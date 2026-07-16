@@ -17,9 +17,12 @@ ALTER TABLE "_rls_probe" FORCE ROW LEVEL SECURITY;
 -- 2. Tenant isolation policy. A row is visible/insertable only when its
 --    organization_id equals app.current_org_id set for the current transaction.
 --    current_setting(..., true) returns NULL when unset => zero rows visible.
+-- NULLIF(..., '') is required: once app.current_org_id has been set in a session
+-- (even via SET LOCAL), later reads return '' rather than NULL; '' ::uuid errors.
+-- Mapping '' -> NULL yields zero visible rows instead of a 22P02 cast error.
 CREATE POLICY tenant_isolation ON "_rls_probe"
-  USING ("organization_id" = current_setting('app.current_org_id', true)::uuid)
-  WITH CHECK ("organization_id" = current_setting('app.current_org_id', true)::uuid);
+  USING ("organization_id" = NULLIF(current_setting('app.current_org_id', true), '')::uuid)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('app.current_org_id', true), '')::uuid);
 
 -- 3. Application role (idempotent). NOSUPERUSER + NOBYPASSRLS so RLS applies.
 --    Password is a non-secret local/CI dev value; production provisions its own.
