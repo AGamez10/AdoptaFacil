@@ -41,10 +41,8 @@
     "html-to-docx": "^1.8.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.3.0",
-
     "marked": "^18.0.13",
     "playwright": "^1.63.0",
-
     "prettier": "^3.4.2",
     "prisma": "^5.22.0",
     "turbo": "^2.3.3",
@@ -59,5 +57,16 @@
     "*.{json,md,yml,yaml,css}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "proxy-addr@<2.0.8": "^2.0.8",
+      "multer@<2.3.0": "^2.4.0",
+      "brace-expansion@<1.1.21": "^1.1.21",
+      "brace-expansion@>=2.0.0 <2.1.7": "^2.1.7",
+      "lodash@<4.18.0": "^4.18.1",
+      "qs@<6.16.0": "^6.16.0",
+      "body-parser@<1.20.6": "^1.20.8"
+    }
   }
 }
