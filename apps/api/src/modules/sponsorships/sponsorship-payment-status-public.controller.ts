@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import type { SponsorshipPaymentPublicStatus } from '@adoptafacil/contracts';
 import { SponsorshipPaymentsService } from './sponsorship-payments.service';
+import { RequireFeature } from '../../core/features';
 
 /**
  * PUBLIC post-checkout status read (MercadoPago redirect-back "gracias"
@@ -12,6 +13,7 @@ import { SponsorshipPaymentsService } from './sponsorship-payments.service';
  * frontend forwards verbatim — it IS our own
  * `sponsorship_payment_attempts.collection_id`.
  */
+@RequireFeature('sponsorships')
 @Controller()
 export class SponsorshipPaymentStatusPublicController {
   constructor(private readonly service: SponsorshipPaymentsService) {}

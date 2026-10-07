@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import type { GuestDonationAccess } from '@adoptafacil/contracts';
 import { DonationsService } from './donations.service';
+import { RequireFeature } from '../../core/features';
 
 /**
  * PUBLIC guest donation access (client requirement, final: a guest donor must
@@ -11,6 +12,7 @@ import { DonationsService } from './donations.service';
  * `DonationsService.getByAccessToken` returns a single generic 404 whether
  * the token is missing, malformed, unknown, or expired — never distinguished.
  */
+@RequireFeature('payments')
 @Controller()
 export class DonationAccessPublicController {
   constructor(private readonly service: DonationsService) {}

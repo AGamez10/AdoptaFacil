@@ -5,6 +5,7 @@ import {
   type ProductsPublicPage,
 } from '@adoptafacil/contracts';
 import { PublicMarketplaceProductsService } from './public-marketplace-products.service';
+import { RequireFeature } from '../../core/features';
 
 function parseCategory(value?: string): ProductCategory | undefined {
   return value && (Object.values(ProductCategory) as string[]).includes(value)
@@ -18,6 +19,7 @@ function parseCategory(value?: string): ProductCategory | undefined {
  * organización. El comprador contacta a la organización por WhatsApp — no
  * hay carrito ni checkout en la plataforma.
  */
+@RequireFeature('marketplace')
 @Controller('public/marketplace/products')
 export class PublicMarketplaceProductsController {
   constructor(private readonly service: PublicMarketplaceProductsService) {}

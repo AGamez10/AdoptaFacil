@@ -8,6 +8,7 @@ import { DIAN_PORT } from './dian.port';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { DuplicateDetectionService } from './duplicate-detection.service';
+import { DisabledDianAdapter } from './disabled-dian.adapter';
 import { FakeDianAdapter } from './fake-dian.adapter';
 import { FormalizationController } from './formalization.controller';
 import { FormalizationService } from './formalization.service';
@@ -69,13 +70,14 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     {
       provide: DIAN_PORT,
       useFactory: () => {
-        // DIAN has NO official API (documento base) — 'fake' is the only real
-        // option today; DIAN_DRIVER exists only so a future real adapter can
-        // slot in later without touching any consumer (TODO(client), see
-        // dian.port.ts).
-        const driver = process.env.DIAN_DRIVER ?? 'fake';
-        if (driver !== 'fake') {
-          throw new Error(`Unsupported DIAN_DRIVER "${driver}" — only "fake" exists today.`);
+        // DIAN has NO official API (documento base) — 'fake' only simulates
+        // the flow for dev/test; DIAN_DRIVER (validated in env.validation.ts)
+        // also accepts 'disabled', the production value: env validation
+        // refuses 'fake' in production (Ola 1, R0-1, SEC-003). A future real
+        // adapter slots in here without touching any consumer (TODO(client),
+        // see dian.port.ts).
+        if (process.env.DIAN_DRIVER === 'disabled') {
+          return new DisabledDianAdapter();
         }
         const latencyMs = process.env.DIAN_FAKE_LATENCY_MS
           ? Number(process.env.DIAN_FAKE_LATENCY_MS)
