@@ -99,7 +99,7 @@ jobs:
       # de runtime sin SUPERUSER/BYPASSRLS ni dueño, SECURITY DEFINER con
       # search_path fijo y sin SQL dinámico. Cubre automáticamente tablas nuevas.
       - name: RLS posture
-        run: psql "$PG_URL" -v ON_ERROR_STOP=1 -v app_role=adoptafacil_app -f scripts/ci/rls-posture.sql
+        run: psql "$PG_URL" -v ON_ERROR_STOP=1 -f scripts/ci/rls-posture.sql
 
       # AF-018: prisma/schema debe declarar lo que crean las migraciones
       # (trinquete sobre la deriva heredada; ver el script).
@@ -112,3 +112,46 @@ jobs:
 
       - name: Integration + RLS no-leak (smoke /health + cross-org isolation)
         run: pnpm --filter @adoptafacil/api run test:integration
+
+  docker:
+    name: Imágenes Docker + compose de producción (arranque de punta a punta)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Secretos de usar y tirar: solo viven en este job.
+      - name: Generate throwaway deploy/.env
+        run: |
+          {
+            echo "RELEASE=ci-${GITHUB_SHA::7}"
+            echo "APP_DOMAIN=localhost"
+            echo "ACME_EMAIL=ci@example.com"
+            echo "POSTGRES_USER=adoptafacil"
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+            echo "POSTGRES_DB=adoptafacil"
+            echo "APP_DB_PASSWORD=$(openssl rand -hex 24)"
+            echo "JWT_SECRET=$(openssl rand -hex 32)"
+            echo "SIGNATURE_ENCRYPTION_KEY=$(openssl rand -hex 32)"
+          } > deploy/.env
+
+      - name: docker compose config
+        run: docker compose -f deploy/compose.yaml --env-file deploy/.env config --quiet
+
+      - name: Build images (api, migrate, edge)
+        run: docker compose -f deploy/compose.yaml --env-file deploy/.env build
+
+      # migrate (migraciones + rotación del rol + postura RLS) -> api sana -> Caddy.
+      - name: Start stack
+        run: docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --wait --wait-timeout 300
+
+      - name: Smoke test through Caddy (HTTPS)
+        run: |
+          curl -fsSk https://localhost/api/health | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -fsSk -o /dev/null https://localhost/
+          curl -fsSkI https://localhost/ | grep -qi '^strict-transport-security:'
+          # Solo Caddy publica puertos: Postgres, Redis y la API quedan en redes internas.
+          test -z "$(docker compose -f deploy/compose.yaml --env-file deploy/.env ps --format '{{.Service}} {{.Publishers}}' | grep -v '^caddy' | grep -E '0\.0\.0\.0|::' || true)"
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose.yaml --env-file deploy/.env logs --no-color --tail 200
