@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, integracion/mvp-1-0]
   pull_request:
 
 concurrency:
@@ -43,7 +43,7 @@ jobs:
         run: pnpm turbo run test
 
   rls-no-leak:
-    name: rls-no-leak (RNF03 gate)
+    name: rls-no-leak · postura RLS · deriva de esquema (RNF03 gate)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -71,6 +71,8 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil?schema=public
+      # Misma base sin el parámetro ?schema= de Prisma (psql lo rechaza).
+      PG_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil
       DATABASE_URL_APP: postgresql://adoptafacil_app:adoptafacil_app@localhost:5432/adoptafacil?schema=public
       REDIS_URL: redis://localhost:6379
     steps:
@@ -92,6 +94,21 @@ jobs:
 
       - name: Apply migrations (creates tables, RLS policy, app role)
         run: pnpm prisma migrate deploy
+
+      # AF-004: toda tabla con organization_id con ENABLE + FORCE + policy, rol
+      # de runtime sin SUPERUSER/BYPASSRLS ni dueño, SECURITY DEFINER con
+      # search_path fijo y sin SQL dinámico. Cubre automáticamente tablas nuevas.
+      - name: RLS posture
+        run: psql "$PG_URL" -v ON_ERROR_STOP=1 -v app_role=adoptafacil_app -f scripts/ci/rls-posture.sql
+
+      # AF-018: prisma/schema debe declarar lo que crean las migraciones
+      # (trinquete sobre la deriva heredada; ver el script).
+      - name: Schema drift
+        env:
+          SHADOW_DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil_shadow
+        run: |
+          psql "$PG_URL" -c 'CREATE DATABASE adoptafacil_shadow'
+          scripts/ci/schema-drift.sh
 
       - name: Integration + RLS no-leak (smoke /health + cross-org isolation)
         run: pnpm --filter @adoptafacil/api run test:integration

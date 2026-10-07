@@ -1,0 +1,58 @@
+# Reglas propias de SQL injection (F31). Las ejecuta el gate `semgrep` de
+# .github/workflows/security.yml sobre el código de runtime (sin pruebas).
+# Todo SQL crudo de la API debe ir como plantilla etiquetada de Prisma
+# ($queryRaw`...` / $executeRaw`...` / Prisma.sql`...`), que parametriza cada
+# interpolación. Inventario y excepciones: docs/operacion/SEGURIDAD_CI.md.
+rules:
+  - id: adoptafacil-prisma-raw-unsafe
+    message: >-
+      $queryRawUnsafe/$executeRawUnsafe construyen SQL desde un string y abren la
+      puerta a SQL injection. Usa la plantilla etiquetada $queryRaw`...` (o
+      Prisma.sql`...`), que parametriza cada valor.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      cwe: 'CWE-89: SQL Injection'
+      owasp: 'A03:2021 - Injection'
+    pattern-either:
+      - pattern: $DB.$queryRawUnsafe(...)
+      - pattern: $DB.$executeRawUnsafe(...)
+
+  - id: adoptafacil-prisma-raw-fragment
+    message: >-
+      Prisma.raw() inserta texto SIN parametrizar. Solo se admite con un literal
+      fijo escrito en el código; nunca con una variable o una plantilla con
+      interpolaciones.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      cwe: 'CWE-89: SQL Injection'
+      owasp: 'A03:2021 - Injection'
+    patterns:
+      - pattern: Prisma.raw($ARG)
+      - pattern-not: Prisma.raw("...")
+      - pattern-not: Prisma.raw(`...`)
+
+  - id: adoptafacil-raw-call-with-string
+    message: >-
+      $queryRaw/$executeRaw llamado como función con un string o una plantilla
+      sin etiquetar concatena SQL. Usa la forma etiquetada $queryRaw`...` o
+      pasa un Prisma.sql`...`.
+    severity: ERROR
+    languages: [typescript, javascript]
+    metadata:
+      cwe: 'CWE-89: SQL Injection'
+      owasp: 'A03:2021 - Injection'
+    patterns:
+      - pattern-either:
+          - pattern: $DB.$queryRaw($ARG, ...)
+          - pattern: $DB.$executeRaw($ARG, ...)
+      - pattern-not: $DB.$queryRaw(Prisma.sql`...`, ...)
+      - pattern-not: $DB.$executeRaw(Prisma.sql`...`, ...)
+      - metavariable-pattern:
+          metavariable: $ARG
+          patterns:
+            - pattern-either:
+                - pattern: '"..." + $X'
+                - pattern: '$X + "..."'
+                - pattern: '`...${$X}...`'
