@@ -1,0 +1,22 @@
+{
+  "animal_a": "f6f1338d-e22c-4c76-b926-c690e7474d76",
+  "clinical_a": "79ae9bba-c3a1-4347-939c-a90cd49eeda3",
+  "campaign_a": "0f5eb522-2bdd-472b-82d7-fbf32a1f04cd",
+  "plan_a": "67b510f6-8aba-4a0e-8b10-fad22839439a",
+  "vopp_a": "2e593823-c037-4c4e-917c-47489b46b0f3",
+  "need_a": "cef39746-0332-4935-94b0-da0f0ebae827",
+  "product_a": "8f498864-669c-48e1-a8e4-a4a546bdab9f",
+  "animal_b": "e7e4ee85-44bc-49e9-b777-d14e05c0920e",
+  "clinical_b": "0e7cfb41-aef3-45a6-accf-05cbf03be550",
+  "campaign_b": "d9698f6b-c396-4158-aae5-6dc9cb6d5cb0",
+  "plan_b": "8bdfd159-c5f6-4f87-a7a8-7f9c4ef8dba8",
+  "vopp_b": "beda063a-cd06-457e-914f-8fcd06656750",
+  "need_b": "f5e16060-63c7-4609-96a7-53cfa15444af",
+  "product_b": "ee76873b-f935-4d0c-b2d1-36be85ba249b",
+  "adoption_b": "58aeb1a1-b7aa-47f9-9819-1ac98b8348a6",
+  "donation_b": "e7a8808f-43df-4d94-ba62-eef08e374ee6",
+  "enroll_b": "738b282d-e81a-4fd6-9d39-7057fcaaf7a7",
+  "offer_b": "122fa89c-522c-463f-aa74-9aa4f7fc3653",
+  "sponsorship_b": "d689bcb6-4149-439f-930e-8b489c280876",
+  "contract_b": "ea11ccf6-57eb-4f9a-9329-097db71e4fc2"
+}
