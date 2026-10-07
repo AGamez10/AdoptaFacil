@@ -1,5 +1,6 @@
 import { Link, NavLink } from 'react-router-dom';
 import { buttonVariants, cn } from '@adoptafacil/ui';
+import { useFeature } from '../capabilities';
 import { Brand } from './brand';
 import styles from './public-navbar.module.scss';
 
@@ -16,6 +17,9 @@ import styles from './public-navbar.module.scss';
  * que la pantalla real exista.
  */
 export function PublicNavbar() {
+  // Ola 1 (R1-1): no links to modules the API has switched off.
+  const resources = useFeature('resources');
+  const marketplace = useFeature('marketplace');
   return (
     <header className={styles.navbar}>
       <div className={styles.navbar__row}>
@@ -41,22 +45,26 @@ export function PublicNavbar() {
           >
             Campañas
           </NavLink>
-          <NavLink
-            to="/recursos"
-            className={({ isActive }) =>
-              cn(styles.navbar__link, isActive && styles['navbar__link--active'])
-            }
-          >
-            Banco de recursos
-          </NavLink>
-          <NavLink
-            to="/marketplace"
-            className={({ isActive }) =>
-              cn(styles.navbar__link, isActive && styles['navbar__link--active'])
-            }
-          >
-            Marketplace
-          </NavLink>
+          {resources && (
+            <NavLink
+              to="/recursos"
+              className={({ isActive }) =>
+                cn(styles.navbar__link, isActive && styles['navbar__link--active'])
+              }
+            >
+              Banco de recursos
+            </NavLink>
+          )}
+          {marketplace && (
+            <NavLink
+              to="/marketplace"
+              className={({ isActive }) =>
+                cn(styles.navbar__link, isActive && styles['navbar__link--active'])
+              }
+            >
+              Marketplace
+            </NavLink>
+          )}
         </nav>
 
         <div className={styles.navbar__actions}>

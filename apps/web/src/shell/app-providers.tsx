@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
+import type { PublicCapabilities } from '@adoptafacil/contracts';
 import { Toaster } from '@adoptafacil/ui';
 import { SessionProvider, type SessionProviderProps } from './auth';
+import { CapabilitiesProvider } from './capabilities';
 import { NavProvider } from './navigation';
 import {
   SessionTransparencyProvider,
@@ -12,6 +14,8 @@ export interface AppProvidersProps {
   children: ReactNode;
   session?: Omit<SessionProviderProps, 'children'>;
   transparency?: Omit<TransparencyProviderProps, 'children'>;
+  /** Pin module capabilities instead of asking the API (tests). Ola 1, R1-1. */
+  capabilities?: PublicCapabilities;
 }
 
 /**
@@ -20,22 +24,24 @@ export interface AppProvidersProps {
  * mount. Kept router-agnostic so the same tree wraps both <BrowserRouter> (app)
  * and <MemoryRouter> (tests).
  */
-export function AppProviders({ children, session, transparency }: AppProvidersProps) {
+export function AppProviders({ children, session, transparency, capabilities }: AppProvidersProps) {
   // By default the indicator derives from REAL session data (T-029). Tests may
   // still pin an explicit value via the `transparency` prop.
   const nav = <NavProvider>{children}</NavProvider>;
   return (
-    <SessionProvider {...session}>
-      {transparency ? (
-        <TransparencyProvider {...transparency}>{nav}</TransparencyProvider>
-      ) : (
-        <SessionTransparencyProvider>{nav}</SessionTransparencyProvider>
-      )}
-      {/* Global toast viewport (T-D05) — every feature's `useToast()`/`toast()`
+    <CapabilitiesProvider value={capabilities}>
+      <SessionProvider {...session}>
+        {transparency ? (
+          <TransparencyProvider {...transparency}>{nav}</TransparencyProvider>
+        ) : (
+          <SessionTransparencyProvider>{nav}</SessionTransparencyProvider>
+        )}
+        {/* Global toast viewport (T-D05) — every feature's `useToast()`/`toast()`
           call queues into the shared store in packages/ui; this is the ONE place
           in the whole app that actually renders it. Previously missing entirely,
           so no toast anywhere in the app was ever visible despite being fired. */}
-      <Toaster />
-    </SessionProvider>
+        <Toaster />
+      </SessionProvider>
+    </CapabilitiesProvider>
   );
 }
