@@ -1,7 +1,11 @@
 -- Gate de postura RLS (R1-10, §7.6 del prompt maestro; AF-004).
 --
--- Se ejecuta contra una base con TODAS las migraciones aplicadas:
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v app_role=adoptafacil_app -f scripts/ci/rls-posture.sql
+-- Se ejecuta contra una base con TODAS las migraciones aplicadas, con cualquier
+-- cliente SQL (no usa metacomandos de psql):
+--   psql "$PG_URL" -v ON_ERROR_STOP=1 -f scripts/ci/rls-posture.sql            (CI)
+--   prisma db execute --file scripts/ci/rls-posture.sql --url "$DATABASE_URL"  (despliegue)
+-- El rol de runtime es adoptafacil_app (lo crea la migración inicial); otro
+-- nombre se fija antes con: SET af.app_role = '<rol>';
 -- Falla (RAISE EXCEPTION) si:
 --   1. una tabla de negocio (columna organization_id en public) no tiene
 --      ENABLE + FORCE ROW LEVEL SECURITY y al menos una policy;
@@ -16,12 +20,9 @@
 -- Excepciones: solo las de la tabla `allowed` de abajo, con su motivo.
 -- Añadir una exige revisión cruzada del hilo de seguridad.
 
-\set ON_ERROR_STOP 1
-SELECT set_config('af.app_role', :'app_role', false) AS app_role_set \gset
-
 DO $$
 DECLARE
-  app_role text := current_setting('af.app_role');
+  app_role text := coalesce(nullif(current_setting('af.app_role', true), ''), 'adoptafacil_app');
   problems text[] := '{}';
   r record;
 BEGIN

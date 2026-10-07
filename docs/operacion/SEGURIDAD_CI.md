@@ -111,7 +111,7 @@ semgrep scan --config .semgrep --error --metrics=off \
   --exclude '*.spec.ts' --exclude '*.integration-spec.ts' --exclude test \
   apps packages scripts
 psql "postgresql://adoptafacil:adoptafacil@localhost:5433/adoptafacil" \
-  -v ON_ERROR_STOP=1 -v app_role=adoptafacil_app -f scripts/ci/rls-posture.sql
+  -v ON_ERROR_STOP=1 -f scripts/ci/rls-posture.sql
 SHADOW_DATABASE_URL=postgresql://adoptafacil:adoptafacil@localhost:5433/shadow \
   scripts/ci/schema-drift.sh
 ```
