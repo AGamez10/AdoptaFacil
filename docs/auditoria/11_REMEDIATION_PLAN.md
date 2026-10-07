@@ -41,15 +41,17 @@
 
 ## Fase 3 · 2 semanas · Operación y MVP visible
 
-| Tarea                                      | Objetivo     | Cambio                                                                                                                                 | Resultado                                         |
-| ------------------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| R3-1 Despliegue D11                        | OPS-003      | Dockerfiles (api, worker, web), compose de producción, Caddy (comodín DNS-01 + `ask`), S3 compatible tras re-verificar MinIO           | `docker compose config` y arranque en el VPS      |
-| R3-2 Backups y restore                     | OPS-001      | `pg_dump` cifrado diario + objetos, copia off-site, restore semanal automatizado                                                       | Restore cronometrado y documentado                |
-| R3-3 Observabilidad                        | OPS-002      | Uptime externo, alertas de error, logs estructurados sin datos personales                                                              | Alerta de prueba recibida                         |
-| R3-4 Correo real + plantillas              | OPS-004, F15 | Proveedor SMTP, cola con reintentos, plantillas versionadas editables por PlatformSuperAdmin con escape                                | Correo de contrato firmado con PDF a ambas partes |
-| R3-5 Landing, navegación y portal          | F4–F8        | Code-splitting, three.js diferido con fallback y `prefers-reduced-motion`, navegación por flags, portal con prueba de no fuga por host | LCP < 2,5 s en móvil medio, WCAG AA, capturas     |
-| R3-6 Workspace del superadmin y onboarding | F19, F20     | Cola de organizaciones con asignación exclusiva y caducidad; CTA de WhatsApp y correo (D10)                                            | Recorrido sin capacitación                        |
-| R3-7 InternalProofProvider                 | SEC-013, F32 | Cadena de hashes por tenant sobre `audit_logs`                                                                                         | Verificador de cadena                             |
+| Tarea                                      | Objetivo     | Cambio                                                                                                                                            | Resultado                                         |
+| ------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| R3-1 Despliegue D11                        | OPS-003      | Dockerfiles (api, worker, web), compose de producción, Caddy (comodín DNS-01 + `ask`), S3 compatible tras re-verificar MinIO                      | `docker compose config` y arranque en el VPS      |
+| R3-2 Backups y restore                     | OPS-001      | `pg_dump` cifrado diario + objetos, copia off-site, restore semanal automatizado                                                                  | Restore cronometrado y documentado                |
+| R3-3 Observabilidad                        | OPS-002      | Uptime externo, alertas de error, logs estructurados sin datos personales                                                                         | Alerta de prueba recibida                         |
+| R3-4 Correo real + plantillas              | OPS-004, F15 | Proveedor SMTP, cola con reintentos, plantillas versionadas editables por PlatformSuperAdmin con escape                                           | Correo de contrato firmado con PDF a ambas partes |
+| R3-5 Landing, navegación y portal          | F4–F8        | Code-splitting, three.js diferido con fallback y `prefers-reduced-motion`, navegación por flags, portal con prueba de no fuga por host            | LCP < 2,5 s en móvil medio, WCAG AA, capturas     |
+| R3-6 Workspace del superadmin y onboarding | F19, F20     | Cola de organizaciones con asignación exclusiva y caducidad; CTA de WhatsApp y correo (D10)                                                       | Recorrido sin capacitación                        |
+| R3-7 InternalProofProvider                 | SEC-013, F32 | Cadena de hashes por tenant sobre `audit_logs`                                                                                                    | Verificador de cadena                             |
+| R3-8 Asistente de guía                     | F29, D14     | Asistente determinista en el navegador, sin LLM: mapa de rutas, ayuda por campo y flujos guiados; no lee valores de formularios                   | Recorrido guiado de registro y adopción, sin red  |
+| R3-9 Diseño de OCR y mandato               | F18, F21     | Solo diseño en el MVP: contrato del puerto OCR (cola, límites, validación humana en 1 clic) y modelo append-only del mandato con texto versionado | Documento de diseño + contratos aditivos          |
 
 ## Fase 4 · Después del piloto (1.1)
 
@@ -64,4 +66,4 @@ Pagos con split real sin custodia tras confirmación escrita del PSP y concepto 
 | 3 · Adopción, contrato y documentos | `modules/adoptions`, generadores PDF, certificados                              | R1-8, R1-9, R2-6, R2-7              |
 | 4 · CI, dependencias y operación    | `.github/workflows`, `package.json` raíz, despliegue                            | R0-3, R0-4, R1-10, R3-1, R3-2, R3-3 |
 
-En cola: R1-4 (portal), R2-4 (pagos), R2-5 (Ley 1581), R3-4 a R3-7. El esquema Prisma es compartido: las migraciones de R2-1, R2-3, R2-4 y R2-5 van en serie, cada una con su token.
+En cola: R1-4 (portal), R2-4 (pagos), R2-5 (Ley 1581), R3-4 a R3-9. La experiencia (R3-5 landing, navegación y portal; R3-6 onboarding y workspace; R3-8 asistente) es MVP según §5.2 del prompt maestro: puede abrirse como quinto frente en cuanto un hilo de la Ola 1 cierre, porque su zona (`apps/web`) solo se cruza con las capabilities del hilo 1. El esquema Prisma es compartido: las migraciones de R2-1, R2-3, R2-4 y R2-5 van en serie, cada una con su token.
