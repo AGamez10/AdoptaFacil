@@ -383,15 +383,16 @@ $border-subtle: hsl(var(--border) / 0.35);
   }
 }
 
+/* Las plantillas claras (Ola 3) cambian estos valores con variables. */
 .btn--glass {
-  color: #fff;
-  background: rgb(255 255 255 / 0.12);
-  border: 1px solid rgb(255 255 255 / 0.35);
+  color: var(--tpl-glass-fg, #fff);
+  background: var(--tpl-glass-bg, rgb(255 255 255 / 0.12));
+  border: 1px solid var(--tpl-glass-border, rgb(255 255 255 / 0.35));
   backdrop-filter: blur(8px);
 }
 
 .btn--glass:hover {
-  background: rgb(255 255 255 / 0.2);
+  background: var(--tpl-glass-bg-hover, rgb(255 255 255 / 0.2));
 }
 
 .btn:focus-visible {

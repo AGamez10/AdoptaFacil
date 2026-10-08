@@ -1,0 +1,708 @@
+/* Plantillas del portal público (Ola 3). Cada plantilla cambia la estructura
+   del hero y, con variables `--tpl-*`, el fondo de la página, los títulos de
+   sección y las tarjetas del catálogo. Los colores de marca de la
+   organización (`--primary`, etc.) se siguen respetando. Paleta de referencia:
+   el carnet del animal (navy #14253f, teal #0ea397). */
+
+$ease: cubic-bezier(0.22, 1, 0.36, 1);
+$navy: #14253f;
+$teal: #0ea397;
+$teal-mid: #4fc9bb;
+$teal-light: #d8f3ef;
+$cream: #faf6ee;
+$ink: #1d1a16;
+
+/* ========================================================================
+   Raíz de página: fondo y variables por plantilla
+   ======================================================================== */
+.page {
+  min-height: 100vh;
+
+  &[data-template='editorial'] {
+    --tpl-heading-font: var(--font-display);
+    --tpl-heading-size: clamp(1.75rem, 3vw, 2.4rem);
+    --tpl-heading-weight: 500;
+    --tpl-heading-tracking: -0.02em;
+    --tpl-card-bg: transparent;
+    --tpl-card-border: 0 solid transparent;
+    --tpl-card-top: 2px solid #{$ink};
+    --tpl-card-radius: 0;
+    --tpl-card-shadow: none;
+    --tpl-photo-ratio: 4 / 5;
+
+    background-color: $cream;
+  }
+
+  &[data-template='carnet'] {
+    --tpl-heading-font: var(--font-display);
+    --tpl-heading-weight: 600;
+    --tpl-card-bg: #fff;
+    --tpl-card-border: 1px solid #{rgba($navy, 0.1)};
+    --tpl-card-top: 6px solid #{$teal};
+    --tpl-card-radius: 22px;
+    --tpl-card-shadow: 0 18px 40px -28px #{rgba($navy, 0.55)};
+    --tpl-photo-ratio: 1 / 1;
+
+    background-color: #f2f7f6;
+    background-image: radial-gradient(#{rgba($teal, 0.12)} 1.2px, transparent 1.2px);
+    background-size: 22px 22px;
+  }
+
+  &[data-template='impacto'] {
+    --tpl-heading-font: var(--font-sans, inherit);
+    --tpl-heading-size: clamp(1.6rem, 3vw, 2.25rem);
+    --tpl-heading-weight: 800;
+    --tpl-heading-tracking: -0.01em;
+    --tpl-heading-transform: uppercase;
+    --tpl-card-bg: #fff;
+    --tpl-card-border: 0 solid transparent;
+    --tpl-card-top: 0 solid transparent;
+    --tpl-card-radius: 6px;
+    --tpl-card-shadow: 0 1px 0 #{rgba($navy, 0.12)};
+    --tpl-photo-ratio: 3 / 4;
+
+    background-color: #eef0f3;
+  }
+}
+
+/* Sellos de documentos revisados (compartidos por los tres héroes). */
+.seals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    background-color: rgba($teal, 0.12);
+    color: #0a7f75;
+  }
+
+  svg {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+}
+
+/* Logo con iniciales de respaldo. */
+%logo {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  object-fit: cover;
+  font-weight: var(--fw-bold);
+}
+
+/* ========================================================================
+   Editorial: portada de revista
+   ======================================================================== */
+.editorial {
+  --tpl-glass-fg: #{$ink};
+  --tpl-glass-bg: transparent;
+  --tpl-glass-border: #{rgba($ink, 0.35)};
+  --tpl-glass-bg-hover: #{rgba($ink, 0.06)};
+
+  display: grid;
+  gap: 2.5rem;
+  padding: 1rem 0 2.5rem;
+  border-bottom: 2px solid $ink;
+  color: $ink;
+
+  @media (min-width: 1024px) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: end;
+    gap: 4rem;
+    padding: 2rem 0 3.5rem;
+  }
+}
+
+.editorial__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.editorial__kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgba($ink, 0.2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.editorial__logo {
+  @extend %logo;
+
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background-color: $ink;
+  color: $cream;
+  letter-spacing: 0;
+}
+
+.editorial__name {
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 7vw, 5.75rem);
+  font-weight: 500;
+  font-style: italic;
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.editorial__lead {
+  max-width: 34rem;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  line-height: 1.55;
+  color: rgba($ink, 0.78);
+
+  &::first-letter {
+    float: left;
+    margin: 0.1rem 0.5rem 0 0;
+    font-size: 3.4rem;
+    line-height: 0.85;
+    font-weight: 600;
+    color: hsl(var(--primary));
+  }
+}
+
+.editorial__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+
+  div {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.15rem;
+  }
+
+  dt {
+    font-size: var(--fs-xs);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba($ink, 0.65);
+  }
+
+  dd {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+}
+
+.editorial__small {
+  font-size: 1.25rem !important;
+  padding-top: 1.5rem;
+}
+
+.editorial__media {
+  position: relative;
+}
+
+.editorial__arch {
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  max-height: 34rem;
+  width: 100%;
+  border-radius: 999px 999px 0 0;
+  background-color: rgba($ink, 0.08);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.editorial__archFallback {
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 50% 35%, hsl(var(--primary) / 0.35), transparent 60%),
+    linear-gradient(180deg, rgba($ink, 0.05), rgba($ink, 0.15));
+}
+
+.editorial__strip {
+  margin-top: 1rem;
+
+  @media (min-width: 1024px) {
+    position: absolute;
+    left: -3rem;
+    bottom: 2rem;
+    margin: 0;
+    padding: 1rem;
+    background-color: $cream;
+    box-shadow: 0 20px 40px -24px rgba($ink, 0.5);
+  }
+
+  p {
+    margin-bottom: 0.6rem;
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  ul {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    width: 5.5rem;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: var(--fs-sm);
+
+    &:hover span {
+      text-decoration: underline;
+    }
+  }
+
+  img {
+    width: 5.5rem;
+    height: 6.5rem;
+    object-fit: cover;
+  }
+}
+
+/* ========================================================================
+   Carnet: la organización como ficha de identidad
+   ======================================================================== */
+.carnet {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.carnet__card {
+  --tpl-glass-fg: #{$navy};
+  --tpl-glass-bg: #fff;
+  --tpl-glass-border: #{rgba($navy, 0.2)};
+  --tpl-glass-bg-hover: #{$teal-light};
+
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  background-color: #fff;
+  box-shadow: 0 30px 60px -40px rgba($navy, 0.6);
+  color: $navy;
+}
+
+.carnet__paw1,
+.carnet__paw2 {
+  position: absolute;
+  pointer-events: none;
+  color: rgba($teal, 0.08);
+}
+
+.carnet__paw1 {
+  right: -1.5rem;
+  bottom: -2rem;
+  width: 14rem;
+  transform: rotate(-18deg);
+}
+
+.carnet__paw2 {
+  right: 9rem;
+  top: 7rem;
+  width: 4rem;
+  transform: rotate(14deg);
+}
+
+.carnet__band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: radial-gradient(18rem 8rem at 100% 0%, rgba($teal, 0.45), transparent 70%), $navy;
+  color: #fff;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 5px;
+    background: linear-gradient(90deg, $teal, $teal-mid, hsl(var(--primary)));
+  }
+
+  @media (min-width: 768px) {
+    padding: 1.5rem 2rem;
+  }
+}
+
+.carnet__logo {
+  @extend %logo;
+
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 14px;
+  border: 2px solid rgba(#fff, 0.6);
+  background-color: $teal;
+  color: #fff;
+}
+
+.carnet__eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: $teal-mid;
+}
+
+.carnet__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3.4vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.carnet__body {
+  position: relative;
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: 17rem minmax(0, 1fr);
+    gap: 2rem;
+    padding: 2rem;
+  }
+}
+
+.carnet__photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  max-height: 22rem;
+  border-radius: 18px;
+  border: 6px solid $teal-light;
+  background-color: $teal-light;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.carnet__photoPaw {
+  width: 40%;
+  color: rgba($teal, 0.4);
+}
+
+.carnet__data {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+
+  dl {
+    display: grid;
+    gap: 0;
+    border-top: 1px dashed rgba($navy, 0.2);
+
+    @media (min-width: 640px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 1.5rem;
+    }
+  }
+
+  dl > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px dashed rgba($navy, 0.2);
+  }
+
+  dt {
+    font-size: 0.7rem;
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: $teal;
+  }
+
+  dd {
+    font-weight: var(--fw-semibold);
+
+    strong {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+    }
+  }
+}
+
+.carnet__about {
+  max-width: 40rem;
+  line-height: 1.6;
+  color: rgba($navy, 0.75);
+}
+
+.carnet__minis {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.mini {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  padding: 0.6rem 0.6rem 0.8rem;
+  border-radius: 18px;
+  background-color: #fff;
+  border-top: 5px solid $teal;
+  box-shadow: 0 14px 30px -24px rgba($navy, 0.6);
+  color: $navy;
+  transition: transform 0.25s $ease;
+
+  &:hover {
+    transform: translateY(-3px);
+  }
+
+  &:focus-visible {
+    outline: 3px solid $teal;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
+  }
+}
+
+.mini__photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background-color: $teal-light;
+  color: rgba($teal, 0.5);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  svg {
+    width: 45%;
+  }
+}
+
+.mini__name {
+  margin-top: 0.6rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.mini__meta {
+  font-size: var(--fs-xs);
+  color: rgba($navy, 0.6);
+}
+
+/* ========================================================================
+   Impacto: oscura, tipográfica, el número manda
+   ======================================================================== */
+.impacto {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  background-color: #0b1220;
+  color: #fff;
+}
+
+.impacto__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 22rem at 85% 10%, hsl(var(--primary) / 0.45), transparent 65%),
+    radial-gradient(30rem 20rem at 0% 100%, rgba($teal, 0.25), transparent 60%);
+}
+
+.impacto__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 2.5rem 1.5rem 2rem;
+
+  @media (min-width: 768px) {
+    padding: 4rem 3.5rem 2.5rem;
+  }
+}
+
+.impacto__kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(#fff, 0.7);
+}
+
+.impacto__logo {
+  @extend %logo;
+
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  background-color: hsl(var(--primary));
+  color: #fff;
+  letter-spacing: 0;
+}
+
+.impacto__count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1.25rem;
+}
+
+.impacto__number {
+  font-size: clamp(5rem, 16vw, 11rem);
+  font-weight: 900;
+  line-height: 0.85;
+  letter-spacing: -0.06em;
+  background: linear-gradient(180deg, #fff 30%, hsl(var(--primary)));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.impacto__label {
+  max-width: 14rem;
+  font-size: clamp(1.25rem, 2.6vw, 2rem);
+  font-weight: 800;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.impacto__name {
+  font-size: clamp(1.4rem, 3vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  filter: brightness(1.35);
+
+  &[data-big='true'] {
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    color: #fff;
+    filter: none;
+  }
+}
+
+.impacto__lead {
+  max-width: 38rem;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: rgba(#fff, 0.8);
+}
+
+.impacto .seals li {
+  background-color: rgba(#fff, 0.1);
+  color: #fff;
+}
+
+.ribbon {
+  position: relative;
+  overflow: hidden;
+  padding: 1rem 0 1.5rem;
+  border-top: 1px solid rgba(#fff, 0.12);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+.ribbon__track {
+  display: flex;
+  gap: 0.75rem;
+  width: max-content;
+  animation: ribbon 40s linear infinite;
+
+  &:hover,
+  &:focus-within {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    flex-wrap: wrap;
+    width: auto;
+    padding: 0 1.5rem;
+    animation: none;
+
+    li[aria-hidden='true'] {
+      display: none;
+    }
+  }
+}
+
+@keyframes ribbon {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ribbon__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 1rem 0.35rem 0.35rem;
+  border-radius: 9999px;
+  background-color: rgba(#fff, 0.08);
+  border: 1px solid rgba(#fff, 0.14);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+
+  img {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    object-fit: cover;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+}

@@ -309,3 +309,32 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     });
   });
 });
+
+describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
+  it('carga la plantilla guardada, muestra el nivel como etiqueta y envía la elegida al guardar', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method === 'PUT') return { tokens: {}, template: 'carnet' };
+      return { tokens: {}, template: 'editorial' };
+    });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    const editorial = await screen.findByRole('radio', { name: /Editorial/ });
+    expect(editorial).toBeChecked();
+    // El nivel de plan es solo un parámetro: se ve, pero nada se bloquea.
+    expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
+    expect(screen.getByTestId('template-option-carnet')).toHaveTextContent(
+      'Plan de pago · gratis durante el lanzamiento',
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Guardar personalización/ }));
+
+    await waitFor(() => {
+      const put = calls.find((c) => c.init?.method === 'PUT');
+      expect(JSON.parse(String(put?.init?.body))).toMatchObject({ template: 'carnet' });
+    });
+    expect(screen.getByRole('radio', { name: /Carnet/ })).toBeChecked();
+  });
+});
