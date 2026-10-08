@@ -127,6 +127,62 @@ Las imágenes quedan etiquetadas con `RELEASE`; la anterior sigue en el disco.
   `RELEASE` anterior. Toda migración de seguridad trae su rollback SQL escrito
   (regla §7.7).
 
+## Apuntamiento de URL (lista de verificación)
+
+Todo lo que cambia cuando AdoptaFácil apunta a un dominio nuevo. Con el
+despliegue de `deploy/` el front y la API comparten origen: la API vive en
+`https://DOMINIO/api` y Caddy quita el prefijo `/api` antes de pasarla. Por eso
+**toda URL externa hacia la API lleva `/api`**. Ninguna línea de esta lista es un
+secreto; las llaves públicas `VITE_*` quedan visibles en el bundle.
+
+Leyenda: ✅ lo resuelve `deploy/` a partir de `APP_DOMAIN`; ⚠️ queda en
+`deploy/.env` o `deploy/api.env` y hay que llenarlo; ❌ falta y se hace fuera
+del repo o en otro hilo.
+
+### Frontend (se hornean en el build: cambiar una exige `up -d --build caddy`)
+
+| Variable                      | Estado | Valor en este despliegue                                                                                             | Si falta                                                                                                        |
+| ----------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_URL`                | ✅     | `https://DOMINIO/api` (`deploy/compose.yaml:125`); el build falla si llega vacía (`deploy/docker/web.Dockerfile:22`) | el front llama a `http://localhost:3000` (p. ej. `apps/web/src/features/donations/api/donations-api.ts:12`)     |
+| `VITE_PORTAL_BASE_DOMAIN`     | ⚠️     | `DOMINIO`, solo cuando existan los subdominios (ver F7 abajo)                                                        | sin subdominios; los portales funcionan por `/o/:slug` (`apps/web/src/features/portals/model/subdomain.ts:22`)  |
+| `VITE_GOOGLE_CLIENT_ID`       | ⚠️     | ID del cliente OAuth web de Google                                                                                   | el botón muestra el modo de prueba (`apps/web/src/features/auth/components/google-sign-in-button.tsx:70`)       |
+| `VITE_MERCADOPAGO_PUBLIC_KEY` | ⚠️     | llave pública de producción, solo al encender pagos                                                                  | el Brick no se monta y muestra un aviso (`apps/web/src/features/payments/components/card-payment-brick.tsx:69`) |
+
+### Backend
+
+| Variable                         | Estado           | Valor en este despliegue                                                                                                   | Para qué                                                                                                                          |
+| -------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `API_CORS_ORIGIN`                | ✅ / ❌          | `https://DOMINIO` (`deploy/compose.yaml:94`)                                                                               | lista separada por comas de orígenes **exactos** con `credentials: true` (`apps/api/src/main.ts:12`). No acepta comodines: ver F7 |
+| `WEB_BASE_URL`                   | ✅               | `https://DOMINIO` (`deploy/compose.yaml:95`)                                                                               | enlaces de los correos (restablecer contraseña, adopciones, donaciones) y retorno al front tras el OAuth de Mercado Pago          |
+| `STORAGE_PUBLIC_BASE_URL`        | ✅               | `https://DOMINIO/api` (`deploy/compose.yaml:99`)                                                                           | URL pública de archivos y base por defecto del retorno OAuth de Mercado Pago                                                      |
+| `MERCADOPAGO_OAUTH_REDIRECT_URI` | ✅ (por defecto) | sin definir → `https://DOMINIO/api/org/mercadopago/callback` (`apps/api/src/core/payments/mercadopago-oauth.client.ts:58`) | solo se fija en `deploy/api.env` si se quiere otra                                                                                |
+| `MERCADOPAGO_BASE_URL`           | ✅ (por defecto) | `https://api.mercadopago.com` (`apps/api/src/config/env.validation.ts:70`)                                                 | no se toca salvo un sandbox                                                                                                       |
+
+### Externo (paneles de terceros y DNS)
+
+| Dónde                                | Estado  | Qué registrar                                                                                                                                                                           |
+| ------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DNS                                  | ❌      | registro A/AAAA de `DOMINIO` → IP del VPS (paso 2 de arriba). `*.DOMINIO` solo con F7                                                                                                   |
+| TLS                                  | ✅ / ❌ | Caddy emite el de `DOMINIO` solo; el comodín necesita DNS-01 (F7)                                                                                                                       |
+| Google Cloud, cliente OAuth web      | ❌      | orígenes JavaScript autorizados: `https://DOMINIO` (y cada subdominio de portal que muestre el botón)                                                                                   |
+| Mercado Pago, webhook (evento Order) | ❌      | `https://DOMINIO/api/donations/webhook` (`apps/api/src/modules/donations/donations.controller.ts:136`). Pagos apagados: solo documentado                                                |
+| Mercado Pago, redirect OAuth         | ❌      | `https://DOMINIO/api/org/mercadopago/callback`, idéntica a la que envía la API (`apps/api/src/modules/payments/mercadopago-connect.controller.ts:65`). Pagos apagados: solo documentado |
+| Mercado Pago, webhook de payouts     | ❌      | `https://DOMINIO/api/payments/payouts/webhook` (`apps/api/src/modules/payments/payouts.controller.ts:58`), cuando se apruebe Disbursements                                              |
+
+### Código revisado
+
+- **Cookie de sesión** (`apps/api/src/core/auth/refresh-cookie.util.ts:18`): en
+  producción es `Secure` + `SameSite=None` con `path: '/'`, así que exige HTTPS
+  (Caddy lo garantiza) y funciona detrás del prefijo `/api`. Si front y API
+  estuvieran en dominios distintos, el CORS ya va con `credentials: true`; con
+  este despliegue comparten origen y no hace falta.
+- **`apps/web/vite.config.ts`**: el proxy `/api` → `localhost:3000` y
+  `allowedHosts: true` son de la demo con ngrok y su comentario pide revertirlos.
+  Solo afectan a `vite dev`; el build de producción no los usa. Revertirlos le
+  toca al dueño del front.
+- **"adoptafacil.com/"** en `apps/web/src/features/org/pages/platform-banner-page.tsx:221`
+  es texto de ayuda, no un enlace: no cambia con el dominio.
+
 ## Staging
 
 Mismo compose con otro nombre de proyecto y dominio, idealmente en otro VPS
@@ -141,6 +197,19 @@ módulo del proveedor DNS (`xcaddy build --with github.com/caddy-dns/<proveedor>
 y un token de API del DNS. El proveedor DNS está ⟦POR DEFINIR⟧ y el hilo del
 portal decide la resolución por host. No se habilita on-demand TLS sin un
 endpoint `ask` que solo autorice dominios verificados.
+
+Además del certificado falta resolver cómo llama a la API un portal servido en
+`org.DOMINIO`: hoy el bundle apunta a `https://DOMINIO/api`, que desde un
+subdominio es otro origen, y `API_CORS_ORIGIN` solo admite orígenes exactos
+(`apps/api/src/main.ts:12`). Dos salidas:
+
+1. **Recomendada, sin código:** que el bloque `*.DOMINIO` de Caddy también
+   enrute `/api/*` a la API y construir el front con `VITE_API_URL=/api`
+   (relativa). Cada subdominio queda en su propio origen y no hay CORS. La
+   cookie de sesión queda por host, lo cual basta porque los portales son
+   públicos. Hay que probar el build relativo antes de activarlo.
+2. Aceptar subdominios en el CORS con una expresión regular. Toca
+   `apps/api/src/main.ts`, que es del hilo "Arranque seguro y flags".
 
 ## Evidencia de este PR (entorno cloud, no el VPS)
 
