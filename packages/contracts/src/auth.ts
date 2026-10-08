@@ -17,6 +17,14 @@ export interface RegisterOrganizationDto {
   password: string;
 }
 
+/**
+ * Minimum length of a NEW password (registration, reset, invitation). AF-026:
+ * raised from 8 to 12 following NIST SP 800-63B / OWASP ASVS V2.1 — length is
+ * the rule that actually matters; no composition rules are imposed. Existing
+ * passwords keep working: the policy applies only when a password is set.
+ */
+export const MIN_PASSWORD_LENGTH = 12;
+
 /** Registration for a Person account. The person gets their own personal
  *  organization (tenant) so multi-tenant RLS applies uniformly. */
 export interface RegisterPersonDto {

@@ -5,24 +5,29 @@
  * approve/reject organizations' documents.
  *
  * Usage (from repo root):
- *   pnpm seed:admin
- *   pnpm seed:admin -- admin@refugio.co "S3cur3P@ss" "Admin Piloto"
+ *   PLATFORM_ADMIN_EMAIL=ops@adoptafacil.co PLATFORM_ADMIN_PASSWORD='…' pnpm seed:admin
+ *   pnpm seed:admin -- ops@adoptafacil.co "una-clave-larga-y-unica" "Admin Piloto"
+ *   PLATFORM_ADMIN_EMAIL=… PLATFORM_ADMIN_PASSWORD='…' pnpm seed:admin -- --rotate-password
  *
- * Credentials come from CLI args (email, password, displayName, in that
- * order) or, if omitted, from env vars — NEVER hardcoded:
+ * Credentials come from env vars (preferred: CLI args end up in the shell
+ * history) or from CLI args (email, password, displayName, in that order):
  *   PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD, PLATFORM_ADMIN_NAME
- * Dev-only defaults when neither is given (CHANGE THESE IN PRODUCTION):
- *   admin@adoptafacil.local / changeme123
+ * There are NO defaults (AF-037): without an email and a password the script
+ * refuses to run. The password must meet the platform policy
+ * (`MIN_PASSWORD_LENGTH`) and cannot be a known default such as the old
+ * `changeme123`.
  *
  * Idempotent: running it twice never duplicates the user — a second run finds
  * the existing credential by email and just re-asserts (upserts) the platform
- * roles, so a partially-failed prior run is safely completed too.
+ * roles, so a partially-failed prior run is safely completed too. An existing
+ * password is NEVER changed silently: pass `--rotate-password` to replace it
+ * (Argon2id) with the one given.
  */
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
-import { Role } from '@adoptafacil/contracts';
+import { MIN_PASSWORD_LENGTH, Role } from '@adoptafacil/contracts';
 import { PasswordService } from '../src/core/auth/password.service';
 
 /** Load the repo-root `.env` (same file the API reads) without adding a
@@ -53,17 +58,48 @@ loadRootEnv();
 // pnpm (unlike npm) forwards a literal `--` through `pnpm run seed:admin -- x y z`
 // instead of stripping it — filter it out so positional args land correctly
 // regardless of whether this runs via the root wrapper or apps/api directly.
-const [argEmail, argPassword, argName] = process.argv.slice(2).filter((arg) => arg !== '--');
+const rawArgs = process.argv.slice(2).filter((arg) => arg !== '--');
+const rotatePassword = rawArgs.includes('--rotate-password');
+const [argEmail, argPassword, argName] = rawArgs.filter((arg) => !arg.startsWith('--'));
 
-const email = (argEmail ?? process.env.PLATFORM_ADMIN_EMAIL ?? 'admin@adoptafacil.local')
-  .trim()
-  .toLowerCase();
-const password = argPassword ?? process.env.PLATFORM_ADMIN_PASSWORD ?? 'changeme123';
+/** Placeholders that pass the length rule but must never protect a platform
+ *  account (variants of the former `changeme123` default). Case-insensitive.
+ *  Shorter ones (incl. `changeme123` itself) already fail MIN_PASSWORD_LENGTH. */
+const FORBIDDEN_PASSWORDS = new Set([
+  'changeme1234',
+  'changeme12345',
+  'password1234',
+  'adoptafacil123',
+  'adoptafacil1234',
+  'adminadoptafacil',
+]);
+
+const email = (argEmail ?? process.env.PLATFORM_ADMIN_EMAIL ?? '').trim().toLowerCase();
+const password = argPassword ?? process.env.PLATFORM_ADMIN_PASSWORD ?? '';
 const displayName = argName ?? process.env.PLATFORM_ADMIN_NAME ?? 'Platform Admin';
 
-if (password.length < 8) {
-  console.error('[seed:admin] La contraseña debe tener al menos 8 caracteres.');
+if (!email || !password) {
+  console.error(
+    '[seed:admin] Faltan credenciales: define PLATFORM_ADMIN_EMAIL y PLATFORM_ADMIN_PASSWORD ' +
+      '(o pásalos como argumentos). No hay valores por defecto.',
+  );
   process.exit(1);
+}
+if (password.length < MIN_PASSWORD_LENGTH) {
+  console.error(
+    `[seed:admin] La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
+  );
+  process.exit(1);
+}
+if (FORBIDDEN_PASSWORDS.has(password.toLowerCase())) {
+  console.error('[seed:admin] Esa contraseña es un valor por defecto conocido. Usa una única.');
+  process.exit(1);
+}
+if (argPassword) {
+  console.warn(
+    '[seed:admin] Aviso: la contraseña llegó como argumento y puede quedar en el historial de la ' +
+      'terminal. Prefiere PLATFORM_ADMIN_PASSWORD.',
+  );
 }
 
 /** Both platform roles, so the pilot operator can do everything at the
@@ -75,7 +111,7 @@ async function main(): Promise<void> {
   // an authenticated request; mirrors the `admin` PrismaClient used by the
   // integration tests' cleanup helper.
   const prisma = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
-  // Same hashing as normal registration (bcryptjs, cost 12) — reused, not reimplemented.
+  // Same hashing as normal registration (Argon2id) — reused, not reimplemented.
   const passwords = new PasswordService();
 
   try {
@@ -88,6 +124,20 @@ async function main(): Promise<void> {
       console.log(`[seed:admin] Ya existe una credencial para ${email} — no se duplica.`);
       userId = existing.userId;
       organizationId = existing.organizationId;
+      if (rotatePassword) {
+        await prisma.authCredential.update({
+          where: { id: existing.id },
+          data: { passwordHash: await passwords.hash(password) },
+        });
+        // Rotating a credential ends every open session of that account.
+        await prisma.refreshToken.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        console.log(`[seed:admin] Contraseña rotada para ${email}; sesiones abiertas revocadas.`);
+      } else {
+        console.log('[seed:admin] La contraseña existente NO se cambió (usa --rotate-password).');
+      }
     } else {
       organizationId = randomUUID();
       userId = randomUUID();

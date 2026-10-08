@@ -174,7 +174,7 @@ export class AuthService {
       where: { email: normalizedEmail },
     });
 
-    // Always run a bcrypt comparison (dummy hash when the user is unknown) so
+    // Always run a hash comparison (dummy hash when the user is unknown) so
     // response timing does not reveal whether the email exists.
     const passwordOk = await this.passwords.verify(
       dto.password,
@@ -182,6 +182,14 @@ export class AuthService {
     );
     if (!credential || !passwordOk) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+    // AF-026: a legacy (bcrypt) hash is upgraded to Argon2id right after a
+    // successful sign-in — the only moment the plaintext is available.
+    if (this.passwords.needsRehash(credential.passwordHash)) {
+      await this.prisma.authCredential.update({
+        where: { id: credential.id },
+        data: { passwordHash: await this.passwords.hash(dto.password) },
+      });
     }
 
     const accountType = credential.accountType as AccountType;

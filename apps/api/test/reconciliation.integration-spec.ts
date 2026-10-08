@@ -24,7 +24,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const currentPeriod = new Date().toISOString().slice(0, 7); // 'YYYY-MM' UTC
 
   interface Actor {

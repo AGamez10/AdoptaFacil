@@ -23,7 +23,7 @@ describe('Campaign funding (RF15 · T-055)', () => {
   let funding: CampaignFundingService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let tokenA = '';
   let tokenB = '';

@@ -16,7 +16,7 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let ownerToken = '';
   let ownerOrgId = '';

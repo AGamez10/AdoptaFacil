@@ -256,6 +256,18 @@ export interface RequestFormalizationTransitionInput {
 }
 
 /**
+ * Platform review of an organization's formalization (R2-2, SEC-003):
+ * `POST /platform/organizations/:organizationId/formalization/transitions`
+ * (PlatformAdmin, PlatformSuperAdmin). Entering ESAL or ESAL_RTE requires
+ * `evidenceDocumentId`: a document of that organization, Approved, current and
+ * with its file present. An organization's own Owner can never move it INTO
+ * those states (403); moving down stays allowed.
+ */
+export interface PlatformFormalizationTransitionInput extends RequestFormalizationTransitionInput {
+  evidenceDocumentId?: string;
+}
+
+/**
  * Verification tier of an organization (§14): a numeric level plus the criteria
  * met to reach it. The concrete tiers/criteria are defined by M01; this is the
  * stable shape consumers render (e.g. a "verified" badge on the portal).

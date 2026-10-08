@@ -19,7 +19,7 @@ describe('Portal subdomain resolution (M14: public, no auth, no cross-org leak)'
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   const suffix = randomUUID().slice(0, 8);
   const slugA = `sub-org-a-${suffix}`;
