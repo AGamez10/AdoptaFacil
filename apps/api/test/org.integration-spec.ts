@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M01 organization profile: CRUD with RBAC, the simulable upload seam, and the
@@ -33,6 +34,7 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     createdOrgIds.push(res.body.user.organizationId);
     return { token: res.body.tokens.accessToken, orgId: res.body.user.organizationId };
   }

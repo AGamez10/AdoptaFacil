@@ -207,6 +207,48 @@ export interface RoleAssignment {
   createdAt: string;
 }
 
+// ============================================================================
+// Member invitations (Ola 1 · R2-3, AF-017, condition C9)
+// ============================================================================
+
+/** An invitation as the inviting organization sees it (never the token). */
+export interface OrganizationInvitation {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: Role;
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  invitedByUserId: string;
+  /** ISO-8601 UTC. */
+  expiresAt: string;
+  /** ISO-8601 UTC. */
+  createdAt: string;
+}
+
+/** `POST /org/invitations` (Owner, Administrator; only an Owner invites an
+ *  Owner). The raw token is only ever emailed, never returned. */
+export interface CreateInvitationInput {
+  email: string;
+  role: Role;
+}
+
+/** `POST /auth/invitations/preview` — what the invitee sees before accepting. */
+export interface InvitationPreview {
+  organizationName: string;
+  email: string;
+  role: Role;
+  /** ISO-8601 UTC. */
+  expiresAt: string;
+}
+
+/** `POST /auth/invitations/accept` — creates the invitee's account inside the
+ *  inviting organization with the invited role and returns a session. */
+export interface AcceptInvitationInput {
+  token: string;
+  displayName: string;
+  password: string;
+}
+
 /** Assign a role to a user in the caller's organization. */
 export interface AssignRoleDto {
   userId: string;

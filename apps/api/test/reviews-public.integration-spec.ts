@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M12 reputation (S7-b, client-requested): the portal-público "Registrar
@@ -38,6 +39,7 @@ describe('Reviews / portal público sin sesión (M12, S7-b)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     orgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

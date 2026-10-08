@@ -145,7 +145,7 @@ async function main(): Promise<void> {
 
       await prisma.$transaction(async (tx) => {
         await tx.organization.create({
-          data: { id: organizationId, name: `${displayName} (Platform)` },
+          data: { id: organizationId, name: `${displayName} (Platform)`, status: 'approved' },
         });
         await tx.user.create({
           data: { id: userId, organizationId, accountType: 'person', email, displayName },

@@ -63,7 +63,7 @@ describe('RBAC governance (AF-007, AF-008, AF-009, AF-026, AF-037)', () => {
   }
 
   /** A second account INSIDE `orgId` holding `role`, able to sign in. Created
-   *  directly (the invitation flow lands in a later PR); its token is issued
+   *  directly (the invitation flow has its own spec); its token is issued
    *  by the real TokenService so the auth rate limit is not spent here. */
   async function memberOf(orgId: string, role: Role): Promise<Actor> {
     const userId = randomUUID();

@@ -1,11 +1,11 @@
 # Roles y organizaciones (Ola 1 · hilo 2)
 
 Reglas de autoridad dentro de una organización y entre la plataforma y las
-organizaciones. Cierra AF-007, AF-008, AF-009, AF-026, AF-037, SEC-003 (parte de
-formalización) y SEC-022 de la auditoría de la Fase 0. Las pruebas que lo
-demuestran por HTTP están en `apps/api/test/rbac-governance.integration-spec.ts`,
-`apps/api/test/formalization.integration-spec.ts` y
-`apps/api/test/tenant-context.integration-spec.ts`.
+organizaciones. Cierra AF-007, AF-008, AF-009, AF-017, AF-023, AF-026, AF-037,
+SEC-003 (parte de formalización) y SEC-022 de la auditoría de la Fase 0. Las
+pruebas que lo demuestran por HTTP están en `apps/api/test/`:
+`rbac-governance`, `formalization`, `tenant-context`, `org-status`,
+`invitations` y `rls-no-leak-organization-invitations` (`*.integration-spec.ts`).
 
 Cadena de seguridad: **JWT** (quién eres y tu organización) → **RBAC**
 deny-by-default, siempre dentro del tenant del JWT → **RLS** en PostgreSQL.
@@ -23,7 +23,7 @@ deny-by-default, siempre dentro del tenant del JWT → **RLS** en PostgreSQL.
     `GET /public/resources/needs`, `GET /public/donations/organizations/:id/availability`),
     que solo leen datos ya públicos;
   - operaciones de plataforma (`/platform/payouts`, `/platform/reconciliation`,
-    `/platform/organizations/:organizationId/...`), protegidas con
+    `/platform/organizations/:organizationId/...` de formalización y estado), protegidas con
     `@Roles(...PLATFORM_ROLES)` y auditadas en la organización destino.
 
 ## 2. Roles de organización (§13 del documento base)
@@ -102,8 +102,81 @@ la B. Si una acción debe quedar reservada al representante legal, usa
 - `pnpm seed:demo` se niega a correr con `NODE_ENV=production` y exige
   `PLATFORM_ADMIN_EMAIL`.
 
-## 6. Cómo revertir
+## 6. Estado operativo de la organización (R2-1, AF-023, MVP-RF-07/10)
 
-Todo el cambio es de código, sin migración: revertir el commit devuelve el
-comportamiento anterior. Los hashes ya convertidos a Argon2id **no** vuelven a
-bcrypt: si se revirtiera, esas cuentas necesitarían reseteo de contraseña.
+Segunda dimensión de estado, independiente de la formalización:
+`draft` → `pending_review` → `observed` / `approved` / `rejected`, y
+`approved` ⇄ `suspended`.
+
+| Transición                                            | Quién                      | Endpoint                                              |
+| ----------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| `draft` u `observed` → `pending_review`               | Owner de la organización   | `POST /org/status/submit`                             |
+| `pending_review` → `approved`, `observed`, `rejected` | PlatformAdmin / SuperAdmin | `POST /platform/organizations/:organizationId/status` |
+| `observed` → `rejected`; `rejected` → `observed`      | PlatformAdmin / SuperAdmin | ídem                                                  |
+| `approved` → `suspended`, `observed`                  | PlatformAdmin / SuperAdmin | ídem                                                  |
+| `suspended` → `approved`                              | PlatformAdmin / SuperAdmin | ídem                                                  |
+
+- Las transiciones viven en `ORGANIZATION_STATUS_TRANSITIONS`
+  (`@adoptafacil/contracts`). Cualquier otra es 400. `observed`, `rejected` y
+  `suspended` exigen motivo, que la organización lee en `GET /org/status`.
+- Dos revisores a la vez: actualización condicional, solo uno gana (409 o 400
+  para el otro).
+- Cola de revisión: `GET /platform/organizations?status=pending_review` (solo
+  organizaciones reales, nunca la organización personal de una persona).
+- Auditoría: `organization.status_changed` en la organización afectada, con
+  `from`, `to`, `reason` y `by` (`organization` o `platform`).
+- **Solo las `approved` son públicas.** El filtro está en la base: las 12
+  funciones `SECURITY DEFINER` de la superficie pública (portal por slug y
+  subdominio, tema, animales, campañas y su rendición de cuentas, voluntariado,
+  marketplace y banco de recursos) exigen `o.status = 'approved'`; el catálogo
+  global de animales lo filtra en `public-animals.service.ts`.
+- **Suspensión:** `JwtAuthGuard` lee el estado en cada petición autenticada
+  (no del token, así que aplica de inmediato a tokens ya emitidos) y responde
+  403 con `code: "ORGANIZATION_SUSPENDED"`. Siguen abiertos `/auth/*` y
+  `GET /org/status`. No se borra nada.
+- Las organizaciones existentes antes de este cambio quedaron `approved`. Las
+  nuevas nacen `draft`; las cuentas de persona y la del administrador de
+  plataforma nacen `approved` (no tienen portal ni revisión).
+- Qué debe estar completo para enviar a revisión no lo fija el documento base:
+  `TODO(client)` en `OrganizationStatusService.submit` (sin requisito por ahora).
+- Pendiente para la experiencia (R3-6, `apps/web`): botón "Enviar a revisión",
+  aviso de estado y de suspensión en el backoffice, y la cola de revisión en el
+  panel de plataforma. La API ya está lista.
+
+## 7. Invitaciones de miembros (R2-3, AF-017, condición C9)
+
+| Endpoint                         | Quién                      | Reglas                                                                                                            |
+| -------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `POST /org/invitations`          | Owner, Administrator       | `{ email, role }` con rol de organización. **Solo un Owner invita a un Owner.** Correo con cuenta existente: 409. |
+| `GET /org/invitations`           | Owner, Administrator       | Las de su organización, con estado `pending`/`accepted`/`revoked`/`expired`.                                      |
+| `DELETE /org/invitations/:id`    | Owner, Administrator       | Revoca una pendiente (204); la de un Owner solo la revoca un Owner.                                               |
+| `POST /auth/invitations/preview` | Público, con límite por IP | `{ token }` → organización, correo, rol y vencimiento.                                                            |
+| `POST /auth/invitations/accept`  | Público, con límite por IP | `{ token, displayName, password }` → crea la cuenta en esa organización con ese rol y devuelve la sesión.         |
+
+- Token aleatorio de 32 bytes. En la base solo queda su hash SHA-256; el token
+  viaja únicamente en el correo, en el fragmento del enlace
+  (`{WEB_BASE_URL}/invitacion#token=…`), así que no llega a logs, proxies ni al
+  `Referer`. Nunca se devuelve en la API ni se audita.
+- Un solo uso (actualización condicional: dos aceptaciones simultáneas crean una
+  sola cuenta), ligado a una organización y a un correo, con vencimiento de 7
+  días (`INVITATION_TTL_MS`, `TODO(client)` para confirmar). Reinvitar el mismo
+  correo revoca el enlace anterior.
+- Todo token inválido, vencido, usado o revocado recibe la misma respuesta
+  (400), sin revelar cuál fue el caso. Una organización suspendida o rechazada
+  no incorpora a nadie por un enlace pendiente.
+- Tabla `organization_invitations` con RLS (ENABLE + FORCE + `tenant_isolation`)
+  y sin DELETE para el rol de la app. El invitado aún no tiene tenant: el token se
+  resuelve con la función acotada `organization_invitation_by_token_hash`.
+- Auditoría: `invitation.created`, `invitation.revoked`, `invitation.accepted`.
+- Pendiente para la experiencia (R3-6, `apps/web`): pantalla de equipo para
+  invitar y la página `/invitacion` que lee el token del fragmento.
+
+## 8. Cómo revertir
+
+Hay una migración, `20261008050000_ola1_org_status_invitations` (aditiva). Para
+revertir: revertir el commit y, en la base, aplicar a mano el rollback que trae
+la migración en su cabecera (borrar la función de invitaciones y la tabla,
+recrear las 12 funciones públicas desde sus migraciones anteriores y quitar las
+columnas de estado). Nunca se aplica en un entorno compartido sin aprobación del
+dueño. Los hashes ya convertidos a Argon2id **no** vuelven a bcrypt: si se
+revirtiera esa parte, esas cuentas necesitarían reseteo de contraseña.

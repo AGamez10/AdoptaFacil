@@ -19,6 +19,7 @@ import {
   type LoginDto,
   type RegisterOrganizationDto,
   type RegisterPersonDto,
+  OrganizationStatus,
   Role,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
@@ -98,7 +99,17 @@ export class AuthService {
     // accepts the insert. `organizations` and the auth tables are not tenant-
     // scoped, but writing them inside the same transaction is fine.
     await this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.organization.create({ data: { id: organizationId, name: organizationName } });
+      // R2-1 (AF-023): a new ORGANIZATION starts as a draft, not public until
+      // its Owner submits it and the platform approves it; a person's personal
+      // organization has nothing to review.
+      await tx.organization.create({
+        data: {
+          id: organizationId,
+          name: organizationName,
+          status:
+            accountType === 'organization' ? OrganizationStatus.Draft : OrganizationStatus.Approved,
+        },
+      });
       await tx.user.create({
         data: { id: userId, organizationId, accountType, email: normalizedEmail, displayName },
       });
@@ -293,7 +304,9 @@ export class AuthService {
     const displayName = claims.name.trim() || normalizedEmail;
 
     await this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.organization.create({ data: { id: organizationId, name: displayName } });
+      await tx.organization.create({
+        data: { id: organizationId, name: displayName, status: OrganizationStatus.Approved },
+      });
       await tx.user.create({
         data: {
           id: userId,

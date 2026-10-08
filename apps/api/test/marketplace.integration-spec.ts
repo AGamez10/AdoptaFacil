@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M10 (F-7, Ola 3) — marketplace simplificado: catálogo de productos por
@@ -38,6 +39,7 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     orgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

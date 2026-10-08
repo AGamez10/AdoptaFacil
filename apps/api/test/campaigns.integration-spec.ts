@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M06 campaigns (RF15, T-053): tenant-scoped CRUD with the RBAC matrix, required
@@ -34,6 +35,7 @@ describe('Campaigns (M06, RF15: CRUD + RBAC + public exposure)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     createdOrgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

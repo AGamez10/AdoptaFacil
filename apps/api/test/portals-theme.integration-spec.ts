@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M14 portal personalization (T-027): the owner saves brand tokens (validated:
@@ -38,6 +39,7 @@ describe('Portal theme (M14: tokens + RBAC + public read)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, ownerReg.body.user.organizationId);
     ownerToken = ownerReg.body.tokens.accessToken;
     createdOrgIds.push(ownerReg.body.user.organizationId);
 

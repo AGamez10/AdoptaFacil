@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * T-030: OrganizationType badge + the platform `showOrganizationType` policy.
@@ -37,6 +38,7 @@ describe('Organization type badge + platform policy (T-030, RF01)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     createdOrgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

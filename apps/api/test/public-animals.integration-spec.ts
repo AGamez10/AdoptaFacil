@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * T-029 public adoption catalog: GET /public/organizations/:slug/animals (no
@@ -36,6 +37,7 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     const token = res.body.tokens.accessToken;
     const orgId = res.body.user.organizationId;
     createdOrgIds.push(orgId);

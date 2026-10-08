@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Accountability end-to-end (RF16 · T-054, hardened to append-only immutable
@@ -40,6 +41,7 @@ describe('Campaign accountability (RF16 · T-054)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return { token: res.body.tokens.accessToken, orgId: res.body.user.organizationId };
   }
 

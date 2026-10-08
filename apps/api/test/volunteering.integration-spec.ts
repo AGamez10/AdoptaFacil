@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M08 volunteering (RF18/RF19) end-to-end: publish an opportunity → public
@@ -43,6 +44,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     orgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

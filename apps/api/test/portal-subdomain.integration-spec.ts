@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M14 real portal subdomains (F-1): `GET /public/organizations/by-subdomain/:subdomain`
@@ -42,6 +43,7 @@ describe('Portal subdomain resolution (M14: public, no auth, no cross-org leak)'
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, ownerA.body.user.organizationId);
     createdOrgIds.push(ownerA.body.user.organizationId);
     await request(server)
       .put('/org/profile')
@@ -58,6 +60,7 @@ describe('Portal subdomain resolution (M14: public, no auth, no cross-org leak)'
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, ownerB.body.user.organizationId);
     createdOrgIds.push(ownerB.body.user.organizationId);
     await request(server)
       .put('/org/profile')

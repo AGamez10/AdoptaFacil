@@ -353,6 +353,13 @@ async function main(): Promise<void> {
         ownerUserId = session.user.id;
         console.log(`[seed:demo] Organización creada (owner=${def.ownerEmail}).`);
       }
+      // R2-1: a new organization starts in review and is not public. The demo
+      // (never production, see the guard above) approves it directly so its
+      // portal and catalogs show up.
+      await prisma.organization.update({
+        where: { id: organizationId },
+        data: { status: 'approved', statusReason: null, statusChangedAt: new Date() },
+      });
       credentialRows.push({
         rol: `Owner — ${def.organizationName}`,
         correo: def.ownerEmail,
