@@ -1,7 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { AnimalSummary } from '@adoptafacil/contracts';
+import {
+  CLOSED_CAPABILITIES,
+  type AnimalSummary,
+  type PublicCapabilities,
+} from '@adoptafacil/contracts';
+import { CapabilitiesProvider } from '../../../shell/capabilities';
+import { OPEN_CAPABILITIES } from '../../../test-utils';
 import { PublicAnimalDetailPage } from './public-animal-detail-page';
 
 /**
@@ -34,16 +40,20 @@ const ANIMAL_WITH_AGE: AnimalSummary = {
   computedAge: { years: 1, months: 0, totalMonths: 12, approximate: false },
 };
 
-function renderDetail(options: { state?: { animal: AnimalSummary } } = {}) {
+function renderDetail(
+  options: { state?: { animal: AnimalSummary }; capabilities?: PublicCapabilities } = {},
+) {
   return render(
-    <MemoryRouter
-      initialEntries={[{ pathname: '/o/patitas/animales/a1', state: options.state ?? null }]}
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-    >
-      <Routes>
-        <Route path="/o/:slug/animales/:animalId" element={<PublicAnimalDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <CapabilitiesProvider value={options.capabilities ?? OPEN_CAPABILITIES}>
+      <MemoryRouter
+        initialEntries={[{ pathname: '/o/patitas/animales/a1', state: options.state ?? null }]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/o/:slug/animales/:animalId" element={<PublicAnimalDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </CapabilitiesProvider>,
   );
 }
 
@@ -158,6 +168,16 @@ describe('PublicAnimalDetailPage', () => {
     await screen.findByRole('link', { name: 'Ver Fundación Patitas' });
     const cta = await screen.findByTestId('sponsor-animal-cta');
     expect(cta.getAttribute('href') ?? '').toContain('organizationName=Fundaci%C3%B3n+Patitas');
+  });
+
+  it('Ola 1 (R1-1): with sponsorships off, "Apadrinar" is never offered nor fetched', async () => {
+    stubWithSponsorshipPlans([{ id: 'plan-1' }]);
+    renderDetail({ state: { animal: ANIMAL }, capabilities: CLOSED_CAPABILITIES });
+
+    await screen.findByTestId('request-adoption-cta');
+    expect(screen.queryByTestId('sponsor-animal-cta')).not.toBeInTheDocument();
+    const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(calls.some((url) => url.includes('/public/sponsorships/'))).toBe(false);
   });
 
   it('F-CTA-APADRINAR: absent in the not-found state, same as "Solicitar adopción"', async () => {

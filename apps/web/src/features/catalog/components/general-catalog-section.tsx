@@ -4,17 +4,7 @@ import {
   type AnimalSpecies,
   type PublicAnimalSummary,
 } from '@adoptafacil/contracts';
-import {
-  Button,
-  ComingSoon,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  EmptyState,
-  Input,
-  Skeleton,
-} from '@adoptafacil/ui';
+import { Button, EmptyState, Input, Skeleton } from '@adoptafacil/ui';
 import { SPECIES_LABELS } from '../../portals/model/animals-catalog';
 import { fetchGlobalPublicAnimals } from '../api/public-animals';
 import { CatalogAnimalCard } from './catalog-animal-card';
@@ -73,7 +63,6 @@ export function GeneralCatalogSection() {
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
 
   const [selectedAnimal, setSelectedAnimal] = useState<PublicAnimalSummary | null>(null);
-  const [alertModalOpen, setAlertModalOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -290,11 +279,6 @@ export function GeneralCatalogSection() {
                     onOpenDetail={setSelectedAnimal}
                   />
                 ))}
-                {/* "¿No encuentras tu amigo?" solo al final del todo, para no
-                    interrumpir el "Ver más" con una tarjeta que no es un animal. */}
-                {visibleCount >= filteredItems.length && (
-                  <NoMatchCard onClick={() => setAlertModalOpen(true)} />
-                )}
               </div>
               {visibleCount < filteredItems.length && (
                 <div className="flex justify-center">
@@ -316,43 +300,6 @@ export function GeneralCatalogSection() {
         animal={selectedAnimal}
         onOpenChange={(open) => !open && setSelectedAnimal(null)}
       />
-
-      <Dialog open={alertModalOpen} onOpenChange={setAlertModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Crear alerta</DialogTitle>
-          </DialogHeader>
-          <ComingSoon
-            icon={<span aria-hidden>🔔</span>}
-            title="Disponible próximamente"
-            description="Avisarte cuando llegue un animal con las características que buscas todavía no está conectado."
-          />
-        </DialogContent>
-      </Dialog>
     </section>
-  );
-}
-
-/** "¿No encuentras tu nuevo amigo?" — última tarjeta del grid (pulido
- *  visual, imagen de referencia usada solo como guía). Al hacer clic abre el
- *  modal "Disponible próximamente" ya usado en el resto del sistema — no
- *  crea ninguna alerta real todavía. */
-function NoMatchCard({ onClick }: { onClick: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border p-6 text-center">
-      <span
-        aria-hidden
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-lg"
-      >
-        +
-      </span>
-      <p className="text-sm font-medium">¿No encuentras tu nuevo amigo?</p>
-      <p className="text-xs text-muted-foreground">
-        Te avisamos cuando llegue un animal con estas características.
-      </p>
-      <Button type="button" variant="outline" size="sm" onClick={onClick}>
-        Crear alerta
-      </Button>
-    </div>
   );
 }

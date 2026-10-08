@@ -1,7 +1,11 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FormalizationState, type OrganizationPublic } from '@adoptafacil/contracts';
+import {
+  CLOSED_CAPABILITIES,
+  FormalizationState,
+  type OrganizationPublic,
+} from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
 
 /**
@@ -77,12 +81,12 @@ describe('OrgPublicPage — rich public portal', () => {
     // informal org under the formalized_only policy) → deny-by-default: no badge.
     expect(await screen.findByRole('heading', { name: /Refugio Patitas/ })).toBeInTheDocument();
     expect(screen.queryByTestId('org-type-badge')).not.toBeInTheDocument();
-    expect(screen.getByText('RTE vigente')).toBeInTheDocument();
-    // The formalization badge + stats row show the STATE label (Formalizada,
-    // appears twice), never the verification level — that stays at 0 until the
-    // ladder catalog exists (T-103), so it is never surfaced in the UI (T-D02).
-    expect(screen.getAllByText('Formalizada').length).toBeGreaterThanOrEqual(1);
+    // Ola 3 (R3-5): formalization and RTE are self-declared today (SEC-003,
+    // R2-2), so the portal never paints them as a seal.
+    expect(screen.queryByText('RTE vigente')).not.toBeInTheDocument();
+    expect(screen.queryByText('Formalizada')).not.toBeInTheDocument();
     expect(screen.queryByText(/Verificación nivel/)).not.toBeInTheDocument();
+    expect(document.title).toBe('Refugio Patitas · AdoptaFácil');
   });
 
   it('shows the org-type badge with its label when the projection carries the type (T-030)', async () => {
@@ -142,7 +146,35 @@ describe('OrgPublicPage — rich public portal', () => {
     expect(screen.getByRole('heading', { name: 'Mascotas en adopción' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Productos' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Necesita hoy' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Campaña activa' })).toBeInTheDocument();
+  });
+
+  it('Ola 1/3: with every module off it shows no money, products, needs, reviews nor ledger', async () => {
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION, capabilities: CLOSED_CAPABILITIES });
+    await screen.findByRole('heading', { level: 1, name: 'Refugio Patitas' });
+
+    expect(screen.queryByTestId('portal-donate-cta')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('public-header-donate')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apadrinar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Productos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Necesita hoy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Reseñas' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-public-ledger-section')).not.toBeInTheDocument();
+    // The closing block explains how to adopt instead of asking for money.
+    expect(
+      screen.getByRole('heading', { name: 'Cómo adoptar en Refugio Patitas' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('public-header-adopt')).toHaveAttribute(
+      'href',
+      '#portal-section-pets',
+    );
+  });
+
+  it('offers the org WhatsApp as a safe wa.me link built from digits only', async () => {
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+    await screen.findByRole('heading', { name: /Refugio Patitas/ });
+    expect(screen.getByTestId('portal-whatsapp-cta').getAttribute('href')).toMatch(
+      /^https:\/\/wa\.me\/573000000000\?text=/,
+    );
   });
 
   it('F-MKT-PORTAL-1: mounts the "Productos" section wired to the marketplace catalog scoped to THIS organization', async () => {
@@ -298,19 +330,23 @@ describe('OrgPublicPage — rich public portal', () => {
     expect(screen.getByTestId('campaign-card')).toBeInTheDocument();
   });
 
-  it('shows the transparency indicator with REAL derived data (§M14, T-027)', async () => {
+  it('shows only the documents the PLATFORM reviewed as trust seals (no self-declared level bar)', async () => {
+    stubFetch({
+      org: {
+        ...ORG,
+        verificationLevel: {
+          level: 2,
+          criteria: ['rut:approved', 'existence_representation_certificate:approved', 'x:y'],
+        },
+      },
+    });
     renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
     await screen.findByRole('heading', { name: /Refugio Patitas/ });
 
-    const indicator = screen.getByTestId('transparency-indicator');
-    // Nivel real (verificationLevel.level = 2).
-    expect(indicator).toHaveTextContent('Nivel');
-    expect(indicator).toHaveTextContent('2');
-    // % derivado de FORMALIZATION_SEQUENCE: Formalizada = índice 2 / 4 = 50%.
-    expect(indicator).toHaveTextContent('50%');
-    // Rendición: placeholder honesto hasta M05/M06.
-    expect(indicator).toHaveTextContent('No disponible');
-    expect(screen.getByText(/Rendición de cuentas: disponible cuando/)).toBeInTheDocument();
+    expect(screen.queryByTestId('transparency-indicator')).not.toBeInTheDocument();
+    const seals = screen.getByRole('list', { name: 'Documentos revisados por la plataforma' });
+    expect(within(seals).getAllByRole('listitem')).toHaveLength(2);
+    expect(seals).toHaveTextContent('RUT revisado por AdoptaFácil');
   });
 
   it('applies the org brand tokens at runtime, scoped and safe-subset only', async () => {
@@ -342,8 +378,8 @@ describe('OrgPublicPage — rich public portal', () => {
     await screen.findByRole('heading', { name: /Refugio Patitas/ });
 
     expect(screen.getByText('hola@patitas.org')).toBeInTheDocument();
-    expect(screen.getByText('900123456-7')).toBeInTheDocument();
-    expect(screen.getByText('Bogotá, Cundinamarca, Colombia')).toBeInTheDocument();
+    expect(screen.getByText('NIT 900123456-7')).toBeInTheDocument();
+    expect(screen.getByText('Bogotá, Cundinamarca')).toBeInTheDocument();
     // "Sitio web" also appears (icon-only) in the footer (T-D04) — scope to
     // the sidebar, which still shows the full visible link.
     const sidebar = within(screen.getByTestId('portal-side-panel'));
@@ -360,7 +396,7 @@ describe('OrgPublicPage — rich public portal', () => {
     renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
     await screen.findByRole('heading', { name: /Refugio Patitas/ });
 
-    expect(screen.queryByText('900123456-7')).not.toBeInTheDocument();
+    expect(screen.queryByText(/900123456-7/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Sitio web' })).not.toBeInTheDocument();
     expect(screen.getByText('hola@patitas.org')).toBeInTheDocument();
   });
@@ -430,7 +466,9 @@ describe('OrgPublicPage — rich public portal', () => {
     // disponibles" — el catálogo (T-D03) también muestra el mismo total en
     // su propio contador ("X de Y animales"), por eso se matchea el texto
     // completo en vez de solo el número.
-    expect(await screen.findByText('3 animales disponibles')).toBeInTheDocument();
+    expect(await screen.findByTestId('portal-animal-count')).toHaveTextContent(
+      '3 animales buscan hogar',
+    );
   });
 
   it('shows a clear public 404 for an unknown slug', async () => {
@@ -532,8 +570,9 @@ describe('OrgPublicPage — rich public portal', () => {
       stubFetch({ org: { ...ORG, logoUrl: 'https://cdn.test/logo.png' }, logoPosition: 'center' });
       renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
 
-      const logo = await screen.findByAltText('Logo de Refugio Patitas');
-      expect(logo.parentElement?.className).toContain('left-1/2');
+      await screen.findByAltText('Logo de Refugio Patitas');
+      const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+      expect(hero.dataset.logo).toBe('center');
     });
 
     it('moves the social sidebar to the left when socialNavPosition is "left"', async () => {
@@ -570,20 +609,22 @@ describe('OrgPublicPage — rich public portal', () => {
       await screen.findByRole('heading', { name: /Refugio Patitas/ });
 
       // KPI real en la línea de meta del hero (rediseño T-D05).
-      expect(await screen.findByText('7 animales disponibles')).toBeInTheDocument();
+      expect(await screen.findByTestId('portal-animal-count')).toHaveTextContent(
+        '7 animales buscan hogar',
+      );
       // No fabricated metrics: those fields don't exist in the contract yet.
       expect(screen.queryByText(/Adopciones/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Calificación/)).not.toBeInTheDocument();
     });
 
-    it('shows Donar/Adoptar/Apadrinar together at the top, and Adoptar/Apadrinar switch back to the real "Portafolio" catalog tab', async () => {
+    it('with the modules on, shows Donar/Apadrinar next to the main CTA, which scroll to the real catalog', async () => {
       stubFetch({ org: { ...ORG, aboutUs: 'Somos un refugio con 10 años de historia.' } });
       renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
       await screen.findByRole('heading', { name: /Refugio Patitas/ });
 
       const actions = screen.getByTestId('portal-header-actions');
       expect(within(actions).getByTestId('portal-donate-cta')).toBeInTheDocument();
-      const adoptar = within(actions).getByRole('button', { name: 'Adoptar' });
+      const adoptar = within(actions).getByRole('button', { name: 'Conocer a nuestros animales' });
       const apadrinar = within(actions).getByRole('button', { name: 'Apadrinar' });
 
       // Neither reimplements a new flow (rediseño T-D04, ya sin tabs): ambos

@@ -54,3 +54,137 @@
   gap: 0.75rem;
   flex-shrink: 0;
 }
+
+/* Ola 3 (R3-5): vidrio sutil sobre el hero y menú móvil. */
+.navbar {
+  background-color: rgb(255 255 255 / 0.88);
+  backdrop-filter: saturate(1.4) blur(10px);
+}
+
+.navbar__login {
+  display: none;
+
+  @media (min-width: 480px) {
+    display: inline-flex;
+  }
+}
+
+.navbar__register {
+  display: none;
+
+  @media (min-width: 640px) {
+    display: inline-flex;
+  }
+}
+
+.navbar__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-md);
+  color: hsl(var(--navy));
+
+  &:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  @media (min-width: 768px) {
+    display: none;
+  }
+}
+
+.navbar__burger,
+.navbar__burger::before,
+.navbar__burger::after {
+  display: block;
+  width: 1.25rem;
+  height: 2px;
+  border-radius: 2px;
+  background-color: currentColor;
+  transition:
+    transform 0.25s ease,
+    background-color 0.25s ease;
+}
+
+.navbar__burger {
+  position: relative;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+  }
+
+  &::before {
+    top: -6px;
+  }
+
+  &::after {
+    top: 6px;
+  }
+
+  &[data-open='true'] {
+    background-color: transparent;
+
+    &::before {
+      transform: translateY(6px) rotate(45deg);
+    }
+
+    &::after {
+      transform: translateY(-6px) rotate(-45deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &,
+    &::before,
+    &::after {
+      transition: none;
+    }
+  }
+}
+
+.navbar__mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem 1.25rem;
+  border-top: 1px solid var(--border-hairline);
+
+  &[hidden] {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    display: none;
+  }
+}
+
+.navbar__mobileLink {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border-radius: var(--r-md);
+  font-weight: var(--fw-medium);
+  color: hsl(var(--navy));
+
+  &:hover {
+    background-color: var(--brand-light);
+  }
+}
+
+.navbar__mobileLink--active {
+  color: hsl(var(--primary));
+  font-weight: var(--fw-semibold);
+}
+
+.navbar__mobileActions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
