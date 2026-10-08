@@ -1,0 +1,334 @@
+/* Bloques comerciales de la landing (Ola 3): formas de ayudar, campañas,
+   propuesta para organizaciones y cierre. Misma paleta del logo y de los
+   carnets de animales (navy, teal, coral, dorado). */
+
+$ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+.container {
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+
+  @media (min-width: 640px) {
+    padding: 0 1.5rem;
+  }
+}
+
+.eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: hsl(var(--brand-teal-dark));
+}
+
+.head {
+  max-width: 40rem;
+  margin-bottom: 2rem;
+}
+
+.head--row {
+  max-width: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.head__title {
+  margin-top: 0.5rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3.6vw, 2.6rem);
+  font-weight: var(--fw-semibold);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+  text-wrap: balance;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: var(--fw-semibold);
+  color: hsl(var(--brand-teal-dark));
+
+  svg {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* ---------- Botones ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.75rem 1.4rem;
+  border-radius: var(--r-full);
+  font-weight: var(--fw-semibold);
+  transition: transform 0.25s $ease;
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid hsl(var(--brand-teal));
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
+  }
+}
+
+.btn--light {
+  background-color: #fff;
+  color: hsl(var(--brand-navy));
+}
+
+.btn--ghost {
+  border: 1px solid rgb(255 255 255 / 0.35);
+  color: #fff;
+}
+
+/* ---------- Formas de ayudar ---------- */
+.ways {
+  padding: 4.5rem 0;
+
+  @media (min-width: 1024px) {
+    padding: 6rem 0;
+  }
+}
+
+.ways__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (min-width: 1024px) {
+    &[data-count='3'] {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    &[data-count='4'] {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+}
+
+.way {
+  --tone: var(--brand-teal);
+  --tone-ink: var(--brand-teal-dark);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.6rem 1.4rem 1.4rem;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--card));
+  transition:
+    transform 0.3s $ease,
+    box-shadow 0.3s $ease;
+
+  /* Huella decorativa en la esquina, como en el carnet del animal. */
+  &::after {
+    content: '';
+    position: absolute;
+    right: -1.5rem;
+    top: -1.5rem;
+    width: 6rem;
+    height: 6rem;
+    border-radius: 9999px;
+    background-color: hsl(var(--tone) / 0.12);
+  }
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 22px 40px -28px hsl(var(--brand-navy) / 0.55);
+  }
+
+  &[data-tone='coral'] {
+    --tone: var(--brand-coral);
+    --tone-ink: 10 70% 42%;
+  }
+
+  &[data-tone='gold'] {
+    --tone: var(--brand-gold);
+    --tone-ink: 32 80% 34%;
+  }
+
+  &[data-tone='navy'] {
+    --tone: var(--brand-navy-soft);
+    --tone-ink: var(--brand-navy);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
+  }
+}
+
+.way__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  background-color: hsl(var(--tone) / 0.16);
+  color: hsl(var(--tone-ink));
+
+  svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+.way__title {
+  margin-top: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: var(--fw-semibold);
+}
+
+.way__text {
+  flex: 1;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.way__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  font-weight: var(--fw-semibold);
+  color: hsl(var(--tone-ink));
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* Toda la tarjeta es clicable, pero el enlace sigue siendo uno solo. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.way:has(.way__cta:focus-visible) {
+  outline: 3px solid hsl(var(--tone));
+  outline-offset: 2px;
+}
+
+/* ---------- Campañas ---------- */
+.campaigns {
+  padding: 4rem 0;
+  background-color: hsl(var(--brand-teal-light) / 0.6);
+}
+
+.campaigns__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  > li {
+    display: flex;
+
+    > * {
+      flex: 1;
+    }
+  }
+}
+
+/* ---------- Cierre ---------- */
+.final {
+  padding: 1rem 0 5rem;
+}
+
+.final__card {
+  position: relative;
+  overflow: hidden;
+  padding: 3rem 1.5rem;
+  border-radius: 2rem;
+  text-align: center;
+  color: #fff;
+  background:
+    radial-gradient(30rem 18rem at 100% 0%, hsl(var(--brand-teal) / 0.45), transparent 60%),
+    radial-gradient(24rem 16rem at 0% 100%, hsl(var(--brand-coral) / 0.25), transparent 60%),
+    hsl(var(--brand-navy));
+
+  @media (min-width: 640px) {
+    padding: 4rem 3rem;
+  }
+}
+
+.final__spark {
+  width: 2rem;
+  height: 2rem;
+  margin: 0 auto 1rem;
+  color: hsl(var(--brand-gold));
+}
+
+.final__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 4vw, 3rem);
+  font-weight: var(--fw-semibold);
+  line-height: 1.1;
+}
+
+.final__text {
+  max-width: 34rem;
+  margin: 1rem auto 0;
+  line-height: 1.6;
+  color: rgb(255 255 255 / 0.85);
+}
+
+.final__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}

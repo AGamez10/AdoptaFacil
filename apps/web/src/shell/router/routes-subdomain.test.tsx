@@ -55,7 +55,7 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
 
     expect(await screen.findByRole('heading', { name: 'Refugio Patitas' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Adoptar bien empieza por confiar.' }),
+      screen.queryByRole('heading', { name: 'Ayudar a un animal nunca fue tan fácil.' }),
     ).not.toBeInTheDocument();
   });
 
@@ -66,7 +66,7 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
     renderShell({ route: '/', session: { initialStatus: 'unauthenticated' } });
 
     expect(
-      await screen.findByRole('heading', { name: 'Adoptar bien empieza por confiar.' }),
+      await screen.findByRole('heading', { name: 'Ayudar a un animal nunca fue tan fácil.' }),
     ).toBeInTheDocument();
   });
 
@@ -77,7 +77,7 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
     renderShell({ route: '/', session: { initialStatus: 'unauthenticated' } });
 
     expect(
-      await screen.findByRole('heading', { name: 'Adoptar bien empieza por confiar.' }),
+      await screen.findByRole('heading', { name: 'Ayudar a un animal nunca fue tan fácil.' }),
     ).toBeInTheDocument();
   });
 });

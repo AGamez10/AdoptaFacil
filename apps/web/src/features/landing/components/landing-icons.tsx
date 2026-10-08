@@ -99,3 +99,19 @@ export const IconMail = (p: IconProps) => (
     <path d="M4 7l8 6 8-6" />
   </svg>
 );
+export const IconHeart = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.3a4.3 4.3 0 017.5 2.5C19.5 15.4 12 20 12 20z" />
+  </svg>
+);
+export const IconBox = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M3.5 7.5L12 3.5l8.5 4v9L12 20.5l-8.5-4v-9z" />
+    <path d="M3.5 7.5L12 11.5l8.5-4M12 11.5v9" />
+  </svg>
+);
+export const IconSpark = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6" />
+  </svg>
+);
