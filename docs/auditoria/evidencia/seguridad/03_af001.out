@@ -1,0 +1,7 @@
+## token fake para el PlatformSuperAdmin semilla
+{"user":{"id":"d41b3e9e-9f9c-4589-8933-ef269c1d767b","email":"admin@adoptafacil.local","displayName":"Platform Admin","accountType":"person","organizationId":"b2d85d7c-1a64-4d36-b595-4236dcb3db4c"},"tokens":{"accessToken":"<JWT-REDACTADO>","refreshToken":"<REDACTADO>","tokenType":"Bearer","expiresIn":86400}}
+## con ese token: /rbac/my-roles y /platform/dashboard/super-admin
+["platform_admin","platform_super_admin"]
+{"grossTotal":0,"platformFeeTotal":0,"gatewayFeeTotal":0,"netTotal":0,"organizationsByVerificationLevel":[{"count":11,"level":0}],"activeAnimals":0,"totalAdoptions":0,"activeCampaigns":0,"activeSponsorships":0,"organizationsByDepartment":[{"count":11,"department":"Sin especificar"}],"organizationsGrowth":{"currentPeriodCount":11,"previousPeriodCount":0,"growthRatePct":100}} HTTP 200
+## variante base64url JSON (sin prefijo fake:) para el Owner de Tenant A
+{"email":"owner.a@tenant-a.test","org":"8d8c0ec4-6acd-40a7-9399-de18a8e85573","type":"organization"}

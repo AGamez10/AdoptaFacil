@@ -1,0 +1,17 @@
+export SEC=${AUDIT_DIR:-./auditoria-seguridad}
+export NODE_ENV=development
+export API_PORT=3100
+export DATABASE_URL='postgresql://adoptafacil:adoptafacil@localhost:5433/adoptafacil_sec?schema=public'
+export DATABASE_URL_APP='postgresql://adoptafacil_app:adoptafacil_app@localhost:5433/adoptafacil_sec?schema=public'
+export REDIS_URL='redis://localhost:6379/5'
+export API_CORS_ORIGIN='http://localhost:5173'
+export WEB_BASE_URL='http://localhost:5173'
+export STORAGE_DRIVER=disk
+export STORAGE_DISK_ROOT=$SEC/evidencia/storage
+export STORAGE_PUBLIC_BASE_URL='http://localhost:3100'
+export PAYMENT_DRIVER=fake
+export AUTH_IDENTITY_DRIVER=fake
+export NOTIFICATION_DRIVER=log
+export JWT_SECRET='sec-audit-local-secret'
+export API=http://localhost:3100
+export JWT_ACCESS_TTL=86400
