@@ -99,6 +99,10 @@ services:
       STORAGE_PUBLIC_BASE_URL: https://${APP_DOMAIN}/api
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET}
       SIGNATURE_ENCRYPTION_KEY: ${SIGNATURE_ENCRYPTION_KEY:?SIGNATURE_ENCRYPTION_KEY}
+      # Caddy es el único proxy delante de la API; el límite de peticiones se
+      # comparte en Redis (exigidos por la guarda de producción, R0-1/R1-3).
+      TRUST_PROXY_HOPS: '1'
+      THROTTLER_STORAGE: redis
     # Drivers e integraciones (NOTIFICATION_DRIVER, SMTP_*, PAYMENT_DRIVER,
     # AUTH_IDENTITY_DRIVER, GOOGLE_OAUTH_CLIENT_ID, …) van en deploy/api.env:
     # la validación de la API rechaza variables vacías, así que lo que no se
