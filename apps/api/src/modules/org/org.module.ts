@@ -24,6 +24,8 @@ import { OrganizationSummaryController } from './organization-summary.controller
 import { OrganizationSummaryService } from './organization-summary.service';
 import { PlatformDocumentsController } from './platform-documents.controller';
 import { PlatformDocumentsService } from './platform-documents.service';
+import { ReviewClaimsController } from './review-claims.controller';
+import { ReviewClaimsService } from './review-claims.service';
 import { PlatformDuplicatesController } from './platform-duplicates.controller';
 import { PlatformDuplicatesService } from './platform-duplicates.service';
 import { PlatformSettingsController } from './platform-settings.controller';
@@ -50,6 +52,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     LegalRepresentativeController,
     OrganizationSummaryController,
     PlatformDocumentsController,
+    ReviewClaimsController,
     PlatformDuplicatesController,
     PlatformSettingsController,
     PublicPlatformSettingsController,
@@ -64,6 +67,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     { provide: SIGNATURE_ENCRYPTION_CONFIG, useFactory: loadSignatureEncryptionConfig },
     OrganizationSummaryService,
     PlatformDocumentsService,
+    ReviewClaimsService,
     PlatformSettingsService,
     DianVerificationService,
     DianVerificationProcessor,
