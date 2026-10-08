@@ -275,7 +275,11 @@ describe('Member invitations (R2-3, AF-017)', () => {
   it('two acceptances of the same link at once: exactly one account is created', async () => {
     const inv = await invited();
     const results = await Promise.all([accept(inv.token), accept(inv.token)]);
-    expect(results.map((r) => r.status).sort()).toEqual([201, 400]);
+    const codes = results.map((r) => r.status).sort();
+    // The loser sees the link already used (400) or, past that check, the
+    // email already taken (409); never two accounts.
+    expect(codes[0]).toBe(201);
+    expect([400, 409]).toContain(codes[1]);
     expect(await admin.authCredential.count({ where: { email: inv.email } })).toBe(1);
   });
 
