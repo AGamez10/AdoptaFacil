@@ -175,6 +175,10 @@ export const envSchema = z.object({
   FEATURE_RESOURCES: featureFlag(),
   FEATURE_MARKETPLACE: featureFlag(),
   FEATURE_VOLUNTEERING_MINORS: featureFlag(),
+  // Planes y suscripciones: OFF by default. While off every organization is
+  // treated as plan `pro` (nothing gated, nothing charged); turning it on is
+  // the owner's call once the subscription can actually be invoiced.
+  PLAN_ENFORCEMENT: featureFlag(),
   // Written approval reference (PSP confirmation + legal review, D1–D7/D17)
   // that production requires before FEATURE_PAYMENTS or FEATURE_SPONSORSHIPS
   // can be turned on. Free text (ticket, email date, document id); it is only
