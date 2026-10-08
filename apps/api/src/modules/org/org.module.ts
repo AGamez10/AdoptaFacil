@@ -26,6 +26,7 @@ import { PlatformDocumentsController } from './platform-documents.controller';
 import { PlatformDocumentsService } from './platform-documents.service';
 import { PlatformDuplicatesController } from './platform-duplicates.controller';
 import { PlatformDuplicatesService } from './platform-duplicates.service';
+import { PlatformOrganizationsController } from './platform-organizations.controller';
 import { PlatformSettingsController } from './platform-settings.controller';
 import { PlatformSettingsService } from './platform-settings.service';
 import { PublicPlatformSettingsController } from './public-platform-settings.controller';
@@ -53,6 +54,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     PlatformDuplicatesController,
     PlatformSettingsController,
     PublicPlatformSettingsController,
+    PlatformOrganizationsController,
   ],
   providers: [
     OrgProfileService,

@@ -11,8 +11,10 @@
  * Env overrides (all optional):
  *   SEED_DEMO_PASSWORD   — shared password for the demo Owner/Person accounts.
  *                           Dev-only default below; NEVER a real credential.
- *   PLATFORM_ADMIN_EMAIL — must match the PlatformAdmin created by seed:admin
- *                           (same default as that script: admin@adoptafacil.local).
+ *   PLATFORM_ADMIN_EMAIL — REQUIRED: the PlatformAdmin created by seed:admin
+ *                           (no default since AF-037).
+ *
+ * Refuses to run with NODE_ENV=production: demo accounts share a password.
  *
  * Forces NOTIFICATION_DRIVER=log and STORAGE_DRIVER=disk regardless of `.env`
  * (the local `.env` has real Gmail SMTP configured; this seed must never send
@@ -70,9 +72,18 @@ import { loadAssetOrGenerate, minimalPdf, simplePng } from './seed-assets';
 // ALWAYS comes from env, with an obviously-dev fallback.
 // ---------------------------------------------------------------------------
 const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'DemoPass123!';
-const PLATFORM_ADMIN_EMAIL = (process.env.PLATFORM_ADMIN_EMAIL ?? 'admin@adoptafacil.local')
-  .trim()
-  .toLowerCase();
+const PLATFORM_ADMIN_EMAIL = (process.env.PLATFORM_ADMIN_EMAIL ?? '').trim().toLowerCase();
+
+if (process.env.NODE_ENV === 'production') {
+  console.error('[seed:demo] Se niega a correr con NODE_ENV=production (cuentas de demostración).');
+  process.exit(1);
+}
+if (!PLATFORM_ADMIN_EMAIL) {
+  console.error(
+    '[seed:demo] Define PLATFORM_ADMIN_EMAIL (el PlatformAdmin creado con seed:admin).',
+  );
+  process.exit(1);
+}
 
 if (!process.env.SEED_DEMO_PASSWORD) {
   console.warn(
@@ -342,6 +353,13 @@ async function main(): Promise<void> {
         ownerUserId = session.user.id;
         console.log(`[seed:demo] Organización creada (owner=${def.ownerEmail}).`);
       }
+      // R2-1: a new organization starts in review and is not public. The demo
+      // (never production, see the guard above) approves it directly so its
+      // portal and catalogs show up.
+      await prisma.organization.update({
+        where: { id: organizationId },
+        data: { status: 'approved', statusReason: null, statusChangedAt: new Date() },
+      });
       credentialRows.push({
         rol: `Owner — ${def.organizationName}`,
         correo: def.ownerEmail,

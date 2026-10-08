@@ -19,6 +19,7 @@ import { CommunityModule } from './modules/community/community.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { OrgGovernanceModule } from './modules/org/governance/org-governance.module';
 import { OrgModule } from './modules/org/org.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PortalsModule } from './modules/portals/portals.module';
@@ -64,6 +65,8 @@ import { RedisModule } from './redis/redis.module';
     FeaturesModule,
     // Feature modules (registered last; core modules above are unchanged).
     OrgModule,
+    // Ola 1 · organization review status/suspension + member invitations.
+    OrgGovernanceModule,
     // M14 · portal personalization by tokens + public theme read (T-027).
     PortalsModule,
     // M03 · animal record (expediente, RF07 / T-104).

@@ -19,6 +19,7 @@ import {
   type LoginDto,
   type RegisterOrganizationDto,
   type RegisterPersonDto,
+  OrganizationStatus,
   Role,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
@@ -98,7 +99,17 @@ export class AuthService {
     // accepts the insert. `organizations` and the auth tables are not tenant-
     // scoped, but writing them inside the same transaction is fine.
     await this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.organization.create({ data: { id: organizationId, name: organizationName } });
+      // R2-1 (AF-023): a new ORGANIZATION starts as a draft, not public until
+      // its Owner submits it and the platform approves it; a person's personal
+      // organization has nothing to review.
+      await tx.organization.create({
+        data: {
+          id: organizationId,
+          name: organizationName,
+          status:
+            accountType === 'organization' ? OrganizationStatus.Draft : OrganizationStatus.Approved,
+        },
+      });
       await tx.user.create({
         data: { id: userId, organizationId, accountType, email: normalizedEmail, displayName },
       });
@@ -174,7 +185,7 @@ export class AuthService {
       where: { email: normalizedEmail },
     });
 
-    // Always run a bcrypt comparison (dummy hash when the user is unknown) so
+    // Always run a hash comparison (dummy hash when the user is unknown) so
     // response timing does not reveal whether the email exists.
     const passwordOk = await this.passwords.verify(
       dto.password,
@@ -182,6 +193,14 @@ export class AuthService {
     );
     if (!credential || !passwordOk) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+    // AF-026: a legacy (bcrypt) hash is upgraded to Argon2id right after a
+    // successful sign-in — the only moment the plaintext is available.
+    if (this.passwords.needsRehash(credential.passwordHash)) {
+      await this.prisma.authCredential.update({
+        where: { id: credential.id },
+        data: { passwordHash: await this.passwords.hash(dto.password) },
+      });
     }
 
     const accountType = credential.accountType as AccountType;
@@ -285,7 +304,9 @@ export class AuthService {
     const displayName = claims.name.trim() || normalizedEmail;
 
     await this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.organization.create({ data: { id: organizationId, name: displayName } });
+      await tx.organization.create({
+        data: { id: organizationId, name: displayName, status: OrganizationStatus.Approved },
+      });
       await tx.user.create({
         data: {
           id: userId,

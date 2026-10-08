@@ -48,7 +48,7 @@ import { TokenService } from './token.service';
     JwtAuthGuard,
     OptionalJwtAuthGuard,
   ],
-  exports: [AUTH_CONFIG, JwtAuthGuard, OptionalJwtAuthGuard],
+  exports: [AUTH_CONFIG, JwtAuthGuard, OptionalJwtAuthGuard, PasswordService, TokenService],
 })
 export class AuthModule implements NestModule {
   // Only the `auth` routes read a cookie (the silent-refresh bootstrap) — no

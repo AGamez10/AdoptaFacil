@@ -32,7 +32,7 @@ describe('RBAC endpoints (role gating + tenant-scoped authority)', () => {
 
   const ownerEmail = `t012-owner-${randomUUID()}@test.local`;
   const personEmail = `t012-person-${randomUUID()}@test.local`;
-  const password = 'password123';
+  const password = 'password-1234';
 
   let ownerToken = '';
   let personToken = '';

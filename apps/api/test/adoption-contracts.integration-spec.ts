@@ -37,7 +37,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const longMessage = 'Tengo hogar y experiencia; quiero adoptar responsablemente a este animal.';
 
   let refugeToken = '';
