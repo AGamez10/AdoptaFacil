@@ -61,6 +61,7 @@ import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OrgProfileService } from '../src/modules/org/org-profile.service';
 import { FormalizationService } from '../src/modules/org/formalization.service';
+import { PLATFORM_ONLY_STATES } from '../src/modules/org/formalization.machine';
 import { DocumentsService } from '../src/modules/org/documents.service';
 import { PlatformDocumentsService } from '../src/modules/org/platform-documents.service';
 import { AnimalsService } from '../src/modules/animals/animals.service';
@@ -421,7 +422,12 @@ async function main(): Promise<void> {
           console.log(`[seed:demo] Formalización ya en "${status.state}" — sin cambios.`);
           return;
         }
-        while (currentIndex < targetIndex) {
+        // ESAL / ESAL_RTE are platform-only (R2-2, SEC-003): the platform
+        // reviewer moves the org there in 1e, once a document is approved.
+        while (
+          currentIndex < targetIndex &&
+          !PLATFORM_ONLY_STATES.includes(FORMALIZATION_SEQUENCE[currentIndex + 1])
+        ) {
           const nextState = FORMALIZATION_SEQUENCE[currentIndex + 1];
           await formalization.transition(ownerUserId, { targetState: nextState });
           currentIndex += 1;
@@ -468,6 +474,30 @@ async function main(): Promise<void> {
           console.log(`[seed:demo] Documento ${docDef.type} queda pendiente a propósito (demo).`);
         }
       }
+
+      // 1e. Platform-only formalization states — the PlatformAdmin cites an
+      // approved, current document of this org as evidence (R2-2, SEC-003).
+      await tenant.run({ organizationId }, async () => {
+        const status = await formalization.getStatus();
+        let currentIndex = FORMALIZATION_SEQUENCE.indexOf(status.state);
+        const targetIndex = FORMALIZATION_SEQUENCE.indexOf(def.formalizationTarget);
+        if (currentIndex >= targetIndex) return;
+        const evidence = (await documents.list()).find((d) => d.status === DocumentStatus.Approved);
+        if (!evidence) {
+          throw new Error(
+            `[seed:demo] "${def.formalizationTarget}" requires an approved document as evidence.`,
+          );
+        }
+        while (currentIndex < targetIndex) {
+          const nextState = FORMALIZATION_SEQUENCE[currentIndex + 1];
+          await formalization.platformTransition(platformAdminUserId, organizationId, {
+            targetState: nextState,
+            evidenceDocumentId: evidence.id,
+          });
+          currentIndex += 1;
+          console.log(`[seed:demo] Formalización avanzada por la plataforma a "${nextState}".`);
+        }
+      });
 
       // 1e. Animals (idempotent by name within the org).
       await tenant.run({ organizationId }, async () => {
