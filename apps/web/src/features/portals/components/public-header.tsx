@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { OrganizationPublic } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { IconGift, IconPaw, IconSearch } from './portal-icons';
+import { useFeature } from '../../../shell/capabilities';
 import { buildDonateHref } from './portal-donate-cta';
 import styles from '../styles/public-portal.module.scss';
 
@@ -121,6 +122,7 @@ function useActiveSection(hrefs: readonly string[]): [string | undefined, (href:
  */
 export function PublicHeader({ organization, navItems }: PublicHeaderProps) {
   const [activeHref, setActiveHref] = useActiveSection(navItems.map((item) => item.href));
+  const payments = useFeature('payments');
 
   return (
     <header className={styles.header} data-testid="public-header">
@@ -162,14 +164,25 @@ export function PublicHeader({ organization, navItems }: PublicHeaderProps) {
         </nav>
 
         <div className={styles.header__actions}>
-          <a
-            href={buildDonateHref(organization)}
-            className={cn(styles.btn, styles['btn--sm'], styles['btn--primary'])}
-            data-testid="public-header-donate"
-          >
-            <IconGift className="mr-1.5 h-4 w-4" />
-            Quiero ayudar
-          </a>
+          {payments ? (
+            <a
+              href={buildDonateHref(organization)}
+              className={cn(styles.btn, styles['btn--sm'], styles['btn--primary'])}
+              data-testid="public-header-donate"
+            >
+              <IconGift className="mr-1.5 h-4 w-4" />
+              Quiero ayudar
+            </a>
+          ) : (
+            <a
+              href="#portal-section-pets"
+              className={cn(styles.btn, styles['btn--sm'], styles['btn--primary'])}
+              data-testid="public-header-adopt"
+            >
+              <IconPaw aria-hidden className="mr-1.5 h-4 w-4" />
+              Quiero adoptar
+            </a>
+          )}
           <a
             href="#portal-section-pets"
             className={styles.header__iconButton}

@@ -4,6 +4,7 @@ import type { AnimalSummary, OrganizationPublic } from '@adoptafacil/contracts';
 import { buttonVariants, cn } from '@adoptafacil/ui';
 import { fetchAnimalSponsorshipSummary } from '../../sponsorships/api/public-sponsorships';
 import { buildAdoptionRequestHref, buildSponsorHref } from '../model/animals-catalog';
+import { useFeature } from '../../../shell/capabilities';
 import { buildDonateHref } from './portal-donate-cta';
 
 export interface AnimalDetailActionsProps {
@@ -39,8 +40,12 @@ export function AnimalDetailActions({
   donateOrganization,
 }: AnimalDetailActionsProps) {
   const [hasSponsorshipPlan, setHasSponsorshipPlan] = useState(false);
+  // Ola 1 (R1-1): con el módulo apagado ni se consulta ni se ofrece.
+  const sponsorships = useFeature('sponsorships');
+  const payments = useFeature('payments');
 
   useEffect(() => {
+    if (!sponsorships) return;
     let active = true;
     setHasSponsorshipPlan(false);
     fetchAnimalSponsorshipSummary(animal.id)
@@ -53,7 +58,7 @@ export function AnimalDetailActions({
     return () => {
       active = false;
     };
-  }, [animal.id]);
+  }, [animal.id, sponsorships]);
 
   return (
     <div className="space-y-2">
@@ -65,7 +70,7 @@ export function AnimalDetailActions({
         >
           Solicitar adopción
         </Link>
-        {hasSponsorshipPlan && (
+        {sponsorships && hasSponsorshipPlan && (
           <Link
             to={buildSponsorHref(animal, orgName)}
             className={cn(buttonVariants({ variant: 'outline' }))}
@@ -74,7 +79,7 @@ export function AnimalDetailActions({
             Apadrinar
           </Link>
         )}
-        {donateOrganization && (
+        {payments && donateOrganization && (
           <Link
             to={buildDonateHref(donateOrganization)}
             className={cn(buttonVariants({ variant: 'outline' }))}

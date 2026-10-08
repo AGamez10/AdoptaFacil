@@ -1,6 +1,7 @@
 import { BrowserRouter } from 'react-router-dom';
 import { AppProviders } from './app-providers';
 import { AppRoutes } from './router/routes';
+import { GuideAssistant } from '../features/guide/components/guide-assistant';
 
 /**
  * Auth transport for the real app: 'http' talks to the backend `/auth/*`
@@ -20,6 +21,8 @@ export function Shell() {
     <AppProviders session={{ mode: AUTH_MODE }}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppRoutes />
+        {/* Ola 3 (R3-8): ayuda fija por página, sin IA (D14). */}
+        <GuideAssistant />
       </BrowserRouter>
     </AppProviders>
   );

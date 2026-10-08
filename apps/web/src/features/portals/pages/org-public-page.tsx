@@ -14,7 +14,6 @@ import { safeLogoPosition, safePortalTheme, safeSocialNavPosition } from '../mod
 import { fetchPublicAnimals } from '../api/public-animals';
 import { PortalProfileSection } from '../components/portal-profile-section';
 import { PortalPlaceholderSection } from '../components/portal-placeholder-section';
-import { PortalTransparencyBar } from '../components/portal-transparency-bar';
 import { PortalSocialLinks } from '../components/portal-social-links';
 import { PortalAdoptionSection } from '../components/portal-adoption-section';
 import { PortalProductsSection } from '../components/portal-products-section';
@@ -28,6 +27,9 @@ import { PortalPublicLedgerSection } from '../components/portal-public-ledger-se
 import { PublicHeader, type PublicHeaderNavItem } from '../components/public-header';
 import { PublicFooter } from '../components/public-footer';
 import { PortalHelpCta } from '../components/portal-help-cta';
+import { PortalAdoptionSteps } from '../components/portal-adoption-steps';
+import { useFeature } from '../../../shell/capabilities';
+import { useDocumentTitle } from '../../../lib/use-document-title';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -93,6 +95,13 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const [layout, setLayout] = useState<Layout>(DEFAULT_LAYOUT);
   const [state, setState] = useState<LoadState>('loading');
   const [animalTotal, setAnimalTotal] = useState<number | undefined>(undefined);
+  // Ola 1 (R1-1) / Ola 3 (R3-5): el portal solo muestra módulos encendidos.
+  // Con un módulo apagado su sección ni se monta (antes pintaba "No se pudo
+  // cargar" porque la API respondía 404) y no hay enlaces de dinero.
+  const payments = useFeature('payments');
+  const marketplace = useFeature('marketplace');
+  const resources = useFeature('resources');
+  const reputation = useFeature('reputation');
 
   // "Adoptar"/"Apadrinar" (pulido visual) no inventan un flujo nuevo: solo
   // desplazan a la sección real "Mascotas en adopción" (rediseño T-D04, ya
@@ -185,21 +194,26 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // barra de transparencia solo aporta información real cuando hay un nivel > 0
   // que mostrar (pulido visual T-D02, condición basada en el dato real, no un
   // "nunca más" hardcodeado: si el catálogo se puebla, la barra vuelve a aparecer).
-  const hasVerificationSignal = (view?.profile.organization.verificationLevel?.level ?? 0) > 0;
+  // Ola 3 (R3-5): la barra "Nivel · % formalización · Rendición" se retiró:
+  // mezclaba documentos revisados por la plataforma con un estado de
+  // formalización que hoy declara la propia organización (SEC-003). Los
+  // documentos revisados se muestran como sellos en el hero.
+  useDocumentTitle(view?.profile.organization.name);
 
   // Secciones agregadas AÚN sin módulo dueño (transparencia) nacen en
   // status:'placeholder' — ocultarlas evita el "Próximamente" vacío frente al
   // cliente (pulido visual T-D02). 'pets', 'products' (F-MKT-PORTAL-1),
   // 'needsToday' (F-NEEDS-PORTAL-1) y 'activeCampaign' (F-CAMPANAS-PORTAL-2,
   // S2-07) ya están cableadas a datos reales y siempre se muestran.
-  const visibleSections = view?.sections.filter(
-    (section) =>
+  const visibleSections = view?.sections.filter((section) => {
+    if (section.kind === 'products') return marketplace;
+    if (section.kind === 'needsToday') return resources;
+    return (
       section.kind === 'pets' ||
-      section.kind === 'products' ||
-      section.kind === 'needsToday' ||
       section.kind === 'activeCampaign' ||
-      section.status !== 'placeholder',
-  );
+      section.status !== 'placeholder'
+    );
+  });
   // "Campaña activa" se movió a la franja superior (junto a "Síguenos", pulido
   // visual); 'pets' se queda en la tab "Portafolio"; cualquier otra sección
   // que algún día deje de ser placeholder cae dentro de la tab, como antes.
@@ -225,10 +239,10 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const navItems: PublicHeaderNavItem[] = [
     { label: 'Inicio', href: '#portal-top' },
     { label: 'Animales', href: '#portal-section-pets' },
-    { label: 'Cómo ayudar', href: '#portal-help-cta' },
+    { label: payments ? 'Cómo ayudar' : 'Cómo adoptar', href: '#portal-help-cta' },
     ...(aboutUs ? [{ label: 'Nosotros', href: '#portal-about' }] : []),
-    { label: 'Reseñas', href: '#portal-reviews' },
-    { label: 'Transparencia', href: '#portal-section-public-ledger' },
+    ...(reputation ? [{ label: 'Reseñas', href: '#portal-reviews' }] : []),
+    ...(payments ? [{ label: 'Transparencia', href: '#portal-section-public-ledger' }] : []),
     ...(hasContactInfo ? [{ label: 'Contacto', href: '#portal-contact-info' }] : []),
   ];
 
@@ -254,11 +268,6 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         )}
         {state === 'ready' && view && (
           <div className="space-y-8">
-            {hasVerificationSignal && (
-              <div className="flex justify-end">
-                <PortalTransparencyBar organization={view.profile.organization} />
-              </div>
-            )}
             {/* Header (3ra iteración): perfil + KPI(s) + acciones viven TODOS
                 dentro del mismo panel (`PortalProfileSection`) — ya no hay una
                 tarjeta de KPI flotante aparte ni una fila extra a su lado. */}
@@ -326,7 +335,14 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               </aside>
             </div>
 
-            <PortalHelpCta organization={view.profile.organization} />
+            {payments ? (
+              <PortalHelpCta organization={view.profile.organization} />
+            ) : (
+              <PortalAdoptionSteps
+                organization={view.profile.organization}
+                onBrowseCatalog={goToCatalog}
+              />
+            )}
 
             {/* "Nosotros"/"Información" (S2-PORTAL, rediseño T-D04): antes
                 tabs, ahora secciones ancladas siempre visibles cuando hay
@@ -336,7 +352,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 <PortalAboutSection aboutUs={aboutUs} />
               </section>
             )}
-            <PortalReviewsSection slug={slug as string} />
+            {reputation && <PortalReviewsSection slug={slug as string} />}
 
             {hasContactInfo && contact && (
               <section id="portal-contact-info" style={{ scrollMarginTop: '5rem' }}>
@@ -347,9 +363,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               </section>
             )}
 
-            <div style={{ scrollMarginTop: '5rem' }}>
-              <PortalPublicLedgerSection />
-            </div>
+            {payments && (
+              <div style={{ scrollMarginTop: '5rem' }}>
+                <PortalPublicLedgerSection />
+              </div>
+            )}
           </div>
         )}
       </main>

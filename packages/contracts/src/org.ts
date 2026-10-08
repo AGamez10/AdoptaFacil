@@ -539,6 +539,20 @@ export interface DocumentReviewQueueItem {
   createdAt: string;
 }
 
+/** Reserva de revisión de una organización en el workspace de plataforma (Ola 3,
+ *  R3-6): evita que dos revisores trabajen el mismo expediente a la vez. Vence
+ *  sola (`expiresAt`); es una coordinación del equipo, no un permiso. */
+export interface DocumentReviewClaim {
+  organizationId: string;
+  reviewerUserId: string;
+  /** Correo del revisor (personal de plataforma) para saber a quién preguntar. */
+  reviewerEmail: string;
+  /** ISO-8601 UTC. */
+  claimedAt: string;
+  /** ISO-8601 UTC. */
+  expiresAt: string;
+}
+
 // ============================================================================
 // Legal representative signature (M01, S-1, RF14 relacionado / RNF10). Contract-
 // first, additive: published for M05 (@fabian) to replace the generic-text
