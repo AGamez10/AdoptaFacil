@@ -10,6 +10,7 @@ import {
   type GatewayPaymentSnapshot,
   type OrgGatewayConnection,
 } from '../src/payment-gateways';
+import { computeBreakdown, DIRECT_COLLECTION_RATES, PAYMENT_FEE_CONFIG } from '../src/payments';
 
 const ORG_A = '00000000-0000-0000-0000-00000000000a';
 const ORG_B = '00000000-0000-0000-0000-00000000000b';
@@ -215,5 +216,31 @@ describe('findPaymentMismatches (PAY-003)', () => {
         reference: 'don_other',
       }),
     ).toEqual(['reference', 'amount', 'currency']);
+  });
+});
+
+describe('computeBreakdown — cobro directo (ADR-PAG-001)', () => {
+  it.each([1000, 33333, 100000, 1234567])(
+    'no platform fee and the sum still reconciles (%i)',
+    (amount) => {
+      for (const payer of ['organization', 'donor'] as const) {
+        const b = computeBreakdown(amount, payer, DIRECT_COLLECTION_RATES);
+        expect(b.platformFee).toBe(0);
+        expect(b.platformIva).toBe(0);
+        expect(b.gross).toBe(b.net + b.gatewayFee + b.gatewayIva);
+      }
+    },
+  );
+
+  it('defaults stay unchanged for callers that pass no rates', () => {
+    expect(computeBreakdown(100000, 'organization')).toEqual(
+      computeBreakdown(100000, 'organization', { platformRate: PAYMENT_FEE_CONFIG.platformRate }),
+    );
+  });
+
+  it.each([-0.1, 1, Number.NaN])('rejects platformRate %s', (rate) => {
+    expect(() => computeBreakdown(1000, 'organization', { platformRate: rate })).toThrow(
+      RangeError,
+    );
   });
 });

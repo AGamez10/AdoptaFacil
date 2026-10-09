@@ -1,6 +1,6 @@
 # ADR-PAG-001 · Recaudo con varias pasarelas, sin custodia
 
-> Estado: **propuesta** (borrador). Fecha: 2026-10-08. No activa dinero real.
+> Estado: **decidido por el dueño** (2026-10-08) e implementado para Mercado Pago, apagado. No activa dinero real.
 > Contrato: `packages/contracts/src/payment-gateways.ts` · pruebas: `packages/contracts/test/payment-gateways.test.ts`.
 > No es asesoría jurídica ni tributaria: lo marcado ⚖️ va al abogado y lo marcado 🧾 al contador.
 
@@ -32,18 +32,23 @@ split. La documentación colombiana del split habla de **`/v1/payments` con el t
 pena una sola prueba en sandbox de ese camino y mandar a Mercado Pago lo que pidieron (sección 7), pero el
 lanzamiento **no depende** de esa respuesta.
 
-## 3. Decisión propuesta
+## 3. Decisión
 
-**Lanzar con "pago directo a la cuenta de cada organización" + planes de suscripción para AdoptaFácil.**
+**Cada organización cobra con su propia cuenta y ve el dinero en el instante en que le donan. AdoptaFácil
+vive de planes de suscripción.** Decidido por el dueño el 2026-10-08.
 
 - Cada organización conecta **su propia** pasarela. La donación se cobra con las credenciales de la
   organización: la organización es el comercio (merchant of record), recibe el dinero en su cuenta y paga
   su propia tarifa de pasarela. AdoptaFácil **nunca** recibe ni retiene una donación.
-- Comisión de AdoptaFácil por transacción en el lanzamiento: **0 %**. El ingreso sale de **planes
-  mensuales** que AdoptaFácil le cobra a la organización con su propia cuenta (ingreso propio, con factura
-  electrónica 🧾).
+- Comisión de AdoptaFácil por transacción: **0 %**. El ingreso sale de **planes mensuales** que AdoptaFácil
+  le cobra a la organización con su propia cuenta (ingreso propio, con factura electrónica 🧾). El catálogo,
+  precios y cobro de planes los lleva el hilo "Planes y suscripciones" con un puerto aparte del de
+  donaciones.
 - El **4 %** se enciende después, solo con split en origen confirmado por escrito (ePayco o Mercado Pago si
-  activa MCO). El código ya lo exige: sin `splitApprovalRef`, `platform_split` se rechaza.
+  activa MCO). El contrato ya lo exige: sin `splitApprovalRef`, `platform_split` se rechaza.
+- **Organizaciones informales** (persona natural, sin RUT) **sí pueden recaudar** (decisión del dueño, D6).
+  Reciben un **comprobante de donación sin efecto tributario**; el certificado tributario sigue reservado a
+  ESAL con RTE verificado por la plataforma (D9). El riesgo legal queda anotado en la sección 6.
 
 Por qué esta y no otra:
 
@@ -139,15 +144,39 @@ Lo que cambia en la API (siguiente PR, no este):
 | 2–3 organizaciones piloto y qué pasarela tiene cada una                                                       | Priorizar adaptadores                                     | Responder en el hilo (nombres, no credenciales).                                                                                                                                                                                                                              |
 | Respuesta a Mercado Pago con lo que pidieron                                                                  | Cerrar la duda del split en MCO                           | Enviar desde la cuenta del dueño el `order_id`, el cuerpo del `POST /v1/orders` sin datos de tarjeta y si se habilitó el flujo de autorización de marketplace; preguntar además por `/v1/payments` con `application_fee` y el token OAuth del vendedor.                       |
 | Solicitud a ePayco de "Pagos divididos"                                                                       | Ruta del 4 %                                              | Cita comercial desde la cuenta del dueño.                                                                                                                                                                                                                                     |
-| Precio y alcance de cada plan                                                                                 | Configurar planes (D7)                                    | Decisión del dueño (`TODO(client)` en `SubscriptionPlanDefinition`).                                                                                                                                                                                                          |
+| Precio y alcance de cada plan                                                                                 | Configurar planes (D7)                                    | En el hilo "Planes y suscripciones".                                                                                                                                                                                                                                          |
 | Abogado y contador                                                                                            | Sección 6                                                 | Concepto escrito; su referencia va en `PAYMENTS_PRODUCTION_APPROVAL_REF`.                                                                                                                                                                                                     |
 
 ## 8. Qué hace este PR y qué no
 
-Hace: este documento y el contrato aditivo `payment-gateways.ts` (vocabulario, catálogo con fuentes,
-`planCollection`, `findPaymentMismatches`, tipo de plan) con 21 pruebas.
+Hace:
 
-No hace: no cambia la API, no crea migraciones, no toca `payments.ts`, no activa pagos. Todo pago real sigue
-apagado (flags del PR de arranque seguro) hasta la orden escrita del dueño.
+- Este documento y el contrato aditivo `payment-gateways.ts` (vocabulario, catálogo con fuentes,
+  `planCollection`, `findPaymentMismatches`).
+- `computeBreakdown` acepta tarifas opcionales y publica `DIRECT_COLLECTION_RATES` (comisión de plataforma
+  0). Sin argumentos se comporta igual que antes.
+- **Mercado Pago cobra con el token OAuth de la organización** (`mercadopago-payment.adapter.ts`). Sin cuenta
+  conectada el adaptador real se niega a cobrar; ya no existe el camino "cobra la plataforma". Se retira
+  `integration_data.sponsor.id`.
+- Las donaciones con driver real exigen que la organización haya conectado su cuenta (409 si no).
+- El webhook se verifica con el secreto de la app, ubica la organización por la cuenta notificada (función
+  `mercadopago_account_organization_id`, una migración, solo devuelve el id de la organización), relee la
+  orden **con el token de esa organización** y no aprueba si la organización, el monto o la moneda no
+  cuadran (auditoría `donation.payment_mismatch`). Una cuenta conectada a dos organizaciones se ignora.
+- El log del webhook ya no imprime la cola del secreto ni la firma calculada (AF-032).
+- La web deja de mostrar el "4 %" y dice que AdoptaFácil no cobra comisión por la donación; el comprobante
+  dice "No es un certificado tributario".
 
-Reversión: borrar los dos archivos nuevos y la línea de `index.ts`; nadie los consume todavía.
+No hace (siguientes pasos):
+
+- Prueba en sandbox: la red de este entorno bloquea `api.mercadopago.com`. Pendiente de habilitar ese
+  dominio o de correrla en el equipo del dueño.
+- Apadrinamientos: siguen llamando al puerto sin la cuenta de la organización, así que con el driver real
+  fallan cerrados. Están apagados por flag; se conectan en el PR siguiente.
+- Impedir que la misma cuenta de Mercado Pago se conecte a dos organizaciones (hoy se detecta y se ignora en
+  el webhook).
+- Wompi y enlace externo; payouts T+1 y cuentas bancarias siguen en el código, apagados.
+- No activa pagos: los flags del PR de arranque seguro siguen mandando.
+
+Reversión: revertir el PR. La migración solo crea una función de lectura; su reversión es
+`DROP FUNCTION mercadopago_account_organization_id(TEXT);`.

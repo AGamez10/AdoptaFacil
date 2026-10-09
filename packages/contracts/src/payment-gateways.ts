@@ -321,24 +321,3 @@ export function findPaymentMismatches(
   if (actual.receiverAccountId !== expected.receiverAccountId) out.push('receiver');
   return out;
 }
-
-// ----------------------------------------------------------------------------
-// SaaS plans (D7): AdoptaFácil's own revenue, billed to the organization.
-// ----------------------------------------------------------------------------
-
-/**
- * A subscription plan sold by AdoptaFácil to an organization. This is
- * AdoptaFácil's own income (electronic invoice required), completely separate
- * from donations. Prices and what each plan covers are decided by the owner:
- * TODO(client) — no price or entitlement is hard-coded here.
- */
-export interface SubscriptionPlanDefinition {
-  code: string;
-  name: string;
-  /** Integer COP per billing period; null while TODO(client). */
-  priceCop: number | null;
-  period: 'monthly' | 'yearly';
-  /** Feature keys the plan unlocks (catalog decided by the owner). */
-  entitlements: readonly string[];
-  active: boolean;
-}
