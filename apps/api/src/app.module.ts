@@ -4,6 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation';
 import { AuditModule } from './core/audit/audit.module';
 import { AuthModule } from './core/auth/auth.module';
+import { FeaturesModule } from './core/features/features.module';
+import { PlansModule } from './core/plans/plans.module';
 import { IdentityModule } from './core/identity/identity.module';
 import { NotificationModule } from './core/notifications/notification.module';
 import { PaymentModule } from './core/payments/payment.module';
@@ -19,6 +21,7 @@ import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { OrgGovernanceModule } from './modules/org/governance/org-governance.module';
 import { OrgModule } from './modules/org/org.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PortalsModule } from './modules/portals/portals.module';
@@ -59,8 +62,14 @@ import { RedisModule } from './redis/redis.module';
     // Sign-In verifier by default, global.
     IdentityModule,
     HealthModule,
+    // Module feature flags (Ola 1, R1-1): global guard that answers 404 for
+    // switched-off modules + `GET /public/config/features` for the web.
+    FeaturesModule,
+    PlansModule,
     // Feature modules (registered last; core modules above are unchanged).
     OrgModule,
+    // Ola 1 · organization review status/suspension + member invitations.
+    OrgGovernanceModule,
     // M14 · portal personalization by tokens + public theme read (T-027).
     PortalsModule,
     // M03 · animal record (expediente, RF07 / T-104).

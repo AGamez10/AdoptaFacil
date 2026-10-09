@@ -20,7 +20,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let esalToken = '';
   let esalOrgId = '';

@@ -23,7 +23,7 @@ describe('auth validation', () => {
   it('enforces a minimum password length', () => {
     expect(validatePassword('')).toBeDefined();
     expect(validatePassword('short')).toContain('al menos');
-    expect(validatePassword('longenough')).toBeUndefined();
+    expect(validatePassword('longenough12')).toBeUndefined();
   });
 
   it('checks password confirmation matches', () => {

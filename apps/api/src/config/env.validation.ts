@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+/** A module feature flag: true only for the exact string "true" (fails closed). */
+function featureFlag() {
+  return z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) => value === true || value === 'true');
+}
+
 /**
  * Single source of truth for backend configuration.
  * The API refuses to boot if any required variable is missing or malformed —
@@ -63,7 +71,10 @@ export const envSchema = z.object({
   // Checkout Pro preferences). Swap happens in PaymentModule, no consumer
   // changes. Wompi was fully replaced by MercadoPago (client decision) — the
   // gateway never conviven, so this enum has no 'wompi' option any more.
-  PAYMENT_DRIVER: z.enum(['fake', 'mercadopago']).default('fake'),
+  // 'disabled' (Ola 1, R0-1): binds an adapter that refuses every call — the
+  // production value while money stays off (D1–D7). 'fake' is rejected in
+  // production by assertProductionSafety below.
+  PAYMENT_DRIVER: z.enum(['fake', 'mercadopago', 'disabled']).default('fake'),
   // MercadoPago credentials — read ONLY from env; never hardcoded, never
   // committed. Optional at the schema level so 'fake' mode boots without them;
   // the refine below enforces their presence when PAYMENT_DRIVER=mercadopago.
@@ -138,10 +149,52 @@ export const envSchema = z.object({
   // OAuth credentials yet, so `google` cannot be exercised end-to-end until
   // then — same "stub until credentials exist" shape PAYMENT_DRIVER had
   // before T-052/MercadoPago.
-  AUTH_IDENTITY_DRIVER: z.enum(['fake', 'google']).default('fake'),
+  // 'disabled' (Ola 1, R0-1, SEC-001): `POST /auth/google` answers 404 —
+  // the production value until real Google credentials exist. 'fake' is
+  // rejected in production by assertProductionSafety below.
+  AUTH_IDENTITY_DRIVER: z.enum(['fake', 'google', 'disabled']).default('fake'),
   // Google OAuth 2.0 Client ID (web application type) the ID token's audience
   // must match. Read ONLY from env; never hardcoded, never committed.
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  // Ola 1 (R0-1): DianPort and SignaturePort only had a fake adapter, bound
+  // unconditionally. Both are now selectable so production can bind the
+  // 'disabled' adapter (refuses instead of pretending): the fake DIAN
+  // auto-verified RTE (SEC-003) and the fake signature emitted "fake:" ids on
+  // real contracts. 'fake' stays the dev/test default.
+  DIAN_DRIVER: z.enum(['fake', 'disabled']).default('fake'),
+  SIGNATURE_DRIVER: z.enum(['fake', 'disabled']).default('fake'),
+  // Ola 1 (R1-1): module feature flags. OFF unless the value is exactly
+  // "true", in every environment — a missing or misspelled flag fails closed.
+  // A module that is off answers 404 in the API (FeatureFlagGuard) and is
+  // hidden in the web (GET /public/config/features).
+  FEATURE_PAYMENTS: featureFlag(),
+  FEATURE_SPONSORSHIPS: featureFlag(),
+  FEATURE_DONATION_CERTIFICATES: featureFlag(),
+  FEATURE_COMMUNITY: featureFlag(),
+  FEATURE_REPUTATION: featureFlag(),
+  FEATURE_RESOURCES: featureFlag(),
+  FEATURE_MARKETPLACE: featureFlag(),
+  FEATURE_VOLUNTEERING_MINORS: featureFlag(),
+  // Planes y suscripciones: OFF by default. While off every organization is
+  // treated as plan `pro` (nothing gated, nothing charged); turning it on is
+  // the owner's call once the subscription can actually be invoiced.
+  PLAN_ENFORCEMENT: featureFlag(),
+  // Written approval reference (PSP confirmation + legal review, D1–D7/D17)
+  // that production requires before FEATURE_PAYMENTS or FEATURE_SPONSORSHIPS
+  // can be turned on. Free text (ticket, email date, document id); it is only
+  // checked for presence — the decision itself lives outside the code.
+  PAYMENTS_PRODUCTION_APPROVAL_REF: z.string().min(1).optional(),
+  // Ola 1 (R1-3, SEC-010): number of reverse-proxy hops in front of the API
+  // (Caddy on the VPS = 1, Render = 1). Express derives req.ip from
+  // X-Forwarded-For only across these hops, so the rate limiter sees the real
+  // client IP and a spoofed header cannot pick it. 0 = no proxy (local dev).
+  // Production must declare it explicitly.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).optional(),
+  // Ola 1 (R1-3, SEC-010): where the auth rate-limit counters live. 'redis'
+  // shares them across instances and restarts; 'memory' is per-process (the
+  // integration suite uses it so each app instance starts with a clean
+  // budget). Production must use 'redis'.
+  THROTTLER_STORAGE: z.enum(['memory', 'redis']).default('redis'),
 });
 
 /** Runtime config type (from the base object schema). */
@@ -174,6 +227,69 @@ const REQUIRED_MERCADOPAGO_KEYS = [
 
 /** Google OAuth vars required when AUTH_IDENTITY_DRIVER=google (fail-fast at boot). */
 const REQUIRED_GOOGLE_IDENTITY_KEYS = ['GOOGLE_OAUTH_CLIENT_ID'] as const;
+
+/**
+ * Production safety rules (Ola 1, R0-1 / R1-1 / R1-3). Closes the root cause
+ * of SEC-001/SEC-002/SEC-003: simulable adapters were active by default and
+ * nothing stopped them in production. With NODE_ENV=production the API now
+ * refuses to boot when any port is bound to a fake/stub/log adapter, when a
+ * money module is on without a written approval reference, or when the
+ * rate limiter cannot see real client IPs. Every rule lists the variable, so
+ * a misconfigured deploy fails loud before serving a single request.
+ */
+export const PRODUCTION_FORBIDDEN_DRIVERS = {
+  AUTH_IDENTITY_DRIVER: ['fake'],
+  PAYMENT_DRIVER: ['fake'],
+  STORAGE_DRIVER: ['stub'],
+  NOTIFICATION_DRIVER: ['log'],
+  DIAN_DRIVER: ['fake'],
+  SIGNATURE_DRIVER: ['fake'],
+} as const satisfies Partial<Record<keyof Env, readonly string[]>>;
+
+function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
+  if (env.NODE_ENV !== 'production') return;
+  const fail = (path: string, message: string) =>
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+
+  for (const [key, forbidden] of Object.entries(PRODUCTION_FORBIDDEN_DRIVERS)) {
+    const value = env[key as keyof typeof PRODUCTION_FORBIDDEN_DRIVERS];
+    if ((forbidden as readonly string[]).includes(value)) {
+      fail(key, `${key}=${value} is a simulated adapter and is not allowed in production`);
+    }
+  }
+
+  if (env.FEATURE_PAYMENTS || env.FEATURE_SPONSORSHIPS) {
+    if (env.PAYMENT_DRIVER !== 'mercadopago') {
+      fail(
+        'PAYMENT_DRIVER',
+        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=mercadopago in production',
+      );
+    }
+    if (!env.PAYMENTS_PRODUCTION_APPROVAL_REF) {
+      fail(
+        'PAYMENTS_PRODUCTION_APPROVAL_REF',
+        'money modules need the written PSP + legal approval reference in production',
+      );
+    }
+  }
+  if (env.FEATURE_DONATION_CERTIFICATES && !env.FEATURE_PAYMENTS) {
+    fail('FEATURE_DONATION_CERTIFICATES', 'donation certificates require FEATURE_PAYMENTS');
+  }
+  if (env.FEATURE_VOLUNTEERING_MINORS) {
+    // Prompt maestro §3.5 / F23: minors stay out of production until age
+    // control, legal guardian and traceable consent exist.
+    fail('FEATURE_VOLUNTEERING_MINORS', 'volunteering with minors is not allowed in production');
+  }
+  if (env.TRUST_PROXY_HOPS === undefined) {
+    fail(
+      'TRUST_PROXY_HOPS',
+      'declare how many reverse proxies sit in front of the API (0 if none)',
+    );
+  }
+  if (env.THROTTLER_STORAGE !== 'redis') {
+    fail('THROTTLER_STORAGE', 'production rate limiting must be shared in Redis');
+  }
+}
 
 /** The validated schema + cross-field rules (fail-fast for smtp/mercadopago credentials). */
 export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
@@ -210,14 +326,28 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
       }
     }
   }
+  assertProductionSafety(env, ctx);
 });
+
+/**
+ * Empty values count as "not set" (BLD-001): `pnpm setup:env` and PaaS
+ * dashboards write `KEY=` for optional credentials, and `z.string().min(1)
+ * .optional()` would otherwise reject the generated .env and stop the API.
+ */
+function dropEmptyValues(config: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(config).filter(
+      ([, value]) => !(typeof value === 'string' && value.trim() === ''),
+    ),
+  );
+}
 
 /**
  * @nestjs/config `validate` hook. Throws a readable error listing every
  * offending variable so a misconfigured environment fails fast and loud.
  */
 export function validateEnv(config: Record<string, unknown>): Env {
-  const parsed = validatedEnvSchema.safeParse(config);
+  const parsed = validatedEnvSchema.safeParse(dropEmptyValues(config));
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
@@ -227,11 +357,35 @@ export function validateEnv(config: Record<string, unknown>): Env {
   return parsed.data;
 }
 
-/** Parse REDIS_URL into the host/port shape BullMQ and ioredis expect. */
-export function parseRedisUrl(redisUrl: string): { host: string; port: number } {
+/** Connection options BullMQ/ioredis take, derived from the whole REDIS_URL. */
+export interface RedisConnectionOptions {
+  host: string;
+  port: number;
+  db: number;
+  username?: string;
+  password?: string;
+  tls?: Record<string, never>;
+}
+
+/**
+ * Parse REDIS_URL into the options BullMQ and ioredis expect (R1-7, BLD-003).
+ * Keeps the database index, credentials and TLS (`rediss://`): before, only
+ * host and port survived, so a password-protected Redis never authenticated
+ * and two environments on different `/db` indexes consumed each other's jobs.
+ */
+export function parseRedisUrl(redisUrl: string): RedisConnectionOptions {
   const url = new URL(redisUrl);
+  const dbPath = url.pathname.replace(/^\//, '');
+  const db = dbPath === '' ? 0 : Number(dbPath);
+  if (!Number.isInteger(db) || db < 0) {
+    throw new Error(`REDIS_URL has an invalid database index "${dbPath}"`);
+  }
   return {
     host: url.hostname,
     port: url.port ? Number(url.port) : 6379,
+    db,
+    ...(url.username ? { username: decodeURIComponent(url.username) } : {}),
+    ...(url.password ? { password: decodeURIComponent(url.password) } : {}),
+    ...(url.protocol === 'rediss:' ? { tls: {} } : {}),
   };
 }

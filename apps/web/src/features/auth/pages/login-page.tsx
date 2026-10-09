@@ -5,7 +5,7 @@ import { useSession } from '../../../shell/auth';
 import { AuthLayout } from '../components/auth-layout';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
-import { GoogleSignInButton } from '../components/google-sign-in-button';
+import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
 import { collectErrors, validateEmail } from '../validation';
 
 interface FromState {
@@ -19,6 +19,7 @@ interface FromState {
  */
 export function LoginPage() {
   const { signIn, signInWithGoogle } = useSession();
+  const googleAvailable = useGoogleSignInAvailable();
   const navigate = useNavigate();
   const location = useLocation();
   // Return to the guarded origin PRESERVING its query string, so a deep link with
@@ -136,12 +137,16 @@ export function LoginPage() {
         {submitting ? 'Ingresando…' : 'Iniciar sesión'}
       </Button>
 
-      <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        o
-        <span className="h-px flex-1 bg-border" />
-      </div>
-      <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+      {googleAvailable && (
+        <>
+          <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            o
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+        </>
+      )}
     </AuthLayout>
   );
 }

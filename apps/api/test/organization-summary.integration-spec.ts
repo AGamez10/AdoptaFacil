@@ -3,7 +3,11 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown, FakePaymentAdapter } from '@adoptafacil/contracts';
+import {
+  computeBreakdown,
+  DIRECT_COLLECTION_RATES,
+  FakePaymentAdapter,
+} from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
@@ -21,7 +25,7 @@ describe('Organization summary (S2-08, M13)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -261,7 +265,7 @@ describe('Organization summary (S2-08, M13)', () => {
         idempotencyKey: orgModeKey,
       })
       .expect(201);
-    net1 = computeBreakdown(50_000, 'organization').net;
+    net1 = computeBreakdown(50_000, 'organization', DIRECT_COLLECTION_RATES).net;
     await request(server)
       .post('/donations/webhook')
       .set('x-signature', 'fake-sig')
@@ -283,7 +287,7 @@ describe('Organization summary (S2-08, M13)', () => {
         idempotencyKey: donorModeKey,
       })
       .expect(201);
-    net2 = computeBreakdown(30_000, 'donor').net;
+    net2 = computeBreakdown(30_000, 'donor', DIRECT_COLLECTION_RATES).net;
     await request(server)
       .post('/donations/webhook')
       .set('x-signature', 'fake-sig')
@@ -321,12 +325,22 @@ describe('Organization summary (S2-08, M13)', () => {
 
     expect(res.body.animalsActive).toBe(2);
     expect(res.body.adoptionRequestsPending).toBe(2); // 'new' + 'in_review', not 'rejected'
+    expect(res.body.adoptionRequestsNew).toBe(1); // only the one nobody opened yet
     expect(res.body.sponsorshipsActive).toBe(1); // not the suspended one
     expect(res.body.documentsExpiringSoon).toBe(1); // only the near-expiry Approved one
     expect(res.body.documentsRejected).toBe(1);
     expect(res.body.donationsReceivedTotal).toBe(net1 + net2); // not the pending one
     expect(res.body.formalizationLevel).toBe(2); // Rut + ExistenceCert approved, Informal blocks tier 3
     expect(res.body.formalizationPercent).toBe(0); // Informal = position 0 of 5
+  });
+
+  it('a rejected document stops counting once a newer version replaces it', async () => {
+    await upload(owner.token, 'legal_representative_id').expect(201); // v2, pending
+    const res = await request(server)
+      .get('/org/summary')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(200);
+    expect(res.body.documentsRejected).toBe(0);
   });
 
   it('cross-checks donationsReceivedTotal against computeBreakdown — the single source of money math', async () => {
@@ -341,7 +355,8 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${owner.token}`)
       .expect(200);
     const expected =
-      computeBreakdown(50_000, 'organization').net + computeBreakdown(30_000, 'donor').net;
+      computeBreakdown(50_000, 'organization', DIRECT_COLLECTION_RATES).net +
+      computeBreakdown(30_000, 'donor', DIRECT_COLLECTION_RATES).net;
     expect(res.body.donationsReceivedTotal).toBe(expected);
   });
 
@@ -353,6 +368,7 @@ describe('Organization summary (S2-08, M13)', () => {
     expect(res.body).toEqual({
       animalsActive: 0,
       adoptionRequestsPending: 0,
+      adoptionRequestsNew: 0,
       sponsorshipsActive: 0,
       documentsExpiringSoon: 0,
       documentsRejected: 0,
@@ -377,5 +393,33 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${readOnlyAuditor.token}`)
       .expect(403);
     await request(server).get('/org/summary').expect(401);
+  });
+  it('Ola 3: lo atendido sale de los pendientes (reemplazo de documento y solicitud abierta)', async () => {
+    // Reemplazo del documento rechazado y renovación del que está por vencer:
+    // la versión nueva queda 'pending', y la anterior ya no cuenta.
+    await upload(owner.token, 'legal_representative_id').expect(201);
+    const renewal = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString();
+    await upload(owner.token, 'rut', renewal).expect(201);
+
+    // La solicitud 'new' pasa a 'En evaluación'.
+    const fresh = await admin.adoptionRequest.findFirst({
+      where: { organizationId: owner.orgId, status: 'new' },
+      select: { id: true },
+    });
+    expect(fresh).not.toBeNull();
+    await request(server)
+      .post(`/adoptions/${fresh!.id}/transitions`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ targetStatus: 'in_review' })
+      .expect(201);
+
+    const res = await request(server)
+      .get('/org/summary')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(200);
+    expect(res.body.documentsRejected).toBe(0);
+    expect(res.body.documentsExpiringSoon).toBe(0);
+    expect(res.body.adoptionRequestsNew).toBe(0);
+    expect(res.body.adoptionRequestsPending).toBe(2); // sigue en evaluación
   });
 });

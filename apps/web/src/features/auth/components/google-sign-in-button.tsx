@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@adoptafacil/ui';
+import { useCapabilities } from '../../../shell/capabilities';
 import styles from './google-sign-in-button.module.scss';
 
 export interface GoogleSignInButtonProps {
@@ -57,6 +58,21 @@ function loadGoogleIdentityServices(): Promise<void> {
 }
 
 /**
+ * Whether a Google button can be shown at all (Ola 1, R0-2, AF-029): the API
+ * must serve `POST /auth/google` (capabilities) AND either a real Client ID
+ * is configured or this is the Vite dev server. A production build without a
+ * Client ID shows no Google button — never the "(prueba)" one. `vite build`
+ * always runs in mode "production" (even if a stray NODE_ENV=development
+ * leaks in from a local .env), and `import.meta.env.MODE` is replaced at
+ * build time, so that branch is dead code there.
+ */
+export function useGoogleSignInAvailable(): boolean {
+  const { capabilities } = useCapabilities();
+  const hasClientId = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+  return capabilities.googleSignIn && (hasClientId || import.meta.env.MODE !== 'production');
+}
+
+/**
  * "Continuar con Google" (T-Google-SignIn). With a real `VITE_GOOGLE_CLIENT_ID`
  * configured, renders the REAL Google Identity Services button and forwards
  * its ID token to `onCredential`. With no Client ID (the client hasn't
@@ -65,6 +81,8 @@ function loadGoogleIdentityServices(): Promise<void> {
  * documented token format (`fake:<email>:<name>`), so the WHOLE flow —
  * auto-link or new lightweight Person account — can be exercised locally
  * with NO real Google account, against `AUTH_IDENTITY_DRIVER=fake` on the API.
+ * That fallback exists only on the dev server (see useGoogleSignInAvailable);
+ * callers render this component only when that hook says so.
  */
 export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButtonProps) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -105,7 +123,10 @@ export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButto
     return <div ref={containerRef} data-testid="google-sign-in-container" />;
   }
 
-  // Dev/test fallback: no real Client ID configured (see .env.example).
+  // Dev-server fallback: no real Client ID configured (see .env.example).
+  // Never rendered by a production build (R0-2, AF-029).
+  if (import.meta.env.MODE === 'production') return null;
+
   const handleTestSignIn = () => {
     const email = window.prompt(
       'Modo prueba (sin credenciales reales de Google): correo a usar',

@@ -5,6 +5,7 @@ export { AppRoutes } from './router/routes';
 
 // Sub-layers (also individually importable).
 export * from './auth';
+export * from './capabilities';
 export * from './navigation';
 export * from './transparency';
 export * from './layout';

@@ -8,7 +8,7 @@ export interface PasswordRequirementsProps {
 /**
  * Live checklist of password requirements as the user types. Deliberately
  * limited to the ONE rule the backend actually enforces today
- * (`apps/api/src/core/auth/auth.schemas.ts`: minimum 8 characters) — no
+ * (`MIN_PASSWORD_LENGTH` from `@adoptafacil/contracts`, shared with the API) — no
  * uppercase/digit/symbol items, since inventing requirements the backend
  * doesn't check would mislead the user about what's actually required.
  */

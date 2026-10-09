@@ -18,6 +18,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { PayoutsService } from './payouts.service';
 import { requestPayoutSchema } from './payouts.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Dispersión T+1 is a treasury operation — PlatformAdmin/PlatformSuperAdmin
  *  only (an org never self-triggers its own payout in Ola 1). */
@@ -32,6 +33,7 @@ const PLATFORM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
  *   - the GATEWAY posts a confirmation webhook (`/payments/payouts/webhook`)
  *     — PUBLIC (no JWT), signature-verified and idempotent.
  */
+@RequireFeature('payments')
 @Controller()
 export class PayoutsController {
   constructor(private readonly service: PayoutsService) {}

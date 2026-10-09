@@ -121,6 +121,10 @@ export function OrgFormalizationPage() {
   const currentIndex = status ? FORMALIZATION_SEQUENCE.indexOf(status.state) : -1;
   const next = currentIndex >= 0 ? FORMALIZATION_SEQUENCE[currentIndex + 1] : undefined;
   const previous = currentIndex > 0 ? FORMALIZATION_SEQUENCE[currentIndex - 1] : undefined;
+  // R2-2: entering ESAL / ESAL + RTE is decided by the platform after reviewing
+  // an approved document — the organization cannot self-declare it.
+  const nextNeedsPlatform =
+    next === FormalizationState.ESAL || next === FormalizationState.ESAL_RTE;
 
   const move = async (targetState: FormalizationState, requiresReason: boolean) => {
     if (requiresReason && !reason.trim()) {
@@ -221,7 +225,7 @@ export function OrgFormalizationPage() {
 
               {canManage && (next || previous) && (
                 <div className={styles.actions}>
-                  {next && (
+                  {next && !nextNeedsPlatform && (
                     <Button
                       onClick={() =>
                         setPendingTransition({ targetState: next, requiresReason: false })
@@ -229,6 +233,12 @@ export function OrgFormalizationPage() {
                     >
                       Avanzar a {STATE_LABELS[next]}
                     </Button>
+                  )}
+                  {next && nextNeedsPlatform && (
+                    <p>
+                      El paso a {STATE_LABELS[next]} lo aprueba el equipo de AdoptaFácil tras
+                      revisar tus documentos. Súbelos en Documentos para que el equipo los revise.
+                    </p>
                   )}
                   {previous && (
                     <Button

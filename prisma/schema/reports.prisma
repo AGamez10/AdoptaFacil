@@ -11,9 +11,8 @@
 //   volunteer_certificates / legal_representatives).
 // - IDEMPOTENTE: @@unique(organizationId, kind, contentHash) — generar otra vez
 //   el mismo reporte con los mismos datos devuelve la fila existente.
-// - `organizationId`/`generatedByUserId` son escalares (sin @relation entre
-//   archivos, misma convención que campaigns/volunteering); las FK van en el
-//   SQL de la migración.
+// - Las FK hacia organizations (CASCADE) y users (RESTRICT) se declaran como
+//   @relation para que el esquema coincida con la migración (gate schema-drift).
 
 /// Reporte generado por una organización (donaciones o servicio social).
 model OrgReport {
@@ -37,6 +36,9 @@ model OrgReport {
   contentHash       String   @map("content_hash")
   generatedByUserId String   @map("generated_by_user_id") @db.Uuid
   createdAt         DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  generatedBy  User         @relation(fields: [generatedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, kind, contentHash])
   @@index([organizationId, createdAt])

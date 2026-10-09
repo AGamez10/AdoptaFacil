@@ -4,6 +4,7 @@ import type {
   DonationPublicStatus,
 } from '@adoptafacil/contracts';
 import { DonationsService } from './donations.service';
+import { RequireFeature } from '../../core/features';
 
 /**
  * PUBLIC post-checkout status read (MercadoPago redirect-back "gracias"
@@ -16,6 +17,7 @@ import { DonationsService } from './donations.service';
  * frontend forwards verbatim — it IS our own `donations.collection_id`
  * (`af-<idempotencyKey>`, see `MercadoPagoPaymentAdapter.createCollection`).
  */
+@RequireFeature('payments')
 @Controller()
 export class DonationStatusPublicController {
   constructor(private readonly service: DonationsService) {}

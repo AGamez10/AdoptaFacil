@@ -1,6 +1,7 @@
 import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { type ResourceNeedPublic, type ResourceNeedsPage } from '@adoptafacil/contracts';
 import { PublicResourceNeedsService } from './public-resource-needs.service';
+import { RequireFeature } from '../../core/features';
 
 /**
  * PUBLIC resource-need catalog (M09) — NO authentication, public columns
@@ -11,6 +12,7 @@ import { PublicResourceNeedsService } from './public-resource-needs.service';
  * gap for M10) and exposes a single need's detail (donors browse here before
  * offering — offering itself requires auth, see `ResourceOffersController`).
  */
+@RequireFeature('resources')
 @Controller('public/resources/needs')
 export class PublicResourceNeedsController {
   constructor(private readonly service: PublicResourceNeedsService) {}

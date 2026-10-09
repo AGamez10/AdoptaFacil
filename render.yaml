@@ -93,10 +93,11 @@ services:
       # deploy, igual que API_CORS_ORIGIN (ver DEPLOY.md).
       - key: STORAGE_PUBLIC_BASE_URL
         sync: false
-      # 'log' por defecto (no requiere credenciales). Cambiar a 'smtp' + llenar
-      # las SMTP_* de abajo si se quiere correo real para la demo.
+      # Ola 1 (R0-1): producción NO arranca con adaptadores simulados
+      # (env.validation.ts → assertProductionSafety). El correo es real (smtp):
+      # llena las SMTP_* antes del primer deploy o la API se negará a iniciar.
       - key: NOTIFICATION_DRIVER
-        value: log
+        value: smtp
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -107,8 +108,46 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      # Pagos apagados (D1–D7): 'disabled' rechaza todo cobro y todo webhook.
+      # El adaptador 'fake' aprobaba webhooks sin firma (SEC-002).
       - key: PAYMENT_DRIVER
-        value: fake
+        value: disabled
+      # Google Sign-In apagado hasta tener un Client ID real. El adaptador
+      # 'fake' permitía entrar a cualquier cuenta (SEC-001).
+      - key: AUTH_IDENTITY_DRIVER
+        value: disabled
+      # Sin verificación automática de RTE ni firmas simuladas (SEC-003).
+      - key: DIAN_DRIVER
+        value: disabled
+      - key: SIGNATURE_DRIVER
+        value: disabled
+      # Módulos apagados (R1-1): la API responde 404 y la web los oculta.
+      # Para encender pagos o apadrinamientos en producción hacen falta
+      # PAYMENT_DRIVER=mercadopago y PAYMENTS_PRODUCTION_APPROVAL_REF (la
+      # referencia de la aprobación escrita del proveedor y del abogado).
+      - key: FEATURE_PAYMENTS
+        value: 'false'
+      - key: FEATURE_SPONSORSHIPS
+        value: 'false'
+      - key: FEATURE_DONATION_CERTIFICATES
+        value: 'false'
+      - key: FEATURE_COMMUNITY
+        value: 'false'
+      - key: FEATURE_REPUTATION
+        value: 'false'
+      - key: FEATURE_RESOURCES
+        value: 'false'
+      - key: FEATURE_MARKETPLACE
+        value: 'false'
+      - key: FEATURE_VOLUNTEERING_MINORS
+        value: 'false'
+      # R1-3: saltos de proxy delante de la API (balanceador de Render = 1).
+      # TODO(verificar en staging): comparar la IP que registra la API con la
+      # IP real del cliente; si no coinciden, ajustar este número.
+      - key: TRUST_PROXY_HOPS
+        value: '1'
+      - key: THROTTLER_STORAGE
+        value: redis
     disk:
       name: adoptafacil-storage
       mountPath: /var/data/storage

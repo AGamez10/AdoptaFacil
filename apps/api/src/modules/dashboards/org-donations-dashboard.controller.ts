@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { OrgDonationsDashboardService } from './org-donations-dashboard.service';
+import { RequireFeature } from '../../core/features';
 
 /**
  * Dashboard de donaciones/campañas de la organización (M13, S-14). El
@@ -15,6 +16,7 @@ import { OrgDonationsDashboardService } from './org-donations-dashboard.service'
  * respuesta ya lo decide `OrgDonationsDashboardService` según el rol real del
  * actor, nunca aquí.
  */
+@RequireFeature('payments')
 @Controller('org/dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OrgDonationsDashboardController {

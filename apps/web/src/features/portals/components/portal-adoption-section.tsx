@@ -11,6 +11,7 @@ import {
 } from '@adoptafacil/contracts';
 import { EmptyState, Input, cn } from '@adoptafacil/ui';
 import { fetchPublicAnimals } from '../api/public-animals';
+import { usePortalPreviewClient } from '../model/portal-preview-context';
 import { AnimalCard } from './animal-card';
 import {
   IconCalendar,
@@ -77,6 +78,7 @@ function SkeletonGrid() {
  * "no inventar lógica de backend").
  */
 export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSectionProps) {
+  const preview = usePortalPreviewClient();
   const [rawItems, setRawItems] = useState<AnimalSummary[]>([]);
   const [rawTotal, setRawTotal] = useState(0);
   const [state, setState] = useState<SectionState>('loading');
@@ -94,7 +96,7 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
   useEffect(() => {
     let active = true;
     setState('loading');
-    fetchPublicAnimals({ slug, limit: PAGE_SIZE, offset: 0 })
+    fetchPublicAnimals({ slug, preview, limit: PAGE_SIZE, offset: 0 })
       .then((page) => {
         if (!active) return;
         setRawItems(page.items);
@@ -107,12 +109,17 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, preview]);
 
   const loadMore = async () => {
     setLoadingMore(true);
     try {
-      const page = await fetchPublicAnimals({ slug, limit: PAGE_SIZE, offset: rawItems.length });
+      const page = await fetchPublicAnimals({
+        slug,
+        preview,
+        limit: PAGE_SIZE,
+        offset: rawItems.length,
+      });
       setRawItems((prev) => [...prev, ...page.items]);
       setRawTotal(page.total);
     } catch {

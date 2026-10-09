@@ -4,10 +4,19 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import type { Env } from './config/env.validation';
+import { applyHttpHardening } from './core/http/configure-http';
 
 async function bootstrap(): Promise<void> {
+  // Env validation runs while the module graph is built: with NODE_ENV=production
+  // it refuses simulated adapters and unsafe settings (Ola 1, R0-1), so the
+  // process exits before listening.
   const app = await NestFactory.create(AppModule);
   const config = app.get<ConfigService<Env, true>>(ConfigService);
+
+  applyHttpHardening(app, {
+    production: config.get('NODE_ENV', { infer: true }) === 'production',
+    trustProxyHops: config.get('TRUST_PROXY_HOPS', { infer: true }) ?? 0,
+  });
 
   const origins = config
     .get('API_CORS_ORIGIN', { infer: true })

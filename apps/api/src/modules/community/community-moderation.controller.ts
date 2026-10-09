@@ -17,6 +17,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { CommunityModerationService } from './community-moderation.service';
 import { moderatePostSchema } from './community-moderation.schemas';
+import { RequireFeature } from '../../core/features';
 
 /**
  * CROSS-TENANT moderación básica de la comunidad (M11). Gated a roles de
@@ -24,6 +25,7 @@ import { moderatePostSchema } from './community-moderation.schemas';
  * funciones SECURITY DEFINER acotadas — mismo patrón que
  * `PlatformDocumentsController` (M01, RF03).
  */
+@RequireFeature('community')
 @Controller('platform/community/posts')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { CampaignCategory, CampaignStatus, type CampaignPublic } from '@adoptafacil/contracts';
@@ -69,27 +69,23 @@ describe('PortalCampaignsSection', () => {
     expect(screen.getAllByText('Refugio Patitas').length).toBe(2);
   });
 
-  it('shows an explicit empty state for a wrapped-empty response (no throw)', async () => {
+  it('unmounts itself for a wrapped-empty response (no empty "recaudación" notice, no throw)', async () => {
     stubCampaigns({ items: [], total: 0, limit: 12, offset: 0 });
     renderSection();
 
-    expect(
-      await screen.findByText(
-        'Esta organización no tiene una campaña de recaudación activa por ahora.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId('campaign-card')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByTestId('portal-campaigns-section')).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/recaudación/)).not.toBeInTheDocument();
   });
 
   it('T-028c regression: a NON-array body normalizes to [] → empty state, never .map throws', async () => {
     stubCampaigns({ items: null, total: 0 });
     renderSection();
 
-    expect(
-      await screen.findByText(
-        'Esta organización no tiene una campaña de recaudación activa por ahora.',
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByTestId('portal-campaigns-section')).not.toBeInTheDocument(),
+    );
   });
 
   it('shows a clear error state (not a crash) when the fetch fails', async () => {
