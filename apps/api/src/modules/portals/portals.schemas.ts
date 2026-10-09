@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import type { PortalColorToken, PortalTheme, PortalThemeToken } from '@adoptafacil/contracts';
+import {
+  PORTAL_TEMPLATE_IDS,
+  type PortalColorToken,
+  type PortalTheme,
+  type PortalThemeToken,
+} from '@adoptafacil/contracts';
 
 /**
  * M14 personalization (T-027) — runtime validation for a tenant's brand tokens.
@@ -97,6 +102,8 @@ export const portalThemeTokensSchema = z
 /** S2-PORTAL: layout positions, validated as closed enums (never free CSS). */
 const logoPositionSchema = z.enum(['left', 'center', 'right']);
 const socialNavPositionSchema = z.enum(['left', 'right']);
+/** Ola 3: plantilla del portal, conjunto cerrado del contrato. */
+const templateSchema = z.enum(PORTAL_TEMPLATE_IDS);
 
 /** PUT /portals/theme body. `logoPosition`/`socialNavPosition` are optional and
  *  independent of `tokens` (S2-PORTAL) — a request may update either or both. */
@@ -105,6 +112,7 @@ export const updatePortalThemeSchema = z
     tokens: portalThemeTokensSchema,
     logoPosition: logoPositionSchema.optional(),
     socialNavPosition: socialNavPositionSchema.optional(),
+    template: templateSchema.optional(),
   })
   .strict();
 

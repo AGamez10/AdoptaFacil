@@ -1,18 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
+  AnimalSummary,
   OrganizationPublic,
   PortalLogoPosition,
   PortalSocialNavPosition,
+  PortalTemplateId,
   PortalTheme,
   PortalView,
 } from '@adoptafacil/contracts';
 import { EmptyState, Skeleton } from '@adoptafacil/ui';
 import { brandTokensToStyle } from '../../../shell/theme';
 import { buildPortalView } from '../model/portal-view';
-import { safeLogoPosition, safePortalTheme, safeSocialNavPosition } from '../model/theme';
+import {
+  safeLogoPosition,
+  safePortalTheme,
+  safeSocialNavPosition,
+  safeTemplate,
+} from '../model/theme';
 import { fetchPublicAnimals } from '../api/public-animals';
 import { PortalProfileSection } from '../components/portal-profile-section';
+import { CarnetHero, EditorialHero, ImpactoHero } from '../components/templates/template-heroes';
+import templateStyles from '../components/templates/portal-templates.module.scss';
 import { PortalPlaceholderSection } from '../components/portal-placeholder-section';
 import { PortalSocialLinks } from '../components/portal-social-links';
 import { PortalAdoptionSection } from '../components/portal-adoption-section';
@@ -38,9 +47,15 @@ type LoadState = 'loading' | 'ready' | 'not-found' | 'error';
 interface Layout {
   logoPosition: PortalLogoPosition;
   socialNavPosition: PortalSocialNavPosition;
+  /** Ola 3: plantilla visual del portal (mismo contenido, otra estructura). */
+  template: PortalTemplateId;
 }
 
-const DEFAULT_LAYOUT: Layout = { logoPosition: 'left', socialNavPosition: 'right' };
+const DEFAULT_LAYOUT: Layout = {
+  logoPosition: 'left',
+  socialNavPosition: 'right',
+  template: 'clasica',
+};
 
 /**
  * PUBLIC organization PORTAL at `/o/:slug` (§M14). Rendered OUTSIDE the app shell
@@ -95,6 +110,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const [layout, setLayout] = useState<Layout>(DEFAULT_LAYOUT);
   const [state, setState] = useState<LoadState>('loading');
   const [animalTotal, setAnimalTotal] = useState<number | undefined>(undefined);
+  const [animalSample, setAnimalSample] = useState<AnimalSummary[]>([]);
   // Ola 1 (R1-1) / Ola 3 (R3-5): el portal solo muestra módulos encendidos.
   // Con un módulo apagado su sección ni se monta (antes pintaba "No se pudo
   // cargar" porque la API respondía 404) y no hay enlaces de dinero.
@@ -137,6 +153,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               tokens?: unknown;
               logoPosition?: unknown;
               socialNavPosition?: unknown;
+              template?: unknown;
             }>)
           : null,
       )
@@ -145,6 +162,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         layout: {
           logoPosition: safeLogoPosition(body?.logoPosition),
           socialNavPosition: safeSocialNavPosition(body?.socialNavPosition),
+          template: safeTemplate(body?.template),
         },
       }))
       .catch(() => ({ tokens: {} as PortalTheme, layout: DEFAULT_LAYOUT }));
@@ -167,16 +185,19 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     };
   }, [slug]);
 
-  // Real animal count for the profile stats row (pulido visual T-D02). A tiny,
-  // INDEPENDENT fetch (limit 1, unfiltered) so it stays stable regardless of the
+  // Real animal count for the profile stats row (pulido visual T-D02). A small,
+  // INDEPENDENT fetch (Ola 3: limit 8, la muestra alimenta los héroes de las
+  // plantillas; unfiltered) so it stays stable regardless of the
   // species filter the visitor picks inside PortalAdoptionSection — its own
   // internal fetch/filter logic is untouched.
   useEffect(() => {
     if (!slug) return;
     let active = true;
-    fetchPublicAnimals({ slug, limit: 1, offset: 0 })
+    fetchPublicAnimals({ slug, limit: 8, offset: 0 })
       .then((page) => {
-        if (active) setAnimalTotal(page.total);
+        if (!active) return;
+        setAnimalTotal(page.total);
+        setAnimalSample(page.items);
       })
       .catch(() => {
         // Best-effort: the stat simply stays absent (never fabricated).
@@ -246,8 +267,28 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     ...(hasContactInfo ? [{ label: 'Contacto', href: '#portal-contact-info' }] : []),
   ];
 
+  // Las plantillas (Ola 3) reciben los MISMOS datos que la Clásica.
+  const heroProps = view
+    ? {
+        profile: view.profile,
+        slug: slug as string,
+        animalCount: animalTotal,
+        animals: animalSample,
+        actions: (
+          <PortalHeaderActions
+            organization={view.profile.organization}
+            onBrowseCatalog={goToCatalog}
+          />
+        ),
+      }
+    : null;
+
   return (
-    <>
+    <div
+      className={templateStyles.page}
+      data-template={state === 'ready' ? layout.template : undefined}
+      data-testid="portal-page"
+    >
       {state === 'ready' && view && (
         <PublicHeader organization={view.profile.organization} navItems={navItems} />
       )}
@@ -266,22 +307,25 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         {state === 'error' && (
           <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
         )}
-        {state === 'ready' && view && (
+        {state === 'ready' && view && heroProps && (
           <div className="space-y-8">
             {/* Header (3ra iteración): perfil + KPI(s) + acciones viven TODOS
                 dentro del mismo panel (`PortalProfileSection`) — ya no hay una
                 tarjeta de KPI flotante aparte ni una fila extra a su lado. */}
-            <PortalProfileSection
-              profile={view.profile}
-              animalCount={animalTotal}
-              logoPosition={layout.logoPosition}
-              actions={
-                <PortalHeaderActions
-                  organization={view.profile.organization}
-                  onBrowseCatalog={goToCatalog}
-                />
-              }
-            />
+            {layout.template === 'editorial' ? (
+              <EditorialHero {...heroProps} />
+            ) : layout.template === 'carnet' ? (
+              <CarnetHero {...heroProps} />
+            ) : layout.template === 'impacto' ? (
+              <ImpactoHero {...heroProps} />
+            ) : (
+              <PortalProfileSection
+                profile={view.profile}
+                animalCount={animalTotal}
+                logoPosition={layout.logoPosition}
+                actions={heroProps.actions}
+              />
+            )}
 
             {/* Dos columnas (pulido visual, 2da iteración): columna principal
                 con "Mascotas en adopción"/"Productos"/"Necesita hoy" SIEMPRE
@@ -376,6 +420,6 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           <PublicFooter organization={view.profile.organization} navItems={navItems} />
         </div>
       )}
-    </>
+    </div>
   );
 }

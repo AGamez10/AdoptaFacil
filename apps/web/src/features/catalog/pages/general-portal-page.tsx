@@ -5,11 +5,14 @@ import { useSession } from '../../../shell/auth';
 import { FullPageLoading, PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { useDocumentTitle } from '../../../lib/use-document-title';
 import {
+  ActiveCampaignsSection,
   AdoptionStepsSection,
+  FinalCtaSection,
   ForOrganizationsSection,
   LANDING_CATALOG_ID,
   LandingHero,
   PromisesSection,
+  WaysToHelpSection,
 } from '../../landing';
 import styles from '../../landing/components/landing.module.scss';
 import { GeneralCatalogSection } from '../components/general-catalog-section';
@@ -82,13 +85,13 @@ export function GeneralPortalPage() {
       <PublicNavbar />
 
       <main className="flex-1">
-        {/* Landing 10/10 (Ola 3, R3-5 · F4/F5): hero con escena three.js
-            diferida, cómo funciona adoptar, catálogo real, oferta para
-            organizaciones con ayuda directa (F20) y compromisos. Ningún
-            texto promete módulos apagados (pagos, apadrinamientos,
-            certificados) ni cifras que no salgan de la API. */}
+        {/* Landing comercial (Ola 3): primero las formas de ayudar que el
+            producto cumple HOY (donar y recursos solo con su módulo
+            encendido), luego el catálogo real, cómo adoptar, campañas
+            activas reales, la propuesta para organizaciones y el cierre.
+            Ninguna cifra que no salga de la API. */}
         <LandingHero />
-        <AdoptionStepsSection photos={heroBannerPhotos} />
+        <WaysToHelpSection />
 
         <section id={LANDING_CATALOG_ID} className={styles.catalog} aria-label="Catálogo">
           <div className="mx-auto w-full max-w-6xl space-y-8 px-4 sm:px-6">
@@ -96,8 +99,11 @@ export function GeneralPortalPage() {
           </div>
         </section>
 
+        <AdoptionStepsSection photos={heroBannerPhotos} />
+        <ActiveCampaignsSection />
         <ForOrganizationsSection />
         <PromisesSection />
+        <FinalCtaSection />
       </main>
 
       <PublicFooter />

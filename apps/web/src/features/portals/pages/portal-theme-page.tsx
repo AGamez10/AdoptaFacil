@@ -5,6 +5,7 @@ import {
   type Organization,
   type PortalLogoPosition,
   type PortalSocialNavPosition,
+  type PortalTemplateId,
   type PortalTheme,
   type PortalThemeConfig,
 } from '@adoptafacil/contracts';
@@ -29,7 +30,13 @@ import {
   hslStringToHex,
   MIN_CONTRAST_RATIO,
 } from '../model/color-conversion';
-import { PORTAL_THEME_FIELDS, safePortalTheme, type PortalThemeField } from '../model/theme';
+import {
+  PORTAL_THEME_FIELDS,
+  safePortalTheme,
+  safeTemplate,
+  type PortalThemeField,
+} from '../model/theme';
+import { TemplatePicker } from '../components/templates/template-picker';
 import { PortalMiniPreview } from '../components/portal-mini-preview';
 import { OrgStatusCard } from '../../org/components/org-status-card';
 
@@ -222,6 +229,7 @@ export function PortalThemePage() {
   const [form, setForm] = useState<FormState>({});
   const [logoPosition, setLogoPosition] = useState<PortalLogoPosition>('left');
   const [socialNavPosition, setSocialNavPosition] = useState<PortalSocialNavPosition>('right');
+  const [template, setTemplate] = useState<PortalTemplateId>('clasica');
   const [slug, setSlug] = useState<string | undefined>(undefined);
   const [orgName, setOrgName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -246,6 +254,7 @@ export function PortalThemePage() {
         setForm(safePortalTheme(config.tokens) as FormState);
         setLogoPosition(config.logoPosition ?? 'left');
         setSocialNavPosition(config.socialNavPosition ?? 'right');
+        setTemplate(safeTemplate(config.template));
         setSlug(org?.slug ?? undefined);
         setOrgName(org?.name ?? undefined);
       })
@@ -309,11 +318,12 @@ export function PortalThemePage() {
     try {
       const themeConfig = await client.request<PortalThemeConfig>('/portals/theme', {
         method: 'PUT',
-        json: { tokens: tokensFromForm(form), logoPosition, socialNavPosition },
+        json: { tokens: tokensFromForm(form), logoPosition, socialNavPosition, template },
       });
       setForm(safePortalTheme(themeConfig.tokens) as FormState);
       setLogoPosition(themeConfig.logoPosition ?? 'left');
       setSocialNavPosition(themeConfig.socialNavPosition ?? 'right');
+      setTemplate(safeTemplate(themeConfig.template));
       toast({
         title: 'Personalización guardada',
         description: 'Tu portal se re-tematizó.',
@@ -374,7 +384,7 @@ export function PortalThemePage() {
     <PageContainer>
       <PageHeader
         title="Personalización del portal"
-        description="La apariencia visual de tu portal público: colores y diseño."
+        description="La apariencia visual de tu portal público: plantilla, colores y diseño."
         actions={publicPortalLink}
       />
       <OrgStatusCard hideWhenApproved onStatus={setOrgStatus} />
@@ -383,6 +393,20 @@ export function PortalThemePage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
+            {/* Ola 3: plantilla del portal. Mismo contenido, otra estructura;
+                el nivel de plan es un parámetro (TODO(client)). */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Plantilla de tu portal</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Tus animales, campañas y datos se ven en todas. Cambia la forma de presentarlos.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <TemplatePicker value={template} onChange={setTemplate} />
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Colores de tu portal</CardTitle>
@@ -413,7 +437,11 @@ export function PortalThemePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <PositionToggle
-                  legend="Posición del logo"
+                  legend={
+                    template === 'clasica'
+                      ? 'Posición del logo'
+                      : 'Posición del logo (solo Clásica)'
+                  }
                   options={LOGO_POSITION_OPTIONS}
                   value={logoPosition}
                   onChange={setLogoPosition}

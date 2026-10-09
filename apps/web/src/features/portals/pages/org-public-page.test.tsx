@@ -712,3 +712,72 @@ describe('OrgPublicPage — rich public portal', () => {
     });
   });
 });
+
+describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
+  function stubWithTemplate(template: unknown) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/theme')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ tokens: {}, template }),
+          });
+        }
+        if (url.includes('/animals')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 'a1',
+                  name: 'Luna',
+                  species: 'dog',
+                  sex: 'female',
+                  size: 'medium',
+                  photoUrl: 'https://cdn.example/luna.jpg',
+                  breed: 'Criolla',
+                },
+              ],
+              total: 5,
+              limit: 8,
+              offset: 0,
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: async () => ORG });
+      }),
+    );
+  }
+
+  it.each(['editorial', 'carnet', 'impacto'])(
+    'con la plantilla %s cambia el hero y conserva los mismos datos',
+    async (template) => {
+      stubWithTemplate(template);
+      renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+      const hero = await screen.findByTestId(`portal-hero-${template}`);
+      expect(screen.getByTestId('portal-page')).toHaveAttribute('data-template', template);
+      expect(within(hero).getByRole('heading', { level: 1 })).toHaveTextContent('Refugio Patitas');
+      expect(await within(hero).findByTestId('portal-animal-count')).toHaveTextContent('5');
+      // Las acciones y el catálogo real siguen ahí.
+      expect(within(hero).getByTestId('portal-header-actions')).toBeInTheDocument();
+      expect(within(hero).getByRole('link', { name: /Luna/ })).toHaveAttribute(
+        'href',
+        '/o/patitas/animales/a1',
+      );
+    },
+  );
+
+  it('una plantilla desconocida cae en la Clásica', async () => {
+    stubWithTemplate('<script>');
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    await screen.findByRole('heading', { name: /Refugio Patitas/ });
+    expect(screen.getByTestId('portal-page')).toHaveAttribute('data-template', 'clasica');
+    expect(screen.queryByTestId('portal-hero-editorial')).not.toBeInTheDocument();
+  });
+});

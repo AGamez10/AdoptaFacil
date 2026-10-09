@@ -2,6 +2,8 @@ import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { SessionProvider } from '../../../shell/auth';
+import { CapabilitiesProvider } from '../../../shell/capabilities';
+import { OPEN_CAPABILITIES } from '../../../test-utils';
 import { GeneralPortalPage } from './general-portal-page';
 
 /**
@@ -35,26 +37,70 @@ describe('GeneralPortalPage (landing)', () => {
     renderLanding();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Adoptar bien empieza por confiar.' }),
+      screen.getByRole('heading', { level: 1, name: 'Ayudar a un animal nunca fue tan fácil.' }),
     ).toBeInTheDocument();
     expect(document.title).toBe('Adopción responsable en Colombia · AdoptaFácil');
     await screen.findByText('No hay animales en adopción ahora');
   });
 
-  it('the primary CTA anchors to the catalog section and the secondary one to registration', async () => {
+  it('the primary CTA anchors to the catalog and the secondary one to the ways to help', async () => {
     renderLanding();
-    expect(screen.getByRole('link', { name: /Conocer animales en adopción/ })).toHaveAttribute(
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    expect(within(hero).getByRole('link', { name: /Quiero adoptar/ })).toHaveAttribute(
       'href',
       '#adoptar',
     );
-    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
-    expect(within(hero).getByRole('link', { name: 'Registrar mi organización' })).toHaveAttribute(
+    expect(within(hero).getByRole('link', { name: 'Otras formas de ayudar' })).toHaveAttribute(
       'href',
-      '/register',
+      '#ayudar',
     );
     expect(document.getElementById('adoptar')).not.toBeNull();
+    expect(document.getElementById('ayudar')).not.toBeNull();
     expect(document.getElementById('organizaciones')).not.toBeNull();
     await screen.findByText('No hay animales en adopción ahora');
+  });
+
+  it('only offers the ways to help whose module is on (donar y recursos apagados por defecto)', async () => {
+    renderLanding();
+    await screen.findByText('No hay animales en adopción ahora');
+    expect(screen.getByTestId('way-adoptar')).toBeInTheDocument();
+    expect(screen.getByTestId('way-campanas')).toBeInTheDocument();
+    expect(screen.queryByTestId('way-donar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('way-recursos')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Donar/ })).not.toBeInTheDocument();
+  });
+
+  it('with payments and resources on, offers donating and the resource bank too', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({ ok: true, status: 200, json: async () => ({ data: [], total: 0 }) }),
+      ),
+    );
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <CapabilitiesProvider value={OPEN_CAPABILITIES}>
+          <SessionProvider initialStatus="unauthenticated">
+            <GeneralPortalPage />
+          </SessionProvider>
+        </CapabilitiesProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByText('No hay animales en adopción ahora');
+    expect(within(screen.getByTestId('way-donar')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/donaciones',
+    );
+    expect(within(screen.getByTestId('way-recursos')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/recursos',
+    );
+  });
+
+  it('hides the campaigns block when there are no active campaigns', async () => {
+    renderLanding();
+    await screen.findByText('No hay animales en adopción ahora');
+    expect(screen.queryByTestId('landing-campaigns')).not.toBeInTheDocument();
   });
 
   it('shows the live total from the API and never a fabricated counter', async () => {

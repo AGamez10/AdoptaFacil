@@ -75,21 +75,20 @@ export function LandingHero() {
           Adopción responsable en Colombia
         </p>
         <h1 id="landing-hero-title" className={styles.hero__title}>
-          Adoptar bien empieza <span className={styles.hero__accent}>por confiar.</span>
+          Ayudar a un animal <span className={styles.hero__accent}>nunca fue tan fácil.</span>
         </h1>
         <p className={styles.hero__lead}>
-          Conoce animales de refugios, fundaciones y rescatistas de todo el país, solicita su
-          adopción en línea y firma un contrato claro con la organización. Mirar es libre: solo te
-          pedimos una cuenta para adoptar.
+          Adopta, apoya campañas y acompaña a refugios, fundaciones y rescatistas de todo Colombia.
+          Ves a quién ayudas, cómo y en qué se usa tu apoyo.
         </p>
         <div className={styles.hero__actions}>
           <a href={`#${LANDING_CATALOG_ID}`} className={cn(styles.btn, styles['btn--primary'])}>
-            Conocer animales en adopción
+            Quiero adoptar
             <IconArrowRight className={styles.btn__icon} />
           </a>
-          <Link to="/register" className={cn(styles.btn, styles['btn--ghost'])}>
-            Registrar mi organización
-          </Link>
+          <a href="#ayudar" className={cn(styles.btn, styles['btn--ghost'])}>
+            Otras formas de ayudar
+          </a>
         </div>
         <ul className={styles.hero__facts} aria-label="En AdoptaFácil">
           {typeof total === 'number' && total > 0 && (
@@ -219,15 +218,15 @@ export function ForOrganizationsSection() {
             <SectionHeading
               tone="dark"
               eyebrow="Para refugios, fundaciones y rescatistas"
-              title="Tu organización, con su casa digital y la operación en orden."
+              title="AdoptaFácil gana cuando tu organización gana."
               id="landing-orgs-title"
             >
-              AdoptaFácil es gratis para las organizaciones. Te damos las herramientas para mostrar
-              tu trabajo, adoptar con respaldo y rendir cuentas.
+              Empiezas gratis, con tu propio portal y todo lo necesario para adoptar con respaldo.
+              Nuestro trabajo es que más personas conozcan a tus animales y te apoyen.
             </SectionHeading>
             <div className={styles.orgs__cta}>
               <Link to="/register" className={cn(styles.btn, styles['btn--primary'])}>
-                Registrar mi organización
+                Crear mi portal gratis
                 <IconArrowRight className={styles.btn__icon} />
               </Link>
               <Link to="/login" className={cn(styles.btn, styles['btn--ghost'])}>

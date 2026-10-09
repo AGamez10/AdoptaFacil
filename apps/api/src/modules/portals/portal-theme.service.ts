@@ -1,15 +1,41 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type {
-  PortalLogoPosition,
-  PortalSocialNavPosition,
-  PortalTheme,
-  PortalThemeConfig,
-  UpdatePortalThemeInput,
+import {
+  DEFAULT_PORTAL_TEMPLATE,
+  PORTAL_TEMPLATE_IDS,
+  type PortalLogoPosition,
+  type PortalSocialNavPosition,
+  type PortalTemplateId,
+  type PortalTheme,
+  type PortalThemeConfig,
+  type UpdatePortalThemeInput,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
+
+/**
+ * Ola 3: la plantilla elegida viaja DENTRO del JSON `tokens` bajo esta clave
+ * reservada, para no necesitar migración ni tocar la función SECURITY DEFINER
+ * `organization_portal_theme` (que el PR de aprobación de organizaciones
+ * reescribe). Nunca sale hacia afuera como token: se separa al leer.
+ * TODO(migración): pasarla a una columna `template` cuando ese PR se fusione.
+ */
+const TEMPLATE_KEY = '__template';
+
+function isTemplate(value: unknown): value is PortalTemplateId {
+  return typeof value === 'string' && (PORTAL_TEMPLATE_IDS as readonly string[]).includes(value);
+}
+
+/** Separa la plantilla de los tokens de color guardados. */
+function splitStored(raw: unknown): { tokens: PortalTheme; template?: PortalTemplateId } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { tokens: {} };
+  const { [TEMPLATE_KEY]: template, ...tokens } = raw as Record<string, unknown>;
+  return {
+    tokens: tokens as PortalTheme,
+    ...(isTemplate(template) ? { template } : {}),
+  };
+}
 
 /**
  * M14 portal theme (T-027). The theme is tenant-scoped: an org reads/edits only
@@ -39,10 +65,12 @@ export class PortalThemeService {
     const organizationId = this.requireOrgId();
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const row = await tx.portalTheme.findUnique({ where: { organizationId } });
+      const stored = splitStored(row?.tokens);
       return {
-        tokens: (row?.tokens as PortalTheme | undefined) ?? {},
+        tokens: stored.tokens,
         logoPosition: (row?.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row?.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
+        ...(stored.template ? { template: stored.template } : {}),
       };
     });
   }
@@ -56,9 +84,18 @@ export class PortalThemeService {
     input: UpdatePortalThemeInput,
   ): Promise<PortalThemeConfig> {
     const organizationId = this.requireOrgId();
-    const tokens = input.tokens as unknown as Prisma.InputJsonValue;
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
+      // `tokens` se reemplaza entero; la plantilla guardada se conserva si
+      // la petición no trae una nueva.
+      const template =
+        input.template ??
+        splitStored((await tx.portalTheme.findUnique({ where: { organizationId } }))?.tokens)
+          .template;
+      const tokens = {
+        ...input.tokens,
+        ...(template ? { [TEMPLATE_KEY]: template } : {}),
+      } as unknown as Prisma.InputJsonValue;
       const row = await tx.portalTheme.upsert({
         where: { organizationId },
         create: {
@@ -90,13 +127,16 @@ export class PortalThemeService {
           layout: [
             ...(input.logoPosition !== undefined ? ['logoPosition'] : []),
             ...(input.socialNavPosition !== undefined ? ['socialNavPosition'] : []),
+            ...(input.template !== undefined ? ['template'] : []),
           ],
         },
       });
+      const stored = splitStored(row.tokens);
       return {
-        tokens: (row.tokens as PortalTheme) ?? {},
+        tokens: stored.tokens,
         logoPosition: (row.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
+        ...(stored.template ? { template: stored.template } : {}),
       };
     });
   }
@@ -118,10 +158,12 @@ export class PortalThemeService {
       }>
     >(Prisma.sql`SELECT organization_portal_theme(${slug}) AS data`);
     const data = rows[0]?.data;
+    const stored = splitStored(data?.tokens);
     return {
-      tokens: data?.tokens ?? {},
+      tokens: stored.tokens,
       logoPosition: data?.logoPosition ?? 'left',
       socialNavPosition: data?.socialNavPosition ?? 'right',
+      template: stored.template ?? DEFAULT_PORTAL_TEMPLATE,
     };
   }
 }

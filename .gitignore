@@ -55,3 +55,4 @@ Thumbs.db
 deploy/api.env
 deploy/backups/
 node-compile-cache/
+dump.rdb

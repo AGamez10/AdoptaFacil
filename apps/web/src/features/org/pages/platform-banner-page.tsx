@@ -218,7 +218,7 @@ export function PlatformBannerPage() {
     <PageContainer>
       <PageHeader
         title="Banner del portal"
-        description="Hasta 4 fotos para el collage del portal general (adoptafacil.com/). Un cuadro sin foto muestra el diseño decorativo de siempre."
+        description="Hasta 4 fotos para el collage del portal general (adoptafacil.org/). Un cuadro sin foto muestra el diseño decorativo de siempre."
       />
       {loading && <Skeleton className="h-96 w-full" />}
       {!loading && (

@@ -36,7 +36,7 @@ export function reviewedDocumentBadges(criteria: readonly string[] | undefined):
 }
 
 /** Iniciales (máx. 2) para el avatar de respaldo cuando no hay logo. */
-function initials(name: string): string {
+export function initials(name: string): string {
   return name
     .split(/\s+/)
     .filter(Boolean)

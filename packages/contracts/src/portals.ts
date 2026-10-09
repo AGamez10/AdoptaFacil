@@ -75,7 +75,7 @@ export interface PortalView {
 
 /**
  * Resultado de resolver un subdominio real del portal
- * (`<subdominio>.adoptafacil.com`) a su slug de organización. Superficie
+ * (`<subdominio>.adoptafacil.org`) a su slug de organización. Superficie
  * pública mínima — SOLO el slug, nada más — para que el frontend reutilice
  * sin cambios cada endpoint público ya existente que se indexa por slug
  * (`organization_public`, `organization_portal_theme`, animales, campañas...)
@@ -136,6 +136,60 @@ export type PortalTheme = Partial<Record<PortalThemeToken, string>>;
 export type PortalLogoPosition = 'left' | 'center' | 'right';
 export type PortalSocialNavPosition = 'left' | 'right';
 
+/**
+ * Plantillas del portal público (Ola 3). Mismo contenido y mismos datos, otra
+ * identidad visual y otra estructura. Conjunto cerrado: nunca HTML ni CSS libre.
+ */
+export const PORTAL_TEMPLATE_IDS = ['clasica', 'editorial', 'carnet', 'impacto'] as const;
+export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
+export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
+
+/** En qué nivel de plan vive una plantilla. */
+export type PortalTemplateTier = 'free' | 'paid';
+
+export interface PortalTemplateInfo {
+  id: PortalTemplateId;
+  name: string;
+  tagline: string;
+  /** TODO(client): lo define el hilo de planes. Hoy es solo un parámetro. */
+  tier: PortalTemplateTier;
+}
+
+/**
+ * Catálogo de plantillas. `tier` es un PARÁMETRO de negocio pendiente
+ * (TODO(client)): mientras no existan planes de pago, ninguna plantilla se
+ * bloquea y la interfaz solo muestra la etiqueta.
+ */
+export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
+  {
+    id: 'clasica',
+    name: 'Clásica',
+    tagline: 'Tu portada a todo el ancho y tus animales justo debajo.',
+    tier: 'free',
+  },
+  {
+    id: 'editorial',
+    name: 'Editorial',
+    tagline: 'Como una revista: titulares grandes, mucho aire y foto en arco.',
+    tier: 'paid',
+  },
+  {
+    id: 'carnet',
+    name: 'Carnet',
+    tagline: 'Inspirada en el carnet de cada animal: fichas con personalidad.',
+    tier: 'paid',
+  },
+  {
+    id: 'impacto',
+    name: 'Impacto',
+    tagline: 'Oscura y directa: el número de animales que buscan hogar manda.',
+    tier: 'paid',
+  },
+];
+
+/** ¿Se cobra la plantilla? Hasta que existan planes, nunca se bloquea. */
+export const PORTAL_TEMPLATE_TIERS_ENFORCED = false;
+
 /** Respuesta de lectura del tema (propio o público). */
 export interface PortalThemeConfig {
   tokens: PortalTheme;
@@ -143,6 +197,8 @@ export interface PortalThemeConfig {
   logoPosition?: PortalLogoPosition;
   /** De qué lado va el sidebar de redes/contacto (S2-PORTAL). Default: 'right'. */
   socialNavPosition?: PortalSocialNavPosition;
+  /** Plantilla del portal (Ola 3). Default: 'clasica'. */
+  template?: PortalTemplateId;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */
@@ -150,6 +206,8 @@ export interface UpdatePortalThemeInput {
   tokens: PortalTheme;
   logoPosition?: PortalLogoPosition;
   socialNavPosition?: PortalSocialNavPosition;
+  /** Omitida, conserva la plantilla guardada. */
+  template?: PortalTemplateId;
 }
 
 // ----------------------------------------------------------------------------
