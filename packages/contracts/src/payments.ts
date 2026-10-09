@@ -112,6 +112,23 @@ export interface CreateCollectionInput {
    * own account).
    */
   sponsorMpUserId?: string;
+  /**
+   * ADR-PAG-001 (cobro directo, sin custodia): the BENEFICIARY organization's
+   * own gateway credentials, resolved SERVER-SIDE by the calling service from
+   * the org's connected account. The real adapter creates the charge WITH
+   * these credentials, so the organization is the collector and the money
+   * lands in its account. SERVER-ONLY: never serialized to a client, never
+   * logged, never audited. The real driver refuses to charge without it.
+   */
+  collector?: CollectorCredentials;
+}
+
+/** Server-only credentials of the organization that receives the money. */
+export interface CollectorCredentials {
+  /** The org's OAuth access token at the gateway. Secret. */
+  accessToken: string;
+  /** The org's account id at the gateway (MP `user_id`). Not a secret. */
+  accountId: string;
 }
 
 export interface CollectionResult {
@@ -135,6 +152,16 @@ export interface NormalizedWebhookEvent {
   status: PaymentStatus;
   /** Stable key to dedup repeated deliveries of the same event. */
   dedupKey: string;
+  /**
+   * What the gateway reports was charged, read back from its API (integer COP
+   * pesos). Optional/additive: the caller compares it with the stored
+   * `amountCharged` and never settles a donation on a mismatch (PAY-003).
+   */
+  amountCharged?: number;
+  /** Currency reported by the gateway, when it reports one. */
+  currency?: string;
+  /** Account that received the money, as established by the read-back. */
+  receiverAccountId?: string;
 }
 
 /**
@@ -148,6 +175,12 @@ export interface NormalizedWebhookEvent {
 export interface WebhookVerificationContext {
   headers?: Record<string, string | undefined>;
   query?: Record<string, string | undefined>;
+  /**
+   * ADR-PAG-001: credentials of the organization that owns the notified
+   * payment (resolved server-side from the notification's account id). The
+   * real adapter reads the payment back WITH them. Server-only.
+   */
+  collector?: CollectorCredentials;
 }
 
 /** Colombian bank account type (RF26 payouts — ahorros/corriente). */
@@ -319,14 +352,31 @@ export function roundPesosHalfUp(value: number): number {
 }
 
 /** Commission components computed from a gross amount (each rounded to the peso). */
-function feesFromGross(gross: number): Omit<PaymentBreakdown, 'amountCharged' | 'gross' | 'net'> {
-  const { platformRate, gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
+function feesFromGross(
+  gross: number,
+  platformRate: number,
+): Omit<PaymentBreakdown, 'amountCharged' | 'gross' | 'net'> {
+  const { gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
   const platformFee = roundPesosHalfUp(platformRate * gross);
   const platformIva = roundPesosHalfUp(ivaRate * platformFee);
   const gatewayFee = roundPesosHalfUp(gatewayRate * gross + gatewayFixed);
   const gatewayIva = roundPesosHalfUp(ivaRate * gatewayFee);
   return { platformFee, platformIva, gatewayFee, gatewayIva };
 }
+
+/** Optional overrides for {@link computeBreakdown}. */
+export interface BreakdownRates {
+  /** Platform commission over gross. Defaults to `PAYMENT_FEE_CONFIG.platformRate`. */
+  platformRate?: number;
+}
+
+/**
+ * Rates for direct collection (ADR-PAG-001): the organization collects with its
+ * own account and AdoptaFácil takes NO per-transaction fee (its revenue comes
+ * from subscription plans). The 4 % only returns with a gateway split at
+ * source confirmed in writing.
+ */
+export const DIRECT_COLLECTION_RATES: Readonly<Required<BreakdownRates>> = { platformRate: 0 };
 
 /**
  * Compute the auditable breakdown for a collection.
@@ -344,12 +394,17 @@ function feesFromGross(gross: number): Omit<PaymentBreakdown, 'amountCharged' | 
 export function computeBreakdown(
   intendedAmount: number,
   commissionPayer: CommissionPayer,
+  rates: BreakdownRates = {},
 ): PaymentBreakdown {
   if (!Number.isInteger(intendedAmount) || intendedAmount <= 0) {
     throw new RangeError('intendedAmount must be a positive integer number of COP pesos');
   }
 
-  const { platformRate, gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
+  const platformRate = rates.platformRate ?? PAYMENT_FEE_CONFIG.platformRate;
+  if (!Number.isFinite(platformRate) || platformRate < 0 || platformRate >= 1) {
+    throw new RangeError('platformRate must be in [0, 1)');
+  }
+  const { gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
 
   let gross: number;
   if (commissionPayer === 'organization') {
@@ -364,7 +419,7 @@ export function computeBreakdown(
     gross = roundPesosHalfUp((intendedAmount + fixed) / (1 - proportional));
   }
 
-  const fees = feesFromGross(gross);
+  const fees = feesFromGross(gross, platformRate);
   const net = gross - fees.platformFee - fees.platformIva - fees.gatewayFee - fees.gatewayIva;
 
   return { amountCharged: gross, gross, ...fees, net };

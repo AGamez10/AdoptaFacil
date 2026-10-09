@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   computeBreakdown,
+  DIRECT_COLLECTION_RATES,
   type CollectionResult,
   type CreateCollectionInput,
   type CreatePayoutInput,
@@ -31,6 +32,12 @@ interface MercadoPagoOrderFetched {
   status?: string;
   status_detail?: string;
   external_reference?: string;
+  /** Pesos as a STRING (e.g. "50000"), same convention as the request. */
+  total_amount?: string;
+  /** Present on Orders responses per MP's reference; checked when present. */
+  currency?: string;
+  /** Owner (collector) account of the order, when MP reports it. */
+  user_id?: string | number;
   // Read ONLY for diagnostic logging (e.g. 'rejected_by_issuer') — the
   // order's own top-level `status_detail` above is uninformative on a
   // decline (verified live, 2026-10-01: it just duplicates `status`, e.g.
@@ -154,12 +161,12 @@ function timingSafeEqualHex(computedHex: string, givenHex: string): boolean {
  * codebase. `CollectionResult.paymentLinkUrl` is simply absent now (always
  * optional on the contract already).
  *
- * Split de Pagos 1:1 (T-OAuth-Connect): when the calling service resolves a
- * `sponsorMpUserId` (the beneficiary org's own connected MercadoPago
- * account), this adapter includes `integration_data.sponsor.id` so 100% of
- * the charge routes directly to that account via MercadoPago's own split
- * mechanism — see {@link createCollection}'s body for the commission
- * TODO(client): no fee field exists in the Orders API as of this task.
+ * Cobro directo (ADR-PAG-001, docs/pagos/pasarelas-multiples.md): every
+ * order is created WITH the beneficiary organization's own OAuth token
+ * (`input.collector`), so the organization is the collector and receives the
+ * money in its own account. The platform token is never used to charge
+ * (that was custody, PAY-001). No platform fee is taken per transaction: MP
+ * confirmed in writing that Split 1:1 is not active for Colombia.
  *
  * `computeBreakdown` remains the single source of the commission math — this
  * adapter only turns that breakdown into a MercadoPago order and back; it
@@ -217,8 +224,26 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
    * requirement (dev/test double, never calls a real gateway).
    */
   async createCollection(input: CreateCollectionInput): Promise<CollectionResult> {
-    const breakdown = computeBreakdown(input.intendedAmount, input.commissionPayer);
+    // Direct collection: no per-transaction platform fee (ADR-PAG-001).
+    const breakdown = computeBreakdown(
+      input.intendedAmount,
+      input.commissionPayer,
+      DIRECT_COLLECTION_RATES,
+    );
     const reference = `af-${input.idempotencyKey}`;
+
+    // ADR-PAG-001 (sin custodia): the charge is ALWAYS created with the
+    // beneficiary organization's own OAuth token, so the organization is the
+    // collector. There is no fallback to the platform's token: that fallback
+    // was custody (PAY-001).
+    const collector = input.collector;
+    if (!collector?.accessToken || !collector.accountId) {
+      throw new Error(
+        "MercadoPagoPaymentAdapter.createCollection requires the organization's own " +
+          'connected account (collector). Charging with the platform account is custody ' +
+          'and is not allowed (ADR-PAG-001).',
+      );
+    }
 
     if (!input.cardToken || !input.paymentMethodId) {
       throw new Error(
@@ -263,28 +288,15 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     if (input.payer?.email) {
       body.payer = { email: input.payer.email };
     }
-    if (input.sponsorMpUserId) {
-      // Split de Pagos 1:1 (T-OAuth-Connect). Verified empirically: this is
-      // the ONLY valid location for `sponsor.id` (rejected when nested under
-      // `transactions.payments[0]`), and it must be a DIFFERENT MercadoPago
-      // account than the one issuing the request (self-sponsorship rejected
-      // as `order_invalid_sponsor_id`).
-      // TODO(client): no commission/fee field exists anywhere in the Orders
-      // API as of this task — `marketplace_fee` (top-level) is silently
-      // accepted but ignored/never echoed back; `application_fee` (nested in
-      // a payment) and a `fee` nested in `sponsor` are both REJECTED as
-      // unsupported (all verified via live curl, 2026-09-30). Until
-      // MercadoPago support answers how a platform commission is taken on a
-      // split order, 100% of `amountCharged` routes to the sponsor — moving
-      // forward now is an explicit client decision, not an oversight.
-      body.integration_data = { sponsor: { id: input.sponsorMpUserId } };
-    }
+    // No `integration_data.sponsor.id`: MP confirmed in writing (2026-10-01)
+    // it only tags the order and never moves money. The collector is decided
+    // by WHOSE token creates the order (below), not by a body field.
 
     const response = await this.fetchFn(`${this.baseUrl}/v1/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.accessToken}`,
+        Authorization: `Bearer ${collector.accessToken}`,
         // REQUIRED by /v1/orders (verified live, 2026-09-30: 400
         // empty_required_header without it) — unlike the retired Checkout Pro
         // preferences endpoint, which took no idempotency header at all. Our
@@ -408,15 +420,20 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`;
     const computed = createHmac('sha256', this.webhookSecret).update(manifest).digest('hex');
 
-    this.logger.debug(
-      `webhook sig check secret_tail=...${this.webhookSecret.slice(-6)} manifest="${manifest}" computed=${computed} received_v1=${v1}`,
-    );
+    // AF-032: never log the secret (not even its tail) nor the computed HMAC.
     if (!timingSafeEqualHex(computed, v1)) {
       throw new Error('MercadoPago webhook rejected: signature mismatch.');
     }
 
-    const response = await this.fetchFn(`${this.baseUrl}/v1/orders/${dataId}`, {
-      headers: { Authorization: `Bearer ${this.accessToken}` },
+    // ADR-PAG-001: the order belongs to the ORGANIZATION's account, so it is
+    // read back with the organization's token. A notification replayed with
+    // another org's account id simply 404s here and is rejected.
+    const collector = context?.collector;
+    if (!collector?.accessToken || !collector.accountId) {
+      throw new Error('MercadoPago webhook rejected: no connected organization for this account.');
+    }
+    const response = await this.fetchFn(`${this.baseUrl}/v1/orders/${encodeURIComponent(dataId)}`, {
+      headers: { Authorization: `Bearer ${collector.accessToken}` },
     });
     if (!response.ok) {
       throw new Error(`MercadoPago order fetch failed (${response.status})`);
@@ -426,9 +443,24 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       throw new Error('MercadoPago webhook rejected: order has no external_reference.');
     }
 
+    if (order.user_id !== undefined && String(order.user_id) !== collector.accountId) {
+      throw new Error('MercadoPago webhook rejected: order belongs to another account.');
+    }
+
     const status = mapMercadoPagoOrderStatus(order.status);
     const eventId = `${dataId}-${order.status}`;
-    return { eventId, collectionId: order.external_reference, status, dedupKey: eventId };
+    const amountCharged = order.total_amount !== undefined ? Number(order.total_amount) : undefined;
+    return {
+      eventId,
+      collectionId: order.external_reference,
+      status,
+      dedupKey: eventId,
+      amountCharged,
+      currency: order.currency,
+      // Read back successfully WITH the org's own token ⇒ the order is in the
+      // org's account (MP scopes reads to the token owner).
+      receiverAccountId: collector.accountId,
+    };
   }
 
   /**

@@ -113,4 +113,15 @@ describe('RLS (organization_mercadopago_accounts)', () => {
     );
     expect(survives).not.toBeNull();
   });
+
+  it('no-leak: the account→organization lookup returns only the organization id, never tokens (ADR-PAG-001)', async () => {
+    const rows = await prisma.$queryRaw<Record<string, unknown>[]>(
+      Prisma.sql`SELECT * FROM mercadopago_account_organization_id(${'mp-user-A'})`,
+    );
+    expect(rows).toEqual([{ organization_id: orgA }]);
+    const none = await prisma.$queryRaw<Record<string, unknown>[]>(
+      Prisma.sql`SELECT * FROM mercadopago_account_organization_id(${'mp-user-unknown'})`,
+    );
+    expect(none).toEqual([]);
+  });
 });

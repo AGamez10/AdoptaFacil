@@ -10,6 +10,7 @@ export * from './animals';
 export * from './adoptions';
 export * from './donations';
 export * from './payments';
+export * from './payment-gateways';
 export * from './campaigns';
 export * from './sponsorships';
 export * from './volunteering';
