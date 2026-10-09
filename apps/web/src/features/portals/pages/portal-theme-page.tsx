@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  OrganizationStatus,
   Role,
   type Organization,
   type PortalLogoPosition,
@@ -30,6 +31,7 @@ import {
 } from '../model/color-conversion';
 import { PORTAL_THEME_FIELDS, safePortalTheme, type PortalThemeField } from '../model/theme';
 import { PortalMiniPreview } from '../components/portal-mini-preview';
+import { OrgStatusCard } from '../../org/components/org-status-card';
 
 /** Empty string ⇒ "use the default token" (the field is omitted from the payload). */
 type FormState = Partial<Record<string, string>>;
@@ -224,6 +226,7 @@ export function PortalThemePage() {
   const [orgName, setOrgName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [orgStatus, setOrgStatus] = useState<OrganizationStatus | null>(null);
 
   useEffect(() => {
     if (!canEdit) {
@@ -330,17 +333,26 @@ export function PortalThemePage() {
     }
   };
 
-  const publicPortalLink = slug ? (
-    <a
-      href={`/o/${encodeURIComponent(slug)}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-    >
-      <ExternalLinkIcon />
-      Ver portal público
-    </a>
-  ) : undefined;
+  // Only approved organizations have a public portal (R2-1): the link would
+  // open "Organización no encontrada" before that, so the status card explains.
+  const publicPortalLink =
+    slug && orgStatus === OrganizationStatus.Approved ? (
+      <a
+        href={`/o/${encodeURIComponent(slug)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      >
+        <ExternalLinkIcon />
+        Ver portal público
+      </a>
+    ) : orgStatus === OrganizationStatus.Approved ? (
+      // Approved but without a public address yet: the portal lives at
+      // /o/<slug>, and the slug is chosen in the organization profile.
+      <a href="/organizacion" className="text-sm font-medium text-primary hover:underline">
+        Define la dirección pública de tu portal en el perfil
+      </a>
+    ) : undefined;
 
   // Deny-by-default: without Owner/Administrator the tokens are not editable.
   if (!canEdit) {
@@ -365,6 +377,7 @@ export function PortalThemePage() {
         description="La apariencia visual de tu portal público: colores y diseño."
         actions={publicPortalLink}
       />
+      <OrgStatusCard hideWhenApproved onStatus={setOrgStatus} />
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : (

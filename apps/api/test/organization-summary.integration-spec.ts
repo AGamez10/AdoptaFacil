@@ -3,7 +3,11 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown, FakePaymentAdapter } from '@adoptafacil/contracts';
+import {
+  computeBreakdown,
+  DIRECT_COLLECTION_RATES,
+  FakePaymentAdapter,
+} from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
@@ -261,7 +265,7 @@ describe('Organization summary (S2-08, M13)', () => {
         idempotencyKey: orgModeKey,
       })
       .expect(201);
-    net1 = computeBreakdown(50_000, 'organization').net;
+    net1 = computeBreakdown(50_000, 'organization', DIRECT_COLLECTION_RATES).net;
     await request(server)
       .post('/donations/webhook')
       .set('x-signature', 'fake-sig')
@@ -283,7 +287,7 @@ describe('Organization summary (S2-08, M13)', () => {
         idempotencyKey: donorModeKey,
       })
       .expect(201);
-    net2 = computeBreakdown(30_000, 'donor').net;
+    net2 = computeBreakdown(30_000, 'donor', DIRECT_COLLECTION_RATES).net;
     await request(server)
       .post('/donations/webhook')
       .set('x-signature', 'fake-sig')
@@ -329,6 +333,15 @@ describe('Organization summary (S2-08, M13)', () => {
     expect(res.body.formalizationPercent).toBe(0); // Informal = position 0 of 5
   });
 
+  it('a rejected document stops counting once a newer version replaces it', async () => {
+    await upload(owner.token, 'legal_representative_id').expect(201); // v2, pending
+    const res = await request(server)
+      .get('/org/summary')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(200);
+    expect(res.body.documentsRejected).toBe(0);
+  });
+
   it('cross-checks donationsReceivedTotal against computeBreakdown — the single source of money math', async () => {
     // No pre-existing public display of an org-wide donation total exists yet
     // (verified during inventory: the public portal only has a typed placeholder
@@ -341,7 +354,8 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${owner.token}`)
       .expect(200);
     const expected =
-      computeBreakdown(50_000, 'organization').net + computeBreakdown(30_000, 'donor').net;
+      computeBreakdown(50_000, 'organization', DIRECT_COLLECTION_RATES).net +
+      computeBreakdown(30_000, 'donor', DIRECT_COLLECTION_RATES).net;
     expect(res.body.donationsReceivedTotal).toBe(expected);
   });
 

@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown } from '@adoptafacil/contracts';
+import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
@@ -109,7 +109,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
         eventId: `evt-reconc-${randomUUID()}`,
       })
       .expect(200);
-    return computeBreakdown(intendedAmount, 'organization').net;
+    return computeBreakdown(intendedAmount, 'organization', DIRECT_COLLECTION_RATES).net;
   }
 
   async function waitFor<T>(

@@ -131,8 +131,12 @@ export function DonationAccessPage() {
 
                 {data.receipt && (
                   <div className={styles.receipt} data-testid="access-receipt">
-                    <p className={styles['receipt__label']}>Recibo emitido</p>
+                    <p className={styles['receipt__label']}>Comprobante de donación emitido</p>
                     <p className={styles['receipt__date']}>{formatBogota(data.receipt.issuedAt)}</p>
+                    <p className={styles['receipt__note']} data-testid="access-receipt-note">
+                      Constancia de que la organización recibió tu aporte. No es un certificado
+                      tributario.
+                    </p>
                   </div>
                 )}
 

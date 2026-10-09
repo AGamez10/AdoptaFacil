@@ -5,6 +5,7 @@ import { validateEnv } from './config/env.validation';
 import { AuditModule } from './core/audit/audit.module';
 import { AuthModule } from './core/auth/auth.module';
 import { FeaturesModule } from './core/features/features.module';
+import { PlansModule } from './core/plans/plans.module';
 import { IdentityModule } from './core/identity/identity.module';
 import { NotificationModule } from './core/notifications/notification.module';
 import { PaymentModule } from './core/payments/payment.module';
@@ -63,6 +64,7 @@ import { RedisModule } from './redis/redis.module';
     // Module feature flags (Ola 1, R1-1): global guard that answers 404 for
     // switched-off modules + `GET /public/config/features` for the web.
     FeaturesModule,
+    PlansModule,
     // Feature modules (registered last; core modules above are unchanged).
     OrgModule,
     // Ola 1 · organization review status/suspension + member invitations.

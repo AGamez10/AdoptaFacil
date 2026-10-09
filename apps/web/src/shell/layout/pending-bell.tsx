@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   ReminderStatus,
   Role,
   type ClinicalReminder,
   type OrganizationDashboardSummary,
 } from '@adoptafacil/contracts';
-import { Badge, cn } from '@adoptafacil/ui';
+import { Badge, cn, useToast } from '@adoptafacil/ui';
 import { useApiClient } from '../api';
 import { useSession } from '../auth';
 import { fetchOrgSummary } from '../../features/_layout/api/dashboard-api';
@@ -71,6 +71,10 @@ export function PendingBell() {
   const [summary, setSummary] = useState<OrganizationDashboardSummary | null>(null);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const { pathname } = useLocation();
+  const { toast } = useToast();
+  /** Last pending total seen; null until the first load finishes. */
+  const lastTotal = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     const tasks: Promise<void>[] = [];
@@ -94,10 +98,21 @@ export function PendingBell() {
 
   useEffect(() => {
     if (!canSeeReminders && !canSeeSummary) return;
-    void load();
     const timer = window.setInterval(() => void load(), POLL_MS);
-    return () => window.clearInterval(timer);
+    const onFocus = () => void load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [load, canSeeReminders, canSeeSummary]);
+
+  // Refresca al cambiar de pantalla: lo que se acaba de atender desaparece
+  // en cuanto la persona sale de esa pantalla, sin esperar al sondeo.
+  useEffect(() => {
+    if (!canSeeReminders && !canSeeSummary) return;
+    void load();
+  }, [pathname, load, canSeeReminders, canSeeSummary]);
 
   // Cierra con Escape o al hacer clic fuera.
   useEffect(() => {
@@ -115,6 +130,32 @@ export function PendingBell() {
       document.removeEventListener('mousedown', onPointerDown);
     };
   }, [open]);
+
+  const openCount = reminders.filter(isOpen).length;
+  const actionCount = summary ? deriveActionItems(summary).length : 0;
+  const loaded = summary !== null || !canSeeSummary;
+
+  // Reconoce el trabajo: cuando un pendiente se atiende, se agradece.
+  useEffect(() => {
+    if (!loaded) return;
+    const current = openCount + actionCount;
+    const previous = lastTotal.current;
+    lastTotal.current = current;
+    if (previous === null || current >= previous) return;
+    toast(
+      current === 0
+        ? {
+            title: '¡Todo al día!',
+            description: 'Gracias por atender cada pendiente a tiempo.',
+            variant: 'success',
+          }
+        : {
+            title: '¡Bien hecho!',
+            variant: 'success',
+            description: `Atendiste ${previous - current === 1 ? 'un pendiente' : `${previous - current} pendientes`}. Te ${current === 1 ? 'queda 1' : `quedan ${current}`}.`,
+          },
+    );
+  }, [loaded, openCount, actionCount, toast]);
 
   if (!canSeeReminders && !canSeeSummary) return null;
 
