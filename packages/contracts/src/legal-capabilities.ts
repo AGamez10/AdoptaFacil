@@ -166,27 +166,17 @@ export const CAPABILITY_RULES: readonly CapabilityRule[] = [
 ];
 
 /** Documentos que la plataforma debe tener APROBADOS para reconocer cada estado.
- *  TODO(client): confirmar con abogado; hoy son la recomendación del diseño. */
+ *  Igual al bloqueo de la API (`TRANSITION_REQUIREMENTS` y
+ *  `PLATFORM_TRANSITION_EVIDENCE`). La cédula del representante legal se pide,
+ *  pero no bloquea. TODO(client): confirmar con abogado. */
 export const STATE_REQUIRED_DOCUMENTS: Readonly<
   Record<FormalizationState, readonly DocumentType[]>
 > = {
   [S.Informal]: [],
   [S.EnProceso]: [],
-  [S.Formalizada]: [
-    DocumentType.Rut,
-    DocumentType.ExistenceRepresentationCertificate,
-    DocumentType.LegalRepresentativeId,
-  ],
-  [S.ESAL]: [
-    DocumentType.Rut,
-    DocumentType.ExistenceRepresentationCertificate,
-    DocumentType.LegalRepresentativeId,
-  ],
-  [S.ESAL_RTE]: [
-    DocumentType.Rut,
-    DocumentType.ExistenceRepresentationCertificate,
-    DocumentType.LegalRepresentativeId,
-  ],
+  [S.Formalizada]: [DocumentType.Rut, DocumentType.ExistenceRepresentationCertificate],
+  [S.ESAL]: [DocumentType.ExistenceRepresentationCertificate],
+  [S.ESAL_RTE]: [DocumentType.Rut],
 };
 
 export interface CapabilityDecision {

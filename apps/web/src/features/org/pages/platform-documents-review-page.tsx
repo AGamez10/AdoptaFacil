@@ -122,23 +122,46 @@ interface OrgPromotion {
 }
 
 /** Qué documento acepta la plataforma como evidencia para cada estado (igual
- *  que `PLATFORM_TRANSITION_EVIDENCE` en la API). Formalizada la pide el Owner. */
+ *  que `PLATFORM_TRANSITION_EVIDENCE` en la API). */
 const EVIDENCE_FOR: Partial<Record<FormalizationState, DocumentType>> = {
   [FormalizationState.ESAL]: DocumentType.ExistenceRepresentationCertificate,
   [FormalizationState.ESAL_RTE]: DocumentType.Rut,
 };
 
-/** El siguiente paso que la plataforma puede dar con un documento ya aprobado. */
-export function nextPromotion(
-  promotion: OrgPromotion,
-): { target: FormalizationState; documentId: string } | null {
+export interface PromotionStep {
+  target: FormalizationState;
+  /** Documento citado como evidencia (solo ESAL y ESAL con RTE). */
+  documentId?: string;
+}
+
+/**
+ * Los pasos que la plataforma puede dar seguidos con los documentos que acaba
+ * de aprobar: hasta Formalizada basta tener aprobados el RUT y el certificado
+ * de Cámara (la API lo vuelve a exigir); ESAL y ESAL con RTE citan el documento
+ * que los prueba. Se detiene en el primer paso sin respaldo.
+ */
+export function promotionPath(promotion: OrgPromotion): PromotionStep[] {
   const rank = (state: FormalizationState) => FORMALIZATION_SEQUENCE.indexOf(state);
-  const next = FORMALIZATION_SEQUENCE[rank(promotion.currentState) + 1];
-  if (!next || !EVIDENCE_FOR[next]) return null;
-  const candidate = promotion.candidates.find(
-    (c) => c.type === EVIDENCE_FOR[next] && rank(c.target) >= rank(next),
-  );
-  return candidate ? { target: next, documentId: candidate.documentId } : null;
+  const approvedTypes = new Set(promotion.candidates.map((c) => c.type));
+  const hasBoth =
+    approvedTypes.has(DocumentType.Rut) &&
+    approvedTypes.has(DocumentType.ExistenceRepresentationCertificate);
+  const steps: PromotionStep[] = [];
+  for (let i = rank(promotion.currentState) + 1; i < FORMALIZATION_SEQUENCE.length; i += 1) {
+    const target = FORMALIZATION_SEQUENCE[i]!;
+    const evidenceType = EVIDENCE_FOR[target];
+    if (!evidenceType) {
+      if (!hasBoth) break;
+      steps.push({ target });
+      continue;
+    }
+    const candidate = promotion.candidates.find(
+      (c) => c.type === evidenceType && rank(c.target) >= i,
+    );
+    if (!candidate) break;
+    steps.push({ target, documentId: candidate.documentId });
+  }
+  return steps;
 }
 
 /**
@@ -322,11 +345,13 @@ export function PlatformDocumentsReviewPage() {
     report: DocumentVerificationReport,
   ): Promise<void> => {
     const ok = await review(item, 'approve');
-    if (!ok || !report.suggestedState || !report.currentState) return;
+    if (!ok || !report.currentState) return;
     const candidate: PromotionCandidate = {
       documentId: item.id,
       type: item.type,
-      target: report.suggestedState,
+      // Sin estado sugerido el documento igual cuenta como aprobado para
+      // Formalizada, pero no respalda ESAL ni RTE.
+      target: report.suggestedState ?? report.currentState,
     };
     setPromotions((prev) => {
       const current = prev[item.organizationId];
@@ -341,36 +366,48 @@ export function PlatformDocumentsReviewPage() {
     });
   };
 
+  /** Sube la organización paso a paso hasta donde la respaldan sus documentos.
+   *  Cada paso es una transición auditada de la API; se detiene en el primer error. */
   const promote = async (organizationId: string): Promise<void> => {
     const promotion = promotions[organizationId];
-    const step = promotion ? nextPromotion(promotion) : null;
-    if (!promotion || !step) return;
+    const steps = promotion ? promotionPath(promotion) : [];
+    if (!promotion || steps.length === 0) return;
     setBusy(`promote-${organizationId}`);
+    let reached = promotion.currentState;
     try {
-      await client.request(`/platform/organizations/${organizationId}/formalization/transitions`, {
-        method: 'POST',
-        json: {
-          targetState: step.target,
-          evidenceDocumentId: step.documentId,
-          reason: 'Documento verificado y aprobado por la plataforma.',
-        },
-      });
-      setPromotions((prev) => ({
-        ...prev,
-        [organizationId]: { ...promotion, currentState: step.target },
-      }));
+      for (const step of steps) {
+        await client.request(
+          `/platform/organizations/${organizationId}/formalization/transitions`,
+          {
+            method: 'POST',
+            json: {
+              targetState: step.target,
+              ...(step.documentId ? { evidenceDocumentId: step.documentId } : {}),
+              reason: 'Documentos verificados y aprobados por la plataforma.',
+            },
+          },
+        );
+        reached = step.target;
+      }
       toast({
-        title: `${promotion.organizationName} ahora es ${STATE_NAMES[step.target]}`,
+        title: `${promotion.organizationName} ahora es ${STATE_NAMES[reached]}`,
         description: 'Ya tiene habilitadas las funciones de ese estado.',
         variant: 'success',
       });
     } catch (error) {
       toast({
-        title: 'No se pudo subir de estado',
+        title:
+          reached === promotion.currentState
+            ? 'No se pudo subir de estado'
+            : `Quedó en ${STATE_NAMES[reached]}`,
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
     } finally {
+      setPromotions((prev) => ({
+        ...prev,
+        [organizationId]: { ...promotion, currentState: reached },
+      }));
       setBusy(null);
     }
   };
@@ -379,9 +416,9 @@ export function PlatformDocumentsReviewPage() {
     .map(([organizationId, promotion]) => ({
       organizationId,
       promotion,
-      step: nextPromotion(promotion),
+      steps: promotionPath(promotion),
     }))
-    .filter((offer) => offer.step !== null);
+    .filter((offer) => offer.steps.length > 0);
 
   if (!canReview) {
     return (
@@ -403,18 +440,19 @@ export function PlatformDocumentsReviewPage() {
       />
       {promotionOffers.length > 0 && (
         <ul className={styles.promotions} aria-label="Organizaciones listas para subir de estado">
-          {promotionOffers.map(({ organizationId, promotion, step }) => (
+          {promotionOffers.map(({ organizationId, promotion, steps }) => (
             <li key={organizationId} className={styles.promotion}>
               <p>
-                <strong>{promotion.organizationName}</strong>: el documento que aprobaste respalda
-                pasar de {STATE_NAMES[promotion.currentState]} a {STATE_NAMES[step!.target]}.
+                <strong>{promotion.organizationName}</strong>: los documentos que aprobaste
+                respaldan pasar de {STATE_NAMES[promotion.currentState]} a{' '}
+                {STATE_NAMES[steps[steps.length - 1]!.target]}.
               </p>
               <Button
                 size="sm"
                 disabled={busy === `promote-${organizationId}`}
                 onClick={() => void promote(organizationId)}
               >
-                Subir a {STATE_NAMES[step!.target]}
+                Subir a {STATE_NAMES[steps[steps.length - 1]!.target]}
               </Button>
             </li>
           ))}

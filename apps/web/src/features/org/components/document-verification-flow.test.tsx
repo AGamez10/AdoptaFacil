@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentType, FormalizationState, Role } from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
-import { nextPromotion } from '../pages/platform-documents-review-page';
+import { promotionPath } from '../pages/platform-documents-review-page';
 
 function sessionWith(roles: Role[], id = 'admin-1') {
   return {
@@ -67,28 +67,44 @@ const REPORT = {
   links: [{ label: 'Consultar estado del RUT en la DIAN', url: 'https://muisca.dian.gov.co/' }],
 };
 
-describe('nextPromotion', () => {
-  it('ofrece solo el paso siguiente y con el documento que lo prueba', () => {
-    const rut = { documentId: 'r', type: DocumentType.Rut, target: FormalizationState.ESAL_RTE };
-    const cerl = {
-      documentId: 'c',
-      type: DocumentType.ExistenceRepresentationCertificate,
-      target: FormalizationState.ESAL,
-    };
-    const base = { organizationName: 'X', candidates: [rut] };
-    // Desde Formalizada el siguiente es ESAL y el RUT no lo prueba.
-    expect(nextPromotion({ ...base, currentState: FormalizationState.Formalizada })).toBeNull();
+describe('promotionPath', () => {
+  const rut = { documentId: 'r', type: DocumentType.Rut, target: FormalizationState.ESAL_RTE };
+  const cerl = {
+    documentId: 'c',
+    type: DocumentType.ExistenceRepresentationCertificate,
+    target: FormalizationState.ESAL,
+  };
+
+  it('con RUT 04 y certificado de ESAL sube en un clic desde En proceso hasta ESAL con RTE', () => {
     expect(
-      nextPromotion({
-        ...base,
-        currentState: FormalizationState.Formalizada,
+      promotionPath({
+        organizationName: 'X',
+        currentState: FormalizationState.EnProceso,
         candidates: [rut, cerl],
       }),
-    ).toEqual({ target: FormalizationState.ESAL, documentId: 'c' });
-    expect(nextPromotion({ ...base, currentState: FormalizationState.ESAL })).toEqual({
-      target: FormalizationState.ESAL_RTE,
-      documentId: 'r',
-    });
+    ).toEqual([
+      { target: FormalizationState.Formalizada },
+      { target: FormalizationState.ESAL, documentId: 'c' },
+      { target: FormalizationState.ESAL_RTE, documentId: 'r' },
+    ]);
+  });
+
+  it('sin el certificado no ofrece nada; con un RUT 05 se queda en ESAL', () => {
+    expect(
+      promotionPath({
+        organizationName: 'X',
+        currentState: FormalizationState.EnProceso,
+        candidates: [rut],
+      }),
+    ).toEqual([]);
+    const rutOrdinario = { ...rut, target: FormalizationState.EnProceso };
+    expect(
+      promotionPath({
+        organizationName: 'X',
+        currentState: FormalizationState.EnProceso,
+        candidates: [rutOrdinario, cerl],
+      }).map((s) => s.target),
+    ).toEqual([FormalizationState.Formalizada, FormalizationState.ESAL]);
   });
 });
 

@@ -6,13 +6,15 @@ Qué puede hacer cada organización en AdoptaFácil según su estado ante la ley
 
 ## 1. Los cinco estados
 
-| Estado           | Quién es                                                                                                            | Cómo se prueba                                                                                                      |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Informal**     | Rescatista u hogar de paso, persona natural o colectivo sin personería jurídica.                                    | Nada legal. La plataforma aprueba la cuenta (estado operativo del PR #5).                                           |
-| **En proceso**   | Ya inició la constitución (acta, estatutos) pero aún no está inscrita.                                              | Lo declara el Owner. No desbloquea nada nuevo, así que no requiere revisión.                                        |
-| **Formalizada**  | Persona jurídica inscrita en la Cámara de Comercio.                                                                 | RUT de persona jurídica + certificado de existencia y representación legal (CERL) + cédula del representante legal. |
-| **ESAL**         | Fundación, asociación o corporación sin ánimo de lucro, en régimen ordinario de renta (responsabilidad 05 del RUT). | Lo mismo, y el CERL dice "sin ánimo de lucro". Solo la plataforma la sube a este estado.                            |
-| **ESAL con RTE** | ESAL calificada en el Régimen Tributario Especial (responsabilidad 04 del RUT) con su actualización anual al día.   | RUT reciente con responsabilidad 04. Solo la plataforma la sube a este estado.                                      |
+| Estado           | Quién es                                                                                                            | Cómo se prueba                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Informal**     | Rescatista u hogar de paso, persona natural o colectivo sin personería jurídica.                                    | Nada legal. La plataforma aprueba la cuenta (estado operativo del PR #5).                                                            |
+| **En proceso**   | Ya inició la constitución (acta, estatutos) pero aún no está inscrita.                                              | Lo declara el Owner. No desbloquea nada nuevo, así que no requiere revisión.                                                         |
+| **Formalizada**  | Persona jurídica inscrita en la Cámara de Comercio.                                                                 | RUT y certificado de existencia y representación legal (CERL), ambos aprobados. La cédula del representante se pide pero no bloquea. |
+| **ESAL**         | Fundación, asociación o corporación sin ánimo de lucro, en régimen ordinario de renta (responsabilidad 05 del RUT). | Un CERL aprobado que dice "sin ánimo de lucro". Solo la plataforma la sube a este estado.                                            |
+| **ESAL con RTE** | ESAL calificada en el Régimen Tributario Especial (responsabilidad 04 del RUT) con su actualización anual al día.   | Un RUT aprobado y reciente con responsabilidad 04. Solo la plataforma la sube a este estado.                                         |
+
+**Lo formal se habilita solo con documentos aprobados.** El servidor rechaza (400) pasar a Formalizada si el RUT y el CERL no están aprobados (`TRANSITION_REQUIREMENTS` en `apps/api/src/modules/org/formalization.machine.ts`), y rechaza subir a ESAL sin un CERL aprobado como evidencia o a ESAL con RTE sin un RUT aprobado (`PLATFORM_TRANSITION_EVIDENCE`). Mientras tanto, la pantalla de la organización explica qué falta y cómo conseguirlo.
 
 Las ESAL se constituyen por acta o documento privado y adquieren personería al inscribirse en la Cámara de Comercio de su domicilio (Decreto 2150 de 1995, art. 40; Decreto 427 de 1996). El requisito de constitución incluye el PRE-RUT, así que toda ESAL inscrita tiene NIT.
 
@@ -66,10 +68,21 @@ Regla de vigencia: si una ESAL con RTE no tiene el RTE vigente (`rteVigente = fa
 
 4. El informe nunca aprueba solo. Sugiere **Aprobar**, **Observar** (con el motivo ya escrito para la organización) o **Revisión manual**. No se guarda el texto leído; se recalcula cada vez que se abre.
 
+### Consultar el RUT directamente: no hay vía oficial
+
+Se investigó si AdoptaFácil puede consultar el RUT o el registro mercantil por API con el solo NIT:
+
+- **DIAN:** no publica una API del RUT. La consulta de estado del RUT (MUISCA) es un formulario para personas, con captcha; automatizarlo va contra sus condiciones de uso.
+- **RUES:** solo ofrece la consulta web. Los "scrapers" de terceros que la automatizan no son una vía legal.
+- **Proveedores KYC comerciales** (p. ej. Verifik) sí lo ofrecen, pero exigen contrato y un acuerdo de tratamiento de datos (Ley 1581 de 2012). Queda como opción `TODO(client)` detrás del mismo puerto.
+
+Por eso el camino es que la organización **descargue su RUT y su CERL y los suba**: AdoptaFácil los lee, le **llena el perfil** (NIT con dígito de verificación válido y razón social, si confirma con "Usar en mi perfil") y la plataforma los verifica. A quien aún no tiene RUT, la pantalla de Formalización le dice qué hacer (constituir la entidad, inscribirla en la Cámara y sacar el RUT) con los enlaces oficiales.
+
 Endpoints nuevos (sin migración):
 
 - `GET /platform/documents/:id/verification`: informe de un documento de la cola (PlatformAdmin, PlatformSuperAdmin). Solo lee la cola por la función acotada que ya existe.
 - `GET /org/formalization/capabilities`: lo que la organización puede hacer hoy y lo que desbloquea en el siguiente estado (cualquier miembro).
+- `GET /org/documents/:id/prefill`: NIT y razón social leídos del RUT o el CERL propio, para llenar el perfil (Owner, Administrator). Solo ve documentos de su organización (RLS) y no escribe nada.
 
 ## 4. La pantalla del superadmin
 
@@ -78,7 +91,7 @@ Sobre el workspace de revisión del PR #4 (`/plataforma/documentos`), cada docum
 - Una franja con la sugerencia: verde "Todo coincide", ámbar "Revisa estos avisos" o rojo "Hay datos que no coinciden".
 - Los datos leídos (NIT, tipo de contribuyente, régimen, fechas, código de verificación) junto a los chequeos con ✓, ! o ✗ y una frase cada uno.
 - Un botón principal que hace lo sugerido en un clic: **Aprobar** o **Observar con este motivo** (el motivo se puede editar antes).
-- Si el documento respalda un estado superior, después de aprobar aparece **Subir a ESAL con RTE** (o ESAL / Formalizada), que usa el endpoint de transición de plataforma del PR #5 citando ese documento como evidencia.
+- Si los documentos aprobados respaldan un estado superior, arriba aparece **Subir a ESAL con RTE** (o ESAL / Formalizada). En un clic encadena los pasos que los documentos respaldan (por ejemplo En proceso → Formalizada → ESAL → ESAL con RTE), usando el endpoint de transición de plataforma del PR #5 con el documento como evidencia de cada paso.
 - Enlaces a la consulta oficial (RUES y estado del RUT en la DIAN) para lo que la lectura no puede probar, como la autenticidad del certificado.
 
 ## 5. Para validar antes de recaudar dinero real
@@ -93,7 +106,8 @@ Sobre el workspace de revisión del PR #4 (`/plataforma/documentos`), cada docum
 | 6   | Fecha anual para reverificar el RTE y qué pasa con los certificados emitidos entre el vencimiento y la reverificación     | Contador |
 | 7   | Facturación electrónica en la tienda                                                                                      | Contador |
 | 8   | Antigüedad máxima del RUT y del CERL (hoy 30 días)                                                                        | Abogado  |
-| 9   | Qué documentos exige cada estado (hoy son recomendación, no bloqueo: `TRANSITION_REQUIREMENTS` sigue vacío)               | Abogado  |
+| 9   | Si los documentos que hoy bloquean cada estado son los correctos (Formalizada: RUT y CERL; la cédula no bloquea)          | Abogado  |
+| 10  | Si se contrata un proveedor KYC para consultar el RUT y el RUES por NIT, y el acuerdo de tratamiento de datos             | Abogado  |
 
 ## 6. Fuentes
 
@@ -102,4 +116,5 @@ Sobre el workspace de revisión del PR #4 (`/plataforma/documentos`), cada docum
 - Contenido y firma del certificado de donación: [Oficio DIAN 6107 de 2024](https://normograma.dian.gov.co/dian/compilacion/docs/oficio_dian_6107_2024.htm).
 - Cambio de oficio de la responsabilidad 04 a la 05: [DIAN](https://www.dian.gov.co/tramitesservicios/Paginas/esal05.aspx).
 - Actualización anual del RTE en 2026: [ICEF](https://www.icef.com.co/component/k2/item/8395-esal-del-regimen-tributario-especial-deben-actualizar-registro-ante-la-dian); registro web: [ET art. 364-5](https://actualicese.com/estatutotributario/364-5/).
+- Consultas oficiales: [RUES](https://www.rues.org.co/) y [estado del RUT en la DIAN](https://muisca.dian.gov.co/WebRutMuisca/DefConsultaEstadoRUT.faces).
 - Constitución e inscripción de ESAL en Cámara de Comercio: [Decreto 427 de 1996](https://normas.cra.gov.co/Gestor/Docs/decreto_0427_1996.htm) y [requisitos de la Cámara de Comercio de Barranquilla](https://www.camarabaq.org.co/wp-content/uploads/2021/04/Requisitos-Constitucion-ESAL.pdf).
