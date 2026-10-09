@@ -33,7 +33,7 @@ describe('Plans and subscriptions', () => {
         organizationName: 'Refugio Planes',
         displayName: 'Owner',
         email: `plans-${randomUUID()}@test.local`,
-        password: 'password123',
+        password: 'password-plans-123',
       })
       .expect(201);
     createdOrgIds.push(res.body.user.organizationId);
