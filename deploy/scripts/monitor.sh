@@ -12,6 +12,8 @@ DISK_MAX_PCT="${MONITOR_DISK_MAX_PCT:-85}"
 BACKUP_MAX_AGE_H="${MONITOR_BACKUP_MAX_AGE_H:-26}"
 TLS_MIN_DAYS="${MONITOR_TLS_MIN_DAYS:-14}"
 ERRORS_MAX="${MONITOR_API_ERRORS_MAX:-20}"
+DOMAIN_MIN_DAYS="${MONITOR_DOMAIN_MIN_DAYS:-30}"
+RDAP_URL="${MONITOR_RDAP_URL:-https://rdap.org/domain/}"
 problems=()
 
 # 1. La API responde por HTTPS a través de Caddy, con base de datos y Redis arriba.
@@ -56,6 +58,26 @@ api_id="$(compose ps -q api 2>/dev/null || true)"
 if [ -n "$api_id" ]; then
   errors="$(docker logs --since 5m "$api_id" 2>&1 | grep -c ' ERROR ' || true)"
   [ "$errors" -le "$ERRORS_MAX" ] || problems+=("$errors errores de la API en 5 min")
+fi
+
+# 7. Vencimiento del dominio (RDAP público). Se consulta como máximo una vez al
+#    día y se guarda la fecha; si RDAP no responde se usa la última conocida.
+domain_cache="$STATE_FILE.domain-expiry"
+if [ ! -s "$domain_cache" ] || [ -n "$(find "$domain_cache" -mmin +1440 2>/dev/null)" ]; then
+  expiry="$(curl -fsSL -m 15 "$RDAP_URL$APP_DOMAIN" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    events = json.load(sys.stdin).get("events", [])
+    print(next(e["eventDate"] for e in events if e.get("eventAction") == "expiration"))
+except Exception:
+    pass
+' 2>/dev/null || true)"
+  if [ -n "$expiry" ]; then printf '%s' "$expiry" >"$domain_cache"; else touch "$domain_cache"; fi
+fi
+expiry="$(cat "$domain_cache" 2>/dev/null || true)"
+if [ -n "$expiry" ]; then
+  days=$((($(date -d "$expiry" +%s) - $(date +%s)) / 86400))
+  [ "$days" -ge "$DOMAIN_MIN_DAYS" ] || problems+=("el dominio $APP_DOMAIN vence en $days días: renovarlo")
 fi
 
 current="$(printf '%s\n' "${problems[@]+"${problems[@]}"}" | sed '/^$/d' | LC_ALL=C sort)"

@@ -1,5 +1,6 @@
 # Caddy: TLS automático (Let's Encrypt), SPA y proxy inverso de la API.
-# Variables (deploy/.env): APP_DOMAIN, ACME_EMAIL, PORTALS_TLS, CLOUDFLARE_API_TOKEN.
+# Variables (deploy/.env): APP_DOMAIN, ACME_EMAIL, PORTALS_TLS y las credenciales
+# DNS del proveedor elegido (CLOUDFLARE_API_TOKEN o NAMECHEAP_*).
 #
 # Cada host sirve el SPA y, en /api/*, la API (se quita el prefijo /api antes de
 # pasar a NestJS). El front se compila con VITE_API_URL=/api (relativa), así que
@@ -9,6 +10,7 @@
 # Portales por subdominio (*.APP_DOMAIN, F7): PORTALS_TLS elige el bloque.
 #   off        sin comodín (por defecto)
 #   cloudflare certificado comodín por DNS-01 en Cloudflare (producción)
+#   namecheap  certificado comodín por DNS-01 en Namecheap (producción)
 #   internal   comodín con la CA interna de Caddy (CI y pruebas locales)
 # No se habilita on-demand TLS sin un endpoint `ask` que autorice solo dominios
 # verificados: sin él, cualquiera podría hacernos emitir certificados.

@@ -160,14 +160,17 @@ jobs:
           # Solo Caddy publica puertos: Postgres, Redis y la API quedan en redes internas.
           test -z "$(docker compose -f deploy/compose.yaml --env-file deploy/.env ps --format '{{.Service}} {{.Publishers}}' | grep -v '^caddy' | grep -E '0\.0\.0\.0|::' || true)"
 
-      # Producción usa PORTALS_TLS=cloudflare: compila Caddy con el módulo DNS y
-      # valida el Caddyfile con ese bloque (sin emitir certificados).
-      - name: Caddy con caddy-dns/cloudflare (build + validate)
+      # Producción usa PORTALS_TLS=cloudflare o namecheap: compila Caddy con cada
+      # módulo DNS y valida el Caddyfile con ese bloque (sin emitir certificados).
+      - name: Caddy con módulos DNS (build + validate)
         run: |
-          docker build -f deploy/docker/web.Dockerfile --target caddy-cloudflare -t adoptafacil-caddy-cloudflare:ci .
-          docker run --rm -v "$PWD/deploy:/etc/caddy:ro" -e APP_DOMAIN=adoptafacil.example \
-            -e ACME_EMAIL=ci@example.com -e PORTALS_TLS=cloudflare -e CLOUDFLARE_API_TOKEN=ci-dummy \
-            adoptafacil-caddy-cloudflare:ci caddy validate --config /etc/caddy/Caddyfile
+          for provider in cloudflare namecheap; do
+            docker build -f deploy/docker/web.Dockerfile --target "caddy-$provider" -t "adoptafacil-caddy-$provider:ci" .
+            docker run --rm -v "$PWD/deploy:/etc/caddy:ro" -e APP_DOMAIN=adoptafacil.example \
+              -e ACME_EMAIL=ci@example.com -e PORTALS_TLS="$provider" -e CLOUDFLARE_API_TOKEN="$(openssl rand -hex 20)" \
+              -e NAMECHEAP_API_USER=ci -e NAMECHEAP_API_KEY=ci-dummy -e NAMECHEAP_CLIENT_IP=192.0.2.1 \
+              "adoptafacil-caddy-$provider:ci" caddy validate --config /etc/caddy/Caddyfile
+          done
 
       - name: Logs on failure
         if: failure()

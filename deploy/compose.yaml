@@ -135,9 +135,12 @@ services:
       APP_DOMAIN: ${APP_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL}
       PORTALS_TLS: ${PORTALS_TLS:-off}
-      # Solo con PORTALS_TLS=cloudflare: token de Cloudflare limitado a
-      # Zone:DNS:Edit de esta zona. Vive en deploy/.env, nunca en el repo.
+      # Credenciales DNS del proveedor elegido en PORTALS_TLS (solo una se usa).
+      # Viven en deploy/.env del servidor, nunca en el repo.
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      NAMECHEAP_API_USER: ${NAMECHEAP_API_USER:-}
+      NAMECHEAP_API_KEY: ${NAMECHEAP_API_KEY:-}
+      NAMECHEAP_CLIENT_IP: ${NAMECHEAP_CLIENT_IP:-}
     ports:
       - '80:80'
       - '443:443'
