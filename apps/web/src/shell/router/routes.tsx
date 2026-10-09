@@ -11,6 +11,7 @@ import {
   DONATIONS_MANAGEMENT_ROLES,
   MARKETPLACE_VIEW_ROLES,
   ORG_DOCUMENTS_ROLES,
+  ORG_PLAN_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
@@ -36,6 +37,7 @@ import {
   ExogenousReportPage,
   NationalTransparencyPage,
   OrgDocumentsPage,
+  OrgPlanPage,
   OrgFormalizationPage,
   OrgLegalRepresentativePage,
   OrgProfilePage,
@@ -392,6 +394,15 @@ export function AppRoutes() {
               element={
                 <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
                   <OrgDocumentsPage />
+                </RequireRoles>
+              }
+            />
+            {/* Planes y suscripciones · mismo gate que GET /org/plan. */}
+            <Route
+              path="organizacion/plan"
+              element={
+                <RequireRoles roles={ORG_PLAN_ROLES}>
+                  <OrgPlanPage />
                 </RequireRoles>
               }
             />
