@@ -6,6 +6,7 @@ import { AdoptionsController } from './adoptions.controller';
 import { AdoptionsService } from './adoptions.service';
 import { AdoptionContractsController } from './adoption-contracts.controller';
 import { AdoptionContractsService } from './adoption-contracts.service';
+import { AdoptionContractCopyService } from './adoption-contract-copy.service';
 import {
   SIGNATURE_ENCRYPTION_CONFIG,
   loadSignatureEncryptionConfig,
@@ -40,6 +41,7 @@ import { FOLLOWUP_QUEUE } from './followup.constants';
   providers: [
     AdoptionsService,
     AdoptionContractsService,
+    AdoptionContractCopyService,
     { provide: SIGNATURE_PORT, useClass: FakeSignatureAdapter },
     // Mismo factory que `OrgModule` ya registra para sí mismo — no está en su
     // lista de `exports` (deliberadamente mínima, ver su propio comentario),
