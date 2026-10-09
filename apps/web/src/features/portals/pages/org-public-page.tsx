@@ -260,7 +260,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         {state === 'not-found' && (
           <EmptyState
             title="Organización no encontrada"
-            description="El enlace no corresponde a ninguna organización."
+            description="El enlace no corresponde a ninguna organización publicada. Si es la tuya, se publicará cuando AdoptaFácil la apruebe."
           />
         )}
         {state === 'error' && (

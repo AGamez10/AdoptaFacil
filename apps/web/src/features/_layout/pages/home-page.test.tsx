@@ -79,11 +79,14 @@ describe('HomePage — system-health block is platform-admin only (F-VISUAL-02)'
     renderHome([Role.Owner]);
     expect(screen.getByRole('heading', { name: 'Inicio' })).toBeInTheDocument();
     expect(screen.queryByText('Estado del sistema')).not.toBeInTheDocument();
-    // Resumen de Inicio + detalle de donaciones/campañas (sección de Inicio, mismos roles).
+    // Resumen de Inicio + estado de la organización. Sin el módulo de pagos
+    // encendido (sin CapabilitiesProvider = todo apagado) no pide el detalle
+    // de donaciones/campañas, que la API respondería con 404.
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]));
     expect(urls.some((url) => url.includes('/org/summary'))).toBe(true);
-    expect(urls.some((url) => url.includes('/org/dashboard/donations'))).toBe(true);
+    expect(urls.some((url) => url.includes('/org/status'))).toBe(true);
+    expect(urls.some((url) => url.includes('/org/dashboard/donations'))).toBe(false);
   });
 
   it('shows the block with real data for a PlatformAdmin', async () => {

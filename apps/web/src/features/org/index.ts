@@ -4,6 +4,8 @@ export { OrgDocumentsPage } from './pages/org-documents-page';
 export { OrgLegalRepresentativePage } from './pages/org-legal-representative-page';
 export { PlatformDocumentsReviewPage } from './pages/platform-documents-review-page';
 export { PlatformDuplicatesReviewPage } from './pages/platform-duplicates-review-page';
+export { PlatformOrganizationsReviewPage } from './pages/platform-organizations-review-page';
+export { OrgStatusCard } from './components/org-status-card';
 export { PlatformReviewsReviewPage } from './pages/platform-reviews-review-page';
 export { PlatformAdminDashboardPage } from './pages/platform-admin-dashboard-page';
 export { PlatformSuperAdminDashboardPage } from './pages/platform-super-admin-dashboard-page';

@@ -43,6 +43,7 @@ import {
   PlatformBannerPage,
   PlatformDocumentsReviewPage,
   PlatformDuplicatesReviewPage,
+  PlatformOrganizationsReviewPage,
   PlatformReviewsReviewPage,
   PlatformSuperAdminDashboardPage,
 } from '../../features/org';
@@ -521,6 +522,16 @@ export function AppRoutes() {
             {/* M01, S-3 · organizaciones posiblemente duplicadas (nombre similar),
               ruta hermana de la revisión de documentos. Audiencia de PLATAFORMA
               — denegada a roles de organización. */}
+            {/* R2-1 · aprobación de organizaciones: solo las aprobadas son
+              públicas. Audiencia de PLATAFORMA. */}
+            <Route
+              path="plataforma/organizaciones"
+              element={
+                <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
+                  <PlatformOrganizationsReviewPage />
+                </RequireRoles>
+              }
+            />
             <Route
               path="plataforma/organizaciones-duplicadas"
               element={

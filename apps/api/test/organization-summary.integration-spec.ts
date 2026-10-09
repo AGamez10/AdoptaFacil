@@ -329,6 +329,15 @@ describe('Organization summary (S2-08, M13)', () => {
     expect(res.body.formalizationPercent).toBe(0); // Informal = position 0 of 5
   });
 
+  it('a rejected document stops counting once a newer version replaces it', async () => {
+    await upload(owner.token, 'legal_representative_id').expect(201); // v2, pending
+    const res = await request(server)
+      .get('/org/summary')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(200);
+    expect(res.body.documentsRejected).toBe(0);
+  });
+
   it('cross-checks donationsReceivedTotal against computeBreakdown — the single source of money math', async () => {
     // No pre-existing public display of an org-wide donation total exists yet
     // (verified during inventory: the public portal only has a typed placeholder

@@ -69,7 +69,7 @@ export class OrganizationSummaryService {
           tx.sponsorship.count({ where: { organizationId, status: 'active' } }),
           tx.organizationDocument.findMany({
             where: { organizationId },
-            select: { status: true, expiresAt: true },
+            select: { type: true, version: true, status: true, expiresAt: true },
           }),
           tx.donation.findMany({
             where: { organizationId, status: 'approved', conceptKind: 'organization' },
@@ -96,7 +96,15 @@ export class OrganizationSummaryService {
 
     let documentsExpiringSoon = 0;
     let documentsRejected = 0;
+    // Only the latest version of each document type counts: the history is
+    // append-only, so a rejected v1 stays rejected after v2 fixes it and must
+    // not keep asking the organization to "subsanar".
+    const latestByType = new Map<string, (typeof documentRows)[number]>();
     for (const row of documentRows) {
+      const current = latestByType.get(row.type);
+      if (!current || row.version > current.version) latestByType.set(row.type, row);
+    }
+    for (const row of latestByType.values()) {
       const status = effectiveStatus(row.status as DocumentStatus, row.expiresAt, now);
       if (status === DocumentStatus.Rejected) {
         documentsRejected += 1;

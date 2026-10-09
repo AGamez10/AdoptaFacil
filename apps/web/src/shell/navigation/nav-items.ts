@@ -524,6 +524,13 @@ export const navItems: NavItem[] = [
   // M01, S-3 · organizaciones posiblemente duplicadas (mitigación de riesgo
   // "Captación ilegal / LA-FT", §16). Audiencia de PLATAFORMA — ruta hermana
   // de la revisión de documentos, misma zona.
+  // R2-1 · aprobación de organizaciones (solo las aprobadas son públicas).
+  {
+    path: '/plataforma/organizaciones',
+    label: 'Aprobar organizaciones',
+    icon: ShieldIcon,
+    roles: PLATFORM_DUPLICATES_ROLES,
+  },
   {
     path: '/plataforma/organizaciones-duplicadas',
     label: 'Organizaciones duplicadas',
