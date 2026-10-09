@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
@@ -476,5 +477,56 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
       .get(`/public/donations/certificates/${anon.code}`)
       .expect(200);
     expect(anonRes.body.donorName).toBe('Donante anónimo');
+  });
+  it('with signatures OFF (default) reports never carry signatures, even for a certified-grade org', async () => {
+    // Los casos anteriores ejercen el camino con firmas (load-env las enciende);
+    // aquí se apaga solo para este servicio, como queda en producción.
+    const offRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(ConfigService)
+      .useFactory({
+        factory: (): Pick<ConfigService, 'get'> => {
+          const real = new ConfigService();
+          return {
+            get: ((key: string, ...rest: unknown[]) =>
+              key === 'REPORTS_SIGNATURES_ENABLED'
+                ? false
+                : (real.get as (k: string, ...r: unknown[]) => unknown)(key, ...rest)) as never,
+          };
+        },
+      })
+      .compile();
+    const offApp = offRef.createNestApplication();
+    await offApp.init();
+    try {
+      const offServer = offApp.getHttpServer();
+      const call = (body: Record<string, unknown>) =>
+        request(offServer)
+          .post('/org/reports')
+          .set('Authorization', `Bearer ${orgA.token}`)
+          .send(body);
+
+      const ready = await request(offServer)
+        .get('/org/reports/readiness')
+        .set('Authorization', `Bearer ${orgA.token}`)
+        .expect(200);
+      expect(ready.body.signaturesEnabled).toBe(false);
+      expect(ready.body.donationsLegalEffect).toBe('informative');
+
+      // Pedir firmas explícitamente se rechaza: nadie firma por otro.
+      await call({
+        kind: 'donations',
+        periodStart: monthAgo,
+        periodEnd: today,
+        signerRoles: ['legal_representative'],
+      }).expect(400);
+
+      const res = await call({ kind: 'donations', periodStart: monthAgo, periodEnd: today }).expect(
+        201,
+      );
+      expect(res.body.legalEffect).toBe('informative');
+      expect(res.body.signers).toEqual([]);
+    } finally {
+      await offApp.close();
+    }
   });
 });

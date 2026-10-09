@@ -123,9 +123,13 @@ function normalizeFilters(
  * mismo tipo + período + filtros + firmantes + datos ⇒ mismo sello ⇒ se
  * devuelve el reporte existente con el mismo folio, nunca un duplicado.
  */
+const SIGNATURES_PENDING_STEP =
+  'Por ahora los reportes salen como comprobantes informativos, sin firmas: la firma de cada representante se estampará solo cuando él mismo apruebe el documento con su cuenta.';
+
 @Injectable()
 export class ReportsService {
   private readonly webBaseUrl: string;
+  private readonly signaturesEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -134,6 +138,7 @@ export class ReportsService {
     private readonly legalRepresentatives: LegalRepresentativeService,
     @Inject(ConfigService) config: ConfigService,
   ) {
+    this.signaturesEnabled = config.get('REPORTS_SIGNATURES_ENABLED') === true;
     this.webBaseUrl = String(config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(
       /\/$/,
       '',
@@ -214,7 +219,7 @@ export class ReportsService {
           formalizationState: snapshot.formalizationState,
           rteVigente,
           hasNit: Boolean(snapshot.nit),
-          signerRoles: defaultSignerRoles(kind, registered),
+          signerRoles: this.signaturesEnabled ? defaultSignerRoles(kind, registered) : [],
         });
       const schools = [
         ...new Set(schoolRows.map((r) => r.schoolName?.trim()).filter((s): s is string => !!s)),
@@ -229,12 +234,15 @@ export class ReportsService {
             ? { role, registered: true, fullName: s.fullName, position: s.position }
             : { role, registered: false };
         }),
-        nextSteps: nextStepsFor({
-          formalizationState: snapshot.formalizationState,
-          rteVigente,
-          hasNit: Boolean(snapshot.nit),
-          registered,
-        }),
+        nextSteps: this.signaturesEnabled
+          ? nextStepsFor({
+              formalizationState: snapshot.formalizationState,
+              rteVigente,
+              hasNit: Boolean(snapshot.nit),
+              registered,
+            })
+          : [SIGNATURES_PENDING_STEP],
+        signaturesEnabled: this.signaturesEnabled,
         schools,
         studentServiceMinHours: studentServiceMinHours(),
       };
@@ -282,7 +290,13 @@ export class ReportsService {
 
       const registered = new Set(available.keys());
       let roles: LegalRepresentativeRole[];
-      if (input.signerRoles && input.signerRoles.length > 0) {
+      if (!this.signaturesEnabled) {
+        // Sin aprobación del propio firmante, la plataforma no estampa firmas.
+        if (input.signerRoles && input.signerRoles.length > 0) {
+          throw new BadRequestException(SIGNATURES_PENDING_STEP);
+        }
+        roles = [];
+      } else if (input.signerRoles && input.signerRoles.length > 0) {
         const requested = input.signerRoles;
         const missing = requested.filter((r) => !registered.has(r));
         if (missing.length > 0) {

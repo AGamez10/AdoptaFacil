@@ -246,7 +246,8 @@ function ReportCard({
   );
   const effect =
     kind === 'donations' ? readiness.donationsLegalEffect : readiness.socialServiceLegalEffect;
-  const formal = FORMAL_STATES.has(readiness.formalizationState);
+  const formal =
+    readiness.signaturesEnabled !== false && FORMAL_STATES.has(readiness.formalizationState);
 
   const [preset, setPreset] = useState<PresetId>('last_month');
   const [range, setRange] = useState(() => presetRange('last_month'));

@@ -109,6 +109,8 @@ export interface OrgReportSignerReadiness {
  * generar: qué valor tendrá cada documento, qué firmas faltan y qué hacer.
  */
 export interface OrgReportsReadiness {
+  /** false ⇒ los reportes salen sin firmas hasta que cada firmante apruebe. */
+  signaturesEnabled?: boolean;
   formalizationState: string;
   /** Valor que tendrá HOY un informe de donaciones con la política por defecto. */
   donationsLegalEffect: OrgReportLegalEffect;
