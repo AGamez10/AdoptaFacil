@@ -12,7 +12,7 @@
 | -------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | VPS                                    | Hostinger **KVM 2** (2 vCPU, 8 GB RAM, 100 GB NVMe), plantilla **Ubuntu 24.04 LTS** sin panel     | todo el stack; ver §Tamaño                                 |
 | Dominio `adoptafacil.org`              | ya registrado en **Namecheap** (un año); renovación automática activada, ver §Renovación          | —                                                          |
-| DNS con API                            | ⟦POR DECIDIR⟧ Cloudflare (gratis) o la API DNS de Namecheap; ver §DNS                             | certificado comodín de los portales por DNS-01             |
+| DNS con API                            | **Cloudflare** (plan Free), decidido; ver §DNS                                                    | certificado comodín de los portales por DNS-01             |
 | Cuenta de **Backblaze B2**             | un bucket privado `adoptafacil-backups` y una clave de aplicación limitada a ese bucket           | copia off-site de los respaldos cifrados                   |
 | App **ntfy** en el celular             | un tema con nombre largo y aleatorio (`openssl rand -hex 12`)                                     | alertas del servidor (`ALERT_WEBHOOK_URL`)                 |
 | Cuenta gratuita de **UptimeRobot**     | monitor HTTPS cada 5 min a `https://adoptafacil.org/api/health` con palabra clave `"status":"ok"` | aviso si el VPS entero cae (lo que el VPS no puede avisar) |
@@ -82,7 +82,7 @@ que ofrezca Hostinger al comprar (Sudamérica o EE. UU.).
 5. **Pagos apagados** hasta la decisión del cliente: no se cargan credenciales de
    Mercado Pago de producción.
 
-## DNS [fuera del VPS] ⟦pendiente de elegir opción⟧
+## DNS [fuera del VPS]
 
 El dominio `adoptafacil.org` está registrado en Namecheap y hoy su DNS también.
 El certificado comodín `*.adoptafacil.org` solo se puede emitir por desafío
@@ -114,7 +114,10 @@ certificado del dominio principal y de `www` por HTTP-01.
 
 Si hoy usas correo con el dominio, conserva sus registros `MX` y `TXT` (SPF/DKIM).
 
-### Opción A: Cloudflare
+### Opción A: Cloudflare (elegida por el dueño)
+
+Los dos nameservers los asigna Cloudflare a cada cuenta al agregar la zona; no
+se conocen antes. Se copian una sola vez en Namecheap (paso 2).
 
 1. En Cloudflare: **Add a site** → `adoptafacil.org` → plan Free. Copia los
    registros existentes y crea los de la tabla, todos en **DNS only** (nube
@@ -128,7 +131,7 @@ Si hoy usas correo con el dominio, conserva sus registros `MX` y `TXT` (SPF/DKIM
    adoptafacil.org_. Va directo a `CLOUDFLARE_API_TOKEN` en `deploy/.env` del VPS.
 4. En `deploy/.env`: `PORTALS_TLS=cloudflare`.
 
-### Opción B: API DNS de Namecheap
+### Opción B: API DNS de Namecheap (alternativa, no elegida)
 
 1. Cumplir uno de los requisitos de la tabla (lo usual: cargar 50 USD de saldo,
    que quedan disponibles para renovaciones).
@@ -175,7 +178,7 @@ ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443 && ufw --force enable
 exit                                                  # en adelante, como deploy
 ssh deploy@IP_DEL_VPS
 
-# 3. DNS listo (sección DNS, opción elegida): `dig +short adoptafacil.org` y
+# 3. DNS listo (sección DNS, opción A): `dig +short adoptafacil.org` y
 #    `dig +short prueba.adoptafacil.org` deben devolver la IP del VPS.
 
 # 4. Código (la rama o tag que se aprobó para producción)
@@ -188,7 +191,7 @@ sudo nano deploy/.env
 #   APP_DOMAIN=adoptafacil.org              ACME_EMAIL=<correo para avisos de Let's Encrypt>
 #   POSTGRES_PASSWORD, APP_DB_PASSWORD, JWT_SECRET  ->  openssl rand -hex 24
 #   SIGNATURE_ENCRYPTION_KEY                        ->  openssl rand -hex 32
-#   PORTALS_TLS y sus credenciales DNS según la opción elegida (§DNS)
+#   PORTALS_TLS=cloudflare   CLOUDFLARE_API_TOKEN=<token del paso 3 de la opción A>
 #   VITE_PORTAL_BASE_DOMAIN=adoptafacil.org
 #   BACKUP_AGE_RECIPIENT=<age1… clave PÚBLICA>  BACKUP_RCLONE_REMOTE=b2:adoptafacil-backups
 #   ALERT_WEBHOOK_URL=https://ntfy.sh/<tema>    BACKUP_HEALTHCHECK_URL=<URL de healthchecks.io>
