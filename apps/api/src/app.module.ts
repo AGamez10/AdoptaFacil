@@ -5,6 +5,7 @@ import { validateEnv } from './config/env.validation';
 import { AuditModule } from './core/audit/audit.module';
 import { AuthModule } from './core/auth/auth.module';
 import { IdentityModule } from './core/identity/identity.module';
+import { LegalModule } from './core/legal/legal.module';
 import { NotificationModule } from './core/notifications/notification.module';
 import { PaymentModule } from './core/payments/payment.module';
 import { RbacModule } from './core/rbac/rbac.module';
@@ -57,6 +58,8 @@ import { RedisModule } from './redis/redis.module';
     // Shared IdentityPort provider (T-Google-SignIn): binds the fake Google
     // Sign-In verifier by default, global.
     IdentityModule,
+    // Aceptación versionada de términos y política de datos (Ley 1581), global.
+    LegalModule,
     HealthModule,
     // Feature modules (registered last; core modules above are unchanged).
     OrgModule,

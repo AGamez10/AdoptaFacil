@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M12 reputation (RF23) end-to-end: an author needs a REAL interaction with
@@ -33,6 +34,7 @@ describe('Reviews / reputation (M12, RF23)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s7-o-${randomUUID()}@test.local`,
@@ -51,6 +53,7 @@ describe('Reviews / reputation (M12, RF23)', () => {
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: `Reseñador ${tag}`,
         email: `s7-p-${tag}-${randomUUID()}@test.local`,
         password,

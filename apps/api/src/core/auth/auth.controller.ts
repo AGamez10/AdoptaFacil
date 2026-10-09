@@ -44,6 +44,7 @@ import {
   registerPersonSchema,
 } from './auth.schemas';
 import { ZodValidationPipe } from './zod-validation.pipe';
+import { legalContextFrom } from '../legal/legal.service';
 
 /**
  * Auth endpoints. Rate limiting (ThrottlerGuard) is scoped to this controller —
@@ -73,9 +74,10 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async registerOrganization(
     @Body(new ZodValidationPipe(registerOrganizationSchema)) dto: RegisterOrganizationDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthSession> {
-    const session = await this.auth.registerOrganization(dto);
+    const session = await this.auth.registerOrganization(dto, legalContextFrom(req));
     this.mirrorRefreshCookie(res, session.tokens.refreshToken);
     return session;
   }
@@ -84,9 +86,10 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async registerPerson(
     @Body(new ZodValidationPipe(registerPersonSchema)) dto: RegisterPersonDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthSession> {
-    const session = await this.auth.registerPerson(dto);
+    const session = await this.auth.registerPerson(dto, legalContextFrom(req));
     this.mirrorRefreshCookie(res, session.tokens.refreshToken);
     return session;
   }

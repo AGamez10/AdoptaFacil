@@ -6,6 +6,7 @@ import { Role } from '@adoptafacil/contracts';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * End-to-end: a real core action (RBAC role assignment) records exactly one
@@ -45,6 +46,7 @@ describe('Audit trail on a real action (role assignment)', () => {
     const orgReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Audit',
         displayName: 'Owner',
         email: `t013-owner-${randomUUID()}@test.local`,

@@ -7,6 +7,7 @@ import { computeBreakdown } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M13 dashboards (RF24, S-8): PlatformAdmin consolidates the three existing
@@ -35,6 +36,7 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s8-o-${randomUUID()}@test.local`,
@@ -53,6 +55,7 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: `Persona ${tag}`,
         email: `s8-p-${tag}-${randomUUID()}@test.local`,
         password,

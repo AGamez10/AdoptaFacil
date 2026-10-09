@@ -150,6 +150,7 @@ export function DonatePage() {
     commissionPayer,
     anonymous,
     guestPayer,
+    legalAcceptances,
     cardToken,
     paymentMethodId,
     paymentMethodType,
@@ -169,6 +170,8 @@ export function DonatePage() {
             ? { fullName: user.name, email: user.email }
             : undefined
           : guestPayer,
+        // Invitado: prueba de su aceptación de términos y datos (Ley 1581).
+        legalAcceptances,
         // Idempotencia: el servidor deduplica por (org, key); una clave por intento.
         idempotencyKey: crypto.randomUUID(),
         // T-OrdersAPI (Checkout API/Orders): reemplaza el antiguo redirect de

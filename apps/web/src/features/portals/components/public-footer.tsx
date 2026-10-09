@@ -105,6 +105,13 @@ export function PublicFooter({ organization, navItems }: PublicFooterProps) {
         <p className={styles.footer__copyright}>
           © {new Date().getFullYear()} {organization.name}. Todos los derechos reservados.
         </p>
+        {/* La organización responde por su portal; AdoptaFácil es solo el software. */}
+        <p className={styles.footer__copyright}>
+          Portal hecho con AdoptaFácil · <a href="/legal/terminos">Términos</a> ·{' '}
+          <a href="/legal/politica-de-datos">Datos personales</a> ·{' '}
+          <a href="/legal/alcance">Qué es AdoptaFácil</a> ·{' '}
+          <a href="mailto:adoptafacil.oficial@gmail.com?subject=Reporte">Reportar</a>
+        </p>
         <div className={styles.footer__social}>
           {socialIcons.map(({ key, label, href, Icon }) => (
             <a

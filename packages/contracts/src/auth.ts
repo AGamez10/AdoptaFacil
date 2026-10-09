@@ -5,6 +5,8 @@
 // exercises capabilities (adopt, donate, …) without changing account type.
 // All timestamps are ISO-8601 UTC.
 
+import type { LegalAcceptanceItem } from './legal';
+
 /** The two kinds of account. */
 export type AccountType = 'organization' | 'person';
 
@@ -15,6 +17,10 @@ export interface RegisterOrganizationDto {
   displayName: string;
   email: string;
   password: string;
+  /** ADDITIVE: documentos legales aceptados en el formulario (versión vista).
+   *  La API exige los obligatorios del tipo de cuenta en su versión vigente
+   *  (`requiredLegalDocuments`) y responde 400 si faltan. */
+  legalAcceptances?: LegalAcceptanceItem[];
 }
 
 /** Registration for a Person account. The person gets their own personal
@@ -23,6 +29,10 @@ export interface RegisterPersonDto {
   displayName: string;
   email: string;
   password: string;
+  /** ADDITIVE: documentos legales aceptados en el formulario (versión vista).
+   *  La API exige los obligatorios del tipo de cuenta en su versión vigente
+   *  (`requiredLegalDocuments`) y responde 400 si faltan. */
+  legalAcceptances?: LegalAcceptanceItem[];
 }
 
 /** Credentials for login. */

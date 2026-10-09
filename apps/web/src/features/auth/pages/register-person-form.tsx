@@ -1,8 +1,14 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@adoptafacil/ui';
+import { Button, useToast } from '@adoptafacil/ui';
 import { ApiError, type RegisterPersonRequest } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import {
+  acceptancesFrom,
+  type ConsentState,
+  LegalConsentFields,
+  requiredConsentsGiven,
+} from '../../legal';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
 import { GoogleSignInButton } from '../components/google-sign-in-button';
@@ -27,6 +33,7 @@ type PersonErrors = Partial<
 export function RegisterPersonForm() {
   const { register, signInWithGoogle } = useSession();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -37,6 +44,8 @@ export function RegisterPersonForm() {
   const [errors, setErrors] = useState<PersonErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [consents, setConsents] = useState<ConsentState>({});
+  const [legalError, setLegalError] = useState<string | undefined>();
 
   const refs = {
     firstName: useRef<HTMLInputElement>(null),
@@ -62,17 +71,33 @@ export function RegisterPersonForm() {
       if (first) refs[first].current?.focus();
       return;
     }
+    // Autorización previa (Ley 1581): sin las casillas obligatorias no se envía
+    // ningún dato al servidor.
+    if (!requiredConsentsGiven('person', consents)) {
+      setLegalError(
+        'Para crear la cuenta debes aceptar los términos y autorizar el tratamiento de datos.',
+      );
+      return;
+    }
+    setLegalError(undefined);
 
     const request: RegisterPersonRequest = {
       accountType: 'person',
       displayName: `${firstName.trim()} ${lastName.trim()}`.trim(),
       email: email.trim(),
       password,
+      legalAcceptances: acceptancesFrom('person', consents),
     };
 
     setSubmitting(true);
     try {
       await register(request);
+      // Aviso al aceptar: la constancia también llega por correo.
+      toast({
+        title: 'Cuenta creada',
+        description:
+          'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
+      });
       navigate('/', { replace: true });
     } catch (error) {
       setFormError(
@@ -167,6 +192,14 @@ export function RegisterPersonForm() {
         required
       />
 
+      <LegalConsentFields
+        audience="person"
+        value={consents}
+        onChange={setConsents}
+        error={legalError}
+        idPrefix="person"
+      />
+
       <Button
         type="button"
         className="w-full"
@@ -184,6 +217,10 @@ export function RegisterPersonForm() {
       {/* Google Sign-In NEVER creates an Organization — only offered on the
           Person tab. Registering an org stays the long NIT/legal-rep form. */}
       <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+      <p className="text-xs text-muted-foreground">
+        Si continúas con Google, te pediremos aceptar estos mismos documentos antes de usar tu
+        cuenta.
+      </p>
     </div>
   );
 }

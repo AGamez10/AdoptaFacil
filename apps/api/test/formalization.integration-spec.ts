@@ -8,6 +8,7 @@ import { DianVerificationService } from '../src/modules/org/dian-verification.se
 import { DIAN_PORT } from '../src/modules/org/dian.port';
 import { FakeDianAdapter } from '../src/modules/org/fake-dian.adapter';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /** Polls GET /org/formalization until `dianVerification.status` matches (or
  *  times out) — the auto-triggered verification is a REAL async BullMQ job
@@ -82,6 +83,7 @@ describe('Formalization state machine (M01, RF02)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org',
         displayName: 'Owner',
         email: `t102-${randomUUID()}@test.local`,
@@ -111,7 +113,12 @@ describe('Formalization state machine (M01, RF02)', () => {
 
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `t102-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `t102-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     createdOrgIds.push(person.body.user.organizationId);
@@ -230,6 +237,7 @@ describe('DIAN RTE verification — retry ladder + manual retry + RBAC (M01, S-2
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org DIAN',
         displayName: 'Owner',
         email: `s2-dian-${randomUUID()}@test.local`,

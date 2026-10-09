@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_GUEST, LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * Guest donation "magic link" comprobante (client requirement, final): a
@@ -45,6 +46,7 @@ describe('Donations guest access link (magic link comprobante)', () => {
     const orgReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Guest Access',
         displayName: 'Owner Guest Access',
         email: `guest-access-org-${randomUUID()}@test.local`,
@@ -58,6 +60,7 @@ describe('Donations guest access link (magic link comprobante)', () => {
     const personReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Con Cuenta',
         email: `guest-access-p-${randomUUID()}@test.local`,
         password,
@@ -89,6 +92,7 @@ describe('Donations guest access link (magic link comprobante)', () => {
     const donateRes = await request(server)
       .post('/donations')
       .send({
+        ...LEGAL_GUEST,
         organizationId: orgId,
         intendedAmount: 40_000,
         commissionPayer: 'organization',
@@ -98,6 +102,15 @@ describe('Donations guest access link (magic link comprobante)', () => {
       .expect(201);
     expect(donateRes.body.donorUserId).toBeNull();
     const donationId = donateRes.body.id as string;
+    // La donación ya envió la constancia de aceptación legal del invitado; lo
+    // que se verifica abajo es el correo del enlace de acceso.
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: guestEmail,
+        subject: 'Registramos tu aceptación en AdoptaFácil',
+      }),
+    );
+    send.mockClear();
     const collectionId = donateRes.body.collectionId as string;
 
     // 2. Gateway webhook approves it.
@@ -172,6 +185,7 @@ describe('Donations guest access link (magic link comprobante)', () => {
     const donateRes = await request(server)
       .post('/donations')
       .send({
+        ...LEGAL_GUEST,
         organizationId: orgId,
         intendedAmount: 20_000,
         commissionPayer: 'organization',

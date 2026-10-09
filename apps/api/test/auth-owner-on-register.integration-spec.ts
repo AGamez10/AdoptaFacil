@@ -6,6 +6,7 @@ import { Role } from '@adoptafacil/contracts';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * T-012b: registering an organization must automatically grant the registrant
@@ -49,6 +50,7 @@ describe('Owner granted on organization registration (T-012b)', () => {
     const orgReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Owner',
         displayName: 'Rep Legal',
         email: ownerEmail,
@@ -62,7 +64,7 @@ describe('Owner granted on organization registration (T-012b)', () => {
 
     const personReg = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Persona', email: personEmail, password })
+      .send({ ...LEGAL_PERSON, displayName: 'Persona', email: personEmail, password })
       .expect(201);
     personToken = personReg.body.tokens.accessToken;
     createdOrgIds.push(personReg.body.user.organizationId);

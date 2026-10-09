@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * S1-07 GLOBAL public adoption catalog: GET /public/animals (no auth) merges
@@ -32,6 +33,7 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `t-s107-${randomUUID()}@test.local`,
@@ -100,6 +102,7 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
     const noSlugReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Sin Slug',
         displayName: 'Owner',
         email: `t-s107-noslug-${randomUUID()}@test.local`,

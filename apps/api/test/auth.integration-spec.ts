@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * End-to-end auth flow over HTTP: register (both account types), login, refresh
@@ -42,7 +43,7 @@ describe('Auth endpoints (register/login/refresh/logout)', () => {
   it('registers a Person and returns a valid session', async () => {
     const res = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Persona Uno', email: personEmail, password })
+      .send({ ...LEGAL_PERSON, displayName: 'Persona Uno', email: personEmail, password })
       .expect(201);
 
     expect(res.body.user.accountType).toBe('person');
@@ -58,6 +59,7 @@ describe('Auth endpoints (register/login/refresh/logout)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Central',
         displayName: 'Owner',
         email: orgEmail,
@@ -72,14 +74,14 @@ describe('Auth endpoints (register/login/refresh/logout)', () => {
   it('rejects a duplicate email with 409', async () => {
     await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Dup', email: personEmail, password })
+      .send({ ...LEGAL_PERSON, displayName: 'Dup', email: personEmail, password })
       .expect(409);
   });
 
   it('rejects weak/invalid payloads with 400', async () => {
     await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'X', email: 'not-an-email', password: 'short' })
+      .send({ ...LEGAL_PERSON, displayName: 'X', email: 'not-an-email', password: 'short' })
       .expect(400);
   });
 

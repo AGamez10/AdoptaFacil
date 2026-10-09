@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * S2-07 public per-organization campaign feed: GET /public/organizations/:slug/campaigns
@@ -30,6 +31,7 @@ describe('Public per-organization campaign feed (S2-07, RF15/RF16)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio',
         displayName: 'Owner',
         email: `s207-${randomUUID()}@test.local`,

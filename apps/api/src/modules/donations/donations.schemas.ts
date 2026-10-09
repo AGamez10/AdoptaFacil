@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MIN_DONATION_AMOUNT } from '@adoptafacil/contracts';
+import { legalAcceptancesSchema } from '../../core/legal/legal.schemas';
 
 /** Runtime validation for M05 donations (T-050). `.strict()` rejects unknown keys
  *  so no extra field (e.g. a client-supplied breakdown) can be smuggled in — the
@@ -37,6 +38,9 @@ export const createDonationSchema = z
     payer: donorSchema.optional(),
     idempotencyKey: z.string().trim().min(8).max(200),
     anonymous: z.boolean().optional().default(false),
+    // Términos + autorización de datos de un donante invitado; el servicio los
+    // exige cuando no hay sesión (ver DonationsService.create).
+    legalAcceptances: legalAcceptancesSchema.optional(),
     // T-OrdersAPI (Checkout API): tokenized card data from the frontend's Card
     // Payment Brick. OPTIONAL here on purpose — the real gateway adapter is
     // the one place that hard-requires a token (throws otherwise); keeping

@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * S2-08 (M13) minimal organization summary: GET /org/summary aggregates
@@ -33,6 +34,7 @@ describe('Organization summary (S2-08, M13)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s208-${randomUUID()}@test.local`,
@@ -63,7 +65,12 @@ describe('Organization summary (S2-08, M13)', () => {
   async function registerPerson(tag: string): Promise<string> {
     const res = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: tag, email: `s208-${tag}-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: tag,
+        email: `s208-${tag}-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
     await completeTestProfile(admin, res.body.user.id);

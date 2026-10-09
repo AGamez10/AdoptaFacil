@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * M10 (F-7, Ola 3) — marketplace simplificado: catálogo de productos por
@@ -32,6 +33,7 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Org ${tag}`,
         displayName: 'Owner',
         email: `mkt-${tag}-${randomUUID()}@test.local`,

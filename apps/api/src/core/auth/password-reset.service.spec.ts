@@ -5,6 +5,7 @@ import type { AuditService } from '../audit/audit.service';
 import type { NotificationPort } from '../notifications/notification.port';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { Env } from '../../config/env.validation';
+import type { LegalService } from '../legal/legal.service';
 import { AuthService } from './auth.service';
 import type { PasswordService } from './password.service';
 import type { TokenService } from './token.service';
@@ -70,6 +71,7 @@ function makeService(opts: {
     identity as unknown as IdentityPort,
     audit as unknown as AuditService,
     config,
+    {} as unknown as LegalService,
   );
   return { service, tx, prisma, audit, notifications, passwords };
 }

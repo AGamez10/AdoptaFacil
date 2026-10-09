@@ -59,6 +59,8 @@ const APPEND_ONLY_TABLES = [
   'reviews',
   'sponsorship_payment_attempts',
   'sponsorship_payments',
+  // legal_acceptances (prueba de autorización, Ley 1581) es append-only igual.
+  'legal_acceptances',
 ];
 
 export async function purgeOrganizations(

@@ -13,6 +13,7 @@ import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * Requerimiento #17: `subscribe()` now ALWAYS calls `PaymentPort.createCollection`
@@ -59,6 +60,7 @@ describe('Sponsorships base (RF17 · T-056)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Refugio ${tag}`,
         displayName: `Owner ${tag}`,
         email: `t056-${tag}-${randomUUID()}@test.local`,
@@ -86,7 +88,12 @@ describe('Sponsorships base (RF17 · T-056)', () => {
 
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Padrino', email: `t056-p-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Padrino',
+        email: `t056-p-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     orgIds.push(person.body.user.organizationId);
@@ -94,7 +101,12 @@ describe('Sponsorships base (RF17 · T-056)', () => {
 
     const personB = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Padrino B', email: `t056-pb-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Padrino B',
+        email: `t056-pb-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personBToken = personB.body.tokens.accessToken;
     orgIds.push(personB.body.user.organizationId);

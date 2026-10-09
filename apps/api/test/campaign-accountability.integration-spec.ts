@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * Accountability end-to-end (RF16 · T-054, hardened to append-only immutable
@@ -34,6 +35,7 @@ describe('Campaign accountability (RF16 · T-054)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Refugio ${tag}`,
         displayName: `Owner ${tag}`,
         email: `t054-${tag}-${randomUUID()}@test.local`,
@@ -58,7 +60,12 @@ describe('Campaign accountability (RF16 · T-054)', () => {
 
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Persona', email: `t054-p-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Persona',
+        email: `t054-p-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     orgIds.push(person.body.user.organizationId);

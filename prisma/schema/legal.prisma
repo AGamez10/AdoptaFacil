@@ -1,0 +1,33 @@
+/// Aceptaciones de documentos legales (términos, política y autorización de
+/// datos, condiciones para organizaciones, autorización comercial). Prueba de
+/// la autorización exigida por la Ley 1581 de 2012 (art. 9 y art. 17 lit. b):
+/// qué versión exacta (y su hash) aceptó quién, cuándo, desde qué IP/navegador
+/// y por qué canal. APPEND-ONLY: la migración niega UPDATE/DELETE/TRUNCATE al
+/// rol de la app y un trigger los rechaza para todo rol; una revocación es una
+/// fila nueva con action = 'revoked'. Aislada por tenant (RLS ENABLE + FORCE +
+/// tenant_isolation): la fila vive en la organización personal del usuario o,
+/// para un donante invitado, en la organización beneficiaria de la donación.
+model LegalAcceptance {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  /// Usuario que acepta; null para un donante invitado (sin cuenta).
+  userId          String?  @map("user_id") @db.Uuid
+  /// 'user' | 'donation' — a quién pertenece la aceptación.
+  subjectType     String   @map("subject_type")
+  subjectId       String   @map("subject_id") @db.Uuid
+  documentKey     String   @map("document_key")
+  documentVersion String   @map("document_version")
+  documentSha256  String   @map("document_sha256")
+  /// 'accepted' | 'revoked'
+  action          String   @default("accepted")
+  /// 'registration' | 'reacceptance' | 'guest_donation' | 'preferences'
+  channel         String
+  ipAddress       String?  @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, subjectType, subjectId])
+  @@map("legal_acceptances")
+}

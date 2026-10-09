@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M08 volunteering (RF18/RF19) end-to-end: publish an opportunity → public
@@ -37,6 +38,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s6-${randomUUID()}@test.local`,
@@ -55,6 +57,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: `Voluntario ${tag}`,
         email: `s6-p-${tag}-${randomUUID()}@test.local`,
         password,

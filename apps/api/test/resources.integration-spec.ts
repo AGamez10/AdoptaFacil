@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M09 (F-6, Ola 3) — banco de recursos: publicar necesidades, ofrecer
@@ -32,6 +33,7 @@ describe('Resources (M09, F-6: needs → offers → deliveries → evidence, RBA
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Org ${tag}`,
         displayName: 'Owner',
         email: `res-${tag}-${randomUUID()}@test.local`,
@@ -49,7 +51,12 @@ describe('Resources (M09, F-6: needs → offers → deliveries → evidence, RBA
   async function registerPerson(tag: string): Promise<Actor> {
     const res = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Donante', email: `res-${tag}-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Donante',
+        email: `res-${tag}-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
     return {

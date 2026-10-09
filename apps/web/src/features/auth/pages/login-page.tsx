@@ -142,6 +142,17 @@ export function LoginPage() {
         <span className="h-px flex-1 bg-border" />
       </div>
       <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Al usar AdoptaFácil aplican los{' '}
+        <Link to="/legal/terminos" className="underline underline-offset-2">
+          Términos
+        </Link>{' '}
+        y la{' '}
+        <Link to="/legal/politica-de-datos" className="underline underline-offset-2">
+          Política de datos
+        </Link>
+        . Si es tu primera vez con Google, te pediremos aceptarlos antes de continuar.
+      </p>
     </AuthLayout>
   );
 }

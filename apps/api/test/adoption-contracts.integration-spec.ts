@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /** A minimal but genuinely valid 1x1 PNG — `embedPng` must accept it. Same
  *  constant already used by `legal-representative`/`volunteering` specs. */
@@ -60,6 +61,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const refuge = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Contrato',
         displayName: 'Owner Refugio',
         email: `t028b-refuge-${randomUUID()}@test.local`,
@@ -103,6 +105,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const person = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
         email: `t028b-p-${randomUUID()}@test.local`,
         password,
@@ -117,6 +120,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const other = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otro Refugio',
         displayName: 'Owner Otro',
         email: `t028b-other-${randomUUID()}@test.local`,
@@ -263,6 +267,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const bare = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Sin Representante',
         displayName: 'Owner Bare',
         email: `t028b-bare-${randomUUID()}@test.local`,

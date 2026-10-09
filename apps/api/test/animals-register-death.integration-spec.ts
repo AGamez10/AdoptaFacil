@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * "Registrar fallecimiento" (M07 hallazgo QA en vivo): `POST
@@ -35,6 +36,7 @@ describe('Animal death registration (M07 hallazgo QA, POST /animals/:id/register
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Refugio ${tag}`,
         displayName: `Owner ${tag}`,
         email: `m07-death-${tag}-${randomUUID()}@test.local`,
@@ -63,7 +65,12 @@ describe('Animal death registration (M07 hallazgo QA, POST /animals/:id/register
   async function registerPerson(tag: string): Promise<{ token: string; userId: string }> {
     const res = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: tag, email: `m07-death-p-${tag}-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: tag,
+        email: `m07-death-p-${tag}-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
     await completeTestProfile(admin, res.body.user.id);
