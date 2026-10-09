@@ -152,7 +152,9 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .set('Authorization', `Bearer ${personToken}`)
       .send({
         signerId: adopterSignerId,
-        signatureBase64: Buffer.from('fake-adopter-signature').toString('base64'),
+        // Debe ser una imagen real: la API valida PNG/JPG por sus bytes.
+        signatureBase64:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
         signatureContentType: 'image/png',
       })
       .expect(201);

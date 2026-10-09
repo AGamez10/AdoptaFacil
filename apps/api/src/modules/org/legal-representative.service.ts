@@ -28,6 +28,11 @@ export interface LegalRepresentativeSigner {
   /** Raw image bytes (PNG, from `SignaturePad`'s canvas export) — ready to
    *  embed directly in a PDF via `pdf-lib`'s `embedPng`. */
   signatureImage: Buffer;
+  /** Clave opaca (StoragePort) del archivo CIFRADO de esa firma y su SHA-256.
+   *  Aditivo: permite que un documento firmado congele qué firma se usó, aunque
+   *  después se registre otro representante (append-only). */
+  signatureFileRef: string;
+  signatureHash: string;
 }
 
 function toContract(row: LegalRepresentativeRow): LegalRepresentative {
@@ -208,7 +213,13 @@ export class LegalRepresentativeService {
 
     try {
       const signatureImage = decryptSignature(stored.data, this.config.signatureEncryptionKey);
-      return { fullName: row.fullName, position: row.position, signatureImage };
+      return {
+        fullName: row.fullName,
+        position: row.position,
+        signatureImage,
+        signatureFileRef: row.signatureFileRef,
+        signatureHash: row.signatureHash,
+      };
     } catch {
       return null;
     }
