@@ -27,6 +27,8 @@ model EmailTemplateVersion {
   createdByUserId String?  @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")
 
+  activeIn EmailTemplateSetting[]
+
   @@unique([eventKey, version])
   @@map("email_template_versions")
 }
@@ -39,6 +41,9 @@ model EmailTemplateSetting {
   enabled         Boolean  @default(true)
   updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
   updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // The active pointer can only name a version of THIS same event.
+  active EmailTemplateVersion? @relation(fields: [eventKey, activeVersion], references: [eventKey, version], onDelete: NoAction, onUpdate: NoAction, map: "email_template_settings_active_version_fkey")
 
   @@map("email_template_settings")
 }
