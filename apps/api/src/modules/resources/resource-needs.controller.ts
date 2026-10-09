@@ -24,6 +24,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ResourceNeedsService } from './resource-needs.service';
 import { createResourceNeedSchema, updateResourceNeedSchema } from './resource-needs.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that may PUBLISH/EDIT a need (M09). */
 export const RESOURCE_WRITE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
@@ -35,6 +36,7 @@ export const RESOURCE_VIEW_ROLES = [...RESOURCE_WRITE_ROLES, Role.ReadOnlyAudito
  * = Owner/Administrator/Operator; ver = + ReadOnlyAuditor; el resto, denegado
  * (deny-by-default). Exposición pública en un controller separado.
  */
+@RequireFeature('resources')
 @Controller('resources/needs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ResourceNeedsController {

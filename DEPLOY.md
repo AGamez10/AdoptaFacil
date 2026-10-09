@@ -304,22 +304,27 @@ not found` durante el build (T-D07):** pnpm salta TODAS las devDependencies
 
 ## 6. Variables de entorno
 
-| Variable                            | Servicio | Descripción                                                | Cómo se llena                                      |
-| ----------------------------------- | -------- | ---------------------------------------------------------- | -------------------------------------------------- |
-| `DATABASE_URL`                      | api      | Connection string del owner (migraciones)                  | Auto (`fromDatabase`)                              |
-| `DATABASE_URL_APP`                  | api      | Connection string del rol `adoptafacil_app` (runtime, RLS) | Manual — ver paso 2                                |
-| `REDIS_URL`                         | api      | Connection string de Redis (BullMQ)                        | Auto (`fromService`)                               |
-| `JWT_SECRET` / `JWT_REFRESH_SECRET` | api      | Secretos de firma de tokens                                | Auto (`generateValue`)                             |
-| `API_CORS_ORIGIN`                   | api      | Origen(es) permitidos por CORS (coma-separado)             | Manual — ver paso 3                                |
-| `WEB_BASE_URL`                      | api      | URL pública del frontend (link de reset de contraseña)     | Manual — ver paso 3                                |
-| `STORAGE_DRIVER`                    | api      | Adaptador de `StoragePort`                                 | Fijo: `disk`                                       |
-| `STORAGE_DISK_ROOT`                 | api      | Carpeta del Persistent Disk                                | Fijo: `/var/data/storage`                          |
-| `STORAGE_PUBLIC_BASE_URL`           | api      | URL pública de la propia API (arma URLs de descarga)       | Manual — ver paso 3                                |
-| `NOTIFICATION_DRIVER`               | api      | Adaptador de `NotificationPort`                            | `log` (default) o `smtp`                           |
-| `SMTP_HOST/PORT/USER/PASS/FROM`     | api      | Credenciales SMTP reales                                   | Manual, solo si `NOTIFICATION_DRIVER=smtp`         |
-| `PAYMENT_DRIVER`                    | api      | Adaptador de `PaymentPort`                                 | Fijo: `fake` (Wompi real es M15, fuera de alcance) |
-| `VITE_API_URL`                      | web      | URL pública de la API                                      | Manual — ver paso 3                                |
-| `NODE_VERSION`                      | ambos    | Versión de Node                                            | Fijo: `20`                                         |
+| Variable                            | Servicio | Descripción                                                | Cómo se llena                                           |
+| ----------------------------------- | -------- | ---------------------------------------------------------- | ------------------------------------------------------- |
+| `DATABASE_URL`                      | api      | Connection string del owner (migraciones)                  | Auto (`fromDatabase`)                                   |
+| `DATABASE_URL_APP`                  | api      | Connection string del rol `adoptafacil_app` (runtime, RLS) | Manual — ver paso 2                                     |
+| `REDIS_URL`                         | api      | Connection string de Redis (BullMQ)                        | Auto (`fromService`)                                    |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` | api      | Secretos de firma de tokens                                | Auto (`generateValue`)                                  |
+| `API_CORS_ORIGIN`                   | api      | Origen(es) permitidos por CORS (coma-separado)             | Manual — ver paso 3                                     |
+| `WEB_BASE_URL`                      | api      | URL pública del frontend (link de reset de contraseña)     | Manual — ver paso 3                                     |
+| `STORAGE_DRIVER`                    | api      | Adaptador de `StoragePort`                                 | Fijo: `disk`                                            |
+| `STORAGE_DISK_ROOT`                 | api      | Carpeta del Persistent Disk                                | Fijo: `/var/data/storage`                               |
+| `STORAGE_PUBLIC_BASE_URL`           | api      | URL pública de la propia API (arma URLs de descarga)       | Manual — ver paso 3                                     |
+| `NOTIFICATION_DRIVER`               | api      | Adaptador de `NotificationPort`                            | Fijo: `smtp` (`log` no arranca en producción)           |
+| `SMTP_HOST/PORT/USER/PASS/FROM`     | api      | Credenciales SMTP reales                                   | Manual, obligatorias en producción                      |
+| `PAYMENT_DRIVER`                    | api      | Adaptador de `PaymentPort`                                 | Fijo: `disabled` (`fake` no arranca en producción)      |
+| `AUTH_IDENTITY_DRIVER`              | api      | Adaptador de identidad (Google Sign-In)                    | Fijo: `disabled` hasta tener Client ID real             |
+| `DIAN_DRIVER` / `SIGNATURE_DRIVER`  | api      | DIAN y firma electrónica                                   | Fijo: `disabled`                                        |
+| `FEATURE_*`                         | api      | Flags de módulo (apagados salvo `"true"`)                  | Fijo: `false` — ver `docs/seguridad/arranque-seguro.md` |
+| `TRUST_PROXY_HOPS`                  | api      | Proxies delante de la API (rate limit por IP real)         | Fijo: `1` (verificar en staging)                        |
+| `THROTTLER_STORAGE`                 | api      | Dónde viven los contadores del rate limit                  | Fijo: `redis`                                           |
+| `VITE_API_URL`                      | web      | URL pública de la API                                      | Manual — ver paso 3                                     |
+| `NODE_VERSION`                      | ambos    | Versión de Node                                            | Fijo: `20`                                              |
 
 ## 7. Fuera de alcance de este Blueprint
 
@@ -328,8 +333,10 @@ not found` durante el build (T-D07):** pnpm salta TODAS las devDependencies
   serían visibles en la instancia que los recibió. Migrar a un `StoragePort`
   real (S3/R2) es directo gracias a la abstracción existente, pero es trabajo
   aparte (`TODO(client)`).
-- **`PAYMENT_DRIVER=wompi`**: agregado a la tabla de variables por completitud;
-  activarlo es de M15, no de esta tarea.
+- **Pagos reales**: `PAYMENT_DRIVER=mercadopago` + `FEATURE_PAYMENTS=true`
+  solo arrancan en producción con `PAYMENTS_PRODUCTION_APPROVAL_REF` (la
+  referencia de la aprobación escrita del proveedor y del abogado). Ver
+  `docs/seguridad/arranque-seguro.md`.
 - **Dominio propio / TLS custom**: Render lo soporta desde el dashboard del
   servicio `adoptafacil-web` (y `adoptafacil-api` si aplica), no es parte de
   este Blueprint.

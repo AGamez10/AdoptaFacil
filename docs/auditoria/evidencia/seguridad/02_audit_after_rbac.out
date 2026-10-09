@@ -1,0 +1,10 @@
+    action     |            actor_user_id             |           metadata            |       created_at        
+---------------+--------------------------------------+-------------------------------+-------------------------
+ role.assigned | 52be4082-7597-4de2-b720-4122408bdfa9 | {"role": "administrator"}     | 2026-10-07 15:01:00.093
+ role.assigned | 52be4082-7597-4de2-b720-4122408bdfa9 | {"role": "operator"}          | 2026-10-07 15:01:00.117
+ role.assigned | 52be4082-7597-4de2-b720-4122408bdfa9 | {"role": "read_only_auditor"} | 2026-10-07 15:01:00.137
+ role.assigned | 52be4082-7597-4de2-b720-4122408bdfa9 | {"role": "veterinarian"}      | 2026-10-07 15:01:00.157
+ role.assigned | 52be4082-7597-4de2-b720-4122408bdfa9 | {"role": "volunteer"}         | 2026-10-07 15:01:00.173
+ role.assigned | 4ea43e73-f5c2-46d2-95de-c0f1c4f75fdc | {"role": "owner"}             | 2026-10-07 15:03:17.916
+(6 rows)
+

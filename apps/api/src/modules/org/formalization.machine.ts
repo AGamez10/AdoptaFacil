@@ -46,6 +46,28 @@ export const TRANSITION_REQUIREMENTS: Partial<Record<FormalizationState, readonl
     // [FormalizationState.Formalizada]: [DocumentType.ExistenceRepresentationCertificate],
   };
 
+/**
+ * States an organization can never enter on its own (R2-2, SEC-003): being an
+ * ESAL — and above all an ESAL with RTE — unlocks tax-relevant capabilities
+ * (certificates), so only a platform reviewer moves an org INTO them, citing an
+ * approved document. Moving DOWN out of them stays with the org's Owner.
+ */
+export const PLATFORM_ONLY_STATES: readonly FormalizationState[] = [
+  FormalizationState.ESAL,
+  FormalizationState.ESAL_RTE,
+];
+
+/**
+ * Which document types a platform reviewer may cite as evidence to move an org
+ * INTO each platform-only state. TODO(client): the base document does not fix
+ * them, so no type is imposed (`undefined` = any approved, current document of
+ * the org with its file present). Restrict once the client confirms, e.g.
+ * `[FormalizationState.ESAL_RTE]: [DocumentType.Rut]`.
+ */
+export const PLATFORM_TRANSITION_EVIDENCE: Partial<
+  Record<FormalizationState, readonly DocumentType[]>
+> = {};
+
 export interface TransitionContext {
   /** Document types currently Approved AND vigente for the org. */
   satisfiedDocuments?: readonly DocumentType[];

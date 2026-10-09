@@ -12,6 +12,8 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   computeBreakdown,
+  DIRECT_COLLECTION_RATES,
+  type CollectorCredentials,
   type CreateDonationInput,
   type Donation,
   type DonationCertificate,
@@ -117,6 +119,9 @@ export interface WebhookOutcome {
 export class DonationsService {
   private readonly logger = new Logger('Donations');
   private readonly webBaseUrl: string;
+  private readonly certificatesEnabled: boolean;
+  /** Real gateway ⇒ every charge needs the organization's own account. */
+  private readonly requiresCollector: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -129,6 +134,9 @@ export class DonationsService {
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
+    this.certificatesEnabled =
+      config.get('FEATURE_DONATION_CERTIFICATES', { infer: true }) === true;
+    this.requiresCollector = config.get('PAYMENT_DRIVER', { infer: true }) !== 'fake';
   }
 
   private requireOrgId(): string {
@@ -189,19 +197,30 @@ export class DonationsService {
       return this.fromRow(existing);
     }
 
-    // Single source of the money math (RNF12); persisted verbatim.
-    const breakdown = computeBreakdown(input.intendedAmount, input.commissionPayer);
+    // ADR-PAG-001 (cobro directo, sin custodia): the charge is created with
+    // the BENEFICIARY org's own connected account, so the money lands in the
+    // organization's account the moment it is approved. Without a connected
+    // account there is no donation: never a fallback to the platform account
+    // (that fallback was custody, PAY-001). The fake driver (dev/test) keeps
+    // working without one.
+    const collector = await this.resolveCollector(input.organizationId);
+    if (!collector && this.requiresCollector) {
+      throw new ConflictException(
+        'Esta organización todavía no conectó su cuenta para recibir donaciones.',
+      );
+    }
 
-    // Split de Pagos 1:1 (T-OAuth-Connect): if the BENEFICIARY org connected
-    // its own MercadoPago account, route the charge directly to it — read
-    // ONLY the mp_user_id (never the tokens), cross-tenant, via a bounded
-    // SECURITY DEFINER function (same posture as `organizationNamesById`
-    // below). Absent ⇒ undefined ⇒ old single-account behavior, unchanged.
-    const sponsorMpUserId = await this.resolveSponsorMpUserId(input.organizationId);
+    // Single source of the money math (RNF12); persisted verbatim. No
+    // per-transaction platform fee in direct collection: AdoptaFácil's revenue
+    // comes from subscription plans until a gateway splits at source.
+    const breakdown = computeBreakdown(
+      input.intendedAmount,
+      input.commissionPayer,
+      DIRECT_COLLECTION_RATES,
+    );
 
-    // Process the collection through the port (fake in Ola 1; Checkout API/
-    // Orders for the real MercadoPago driver, T-OrdersAPI). Ids are derived
-    // from the idempotency key, so a retry maps to the same collection.
+    // Process the collection through the port. Ids are derived from the
+    // idempotency key, so a retry maps to the same collection.
     const collection = await this.payment.createCollection({
       intendedAmount: input.intendedAmount,
       currency: 'COP',
@@ -213,7 +232,7 @@ export class DonationsService {
       paymentMethodId: input.paymentMethodId,
       paymentMethodType: input.paymentMethodType,
       installments: input.installments,
-      sponsorMpUserId,
+      collector,
     });
 
     let rows: DonationRow[];
@@ -332,9 +351,19 @@ export class DonationsService {
     signature: string,
     context?: WebhookVerificationContext,
   ): Promise<WebhookOutcome> {
+    // ADR-PAG-001: the notified order lives in the ORGANIZATION's account, so
+    // the adapter must read it back with that organization's token. The
+    // account id in the body is NOT trusted for anything else: a forged one
+    // only makes the read-back fail (the order is not in that account).
+    const notifiedOrgId = await this.resolveNotifiedOrganizationId(payload);
+    const collector = notifiedOrgId ? await this.resolveCollector(notifiedOrgId) : undefined;
+
     let event: NormalizedWebhookEvent;
     try {
-      event = await this.payment.verifyAndNormalizeWebhook(payload, signature, context);
+      event = await this.payment.verifyAndNormalizeWebhook(payload, signature, {
+        ...context,
+        collector,
+      });
     } catch (error) {
       // `verifyAndNormalizeWebhook` throws for several DISTINCT reasons (real
       // signature mismatch, the follow-up GET /v1/orders/:id failing, a
@@ -345,6 +374,10 @@ export class DonationsService {
       // the next failure be diagnosed from the log alone.
       this.logger.warn(`Webhook rechazado: ${(error as Error).message}`);
       throw new ForbiddenException('Webhook verification failed.');
+    }
+
+    if (!(await this.matchesExpectedPayment(event, notifiedOrgId))) {
+      return { applied: false, status: null, donationId: null };
     }
 
     const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
@@ -387,13 +420,16 @@ export class DonationsService {
       // F-3 (RF14): certificado real, emitido junto al recibo. Best-effort y
       // sin gating aquí — el servicio decide si la org es ESAL-RTE elegible;
       // si no lo es, simplemente no emite nada (no es un fallo del webhook).
-      await this.certificates.tryIssueForApprovedDonation({
-        donationId: donation.id,
-        organizationId: donation.organization_id,
-        donorName: donation.payer?.fullName,
-        amount: donation.intended_amount,
-        currency: donation.currency,
-      });
+      // Ola 1 (R1-1, D9): solo con FEATURE_DONATION_CERTIFICATES encendido.
+      if (this.certificatesEnabled) {
+        await this.certificates.tryIssueForApprovedDonation({
+          donationId: donation.id,
+          organizationId: donation.organization_id,
+          donorName: donation.payer?.fullName,
+          amount: donation.intended_amount,
+          currency: donation.currency,
+        });
+      }
 
       // Client requirement (final): a GUEST donor (no account) must be able to
       // check their donation later WITHOUT registering. Only for a guest
@@ -622,6 +658,94 @@ export class DonationsService {
       SELECT * FROM mercadopago_account_mp_user_id(${organizationId}::uuid)
     `);
     return rows[0]?.mp_user_id;
+  }
+
+  /**
+   * ADR-PAG-001: the organization's own connected Mercado Pago credentials,
+   * read under THAT organization's RLS context (server-side only; never
+   * returned, logged or audited). `undefined` when it never connected.
+   */
+  private async resolveCollector(
+    organizationId: string,
+  ): Promise<CollectorCredentials | undefined> {
+    const row = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.organizationMercadoPagoAccount.findUnique({
+        where: { organizationId },
+        select: { accessToken: true, mpUserId: true },
+      }),
+    );
+    if (!row?.accessToken || !row.mpUserId) {
+      return undefined;
+    }
+    return { accessToken: row.accessToken, accountId: row.mpUserId };
+  }
+
+  /**
+   * Organization connected with the Mercado Pago account named in a webhook
+   * body (`user_id`). Exactly one match or nothing: an account connected to
+   * two organizations is ambiguous and is never used to settle a payment.
+   */
+  private async resolveNotifiedOrganizationId(payload: unknown): Promise<string | undefined> {
+    const raw = (payload as { user_id?: unknown } | null)?.user_id;
+    if (typeof raw !== 'string' && typeof raw !== 'number') {
+      return undefined;
+    }
+    const accountId = String(raw);
+    if (!/^\d{1,20}$/.test(accountId)) {
+      return undefined;
+    }
+    const rows = await this.prisma.$queryRaw<{ organization_id: string }[]>(Prisma.sql`
+      SELECT * FROM mercadopago_account_organization_id(${accountId})
+    `);
+    return rows.length === 1 ? rows[0].organization_id : undefined;
+  }
+
+  /**
+   * PAY-003: a gateway event settles a donation only if it matches what we
+   * recorded — same organization that owns the receiving account, same amount
+   * and currency. A mismatch is audited and NEVER approved.
+   */
+  private async matchesExpectedPayment(
+    event: NormalizedWebhookEvent,
+    notifiedOrgId: string | undefined,
+  ): Promise<boolean> {
+    if (
+      notifiedOrgId === undefined &&
+      event.amountCharged === undefined &&
+      event.currency === undefined
+    ) {
+      return true; // nothing reported to compare (fake driver)
+    }
+    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+      SELECT * FROM donation_by_collection_id(${event.collectionId})
+    `);
+    const donation = rows[0];
+    if (!donation) {
+      return true; // unknown collection: `apply_donation_webhook` is a no-op
+    }
+    const mismatches: string[] = [];
+    if (notifiedOrgId !== undefined && donation.organization_id !== notifiedOrgId) {
+      mismatches.push('receiver');
+    }
+    if (event.amountCharged !== undefined && event.amountCharged !== donation.amount_charged) {
+      mismatches.push('amount');
+    }
+    if (event.currency !== undefined && event.currency !== donation.currency) {
+      mismatches.push('currency');
+    }
+    if (mismatches.length === 0) {
+      return true;
+    }
+    this.logger.warn(`Pago no coincide con la donación ${donation.id}: ${mismatches.join(', ')}`);
+    await this.audit.record({
+      organizationId: donation.organization_id,
+      actorUserId: null,
+      action: 'donation.payment_mismatch',
+      entityType: 'donation',
+      entityId: donation.id,
+      metadata: { collectionId: event.collectionId, mismatches },
+    });
+    return false;
   }
 
   /**

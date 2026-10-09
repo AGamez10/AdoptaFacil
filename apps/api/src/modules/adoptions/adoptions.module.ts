@@ -12,6 +12,7 @@ import {
   loadSignatureEncryptionConfig,
 } from '../../core/crypto/signature-crypto';
 import { SIGNATURE_PORT } from './signature/signature.port';
+import { DisabledSignatureAdapter } from './signature/disabled-signature.adapter';
 import { FakeSignatureAdapter } from './signature/fake-signature.adapter';
 import { FollowUpController } from './followup.controller';
 import { FollowUpService } from './followup.service';
@@ -42,7 +43,15 @@ import { FOLLOWUP_QUEUE } from './followup.constants';
     AdoptionsService,
     AdoptionContractsService,
     AdoptionContractCopyService,
-    { provide: SIGNATURE_PORT, useClass: FakeSignatureAdapter },
+    // SIGNATURE_DRIVER (Ola 1, R0-1): 'fake' for dev/test; production must
+    // bind 'disabled' (env validation refuses 'fake' there).
+    {
+      provide: SIGNATURE_PORT,
+      useFactory: () =>
+        process.env.SIGNATURE_DRIVER === 'disabled'
+          ? new DisabledSignatureAdapter()
+          : new FakeSignatureAdapter(),
+    },
     // Mismo factory que `OrgModule` ya registra para sí mismo — no está en su
     // lista de `exports` (deliberadamente mínima, ver su propio comentario),
     // así que se re-registra aquí en vez de ampliar esa superficie exportada

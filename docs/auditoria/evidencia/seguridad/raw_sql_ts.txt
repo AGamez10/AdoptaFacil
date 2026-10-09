@@ -1,0 +1,102 @@
+./modules/community/community-moderation.service.ts:73:    const rows = await this.prisma.$queryRaw<Array<{ data: { items: RawPost[]; total: number } }>>(
+./modules/community/community-moderation.service.ts:89:      const rows = await this.prisma.$queryRaw<Array<{ data: RawPost }>>(
+./modules/community/community-comments.service.ts:51:      const rows = await this.prisma.$queryRaw<Array<{ data: RawComment }>>(
+./modules/community/community-comments.service.ts:72:    const rows = await this.prisma.$queryRaw<
+./modules/community/community-comments.service.ts:88:      await this.prisma.$queryRaw(
+./modules/community/community-likes.service.ts:17:      const rows = await this.prisma.$queryRaw<Array<{ data: ToggleLikeResult }>>(
+./modules/community/community-posts.service.ts:261:    const rows = await this.prisma.$queryRaw<Array<{ data: RawPost }>>(
+./modules/community/community-posts.service.ts:272:    const rows = await this.prisma.$queryRaw<Array<{ data: { items: RawPost[]; total: number } }>>(
+./modules/community/community-posts.service.ts:288:    const rows = await this.prisma.$queryRaw<Array<{ data: { items: RawPost[]; total: number } }>>(
+./modules/community/community-posts.service.ts:302:    const rows = await this.prisma.$queryRaw<Array<{ data: RawPost | null }>>(
+./modules/community/community-posts.service.ts:315:      const rows = await this.prisma.$queryRaw<Array<{ data: RawPost }>>(
+./modules/community/community-posts.service.ts:327:      await this.prisma.$queryRaw(
+./modules/marketplace/public-marketplace-products.service.ts:85:    const rows = await this.prisma.$queryRaw<
+./modules/marketplace/public-marketplace-products.service.ts:101:    const rows = await this.prisma.$queryRaw<Array<{ data: RawPublicProduct | null }>>(
+./modules/sponsorships/sponsorship-payments.service.ts:98:    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
+./modules/sponsorships/sponsorship-payments.service.ts:143:    const rows = await this.prisma.$queryRaw<PublicStatusRow[]>(
+./modules/sponsorships/sponsorship-payments.service.ts:172:    const rows = await this.prisma.$queryRaw<RecoveryContextRow[]>(
+./modules/sponsorships/public-sponsorships.service.ts:37:    const rows = await this.prisma.$queryRaw<Array<{ data: RawSummary }>>(
+./modules/sponsorships/sponsorship-payment-poller.service.ts:49:    const rows = await this.prisma.$queryRaw<PendingAttemptRow[]>(
+./modules/sponsorships/sponsorships.service.ts:36: *  Prisma's camelCase mapping only applies to the ORM client, not $queryRaw). */
+./modules/sponsorships/sponsorships.service.ts:179:    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
+./modules/sponsorships/sponsorships.service.ts:212:    const rows = await this.prisma.$queryRaw<SponsorshipRawRow[]>(
+./modules/sponsorships/sponsorships.service.ts:317:    const rows = await this.prisma.$queryRaw<Array<{ data: SponsorshipMineRow[] }>>(
+./modules/sponsorships/sponsorship-billing.service.ts:101:    const rows = await this.prisma.$queryRaw<DueRow[]>(
+./modules/sponsorships/sponsorship-billing.service.ts:183:    const rows = await this.prisma.$queryRaw<OpenPeriodRow[]>(
+./modules/org/platform-documents.service.ts:41:    const rows = await this.prisma.$queryRaw<Array<{ data: DocumentReviewQueueItem[] | null }>>(
+./modules/org/platform-documents.service.ts:63:      const rows = await this.prisma.$queryRaw<Array<{ data: OrganizationDocument }>>(
+./modules/org/org-profile.service.ts:231:    const rows = await this.prisma.$queryRaw<Array<{ data: OrganizationPublic | null }>>(
+./modules/org/duplicate-detection.service.ts:54:    const rows = await this.prisma.$queryRaw<
+./modules/org/duplicate-detection.service.ts:71:    const rows = await this.prisma.$queryRaw<Array<{ id: string; name: string; score: number }>>(
+./modules/org/platform-duplicates.service.ts:29:    const rows = await this.prisma.$queryRaw<Array<{ data: OrganizationDuplicateFlag[] | null }>>(
+./modules/org/platform-duplicates.service.ts:50:      const rows = await this.prisma.$queryRaw<Array<{ data: OrganizationDuplicateFlag }>>(
+./modules/adoptions/adoption-contracts.service.ts:141:        this.prisma.$queryRaw<AdopterProfileRow[]>(
+./modules/adoptions/adoption-contracts.service.ts:520:    const updatedRows = await this.prisma.$queryRaw<ContractRow[]>(Prisma.sql`
+./modules/adoptions/adoption-contracts.service.ts:667:    const rows = await this.prisma.$queryRaw<ContractRow[]>(Prisma.sql`
+./modules/adoptions/followup.service.ts:166:    const rows = await this.prisma.$queryRaw<MilestoneRow[]>(Prisma.sql`
+./modules/adoptions/followup.service.ts:212:    const rows = await this.prisma.$queryRaw<MilestoneRow[]>(Prisma.sql`
+./modules/adoptions/followup.service.ts:291:    const rows = await this.prisma.$queryRaw<MilestoneRow[]>(Prisma.sql`
+./modules/adoptions/followup.service.ts:335:    const rows = await this.prisma.$queryRaw<MilestoneRow[]>(Prisma.sql`
+./modules/adoptions/adoptions.service.ts:97:      const rows = await this.prisma.$queryRaw<AdoptionRow[]>(Prisma.sql`
+./modules/adoptions/adoptions.service.ts:146:    const rows = await this.prisma.$queryRaw<AdoptionRow[]>(Prisma.sql`
+./modules/reputation/reviews.service.ts:95:      rows = await this.prisma.$queryRaw<ReviewRawRow[]>(
+./modules/reputation/reviews.service.ts:144:    const rows = await this.prisma.$queryRaw<Array<{ data: ReviewMineRow[] }>>(
+./modules/reputation/reviews.service.ts:192:      const rows = await this.prisma.$queryRaw<Array<{ data: Review }>>(
+./modules/reputation/platform-reviews.service.ts:35:    const rows = await this.prisma.$queryRaw<Array<{ data: ReviewModerationQueueItem[] | null }>>(
+./modules/reputation/platform-reviews.service.ts:56:      const rows = await this.prisma.$queryRaw<Array<{ data: Review }>>(
+./modules/reputation/platform-reviews.service.ts:83:      const rows = await this.prisma.$queryRaw<Array<{ data: Review }>>(
+./modules/reputation/public-reputation.service.ts:52:    const rows = await this.prisma.$queryRaw<Array<{ data: RawPublicOrg | null }>>(
+./modules/reputation/public-reputation.service.ts:62:    const rows = await this.prisma.$queryRaw<
+./modules/reputation/public-reputation.service.ts:78:    const rows = await this.prisma.$queryRaw<
+./modules/reputation/public-reputation.service.ts:105:    const rows = await this.prisma.$queryRaw<PublicReviewRawRow[]>(
+./modules/volunteering/volunteer-opportunities.service.ts:147:    const orgRows = await this.prisma.$queryRaw<Array<{ data: RawPublicOrg | null }>>(
+./modules/volunteering/volunteer-opportunities.service.ts:189:    const rows = await this.prisma.$queryRaw<
+./modules/volunteering/volunteer-enrollments.service.ts:186:      rows = await this.prisma.$queryRaw<EnrollmentRawRow[]>(
+./modules/volunteering/volunteer-enrollments.service.ts:246:    const rows = await this.prisma.$queryRaw<Array<{ data: EnrollmentMineRow[] }>>(
+./modules/volunteering/volunteer-certificates.service.ts:360:    const rows = await this.prisma.$queryRaw<Array<{ data: CertificateMineRow[] }>>(
+./modules/volunteering/volunteer-certificates.service.ts:369:    const rows = await this.prisma.$queryRaw<CertificateViewerRow[]>(
+./modules/volunteering/service-hours.service.ts:150:      rows = await this.prisma.$queryRaw<ServiceHoursRawRow[]>(
+./modules/volunteering/service-hours.service.ts:181:    const rows = await this.prisma.$queryRaw<Array<{ data: ServiceHoursMineRow[] }>>(
+./modules/dashboards/platform-super-admin-dashboard.service.ts:76:        this.prisma.$queryRaw<FinancialRow[]>(
+./modules/dashboards/platform-super-admin-dashboard.service.ts:79:        this.prisma.$queryRaw<BusinessCountsRow[]>(
+./modules/dashboards/platform-super-admin-dashboard.service.ts:82:        this.prisma.$queryRaw<Array<{ data: OrganizationVerificationLevelCount[] }>>(
+./modules/dashboards/platform-super-admin-dashboard.service.ts:85:        this.prisma.$queryRaw<Array<{ data: OrganizationDepartmentCount[] }>>(
+./modules/dashboards/platform-super-admin-dashboard.service.ts:88:        this.prisma.$queryRaw<GrowthRow[]>(
+./modules/donations/donation-certificates.service.ts:234:    const rows = await this.prisma.$queryRaw<CertificateRow[]>(Prisma.sql`
+./modules/donations/donation-certificates.service.ts:248:    const rows = await this.prisma.$queryRaw<
+./modules/donations/donations.service.ts:221:      rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:307:    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:350:    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:486:    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:500:    const receiptRows = await this.prisma.$queryRaw<ReceiptRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:507:    const certificateRows = await this.prisma.$queryRaw<AccessCertificateRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:605:    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:621:    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
+./modules/donations/donations.service.ts:653:    const rows = await this.prisma.$queryRaw<ReceiptRow[]>(Prisma.sql`
+./modules/donations/donations.service.ts:681:    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+./modules/resources/resource-offers.service.ts:149:    const rows = await this.prisma.$queryRaw<ResourceOfferSqlRow[]>(Prisma.sql`
+./modules/resources/resource-offers.service.ts:182:    const rows = await this.prisma.$queryRaw<Array<{ data: RawOfferWithNeed[] }>>(
+./modules/resources/resource-offers.service.ts:241:    const rows = await this.prisma.$queryRaw<ResourceOfferSqlRow[]>(
+./modules/resources/resource-offer-proofs.service.ts:126:    const ctxRows = await this.prisma.$queryRaw<ProofContextRow[]>(
+./modules/resources/resource-offer-proofs.service.ts:153:    const rows = await this.prisma.$queryRaw<ProofSqlRow[]>(Prisma.sql`
+./modules/resources/public-resource-needs.service.ts:69:    const rows = await this.prisma.$queryRaw<
+./modules/resources/public-resource-needs.service.ts:85:    const rows = await this.prisma.$queryRaw<Array<{ data: RawPublicNeed | null }>>(
+./modules/payments/reconciliation.service.ts:54:    const rows = await this.prisma.$queryRaw<ReconciliationRow[]>(Prisma.sql`
+./modules/payments/mercadopago-connect.service.ts:206:    const rows = await this.prisma.$queryRaw<DueForRefreshRow[]>(
+./modules/payments/payouts.service.ts:80:    const rows = await this.prisma.$queryRaw<PayoutRow[]>(Prisma.sql`
+./modules/payments/payouts.service.ts:230:    const rows = await this.prisma.$queryRaw<PayoutRow[]>(Prisma.sql`
+./modules/payments/payouts.service.ts:252:    const rows = await this.prisma.$queryRaw<PayoutRow[]>(Prisma.sql`
+./modules/animals/public-animals.service.ts:64:    const rows = await this.prisma.$queryRaw<Array<{ data: RawPage | null }>>(
+./modules/animals/public-animals.service.ts:118:        this.prisma.$queryRaw<Array<{ data: RawPage | null }>>(
+./modules/animals/animals.service.ts:356:        const sponsors = await tx.$queryRaw<ActiveSponsorRow[]>(
+./modules/animals/reminders.service.ts:86:    const rows = await this.prisma.$queryRaw<
+./modules/portals/portal-theme.service.ts:111:    const rows = await this.prisma.$queryRaw<
+./modules/portals/portal-subdomain.service.ts:20:    const rows = await this.prisma.$queryRaw<Array<{ slug: string | null }>>(
+./modules/campaigns/campaign-funding.service.ts:56:    const rows = await this.prisma.$queryRaw<AppliedRow[]>(
+./modules/campaigns/campaign-funding.service.ts:82:    const rows = await this.prisma.$queryRaw<ReconciledRow[]>(
+./modules/campaigns/public-campaigns.service.ts:110:    const rows = await this.prisma.$queryRaw<
+./modules/campaigns/public-campaigns.service.ts:142:    const orgRows = await this.prisma.$queryRaw<Array<{ data: RawPublicOrg | null }>>(
+./modules/campaigns/public-campaigns.service.ts:173:    const rows = await this.prisma.$queryRaw<Array<{ data: RawPublicCampaign | null }>>(
+./modules/campaigns/public-campaigns.service.ts:188:    const rows = await this.prisma.$queryRaw<Array<{ data: RawAccountability | null }>>(
+./prisma/prisma.service.ts:72:      await this.$queryRaw`SELECT 1`;
+./prisma/prisma.service.ts:107:      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;

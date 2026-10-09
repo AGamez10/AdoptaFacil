@@ -1,5 +1,7 @@
 import type { CampaignPublic, Paginated } from '@adoptafacil/contracts';
 
+import type { ApiClient } from '../../../shell/api';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 export interface FetchPublicOrgCampaignsParams {
@@ -7,6 +9,9 @@ export interface FetchPublicOrgCampaignsParams {
   limit?: number;
   offset?: number;
   signal?: AbortSignal;
+  /** Owner preview (see `PortalPreviewContext`): reads the caller's own
+   *  organization through the authenticated preview endpoint. */
+  preview?: ApiClient | null;
 }
 
 /**
@@ -27,6 +32,7 @@ export async function fetchPublicOrgCampaigns({
   limit,
   offset,
   signal,
+  preview,
 }: FetchPublicOrgCampaignsParams): Promise<Paginated<CampaignPublic>> {
   const params = new URLSearchParams();
   if (typeof limit === 'number') params.set('limit', String(limit));
@@ -36,11 +42,19 @@ export async function fetchPublicOrgCampaigns({
     qs ? `?${qs}` : ''
   }`;
 
-  const response = await fetch(url, signal ? { signal } : undefined);
-  if (!response.ok) {
-    throw new Error('error');
+  let body: Partial<Paginated<CampaignPublic>> | null;
+  if (preview) {
+    body = await preview.request<Partial<Paginated<CampaignPublic>> | null>(
+      `/org/portal/preview/campaigns${qs ? `?${qs}` : ''}`,
+      signal ? { signal } : {},
+    );
+  } else {
+    const response = await fetch(url, signal ? { signal } : undefined);
+    if (!response.ok) {
+      throw new Error('error');
+    }
+    body = (await response.json()) as Partial<Paginated<CampaignPublic>> | null;
   }
-  const body = (await response.json()) as Partial<Paginated<CampaignPublic>> | null;
   const items: CampaignPublic[] = Array.isArray(body?.items) ? body.items : [];
   return {
     items,

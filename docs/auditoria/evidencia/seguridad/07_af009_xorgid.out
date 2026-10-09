@@ -1,0 +1,108 @@
+# AF-009: rutas sin parámetros, sin JWT, con x-org-id=ORG_B
+400 POST /auth/register/organization {"message":["organizationName: Required","displayName: Required","email: Required","password: Requir
+400 POST /auth/register/person {"message":["displayName: Required","email: Required","password: Required"],"error":"Bad Request","s
+400 POST /auth/login {"message":["email: Required","password: Required"],"error":"Bad Request","statusCode":400}
+400 POST /auth/refresh {"message":["refreshToken: Required"],"error":"Bad Request","statusCode":400}
+200 POST /auth/refresh/silent null
+400 POST /auth/logout {"message":["refreshToken: Required"],"error":"Bad Request","statusCode":400}
+400 POST /auth/password-reset {"message":["email: Required"],"error":"Bad Request","statusCode":400}
+400 POST /auth/password-reset/confirm {"message":["token: Required","password: Required"],"error":"Bad Request","statusCode":400}
+401 GET /auth/me {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+400 POST /auth/google {"message":["idToken: Required"],"error":"Bad Request","statusCode":400}
+401 PATCH /auth/me/profile {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /rbac/my-roles {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /rbac/roles {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /rbac/roles {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 PUT /storage/upload {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+404 GET /storage/public {"message":"Not Found","statusCode":404}
+401 GET /storage/private {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 GET /health {"status":"ok","db":"up","redis":"up"}
+401 GET /org/profile {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 PUT /org/profile {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /org/profile/uploads {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/formalization {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/formalization/history {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /org/formalization/transitions {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /org/formalization/dian-verification/retry {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/documents {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/documents/verification {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /org/documents {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/legal-representative {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /org/legal-representative {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/summary {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /platform/documents/queue {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /platform/duplicates/queue {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /platform/settings {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 PUT /platform/settings {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /platform/settings/uploads {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 GET /public/hero-banner {"photos":[]}
+401 GET /portals/theme {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 PUT /portals/theme {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /animals {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /animals {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /animals/breeds {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /animals/breeds {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /animals/bulk-import/template {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /animals/bulk-import {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /clinical-reminders {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 GET /public/animals {"data":[{"id":"f6f1338d-e22c-4c76-b926-c690e7474d76","organizationId":"8d8c0ec4-6acd-40a7-9399-de18
+401 POST /sponsorship-plans {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /sponsorship-plans {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /sponsorships {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /sponsorships/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /sponsorships {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /adoptions {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /adoptions {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /adoptions/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /adoptions/contracts {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /adoptions/followups {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /adoptions/followups/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+400 POST /donations {"message":["organizationId: Required","intendedAmount: Required","commissionPayer: Required","idemp
+401 GET /donations/received {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /donations/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 POST /donations/webhook {"applied":false,"status":null,"donationId":null}
+401 POST /campaigns {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /campaigns {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /campaigns/funding/reconcile {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 GET /public/campaigns {"items":[{"id":"d9698f6b-c396-4158-aae5-6dc9cb6d5cb0","organizationId":"897207c9-7f8a-412a-a008-3ef
+401 GET /org/payout-bank-account {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 PUT /org/payout-bank-account {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /platform/payouts {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 POST /payments/payouts/webhook 
+401 GET /platform/reconciliation {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/mercadopago/connect {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/mercadopago/status {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 DELETE /org/mercadopago/connect {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+302 GET /org/mercadopago/callback Found. Redirecting to http://localhost:5173/organizacion?mercadopago=error
+401 POST /resources/needs {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /resources/needs {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /resources/offers {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /resources/offers/received {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /resources/offers/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /resources/deliveries {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 GET /public/resources/needs {"items":[{"id":"f5e16060-63c7-4609-96a7-53cfa15444af","organizationId":"897207c9-7f8a-412a-a008-3ef
+401 POST /marketplace/products {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /marketplace/products {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 GET /public/marketplace/products {"items":[{"id":"ee76873b-f935-4d0c-b2d1-36be85ba249b","organizationId":"897207c9-7f8a-412a-a008-3ef
+401 POST /community/posts {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /community/posts {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /community/posts/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /platform/community/posts {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /volunteer-opportunities {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /volunteer-opportunities {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+200 GET /public/volunteer-opportunities {"items":[{"id":"2e593823-c037-4c4e-917c-47489b46b0f3","title":"Voluntariado A","endDate":"2026-11-0
+401 POST /volunteer-enrollments {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /volunteer-enrollments/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /volunteer-enrollments {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /service-hours {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /service-hours/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /service-hours {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /volunteer-certificates {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /volunteer-certificates/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 POST /reviews {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /reviews/mine {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /reviews/org {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /platform/reviews/queue {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /platform/dashboard/admin {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /platform/dashboard/super-admin {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}
+401 GET /org/dashboard/donations {"message":"Missing bearer token","error":"Unauthorized","statusCode":401}

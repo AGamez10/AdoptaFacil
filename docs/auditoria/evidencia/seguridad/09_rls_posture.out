@@ -1,0 +1,7 @@
+rolname|rolsuper|rolbypassrls|rolcanlogin
+adoptafacil|t|t|t
+adoptafacil_app|f|f|t
+(2 rows)
+tablas_rls_force
+54
+(1 row)

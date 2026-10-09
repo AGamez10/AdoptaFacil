@@ -28,6 +28,8 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { MissingDocumentHelp } from '../../guide/components/missing-document-help';
+import { OnboardingHelpCard } from '../../guide/components/onboarding-help-card';
 import { DocumentTypeIcon, UploadCloudIcon } from '../components/document-icons';
 import { TextField } from '../components/profile-fields';
 import {
@@ -282,9 +284,12 @@ export function OrgDocumentsPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {showFriendlyVerificationHint ? (
-                  <p className={styles['verification-hint']}>
-                    Sube tus documentos para iniciar la verificación. 0% completado.
-                  </p>
+                  <>
+                    <p className={styles['verification-hint']}>
+                      Sube tus documentos para iniciar la verificación. 0% completado.
+                    </p>
+                    {canManage && <OnboardingHelpCard />}
+                  </>
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
@@ -392,14 +397,18 @@ export function OrgDocumentsPage() {
                         </div>
                       </>
                     ) : canManage ? (
-                      <button
-                        type="button"
-                        onClick={() => openUpload(type)}
-                        className={styles['doc-card__upload-btn']}
-                      >
-                        <UploadCloudIcon className="h-6 w-6" />
-                        Sin subir
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openUpload(type)}
+                          className={styles['doc-card__upload-btn']}
+                        >
+                          <UploadCloudIcon className="h-6 w-6" />
+                          Sin subir
+                        </button>
+                        {/* Ola 3 (F20, anexo #4): ayuda proactiva si aún no lo tiene. */}
+                        <MissingDocumentHelp type={type} />
+                      </>
                     ) : (
                       <p className={styles['doc-card__empty-text']}>Sin subir</p>
                     )}

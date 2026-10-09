@@ -26,6 +26,7 @@ import {
   scheduleResourceDeliverySchema,
 } from './resource-deliveries.schemas';
 import { RESOURCE_VIEW_ROLES, RESOURCE_WRITE_ROLES } from './resource-needs.controller';
+import { RequireFeature } from '../../core/features';
 
 /**
  * M09 — entregas. Siempre de la organización BENEFICIARIA (tenant-scoped,
@@ -33,6 +34,7 @@ import { RESOURCE_VIEW_ROLES, RESOURCE_WRITE_ROLES } from './resource-needs.cont
  * directamente aquí. Coordinar/cerrar = Owner/Administrator/Operator; ver =
  * + ReadOnlyAuditor; el resto, denegado.
  */
+@RequireFeature('resources')
 @Controller('resources/deliveries')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ResourceDeliveriesController {

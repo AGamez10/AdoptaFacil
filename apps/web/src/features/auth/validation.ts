@@ -1,3 +1,5 @@
+import { MIN_PASSWORD_LENGTH } from '@adoptafacil/contracts';
+
 /**
  * Pure, framework-free form validators for the auth screens. Each returns a
  * human-readable (es-CO) error string, or `undefined` when the value is valid.
@@ -6,8 +8,9 @@
 
 export type FieldError = string | undefined;
 
+export { MIN_PASSWORD_LENGTH };
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const MIN_PASSWORD_LENGTH = 8;
 
 export function validateRequired(value: string, label = 'Este campo'): FieldError {
   return value.trim().length === 0 ? `${label} es obligatorio.` : undefined;

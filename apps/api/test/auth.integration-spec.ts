@@ -20,7 +20,7 @@ describe('Auth endpoints (register/login/refresh/logout)', () => {
 
   const personEmail = `t011-person-${randomUUID()}@test.local`;
   const orgEmail = `t011-org-${randomUUID()}@test.local`;
-  const password = 'password123';
+  const password = 'password-1234';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

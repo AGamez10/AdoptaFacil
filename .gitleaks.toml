@@ -1,0 +1,37 @@
+# gitleaks — configuración del gate de secretos (CI: .github/workflows/security.yml)
+#
+# Se usan TODAS las reglas por defecto de gitleaks. Las únicas excepciones son
+# fixtures de pruebas que la regla `generic-api-key` confunde con claves: cada
+# excepción exige a la vez la ruta exacta del archivo de prueba Y el valor exacto
+# (condition = "AND"). Nunca se añade un allowlist global ni por carpeta.
+# Inventario y justificación: docs/operacion/SEGURIDAD_CI.md §Secretos.
+#
+# Ojo (lección del proyecto anterior): gitleaks 8.24.x ignora en silencio los
+# `[[allowlists]]` globales; las excepciones van dentro de la regla.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+  # Token de tarjeta de prueba del Card Payment Brick en la prueba de integración.
+  [[rules.allowlists]]
+  description = "fixture: cardToken de prueba (no es credencial)"
+  condition = "AND"
+  paths = ['''^apps/api/test/sponsorships\.integration-spec\.ts$''']
+  regexes = ['''^tok_test_1234567890$''']
+
+  # dedupKey de idempotencia del adaptador de Mercado Pago (id de pago ficticio).
+  [[rules.allowlists]]
+  description = "fixture: dedupKey de prueba del adaptador Mercado Pago"
+  condition = "AND"
+  paths = ['''^apps/api/src/core/payments/mercadopago-payment\.adapter\.spec\.ts$''']
+  regexes = ['''^123456789-approved$''']
+
+  # dedupKey del antiguo adaptador Wompi (solo en la historia: el archivo ya no existe).
+  [[rules.allowlists]]
+  description = "fixture: dedupKey de prueba del adaptador Wompi (historia)"
+  condition = "AND"
+  paths = ['''^apps/api/src/core/payments/wompi-payment\.adapter\.spec\.ts$''']
+  regexes = ['''^trx-1-APPROVED$''']
