@@ -6,9 +6,11 @@ import type {
   PortalLogoPosition,
   PortalSocialNavPosition,
   PortalTemplateId,
+  PortalTemplateOptions,
   PortalTheme,
   PortalView,
 } from '@adoptafacil/contracts';
+import { resolveTemplateOptions } from '@adoptafacil/contracts';
 import { EmptyState, Skeleton } from '@adoptafacil/ui';
 import { brandTokensToStyle } from '../../../shell/theme';
 import { buildPortalView } from '../model/portal-view';
@@ -20,7 +22,12 @@ import {
 } from '../model/theme';
 import { fetchPublicAnimals } from '../api/public-animals';
 import { PortalProfileSection } from '../components/portal-profile-section';
-import { CarnetHero, EditorialHero, ImpactoHero } from '../components/templates/template-heroes';
+import {
+  CarnetHero,
+  EditorialHero,
+  ImpactoHero,
+  OrbitaHero,
+} from '../components/templates/template-heroes';
 import templateStyles from '../components/templates/portal-templates.module.scss';
 import { PortalPlaceholderSection } from '../components/portal-placeholder-section';
 import { PortalSocialLinks } from '../components/portal-social-links';
@@ -49,12 +56,14 @@ interface Layout {
   socialNavPosition: PortalSocialNavPosition;
   /** Ola 3: plantilla visual del portal (mismo contenido, otra estructura). */
   template: PortalTemplateId;
+  templateOptions: PortalTemplateOptions;
 }
 
 const DEFAULT_LAYOUT: Layout = {
   logoPosition: 'left',
   socialNavPosition: 'right',
   template: 'clasica',
+  templateOptions: {},
 };
 
 /**
@@ -154,6 +163,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               logoPosition?: unknown;
               socialNavPosition?: unknown;
               template?: unknown;
+              templateOptions?: unknown;
             }>)
           : null,
       )
@@ -163,6 +173,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           logoPosition: safeLogoPosition(body?.logoPosition),
           socialNavPosition: safeSocialNavPosition(body?.socialNavPosition),
           template: safeTemplate(body?.template),
+          // Saneo en el cliente: solo claves y valores de la lista cerrada.
+          templateOptions: resolveTemplateOptions(
+            safeTemplate(body?.template),
+            body?.templateOptions,
+          ),
         },
       }))
       .catch(() => ({ tokens: {} as PortalTheme, layout: DEFAULT_LAYOUT }));
@@ -274,6 +289,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         slug: slug as string,
         animalCount: animalTotal,
         animals: animalSample,
+        options: layout.templateOptions,
         actions: (
           <PortalHeaderActions
             organization={view.profile.organization}
@@ -287,6 +303,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     <div
       className={templateStyles.page}
       data-template={state === 'ready' ? layout.template : undefined}
+      data-pattern={
+        typeof layout.templateOptions.pattern === 'string'
+          ? layout.templateOptions.pattern
+          : undefined
+      }
       data-testid="portal-page"
     >
       {state === 'ready' && view && (
@@ -318,6 +339,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               <CarnetHero {...heroProps} />
             ) : layout.template === 'impacto' ? (
               <ImpactoHero {...heroProps} />
+            ) : layout.template === 'orbita' ? (
+              <OrbitaHero {...heroProps} />
             ) : (
               <PortalProfileSection
                 profile={view.profile}
@@ -336,7 +359,10 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 `PortalThemeConfig.socialNavPosition` —
                 `packages/contracts/src/portals.ts`) — no uno nuevo. En mobile
                 el panel lateral se apila debajo (grid de 1 columna). */}
-            <div className="grid gap-8 lg:grid-cols-[1fr_320px]" data-testid="portal-main-grid">
+            <div
+              className="portal-reveal grid gap-8 lg:grid-cols-[1fr_320px]"
+              data-testid="portal-main-grid"
+            >
               <div
                 className={`space-y-6 ${layout.socialNavPosition === 'left' ? 'lg:order-last' : ''}`}
               >

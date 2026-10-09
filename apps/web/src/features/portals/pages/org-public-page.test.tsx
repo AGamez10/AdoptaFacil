@@ -714,7 +714,7 @@ describe('OrgPublicPage — rich public portal', () => {
 });
 
 describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
-  function stubWithTemplate(template: unknown) {
+  function stubWithTemplate(template: unknown, templateOptions?: unknown) {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
@@ -723,7 +723,7 @@ describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
           return Promise.resolve({
             ok: true,
             status: 200,
-            json: async () => ({ tokens: {}, template }),
+            json: async () => ({ tokens: {}, template, templateOptions }),
           });
         }
         if (url.includes('/animals')) {
@@ -753,7 +753,7 @@ describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
     );
   }
 
-  it.each(['editorial', 'carnet', 'impacto'])(
+  it.each(['editorial', 'carnet', 'impacto', 'orbita'])(
     'con la plantilla %s cambia el hero y conserva los mismos datos',
     async (template) => {
       stubWithTemplate(template);
@@ -771,6 +771,17 @@ describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
       );
     },
   );
+
+  it('aplica los ajustes de la plantilla y descarta los que no le corresponden', async () => {
+    stubWithTemplate('carnet', { pattern: 'huellas', showMinis: false, density: 'intensa' });
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    const hero = await screen.findByTestId('portal-hero-carnet');
+    expect(screen.getByTestId('portal-page')).toHaveAttribute('data-pattern', 'huellas');
+    await screen.findByTestId('portal-animal-count');
+    // Sin mini carnets: el animal no aparece dentro del hero.
+    expect(within(hero).queryByRole('link', { name: /Luna/ })).not.toBeInTheDocument();
+  });
 
   it('una plantilla desconocida cae en la Clásica', async () => {
     stubWithTemplate('<script>');
