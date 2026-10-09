@@ -21,3 +21,4 @@ export * from './reputation';
 export * from './portals';
 export * from './dashboards';
 export * from './features';
+export * from './plans';

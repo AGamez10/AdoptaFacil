@@ -89,6 +89,10 @@ export const PLATFORM_REVIEWS_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdm
  */
 export const ORG_REVIEWS_ROLES = [Role.Owner, Role.Administrator] as const;
 
+/** Planes y suscripciones · copiado VERBATIM del `@Roles` de `GET /org/plan`:
+ *  el plan y su cobro son asunto del Owner/Administrator. */
+export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
+
 /**
  * M13 (S-8, RF24) — "Dashboard de plataforma" (conteos de colas), audiencia
  * de PLATAFORMA. Copiado VERBATIM del `@Roles` de
@@ -411,6 +415,13 @@ export const navItems: NavItem[] = [
         roles: SPONSORSHIP_VIEW_ROLES,
       },
     ],
+  },
+  // Planes y suscripciones · plan en efecto, uso de límites y los tres planes.
+  {
+    path: '/organizacion/plan',
+    label: 'Plan',
+    icon: BoxIcon,
+    roles: ORG_PLAN_ROLES,
   },
   // M14 · portal personalization by tokens (T-027) — REMOVED from the sidebar
   // (S2-04A §4): it now lives as a button inside "Mi organización"'s action bar

@@ -12,6 +12,10 @@ interface ImportMetaEnv {
    *  renders a "pago con tarjeta no disponible" message instead of loading
    *  MercadoPago's Card Payment Brick SDK. */
   readonly VITE_MERCADOPAGO_PUBLIC_KEY?: string;
+  /** Planes y suscripciones: where a shelter asks for a paid plan while billing
+   *  is manual (WhatsApp or form of AdoptaFácil). Unset → the plans screen says
+   *  the change will be available soon. `?plan=<key>` is appended. */
+  readonly VITE_BILLING_CONTACT_URL?: string;
 }
 
 interface ImportMeta {
