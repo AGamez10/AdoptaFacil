@@ -117,3 +117,11 @@ export const updatePortalThemeSchema = z
   .strict();
 
 export type ValidatedPortalTheme = PortalTheme;
+
+/** Pagination for the owner's portal preview (server-capped at 50). */
+export const portalPreviewPageSchema = z.object({
+  limit: z.coerce.number().int().min(1).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
+export type PortalPreviewPage = z.infer<typeof portalPreviewPageSchema>;

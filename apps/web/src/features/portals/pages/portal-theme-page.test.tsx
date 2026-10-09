@@ -247,7 +247,7 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it('explains instead of linking while the org is not approved (only approved orgs are public)', async () => {
+  it('offers a preview (not the public portal) while the org is not approved', async () => {
     stubFetchByUrl(
       { tokens: {} },
       { id: 'org-1', name: 'Refugio Patitas', slug: 'patitas-felices' },
@@ -258,6 +258,10 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     expect(await screen.findByText('Estado de tu organización')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enviar a revisión' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Ver portal público/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ver vista previa del portal/ })).toHaveAttribute(
+      'href',
+      '/o/patitas-felices',
+    );
   });
 
   it('hides "Ver portal público" when the org has no slug yet (never a broken link)', async () => {

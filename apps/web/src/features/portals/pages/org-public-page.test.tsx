@@ -781,3 +781,67 @@ describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
     expect(screen.queryByTestId('portal-hero-editorial')).not.toBeInTheDocument();
   });
 });
+
+describe('OrgPublicPage — vista previa del dueño antes de la aprobación', () => {
+  const OWNER_SESSION = {
+    session: {
+      initialStatus: 'authenticated' as const,
+      initialUser: {
+        id: 'u1',
+        name: 'Dueña',
+        email: 'duena@patitas.org',
+        roles: [],
+        organizationId: 'org-1',
+        accountType: 'organization' as const,
+      },
+    },
+  };
+
+  function stubDraftOrg(previewOrg: OrganizationPublic) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const json = (status: number, body: unknown) =>
+          Promise.resolve(
+            new Response(JSON.stringify(body), {
+              status,
+              headers: { 'content-type': 'application/json' },
+            }),
+          );
+        if (
+          url.includes('/org/portal/preview/animals') ||
+          url.includes('/org/portal/preview/campaigns')
+        )
+          return json(200, { items: [], total: 0, limit: 8, offset: 0 });
+        if (url.includes('/org/portal/preview')) return json(200, previewOrg);
+        if (url.includes('/portals/theme')) return json(200, { tokens: {} });
+        if (url.includes('/public/')) return json(404, { message: 'Organization not found' });
+        return json(200, {});
+      }),
+    );
+  }
+
+  it('shows the owner their own draft portal with a preview banner', async () => {
+    stubDraftOrg(ORG);
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    expect(await screen.findByTestId('portal-preview-banner')).toHaveTextContent('Vista previa');
+    expect(screen.getAllByText('Refugio Patitas').length).toBeGreaterThan(0);
+  });
+
+  it('keeps "Organización no encontrada" when the slug is not the member\'s own', async () => {
+    stubDraftOrg({ ...ORG, slug: 'otra' });
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    expect(await screen.findByText('Organización no encontrada')).toBeInTheDocument();
+    expect(screen.queryByTestId('portal-preview-banner')).not.toBeInTheDocument();
+  });
+
+  it('a visitor without a session still gets "Organización no encontrada"', async () => {
+    stubDraftOrg(ORG);
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    expect(await screen.findByText('Organización no encontrada')).toBeInTheDocument();
+  });
+});

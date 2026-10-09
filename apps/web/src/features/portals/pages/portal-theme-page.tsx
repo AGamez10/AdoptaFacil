@@ -343,26 +343,25 @@ export function PortalThemePage() {
     }
   };
 
-  // Only approved organizations have a public portal (R2-1): the link would
-  // open "Organización no encontrada" before that, so the status card explains.
-  const publicPortalLink =
-    slug && orgStatus === OrganizationStatus.Approved ? (
-      <a
-        href={`/o/${encodeURIComponent(slug)}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-      >
-        <ExternalLinkIcon />
-        Ver portal público
-      </a>
-    ) : orgStatus === OrganizationStatus.Approved ? (
-      // Approved but without a public address yet: the portal lives at
-      // /o/<slug>, and the slug is chosen in the organization profile.
-      <a href="/organizacion" className="text-sm font-medium text-primary hover:underline">
-        Define la dirección pública de tu portal en el perfil
-      </a>
-    ) : undefined;
+  // The portal lives at /o/<slug>. Before the platform approves the
+  // organization only its members see it, as a preview (R2-1); the slug is
+  // chosen in the organization profile.
+  const approved = orgStatus === OrganizationStatus.Approved;
+  const publicPortalLink = slug ? (
+    <a
+      href={`/o/${encodeURIComponent(slug)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+    >
+      <ExternalLinkIcon />
+      {approved ? 'Ver portal público' : 'Ver vista previa del portal'}
+    </a>
+  ) : orgStatus ? (
+    <a href="/organizacion" className="text-sm font-medium text-primary hover:underline">
+      Define la dirección pública de tu portal en el perfil
+    </a>
+  ) : undefined;
 
   // Deny-by-default: without Owner/Administrator the tokens are not editable.
   if (!canEdit) {
