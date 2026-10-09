@@ -1,6 +1,7 @@
 import { DocumentType, FormalizationState } from '@adoptafacil/contracts';
 import {
   buildVerificationReport,
+  extractLegalName,
   extractNit,
   parseSpanishDate,
   type VerificationContext,
@@ -154,5 +155,13 @@ describe('verificación automática de documentos', () => {
     const report = buildVerificationReport(doc(DocumentType.Rut), null, ctx());
     expect(report).toMatchObject({ method: 'none', suggestion: 'manual', checks: [] });
     expect(report.links.length).toBeGreaterThan(0);
+  });
+});
+
+describe('datos para llenar el perfil', () => {
+  it('lee la razón social del RUT y del certificado', () => {
+    expect(extractLegalName(RUT_RTE)).toBe('FUNDACION HUELLITAS DEL VALLE');
+    expect(extractLegalName(CERL)).toBe('FUNDACIÓN HUELLITAS DEL VALLE');
+    expect(extractLegalName('sin datos')).toBeNull();
   });
 });

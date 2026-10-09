@@ -314,5 +314,19 @@ export interface DocumentVerificationReport {
   /** Estado formal que el documento respaldaría al aprobarse, si es superior
    *  al actual (p. ej. RUT con responsabilidad 04 → ESAL_RTE). */
   suggestedState?: FormalizationState;
+  /** Estado formal actual de la organización, para ofrecer solo el paso siguiente. */
+  currentState?: FormalizationState;
   links: OfficialLookupLink[];
+}
+
+/** `GET /org/documents/:id/prefill`: datos leídos del RUT o del certificado de
+ *  Cámara que la organización subió, para llenar su perfil con un clic. La
+ *  plataforma no guarda nada aquí: la organización decide si los usa. */
+export interface DocumentPrefill {
+  documentId: string;
+  /** `false` si el archivo no tiene texto legible (escaneo o foto). */
+  readable: boolean;
+  /** "900123456-8", solo si el dígito de verificación es correcto. */
+  nit?: string;
+  legalName?: string;
 }

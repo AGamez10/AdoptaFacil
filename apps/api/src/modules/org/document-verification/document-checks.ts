@@ -125,6 +125,17 @@ export function extractNit(text: string): { base: string; dv: string } | null {
   return { base: digits.slice(0, -1), dv: digits.slice(-1) };
 }
 
+/** Razón social: lo que sigue a "Razón social" o "Nombre:" en la misma línea. */
+export function extractLegalName(text: string): string | null {
+  const m = text.match(/(?:raz[oó]n\s+social|^\s*nombre)\s*:?[ \t]*([^\n]{3,160})/im);
+  if (!m) return null;
+  const value = m[1]
+    .replace(/^\s*\d+\.\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return /[A-Za-zÁÉÍÓÚÑáéíóúñ]{3}/.test(value) ? value : null;
+}
+
 function check(
   id: string,
   label: string,
@@ -465,7 +476,12 @@ export function buildVerificationReport(
   text: string | null,
   ctx: VerificationContext,
 ): DocumentVerificationReport {
-  const base = { documentId: doc.id, organizationId: doc.organizationId, type: doc.type };
+  const base = {
+    documentId: doc.id,
+    organizationId: doc.organizationId,
+    type: doc.type,
+    currentState: ctx.currentState,
+  };
   const partial: CheckSet | null =
     text === null
       ? null

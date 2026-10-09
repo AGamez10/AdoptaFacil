@@ -30,6 +30,7 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { Role } from '@adoptafacil/contracts';
 import { TextField } from '../components/profile-fields';
+import { CapabilitiesPanel } from '../components/capabilities-panel';
 import styles from './org-formalization-page.module.scss';
 
 const STATE_LABELS: Record<FormalizationState, string> = {
@@ -254,6 +255,8 @@ export function OrgFormalizationPage() {
               )}
             </CardContent>
           </Card>
+
+          <CapabilitiesPanel refreshKey={history.length} />
 
           <Card>
             <CardHeader>

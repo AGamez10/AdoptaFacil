@@ -1,9 +1,16 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { FormalizationState, type DocumentVerificationReport } from '@adoptafacil/contracts';
+import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  DocumentType,
+  FormalizationState,
+  type DocumentPrefill,
+  type DocumentVerificationReport,
+} from '@adoptafacil/contracts';
+import { TenantContextService } from '../../../core/tenant/tenant-context.service';
 import { STORAGE_PORT, type StoragePort } from '../../../core/storage/storage.port';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PlatformDocumentsService } from '../platform-documents.service';
-import { buildVerificationReport } from './document-checks';
+import { buildVerificationReport, extractLegalName, extractNit } from './document-checks';
+import { isValidNit } from './nit';
 import { DOCUMENT_TEXT_PORT, type DocumentTextPort } from './document-text.port';
 
 /**
@@ -16,6 +23,7 @@ import { DOCUMENT_TEXT_PORT, type DocumentTextPort } from './document-text.port'
 export class DocumentVerificationService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tenant: TenantContextService,
     private readonly platformDocuments: PlatformDocumentsService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     @Inject(DOCUMENT_TEXT_PORT) private readonly reader: DocumentTextPort,
@@ -52,5 +60,39 @@ export class DocumentVerificationService {
       legalRepresentative: rep,
       now,
     });
+  }
+
+  /**
+   * Datos para llenar el perfil desde un RUT o certificado de Cámara que la
+   * propia organización subió. Lee por RLS (solo documentos de su organización)
+   * y no escribe nada: la organización decide si los usa.
+   */
+  async prefill(documentId: string): Promise<DocumentPrefill> {
+    const organizationId = this.tenant.getOrganizationId();
+    if (!organizationId) throw new ForbiddenException('Missing tenant context');
+    const doc = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.organizationDocument.findFirst({
+        where: { id: documentId, organizationId },
+        select: { id: true, type: true, storageRef: true },
+      }),
+    );
+    if (
+      !doc ||
+      (doc.type !== DocumentType.Rut &&
+        doc.type !== DocumentType.ExistenceRepresentationCertificate)
+    ) {
+      throw new NotFoundException('Document not found');
+    }
+    const stored = await this.storage.readObject(doc.storageRef);
+    const text = stored ? await this.reader.extractText(stored.data, stored.contentType) : null;
+    if (text === null) return { documentId: doc.id, readable: false };
+    const nit = extractNit(text);
+    const legalName = extractLegalName(text);
+    return {
+      documentId: doc.id,
+      readable: true,
+      ...(nit && isValidNit(nit.base, nit.dv) ? { nit: `${nit.base}-${nit.dv}` } : {}),
+      ...(legalName ? { legalName } : {}),
+    };
   }
 }
