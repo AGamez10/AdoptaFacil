@@ -89,7 +89,7 @@ export function renderLayout(input: LayoutInput): string {
       : '';
 
   const note = input.footerNoteHtml
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;"><tr><td style="background:${theme.soft};border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.5;color:${INK};">${input.footerNoteHtml}</td></tr></table>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;"><tr><td style="background:${theme.soft};border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.5;color:${INK};word-break:break-word;">${input.footerNoteHtml}</td></tr></table>`
     : '';
 
   const legal =

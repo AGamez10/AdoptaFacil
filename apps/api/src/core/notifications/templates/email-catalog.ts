@@ -297,6 +297,12 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       ANIMAL,
       ORG,
       v('fecha', 'Fecha de la última firma', '2026-10-08T21:00:00.000Z', 'date'),
+      v('rol', 'Rol de quien recibe en el contrato', 'adoptante'),
+      v(
+        'huella',
+        'Huella SHA-256 del documento firmado',
+        '3f9a1c0e7b2d4a6f8e1c5b7d9a0e2c4f6b8d0a1c3e5f7a9b1d3f5a7c9e1b3d5f',
+      ),
       v(
         'enlace',
         'Enlace para consultar el contrato',
@@ -311,10 +317,11 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       heading: '¡Es oficial! 🏡',
       body:
         'Hola {{nombre}},\n\nEl contrato de adopción de **{{animal}}** con **{{organizacion}}** quedó firmado por ambas partes el {{fecha}}.\n\n' +
-        'Adjuntamos tu copia en PDF. También puedes consultarla en AdoptaFácil cuando la necesites. ' +
-        'Guárdala: es el respaldo de los compromisos que ambas partes asumieron.',
+        'Recibes esta copia como **{{rol}}**. Adjuntamos el PDF; también puedes consultarlo en AdoptaFácil cuando lo necesites. ' +
+        'Guárdalo: es el respaldo de los compromisos que ambas partes asumieron.',
       ctaLabel: 'Consultar el contrato',
-      footerNote: 'Cada parte recibe su propia copia del mismo documento firmado.',
+      footerNote:
+        'Cada parte recibe su propia copia del mismo documento. Huella del documento (SHA-256): {{huella}}',
     },
   },
   {
