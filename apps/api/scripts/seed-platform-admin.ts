@@ -5,6 +5,7 @@
  * approve/reject organizations' documents.
  *
  * Usage (from repo root):
+ *   pnpm seed:admin        (en una terminal: pide correo, nombre y contraseña)
  *   PLATFORM_ADMIN_EMAIL=ops@adoptafacil.co PLATFORM_ADMIN_PASSWORD='…' pnpm seed:admin
  *   pnpm seed:admin -- ops@adoptafacil.co "una-clave-larga-y-unica" "Admin Piloto"
  *   PLATFORM_ADMIN_EMAIL=… PLATFORM_ADMIN_PASSWORD='…' pnpm seed:admin -- --rotate-password
@@ -26,6 +27,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { PrismaClient } from '@prisma/client';
 import { MIN_PASSWORD_LENGTH, Role } from '@adoptafacil/contracts';
 import { PasswordService } from '../src/core/auth/password.service';
@@ -74,32 +76,73 @@ const FORBIDDEN_PASSWORDS = new Set([
   'adminadoptafacil',
 ]);
 
-const email = (argEmail ?? process.env.PLATFORM_ADMIN_EMAIL ?? '').trim().toLowerCase();
-const password = argPassword ?? process.env.PLATFORM_ADMIN_PASSWORD ?? '';
-const displayName = argName ?? process.env.PLATFORM_ADMIN_NAME ?? 'Platform Admin';
+/** Reads one line from the terminal; with `hidden`, typed characters are not
+ *  echoed (works in cmd/PowerShell and POSIX shells). */
+function ask(question: string, hidden = false): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  if (hidden) {
+    const muted = rl as unknown as { _writeToOutput: (chunk: string) => void };
+    muted._writeToOutput = (chunk: string) => {
+      if (chunk.includes(question)) process.stdout.write(chunk);
+    };
+  }
+  return new Promise((resolve) =>
+    rl.question(question, (answer) => {
+      rl.close();
+      if (hidden) process.stdout.write('\n');
+      resolve(answer);
+    }),
+  );
+}
 
-if (!email || !password) {
-  console.error(
-    '[seed:admin] Faltan credenciales: define PLATFORM_ADMIN_EMAIL y PLATFORM_ADMIN_PASSWORD ' +
-      '(o pásalos como argumentos). No hay valores por defecto.',
-  );
+function fail(message: string): never {
+  console.error(`[seed:admin] ${message}`);
   process.exit(1);
 }
-if (password.length < MIN_PASSWORD_LENGTH) {
-  console.error(
-    `[seed:admin] La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
-  );
-  process.exit(1);
-}
-if (FORBIDDEN_PASSWORDS.has(password.toLowerCase())) {
-  console.error('[seed:admin] Esa contraseña es un valor por defecto conocido. Usa una única.');
-  process.exit(1);
-}
-if (argPassword) {
-  console.warn(
-    '[seed:admin] Aviso: la contraseña llegó como argumento y puede quedar en el historial de la ' +
-      'terminal. Prefiere PLATFORM_ADMIN_PASSWORD.',
-  );
+
+/** Credentials from args or env; when missing and a person is at the terminal,
+ *  they are asked for (password hidden, typed twice). Nothing is ever defaulted. */
+async function resolveCredentials(): Promise<{
+  email: string;
+  password: string;
+  displayName: string;
+}> {
+  let email = (argEmail ?? process.env.PLATFORM_ADMIN_EMAIL ?? '').trim().toLowerCase();
+  let password = argPassword ?? process.env.PLATFORM_ADMIN_PASSWORD ?? '';
+  let displayName = argName ?? process.env.PLATFORM_ADMIN_NAME ?? '';
+
+  if ((!email || !password) && process.stdin.isTTY) {
+    console.log('[seed:admin] Crea (o asegura) una cuenta de administración de la plataforma.');
+    if (!email) email = (await ask('Correo: ')).trim().toLowerCase();
+    if (!displayName)
+      displayName = (await ask('Nombre para mostrar (Enter = Platform Admin): ')).trim();
+    if (!password) {
+      password = await ask(`Contraseña (mínimo ${MIN_PASSWORD_LENGTH} caracteres): `, true);
+      if ((await ask('Repite la contraseña: ', true)) !== password) {
+        fail('Las contraseñas no coinciden.');
+      }
+    }
+  }
+
+  if (!email || !password) {
+    fail(
+      'Faltan credenciales: ejecútalo en una terminal para que te las pida, o define ' +
+        'PLATFORM_ADMIN_EMAIL y PLATFORM_ADMIN_PASSWORD. No hay valores por defecto.',
+    );
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    fail(`La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`);
+  }
+  if (FORBIDDEN_PASSWORDS.has(password.toLowerCase())) {
+    fail('Esa contraseña es un valor por defecto conocido. Usa una única.');
+  }
+  if (argPassword) {
+    console.warn(
+      '[seed:admin] Aviso: la contraseña llegó como argumento y puede quedar en el historial de la ' +
+        'terminal. Prefiere que el script te la pida.',
+    );
+  }
+  return { email, password, displayName: displayName || 'Platform Admin' };
 }
 
 /** Both platform roles, so the pilot operator can do everything at the
@@ -107,6 +150,7 @@ if (argPassword) {
 const PLATFORM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
 
 async function main(): Promise<void> {
+  const { email, password, displayName } = await resolveCredentials();
   // Superuser connection (bypasses RLS) — this is an ops/bootstrap script, not
   // an authenticated request; mirrors the `admin` PrismaClient used by the
   // integration tests' cleanup helper.
