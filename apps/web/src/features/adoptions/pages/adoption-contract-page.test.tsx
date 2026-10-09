@@ -279,4 +279,34 @@ describe('AdoptionContractPage (M04, T-028b — nuevo requerimiento)', () => {
     expect(signatureImages).toHaveLength(2);
     expect(signatureImages[0]).toHaveAttribute('src', 'blob:mock');
   });
+
+  it('plantilla v2: misma fuente que el PDF, organización como cedente y campos de entrega', async () => {
+    const v2 = {
+      ...DRAFT_CONTRACT,
+      payload: {
+        ...BASE_PAYLOAD,
+        templateVersion: 'v2' as const,
+        data: {
+          ...BASE_PAYLOAD.data,
+          followUpMonths: 12,
+          organizationName: 'Fundación Huellitas',
+          signatureCity: 'Medellín',
+        },
+      },
+    };
+    stubFetch((url) => (url.includes('/org/') ? v2 : {}));
+    renderShell({ route: '/adopciones/contratos/c1', ...sessionWith([Role.Owner]) });
+
+    expect(
+      await screen.findByText('CONTRATO DE ADOPCIÓN RESPONSABLE DE ANIMAL DE COMPAÑÍA'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/EL CEDENTE: Fundación Huellitas/)).toBeInTheDocument();
+    expect(screen.queryByText(/Adopta Fácil \(organización/)).not.toBeInTheDocument();
+    expect(screen.getByText(/cada una recibe una copia en PDF en su correo/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Identificación del animal')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Plan de seguimiento que eligió el adoptante'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Cuidador de respaldo (nombre)')).toBeInTheDocument();
+  });
 });

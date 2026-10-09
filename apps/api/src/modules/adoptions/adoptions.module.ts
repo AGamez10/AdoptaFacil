@@ -6,6 +6,7 @@ import { AdoptionsController } from './adoptions.controller';
 import { AdoptionsService } from './adoptions.service';
 import { AdoptionContractsController } from './adoption-contracts.controller';
 import { AdoptionContractsService } from './adoption-contracts.service';
+import { AdoptionContractCopyService } from './adoption-contract-copy.service';
 import {
   SIGNATURE_ENCRYPTION_CONFIG,
   loadSignatureEncryptionConfig,
@@ -41,6 +42,7 @@ import { FOLLOWUP_QUEUE } from './followup.constants';
   providers: [
     AdoptionsService,
     AdoptionContractsService,
+    AdoptionContractCopyService,
     // SIGNATURE_DRIVER (Ola 1, R0-1): 'fake' for dev/test; production must
     // bind 'disabled' (env validation refuses 'fake' there).
     {
