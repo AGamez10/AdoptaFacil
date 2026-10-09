@@ -346,6 +346,12 @@ export function PortalThemePage() {
         <ExternalLinkIcon />
         Ver portal público
       </a>
+    ) : orgStatus === OrganizationStatus.Approved ? (
+      // Approved but without a public address yet: the portal lives at
+      // /o/<slug>, and the slug is chosen in the organization profile.
+      <a href="/organizacion" className="text-sm font-medium text-primary hover:underline">
+        Define la dirección pública de tu portal en el perfil
+      </a>
     ) : undefined;
 
   // Deny-by-default: without Owner/Administrator the tokens are not editable.
