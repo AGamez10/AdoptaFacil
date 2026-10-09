@@ -119,7 +119,8 @@ export class AdoptionContractCopyService {
     const claim = await this.prisma.withOrgContext(organizationId, async (tx) => {
       // Serializa envíos concurrentes del MISMO contrato (otros contratos no
       // esperan). El candado se libera solo al terminar la transacción.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`adoption-contract-copy:${contractId}`}))`;
+      const lockKey = `adoption-contract-copy:${contractId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
       const row = await tx.adoptionContract.findUnique({ where: { id: contractId } });
       if (!row || row.organizationId !== organizationId) {
