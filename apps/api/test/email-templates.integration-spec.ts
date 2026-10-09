@@ -45,7 +45,7 @@ describe('Email templates (superadmin panel)', () => {
         organizationName: 'Refugio Correos',
         displayName: 'Owner',
         email: `mail-${randomUUID()}@test.local`,
-        password: 'password123',
+        password: 'password-1234',
       })
       .expect(201);
     createdOrgIds.push(res.body.user.organizationId);
