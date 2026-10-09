@@ -1,0 +1,12 @@
+# PORTALS_TLS=cloudflare: portales en <org>.APP_DOMAIN con un certificado
+# comodín emitido por desafío DNS-01 en Cloudflare. Requiere la imagen de Caddy
+# compilada con caddy-dns/cloudflare (la elige el mismo PORTALS_TLS en el build)
+# y CLOUDFLARE_API_TOKEN con permiso Zone:DNS:Edit solo sobre esta zona.
+*.{$APP_DOMAIN} {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		# Comprobar la propagación contra un resolvedor público, no el del VPS.
+		resolvers 1.1.1.1 1.0.0.1
+	}
+	import app
+}

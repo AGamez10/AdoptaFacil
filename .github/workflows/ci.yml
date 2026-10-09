@@ -132,6 +132,9 @@ jobs:
             echo "APP_DB_PASSWORD=$(openssl rand -hex 24)"
             echo "JWT_SECRET=$(openssl rand -hex 32)"
             echo "SIGNATURE_ENCRYPTION_KEY=$(openssl rand -hex 32)"
+            # Portales por subdominio con la CA interna de Caddy (sin DNS real).
+            echo "PORTALS_TLS=internal"
+            echo "VITE_PORTAL_BASE_DOMAIN=localhost"
           } > deploy/.env
           # Integraciones con los valores seguros del ejemplo; el SMTP es un
           # destino ficticio (la API no conecta al arrancar).
@@ -159,8 +162,22 @@ jobs:
           curl -fsSk https://localhost/api/health | tee /dev/stderr | grep -q '"status":"ok"'
           curl -fsSk -o /dev/null https://localhost/
           curl -fsSkI https://localhost/ | grep -qi '^strict-transport-security:'
+          # Portal en <org>.APP_DOMAIN: mismo origen para el SPA y /api (VITE_API_URL=/api).
+          curl -fsSk --resolve demo.localhost:443:127.0.0.1 https://demo.localhost/api/health | grep -q '"status":"ok"'
+          curl -fsSk --resolve demo.localhost:443:127.0.0.1 -o /dev/null https://demo.localhost/
+          # www redirige al dominio principal.
+          test "$(curl -sk --resolve www.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{redirect_url}' https://www.localhost/x)" = "301 https://localhost/x"
           # Solo Caddy publica puertos: Postgres, Redis y la API quedan en redes internas.
           test -z "$(docker compose -f deploy/compose.yaml --env-file deploy/.env ps --format '{{.Service}} {{.Publishers}}' | grep -v '^caddy' | grep -E '0\.0\.0\.0|::' || true)"
+
+      # Producción usa PORTALS_TLS=cloudflare: compila Caddy con el módulo DNS y
+      # valida el Caddyfile con ese bloque (sin emitir certificados).
+      - name: Caddy con caddy-dns/cloudflare (build + validate)
+        run: |
+          docker build -f deploy/docker/web.Dockerfile --target caddy-cloudflare -t adoptafacil-caddy-cloudflare:ci .
+          docker run --rm -v "$PWD/deploy:/etc/caddy:ro" -e APP_DOMAIN=adoptafacil.example \
+            -e ACME_EMAIL=ci@example.com -e PORTALS_TLS=cloudflare -e CLOUDFLARE_API_TOKEN=ci-dummy \
+            adoptafacil-caddy-cloudflare:ci caddy validate --config /etc/caddy/Caddyfile
 
       - name: Logs on failure
         if: failure()

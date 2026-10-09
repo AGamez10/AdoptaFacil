@@ -2,12 +2,19 @@
 # Borde HTTPS: Caddy sirve el SPA compilado y hace de proxy inverso hacia la API.
 # Contexto: raíz del repo.
 #   docker build -f deploy/docker/web.Dockerfile \
-#     --build-arg VITE_API_URL=https://adoptafacil.example/api -t adoptafacil-edge .
+#     --build-arg VITE_API_URL=/api -t adoptafacil-edge .
 # Las VITE_* se hornean en el bundle en tiempo de build (Vite no las lee en runtime):
 # cambiar una exige reconstruir la imagen. Nunca pongas un secreto en una VITE_*.
+#
+# PORTALS_TLS elige el binario de Caddy: `cloudflare` lo compila con el módulo
+# caddy-dns/cloudflare (certificado comodín por DNS-01); `off` e `internal` usan
+# la imagen oficial sin módulos extra. BuildKit solo construye la etapa elegida.
 
 ARG NODE_IMAGE=node:20-bookworm-slim
 ARG CADDY_IMAGE=caddy:2.10-alpine
+ARG CADDY_BUILDER_IMAGE=caddy:2.10-builder-alpine
+ARG CADDY_DNS_CLOUDFLARE=github.com/caddy-dns/cloudflare@v0.2.4
+ARG PORTALS_TLS=off
 
 FROM ${NODE_IMAGE} AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH HUSKY=0 CI=true
@@ -26,6 +33,17 @@ RUN VITE_API_URL="$VITE_API_URL" \
     VITE_MERCADOPAGO_PUBLIC_KEY="$VITE_MERCADOPAGO_PUBLIC_KEY" \
     pnpm turbo run build --filter=@adoptafacil/web...
 
-FROM ${CADDY_IMAGE} AS edge
-COPY deploy/Caddyfile /etc/caddy/Caddyfile
+FROM ${CADDY_IMAGE} AS caddy-off
+FROM ${CADDY_IMAGE} AS caddy-internal
+
+FROM ${CADDY_BUILDER_IMAGE} AS caddy-cloudflare-build
+ARG CADDY_DNS_CLOUDFLARE
+RUN xcaddy build --with "$CADDY_DNS_CLOUDFLARE" --output /usr/bin/caddy
+
+FROM ${CADDY_IMAGE} AS caddy-cloudflare
+COPY --from=caddy-cloudflare-build /usr/bin/caddy /usr/bin/caddy
+RUN caddy list-modules | grep -qx 'dns.providers.cloudflare'
+
+FROM caddy-${PORTALS_TLS} AS edge
+COPY deploy/Caddyfile deploy/portals-*.caddy /etc/caddy/
 COPY --from=build /repo/apps/web/dist /srv/web
