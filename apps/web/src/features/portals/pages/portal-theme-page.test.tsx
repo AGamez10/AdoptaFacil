@@ -325,7 +325,7 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     // El nivel de plan es solo un parámetro: se ve, pero nada se bloquea.
     expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-option-carnet')).toHaveTextContent(
-      'Plan de pago · gratis durante el lanzamiento',
+      'Pago · gratis en el lanzamiento',
     );
 
     fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));

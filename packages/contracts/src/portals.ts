@@ -170,7 +170,7 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
   {
     id: 'editorial',
     name: 'Editorial',
-    tagline: 'Como una revista: titulares grandes, aire y secciones numeradas.',
+    tagline: 'Como una revista: titulares grandes, mucho aire y foto en arco.',
     tier: 'paid',
   },
   {

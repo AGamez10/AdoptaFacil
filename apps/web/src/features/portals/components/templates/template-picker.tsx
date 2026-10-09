@@ -20,9 +20,7 @@ export interface TemplatePickerProps {
 
 export function tierLabel(template: PortalTemplateInfo): string {
   if (template.tier === 'free') return 'Gratis';
-  return PORTAL_TEMPLATE_TIERS_ENFORCED
-    ? 'Plan de pago'
-    : 'Plan de pago · gratis durante el lanzamiento';
+  return PORTAL_TEMPLATE_TIERS_ENFORCED ? 'Plan de pago' : 'Pago · gratis en el lanzamiento';
 }
 
 function Thumb({ id }: { id: PortalTemplateId }) {

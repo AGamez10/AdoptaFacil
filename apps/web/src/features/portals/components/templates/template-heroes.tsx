@@ -243,6 +243,7 @@ export function ImpactoHero({ profile, slug, animalCount, animals, actions }: Te
   const org = profile.organization;
   const location = locationOf(profile);
   const ribbon = animals.filter((a) => a.photoUrl).slice(0, 8);
+  const mosaic = ribbon.slice(0, 4);
   const hasCount = typeof animalCount === 'number' && animalCount > 0;
 
   return (
@@ -270,6 +271,14 @@ export function ImpactoHero({ profile, slug, animalCount, animals, actions }: Te
         <Seals profile={profile} className={styles.seals} />
         {actions}
       </div>
+
+      {mosaic.length > 0 && (
+        <div className={styles.impacto__mosaic} data-count={mosaic.length} aria-hidden="true">
+          {mosaic.map((animal) => (
+            <img key={animal.id} src={animal.photoUrl} alt="" />
+          ))}
+        </div>
+      )}
 
       {ribbon.length > 0 && (
         <div className={styles.ribbon} aria-label="Animales que buscan hogar" role="region">

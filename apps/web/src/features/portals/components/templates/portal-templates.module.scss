@@ -396,9 +396,14 @@ $ink: #1d1a16;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  aspect-ratio: 4 / 5;
-  max-height: 22rem;
+  aspect-ratio: 16 / 9;
   border-radius: 18px;
+
+  @media (min-width: 768px) {
+    aspect-ratio: 4 / 5;
+    max-height: 22rem;
+  }
+
   border: 6px solid $teal-light;
   background-color: $teal-light;
 
@@ -559,6 +564,8 @@ $ink: #1d1a16;
 
 .impacto__inner {
   position: relative;
+  z-index: 1;
+  max-width: 46rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -618,6 +625,7 @@ $ink: #1d1a16;
 }
 
 .impacto__name {
+  font-family: var(--font-sans);
   font-size: clamp(1.4rem, 3vw, 2.25rem);
   font-weight: 800;
   line-height: 1.1;
@@ -629,6 +637,44 @@ $ink: #1d1a16;
     font-size: clamp(2.5rem, 7vw, 5rem);
     color: #fff;
     filter: none;
+  }
+}
+
+/* Mosaico de caras reales, solo en escritorio: llena el lado derecho. */
+.impacto__mosaic {
+  display: none;
+
+  @media (min-width: 1024px) {
+    position: absolute;
+    top: 3rem;
+    right: 3rem;
+    bottom: 6.5rem;
+    width: min(36%, 30rem);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 0.75rem;
+    transform: rotate(3deg);
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 18px;
+    border: 3px solid rgba(#fff, 0.12);
+  }
+
+  img:nth-child(even) {
+    transform: translateY(1.5rem);
+  }
+
+  &[data-count='1'] {
+    grid-template-columns: 1fr;
+  }
+
+  &[data-count='3'] img:first-child {
+    grid-row: span 2;
   }
 }
 
