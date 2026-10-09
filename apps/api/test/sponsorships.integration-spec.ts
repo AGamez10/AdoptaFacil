@@ -45,7 +45,7 @@ describe('Sponsorships base (RF17 · T-056)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const paymentPort = new ControllableFakePaymentAdapter();
 
   let tokenA = '';

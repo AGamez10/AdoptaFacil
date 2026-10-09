@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FakePaymentAdapter } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
+import { DisabledPaymentAdapter } from './disabled-payment.adapter';
 import { PAYMENT_PORT } from './payment.port';
 import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
 
@@ -27,6 +28,10 @@ import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
         if (driver === 'mercadopago') {
           return new MercadoPagoPaymentAdapter(config);
         }
+        if (driver === 'disabled') {
+          return new DisabledPaymentAdapter();
+        }
+        // Dev/test only: env validation refuses 'fake' in production (R0-1).
         return new FakePaymentAdapter();
       },
     },

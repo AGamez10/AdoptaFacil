@@ -187,17 +187,13 @@ describe('GeneralCatalogSection', () => {
     );
   });
 
-  it('shows "¿No encuentras tu nuevo amigo?" and opens the existing "Disponible próximamente" modal on click', async () => {
+  it('never offers the fake "Crear alerta" tile (Ola 3: no alert exists behind it)', async () => {
     stubCatalog({ data: [FIRULAIS], total: 1, page: 1, limit: 50 });
     renderSection();
     await screen.findAllByTestId('animal-card');
 
-    expect(screen.getByText('¿No encuentras tu nuevo amigo?')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Crear alerta' }));
-
-    expect(await screen.findByText('Disponible próximamente')).toBeInTheDocument();
-    // No real alert is created — this is the shared placeholder, not new logic.
-    expect(screen.getByText('Pronto')).toBeInTheDocument();
+    expect(screen.queryByText('¿No encuentras tu nuevo amigo?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear alerta' })).not.toBeInTheDocument();
   });
 
   it('QA visual: caps the initial render at 12 cards with "Ver más" — loading/filtering all 50 live does not mean rendering all 50 at once', async () => {
@@ -209,12 +205,9 @@ describe('GeneralCatalogSection', () => {
 
     const cards = await screen.findAllByTestId('animal-card');
     expect(cards).toHaveLength(12);
-    // The "no encuentras a tu amigo" tile only shows once everything is visible.
-    expect(screen.queryByText('¿No encuentras tu nuevo amigo?')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Ver más' }));
     expect(await screen.findAllByTestId('animal-card')).toHaveLength(20);
-    expect(screen.getByText('¿No encuentras tu nuevo amigo?')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ver más' })).not.toBeInTheDocument();
   });
 

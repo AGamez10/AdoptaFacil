@@ -1,0 +1,58 @@
+.help {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.help__toggle {
+  justify-self: start;
+  min-height: 2.25rem;
+  padding: 0 0.25rem;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+
+  &:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--r-sm);
+  }
+}
+
+.help__panel {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid hsl(var(--primary) / 0.25);
+  background: hsl(var(--accent));
+}
+
+.help__title {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  color: hsl(var(--foreground));
+}
+
+.help__text {
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: hsl(var(--muted-foreground));
+}
+
+.help__steps {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1.25rem;
+  list-style: decimal;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: hsl(var(--foreground));
+}
+
+.help__unlocks {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: hsl(var(--foreground));
+}

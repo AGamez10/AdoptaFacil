@@ -1,6 +1,11 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { UserRole as UserRoleRow } from '@prisma/client';
-import type { Role, RoleAssignment } from '@adoptafacil/contracts';
+import { Role, type RoleAssignment } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
@@ -40,13 +45,23 @@ export class RbacService {
   }
 
   /** Grant a role to a user of the caller's organization (idempotent). Records
-   *  an append-only audit event in the SAME transaction as the assignment. */
+   *  an append-only audit event in the SAME transaction as the assignment.
+   *  Only an Owner may grant `owner` (AF-007): an Administrator cannot promote
+   *  itself or anyone else to the organization's top authority. */
   async assignRole(actorUserId: string, userId: string, role: Role): Promise<RoleAssignment> {
     const organizationId = this.tenant.getOrganizationId();
     if (!organizationId) {
       throw new ForbiddenException('Missing tenant context');
     }
     return this.prisma.withTenant(async (tx) => {
+      if (role === Role.Owner) {
+        const actorIsOwner = await tx.userRole.findFirst({
+          where: { userId: actorUserId, role: Role.Owner },
+        });
+        if (!actorIsOwner) {
+          throw new ForbiddenException('Only an Owner can grant the Owner role');
+        }
+      }
       // RLS makes only same-org users visible: assigning to a user outside the
       // caller's organization yields "not found", never cross-tenant authority.
       const target = await tx.user.findUnique({ where: { id: userId } });
@@ -70,8 +85,40 @@ export class RbacService {
     });
   }
 
-  /** Revoke a role from a user of the caller's organization (idempotent). */
-  async revokeRole(userId: string, role: Role): Promise<void> {
-    await this.prisma.withTenant((tx) => tx.userRole.deleteMany({ where: { userId, role } }));
+  /**
+   * Revoke a role from a user of the caller's organization (idempotent: a role
+   * the user does not hold is a no-op). An organization is never left without
+   * an Owner (AF-008): revoking the last one is a 409. The Owner rows are
+   * locked (`FOR UPDATE`) before counting, so two Owners revoking each other
+   * concurrently cannot both succeed. An effective revocation is audited in the
+   * same transaction.
+   */
+  async revokeRole(actorUserId: string, userId: string, role: Role): Promise<void> {
+    const organizationId = this.tenant.getOrganizationId();
+    if (!organizationId) {
+      throw new ForbiddenException('Missing tenant context');
+    }
+    await this.prisma.withTenant(async (tx) => {
+      if (role === Role.Owner) {
+        // RLS scopes this to the caller's organization.
+        const owners = await tx.$queryRaw<{ user_id: string }[]>`
+          SELECT user_id FROM user_roles WHERE role = ${Role.Owner} FOR UPDATE`;
+        const targetIsOwner = owners.some((row) => row.user_id === userId);
+        if (targetIsOwner && owners.length <= 1) {
+          throw new ConflictException('An organization must keep at least one Owner');
+        }
+      }
+      const { count } = await tx.userRole.deleteMany({ where: { userId, role } });
+      if (count > 0) {
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'role.revoked',
+          entityType: 'user',
+          entityId: userId,
+          metadata: { role },
+        });
+      }
+    });
   }
 }

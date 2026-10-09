@@ -50,3 +50,9 @@ Thumbs.db
 
 # Local AI tooling (personal, not shared with the team)
 .codex/
+
+# Despliegue: secretos reales del VPS (solo se versionan los *.example)
+deploy/api.env
+deploy/backups/
+node-compile-cache/
+dump.rdb

@@ -26,6 +26,7 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { useFeature } from '../../../shell/capabilities';
 import { AnimalDetailPanel } from '../components/animal-detail-panel';
 import { AnimalFormModal } from '../components/animal-form-modal';
 import { AnimalBehaviorDisclosureModal } from '../components/animal-behavior-disclosure-modal';
@@ -99,7 +100,10 @@ export function AnimalsPage() {
   // S2-03-REV: matches `SponsorshipPlansController.WRITE_ROLES` VERBATIM — no
   // Operator/Veterinarian, unlike the broader `canManage` above (M07 money
   // gate is narrower than M03's own edit gate).
-  const canManageSponsorship = hasRole(Role.Owner) || hasRole(Role.Administrator);
+  // Hidden while the sponsorships module is off (R1-1): its API answers 404.
+  const sponsorshipsOn = useFeature('sponsorships');
+  const canManageSponsorship =
+    sponsorshipsOn && (hasRole(Role.Owner) || hasRole(Role.Administrator));
   const { toast } = useToast();
 
   const [animals, setAnimals] = useState<Animal[]>([]);

@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import type { ConfigService } from '@nestjs/config';
-import { computeBreakdown } from '@adoptafacil/contracts';
+import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { MercadoPagoPaymentAdapter, type MercadoPagoFetch } from './mercadopago-payment.adapter';
 
@@ -15,6 +15,9 @@ function makeConfig(overrides: Record<string, unknown> = {}): ConfigService<Env,
   const merged = { ...ENV, ...overrides };
   return { get: (key: string) => merged[key] } as unknown as ConfigService<Env, true>;
 }
+
+/** The beneficiary organization's own connected account (ADR-PAG-001). */
+const ORG_COLLECTOR = { accessToken: 'APP_USR-org-token-dummy', accountId: '292020059' };
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -44,6 +47,7 @@ describe('MercadoPagoPaymentAdapter — createCollection (T-OrdersAPI, Checkout 
     idempotencyKey: 'idem-abc',
     cardToken: 'card-token-abcdef0123456789',
     paymentMethodId: 'visa',
+    collector: ORG_COLLECTOR,
   };
 
   it('POSTs /v1/orders with amounts as STRINGS in pesos and the correct breakdown', async () => {
@@ -58,13 +62,13 @@ describe('MercadoPagoPaymentAdapter — createCollection (T-OrdersAPI, Checkout 
     const [url, init] = (fetchFn as jest.Mock).mock.calls[0];
     expect(url).toBe('https://api.mercadopago.com/v1/orders');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer TEST-token-dummy');
+    expect(init.headers.Authorization).toBe(`Bearer ${ORG_COLLECTOR.accessToken}`);
     // Regression (live 2026-09-30: 400 empty_required_header without this) —
     // /v1/orders rejects the request outright when it's missing.
     expect(init.headers['X-Idempotency-Key']).toBe('idem-abc');
 
     const body = JSON.parse(init.body as string);
-    const expectedBreakdown = computeBreakdown(50_000, 'organization');
+    const expectedBreakdown = computeBreakdown(50_000, 'organization', DIRECT_COLLECTION_RATES);
     expect(body.type).toBe('online');
     expect(body.external_reference).toBe('af-idem-abc');
     expect(body.total_amount).toBe(String(expectedBreakdown.amountCharged));
@@ -174,7 +178,7 @@ describe('MercadoPagoPaymentAdapter — createCollection (T-OrdersAPI, Checkout 
     expect(body.payer).toEqual({ email: 'donante@test.local' });
   });
 
-  it('Split de Pagos 1:1 — includes integration_data.sponsor.id ONLY when sponsorMpUserId is present', async () => {
+  it("charges WITH the organization's own token (the org is the collector) and never sends sponsor.id", async () => {
     const fetchFn = jest.fn<ReturnType<MercadoPagoFetch>, Parameters<MercadoPagoFetch>>(() =>
       Promise.resolve(jsonResponse({ id: 'ORD-1', status: 'processed' }, 201)),
     ) as unknown as MercadoPagoFetch;
@@ -183,21 +187,19 @@ describe('MercadoPagoPaymentAdapter — createCollection (T-OrdersAPI, Checkout 
     await adapter.createCollection({ ...baseInput, sponsorMpUserId: 'mp-user-999' });
 
     const [, init] = (fetchFn as jest.Mock).mock.calls[0];
-    const body = JSON.parse(init.body as string);
-    expect(body.integration_data).toEqual({ sponsor: { id: 'mp-user-999' } });
-  });
-
-  it('omits integration_data entirely when sponsorMpUserId is absent', async () => {
-    const fetchFn = jest.fn<ReturnType<MercadoPagoFetch>, Parameters<MercadoPagoFetch>>(() =>
-      Promise.resolve(jsonResponse({ id: 'ORD-1', status: 'processed' }, 201)),
-    ) as unknown as MercadoPagoFetch;
-    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
-
-    await adapter.createCollection(baseInput);
-
-    const [, init] = (fetchFn as jest.Mock).mock.calls[0];
+    expect(init.headers.Authorization).toBe(`Bearer ${ORG_COLLECTOR.accessToken}`);
+    expect(init.headers.Authorization).not.toContain(ENV.MERCADOPAGO_ACCESS_TOKEN as string);
     const body = JSON.parse(init.body as string);
     expect(body.integration_data).toBeUndefined();
+  });
+
+  it('refuses to charge with the platform account when no collector is supplied (custody)', async () => {
+    const fetchFn = jest.fn() as unknown as MercadoPagoFetch;
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+
+    const { collector: _omit, ...withoutCollector } = baseInput;
+    await expect(adapter.createCollection(withoutCollector)).rejects.toThrow(/custody/);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('maps the order create-response status (processed/failed/pending) to PaymentStatus', async () => {
@@ -368,6 +370,7 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
     const event = await adapter.verifyAndNormalizeWebhook({}, signature, {
       headers: { 'x-request-id': 'req-1' },
       query: { 'data.id': 'ORD123456789' },
+      collector: ORG_COLLECTOR,
     });
 
     expect(event).toEqual({
@@ -375,10 +378,73 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
       collectionId: 'af-idem-abc',
       status: 'approved',
       dedupKey: 'ORD123456789-processed',
+      receiverAccountId: ORG_COLLECTOR.accountId,
     });
 
-    const [url] = (fetchFn as jest.Mock).mock.calls[0];
+    const [url, init] = (fetchFn as jest.Mock).mock.calls[0];
     expect(url).toBe('https://api.mercadopago.com/v1/orders/ORD123456789');
+    expect(init.headers.Authorization).toBe(`Bearer ${ORG_COLLECTOR.accessToken}`);
+  });
+
+  it('reports the read-back amount and currency so the caller can compare them', async () => {
+    const { signature } = signWebhook('ORD9', 'req-1');
+    const fetchFn = jest.fn<ReturnType<MercadoPagoFetch>, Parameters<MercadoPagoFetch>>(() =>
+      Promise.resolve(
+        jsonResponse({
+          id: 'ORD9',
+          status: 'processed',
+          external_reference: 'af-k',
+          total_amount: '50000',
+          currency: 'COP',
+          user_id: 292020059,
+        }),
+      ),
+    ) as unknown as MercadoPagoFetch;
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+
+    await expect(
+      adapter.verifyAndNormalizeWebhook({}, signature, {
+        headers: { 'x-request-id': 'req-1' },
+        query: { 'data.id': 'ORD9' },
+        collector: ORG_COLLECTOR,
+      }),
+    ).resolves.toMatchObject({
+      amountCharged: 50000,
+      currency: 'COP',
+      receiverAccountId: '292020059',
+    });
+  });
+
+  it('rejects an order owned by another account', async () => {
+    const { signature } = signWebhook('ORD9', 'req-1');
+    const fetchFn = jest.fn<ReturnType<MercadoPagoFetch>, Parameters<MercadoPagoFetch>>(() =>
+      Promise.resolve(
+        jsonResponse({ id: 'ORD9', status: 'processed', external_reference: 'af-k', user_id: 1 }),
+      ),
+    ) as unknown as MercadoPagoFetch;
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+
+    await expect(
+      adapter.verifyAndNormalizeWebhook({}, signature, {
+        headers: { 'x-request-id': 'req-1' },
+        query: { 'data.id': 'ORD9' },
+        collector: ORG_COLLECTOR,
+      }),
+    ).rejects.toThrow(/another account/);
+  });
+
+  it('rejects a valid notification when no organization is connected for its account', async () => {
+    const { signature } = signWebhook('ORD9', 'req-1');
+    const fetchFn = jest.fn() as unknown as MercadoPagoFetch;
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+
+    await expect(
+      adapter.verifyAndNormalizeWebhook({}, signature, {
+        headers: { 'x-request-id': 'req-1' },
+        query: { 'data.id': 'ORD9' },
+      }),
+    ).rejects.toThrow(/no connected organization/);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('lowercases an alphanumeric data.id when building the manifest', async () => {
@@ -394,6 +460,7 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
       adapter.verifyAndNormalizeWebhook({}, signature, {
         headers: { 'x-request-id': 'req-1' },
         query: { 'data.id': 'AbC123' },
+        collector: ORG_COLLECTOR,
       }),
     ).resolves.toMatchObject({ collectionId: 'af-x' });
   });
@@ -407,6 +474,7 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
       adapter.verifyAndNormalizeWebhook({}, `ts=${ts},v1=deadbeef`, {
         headers: { 'x-request-id': 'req-1' },
         query: { 'data.id': '123' },
+        collector: ORG_COLLECTOR,
       }),
     ).rejects.toThrow(/signature mismatch/);
     expect(fetchFn).not.toHaveBeenCalled();
@@ -442,6 +510,7 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
       adapter.verifyAndNormalizeWebhook({}, 'ts=123', {
         headers: { 'x-request-id': 'req-1' },
         query: { 'data.id': '123' },
+        collector: ORG_COLLECTOR,
       }),
     ).rejects.toThrow(/missing/);
   });
@@ -455,6 +524,7 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
       adapter.verifyAndNormalizeWebhook({}, `ts=${ts},v1=ab`, {
         headers: { 'x-request-id': 'req-1' },
         query: { 'data.id': '123' },
+        collector: ORG_COLLECTOR,
       }),
     ).rejects.toThrow(/signature mismatch/);
   });
@@ -470,6 +540,7 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
       adapter.verifyAndNormalizeWebhook({}, signature, {
         headers: { 'x-request-id': 'req-1' },
         query: { 'data.id': '123' },
+        collector: ORG_COLLECTOR,
       }),
     ).rejects.toThrow(/404/);
   });
@@ -485,6 +556,7 @@ describe('MercadoPagoPaymentAdapter — verifyAndNormalizeWebhook (T-OrdersAPI, 
       adapter.verifyAndNormalizeWebhook({}, signature, {
         headers: { 'x-request-id': 'req-1' },
         query: { 'data.id': '123' },
+        collector: ORG_COLLECTOR,
       }),
     ).rejects.toThrow(/external_reference/);
   });

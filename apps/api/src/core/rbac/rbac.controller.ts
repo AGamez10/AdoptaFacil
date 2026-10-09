@@ -4,7 +4,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { RequestUser } from '../auth/auth.types';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
-import { assignRoleSchema } from './rbac.schemas';
+import { assignRoleSchema, revokeRoleParamsSchema } from './rbac.schemas';
 import { RbacService } from './rbac.service';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
@@ -33,7 +33,12 @@ export class RbacController {
     return this.rbac.listRolesForOrg();
   }
 
-  /** Assign an organization role to a user of the caller's organization. */
+  /**
+   * Assign an organization role to a user of the caller's organization.
+   * Owner and Administrator may call it, but only an Owner may grant `owner`
+   * (AF-007): an Administrator asking for it gets 403, so no one climbs above
+   * the authority they already hold.
+   */
   @Post('roles')
   @UseGuards(RolesGuard)
   @Roles(Role.Owner, Role.Administrator)
@@ -44,12 +49,19 @@ export class RbacController {
     return this.rbac.assignRole(actor.id, dto.userId, dto.role);
   }
 
-  /** Revoke a role from a user of the caller's organization. */
+  /**
+   * Revoke a role from a user of the caller's organization. Owner only.
+   * Revoking the organization's LAST Owner is refused with 409 (AF-008), and
+   * malformed params are a 400 (SEC-022). Every effective revocation is audited.
+   */
   @Delete('roles/:userId/:role')
   @HttpCode(204)
   @UseGuards(RolesGuard)
   @Roles(Role.Owner)
-  async revoke(@Param('userId') userId: string, @Param('role') role: Role): Promise<void> {
-    await this.rbac.revokeRole(userId, role);
+  async revoke(
+    @CurrentUser() actor: RequestUser,
+    @Param(new ZodValidationPipe(revokeRoleParamsSchema)) params: { userId: string; role: Role },
+  ): Promise<void> {
+    await this.rbac.revokeRole(actor.id, params.userId, params.role);
   }
 }

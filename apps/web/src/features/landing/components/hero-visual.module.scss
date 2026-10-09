@@ -1,0 +1,49 @@
+.visual {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.45;
+
+  @media (min-width: 1024px) {
+    left: auto;
+    width: 56%;
+    opacity: 1;
+  }
+}
+
+/* Fondo estático: halo + retícula de puntos con máscara circular. Es el
+   diseño completo cuando no hay WebGL o mientras three.js carga. */
+.visual__fallback {
+  position: absolute;
+  inset: 8% 6%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgb(37 186 166 / 0.28), transparent 62%),
+    radial-gradient(circle, rgb(155 232 220 / 0.55) 1px, transparent 1.6px) 0 0 / 18px 18px;
+  mask-image: radial-gradient(circle at 50% 50%, #000 40%, transparent 70%);
+  transition: opacity 1.2s ease;
+}
+
+.visual__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.visual[data-mode='scene'] .visual__canvas {
+  opacity: 1;
+}
+
+.visual[data-mode='scene'] .visual__fallback {
+  opacity: 0.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visual__canvas,
+  .visual__fallback {
+    transition: none;
+  }
+}

@@ -23,11 +23,13 @@ import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ResourceDeliveryEvidencesService } from './resource-delivery-evidences.service';
 import { createResourceDeliveryEvidenceSchema } from './resource-delivery-evidences.schemas';
 import { RESOURCE_VIEW_ROLES, RESOURCE_WRITE_ROLES } from './resource-needs.controller';
+import { RequireFeature } from '../../core/features';
 
 /**
  * M09 — evidencia fotográfica de una entrega, anidada bajo su id. Subir/
  * eliminar = Owner/Administrator/Operator; ver = + ReadOnlyAuditor.
  */
+@RequireFeature('resources')
 @Controller('resources/deliveries/:deliveryId/evidences')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ResourceDeliveryEvidencesController {

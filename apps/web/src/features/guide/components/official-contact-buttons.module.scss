@@ -1,0 +1,82 @@
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+  transition:
+    transform var(--transition-base),
+    box-shadow var(--transition-base),
+    background-color var(--transition-base);
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  &:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
+  }
+}
+
+/* Verde de WhatsApp oscurecido para contraste AA con texto blanco (5,1:1). */
+.button--whatsapp {
+  background-color: #12784a;
+  color: #fff;
+
+  &:hover {
+    background-color: #0f6a41;
+  }
+}
+
+.button--mail {
+  background-color: var(--bg-surface);
+  color: hsl(var(--navy));
+  border: 1px solid var(--border-hairline-strong);
+}
+
+.group--dark .button--mail {
+  background-color: rgb(255 255 255 / 0.08);
+  color: #fff;
+  border-color: rgb(255 255 255 / 0.28);
+
+  &:hover {
+    background-color: rgb(255 255 255 / 0.14);
+  }
+}
+
+.icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+}
+
+.label {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.detail {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+  opacity: 0.85;
+}

@@ -23,6 +23,7 @@ import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ResourceOffersService } from './resource-offers.service';
 import { createResourceOfferSchema, decideResourceOfferSchema } from './resource-offers.schemas';
 import { RESOURCE_VIEW_ROLES, RESOURCE_WRITE_ROLES } from './resource-needs.controller';
+import { RequireFeature } from '../../core/features';
 
 /**
  * M09 — ofertas de donación física. Audiencias:
@@ -33,6 +34,7 @@ import { RESOURCE_VIEW_ROLES, RESOURCE_WRITE_ROLES } from './resource-needs.cont
  *     decide (`PATCH :id/decision`) — deny-by-default, RESOURCE_WRITE_ROLES;
  *   - el donante lista lo suyo (`GET mine`) — cross-tenant, por identidad.
  */
+@RequireFeature('resources')
 @Controller('resources/offers')
 export class ResourceOffersController {
   constructor(private readonly service: ResourceOffersService) {}

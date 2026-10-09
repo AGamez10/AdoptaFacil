@@ -144,10 +144,11 @@ export class PublicAnimalsService {
    *  {@link listAllAdoptable}'s RLS note) — matches the per-org endpoint's max. */
   private static readonly PER_ORG_CAP = 50;
 
-  /** Every organization with a public profile (slug set), with just the
-   *  public-safe fields the global catalog needs. */
+  /** Every APPROVED organization (R2-1) with a public profile (slug set),
+   *  with just the public-safe fields the global catalog needs. */
   private async getPublicOrgDirectory(): Promise<PublicAnimalOrganizationSummary[]> {
     const organizations = await this.prisma.organization.findMany({
+      where: { status: 'approved' },
       select: { id: true, name: true },
     });
     const profiles = await Promise.all(
