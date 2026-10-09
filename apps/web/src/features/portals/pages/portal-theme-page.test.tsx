@@ -51,8 +51,13 @@ function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
 function stubFetchByUrl(
   themeBody: unknown,
   orgProfileBody: unknown = { id: 'org-1', name: 'Org' },
+  orgStatus = 'approved',
 ) {
-  stubFetch((url) => (url.includes('/org/profile') ? orgProfileBody : themeBody));
+  stubFetch((url) => {
+    if (url.includes('/org/profile')) return orgProfileBody;
+    if (url.includes('/org/status')) return { organizationId: 'org-1', status: orgStatus };
+    return themeBody;
+  });
 }
 
 beforeEach(() => {
@@ -238,6 +243,23 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     expect(link).toHaveAttribute('href', '/o/patitas-felices');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('offers a preview (not the public portal) while the org is not approved', async () => {
+    stubFetchByUrl(
+      { tokens: {} },
+      { id: 'org-1', name: 'Refugio Patitas', slug: 'patitas-felices' },
+      'draft',
+    );
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByText('Estado de tu organización')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar a revisión' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Ver portal público/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ver vista previa del portal/ })).toHaveAttribute(
+      'href',
+      '/o/patitas-felices',
+    );
   });
 
   it('hides "Ver portal público" when the org has no slug yet (never a broken link)', async () => {

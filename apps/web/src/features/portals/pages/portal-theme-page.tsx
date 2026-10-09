@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  OrganizationStatus,
   Role,
   type Organization,
   type PortalLogoPosition,
@@ -40,6 +41,7 @@ import {
 import { TemplatePicker, TemplateUpsell } from '../components/templates/template-picker';
 import { TemplateOptionsForm } from '../components/templates/template-options-form';
 import { TemplateLivePreview } from '../components/templates/template-live-preview';
+import { OrgStatusCard } from '../../org/components/org-status-card';
 
 /** Empty string ⇒ "use the default token" (the field is omitted from the payload). */
 type FormState = Partial<Record<string, string>>;
@@ -236,6 +238,7 @@ export function PortalThemePage() {
   const [orgName, setOrgName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [orgStatus, setOrgStatus] = useState<OrganizationStatus | null>(null);
 
   useEffect(() => {
     if (!canEdit) {
@@ -357,6 +360,10 @@ export function PortalThemePage() {
     }
   };
 
+  // The portal lives at /o/<slug>. Before the platform approves the
+  // organization only its members see it, as a preview (R2-1); the slug is
+  // chosen in the organization profile.
+  const approved = orgStatus === OrganizationStatus.Approved;
   const publicPortalLink = slug ? (
     <a
       href={`/o/${encodeURIComponent(slug)}`}
@@ -365,7 +372,11 @@ export function PortalThemePage() {
       className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
     >
       <ExternalLinkIcon />
-      Ver portal público
+      {approved ? 'Ver portal público' : 'Ver vista previa del portal'}
+    </a>
+  ) : orgStatus ? (
+    <a href="/organizacion" className="text-sm font-medium text-primary hover:underline">
+      Define la dirección pública de tu portal en el perfil
     </a>
   ) : undefined;
 
@@ -405,6 +416,7 @@ export function PortalThemePage() {
           </div>
         }
       />
+      <OrgStatusCard hideWhenApproved onStatus={setOrgStatus} />
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : (

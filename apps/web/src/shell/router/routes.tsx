@@ -11,6 +11,7 @@ import {
   DONATIONS_MANAGEMENT_ROLES,
   MARKETPLACE_VIEW_ROLES,
   ORG_DOCUMENTS_ROLES,
+  ORG_PLAN_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
@@ -36,6 +37,7 @@ import {
   ExogenousReportPage,
   NationalTransparencyPage,
   OrgDocumentsPage,
+  OrgPlanPage,
   OrgFormalizationPage,
   OrgLegalRepresentativePage,
   OrgProfilePage,
@@ -43,6 +45,7 @@ import {
   PlatformBannerPage,
   PlatformDocumentsReviewPage,
   PlatformDuplicatesReviewPage,
+  PlatformOrganizationsReviewPage,
   PlatformReviewsReviewPage,
   PlatformSuperAdminDashboardPage,
 } from '../../features/org';
@@ -395,6 +398,15 @@ export function AppRoutes() {
                 </RequireRoles>
               }
             />
+            {/* Planes y suscripciones · mismo gate que GET /org/plan. */}
+            <Route
+              path="organizacion/plan"
+              element={
+                <RequireRoles roles={ORG_PLAN_ROLES}>
+                  <OrgPlanPage />
+                </RequireRoles>
+              }
+            />
             {/* M13 (S-14) · el dashboard de donaciones/campañas ahora es una sección
               de "Inicio" (antes pantalla propia, casi duplicada); la ruta vieja
               redirige para no romper enlaces/favoritos. */}
@@ -521,6 +533,16 @@ export function AppRoutes() {
             {/* M01, S-3 · organizaciones posiblemente duplicadas (nombre similar),
               ruta hermana de la revisión de documentos. Audiencia de PLATAFORMA
               — denegada a roles de organización. */}
+            {/* R2-1 · aprobación de organizaciones: solo las aprobadas son
+              públicas. Audiencia de PLATAFORMA. */}
+            <Route
+              path="plataforma/organizaciones"
+              element={
+                <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
+                  <PlatformOrganizationsReviewPage />
+                </RequireRoles>
+              }
+            />
             <Route
               path="plataforma/organizaciones-duplicadas"
               element={

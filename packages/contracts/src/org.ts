@@ -256,6 +256,18 @@ export interface RequestFormalizationTransitionInput {
 }
 
 /**
+ * Platform review of an organization's formalization (R2-2, SEC-003):
+ * `POST /platform/organizations/:organizationId/formalization/transitions`
+ * (PlatformAdmin, PlatformSuperAdmin). Entering ESAL or ESAL_RTE requires
+ * `evidenceDocumentId`: a document of that organization, Approved, current and
+ * with its file present. An organization's own Owner can never move it INTO
+ * those states (403); moving down stays allowed.
+ */
+export interface PlatformFormalizationTransitionInput extends RequestFormalizationTransitionInput {
+  evidenceDocumentId?: string;
+}
+
+/**
  * Verification tier of an organization (§14): a numeric level plus the criteria
  * met to reach it. The concrete tiers/criteria are defined by M01; this is the
  * stable shape consumers render (e.g. a "verified" badge on the portal).
@@ -721,4 +733,72 @@ export type ReviewOrganizationDuplicateDecision = 'dismiss' | 'confirm';
 
 export interface ReviewOrganizationDuplicateInput {
   decision: ReviewOrganizationDuplicateDecision;
+}
+
+// ============================================================================
+// Platform review status of an organization (Ola 1 · R2-1, AF-023)
+// ============================================================================
+
+/**
+ * Operational status of an organization (MVP-RF-07). A new organization starts
+ * in `Draft`; its Owner submits it for review (`Draft`/`Observed` →
+ * `PendingReview`) and every other move is decided by the platform
+ * (PlatformAdmin / PlatformSuperAdmin). Only `Approved` organizations appear
+ * on the public surface (portal, subdomain, catalogs); `Suspended`
+ * additionally blocks the organization's backoffice (403
+ * `ORGANIZATION_SUSPENDED`) without deleting its history.
+ */
+export enum OrganizationStatus {
+  Draft = 'draft',
+  PendingReview = 'pending_review',
+  Observed = 'observed',
+  Approved = 'approved',
+  Rejected = 'rejected',
+  Suspended = 'suspended',
+}
+
+/** Statuses from which the organization's Owner may submit it for review
+ *  (`POST /org/status/submit`). */
+export const ORGANIZATION_SUBMITTABLE_STATUSES: readonly OrganizationStatus[] = [
+  OrganizationStatus.Draft,
+  OrganizationStatus.Observed,
+];
+
+/** Allowed PLATFORM transitions (from → to). A reason is mandatory when the
+ *  target is observed, rejected or suspended. */
+export const ORGANIZATION_STATUS_TRANSITIONS: Readonly<
+  Record<OrganizationStatus, readonly OrganizationStatus[]>
+> = {
+  [OrganizationStatus.Draft]: [],
+  [OrganizationStatus.PendingReview]: [
+    OrganizationStatus.Approved,
+    OrganizationStatus.Observed,
+    OrganizationStatus.Rejected,
+  ],
+  [OrganizationStatus.Observed]: [OrganizationStatus.Rejected],
+  [OrganizationStatus.Approved]: [OrganizationStatus.Suspended, OrganizationStatus.Observed],
+  [OrganizationStatus.Rejected]: [OrganizationStatus.Observed],
+  [OrganizationStatus.Suspended]: [OrganizationStatus.Approved],
+};
+
+/** `GET /org/status` (any member) and items of the platform list. */
+export interface OrganizationStatusView {
+  organizationId: string;
+  status: OrganizationStatus;
+  reason: string | null;
+  /** ISO-8601 UTC, null when never changed by the platform. */
+  changedAt: string | null;
+}
+
+/** Item of `GET /platform/organizations` (PlatformAdmin, PlatformSuperAdmin). */
+export interface PlatformOrganizationListItem extends OrganizationStatusView {
+  name: string;
+  /** ISO-8601 UTC. */
+  createdAt: string;
+}
+
+/** `POST /platform/organizations/:organizationId/status`. */
+export interface ChangeOrganizationStatusInput {
+  status: OrganizationStatus;
+  reason?: string;
 }

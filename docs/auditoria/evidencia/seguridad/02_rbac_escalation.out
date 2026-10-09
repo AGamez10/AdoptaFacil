@@ -1,0 +1,44 @@
+== AF-007 Administrator se auto-asigna Owner
+### POST /rbac/roles {"userId":"4ea43e73-f5c2-46d2-95de-c0f1c4f75fdc","role":"owner"} (as USER_A_ADMIN)
+HTTP 201
+{"userId":"4ea43e73-f5c2-46d2-95de-c0f1c4f75fdc","role":"owner","organizationId":"8d8c0ec4-6acd-40a7-9399-de18a8e85573","createdAt":"2026-10-07T15:03:17.914Z"}
+== Administrator asigna PlatformSuperAdmin (debe 400)
+### POST /rbac/roles {"userId":"4ea43e73-f5c2-46d2-95de-c0f1c4f75fdc","role":"platform_super_admin"} (as USER_A_ADMIN)
+HTTP 400
+{"message":["role: Only organization roles can be assigned here"],"error":"Bad Request","statusCode":400}
+== Operator intenta asignarse Administrator
+### POST /rbac/roles {"userId":"6dfaccd5-f1b5-41fd-8082-a9ce735146f2","role":"administrator"} (as USER_A_LOW)
+HTTP 403
+{"message":"Insufficient role for this operation","error":"Forbidden","statusCode":403}
+== ReadOnlyAuditor intenta escribir (asignar rol / editar perfil / crear animal)
+### POST /rbac/roles {"userId":"5f70bacb-0771-441c-9443-e33d9d34b6fd","role":"administrator"} (as AUDITOR_A)
+HTTP 403
+{"message":"Insufficient role for this operation","error":"Forbidden","statusCode":403}
+### POST /animals {"name":"x","species":"dog"} (as AUDITOR_A)
+HTTP 403
+{"message":"Insufficient role for this operation","error":"Forbidden","statusCode":403}
+== Owner A asigna rol a usuario de B (cross-tenant)
+### POST /rbac/roles {"userId":"3c78c40a-d87e-4692-853a-98159cd8e923","role":"administrator"} (as OWNER_A)
+HTTP 404
+{"message":"User not found in this organization","error":"Not Found","statusCode":404}
+== my-roles admin
+### GET /rbac/my-roles  (as USER_A_ADMIN)
+HTTP 200
+["administrator","owner"]
+== AF-008: admin (ahora Owner) revoca Owner del Owner original; luego el ultimo Owner se revoca a si mismo
+### DELETE /rbac/roles/52be4082-7597-4de2-b720-4122408bdfa9/owner  (as USER_A_ADMIN)
+HTTP 204
+
+### GET /rbac/roles  (as USER_A_ADMIN)
+HTTP 200
+[{"userId":"4ea43e73-f5c2-46d2-95de-c0f1c4f75fdc","role":"administrator","organizationId":"8d8c0ec4-6acd-40a7-9399-de18a8e85573","createdAt":"2026-10-07T15:01:00.090Z"},{"userId":"6dfaccd5-f1b5-41fd-8082-a9ce735146f2","role":"operator","organizationId":"8d8c0ec4-6acd-40a7-9399-de18a8e85573","createdAt":"2026-10-07T15:01:00.115Z"},{"userId":"5f70bacb-0771-441c-9443-e33d9d34b6fd","role":"read_only_a
+### DELETE /rbac/roles/4ea43e73-f5c2-46d2-95de-c0f1c4f75fdc/owner  (as USER_A_ADMIN)
+HTTP 204
+
+### GET /rbac/my-roles  (as USER_A_ADMIN)
+HTTP 200
+["administrator"]
+== Revoke con rol arbitrario (no-enum) y userId no-uuid
+### DELETE /rbac/roles/not-a-uuid/whatever  (as OWNER_B)
+HTTP 500
+{"statusCode":500,"message":"Internal server error"}

@@ -89,6 +89,10 @@ export const PLATFORM_REVIEWS_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdm
  */
 export const ORG_REVIEWS_ROLES = [Role.Owner, Role.Administrator] as const;
 
+/** Planes y suscripciones · copiado VERBATIM del `@Roles` de `GET /org/plan`:
+ *  el plan y su cobro son asunto del Owner/Administrator. */
+export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
+
 /**
  * M13 (S-8, RF24) — "Dashboard de plataforma" (conteos de colas), audiencia
  * de PLATAFORMA. Copiado VERBATIM del `@Roles` de
@@ -412,6 +416,13 @@ export const navItems: NavItem[] = [
       },
     ],
   },
+  // Planes y suscripciones · plan en efecto, uso de límites y los tres planes.
+  {
+    path: '/organizacion/plan',
+    label: 'Plan',
+    icon: BoxIcon,
+    roles: ORG_PLAN_ROLES,
+  },
   // M14 · portal personalization by tokens (T-027) — REMOVED from the sidebar
   // (S2-04A §4): it now lives as a button inside "Mi organización"'s action bar
   // (OrgProfilePage, S2-01/S2-REORG), not as a top-level nav entry. The ROUTE
@@ -524,6 +535,13 @@ export const navItems: NavItem[] = [
   // M01, S-3 · organizaciones posiblemente duplicadas (mitigación de riesgo
   // "Captación ilegal / LA-FT", §16). Audiencia de PLATAFORMA — ruta hermana
   // de la revisión de documentos, misma zona.
+  // R2-1 · aprobación de organizaciones (solo las aprobadas son públicas).
+  {
+    path: '/plataforma/organizaciones',
+    label: 'Aprobar organizaciones',
+    icon: ShieldIcon,
+    roles: PLATFORM_DUPLICATES_ROLES,
+  },
   {
     path: '/plataforma/organizaciones-duplicadas',
     label: 'Organizaciones duplicadas',

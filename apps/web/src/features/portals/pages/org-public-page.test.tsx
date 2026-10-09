@@ -831,6 +831,26 @@ describe('OrgPublicPage — vista previa privada del dueño (Ola 3)', () => {
           });
         }
         if (url.endsWith('/portals/theme')) return respond(200, { tokens: {}, template: 'carnet' });
+        if (url.includes('/org/portal/preview/animals')) {
+          return respond(200, {
+            items: [
+              {
+                id: 'a1',
+                organizationId: 'org-1',
+                name: 'Luna',
+                species: 'dog',
+                sex: 'female',
+                size: 'medium',
+                status: 'available',
+                isActive: true,
+                createdAt: '2026-10-01T00:00:00.000Z',
+              },
+            ],
+            total: 1,
+            limit: 8,
+            offset: 0,
+          });
+        }
         return respond(200, []);
       }),
     );
@@ -847,6 +867,14 @@ describe('OrgPublicPage — vista previa privada del dueño (Ola 3)', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Refugio Patitas');
     expect(screen.queryByText('Fundación Patitas SAS')).not.toBeInTheDocument();
     expect(screen.queryByText(/3001112233/)).not.toBeInTheDocument();
+  });
+
+  it('la vista previa muestra los animales propios aunque el catálogo público aún no exista', async () => {
+    stubUnpublished('patitas');
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    await screen.findByTestId('portal-owner-preview');
+    expect((await screen.findAllByText('Luna')).length).toBeGreaterThan(0);
   });
 
   it('otra organización con sesión sigue viendo "no encontrada"', async () => {

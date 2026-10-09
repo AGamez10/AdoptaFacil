@@ -1,0 +1,58 @@
+# Caddy: TLS automático (Let's Encrypt), SPA y proxy inverso de la API.
+# Variables (deploy/.env): APP_DOMAIN, ACME_EMAIL.
+#
+# Un solo origen: https://APP_DOMAIN sirve el SPA y https://APP_DOMAIN/api/* la
+# API (se quita el prefijo /api antes de pasar a NestJS). Así la cookie httpOnly
+# de refresco y CORS no cruzan dominios.
+#
+# Portales por subdominio (*.APP_DOMAIN, F7): requieren certificado comodín por
+# desafío DNS-01, que exige compilar Caddy con el módulo del proveedor DNS
+# (⟦POR DEFINIR⟧). Ver docs/operacion/DESPLIEGUE_VPS.md §Subdominios. No se
+# habilita on-demand TLS sin un endpoint `ask` que autorice solo dominios
+# verificados: sin él, cualquiera podría hacernos emitir certificados.
+{
+	email {$ACME_EMAIL}
+	# Logs de acceso en JSON por stdout (los recoge Docker con rotación).
+	log {
+		output stdout
+		format json
+	}
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), payment=(), usb=()"
+		-Server
+		-X-Powered-By
+	}
+
+	# Subidas: el tope de la API es STORAGE_MAX_FILE_MB (15 MB por defecto).
+	request_body {
+		max_size 20MB
+	}
+
+	handle_path /api/* {
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-Proto {scheme}
+			health_uri /health
+			health_interval 30s
+		}
+	}
+
+	# Recursos con hash en el nombre: caché larga e inmutable.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		header /index.html Cache-Control "no-cache"
+		file_server
+	}
+}

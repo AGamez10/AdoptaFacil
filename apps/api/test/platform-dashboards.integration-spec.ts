@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown } from '@adoptafacil/contracts';
+import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
@@ -23,7 +23,7 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -239,7 +239,7 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .expect(200);
 
     const after = await superAdminSummary(platformSuperAdmin.token).expect(200);
-    const expected = computeBreakdown(80_000, 'organization');
+    const expected = computeBreakdown(80_000, 'organization', DIRECT_COLLECTION_RATES);
 
     expect(after.body.grossTotal - before.body.grossTotal).toBeCloseTo(expected.gross, 6);
     expect(after.body.platformFeeTotal - before.body.platformFeeTotal).toBeCloseTo(

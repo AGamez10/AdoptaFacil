@@ -1,0 +1,22 @@
+[
+  {
+    "RuleID": "generic-api-key",
+    "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+    "StartLine": 332,
+    "EndLine": 332,
+    "StartColumn": 40,
+    "EndColumn": 71,
+    "Match": "cardToken: 'REDACTED'",
+    "Secret": "REDACTED",
+    "File": "apps/api/test/sponsorships.integration-spec.ts",
+    "SymlinkFile": "",
+    "Commit": "",
+    "Entropy": 3.8924072,
+    "Author": "",
+    "Email": "",
+    "Date": "",
+    "Message": "",
+    "Tags": [],
+    "Fingerprint": "apps/api/test/sponsorships.integration-spec.ts:generic-api-key:332"
+  }
+]

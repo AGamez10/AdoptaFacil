@@ -20,9 +20,11 @@ import {
 import { formatCop } from '../../donations';
 import { deriveActionItems } from '../model/action-items';
 import { OrgDonationsDashboardSection } from '../../org/components/org-donations-dashboard-section';
+import { OrgStatusCard } from '../../org/components/org-status-card';
 import { fetchHealth } from '../../../lib/api';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { useFeature } from '../../../shell/capabilities';
 import { fetchOrgSummary } from '../api/dashboard-api';
 import { formatLongDateEs, greetingLabel } from '../model/greeting';
 import { formalizationSteps, formalizationStepIndex } from '../model/formalization-stepper-view';
@@ -79,6 +81,8 @@ export function HomePage() {
   const { hasAnyRole, user } = useSession();
   const client = useApiClient();
   const isPlatformAdmin = hasAnyRole(...PLATFORM_ROLES);
+  // Donations/campaigns/sponsorships detail needs the payments module (R1-1).
+  const paymentsOn = useFeature('payments');
   const canViewSummary = hasAnyRole(...SUMMARY_ROLES);
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
@@ -226,7 +230,9 @@ export function HomePage() {
         </div>
       )}
 
-      <OrgDonationsDashboardSection />
+      {canViewSummary && <OrgStatusCard hideWhenApproved />}
+
+      {paymentsOn && <OrgDonationsDashboardSection />}
 
       {isPlatformAdmin && (
         <Card className="max-w-xl">

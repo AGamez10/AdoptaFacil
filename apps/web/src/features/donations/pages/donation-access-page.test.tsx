@@ -76,6 +76,9 @@ describe('DonationAccessPage (guest magic link comprobante)', () => {
     expect(screen.getByText('Aprobada')).toBeInTheDocument();
     expect(screen.getByTestId('access-amount')).toHaveTextContent('50.000');
     expect(screen.getByTestId('access-receipt')).toBeInTheDocument();
+    expect(screen.getByTestId('access-receipt-note')).toHaveTextContent(
+      /No es un certificado tributario/,
+    );
     expect(screen.queryByTestId('access-view-certificate')).not.toBeInTheDocument();
   });
 

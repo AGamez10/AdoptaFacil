@@ -9,6 +9,7 @@ import type {
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { brandTokensToStyle } from '../../../../shell/theme';
+import { useApiClient } from '../../../../shell/api';
 import { fetchPublicAnimals } from '../../api/public-animals';
 import { buildPortalView } from '../../model/portal-view';
 import { AnimalCard } from '../animal-card';
@@ -19,7 +20,6 @@ import portalStyles from '../../styles/public-portal.module.scss';
 import templateStyles from './portal-templates.module.scss';
 import styles from './template-live-preview.module.scss';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 const PORTAL_BASE_DOMAIN =
   (import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined) || 'adoptafacil.org';
 
@@ -70,18 +70,21 @@ export function TemplateLivePreview({
   const [height, setHeight] = useState(600);
   const frameRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const client = useApiClient();
 
+  // Reads the organization's OWN portal data (authenticated preview endpoints,
+  // under RLS), so the editor shows real content even before the platform
+  // approves the organization, when the public endpoints still answer 404.
   useEffect(() => {
     if (!slug) return;
     let active = true;
-    const encoded = encodeURIComponent(slug);
-    fetch(`${API_BASE}/public/organizations/${encoded}`)
-      .then((response) => (response.ok ? (response.json() as Promise<OrganizationPublic>) : null))
+    client
+      .request<OrganizationPublic>('/org/portal/preview')
       .then((data) => {
-        if (active && data) setOrganization(data);
+        if (active && data?.name) setOrganization(data);
       })
       .catch(() => undefined);
-    fetchPublicAnimals({ slug, limit: 8, offset: 0 })
+    fetchPublicAnimals({ slug, preview: client, limit: 8, offset: 0 })
       .then((page) => {
         if (!active) return;
         setAnimals(page.items);
@@ -91,7 +94,7 @@ export function TemplateLivePreview({
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, client]);
 
   const width = DEVICE_WIDTH[device];
   useLayoutEffect(() => {

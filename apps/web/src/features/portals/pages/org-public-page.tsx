@@ -51,6 +51,7 @@ import { useDocumentTitle } from '../../../lib/use-document-title';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { ownerPreviewOrganization } from '../model/owner-preview';
+import { PortalPreviewContext } from '../model/portal-preview-context';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -263,6 +264,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     };
   }, [publicMissing, slug, session.status, session.isAuthenticated, session.user, client]);
 
+  // Owner preview: the sections (animals, campaigns) read the organization's
+  // own catalog through the authenticated preview endpoints, since the public
+  // ones answer 404 until the organization is approved.
+  const previewClient = ownerPreview ? client : null;
+
   // Real animal count for the profile stats row (pulido visual T-D02). A small,
   // INDEPENDENT fetch (Ola 3: limit 8, la muestra alimenta los héroes de las
   // plantillas; unfiltered) so it stays stable regardless of the
@@ -271,7 +277,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   useEffect(() => {
     if (!slug) return;
     let active = true;
-    fetchPublicAnimals({ slug, limit: 8, offset: 0 })
+    fetchPublicAnimals({ slug, preview: previewClient, limit: 8, offset: 0 })
       .then((page) => {
         if (!active) return;
         setAnimalTotal(page.total);
@@ -283,7 +289,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, previewClient]);
 
   // Only the safe token subset ever reaches inline styles (custom properties
   // cannot execute script; unknown keys were already filtered out).
@@ -363,72 +369,73 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     : null;
 
   return (
-    <div
-      className={templateStyles.page}
-      data-template={state === 'ready' ? layout.template : undefined}
-      data-pattern={
-        typeof layout.templateOptions.pattern === 'string'
-          ? layout.templateOptions.pattern
-          : undefined
-      }
-      data-testid="portal-page"
-    >
-      {state === 'ready' && view && (
-        <PublicHeader organization={view.profile.organization} navItems={navItems} />
-      )}
-      <main
-        id="portal-top"
-        className="mx-auto w-full px-4 py-10 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0"
-        style={{ ...themeStyle, scrollMarginTop: '5rem' }}
+    <PortalPreviewContext.Provider value={previewClient}>
+      <div
+        className={templateStyles.page}
+        data-template={state === 'ready' ? layout.template : undefined}
+        data-pattern={
+          typeof layout.templateOptions.pattern === 'string'
+            ? layout.templateOptions.pattern
+            : undefined
+        }
+        data-testid="portal-page"
       >
-        {state === 'loading' && <Skeleton className="h-72 w-full" />}
-        {state === 'not-found' && (
-          <EmptyState
-            title="Organización no encontrada"
-            description="El enlace no corresponde a ninguna organización."
-          />
+        {state === 'ready' && view && (
+          <PublicHeader organization={view.profile.organization} navItems={navItems} />
         )}
-        {state === 'error' && (
-          <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
-        )}
-        {state === 'ready' && view && heroProps && (
-          <div className="space-y-8">
-            {ownerPreview && (
-              <div
-                role="status"
-                data-testid="portal-owner-preview"
-                className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950"
-              >
-                <strong>Vista previa privada.</strong> Solo tu equipo ve esta página. Tu portal será
-                público cuando la plataforma apruebe tu organización; mientras tanto puedes
-                ajustarlo en{' '}
-                <a className="font-semibold underline" href="/organizacion/portal">
-                  Diseña tu portal
-                </a>
-                .
-              </div>
-            )}
-            {/* Header (3ra iteración): perfil + KPI(s) + acciones viven TODOS
+        <main
+          id="portal-top"
+          className="mx-auto w-full px-4 py-10 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0"
+          style={{ ...themeStyle, scrollMarginTop: '5rem' }}
+        >
+          {state === 'loading' && <Skeleton className="h-72 w-full" />}
+          {state === 'not-found' && (
+            <EmptyState
+              title="Organización no encontrada"
+              description="El enlace no corresponde a ninguna organización."
+            />
+          )}
+          {state === 'error' && (
+            <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
+          )}
+          {state === 'ready' && view && heroProps && (
+            <div className="space-y-8">
+              {ownerPreview && (
+                <div
+                  role="status"
+                  data-testid="portal-owner-preview"
+                  className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950"
+                >
+                  <strong>Vista previa privada.</strong> Solo tu equipo ve esta página. Tu portal
+                  será público cuando la plataforma apruebe tu organización; mientras tanto puedes
+                  ajustarlo en{' '}
+                  <a className="font-semibold underline" href="/organizacion/portal">
+                    Diseña tu portal
+                  </a>
+                  .
+                </div>
+              )}
+              {/* Header (3ra iteración): perfil + KPI(s) + acciones viven TODOS
                 dentro del mismo panel (`PortalProfileSection`) — ya no hay una
                 tarjeta de KPI flotante aparte ni una fila extra a su lado. */}
-            {layout.template === 'editorial' ? (
-              <EditorialHero {...heroProps} />
-            ) : layout.template === 'carnet' ? (
-              <CarnetHero {...heroProps} />
-            ) : layout.template === 'impacto' ? (
-              <ImpactoHero {...heroProps} />
-            ) : layout.template === 'orbita' ? (
-              <OrbitaHero {...heroProps} />
-            ) : (
-              <PortalProfileSection
-                profile={view.profile}
-                animalCount={animalTotal}
-                logoPosition={layout.logoPosition}
-                actions={heroProps.actions}
-              />
-            )}
+              {layout.template === 'editorial' ? (
+                <EditorialHero {...heroProps} />
+              ) : layout.template === 'carnet' ? (
+                <CarnetHero {...heroProps} />
+              ) : layout.template === 'impacto' ? (
+                <ImpactoHero {...heroProps} />
+              ) : layout.template === 'orbita' ? (
+                <OrbitaHero {...heroProps} />
+              ) : (
+                <PortalProfileSection
+                  profile={view.profile}
+                  animalCount={animalTotal}
+                  logoPosition={layout.logoPosition}
+                  actions={heroProps.actions}
+                />
+              )}
 
-            {/* Dos columnas (pulido visual, 2da iteración): columna principal
+              {/* Dos columnas (pulido visual, 2da iteración): columna principal
                 con "Mascotas en adopción"/"Productos"/"Necesita hoy" SIEMPRE
                 visibles (rediseño T-D04, ya no detrás de una tab), y UN panel
                 lateral con "Campaña activa" + "Síguenos" juntos. El lado lo
@@ -437,93 +444,94 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 `PortalThemeConfig.socialNavPosition` —
                 `packages/contracts/src/portals.ts`) — no uno nuevo. En mobile
                 el panel lateral se apila debajo (grid de 1 columna). */}
-            <div
-              className="portal-reveal grid gap-8 lg:grid-cols-[1fr_320px]"
-              data-testid="portal-main-grid"
-            >
               <div
-                className={`space-y-6 ${layout.socialNavPosition === 'left' ? 'lg:order-last' : ''}`}
+                className="portal-reveal grid gap-8 lg:grid-cols-[1fr_320px]"
+                data-testid="portal-main-grid"
               >
-                {/* "Mascotas en adopción" (kind 'pets', §M03/T-052),
+                <div
+                  className={`space-y-6 ${layout.socialNavPosition === 'left' ? 'lg:order-last' : ''}`}
+                >
+                  {/* "Mascotas en adopción" (kind 'pets', §M03/T-052),
                     "Productos" (kind 'products', §M10, F-MKT-PORTAL-1) y
                     "Necesita hoy" (kind 'needsToday', §M09,
                     F-NEEDS-PORTAL-1); cualquier otra sección que algún día
                     deje de ser placeholder aparecería aquí también. */}
-                {portafolioSections?.map((section) =>
-                  section.kind === 'pets' ? (
-                    <PortalAdoptionSection
-                      key={section.kind}
-                      slug={slug as string}
-                      organization={view.profile.organization}
-                    />
-                  ) : section.kind === 'products' ? (
-                    <PortalProductsSection
-                      key={section.kind}
-                      organizationId={view.profile.organization.id}
-                    />
-                  ) : section.kind === 'needsToday' ? (
-                    <PortalNeedsSection
-                      key={section.kind}
-                      organizationId={view.profile.organization.id}
-                    />
-                  ) : (
-                    <PortalPlaceholderSection key={section.kind} section={section} />
-                  ),
-                )}
+                  {portafolioSections?.map((section) =>
+                    section.kind === 'pets' ? (
+                      <PortalAdoptionSection
+                        key={section.kind}
+                        slug={slug as string}
+                        organization={view.profile.organization}
+                      />
+                    ) : section.kind === 'products' ? (
+                      <PortalProductsSection
+                        key={section.kind}
+                        organizationId={view.profile.organization.id}
+                      />
+                    ) : section.kind === 'needsToday' ? (
+                      <PortalNeedsSection
+                        key={section.kind}
+                        organizationId={view.profile.organization.id}
+                      />
+                    ) : (
+                      <PortalPlaceholderSection key={section.kind} section={section} />
+                    ),
+                  )}
+                </div>
+
+                <aside
+                  className={`space-y-6 ${layout.socialNavPosition === 'left' ? 'lg:order-first' : ''}`}
+                  data-testid="portal-side-panel"
+                >
+                  {hasActiveCampaignSection && (
+                    <PortalCampaignsSection key="activeCampaign" slug={slug as string} />
+                  )}
+                  <PortalSocialLinks organization={view.profile.organization} />
+                </aside>
               </div>
 
-              <aside
-                className={`space-y-6 ${layout.socialNavPosition === 'left' ? 'lg:order-first' : ''}`}
-                data-testid="portal-side-panel"
-              >
-                {hasActiveCampaignSection && (
-                  <PortalCampaignsSection key="activeCampaign" slug={slug as string} />
-                )}
-                <PortalSocialLinks organization={view.profile.organization} />
-              </aside>
-            </div>
+              {payments ? (
+                <PortalHelpCta organization={view.profile.organization} />
+              ) : (
+                <PortalAdoptionSteps
+                  organization={view.profile.organization}
+                  onBrowseCatalog={goToCatalog}
+                />
+              )}
 
-            {payments ? (
-              <PortalHelpCta organization={view.profile.organization} />
-            ) : (
-              <PortalAdoptionSteps
-                organization={view.profile.organization}
-                onBrowseCatalog={goToCatalog}
-              />
-            )}
-
-            {/* "Nosotros"/"Información" (S2-PORTAL, rediseño T-D04): antes
+              {/* "Nosotros"/"Información" (S2-PORTAL, rediseño T-D04): antes
                 tabs, ahora secciones ancladas siempre visibles cuando hay
                 contenido real — nunca una sección vacía. */}
-            {aboutUs && (
-              <section id="portal-about" style={{ scrollMarginTop: '5rem' }}>
-                <PortalAboutSection aboutUs={aboutUs} />
-              </section>
-            )}
-            {reputation && <PortalReviewsSection slug={slug as string} />}
+              {aboutUs && (
+                <section id="portal-about" style={{ scrollMarginTop: '5rem' }}>
+                  <PortalAboutSection aboutUs={aboutUs} />
+                </section>
+              )}
+              {reputation && <PortalReviewsSection slug={slug as string} />}
 
-            {hasContactInfo && contact && (
-              <section id="portal-contact-info" style={{ scrollMarginTop: '5rem' }}>
-                <PortalContactInfoSection
-                  contact={contact}
-                  location={view.profile.organization.location}
-                />
-              </section>
-            )}
+              {hasContactInfo && contact && (
+                <section id="portal-contact-info" style={{ scrollMarginTop: '5rem' }}>
+                  <PortalContactInfoSection
+                    contact={contact}
+                    location={view.profile.organization.location}
+                  />
+                </section>
+              )}
 
-            {payments && (
-              <div style={{ scrollMarginTop: '5rem' }}>
-                <PortalPublicLedgerSection />
-              </div>
-            )}
+              {payments && (
+                <div style={{ scrollMarginTop: '5rem' }}>
+                  <PortalPublicLedgerSection />
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+        {state === 'ready' && view && (
+          <div className="mx-auto w-full px-4 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0">
+            <PublicFooter organization={view.profile.organization} navItems={navItems} />
           </div>
         )}
-      </main>
-      {state === 'ready' && view && (
-        <div className="mx-auto w-full px-4 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0">
-          <PublicFooter organization={view.profile.organization} navItems={navItems} />
-        </div>
-      )}
-    </div>
+      </div>
+    </PortalPreviewContext.Provider>
   );
 }

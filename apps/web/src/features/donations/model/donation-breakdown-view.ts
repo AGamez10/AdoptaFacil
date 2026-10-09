@@ -1,5 +1,6 @@
 import {
   computeBreakdown,
+  DIRECT_COLLECTION_RATES,
   MIN_DONATION_AMOUNT,
   type CommissionPayer,
   type PaymentBreakdown,
@@ -45,7 +46,7 @@ export function formatBogota(isoUtc: string): string {
  * que ambas pantallas usen EXACTAMENTE el mismo texto sin duplicar los literales).
  */
 export function breakdownLines(breakdown: PaymentBreakdown): BreakdownLine[] {
-  return [
+  const lines: BreakdownLine[] = [
     {
       key: 'amountCharged',
       label: 'Total que pagas',
@@ -54,7 +55,7 @@ export function breakdownLines(breakdown: PaymentBreakdown): BreakdownLine[] {
     },
     {
       key: 'platformFee',
-      label: 'Apoyo de sostenimiento a AdoptaFácil (4%)',
+      label: 'Apoyo de sostenimiento a AdoptaFácil',
       amount: breakdown.platformFee,
     },
     {
@@ -62,27 +63,32 @@ export function breakdownLines(breakdown: PaymentBreakdown): BreakdownLine[] {
       label: 'IVA sobre el apoyo de sostenimiento a AdoptaFácil',
       amount: breakdown.platformIva,
     },
-    { key: 'gatewayFee', label: 'Comisión pasarela', amount: breakdown.gatewayFee },
+    { key: 'gatewayFee', label: 'Comisión pasarela (estimada)', amount: breakdown.gatewayFee },
     { key: 'gatewayIva', label: 'IVA sobre la comisión pasarela', amount: breakdown.gatewayIva },
     {
       key: 'net',
-      label: 'Neto que recibe la organización',
+      label: 'Neto estimado que recibe la organización en su cuenta',
       amount: breakdown.net,
       emphasis: 'net',
     },
   ];
+  // Cobro directo (ADR-PAG-001): AdoptaFácil no cobra comisión por donación,
+  // así que esas líneas solo aparecen en donaciones históricas que la tuvieron.
+  return lines.filter(
+    (line) => !(line.key === 'platformFee' || line.key === 'platformIva') || line.amount > 0,
+  );
 }
 
 /**
  * Construye el desglose presentable a partir del monto pretendido y de quién asume
  * la comisión. `breakdown` es EXACTAMENTE `computeBreakdown(intendedAmount,
- * commissionPayer)` — misma fuente que el backend y el recibo.
+ * commissionPayer, DIRECT_COLLECTION_RATES)` — misma fuente que el backend y el recibo.
  */
 export function buildDonationBreakdown(
   intendedAmount: number,
   commissionPayer: CommissionPayer,
 ): { breakdown: PaymentBreakdown; lines: BreakdownLine[] } {
-  const breakdown = computeBreakdown(intendedAmount, commissionPayer);
+  const breakdown = computeBreakdown(intendedAmount, commissionPayer, DIRECT_COLLECTION_RATES);
   return { breakdown, lines: breakdownLines(breakdown) };
 }
 
