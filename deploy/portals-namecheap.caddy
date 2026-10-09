@@ -1,0 +1,18 @@
+# PORTALS_TLS=namecheap: portales en <org>.APP_DOMAIN con un certificado
+# comodín emitido por desafío DNS-01 en el DNS de Namecheap. Requiere la imagen
+# de Caddy compilada con caddy-dns/namecheap (la elige el mismo PORTALS_TLS en
+# el build), acceso a la API de Namecheap habilitado y la IPv4 del VPS en la
+# lista blanca de esa API (NAMECHEAP_CLIENT_IP).
+*.{$APP_DOMAIN} {
+	tls {
+		dns namecheap {
+			api_key {env.NAMECHEAP_API_KEY}
+			user {env.NAMECHEAP_API_USER}
+			api_endpoint https://api.namecheap.com/xml.response
+			client_ip {env.NAMECHEAP_CLIENT_IP}
+		}
+		# Comprobar la propagación contra un resolvedor público, no el del VPS.
+		resolvers 1.1.1.1 1.0.0.1
+	}
+	import app
+}

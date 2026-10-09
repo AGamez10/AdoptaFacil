@@ -1,14 +1,18 @@
 # Caddy: TLS automático (Let's Encrypt), SPA y proxy inverso de la API.
-# Variables (deploy/.env): APP_DOMAIN, ACME_EMAIL.
+# Variables (deploy/.env): APP_DOMAIN, ACME_EMAIL, PORTALS_TLS y las credenciales
+# DNS del proveedor elegido (CLOUDFLARE_API_TOKEN o NAMECHEAP_*).
 #
-# Un solo origen: https://APP_DOMAIN sirve el SPA y https://APP_DOMAIN/api/* la
-# API (se quita el prefijo /api antes de pasar a NestJS). Así la cookie httpOnly
-# de refresco y CORS no cruzan dominios.
+# Cada host sirve el SPA y, en /api/*, la API (se quita el prefijo /api antes de
+# pasar a NestJS). El front se compila con VITE_API_URL=/api (relativa), así que
+# cada host habla con la API en su propio origen: la cookie httpOnly de refresco
+# y CORS nunca cruzan dominios, tampoco desde un portal en <org>.APP_DOMAIN.
 #
-# Portales por subdominio (*.APP_DOMAIN, F7): requieren certificado comodín por
-# desafío DNS-01, que exige compilar Caddy con el módulo del proveedor DNS
-# (⟦POR DEFINIR⟧). Ver docs/operacion/DESPLIEGUE_VPS.md §Subdominios. No se
-# habilita on-demand TLS sin un endpoint `ask` que autorice solo dominios
+# Portales por subdominio (*.APP_DOMAIN, F7): PORTALS_TLS elige el bloque.
+#   off        sin comodín (por defecto)
+#   cloudflare certificado comodín por DNS-01 en Cloudflare (producción)
+#   namecheap  certificado comodín por DNS-01 en Namecheap (producción)
+#   internal   comodín con la CA interna de Caddy (CI y pruebas locales)
+# No se habilita on-demand TLS sin un endpoint `ask` que autorice solo dominios
 # verificados: sin él, cualquiera podría hacernos emitir certificados.
 {
 	email {$ACME_EMAIL}
@@ -19,7 +23,7 @@
 	}
 }
 
-{$APP_DOMAIN} {
+(app) {
 	encode zstd gzip
 
 	header {
@@ -56,3 +60,14 @@
 		file_server
 	}
 }
+
+{$APP_DOMAIN} {
+	import app
+}
+
+# www siempre redirige al dominio principal (necesita su registro DNS).
+www.{$APP_DOMAIN} {
+	redir https://{$APP_DOMAIN}{uri} permanent
+}
+
+import portals-{$PORTALS_TLS:off}.caddy
