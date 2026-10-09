@@ -40,7 +40,9 @@ age-keygen -o adoptafacil-backup.key      # en la máquina del dueño, NO en el 
 ## Off-site
 
 `BACKUP_RCLONE_REMOTE` (cualquier destino de rclone: Backblaze B2, S3,
-Cloudflare R2, Google Drive…). Proveedor ⟦POR DEFINIR por el dueño⟧. Recomendado:
+Cloudflare R2, Google Drive…). Recomendado para Hostinger: **Backblaze B2**
+(`BACKUP_RCLONE_REMOTE=b2:adoptafacil-backups`, `rclone config` con una clave
+de aplicación limitada a ese bucket; los primeros 10 GB son gratis). Además:
 bucket con **bloqueo de objetos / versionado** para que un atacante en el VPS no
 pueda borrar los respaldos remotos, y credencial de rclone que solo pueda
 escribir. Mientras no exista, el respaldo vive en el mismo disco que la base:

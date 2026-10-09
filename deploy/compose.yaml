@@ -122,7 +122,10 @@ services:
       dockerfile: deploy/docker/web.Dockerfile
       target: edge
       args:
-        VITE_API_URL: https://${APP_DOMAIN}/api
+        # Relativa: cada host (dominio principal o <org>.APP_DOMAIN) llama a la
+        # API en su propio origen a través de Caddy. Ver deploy/Caddyfile.
+        VITE_API_URL: /api
+        PORTALS_TLS: ${PORTALS_TLS:-off}
         VITE_PORTAL_BASE_DOMAIN: ${VITE_PORTAL_BASE_DOMAIN:-}
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
         VITE_MERCADOPAGO_PUBLIC_KEY: ${VITE_MERCADOPAGO_PUBLIC_KEY:-}
@@ -131,6 +134,10 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL}
+      PORTALS_TLS: ${PORTALS_TLS:-off}
+      # Solo con PORTALS_TLS=cloudflare: token de Cloudflare limitado a
+      # Zone:DNS:Edit de esta zona. Vive en deploy/.env, nunca en el repo.
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
     ports:
       - '80:80'
       - '443:443'
