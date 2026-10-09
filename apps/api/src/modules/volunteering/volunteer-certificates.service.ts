@@ -331,6 +331,16 @@ export class VolunteerCertificatesService {
         to: created.volunteerEmail,
         subject: buildCertificateIssuedSubject(emailInput),
         body: buildCertificateIssuedBody(emailInput),
+        template: {
+          event: 'volunteering.certificate_issued',
+          organizationName: emailInput.organizationName || undefined,
+          data: {
+            nombre: emailInput.volunteerName,
+            oportunidad: emailInput.opportunityTitle,
+            organizacion: emailInput.organizationName,
+            horas: emailInput.totalApprovedHours,
+          },
+        },
       });
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);

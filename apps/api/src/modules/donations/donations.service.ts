@@ -406,6 +406,17 @@ export class DonationsService {
           donation.id,
           donation.organization_id,
           donation.payer.email,
+          donation.intended_amount,
+        );
+      } else if (donation.donor_user_id && donation.payer?.email) {
+        // An authenticated donor gets the same thank-you, pointing to "Mis
+        // donaciones" instead of a magic link. Runs once per donation: a
+        // duplicate webhook returns no row from apply_donation_webhook.
+        await this.sendDonationThanks(
+          donation.organization_id,
+          donation.payer.email,
+          donation.intended_amount,
+          `${this.webBaseUrl.replace(/\/+$/, '')}/mis-donaciones`,
         );
       }
     }
@@ -425,6 +436,7 @@ export class DonationsService {
     donationId: string,
     organizationId: string,
     payerEmail: string,
+    amount?: number,
   ): Promise<void> {
     try {
       const token = randomBytes(32).toString('base64url');
@@ -447,8 +459,15 @@ export class DonationsService {
       });
 
       const accessLink = buildDonationAccessLink(this.webBaseUrl, token);
+      const organizationName = await this.organizationName(organizationId);
       await this.notifications.send({
         to: payerEmail,
+        // Branded, superadmin-editable copy; subject/body below are the fallback.
+        template: {
+          event: 'donation.thanks',
+          organizationName,
+          data: { enlace: accessLink, monto: amount },
+        },
         subject: 'Tu comprobante de donación en AdoptaFácil',
         body:
           'Hola,\n\n' +
@@ -464,6 +483,46 @@ export class DonationsService {
       this.logger.warn(
         `No se pudo emitir el enlace de acceso de invitado para donation=${donationId}: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /** Best-effort thank-you for an authenticated donor (never fails the webhook). */
+  private async sendDonationThanks(
+    organizationId: string,
+    payerEmail: string,
+    amount: number,
+    link: string,
+  ): Promise<void> {
+    try {
+      const organizationName = await this.organizationName(organizationId);
+      await this.notifications.send({
+        to: payerEmail,
+        subject: 'Gracias por tu donación en AdoptaFácil',
+        body:
+          'Hola,\n\n¡Gracias por tu donación! Tu pago fue confirmado.\n' +
+          `Puedes ver el recibo y el certificado (si aplica) en "Mis donaciones": ${link}`,
+        template: {
+          event: 'donation.thanks',
+          organizationName,
+          data: { enlace: link, monto: amount },
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar el agradecimiento de la donación: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async organizationName(organizationId: string): Promise<string | undefined> {
+    try {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true },
+      });
+      return org?.name ?? undefined;
+    } catch {
+      return undefined;
     }
   }
 

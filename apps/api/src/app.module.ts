@@ -5,6 +5,7 @@ import { validateEnv } from './config/env.validation';
 import { AuditModule } from './core/audit/audit.module';
 import { AuthModule } from './core/auth/auth.module';
 import { IdentityModule } from './core/identity/identity.module';
+import { EmailTemplatesModule } from './core/notifications/email-templates.module';
 import { NotificationModule } from './core/notifications/notification.module';
 import { PaymentModule } from './core/payments/payment.module';
 import { RbacModule } from './core/rbac/rbac.module';
@@ -50,6 +51,8 @@ import { RedisModule } from './redis/redis.module';
     RedisModule,
     QueueModule,
     NotificationModule,
+    // Superadmin-editable email templates + public bulk-email opt-out.
+    EmailTemplatesModule,
     // Shared infra ports (T-107): single StoragePort provider, global.
     StorageModule,
     // Shared PaymentPort provider (T-052): binds the fake adapter, global.

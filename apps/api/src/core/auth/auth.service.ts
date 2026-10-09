@@ -408,6 +408,9 @@ export class AuthService {
     const resetLink = buildPasswordResetLink(this.webBaseUrl, token);
     await this.notifications.send({
       to: normalizedEmail,
+      // Branded, superadmin-editable copy (required event: can't be disabled);
+      // subject/body below are the plain fallback.
+      template: { event: 'auth.password_reset', data: { enlace: resetLink } },
       subject: 'Restablece tu contraseña de AdoptaFácil',
       body:
         'Hola,\n\n' +

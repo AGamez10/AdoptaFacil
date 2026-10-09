@@ -241,10 +241,26 @@ export class CommunityPostsService {
     const body = post.title ? `"${post.title}": ${post.body}` : post.body;
     for (const to of emails) {
       try {
-        await this.notifications.send({ to, subject, body });
+        // Bulk event: the template layer adds the unsubscribe link and skips
+        // anyone who opted out (Ley 1581).
+        await this.notifications.send({
+          to,
+          subject,
+          body,
+          template: {
+            event: 'community.campaign_update',
+            organizationName: org?.name ?? undefined,
+            data: {
+              organizacion: orgName,
+              titulo: post.title ?? `Novedades de ${orgName}`,
+              mensaje: post.body,
+            },
+          },
+        });
       } catch (error) {
+        // Never the recipient address in the log (Ley 1581).
         this.logger.warn(
-          `No se pudo notificar a ${to} sobre la publicación ${post.id}: ${(error as Error).message}`,
+          `No se pudo notificar a un donante sobre la publicación ${post.id}: ${(error as Error).message}`,
         );
       }
     }

@@ -1,0 +1,56 @@
+// Module: notifications (core) — email templates editable from the superadmin
+// panel + bulk-email opt-outs.
+//
+// Platform-level configuration, NOT tenant business data (same reasoning as
+// `platform_settings`): one catalog of email events for the whole platform, so
+// these tables carry no organization_id and are intentionally NOT under RLS.
+// Writes happen only through the platform-gated controller (PlatformAdmin /
+// PlatformSuperAdmin). The migration grants the app role the minimum:
+//   * email_template_versions → SELECT, INSERT only (append-only history).
+//   * email_template_settings → SELECT, INSERT, UPDATE (active pointer + on/off).
+//   * email_suppressions      → SELECT, INSERT only (an opt-out is never erased
+//                               by the app; Ley 1581 revocatoria).
+
+/// Immutable copy of one email event (`event_key` from the code catalog). A new
+/// edit is a NEW row with the next `version`; rows are never updated/deleted.
+model EmailTemplateVersion {
+  id              String   @id @default(uuid()) @db.Uuid
+  eventKey        String   @map("event_key")
+  version         Int
+  subject         String
+  preheader       String
+  heading         String
+  body            String
+  ctaLabel        String?  @map("cta_label")
+  footerNote      String?  @map("footer_note")
+  changeNote      String?  @map("change_note")
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([eventKey, version])
+  @@map("email_template_versions")
+}
+
+/// Per-event state: which version is active (`null` = built-in default copy)
+/// and whether the event sends at all. Absent row = default copy, enabled.
+model EmailTemplateSetting {
+  eventKey        String   @id @map("event_key")
+  activeVersion   Int?     @map("active_version")
+  enabled         Boolean  @default(true)
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("email_template_settings")
+}
+
+/// Bulk-email opt-out. Stores ONLY the SHA-256 of the normalized address (never
+/// the address itself), so the list can't be read back as a mailing list.
+model EmailSuppression {
+  emailHash String   @map("email_hash")
+  category  String
+  source    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([emailHash, category])
+  @@map("email_suppressions")
+}

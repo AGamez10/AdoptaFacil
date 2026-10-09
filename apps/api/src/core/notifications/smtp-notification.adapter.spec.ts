@@ -47,6 +47,34 @@ describe('SmtpNotificationAdapter (T-109)', () => {
     });
   });
 
+  it('adds html, headers and attachments only when present (additive)', async () => {
+    const sendMail = jest.fn().mockResolvedValue({});
+    const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;
+    const adapter = new SmtpNotificationAdapter(makeConfig(), createTransport);
+    const attachments = [
+      { filename: 'a.pdf', content: Buffer.from('x'), contentType: 'application/pdf' },
+    ];
+
+    await adapter.send({
+      to: 'user@dest.test',
+      subject: 'Hola',
+      body: 'texto',
+      html: '<p>hola</p>',
+      headers: { 'List-Unsubscribe': '<https://x/u>' },
+      attachments,
+    });
+
+    expect(sendMail).toHaveBeenCalledWith({
+      from: 'AdoptaFácil <no-reply@example.test>',
+      to: 'user@dest.test',
+      subject: 'Hola',
+      text: 'texto',
+      html: '<p>hola</p>',
+      headers: { 'List-Unsubscribe': '<https://x/u>' },
+      attachments,
+    });
+  });
+
   it('is best-effort: a send failure does NOT throw (never tumbles the caller)', async () => {
     const sendMail = jest.fn().mockRejectedValue(new Error('SMTP connection refused'));
     const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;
