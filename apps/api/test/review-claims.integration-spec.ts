@@ -31,7 +31,7 @@ describe('Platform review claims (R3-6)', () => {
         organizationName: 'Org',
         displayName: 'Owner',
         email: `claims-${randomUUID()}@test.local`,
-        password: 'password123',
+        password: 'password-claims-123',
       })
       .expect(201);
     const actor = {
