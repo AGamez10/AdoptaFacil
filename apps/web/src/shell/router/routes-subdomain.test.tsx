@@ -25,8 +25,8 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
   });
 
   it('renders Org A\'s rich portal at "/" when the host is Org A\'s real subdomain', async () => {
-    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.com');
-    setHostname('patitas.adoptafacil.com');
+    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.org');
+    setHostname('patitas.adoptafacil.org');
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
@@ -60,7 +60,7 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
   });
 
   it('falls back to the general portal when the host is not a real organization subdomain', async () => {
-    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.com');
+    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.org');
     setHostname('localhost');
 
     renderShell({ route: '/', session: { initialStatus: 'unauthenticated' } });
@@ -72,7 +72,7 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
 
   it('falls back to the general portal when VITE_PORTAL_BASE_DOMAIN is unset, even on a real-shaped host', async () => {
     vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', '');
-    setHostname('patitas.adoptafacil.com');
+    setHostname('patitas.adoptafacil.org');
 
     renderShell({ route: '/', session: { initialStatus: 'unauthenticated' } });
 

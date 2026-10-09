@@ -49,7 +49,7 @@ export interface Organization {
 
   // --- Public portal (M14, additive) -----------------------------------------
   /** Subdomain for the org portal, e.g. `patitaspeludas` in
-   *  patitaspeludas.adoptafacil.com. */
+   *  patitaspeludas.adoptafacil.org. */
   subdomain?: string;
   /** URL slug for the path-based portal route `/o/<slug>`. */
   slug?: string;

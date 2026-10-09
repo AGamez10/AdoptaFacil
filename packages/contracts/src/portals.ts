@@ -75,7 +75,7 @@ export interface PortalView {
 
 /**
  * Resultado de resolver un subdominio real del portal
- * (`<subdominio>.adoptafacil.com`) a su slug de organización. Superficie
+ * (`<subdominio>.adoptafacil.org`) a su slug de organización. Superficie
  * pública mínima — SOLO el slug, nada más — para que el frontend reutilice
  * sin cambios cada endpoint público ya existente que se indexa por slug
  * (`organization_public`, `organization_portal_theme`, animales, campañas...)
