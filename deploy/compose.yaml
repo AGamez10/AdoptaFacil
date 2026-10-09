@@ -126,7 +126,10 @@ services:
       dockerfile: deploy/docker/web.Dockerfile
       target: edge
       args:
-        VITE_API_URL: https://${APP_DOMAIN}/api
+        # Relativa: cada host (dominio principal o <org>.APP_DOMAIN) llama a la
+        # API en su propio origen a través de Caddy. Ver deploy/Caddyfile.
+        VITE_API_URL: /api
+        PORTALS_TLS: ${PORTALS_TLS:-off}
         VITE_PORTAL_BASE_DOMAIN: ${VITE_PORTAL_BASE_DOMAIN:-}
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
         VITE_MERCADOPAGO_PUBLIC_KEY: ${VITE_MERCADOPAGO_PUBLIC_KEY:-}
@@ -135,6 +138,13 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL}
+      PORTALS_TLS: ${PORTALS_TLS:-off}
+      # Credenciales DNS del proveedor elegido en PORTALS_TLS (solo una se usa).
+      # Viven en deploy/.env del servidor, nunca en el repo.
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      NAMECHEAP_API_USER: ${NAMECHEAP_API_USER:-}
+      NAMECHEAP_API_KEY: ${NAMECHEAP_API_KEY:-}
+      NAMECHEAP_CLIENT_IP: ${NAMECHEAP_CLIENT_IP:-}
     ports:
       - '80:80'
       - '443:443'
