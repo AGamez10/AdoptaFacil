@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PDFParse } from 'pdf-parse';
 import type { DocumentTextPort } from './document-text.port';
 
 /** Páginas que se leen como máximo: el RUT ocupa 1-3 y el certificado de
@@ -21,6 +20,8 @@ export class PdfTextAdapter implements DocumentTextPort {
   async extractText(data: Buffer, contentType?: string): Promise<string | null> {
     const looksPdf = data.subarray(0, 5).toString('latin1') === '%PDF-';
     if (!looksPdf || (contentType && !/pdf|octet-stream/i.test(contentType))) return null;
+    // Carga perezosa: pdf.js pesa varios MB y solo hace falta al leer un documento.
+    const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse({
       data: new Uint8Array(data),
       isEvalSupported: false,
