@@ -19,8 +19,29 @@ export interface TemplatePickerProps {
 }
 
 export function tierLabel(template: PortalTemplateInfo): string {
-  if (template.tier === 'free') return 'Gratis';
-  return PORTAL_TEMPLATE_TIERS_ENFORCED ? 'Plan de pago' : 'Pago · gratis en el lanzamiento';
+  return template.tier === 'free' ? 'Gratis' : 'Pro';
+}
+
+/**
+ * Aviso del plan de pago: vende sin bloquear. Mientras los niveles no se
+ * cobren (`PORTAL_TEMPLATE_TIERS_ENFORCED`), dice que las Pro están incluidas.
+ */
+export function TemplateUpsell() {
+  return (
+    <p className={styles.upsell} data-testid="template-upsell">
+      <span className={styles.upsell__badge}>PRO</span>
+      <span>
+        {PORTAL_TEMPLATE_TIERS_ENFORCED ? (
+          <>Las plantillas Pro son parte del plan de pago.</>
+        ) : (
+          <>
+            <strong>Las plantillas Pro están incluidas gratis durante el lanzamiento.</strong> Más
+            adelante serán parte del plan de pago, junto con tu dominio propio.
+          </>
+        )}
+      </span>
+    </p>
+  );
 }
 
 function Thumb({ id }: { id: PortalTemplateId }) {

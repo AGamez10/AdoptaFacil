@@ -5,12 +5,15 @@ import {
   type Organization,
   type PortalLogoPosition,
   type PortalSocialNavPosition,
+  PORTAL_TEMPLATES,
+  PORTAL_TEMPLATE_OPTIONS,
+  resolveTemplateOptions,
   type PortalTemplateId,
+  type PortalTemplateOptions,
   type PortalTheme,
   type PortalThemeConfig,
 } from '@adoptafacil/contracts';
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -23,7 +26,6 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
-import { brandTokensToStyle } from '../../../shell/theme';
 import {
   contrastRatio,
   hexToHslString,
@@ -36,8 +38,9 @@ import {
   safeTemplate,
   type PortalThemeField,
 } from '../model/theme';
-import { TemplatePicker } from '../components/templates/template-picker';
-import { PortalMiniPreview } from '../components/portal-mini-preview';
+import { TemplatePicker, TemplateUpsell } from '../components/templates/template-picker';
+import { TemplateOptionsForm } from '../components/templates/template-options-form';
+import { TemplateLivePreview } from '../components/templates/template-live-preview';
 import { OrgStatusCard } from '../../org/components/org-status-card';
 
 /** Empty string ⇒ "use the default token" (the field is omitted from the payload). */
@@ -230,6 +233,7 @@ export function PortalThemePage() {
   const [logoPosition, setLogoPosition] = useState<PortalLogoPosition>('left');
   const [socialNavPosition, setSocialNavPosition] = useState<PortalSocialNavPosition>('right');
   const [template, setTemplate] = useState<PortalTemplateId>('clasica');
+  const [templateOptions, setTemplateOptions] = useState<PortalTemplateOptions>({});
   const [slug, setSlug] = useState<string | undefined>(undefined);
   const [orgName, setOrgName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -255,6 +259,9 @@ export function PortalThemePage() {
         setLogoPosition(config.logoPosition ?? 'left');
         setSocialNavPosition(config.socialNavPosition ?? 'right');
         setTemplate(safeTemplate(config.template));
+        setTemplateOptions(
+          resolveTemplateOptions(safeTemplate(config.template), config.templateOptions),
+        );
         setSlug(org?.slug ?? undefined);
         setOrgName(org?.name ?? undefined);
       })
@@ -270,12 +277,13 @@ export function PortalThemePage() {
     };
   }, [client, canEdit]);
 
-  const previewStyle = useMemo(() => brandTokensToStyle(tokensFromForm(form)), [form]);
-  const primaryBg = form.primary || DISPLAY_FALLBACK_HSL.primary;
-  const primaryFg = form['primary-foreground'] || DISPLAY_FALLBACK_HSL['primary-foreground'];
-  const accentBg = form.accent || DISPLAY_FALLBACK_HSL.accent;
-  const accentFg = form['accent-foreground'] || DISPLAY_FALLBACK_HSL['accent-foreground'];
-  const ringColor = form.ring || DISPLAY_FALLBACK_HSL.ring;
+  const previewTokens = useMemo(() => tokensFromForm(form), [form]);
+
+  // Al cambiar de plantilla, sus ajustes arrancan en los valores por defecto.
+  const chooseTemplate = (next: PortalTemplateId) => {
+    setTemplate(next);
+    setTemplateOptions(resolveTemplateOptions(next, next === template ? templateOptions : {}));
+  };
 
   const setToken = (token: string, value: string) =>
     setForm((prev) => ({ ...prev, [token]: value }));
@@ -318,12 +326,21 @@ export function PortalThemePage() {
     try {
       const themeConfig = await client.request<PortalThemeConfig>('/portals/theme', {
         method: 'PUT',
-        json: { tokens: tokensFromForm(form), logoPosition, socialNavPosition, template },
+        json: {
+          tokens: tokensFromForm(form),
+          logoPosition,
+          socialNavPosition,
+          template,
+          templateOptions,
+        },
       });
       setForm(safePortalTheme(themeConfig.tokens) as FormState);
       setLogoPosition(themeConfig.logoPosition ?? 'left');
       setSocialNavPosition(themeConfig.socialNavPosition ?? 'right');
       setTemplate(safeTemplate(themeConfig.template));
+      setTemplateOptions(
+        resolveTemplateOptions(safeTemplate(themeConfig.template), themeConfig.templateOptions),
+      );
       toast({
         title: 'Personalización guardada',
         description: 'Tu portal se re-tematizó.',
@@ -379,39 +396,82 @@ export function PortalThemePage() {
     );
   }
 
+  const templateInfo = PORTAL_TEMPLATES.find((info) => info.id === template);
+  const hasOptions = PORTAL_TEMPLATE_OPTIONS[template].length > 0;
+  const saveButton = (
+    <Button disabled={saving} onClick={() => void save()} data-testid="theme-save">
+      {saving ? 'Guardando…' : 'Guardar y publicar'}
+    </Button>
+  );
+
   return (
     <PageContainer>
       <PageHeader
-        title="Personalización del portal"
-        description="La apariencia visual de tu portal público: plantilla, colores y diseño."
-        actions={publicPortalLink}
+        title="Diseña tu portal"
+        description="Elige una plantilla, ajústala a tu estilo y mira el resultado en vivo antes de publicarlo."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            {publicPortalLink}
+            {saveButton}
+          </div>
+        }
       />
       <OrgStatusCard hideWhenApproved onStatus={setOrgStatus} />
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
           <div className="space-y-6">
+            <TemplateUpsell />
+
             {/* Ola 3: plantilla del portal. Mismo contenido, otra estructura;
                 el nivel de plan es un parámetro (TODO(client)). */}
             <Card>
               <CardHeader>
-                <CardTitle>Plantilla de tu portal</CardTitle>
+                <CardTitle>1. Elige tu plantilla</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Tus animales, campañas y datos se ven en todas. Cambia la forma de presentarlos.
                 </p>
               </CardHeader>
               <CardContent>
-                <TemplatePicker value={template} onChange={setTemplate} />
+                <TemplatePicker value={template} onChange={chooseTemplate} />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Colores de tu portal</CardTitle>
+                <CardTitle>2. Ajusta {templateInfo?.name ?? 'tu plantilla'}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {hasOptions && (
+                  <TemplateOptionsForm
+                    template={template}
+                    value={templateOptions}
+                    onChange={setTemplateOptions}
+                  />
+                )}
+                {template === 'clasica' && (
+                  <PositionToggle
+                    legend="Posición del logo"
+                    options={LOGO_POSITION_OPTIONS}
+                    value={logoPosition}
+                    onChange={setLogoPosition}
+                  />
+                )}
+                <PositionToggle
+                  legend="Lado del panel de redes y campañas"
+                  options={SOCIAL_NAV_POSITION_OPTIONS}
+                  value={socialNavPosition}
+                  onChange={setSocialNavPosition}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>3. Tus colores</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Elige los colores que representan a tu organización. Se aplican automáticamente a
-                  tu portal público.
+                  Los colores de tu organización se aplican a cualquier plantilla.
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -428,97 +488,22 @@ export function PortalThemePage() {
               </CardContent>
             </Card>
 
-            {/* Diseño del portal (S2-PORTAL): posiciones de layout, un
-                subconjunto seguro y acotado más — nunca CSS libre. */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Diseño del portal</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <PositionToggle
-                  legend={
-                    template === 'clasica'
-                      ? 'Posición del logo'
-                      : 'Posición del logo (solo Clásica)'
-                  }
-                  options={LOGO_POSITION_OPTIONS}
-                  value={logoPosition}
-                  onChange={setLogoPosition}
-                />
-                <PositionToggle
-                  legend="Posición del sidebar de redes"
-                  options={SOCIAL_NAV_POSITION_OPTIONS}
-                  value={socialNavPosition}
-                  onChange={setSocialNavPosition}
-                />
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-end">
-              <Button disabled={saving} onClick={() => void save()}>
-                {saving ? 'Guardando…' : 'Guardar personalización'}
-              </Button>
-            </div>
+            <div className="flex justify-end">{saveButton}</div>
           </div>
 
-          <div className="space-y-6">
-            {/* Live preview — the same tokens applied to a scoped sample, so the
-                owner sees the re-theme before publishing it. Primary cascada
-                correctamente por los componentes compartidos Button/Badge; Acento
-                y Anillo de foco llevan un swatch DEDICADO abajo (T-D03) porque
-                ningún componente de `packages/ui` consume --accent/--ring (sus
-                `.module.scss` usan sus propias constantes fijas). No hay un chip
-                "Secundario": ese token se QUITÓ (T-PERSONALIZACION-AUDIT) — la
-                variante `secondary` de `Badge` es un gris FIJO del design system,
-                nunca reflejó ningún valor editable aquí. */}
-            <Card style={previewStyle} data-testid="theme-preview">
-              <CardHeader>
-                <CardTitle>Vista previa</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button>Botón primario</Button>
-                  <Button variant="outline">Contorno</Button>
-                  <Badge>Primario</Badge>
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full border border-transparent px-2.5 py-0.5 text-xs font-medium"
-                    style={{ backgroundColor: `hsl(${accentBg})`, color: `hsl(${accentFg})` }}
-                  >
-                    Acento
-                  </span>
-                  <span
-                    aria-hidden
-                    title="Anillo de foco"
-                    className="inline-block h-6 w-6 rounded-full border-2 bg-background"
-                    style={{ borderColor: `hsl(${ringColor})` }}
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Así se verán los elementos de marca en tu portal público.
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Mini-réplica del portal (S2-PORTAL) — sin fetch, refleja el
-                formulario en tiempo real (colores + posiciones). Estructura y
-                tokens alineados al portal REAL de hoy (T-PERSONALIZACION-AUDIT):
-                sin tabs (el portal es scroll único con anclas desde T-D04), y
-                `ring` representado en la misma pieza donde de verdad se ve
-                (el buscador del catálogo), no como adorno decorativo. */}
+          <div className="lg:sticky lg:top-4 lg:self-start">
             <Card>
               <CardHeader>
-                <CardTitle>Así se verá tu portal</CardTitle>
+                <CardTitle>Vista previa en vivo</CardTitle>
               </CardHeader>
               <CardContent>
-                <PortalMiniPreview
-                  organizationName={orgName}
-                  primary={primaryBg}
-                  primaryForeground={primaryFg}
-                  accent={accentBg}
-                  accentForeground={accentFg}
-                  ring={ringColor}
+                <TemplateLivePreview
+                  slug={slug}
+                  orgName={orgName}
+                  template={template}
+                  options={templateOptions}
+                  tokens={previewTokens}
                   logoPosition={logoPosition}
-                  socialNavPosition={socialNavPosition}
                 />
               </CardContent>
             </Card>

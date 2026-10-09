@@ -140,7 +140,7 @@ export type PortalSocialNavPosition = 'left' | 'right';
  * Plantillas del portal público (Ola 3). Mismo contenido y mismos datos, otra
  * identidad visual y otra estructura. Conjunto cerrado: nunca HTML ni CSS libre.
  */
-export const PORTAL_TEMPLATE_IDS = ['clasica', 'editorial', 'carnet', 'impacto'] as const;
+export const PORTAL_TEMPLATE_IDS = ['clasica', 'editorial', 'carnet', 'impacto', 'orbita'] as const;
 export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
 
@@ -185,7 +185,106 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     tagline: 'Oscura y directa: el número de animales que buscan hogar manda.',
     tier: 'paid',
   },
+  {
+    id: 'orbita',
+    name: 'Órbita',
+    tagline: 'Una constelación en 3D que forma una huella y reacciona al cursor.',
+    tier: 'paid',
+  },
 ];
+
+/**
+ * Ajustes propios de cada plantilla (Ola 3). Conjunto cerrado: la API rechaza
+ * cualquier clave o valor fuera de esta lista, y la web arma el formulario a
+ * partir de ella. Nunca CSS ni HTML libre.
+ */
+export type PortalTemplateOptionValue = string | boolean;
+export type PortalTemplateOptions = Record<string, PortalTemplateOptionValue>;
+
+export type PortalTemplateOptionDef =
+  | { key: string; label: string; kind: 'toggle'; default: boolean }
+  | {
+      key: string;
+      label: string;
+      kind: 'choice';
+      default: string;
+      choices: ReadonlyArray<{ value: string; label: string }>;
+    };
+
+export const PORTAL_TEMPLATE_OPTIONS: Readonly<
+  Record<PortalTemplateId, readonly PortalTemplateOptionDef[]>
+> = {
+  clasica: [],
+  editorial: [
+    {
+      key: 'photoShape',
+      label: 'Forma de la foto de portada',
+      kind: 'choice',
+      default: 'arco',
+      choices: [
+        { value: 'arco', label: 'Arco' },
+        { value: 'recta', label: 'Recta' },
+        { value: 'circulo', label: 'Círculo' },
+      ],
+    },
+    { key: 'showFeatured', label: 'Mostrar "En esta edición"', kind: 'toggle', default: true },
+  ],
+  carnet: [
+    {
+      key: 'pattern',
+      label: 'Fondo de la página',
+      kind: 'choice',
+      default: 'puntos',
+      choices: [
+        { value: 'puntos', label: 'Puntos' },
+        { value: 'huellas', label: 'Huellas' },
+        { value: 'liso', label: 'Liso' },
+      ],
+    },
+    { key: 'showMinis', label: 'Mostrar mini carnets de animales', kind: 'toggle', default: true },
+  ],
+  impacto: [
+    { key: 'showMosaic', label: 'Mostrar mosaico de fotos', kind: 'toggle', default: true },
+    { key: 'motion', label: 'Cinta de nombres en movimiento', kind: 'toggle', default: true },
+  ],
+  orbita: [
+    {
+      key: 'density',
+      label: 'Intensidad de la constelación',
+      kind: 'choice',
+      default: 'media',
+      choices: [
+        { value: 'suave', label: 'Suave' },
+        { value: 'media', label: 'Media' },
+        { value: 'intensa', label: 'Intensa' },
+      ],
+    },
+    { key: 'showCount', label: 'Mostrar el número de animales', kind: 'toggle', default: true },
+  ],
+};
+
+/** Ajustes efectivos: los guardados válidos sobre los valores por defecto. */
+export function resolveTemplateOptions(
+  template: PortalTemplateId,
+  raw: unknown,
+): PortalTemplateOptions {
+  const defs = PORTAL_TEMPLATE_OPTIONS[template] ?? [];
+  const source =
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out: PortalTemplateOptions = {};
+  for (const def of defs) {
+    const value = source[def.key];
+    if (def.kind === 'toggle') {
+      out[def.key] = typeof value === 'boolean' ? value : def.default;
+    } else {
+      out[def.key] =
+        typeof value === 'string' && def.choices.some((c) => c.value === value)
+          ? value
+          : def.default;
+    }
+  }
+  return out;
+}
 
 /** ¿Se cobra la plantilla? Hasta que existan planes, nunca se bloquea. */
 export const PORTAL_TEMPLATE_TIERS_ENFORCED = false;
@@ -199,6 +298,8 @@ export interface PortalThemeConfig {
   socialNavPosition?: PortalSocialNavPosition;
   /** Plantilla del portal (Ola 3). Default: 'clasica'. */
   template?: PortalTemplateId;
+  /** Ajustes de esa plantilla (Ola 3), ya resueltos con sus valores por defecto. */
+  templateOptions?: PortalTemplateOptions;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */
@@ -208,6 +309,8 @@ export interface UpdatePortalThemeInput {
   socialNavPosition?: PortalSocialNavPosition;
   /** Omitida, conserva la plantilla guardada. */
   template?: PortalTemplateId;
+  /** Ajustes de la plantilla. Omitidos, se conservan los guardados. */
+  templateOptions?: PortalTemplateOptions;
 }
 
 // ----------------------------------------------------------------------------

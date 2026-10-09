@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { AnimalSummary, PortalProfile } from '@adoptafacil/contracts';
+import type { AnimalSummary, PortalProfile, PortalTemplateOptions } from '@adoptafacil/contracts';
 import { OrgTypeBadge } from '../org-type-badge';
 import { initials, reviewedDocumentBadges } from '../portal-profile-section';
+import { ConstellationCanvas } from './constellation-canvas';
 import styles from './portal-templates.module.scss';
 
 /**
@@ -19,6 +20,8 @@ export interface TemplateHeroProps {
   /** Muestra real del catálogo (primeros animales adoptables). */
   animals: AnimalSummary[];
   actions?: ReactNode;
+  /** Ajustes de la plantilla ya resueltos (`resolveTemplateOptions`). */
+  options?: PortalTemplateOptions;
 }
 
 const HEADING_ID = 'portal-profile-heading';
@@ -81,11 +84,19 @@ function animalHref(slug: string, animal: AnimalSummary): string {
 // Editorial: portada de revista. Titular enorme a la izquierda, foto en arco a
 // la derecha y una tira de tres animales reales como "en esta edición".
 // ---------------------------------------------------------------------------
-export function EditorialHero({ profile, slug, animalCount, animals, actions }: TemplateHeroProps) {
+export function EditorialHero({
+  profile,
+  slug,
+  animalCount,
+  animals,
+  actions,
+  options = {},
+}: TemplateHeroProps) {
   const org = profile.organization;
   const cover = org.coverPhotos?.[0];
   const location = locationOf(profile);
-  const featured = animals.filter((a) => a.photoUrl).slice(0, 3);
+  const featured =
+    options.showFeatured === false ? [] : animals.filter((a) => a.photoUrl).slice(0, 3);
 
   return (
     <section
@@ -122,7 +133,7 @@ export function EditorialHero({ profile, slug, animalCount, animals, actions }: 
       </div>
 
       <div className={styles.editorial__media}>
-        <div className={styles.editorial__arch}>
+        <div className={styles.editorial__arch} data-shape={options.photoShape ?? 'arco'}>
           {cover ? <img src={cover} alt="" /> : <div className={styles.editorial__archFallback} />}
         </div>
         {featured.length > 0 && (
@@ -150,11 +161,18 @@ export function EditorialHero({ profile, slug, animalCount, animals, actions }: 
 // animales (la pieza favorita de los usuarios): banda navy, huellas, foto
 // enmarcada y una ficha de datos. Debajo, mini carnets de animales reales.
 // ---------------------------------------------------------------------------
-export function CarnetHero({ profile, slug, animalCount, animals, actions }: TemplateHeroProps) {
+export function CarnetHero({
+  profile,
+  slug,
+  animalCount,
+  animals,
+  actions,
+  options = {},
+}: TemplateHeroProps) {
   const org = profile.organization;
   const cover = org.coverPhotos?.[0];
   const location = locationOf(profile);
-  const featured = animals.slice(0, 4);
+  const featured = options.showMinis === false ? [] : animals.slice(0, 4);
 
   return (
     <section
@@ -239,11 +257,18 @@ export function CarnetHero({ profile, slug, animalCount, animals, actions }: Tem
 // Impacto: oscura y tipográfica. El número real de animales que buscan hogar
 // es el protagonista; debajo, una cinta en movimiento con sus caras.
 // ---------------------------------------------------------------------------
-export function ImpactoHero({ profile, slug, animalCount, animals, actions }: TemplateHeroProps) {
+export function ImpactoHero({
+  profile,
+  slug,
+  animalCount,
+  animals,
+  actions,
+  options = {},
+}: TemplateHeroProps) {
   const org = profile.organization;
   const location = locationOf(profile);
   const ribbon = animals.filter((a) => a.photoUrl).slice(0, 8);
-  const mosaic = ribbon.slice(0, 4);
+  const mosaic = options.showMosaic === false ? [] : ribbon.slice(0, 4);
   const hasCount = typeof animalCount === 'number' && animalCount > 0;
 
   return (
@@ -281,7 +306,12 @@ export function ImpactoHero({ profile, slug, animalCount, animals, actions }: Te
       )}
 
       {ribbon.length > 0 && (
-        <div className={styles.ribbon} aria-label="Animales que buscan hogar" role="region">
+        <div
+          className={styles.ribbon}
+          aria-label="Animales que buscan hogar"
+          role="region"
+          data-motion={options.motion === false ? 'off' : 'on'}
+        >
           <ul className={styles.ribbon__track}>
             {ribbon.map((animal) => (
               <li key={animal.id}>
@@ -302,6 +332,65 @@ export function ImpactoHero({ profile, slug, animalCount, animals, actions }: Te
             ))}
           </ul>
         </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Órbita: una constelación three.js que forma una huella detrás del nombre.
+// Con el número real de animales (opcional) y sus fotos en una fila flotante.
+// ---------------------------------------------------------------------------
+export function OrbitaHero({
+  profile,
+  slug,
+  animalCount,
+  animals,
+  actions,
+  options = {},
+}: TemplateHeroProps) {
+  const org = profile.organization;
+  const location = locationOf(profile);
+  const faces = animals.filter((a) => a.photoUrl).slice(0, 5);
+  const showCount =
+    options.showCount !== false && typeof animalCount === 'number' && animalCount > 0;
+  const density = (options.density as 'suave' | 'media' | 'intensa' | undefined) ?? 'media';
+
+  return (
+    <section
+      aria-labelledby={HEADING_ID}
+      className={styles.orbita}
+      data-testid="portal-hero-orbita"
+    >
+      <ConstellationCanvas density={density} />
+      <div className={styles.orbita__inner}>
+        <p className={styles.orbita__kicker}>
+          <Logo profile={profile} className={styles.orbita__logo} />
+          {location || 'Colombia'}
+        </p>
+        <h1 id={HEADING_ID} className={styles.orbita__name}>
+          {org.name}
+        </h1>
+        {org.description && <p className={styles.orbita__lead}>{org.description}</p>}
+        {showCount && (
+          <p className={styles.orbita__count} data-testid="portal-animal-count">
+            <strong>{animalCount}</strong> {animalsLabel(animalCount)}
+          </p>
+        )}
+        <Seals profile={profile} className={styles.seals} />
+        {actions}
+      </div>
+      {faces.length > 0 && (
+        <ul className={styles.orbita__faces} aria-label="Algunos de nuestros animales">
+          {faces.map((animal, index) => (
+            <li key={animal.id} style={{ ['--i' as string]: index }}>
+              <Link to={animalHref(slug, animal)}>
+                <img src={animal.photoUrl} alt="" />
+                <span>{animal.name}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

@@ -80,14 +80,12 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     ).toBeInTheDocument();
     // No editor field is rendered for an unauthorized user.
     expect(screen.queryByLabelText('Color principal')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Guardar personalización/ }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Guardar y publicar/ })).not.toBeInTheDocument();
   });
 
   it('renames the section to plain Spanish (no "tokens" jargon)', async () => {
     renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
-    expect(await screen.findByText('Colores de tu portal')).toBeInTheDocument();
+    expect(await screen.findByText('3. Tus colores')).toBeInTheDocument();
     expect(screen.queryByText('Tokens de marca')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Color principal')).toBeInTheDocument();
   });
@@ -104,7 +102,7 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
 
     const primary = await screen.findByLabelText('Color principal');
     fireEvent.change(primary, { target: { value: '#ff5500' } });
-    fireEvent.click(screen.getByRole('button', { name: /Guardar personalización/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
 
     await waitFor(() => {
       const puts = calls.filter((c) => c.init?.method === 'PUT');
@@ -162,7 +160,7 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
 
         const input = await screen.findByLabelText(label);
         fireEvent.change(input, { target: { value: hex } });
-        fireEvent.click(screen.getByRole('button', { name: /Guardar personalización/ }));
+        fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
 
         await waitFor(() => {
           const put = calls.find((c) => c.init?.method === 'PUT');
@@ -198,7 +196,7 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
       // Pale yellow background: fine against near-black, fails 4.5:1 against
       // the existing white foreground.
       fireEvent.change(primary, { target: { value: '#fef3c7' } });
-      fireEvent.click(screen.getByRole('button', { name: /Guardar personalización/ }));
+      fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
 
       expect(await screen.findByText('Contraste bajo — se guardará igual')).toBeInTheDocument();
       // Names both conflicting fields by their visible label, in one message
@@ -272,25 +270,19 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     expect(screen.queryByRole('link', { name: /Ver portal público/ })).not.toBeInTheDocument();
   });
 
-  it('the live preview reflects the accent color from the FORM, not just the saved tokens (T-D03)', async () => {
+  it('la vista previa en vivo refleja el color del formulario sin guardar', async () => {
     stubFetchByUrl({ tokens: {} });
     renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
 
-    const accentPicker = await screen.findByLabelText('Color de acento');
-    fireEvent.change(accentPicker, { target: { value: '#000000' } });
+    const primary = await screen.findByLabelText('Color principal');
+    fireEvent.change(primary, { target: { value: '#000000' } });
 
-    const preview = screen.getByTestId('theme-preview');
-    const chip = within(preview).getByText('Acento');
-    expect(chip).toHaveStyle({ backgroundColor: 'hsl(0 0% 0%)' });
+    const preview = screen.getByTestId('template-live-preview');
+    const page = preview.querySelector('[data-template]') as HTMLElement;
+    expect(page.style.getPropertyValue('--primary')).toBe('0 0% 0%');
   });
 
-  describe('S2-PORTAL: diseño y mini-réplica (siguen en Personalización)', () => {
-    it('renders the mini preview (no fetch — pure props from the form)', async () => {
-      renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
-      await screen.findByLabelText('Color principal');
-      expect(screen.getByTestId('portal-mini-preview')).toBeInTheDocument();
-    });
-
+  describe('S2-PORTAL: diseño (sigue en Personalización)', () => {
     it('changing the logo position toggle updates the state and is included on save', async () => {
       const calls: Array<{ url: string; init?: RequestInit }> = [];
       stubFetch((url, init) => {
@@ -309,7 +301,7 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
         'true',
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /Guardar personalización/ }));
+      fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
       await waitFor(() => {
         const put = calls.find((c) => c.url.includes('/portals/theme') && c.init?.method === 'PUT');
         expect(put).toBeDefined();
@@ -346,17 +338,60 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     expect(editorial).toBeChecked();
     // El nivel de plan es solo un parámetro: se ve, pero nada se bloquea.
     expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
-    expect(screen.getByTestId('template-option-carnet')).toHaveTextContent(
-      'Pago · gratis en el lanzamiento',
+    expect(screen.getByTestId('template-option-carnet')).toHaveTextContent('Pro');
+    expect(screen.getByTestId('template-upsell')).toHaveTextContent(
+      'incluidas gratis durante el lanzamiento',
     );
 
     fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Guardar personalización/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
 
     await waitFor(() => {
       const put = calls.find((c) => c.init?.method === 'PUT');
       expect(JSON.parse(String(put?.init?.body))).toMatchObject({ template: 'carnet' });
     });
     expect(screen.getByRole('radio', { name: /Carnet/ })).toBeChecked();
+  });
+
+  it('muestra los ajustes de la plantilla, los refleja en la vista previa y los envía al guardar', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method === 'PUT') {
+        return {
+          tokens: {},
+          template: 'carnet',
+          templateOptions: { pattern: 'huellas', showMinis: false },
+        };
+      }
+      return { tokens: {}, template: 'clasica' };
+    });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    // Clásica no tiene ajustes propios; sí la posición del logo.
+    await screen.findByRole('radio', { name: /Clásica/ });
+    expect(screen.queryByTestId('template-options')).not.toBeInTheDocument();
+    expect(screen.getByText('Posición del logo')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));
+    const options = screen.getByTestId('template-options');
+    expect(screen.queryByText('Posición del logo')).not.toBeInTheDocument();
+    fireEvent.click(within(options).getByRole('button', { name: 'Huellas' }));
+    fireEvent.click(within(options).getByRole('switch', { name: /mini carnets/ }));
+
+    const page = screen
+      .getByTestId('template-live-preview')
+      .querySelector('[data-template]') as HTMLElement;
+    expect(page).toHaveAttribute('data-template', 'carnet');
+    expect(page).toHaveAttribute('data-pattern', 'huellas');
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => {
+      const put = calls.find((c) => c.init?.method === 'PUT');
+      expect(JSON.parse(String(put?.init?.body))).toMatchObject({
+        template: 'carnet',
+        templateOptions: { pattern: 'huellas', showMinis: false },
+      });
+    });
   });
 });

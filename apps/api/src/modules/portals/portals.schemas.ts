@@ -104,6 +104,11 @@ const logoPositionSchema = z.enum(['left', 'center', 'right']);
 const socialNavPositionSchema = z.enum(['left', 'right']);
 /** Ola 3: plantilla del portal, conjunto cerrado del contrato. */
 const templateSchema = z.enum(PORTAL_TEMPLATE_IDS);
+/** Ola 3: ajustes de plantilla. Aquí solo la forma; el servicio los valida
+ *  contra la lista cerrada de la plantilla efectiva (`PORTAL_TEMPLATE_OPTIONS`). */
+const templateOptionsSchema = z
+  .record(z.string().regex(/^[a-zA-Z]{1,32}$/), z.union([z.boolean(), z.string().max(32)]))
+  .refine((value) => Object.keys(value).length <= 10, 'Demasiados ajustes');
 
 /** PUT /portals/theme body. `logoPosition`/`socialNavPosition` are optional and
  *  independent of `tokens` (S2-PORTAL) — a request may update either or both. */
@@ -113,6 +118,7 @@ export const updatePortalThemeSchema = z
     logoPosition: logoPositionSchema.optional(),
     socialNavPosition: socialNavPositionSchema.optional(),
     template: templateSchema.optional(),
+    templateOptions: templateOptionsSchema.optional(),
   })
   .strict();
 
