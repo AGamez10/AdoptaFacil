@@ -130,3 +130,74 @@
   padding-top: 0.5rem;
   border-top: 1px solid var(--border-hairline);
 }
+
+/* Ola 3: reconocimiento cuando un pendiente desaparece. */
+.bell__kudos {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: min(20rem, calc(100vw - 2rem));
+  padding: 0.85rem 0.85rem 0.85rem 1rem;
+  border-radius: var(--r-xl);
+  background:
+    radial-gradient(14rem 6rem at 100% 0%, hsl(var(--primary) / 0.35), transparent 70%),
+    hsl(var(--navy, 215 52% 16%));
+  color: #fff;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  box-shadow: var(--shadow-lg);
+  animation: kudos-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+.bell__kudosIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  background-color: hsl(var(--brand-gold, 40 90% 55%));
+  color: hsl(var(--navy, 215 52% 16%));
+  font-size: 0.95rem;
+}
+
+.bell__kudosClose {
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: rgb(255 255 255 / 0.75);
+  cursor: pointer;
+
+  &:hover {
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+  }
+}
+
+@keyframes kudos-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

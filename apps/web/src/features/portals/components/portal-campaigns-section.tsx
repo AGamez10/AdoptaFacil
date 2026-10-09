@@ -53,6 +53,10 @@ export function PortalCampaignsSection({ slug }: PortalCampaignsSectionProps) {
     };
   }, [slug]);
 
+  // Ola 3 (R3-5): sin campañas activas la sección no se monta (antes decía
+  // "no tiene una campaña de recaudación activa", ruido que habla de dinero).
+  if (state === 'ready' && items.length === 0) return null;
+
   return (
     <section
       aria-labelledby={HEADING_ID}
@@ -67,11 +71,6 @@ export function PortalCampaignsSection({ slug }: PortalCampaignsSectionProps) {
         <p className="text-sm text-muted-foreground">
           <span className="block font-medium text-foreground">No se pudo cargar</span>
           Inténtalo de nuevo más tarde.
-        </p>
-      )}
-      {state === 'ready' && items.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          Esta organización no tiene una campaña de recaudación activa por ahora.
         </p>
       )}
       {state === 'ready' && items.length > 0 && (

@@ -117,6 +117,7 @@ export interface WebhookOutcome {
 export class DonationsService {
   private readonly logger = new Logger('Donations');
   private readonly webBaseUrl: string;
+  private readonly certificatesEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -129,6 +130,8 @@ export class DonationsService {
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
+    this.certificatesEnabled =
+      config.get('FEATURE_DONATION_CERTIFICATES', { infer: true }) === true;
   }
 
   private requireOrgId(): string {
@@ -387,13 +390,16 @@ export class DonationsService {
       // F-3 (RF14): certificado real, emitido junto al recibo. Best-effort y
       // sin gating aquí — el servicio decide si la org es ESAL-RTE elegible;
       // si no lo es, simplemente no emite nada (no es un fallo del webhook).
-      await this.certificates.tryIssueForApprovedDonation({
-        donationId: donation.id,
-        organizationId: donation.organization_id,
-        donorName: donation.payer?.fullName,
-        amount: donation.intended_amount,
-        currency: donation.currency,
-      });
+      // Ola 1 (R1-1, D9): solo con FEATURE_DONATION_CERTIFICATES encendido.
+      if (this.certificatesEnabled) {
+        await this.certificates.tryIssueForApprovedDonation({
+          donationId: donation.id,
+          organizationId: donation.organization_id,
+          donorName: donation.payer?.fullName,
+          amount: donation.intended_amount,
+          currency: donation.currency,
+        });
+      }
 
       // Client requirement (final): a GUEST donor (no account) must be able to
       // check their donation later WITHOUT registering. Only for a guest

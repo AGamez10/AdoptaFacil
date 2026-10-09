@@ -6,6 +6,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ReconciliationService } from './reconciliation.service';
 import { reconciliationQuerySchema, type ReconciliationQuery } from './reconciliation.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Conciliación es un reporte de tesorería — mismo set que dispara/inspecciona
  *  payouts (PlatformAdmin/PlatformSuperAdmin), nunca un rol de organización. */
@@ -18,6 +19,7 @@ const PLATFORM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
  * `ReconciliationReport`/`ReconciliationPeriodRow` en `@adoptafacil/contracts`
  * para la forma exacta — coordínala con él antes de construir su vista.
  */
+@RequireFeature('payments')
 @Controller('platform/reconciliation')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...PLATFORM_ROLES)

@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { CampaignFundingService } from './campaign-funding.service';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that may trigger a funding reconcile — same as campaign management. */
 const MANAGE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
@@ -15,6 +16,7 @@ const MANAGE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
  * is the donations webhook calling {@link CampaignFundingService.applyApprovedCollection}
  * per collection — see the HANDOFF note in the service.
  */
+@RequireFeature('payments')
 @Controller('campaigns/funding')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CampaignFundingController {

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { FakeIdentityAdapter } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { IDENTITY_PORT } from './identity.port';
+import { DisabledIdentityAdapter } from './disabled-identity.adapter';
 import { GoogleIdentityAdapter } from './google-identity.adapter';
 
 /**
@@ -10,7 +11,8 @@ import { GoogleIdentityAdapter } from './google-identity.adapter';
  * IDENTITY_PORT without re-binding it — mirrors PaymentModule/StorageModule/
  * NotificationModule.
  *
- * The adapter is chosen by AUTH_IDENTITY_DRIVER ('fake' by default). The Fake
+ * The adapter is chosen by AUTH_IDENTITY_DRIVER ('fake' by default; 'disabled'
+ * answers 404 — the production value until real credentials exist). The Fake
  * adapter is IMPORTED from @adoptafacil/contracts (dependency-free,
  * deterministic) — NOT copied here. `google` binds the real verifier
  * (google-auth-library) — blocked end-to-end on the client's real OAuth
@@ -28,6 +30,10 @@ import { GoogleIdentityAdapter } from './google-identity.adapter';
         if (driver === 'google') {
           return new GoogleIdentityAdapter(config);
         }
+        if (driver === 'disabled') {
+          return new DisabledIdentityAdapter();
+        }
+        // Dev/test only: env validation refuses 'fake' in production (R0-1).
         return new FakeIdentityAdapter();
       },
     },

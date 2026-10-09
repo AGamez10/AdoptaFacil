@@ -40,9 +40,11 @@ $border-subtle: hsl(var(--border) / 0.35);
 }
 
 .heading {
-  font-family: var(--font-display);
-  font-size: var(--fs-h2);
-  font-weight: var(--fw-semibold);
+  font-family: var(--tpl-heading-font, var(--font-display));
+  font-size: var(--tpl-heading-size, var(--fs-h2));
+  font-weight: var(--tpl-heading-weight, var(--fw-semibold));
+  letter-spacing: var(--tpl-heading-tracking, normal);
+  text-transform: var(--tpl-heading-transform, none);
   color: hsl(var(--foreground));
   scroll-margin-top: 5rem;
 }
@@ -260,15 +262,18 @@ $border-subtle: hsl(var(--border) / 0.35);
   }
 }
 
+/* Ola 3: las plantillas del portal ajustan la tarjeta con variables `--tpl-*`;
+   sin plantilla todo queda como siempre. */
 .card {
   position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: hsl(var(--card));
-  border: 1px solid $border-subtle;
-  border-radius: $radius-md;
-  box-shadow: $shadow-soft;
+  background: var(--tpl-card-bg, hsl(var(--card)));
+  border: var(--tpl-card-border, 1px solid #{$border-subtle});
+  border-top: var(--tpl-card-top, var(--tpl-card-border, 1px solid #{$border-subtle}));
+  border-radius: var(--tpl-card-radius, #{$radius-md});
+  box-shadow: var(--tpl-card-shadow, #{$shadow-soft});
   transition: var(--transition-base);
   transition-property: transform, box-shadow, border-color;
 }
@@ -282,7 +287,7 @@ $border-subtle: hsl(var(--border) / 0.35);
 
 .card__photoWrap {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: var(--tpl-photo-ratio, 4 / 3);
   width: 100%;
   background: hsl(var(--muted));
   overflow: hidden;
@@ -360,7 +365,7 @@ $border-subtle: hsl(var(--border) / 0.35);
 // El nombre es el elemento más importante de la tarjeta (T-D06, §14) — todo
 // lo demás (raza/edad/sexo/tamaño) es texto plano y discreto, nunca badges.
 .card__name {
-  font-family: var(--font-display);
+  font-family: var(--tpl-heading-font, var(--font-display));
   font-size: var(--fs-h3);
   font-weight: var(--fw-semibold);
   color: hsl(var(--foreground));

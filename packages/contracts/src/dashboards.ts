@@ -22,6 +22,10 @@ export interface OrganizationDashboardSummary {
   /** Solicitudes de adopción en 'new' o 'in_review' ("Nuevas" + "En evaluación",
    *  mismas etiquetas que `ADOPTION_STATUS_EMAIL_LABELS`). */
   adoptionRequestsPending: number;
+  /** Solicitudes en 'new' (nadie las ha abierto todavía). Ola 3: la campana
+   *  de pendientes usa este conteo, así que una solicitud que pasa a
+   *  "En evaluación" sale de los pendientes. Opcional = aditivo. */
+  adoptionRequestsNew?: number;
   /** Apadrinamientos con status 'active' (S2-03). */
   sponsorshipsActive: number;
   /** Documentos institucionales Approved cuyo `expiresAt` cae dentro de la

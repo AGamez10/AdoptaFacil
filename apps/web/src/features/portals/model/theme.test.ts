@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PORTAL_THEME_FIELDS, safePortalTheme } from './theme';
+import { PORTAL_THEME_FIELDS, safePortalTheme, safeTemplate } from './theme';
 
 /** T-027 · client-side defence: only the known safe token subset is ever kept
  *  (the backend is the authority, but the portal never applies an unknown key). */
@@ -30,5 +30,15 @@ describe('safePortalTheme', () => {
   it('exposes a stable set of editable fields for the config UI', () => {
     expect(PORTAL_THEME_FIELDS.map((f) => f.token)).toContain('primary');
     expect(PORTAL_THEME_FIELDS.every((f) => f.label.length > 0)).toBe(true);
+  });
+});
+
+describe('safeTemplate (Ola 3)', () => {
+  it('acepta solo las plantillas del catálogo y cae en la Clásica', () => {
+    expect(safeTemplate('carnet')).toBe('carnet');
+    expect(safeTemplate('impacto')).toBe('impacto');
+    expect(safeTemplate('otra')).toBe('clasica');
+    expect(safeTemplate(undefined)).toBe('clasica');
+    expect(safeTemplate(3)).toBe('clasica');
   });
 });

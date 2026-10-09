@@ -35,6 +35,7 @@ import {
   paySponsorshipPaymentSchema,
   sponsorshipStatusChangeSchema,
 } from './sponsorships.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that may suspend/reactivate/cancel a sponsorship (§13 M07). */
 const MANAGE_ROLES = [Role.Owner, Role.Administrator] as const;
@@ -48,6 +49,7 @@ const VIEW_ROLES = [...MANAGE_ROLES, Role.ReadOnlyAuditor] as const;
  * Owner/Administrator (+ ReadOnlyAuditor for viewing) — deny-by-default for
  * everyone else. This slice does NOT process any payment (TODO T-057).
  */
+@RequireFeature('sponsorships')
 @Controller('sponsorships')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SponsorshipsController {

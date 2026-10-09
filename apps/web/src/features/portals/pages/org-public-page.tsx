@@ -1,20 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
+  AnimalSummary,
+  Organization,
   OrganizationPublic,
+  PortalThemeConfig,
   PortalLogoPosition,
   PortalSocialNavPosition,
+  PortalTemplateId,
+  PortalTemplateOptions,
   PortalTheme,
   PortalView,
 } from '@adoptafacil/contracts';
+import { resolveTemplateOptions } from '@adoptafacil/contracts';
 import { EmptyState, Skeleton } from '@adoptafacil/ui';
 import { brandTokensToStyle } from '../../../shell/theme';
 import { buildPortalView } from '../model/portal-view';
-import { safeLogoPosition, safePortalTheme, safeSocialNavPosition } from '../model/theme';
+import {
+  safeLogoPosition,
+  safePortalTheme,
+  safeSocialNavPosition,
+  safeTemplate,
+} from '../model/theme';
 import { fetchPublicAnimals } from '../api/public-animals';
 import { PortalProfileSection } from '../components/portal-profile-section';
+import {
+  CarnetHero,
+  EditorialHero,
+  ImpactoHero,
+  OrbitaHero,
+} from '../components/templates/template-heroes';
+import templateStyles from '../components/templates/portal-templates.module.scss';
 import { PortalPlaceholderSection } from '../components/portal-placeholder-section';
-import { PortalTransparencyBar } from '../components/portal-transparency-bar';
 import { PortalSocialLinks } from '../components/portal-social-links';
 import { PortalAdoptionSection } from '../components/portal-adoption-section';
 import { PortalProductsSection } from '../components/portal-products-section';
@@ -28,6 +45,12 @@ import { PortalPublicLedgerSection } from '../components/portal-public-ledger-se
 import { PublicHeader, type PublicHeaderNavItem } from '../components/public-header';
 import { PublicFooter } from '../components/public-footer';
 import { PortalHelpCta } from '../components/portal-help-cta';
+import { PortalAdoptionSteps } from '../components/portal-adoption-steps';
+import { useFeature } from '../../../shell/capabilities';
+import { useDocumentTitle } from '../../../lib/use-document-title';
+import { useApiClient } from '../../../shell/api';
+import { useSession } from '../../../shell/auth';
+import { ownerPreviewOrganization } from '../model/owner-preview';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -36,9 +59,17 @@ type LoadState = 'loading' | 'ready' | 'not-found' | 'error';
 interface Layout {
   logoPosition: PortalLogoPosition;
   socialNavPosition: PortalSocialNavPosition;
+  /** Ola 3: plantilla visual del portal (mismo contenido, otra estructura). */
+  template: PortalTemplateId;
+  templateOptions: PortalTemplateOptions;
 }
 
-const DEFAULT_LAYOUT: Layout = { logoPosition: 'left', socialNavPosition: 'right' };
+const DEFAULT_LAYOUT: Layout = {
+  logoPosition: 'left',
+  socialNavPosition: 'right',
+  template: 'clasica',
+  templateOptions: {},
+};
 
 /**
  * PUBLIC organization PORTAL at `/o/:slug` (§M14). Rendered OUTSIDE the app shell
@@ -93,6 +124,20 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const [layout, setLayout] = useState<Layout>(DEFAULT_LAYOUT);
   const [state, setState] = useState<LoadState>('loading');
   const [animalTotal, setAnimalTotal] = useState<number | undefined>(undefined);
+  const [animalSample, setAnimalSample] = useState<AnimalSummary[]>([]);
+  // Ola 3: el portal público no existe (todavía) para este enlace. Si quien
+  // mira es la propia organización, ve una vista previa privada.
+  const [publicMissing, setPublicMissing] = useState(false);
+  const [ownerPreview, setOwnerPreview] = useState(false);
+  const client = useApiClient();
+  const session = useSession();
+  // Ola 1 (R1-1) / Ola 3 (R3-5): el portal solo muestra módulos encendidos.
+  // Con un módulo apagado su sección ni se monta (antes pintaba "No se pudo
+  // cargar" porque la API respondía 404) y no hay enlaces de dinero.
+  const payments = useFeature('payments');
+  const marketplace = useFeature('marketplace');
+  const resources = useFeature('resources');
+  const reputation = useFeature('reputation');
 
   // "Adoptar"/"Apadrinar" (pulido visual) no inventan un flujo nuevo: solo
   // desplazan a la sección real "Mascotas en adopción" (rediseño T-D04, ya
@@ -110,6 +155,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       return;
     }
     let active = true;
+    setPublicMissing(false);
+    setOwnerPreview(false);
     const encoded = encodeURIComponent(slug);
 
     // The profile drives the page state (404/error). The theme (colors +
@@ -128,6 +175,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               tokens?: unknown;
               logoPosition?: unknown;
               socialNavPosition?: unknown;
+              template?: unknown;
+              templateOptions?: unknown;
             }>)
           : null,
       )
@@ -136,6 +185,12 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         layout: {
           logoPosition: safeLogoPosition(body?.logoPosition),
           socialNavPosition: safeSocialNavPosition(body?.socialNavPosition),
+          template: safeTemplate(body?.template),
+          // Saneo en el cliente: solo claves y valores de la lista cerrada.
+          templateOptions: resolveTemplateOptions(
+            safeTemplate(body?.template),
+            body?.templateOptions,
+          ),
         },
       }))
       .catch(() => ({ tokens: {} as PortalTheme, layout: DEFAULT_LAYOUT }));
@@ -150,24 +205,77 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         setState('ready');
       })
       .catch((err: unknown) => {
-        if (active)
-          setState(err instanceof Error && err.message === 'not-found' ? 'not-found' : 'error');
+        if (!active) return;
+        if (err instanceof Error && err.message === 'not-found') {
+          // Se decide abajo, cuando la sesión termine de cargar: dueño → vista
+          // previa; cualquier otro → "no encontrada".
+          setPublicMissing(true);
+        } else {
+          setState('error');
+        }
       });
     return () => {
       active = false;
     };
   }, [slug]);
 
-  // Real animal count for the profile stats row (pulido visual T-D02). A tiny,
-  // INDEPENDENT fetch (limit 1, unfiltered) so it stays stable regardless of the
+  // Ola 3: vista previa del DUEÑO. Una organización en borrador o sin aprobar
+  // no tiene portal público, pero su equipo debe poder verlo antes de
+  // publicarlo. Se lee con la sesión (su propio perfil y tema, bajo RLS) y
+  // solo si el enlace es el de SU organización; el público sigue viendo
+  // "Organización no encontrada".
+  useEffect(() => {
+    if (!publicMissing || !slug) return;
+    if (session.status === 'loading') return;
+    if (!session.isAuthenticated || session.user?.accountType !== 'organization') {
+      setState('not-found');
+      return;
+    }
+    let active = true;
+    Promise.all([
+      client.request<Organization>('/org/profile'),
+      client.request<PortalThemeConfig>('/portals/theme').catch(() => null),
+    ])
+      .then(([org, themeConfig]) => {
+        if (!active) return;
+        const preview = ownerPreviewOrganization(org, slug);
+        if (!preview) {
+          setState('not-found');
+          return;
+        }
+        const template = safeTemplate(themeConfig?.template);
+        setView(buildPortalView(preview));
+        setTheme(safePortalTheme(themeConfig?.tokens));
+        setLayout({
+          logoPosition: safeLogoPosition(themeConfig?.logoPosition),
+          socialNavPosition: safeSocialNavPosition(themeConfig?.socialNavPosition),
+          template,
+          templateOptions: resolveTemplateOptions(template, themeConfig?.templateOptions),
+        });
+        setOwnerPreview(true);
+        setState('ready');
+      })
+      .catch(() => {
+        if (active) setState('not-found');
+      });
+    return () => {
+      active = false;
+    };
+  }, [publicMissing, slug, session.status, session.isAuthenticated, session.user, client]);
+
+  // Real animal count for the profile stats row (pulido visual T-D02). A small,
+  // INDEPENDENT fetch (Ola 3: limit 8, la muestra alimenta los héroes de las
+  // plantillas; unfiltered) so it stays stable regardless of the
   // species filter the visitor picks inside PortalAdoptionSection — its own
   // internal fetch/filter logic is untouched.
   useEffect(() => {
     if (!slug) return;
     let active = true;
-    fetchPublicAnimals({ slug, limit: 1, offset: 0 })
+    fetchPublicAnimals({ slug, limit: 8, offset: 0 })
       .then((page) => {
-        if (active) setAnimalTotal(page.total);
+        if (!active) return;
+        setAnimalTotal(page.total);
+        setAnimalSample(page.items);
       })
       .catch(() => {
         // Best-effort: the stat simply stays absent (never fabricated).
@@ -185,21 +293,26 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // barra de transparencia solo aporta información real cuando hay un nivel > 0
   // que mostrar (pulido visual T-D02, condición basada en el dato real, no un
   // "nunca más" hardcodeado: si el catálogo se puebla, la barra vuelve a aparecer).
-  const hasVerificationSignal = (view?.profile.organization.verificationLevel?.level ?? 0) > 0;
+  // Ola 3 (R3-5): la barra "Nivel · % formalización · Rendición" se retiró:
+  // mezclaba documentos revisados por la plataforma con un estado de
+  // formalización que hoy declara la propia organización (SEC-003). Los
+  // documentos revisados se muestran como sellos en el hero.
+  useDocumentTitle(view?.profile.organization.name);
 
   // Secciones agregadas AÚN sin módulo dueño (transparencia) nacen en
   // status:'placeholder' — ocultarlas evita el "Próximamente" vacío frente al
   // cliente (pulido visual T-D02). 'pets', 'products' (F-MKT-PORTAL-1),
   // 'needsToday' (F-NEEDS-PORTAL-1) y 'activeCampaign' (F-CAMPANAS-PORTAL-2,
   // S2-07) ya están cableadas a datos reales y siempre se muestran.
-  const visibleSections = view?.sections.filter(
-    (section) =>
+  const visibleSections = view?.sections.filter((section) => {
+    if (section.kind === 'products') return marketplace;
+    if (section.kind === 'needsToday') return resources;
+    return (
       section.kind === 'pets' ||
-      section.kind === 'products' ||
-      section.kind === 'needsToday' ||
       section.kind === 'activeCampaign' ||
-      section.status !== 'placeholder',
-  );
+      section.status !== 'placeholder'
+    );
+  });
   // "Campaña activa" se movió a la franja superior (junto a "Síguenos", pulido
   // visual); 'pets' se queda en la tab "Portafolio"; cualquier otra sección
   // que algún día deje de ser placeholder cae dentro de la tab, como antes.
@@ -225,15 +338,41 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const navItems: PublicHeaderNavItem[] = [
     { label: 'Inicio', href: '#portal-top' },
     { label: 'Animales', href: '#portal-section-pets' },
-    { label: 'Cómo ayudar', href: '#portal-help-cta' },
+    { label: payments ? 'Cómo ayudar' : 'Cómo adoptar', href: '#portal-help-cta' },
     ...(aboutUs ? [{ label: 'Nosotros', href: '#portal-about' }] : []),
-    { label: 'Reseñas', href: '#portal-reviews' },
-    { label: 'Transparencia', href: '#portal-section-public-ledger' },
+    ...(reputation ? [{ label: 'Reseñas', href: '#portal-reviews' }] : []),
+    ...(payments ? [{ label: 'Transparencia', href: '#portal-section-public-ledger' }] : []),
     ...(hasContactInfo ? [{ label: 'Contacto', href: '#portal-contact-info' }] : []),
   ];
 
+  // Las plantillas (Ola 3) reciben los MISMOS datos que la Clásica.
+  const heroProps = view
+    ? {
+        profile: view.profile,
+        slug: slug as string,
+        animalCount: animalTotal,
+        animals: animalSample,
+        options: layout.templateOptions,
+        actions: (
+          <PortalHeaderActions
+            organization={view.profile.organization}
+            onBrowseCatalog={goToCatalog}
+          />
+        ),
+      }
+    : null;
+
   return (
-    <>
+    <div
+      className={templateStyles.page}
+      data-template={state === 'ready' ? layout.template : undefined}
+      data-pattern={
+        typeof layout.templateOptions.pattern === 'string'
+          ? layout.templateOptions.pattern
+          : undefined
+      }
+      data-testid="portal-page"
+    >
       {state === 'ready' && view && (
         <PublicHeader organization={view.profile.organization} navItems={navItems} />
       )}
@@ -252,27 +391,42 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         {state === 'error' && (
           <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
         )}
-        {state === 'ready' && view && (
+        {state === 'ready' && view && heroProps && (
           <div className="space-y-8">
-            {hasVerificationSignal && (
-              <div className="flex justify-end">
-                <PortalTransparencyBar organization={view.profile.organization} />
+            {ownerPreview && (
+              <div
+                role="status"
+                data-testid="portal-owner-preview"
+                className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950"
+              >
+                <strong>Vista previa privada.</strong> Solo tu equipo ve esta página. Tu portal será
+                público cuando la plataforma apruebe tu organización; mientras tanto puedes
+                ajustarlo en{' '}
+                <a className="font-semibold underline" href="/organizacion/portal">
+                  Diseña tu portal
+                </a>
+                .
               </div>
             )}
             {/* Header (3ra iteración): perfil + KPI(s) + acciones viven TODOS
                 dentro del mismo panel (`PortalProfileSection`) — ya no hay una
                 tarjeta de KPI flotante aparte ni una fila extra a su lado. */}
-            <PortalProfileSection
-              profile={view.profile}
-              animalCount={animalTotal}
-              logoPosition={layout.logoPosition}
-              actions={
-                <PortalHeaderActions
-                  organization={view.profile.organization}
-                  onBrowseCatalog={goToCatalog}
-                />
-              }
-            />
+            {layout.template === 'editorial' ? (
+              <EditorialHero {...heroProps} />
+            ) : layout.template === 'carnet' ? (
+              <CarnetHero {...heroProps} />
+            ) : layout.template === 'impacto' ? (
+              <ImpactoHero {...heroProps} />
+            ) : layout.template === 'orbita' ? (
+              <OrbitaHero {...heroProps} />
+            ) : (
+              <PortalProfileSection
+                profile={view.profile}
+                animalCount={animalTotal}
+                logoPosition={layout.logoPosition}
+                actions={heroProps.actions}
+              />
+            )}
 
             {/* Dos columnas (pulido visual, 2da iteración): columna principal
                 con "Mascotas en adopción"/"Productos"/"Necesita hoy" SIEMPRE
@@ -283,7 +437,10 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 `PortalThemeConfig.socialNavPosition` —
                 `packages/contracts/src/portals.ts`) — no uno nuevo. En mobile
                 el panel lateral se apila debajo (grid de 1 columna). */}
-            <div className="grid gap-8 lg:grid-cols-[1fr_320px]" data-testid="portal-main-grid">
+            <div
+              className="portal-reveal grid gap-8 lg:grid-cols-[1fr_320px]"
+              data-testid="portal-main-grid"
+            >
               <div
                 className={`space-y-6 ${layout.socialNavPosition === 'left' ? 'lg:order-last' : ''}`}
               >
@@ -326,7 +483,14 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               </aside>
             </div>
 
-            <PortalHelpCta organization={view.profile.organization} />
+            {payments ? (
+              <PortalHelpCta organization={view.profile.organization} />
+            ) : (
+              <PortalAdoptionSteps
+                organization={view.profile.organization}
+                onBrowseCatalog={goToCatalog}
+              />
+            )}
 
             {/* "Nosotros"/"Información" (S2-PORTAL, rediseño T-D04): antes
                 tabs, ahora secciones ancladas siempre visibles cuando hay
@@ -336,7 +500,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 <PortalAboutSection aboutUs={aboutUs} />
               </section>
             )}
-            <PortalReviewsSection slug={slug as string} />
+            {reputation && <PortalReviewsSection slug={slug as string} />}
 
             {hasContactInfo && contact && (
               <section id="portal-contact-info" style={{ scrollMarginTop: '5rem' }}>
@@ -347,9 +511,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               </section>
             )}
 
-            <div style={{ scrollMarginTop: '5rem' }}>
-              <PortalPublicLedgerSection />
-            </div>
+            {payments && (
+              <div style={{ scrollMarginTop: '5rem' }}>
+                <PortalPublicLedgerSection />
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -358,6 +524,6 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           <PublicFooter organization={view.profile.organization} navItems={navItems} />
         </div>
       )}
-    </>
+    </div>
   );
 }

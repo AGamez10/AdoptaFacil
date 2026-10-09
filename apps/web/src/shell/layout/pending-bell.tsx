@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   ReminderStatus,
   Role,
@@ -7,7 +7,7 @@ import {
   type OrganizationDashboardSummary,
 } from '@adoptafacil/contracts';
 import { Badge, cn } from '@adoptafacil/ui';
-import { useApiClient } from '../api';
+import { DATA_CHANGED_EVENT, useApiClient } from '../api';
 import { useSession } from '../auth';
 import { fetchOrgSummary } from '../../features/_layout/api/dashboard-api';
 import { deriveActionItems } from '../../features/_layout/model/action-items';
@@ -27,6 +27,22 @@ const SUMMARY_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
 
 const POLL_MS = 5 * 60 * 1000;
 const MAX_LISTED = 5;
+/** Espera tras una escritura antes de recontar (deja terminar la cadena). */
+const DATA_CHANGED_DEBOUNCE_MS = 400;
+const KUDOS_MS = 7000;
+
+/**
+ * Ola 3: mensaje de reconocimiento cuando un pendiente desaparece. Texto fijo
+ * y determinista (sin IA), en tono cálido.
+ */
+export function kudosMessage(resolved: number, remaining: number): string {
+  if (remaining === 0) {
+    return '¡Todo al día! Gracias por ser tan diligente: así más animales encuentran hogar.';
+  }
+  return resolved === 1
+    ? '¡Bien hecho! Atendiste un pendiente. Gracias por cuidar cada detalle.'
+    : `¡Bien hecho! Atendiste ${resolved} pendientes. Gracias por cuidar cada detalle.`;
+}
 
 const REMINDER_TYPE_LABELS: Record<string, string> = {
   vaccine: 'Vacuna',
@@ -70,7 +86,12 @@ export function PendingBell() {
   const [reminders, setReminders] = useState<ClinicalReminder[]>([]);
   const [summary, setSummary] = useState<OrganizationDashboardSummary | null>(null);
   const [open, setOpen] = useState(false);
+  const [kudos, setKudos] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  /** Total del último conteo; null hasta la primera carga (no felicita al entrar). */
+  const lastTotalRef = useRef<number | null>(null);
+  const location = useLocation();
 
   const load = useCallback(async () => {
     const tasks: Promise<void>[] = [];
@@ -90,6 +111,7 @@ export function PendingBell() {
       );
     }
     await Promise.all(tasks);
+    setLoaded(true);
   }, [client, canSeeReminders, canSeeSummary]);
 
   useEffect(() => {
@@ -98,6 +120,39 @@ export function PendingBell() {
     const timer = window.setInterval(() => void load(), POLL_MS);
     return () => window.clearInterval(timer);
   }, [load, canSeeReminders, canSeeSummary]);
+
+  // Ola 3: antes el conteo solo se refrescaba al abrir la campana o cada 5
+  // minutos, así que un pendiente atendido seguía ahí. Ahora se recuenta tras
+  // cada escritura exitosa, al cambiar de página y al volver a la pestaña.
+  useEffect(() => {
+    if (!canSeeReminders && !canSeeSummary) return;
+    let pending: number | undefined;
+    const schedule = () => {
+      window.clearTimeout(pending);
+      pending = window.setTimeout(() => void load(), DATA_CHANGED_DEBOUNCE_MS);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') schedule();
+    };
+    window.addEventListener(DATA_CHANGED_EVENT, schedule);
+    window.addEventListener('focus', schedule);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearTimeout(pending);
+      window.removeEventListener(DATA_CHANGED_EVENT, schedule);
+      window.removeEventListener('focus', schedule);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load, canSeeReminders, canSeeSummary]);
+
+  const isFirstLocation = useRef(true);
+  useEffect(() => {
+    if (isFirstLocation.current) {
+      isFirstLocation.current = false;
+      return;
+    }
+    if (canSeeReminders || canSeeSummary) void load();
+  }, [location.pathname, load, canSeeReminders, canSeeSummary]);
 
   // Cierra con Escape o al hacer clic fuera.
   useEffect(() => {
@@ -116,12 +171,26 @@ export function PendingBell() {
     };
   }, [open]);
 
-  if (!canSeeReminders && !canSeeSummary) return null;
-
   const openReminders = reminders.filter(isOpen).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const actions = summary ? deriveActionItems(summary) : [];
   const total = openReminders.length + actions.length;
   const badge = total > 9 ? '9+' : String(total);
+
+  // Ola 3: cuando el total baja, se reconoce al usuario por atenderlo.
+  useEffect(() => {
+    if (!loaded) return;
+    const previous = lastTotalRef.current;
+    lastTotalRef.current = total;
+    if (previous !== null && total < previous) setKudos(kudosMessage(previous - total, total));
+  }, [loaded, total]);
+
+  useEffect(() => {
+    if (!kudos) return;
+    const timer = window.setTimeout(() => setKudos(null), KUDOS_MS);
+    return () => window.clearTimeout(timer);
+  }, [kudos]);
+
+  if (!canSeeReminders && !canSeeSummary) return null;
 
   const toggle = () => {
     setOpen((value) => {
@@ -148,6 +217,23 @@ export function PendingBell() {
           </span>
         )}
       </button>
+
+      {kudos && !open && (
+        <div role="status" className={styles.bell__kudos} data-testid="pending-bell-kudos">
+          <span aria-hidden="true" className={styles.bell__kudosIcon}>
+            ★
+          </span>
+          <span>{kudos}</span>
+          <button
+            type="button"
+            className={styles.bell__kudosClose}
+            onClick={() => setKudos(null)}
+            aria-label="Cerrar mensaje"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {open && (
         <div

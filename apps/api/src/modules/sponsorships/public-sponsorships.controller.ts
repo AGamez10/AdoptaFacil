@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
 import { type SponsorshipPublicSummary } from '@adoptafacil/contracts';
 import { PublicSponsorshipsService } from './public-sponsorships.service';
+import { RequireFeature } from '../../core/features';
 
 /**
  * PUBLIC sponsorship summary (M14/M07, optional/aditivo — RF17) — NO
@@ -8,6 +9,7 @@ import { PublicSponsorshipsService } from './public-sponsorships.service';
  * DEFINER function. Lets the portal show "this animal has N active sponsors"
  * and the plans available to sponsor it, without ever exposing sponsor identity.
  */
+@RequireFeature('sponsorships')
 @Controller('public/sponsorships')
 export class PublicSponsorshipsController {
   constructor(private readonly service: PublicSponsorshipsService) {}

@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { MercadoPagoConnectService } from './mercadopago-connect.service';
+import { RequireFeature } from '../../core/features';
 
 /** Same "who manages the org's payout setup" audience as
  *  `BankAccountsController` (Owner/Administrator) — connecting a payment
@@ -27,6 +28,7 @@ const MANAGE_ROLES = [Role.Owner, Role.Administrator] as const;
  * Authorization header. That endpoint verifies the signed `state` JWT itself
  * (see `MercadoPagoConnectService`) instead of relying on a guard.
  */
+@RequireFeature('payments')
 @Controller('org/mercadopago')
 export class MercadoPagoConnectController {
   constructor(

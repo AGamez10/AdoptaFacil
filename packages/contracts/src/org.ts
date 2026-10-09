@@ -49,7 +49,7 @@ export interface Organization {
 
   // --- Public portal (M14, additive) -----------------------------------------
   /** Subdomain for the org portal, e.g. `patitaspeludas` in
-   *  patitaspeludas.adoptafacil.com. */
+   *  patitaspeludas.adoptafacil.org. */
   subdomain?: string;
   /** URL slug for the path-based portal route `/o/<slug>`. */
   slug?: string;
@@ -525,6 +525,20 @@ export interface DocumentReviewQueueItem {
   expiresAt?: string;
   /** ISO-8601 UTC. */
   createdAt: string;
+}
+
+/** Reserva de revisión de una organización en el workspace de plataforma (Ola 3,
+ *  R3-6): evita que dos revisores trabajen el mismo expediente a la vez. Vence
+ *  sola (`expiresAt`); es una coordinación del equipo, no un permiso. */
+export interface DocumentReviewClaim {
+  organizationId: string;
+  reviewerUserId: string;
+  /** Correo del revisor (personal de plataforma) para saber a quién preguntar. */
+  reviewerEmail: string;
+  /** ISO-8601 UTC. */
+  claimedAt: string;
+  /** ISO-8601 UTC. */
+  expiresAt: string;
 }
 
 // ============================================================================

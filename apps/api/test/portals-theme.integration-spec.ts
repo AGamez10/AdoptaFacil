@@ -165,4 +165,106 @@ describe('Portal theme (M14: tokens + RBAC + public read)', () => {
       expect(res.body.tokens).toEqual({});
     });
   });
+  describe('Ola 3: plantilla del portal', () => {
+    it('guarda la plantilla, la conserva al cambiar solo colores y la expone en público sin filtrarla como token', async () => {
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          tokens: { primary: '142 72% 29%', 'primary-foreground': '0 0% 100%' },
+          template: 'carnet',
+        })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.template).toBe('carnet');
+          expect(res.body.tokens).not.toHaveProperty('__template');
+        });
+
+      // Sin `template`: se conserva la guardada.
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: { primary: '142 72% 29%', 'primary-foreground': '0 0% 100%' } })
+        .expect(200)
+        .expect((res) => expect(res.body.template).toBe('carnet'));
+
+      const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+      expect(pub.body.template).toBe('carnet');
+      expect(pub.body.tokens).not.toHaveProperty('__template');
+    });
+
+    it('rechaza una plantilla fuera del catálogo y no deja meter la clave reservada como token', async () => {
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: {}, template: 'hackeada' })
+        .expect(400);
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: { __template: 'impacto' } })
+        .expect(400);
+    });
+
+    it('guarda los ajustes de la plantilla, los resuelve con valores por defecto y los expone en público', async () => {
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: {}, template: 'orbita', templateOptions: { density: 'intensa' } })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.templateOptions).toEqual({ density: 'intensa', showCount: true });
+          expect(res.body.tokens).not.toHaveProperty('__templateOptions');
+        });
+
+      // Solo colores: se conservan plantilla y ajustes.
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: {} })
+        .expect(200)
+        .expect((res) => expect(res.body.templateOptions.density).toBe('intensa'));
+
+      const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+      expect(pub.body.template).toBe('orbita');
+      expect(pub.body.templateOptions).toEqual({ density: 'intensa', showCount: true });
+      expect(pub.body.tokens).not.toHaveProperty('__templateOptions');
+
+      // Al cambiar de plantilla, los ajustes de la anterior no se arrastran.
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: {}, template: 'carnet' })
+        .expect(200)
+        .expect((res) =>
+          expect(res.body.templateOptions).toEqual({ pattern: 'puntos', showMinis: true }),
+        );
+    });
+
+    it('rechaza ajustes que la plantilla no declara (deny-by-default)', async () => {
+      for (const templateOptions of [
+        { density: 'intensa' }, // de otra plantilla (la actual es carnet)
+        { pattern: 'url(javascript:alert(1))' },
+        { showMinis: 'si' },
+      ]) {
+        await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ tokens: {}, template: 'carnet', templateOptions })
+          .expect(400);
+      }
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: { __templateOptions: 'x' } })
+        .expect(400);
+    });
+
+    it('un slug desconocido recibe la plantilla por defecto', async () => {
+      const res = await request(server)
+        .get(`/public/organizations/does-not-exist-${randomUUID().slice(0, 6)}/theme`)
+        .expect(200);
+      expect(res.body.template).toBe('clasica');
+    });
+  });
 });
