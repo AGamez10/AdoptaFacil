@@ -13,7 +13,18 @@ export const NOTIFICATION_PORT = Symbol('NOTIFICATION_PORT');
 export interface NotificationMessage {
   to: string;
   subject: string;
+  /** Texto plano (siempre presente: es la alternativa legible sin HTML). */
   body: string;
+  /** Versión HTML opcional (aditivo). Debe venir ya escapada por quien la arma. */
+  html?: string;
+  /** Adjuntos opcionales (aditivo), p. ej. la copia en PDF de un contrato. */
+  attachments?: NotificationAttachment[];
+}
+
+export interface NotificationAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
 }
 
 export interface NotificationPort {
