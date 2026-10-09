@@ -59,6 +59,8 @@ const APPEND_ONLY_TABLES = [
   'reviews',
   'sponsorship_payment_attempts',
   'sponsorship_payments',
+  // org_reports (M13): append-only, mismos triggers que volunteer_certificates.
+  'org_reports',
 ];
 
 export async function purgeOrganizations(

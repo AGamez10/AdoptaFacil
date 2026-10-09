@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import type { DonationCertificateVerification } from '@adoptafacil/contracts';
+import type {
+  DonationCertificateVerification,
+  OrgReportLegalEffect,
+  OrgReportVerification,
+} from '@adoptafacil/contracts';
 import {
   Badge,
   Button,
@@ -13,11 +17,45 @@ import {
   Input,
   Skeleton,
 } from '@adoptafacil/ui';
-import { fetchPublicCertificateVerification } from '../api/donation-certificate';
+import {
+  fetchPublicCertificateVerification,
+  fetchPublicReportVerification,
+  isReportCode,
+} from '../api/donation-certificate';
 import { formatBogota, formatCop } from '../model/certificate-format';
 import styles from './certificate-verification-page.module.scss';
 
 type VerifyState = 'idle' | 'loading' | 'valid' | 'invalid' | 'error';
+
+const REPORT_KIND_LABEL: Record<OrgReportVerification['kind'], string> = {
+  donations: 'Informe de donaciones recibidas',
+  social_service: 'Reporte de servicio social y voluntariado',
+};
+
+const REPORT_EFFECT: Record<
+  OrgReportLegalEffect,
+  { label: string; variant: 'success' | 'info' | 'warning' }
+> = {
+  certified: { label: 'Certificado', variant: 'success' },
+  signed: { label: 'Firmado', variant: 'info' },
+  informative: { label: 'Informativo, sin efecto legal', variant: 'warning' },
+};
+
+const SIGNER_ROLE_LABEL: Record<string, string> = {
+  legal_representative: 'Representante legal',
+  fiscal_reviewer: 'Revisor fiscal',
+  accountant: 'Contador',
+};
+
+function formatDay(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('es-CO', {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 /**
  * `/verificar/:code` — verificación PÚBLICA REAL de un certificado de donación
@@ -31,11 +69,24 @@ export function CertificateVerificationPage() {
   const [code, setCode] = useState(codeParam ?? '');
   const [state, setState] = useState<VerifyState>('idle');
   const [result, setResult] = useState<DonationCertificateVerification | null>(null);
+  const [report, setReport] = useState<OrgReportVerification | null>(null);
 
   const verify = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
     setState('loading');
+    setResult(null);
+    setReport(null);
+    // M13: el mismo verificador acepta los folios de reportes sellados.
+    if (isReportCode(trimmed)) {
+      fetchPublicReportVerification(trimmed.toUpperCase())
+        .then((data) => {
+          setReport(data);
+          setState(data ? 'valid' : 'invalid');
+        })
+        .catch(() => setState('error'));
+      return;
+    }
     fetchPublicCertificateVerification(trimmed)
       .then((data) => {
         setResult(data);
@@ -54,11 +105,12 @@ export function CertificateVerificationPage() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Verificar un certificado de donación</CardTitle>
+            <CardTitle>Verificar un certificado o reporte</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className={styles.intro}>
-              Ingresa el código único del certificado para comprobar su autenticidad.
+              Ingresa el código del certificado de donación o el folio del reporte (ADF-REP-…) para
+              comprobar su autenticidad.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
@@ -115,6 +167,68 @@ export function CertificateVerificationPage() {
                 <div className={styles['evidence__wide']}>
                   <dt className={styles['evidence__label']}>Hash del documento</dt>
                   <dd className={styles['evidence__hash']}>{result.contentHash}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+        )}
+
+        {state === 'valid' && report && (
+          <Card data-testid="report-verification-result" className={styles.result}>
+            <CardHeader className="gap-2">
+              <div className={styles['result__title-row']}>
+                <CardTitle>Reporte auténtico</CardTitle>
+                <Badge variant={REPORT_EFFECT[report.legalEffect].variant}>
+                  {REPORT_EFFECT[report.legalEffect].label}
+                </Badge>
+              </div>
+              <p className={styles['result__intro']}>
+                Este folio fue generado en AdoptaFácil y su contenido está sellado. Compara la
+                huella con la impresa al pie del documento: si coinciden, el documento no fue
+                alterado.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <dl className={styles.evidence}>
+                <div>
+                  <dt className={styles['evidence__label']}>Documento</dt>
+                  <dd className={styles['evidence__value']}>{REPORT_KIND_LABEL[report.kind]}</dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Organización</dt>
+                  <dd className={styles['evidence__value']}>{report.organizationName}</dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Período</dt>
+                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                    {formatDay(report.periodStart)} al {formatDay(report.periodEnd)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Generado</dt>
+                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                    {formatBogota(report.createdAt)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Firmado por</dt>
+                  <dd className={styles['evidence__value']}>
+                    {report.signers.length
+                      ? report.signers
+                          .map((s) => `${s.fullName} (${SIGNER_ROLE_LABEL[s.role] ?? s.role})`)
+                          .join(', ')
+                      : 'Sin firmas'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Registros</dt>
+                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                    {report.rowCount}
+                  </dd>
+                </div>
+                <div className={styles['evidence__wide']}>
+                  <dt className={styles['evidence__label']}>Huella SHA-256 del contenido</dt>
+                  <dd className={styles['evidence__hash']}>{report.contentHash}</dd>
                 </div>
               </dl>
             </CardContent>
