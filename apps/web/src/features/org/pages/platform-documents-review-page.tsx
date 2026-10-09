@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DocumentType,
+  FORMALIZATION_SEQUENCE,
+  FormalizationState,
   Role,
   type DocumentReviewClaim,
+  type DocumentVerificationReport,
   type DocumentReviewDecision,
   type DocumentReviewQueueItem,
   type OrganizationDocument,
@@ -22,6 +25,8 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { ApiError, useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { TextField } from '../components/profile-fields';
+import { DocumentVerificationPanel } from '../components/document-verification-panel';
+import { STATE_NAMES } from '../components/legal-labels';
 import styles from './platform-documents-review-page.module.scss';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -103,6 +108,39 @@ export function groupQueue(items: readonly DocumentReviewQueueItem[]): ReviewGro
 
 type ClaimState = 'free' | 'mine' | 'other';
 
+/** Documento aprobado que respalda subir a la organización de estado formal. */
+interface PromotionCandidate {
+  documentId: string;
+  type: DocumentType;
+  target: FormalizationState;
+}
+
+interface OrgPromotion {
+  organizationName: string;
+  currentState: FormalizationState;
+  candidates: PromotionCandidate[];
+}
+
+/** Qué documento acepta la plataforma como evidencia para cada estado (igual
+ *  que `PLATFORM_TRANSITION_EVIDENCE` en la API). Formalizada la pide el Owner. */
+const EVIDENCE_FOR: Partial<Record<FormalizationState, DocumentType>> = {
+  [FormalizationState.ESAL]: DocumentType.ExistenceRepresentationCertificate,
+  [FormalizationState.ESAL_RTE]: DocumentType.Rut,
+};
+
+/** El siguiente paso que la plataforma puede dar con un documento ya aprobado. */
+export function nextPromotion(
+  promotion: OrgPromotion,
+): { target: FormalizationState; documentId: string } | null {
+  const rank = (state: FormalizationState) => FORMALIZATION_SEQUENCE.indexOf(state);
+  const next = FORMALIZATION_SEQUENCE[rank(promotion.currentState) + 1];
+  if (!next || !EVIDENCE_FOR[next]) return null;
+  const candidate = promotion.candidates.find(
+    (c) => c.type === EVIDENCE_FOR[next] && rank(c.target) >= rank(next),
+  );
+  return candidate ? { target: next, documentId: candidate.documentId } : null;
+}
+
 /**
  * `/plataforma/documentos` — workspace de revisión de plataforma (RF03; Ola 3,
  * R3-6). La cola llega agrupada por organización (la que más ha esperado
@@ -125,6 +163,7 @@ export function PlatformDocumentsReviewPage() {
   const [failed, setFailed] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [promotions, setPromotions] = useState<Record<string, OrgPromotion>>({});
 
   const fetchAll = useCallback(async () => {
     const [items, current] = await Promise.all([
@@ -244,15 +283,16 @@ export function PlatformDocumentsReviewPage() {
   const review = async (
     item: DocumentReviewQueueItem,
     decision: DocumentReviewDecision,
-  ): Promise<void> => {
-    const note = notes[item.id]?.trim();
+    noteOverride?: string,
+  ): Promise<boolean> => {
+    const note = (noteOverride ?? notes[item.id])?.trim();
     if ((decision === 'observe' || decision === 'reject') && !note) {
       toast({
         title: 'Motivo requerido',
         description: 'Escribe qué debe corregir la organización.',
         variant: 'warning',
       });
-      return;
+      return false;
     }
     setBusy(item.id);
     try {
@@ -262,9 +302,71 @@ export function PlatformDocumentsReviewPage() {
       });
       await reload();
       toast({ title: 'Decisión registrada' });
+      return true;
     } catch (error) {
       toast({
         title: 'No se pudo registrar la decisión',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Aprobar en un clic desde la lectura automática y, si el documento respalda
+   *  un estado superior, dejar lista la oferta de subir a la organización. */
+  const approveVerified = async (
+    item: DocumentReviewQueueItem,
+    report: DocumentVerificationReport,
+  ): Promise<void> => {
+    const ok = await review(item, 'approve');
+    if (!ok || !report.suggestedState || !report.currentState) return;
+    const candidate: PromotionCandidate = {
+      documentId: item.id,
+      type: item.type,
+      target: report.suggestedState,
+    };
+    setPromotions((prev) => {
+      const current = prev[item.organizationId];
+      return {
+        ...prev,
+        [item.organizationId]: {
+          organizationName: item.organizationName,
+          currentState: current?.currentState ?? report.currentState!,
+          candidates: [...(current?.candidates ?? []), candidate],
+        },
+      };
+    });
+  };
+
+  const promote = async (organizationId: string): Promise<void> => {
+    const promotion = promotions[organizationId];
+    const step = promotion ? nextPromotion(promotion) : null;
+    if (!promotion || !step) return;
+    setBusy(`promote-${organizationId}`);
+    try {
+      await client.request(`/platform/organizations/${organizationId}/formalization/transitions`, {
+        method: 'POST',
+        json: {
+          targetState: step.target,
+          evidenceDocumentId: step.documentId,
+          reason: 'Documento verificado y aprobado por la plataforma.',
+        },
+      });
+      setPromotions((prev) => ({
+        ...prev,
+        [organizationId]: { ...promotion, currentState: step.target },
+      }));
+      toast({
+        title: `${promotion.organizationName} ahora es ${STATE_NAMES[step.target]}`,
+        description: 'Ya tiene habilitadas las funciones de ese estado.',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'No se pudo subir de estado',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -272,6 +374,14 @@ export function PlatformDocumentsReviewPage() {
       setBusy(null);
     }
   };
+
+  const promotionOffers = Object.entries(promotions)
+    .map(([organizationId, promotion]) => ({
+      organizationId,
+      promotion,
+      step: nextPromotion(promotion),
+    }))
+    .filter((offer) => offer.step !== null);
 
   if (!canReview) {
     return (
@@ -291,6 +401,25 @@ export function PlatformDocumentsReviewPage() {
         title="Revisión de documentos"
         description="Expedientes de las organizaciones, el que más ha esperado primero. Reserva uno antes de decidir para no cruzarte con otra persona del equipo."
       />
+      {promotionOffers.length > 0 && (
+        <ul className={styles.promotions} aria-label="Organizaciones listas para subir de estado">
+          {promotionOffers.map(({ organizationId, promotion, step }) => (
+            <li key={organizationId} className={styles.promotion}>
+              <p>
+                <strong>{promotion.organizationName}</strong>: el documento que aprobaste respalda
+                pasar de {STATE_NAMES[promotion.currentState]} a {STATE_NAMES[step!.target]}.
+              </p>
+              <Button
+                size="sm"
+                disabled={busy === `promote-${organizationId}`}
+                onClick={() => void promote(organizationId)}
+              >
+                Subir a {STATE_NAMES[step!.target]}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
       {loading && <Skeleton className="h-64 w-full" />}
       {!loading && failed && (
         <EmptyState
@@ -439,6 +568,18 @@ export function PlatformDocumentsReviewPage() {
                                   </Button>
                                 </div>
                               </div>
+
+                              {canDecide && (
+                                <DocumentVerificationPanel
+                                  documentId={item.id}
+                                  busy={busy === item.id}
+                                  onApprove={(report) => void approveVerified(item, report)}
+                                  onObserve={(note) => {
+                                    setNotes((prev) => ({ ...prev, [item.id]: note }));
+                                    void review(item, 'observe', note);
+                                  }}
+                                />
+                              )}
 
                               {canDecide && (
                                 <div className={styles.doc__decision}>

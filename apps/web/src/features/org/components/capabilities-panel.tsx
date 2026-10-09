@@ -30,7 +30,11 @@ export function CapabilitiesPanel({ refreshKey = 0 }: { refreshKey?: number }) {
     let active = true;
     client
       .request<OrganizationCapabilities>('/org/formalization/capabilities')
-      .then((result) => active && setData(result))
+      .then((result) => {
+        if (!active) return;
+        if (Array.isArray(result?.capabilities)) setData(result);
+        else setFailed(true);
+      })
       .catch(() => active && setFailed(true));
     return () => {
       active = false;
