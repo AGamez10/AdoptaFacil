@@ -6,14 +6,16 @@
 # Las VITE_* se hornean en el bundle en tiempo de build (Vite no las lee en runtime):
 # cambiar una exige reconstruir la imagen. Nunca pongas un secreto en una VITE_*.
 #
-# PORTALS_TLS elige el binario de Caddy: `cloudflare` lo compila con el módulo
-# caddy-dns/cloudflare (certificado comodín por DNS-01); `off` e `internal` usan
-# la imagen oficial sin módulos extra. BuildKit solo construye la etapa elegida.
+# PORTALS_TLS elige el binario de Caddy: `cloudflare` o `namecheap` lo compilan
+# con el módulo caddy-dns del proveedor (certificado comodín por DNS-01); `off` e
+# `internal` usan la imagen oficial sin módulos extra. BuildKit solo construye la
+# etapa elegida.
 
 ARG NODE_IMAGE=node:20-bookworm-slim
 ARG CADDY_IMAGE=caddy:2.10-alpine
 ARG CADDY_BUILDER_IMAGE=caddy:2.10-builder-alpine
 ARG CADDY_DNS_CLOUDFLARE=github.com/caddy-dns/cloudflare@v0.2.4
+ARG CADDY_DNS_NAMECHEAP=github.com/caddy-dns/namecheap@v1.0.0
 ARG PORTALS_TLS=off
 
 FROM ${NODE_IMAGE} AS build
@@ -43,6 +45,14 @@ RUN xcaddy build --with "$CADDY_DNS_CLOUDFLARE" --output /usr/bin/caddy
 FROM ${CADDY_IMAGE} AS caddy-cloudflare
 COPY --from=caddy-cloudflare-build /usr/bin/caddy /usr/bin/caddy
 RUN caddy list-modules | grep -qx 'dns.providers.cloudflare'
+
+FROM ${CADDY_BUILDER_IMAGE} AS caddy-namecheap-build
+ARG CADDY_DNS_NAMECHEAP
+RUN xcaddy build --with "$CADDY_DNS_NAMECHEAP" --output /usr/bin/caddy
+
+FROM ${CADDY_IMAGE} AS caddy-namecheap
+COPY --from=caddy-namecheap-build /usr/bin/caddy /usr/bin/caddy
+RUN caddy list-modules | grep -qx 'dns.providers.namecheap'
 
 FROM caddy-${PORTALS_TLS} AS edge
 COPY deploy/Caddyfile deploy/portals-*.caddy /etc/caddy/

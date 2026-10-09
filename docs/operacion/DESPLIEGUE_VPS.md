@@ -1,8 +1,8 @@
 # Despliegue en el VPS de Hostinger (Docker Compose + Caddy)
 
 > Decisión D11: VPS Hostinger, Docker Compose, Caddy con TLS automático, sin
-> Kubernetes. Dominio: **adoptafacil.com**, con portales por subdominio
-> (`<org>.adoptafacil.com`). Este runbook cierra OPS-003/AF-019 en lo que el
+> Kubernetes. Dominio: **adoptafacil.org**, con portales por subdominio
+> (`<org>.adoptafacil.org`). Este runbook cierra OPS-003/AF-019 en lo que el
 > repo puede cerrar; los pasos marcados **[VPS]** solo se ejecutan en el
 > servidor del dueño y quedan como verificación pendiente.
 
@@ -11,17 +11,17 @@
 | Qué                                    | Recomendación                                                                                     | Para qué                                                   |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | VPS                                    | Hostinger **KVM 2** (2 vCPU, 8 GB RAM, 100 GB NVMe), plantilla **Ubuntu 24.04 LTS** sin panel     | todo el stack; ver §Tamaño                                 |
-| Dominio `adoptafacil.com`              | donde ya esté registrado (Hostinger u otro); solo se cambian sus nameservers                      | —                                                          |
-| Cuenta gratuita de **Cloudflare**      | DNS de la zona en Cloudflare, registros en modo "DNS only" (nube gris)                            | certificado comodín de los portales por DNS-01; ver §DNS   |
+| Dominio `adoptafacil.org`              | ya registrado en **Namecheap** (un año); renovación automática activada, ver §Renovación          | —                                                          |
+| DNS con API                            | ⟦POR DECIDIR⟧ Cloudflare (gratis) o la API DNS de Namecheap; ver §DNS                             | certificado comodín de los portales por DNS-01             |
 | Cuenta de **Backblaze B2**             | un bucket privado `adoptafacil-backups` y una clave de aplicación limitada a ese bucket           | copia off-site de los respaldos cifrados                   |
 | App **ntfy** en el celular             | un tema con nombre largo y aleatorio (`openssl rand -hex 12`)                                     | alertas del servidor (`ALERT_WEBHOOK_URL`)                 |
-| Cuenta gratuita de **UptimeRobot**     | monitor HTTPS cada 5 min a `https://adoptafacil.com/api/health` con palabra clave `"status":"ok"` | aviso si el VPS entero cae (lo que el VPS no puede avisar) |
+| Cuenta gratuita de **UptimeRobot**     | monitor HTTPS cada 5 min a `https://adoptafacil.org/api/health` con palabra clave `"status":"ok"` | aviso si el VPS entero cae (lo que el VPS no puede avisar) |
 | Cuenta gratuita de **healthchecks.io** | un check diario con 2 h de gracia                                                                 | aviso si el respaldo diario no corre                       |
 | Clave SSH                              | la tuya, cargada al crear el VPS                                                                  | entrar al servidor sin contraseña                          |
 | Par de claves **age**                  | generado en tu computador (`age-keygen -o adoptafacil-backup.key`); la privada nunca va al VPS    | cifrar los respaldos; ver `BACKUPS.md`                     |
 
-**Secretos: solo en el servidor.** Contraseñas, `JWT_SECRET`, el token de
-Cloudflare, la clave de B2, el SMTP y, cuando se enciendan los pagos, el access
+**Secretos: solo en el servidor.** Contraseñas, `JWT_SECRET`, las credenciales
+del DNS (Cloudflare o Namecheap), la clave de B2, el SMTP y, cuando se enciendan los pagos, el access
 token y el secreto del webhook de Mercado Pago se escriben **directamente** en
 `deploy/.env` o `deploy/api.env` del VPS (`chmod 600`). Nunca en el repositorio,
 en un PR, en un issue ni en el chat. Lo único público son las `VITE_*` (llaves
@@ -47,11 +47,11 @@ que ofrezca Hostinger al comprar (Sudamérica o EE. UU.).
 | `postgres` | `postgres:16`                                | `data`         | ninguno            |
 | `redis`    | `redis:7` (AOF, `noeviction` para BullMQ)    | `data`         | ninguno            |
 
-- Cada host sirve el SPA y, en `/api/*`, la API: `https://adoptafacil.com/api`
-  en el dominio principal y `https://<org>.adoptafacil.com/api` en cada portal.
+- Cada host sirve el SPA y, en `/api/*`, la API: `https://adoptafacil.org/api`
+  en el dominio principal y `https://<org>.adoptafacil.org/api` en cada portal.
   El front se compila con `VITE_API_URL=/api` (relativa), así que nunca hay
   llamadas entre dominios: sin CORS cruzado y la cookie de sesión no sale de su
-  host. `www.adoptafacil.com` redirige al dominio principal.
+  host. `www.adoptafacil.org` redirige al dominio principal.
 - `data` es una red **interna**: Postgres y Redis no tienen salida a internet ni
   puertos en el host.
 - La API corre como usuario `node` (no root), solo con dependencias de
@@ -82,44 +82,76 @@ que ofrezca Hostinger al comprar (Sudamérica o EE. UU.).
 5. **Pagos apagados** hasta la decisión del cliente: no se cargan credenciales de
    Mercado Pago de producción.
 
-## DNS (Cloudflare) [fuera del VPS]
+## DNS [fuera del VPS] ⟦pendiente de elegir opción⟧
 
-El certificado comodín `*.adoptafacil.com` solo se puede emitir por desafío
-DNS-01: Caddy crea un registro TXT temporal en la zona a través de la API del
-proveedor DNS. Para Cloudflare existe el módulo mantenido por el proyecto Caddy
-(`github.com/caddy-dns/cloudflare`, fijado en `v0.2.4` en
-`deploy/docker/web.Dockerfile`). Para el DNS de Hostinger solo hay módulos
-comunitarios de una persona, con fallos abiertos en el propio desafío, así que
-no los usamos. El dominio puede seguir registrado donde está: solo cambian sus
-nameservers.
+El dominio `adoptafacil.org` está registrado en Namecheap y hoy su DNS también.
+El certificado comodín `*.adoptafacil.org` solo se puede emitir por desafío
+DNS-01: Caddy crea un registro TXT temporal en la zona a través de la **API**
+del proveedor DNS. Hay dos caminos y los dos están listos en el repo
+(`PORTALS_TLS=cloudflare` o `PORTALS_TLS=namecheap`, cada uno con su módulo de
+`github.com/caddy-dns`, fijados en `deploy/docker/web.Dockerfile` y validados en CI).
+En ambos el dominio sigue registrado y renovándose en Namecheap.
 
-1. En Cloudflare: **Add a site** → `adoptafacil.com` → plan Free. Cloudflare
-   copia los registros existentes; si hoy usas correo del dominio, confirma que
-   los registros `MX` y `TXT` (SPF/DKIM) quedaron copiados.
-2. Crea (o corrige) estos registros, todos en **DNS only** (nube gris):
+|                      | A. Cloudflare (recomendada)                 | B. API DNS de Namecheap                                                                                                                                  |
+| -------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Costo                | gratis (plan Free)                          | API sin costo, pero Namecheap solo la habilita si la cuenta tiene **≥ 50 USD de saldo**, **≥ 50 USD gastados en los últimos 2 años** o **≥ 20 dominios** |
+| Requisitos           | cambiar los nameservers en Namecheap        | la IPv4 del VPS en la lista blanca de la API (solo IPv4)                                                                                                 |
+| Credencial en el VPS | token limitado a editar el DNS de esta zona | clave de la API, que da acceso a **toda** la cuenta de Namecheap                                                                                         |
+| Riesgo               | ninguno conocido                            | la API de Namecheap reescribe la lista completa de registros en cada cambio: no editar el DNS a mano mientras Caddy renueva                              |
 
-   | Tipo | Nombre          | Valor                                          |
-   | ---- | --------------- | ---------------------------------------------- |
-   | A    | `@`             | IP del VPS                                     |
-   | A    | `www`           | IP del VPS                                     |
-   | A    | `*`             | IP del VPS                                     |
-   | AAAA | `@`, `www`, `*` | IPv6 del VPS (solo si Hostinger te asignó una) |
+Sin ninguna de las dos, el resto funciona igual con `PORTALS_TLS=off`: los
+portales se ven en `https://adoptafacil.org/o/<slug>` y Caddy emite el
+certificado del dominio principal y de `www` por HTTP-01.
 
-   Nube gris porque Caddy termina el TLS; con el proxy naranja Cloudflare
-   pondría su propio certificado delante.
+**Registros (en cualquiera de las dos):**
 
-3. En el registrador del dominio (en Hostinger: hPanel → Dominios →
-   `adoptafacil.com` → DNS / Nameservers → "Cambiar nameservers") pon los dos
-   nameservers que muestra Cloudflare. Propaga en minutos u horas; Cloudflare
-   avisa por correo cuando la zona queda activa.
-4. Token para Caddy: Cloudflare → My Profile → API Tokens → Create Token →
+| Tipo | Nombre          | Valor                                          |
+| ---- | --------------- | ---------------------------------------------- |
+| A    | `@`             | IPv4 del VPS                                   |
+| A    | `www`           | IPv4 del VPS                                   |
+| A    | `*`             | IPv4 del VPS                                   |
+| AAAA | `@`, `www`, `*` | IPv6 del VPS (solo si Hostinger te asignó una) |
+
+Si hoy usas correo con el dominio, conserva sus registros `MX` y `TXT` (SPF/DKIM).
+
+### Opción A: Cloudflare
+
+1. En Cloudflare: **Add a site** → `adoptafacil.org` → plan Free. Copia los
+   registros existentes y crea los de la tabla, todos en **DNS only** (nube
+   gris): Caddy termina el TLS; con el proxy naranja Cloudflare pondría su
+   propio certificado delante.
+2. En Namecheap: Domain List → `adoptafacil.org` → Manage → Nameservers →
+   **Custom DNS** → los dos nameservers que muestra Cloudflare. Propaga en
+   minutos u horas; Cloudflare avisa por correo cuando la zona queda activa.
+3. Token para Caddy: Cloudflare → My Profile → API Tokens → Create Token →
    plantilla **Edit zone DNS** → Zone Resources: _Include · Specific zone ·
-   adoptafacil.com_. Cópialo directo a `CLOUDFLARE_API_TOKEN` en `deploy/.env`
-   del VPS (paso 5 abajo). No sirve para nada fuera de esa zona.
+   adoptafacil.org_. Va directo a `CLOUDFLARE_API_TOKEN` en `deploy/.env` del VPS.
+4. En `deploy/.env`: `PORTALS_TLS=cloudflare`.
 
-Sin Cloudflare el resto funciona igual con `PORTALS_TLS=off`: los portales se
-ven en `https://adoptafacil.com/o/<slug>` y Caddy emite el certificado del
-dominio principal y de `www` por HTTP-01 con cualquier DNS.
+### Opción B: API DNS de Namecheap
+
+1. Cumplir uno de los requisitos de la tabla (lo usual: cargar 50 USD de saldo,
+   que quedan disponibles para renovaciones).
+2. Namecheap → Profile → Tools → Business & Dev Tools → **Namecheap API
+   Access** → ON. Anota el usuario de la API y la clave.
+3. En la misma pantalla, **Whitelisted IPs** → la IPv4 pública del VPS.
+4. Domain List → `adoptafacil.org` → Manage → Nameservers: **Namecheap
+   BasicDNS**; en Advanced DNS crea los registros de la tabla.
+5. En `deploy/.env`: `PORTALS_TLS=namecheap`, `NAMECHEAP_API_USER`,
+   `NAMECHEAP_API_KEY` y `NAMECHEAP_CLIENT_IP` (la misma IPv4 de la lista blanca).
+
+## Renovación del dominio
+
+`adoptafacil.org` se compró por un año en Namecheap. Si vence, se caen la web,
+los portales, los correos con enlaces y la renovación de certificados.
+
+- En Namecheap: Domain List → `adoptafacil.org` → **Auto-Renew ON**, con un
+  medio de pago vigente o saldo suficiente en la cuenta.
+- `deploy/scripts/monitor.sh` consulta una vez al día la fecha de vencimiento
+  pública (RDAP) y alerta por ntfy cuando faltan menos de 30 días
+  (`MONITOR_DOMAIN_MIN_DAYS`).
+- Recordatorio manual: anota en el calendario del dueño la fecha que muestra
+  Namecheap (Domain List → Expiration) y otro aviso 30 días antes.
 
 ## Primer despliegue [VPS]
 
@@ -143,8 +175,8 @@ ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443 && ufw --force enable
 exit                                                  # en adelante, como deploy
 ssh deploy@IP_DEL_VPS
 
-# 3. DNS listo (sección anterior): `dig +short adoptafacil.com` y
-#    `dig +short prueba.adoptafacil.com` deben devolver la IP del VPS.
+# 3. DNS listo (sección DNS, opción elegida): `dig +short adoptafacil.org` y
+#    `dig +short prueba.adoptafacil.org` deben devolver la IP del VPS.
 
 # 4. Código (la rama o tag que se aprobó para producción)
 sudo git clone https://github.com/AGamez10/AdoptaFacil /opt/adoptafacil
@@ -153,11 +185,11 @@ cd /opt/adoptafacil && sudo git checkout <rama o tag a desplegar>
 # 5. Configuración: secretos escritos aquí, en el servidor, y en ningún otro lado
 sudo cp deploy/.env.example deploy/.env && sudo chmod 600 deploy/.env
 sudo nano deploy/.env
-#   APP_DOMAIN=adoptafacil.com              ACME_EMAIL=<correo para avisos de Let's Encrypt>
+#   APP_DOMAIN=adoptafacil.org              ACME_EMAIL=<correo para avisos de Let's Encrypt>
 #   POSTGRES_PASSWORD, APP_DB_PASSWORD, JWT_SECRET  ->  openssl rand -hex 24
 #   SIGNATURE_ENCRYPTION_KEY                        ->  openssl rand -hex 32
-#   PORTALS_TLS=cloudflare   CLOUDFLARE_API_TOKEN=<token del paso 4 de DNS>
-#   VITE_PORTAL_BASE_DOMAIN=adoptafacil.com
+#   PORTALS_TLS y sus credenciales DNS según la opción elegida (§DNS)
+#   VITE_PORTAL_BASE_DOMAIN=adoptafacil.org
 #   BACKUP_AGE_RECIPIENT=<age1… clave PÚBLICA>  BACKUP_RCLONE_REMOTE=b2:adoptafacil-backups
 #   ALERT_WEBHOOK_URL=https://ntfy.sh/<tema>    BACKUP_HEALTHCHECK_URL=<URL de healthchecks.io>
 sudo cp deploy/api.env.example deploy/api.env && sudo chmod 600 deploy/api.env
@@ -183,16 +215,17 @@ sudo deploy/scripts/backup.sh && sudo deploy/scripts/restore-test.sh
 
 | Comprobación                    | Comando                                                                                                                                                   | Esperado                                      |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| API sana tras HTTPS             | `curl -fsS https://adoptafacil.com/api/health`                                                                                                            | `{"status":"ok","db":"up","redis":"up"}`      |
-| Portal por subdominio           | `curl -fsS https://prueba.adoptafacil.com/api/health`                                                                                                     | el mismo `ok`                                 |
-| `www` redirige                  | `curl -sI https://www.adoptafacil.com/ \| head -1`                                                                                                        | `301`, `location: https://adoptafacil.com/`   |
-| Certificados reales             | `echo \| openssl s_client -connect adoptafacil.com:443 -servername prueba.adoptafacil.com 2>/dev/null \| openssl x509 -noout -issuer -ext subjectAltName` | emisor Let's Encrypt, `DNS:*.adoptafacil.com` |
+| API sana tras HTTPS             | `curl -fsS https://adoptafacil.org/api/health`                                                                                                            | `{"status":"ok","db":"up","redis":"up"}`      |
+| Portal por subdominio           | `curl -fsS https://prueba.adoptafacil.org/api/health`                                                                                                     | el mismo `ok`                                 |
+| `www` redirige                  | `curl -sI https://www.adoptafacil.org/ \| head -1`                                                                                                        | `301`, `location: https://adoptafacil.org/`   |
+| Certificados reales             | `echo \| openssl s_client -connect adoptafacil.org:443 -servername prueba.adoptafacil.org 2>/dev/null \| openssl x509 -noout -issuer -ext subjectAltName` | emisor Let's Encrypt, `DNS:*.adoptafacil.org` |
 | Postura RLS                     | `docker compose ... logs migrate \| tail -3`                                                                                                              | `postura RLS verificada`                      |
 | Solo Caddy publica puertos      | `docker compose ... ps --format '{{.Service}} {{.Publishers}}'`                                                                                           | solo `caddy` con `0.0.0.0`                    |
 | Postgres no alcanzable de fuera | `nc -zv IP_DEL_VPS 5432` desde otra máquina                                                                                                               | rechazado                                     |
-| Cabeceras                       | `curl -sI https://adoptafacil.com/ \| grep -iE 'strict-transport\|nosniff\|frame'`                                                                        | las tres presentes                            |
+| Cabeceras                       | `curl -sI https://adoptafacil.org/ \| grep -iE 'strict-transport\|nosniff\|frame'`                                                                        | las tres presentes                            |
 | Respaldo + restauración         | `deploy/scripts/backup.sh && deploy/scripts/restore-test.sh`                                                                                              | `Restauración OK … N tablas, N migraciones`   |
 | Copia off-site                  | `rclone ls b2:adoptafacil-backups \| tail -3`                                                                                                             | los `.age` del día                            |
+| Vencimiento del dominio         | `cat /var/tmp/adoptafacil-monitor.state.domain-expiry` tras el primer `monitor.sh`                                                                        | la fecha de Namecheap                         |
 | Alerta de prueba                | `docker compose ... stop redis; deploy/scripts/monitor.sh; docker compose ... start redis; deploy/scripts/monitor.sh`                                     | llega 1 alerta a ntfy y luego "Recuperado"    |
 
 ## Tareas programadas [VPS]
@@ -254,7 +287,7 @@ repo (paneles de terceros).
 | Variable                      | Estado | Valor en este despliegue                                                                                     | Si falta                                                                                                        |
 | ----------------------------- | ------ | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | `VITE_API_URL`                | ✅     | `/api`, relativa (`deploy/compose.yaml:127`); el build falla si llega vacía (`deploy/docker/web.Dockerfile`) | el front llama a `http://localhost:3000` (p. ej. `apps/web/src/features/donations/api/donations-api.ts:12`)     |
-| `VITE_PORTAL_BASE_DOMAIN`     | ⚠️     | `adoptafacil.com`                                                                                            | sin subdominios; los portales funcionan por `/o/:slug` (`apps/web/src/features/portals/model/subdomain.ts:22`)  |
+| `VITE_PORTAL_BASE_DOMAIN`     | ⚠️     | `adoptafacil.org`                                                                                            | sin subdominios; los portales funcionan por `/o/:slug` (`apps/web/src/features/portals/model/subdomain.ts:22`)  |
 | `VITE_GOOGLE_CLIENT_ID`       | ⚠️     | ID del cliente OAuth web de Google                                                                           | el botón muestra el modo de prueba (`apps/web/src/features/auth/components/google-sign-in-button.tsx:70`)       |
 | `VITE_MERCADOPAGO_PUBLIC_KEY` | ⚠️     | llave pública de producción, solo al encender pagos                                                          | el Brick no se monta y muestra un aviso (`apps/web/src/features/payments/components/card-payment-brick.tsx:69`) |
 
@@ -262,22 +295,22 @@ repo (paneles de terceros).
 
 | Variable                         | Estado           | Valor en este despliegue                                                                                                           | Para qué                                                                                                                 |
 | -------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `API_CORS_ORIGIN`                | ✅               | `https://adoptafacil.com` (`deploy/compose.yaml:94`)                                                                               | con `/api` relativa cada host llama a su propio origen, así que los portales no necesitan entrar en esta lista           |
-| `WEB_BASE_URL`                   | ✅               | `https://adoptafacil.com` (`deploy/compose.yaml:95`)                                                                               | enlaces de los correos (restablecer contraseña, adopciones, donaciones) y retorno al front tras el OAuth de Mercado Pago |
-| `STORAGE_PUBLIC_BASE_URL`        | ✅               | `https://adoptafacil.com/api` (`deploy/compose.yaml:99`)                                                                           | URL pública de archivos y base por defecto del retorno OAuth de Mercado Pago                                             |
-| `MERCADOPAGO_OAUTH_REDIRECT_URI` | ✅ (por defecto) | sin definir → `https://adoptafacil.com/api/org/mercadopago/callback` (`apps/api/src/core/payments/mercadopago-oauth.client.ts:58`) | solo se fija en `deploy/api.env` si se quiere otra                                                                       |
+| `API_CORS_ORIGIN`                | ✅               | `https://adoptafacil.org` (`deploy/compose.yaml:94`)                                                                               | con `/api` relativa cada host llama a su propio origen, así que los portales no necesitan entrar en esta lista           |
+| `WEB_BASE_URL`                   | ✅               | `https://adoptafacil.org` (`deploy/compose.yaml:95`)                                                                               | enlaces de los correos (restablecer contraseña, adopciones, donaciones) y retorno al front tras el OAuth de Mercado Pago |
+| `STORAGE_PUBLIC_BASE_URL`        | ✅               | `https://adoptafacil.org/api` (`deploy/compose.yaml:99`)                                                                           | URL pública de archivos y base por defecto del retorno OAuth de Mercado Pago                                             |
+| `MERCADOPAGO_OAUTH_REDIRECT_URI` | ✅ (por defecto) | sin definir → `https://adoptafacil.org/api/org/mercadopago/callback` (`apps/api/src/core/payments/mercadopago-oauth.client.ts:58`) | solo se fija en `deploy/api.env` si se quiere otra                                                                       |
 | `MERCADOPAGO_BASE_URL`           | ✅ (por defecto) | `https://api.mercadopago.com` (`apps/api/src/config/env.validation.ts:70`)                                                         | no se toca salvo un sandbox                                                                                              |
 
 ### Externo (paneles de terceros y DNS)
 
 | Dónde                                | Estado | Qué registrar                                                                                                                                                                                   |
 | ------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DNS (Cloudflare)                     | ❌     | `A @`, `A www`, `A *` → IP del VPS, en DNS only (§DNS)                                                                                                                                          |
-| TLS                                  | ✅     | Caddy emite `adoptafacil.com` y `www` por HTTP-01 y `*.adoptafacil.com` por DNS-01 con `PORTALS_TLS=cloudflare`; renueva solo                                                                   |
-| Google Cloud, cliente OAuth web      | ❌     | orígenes JavaScript autorizados: `https://adoptafacil.com`. Google no acepta comodines: el inicio de sesión con Google se hace en el dominio principal                                          |
-| Mercado Pago, webhook (evento Order) | ❌     | `https://adoptafacil.com/api/donations/webhook` (`apps/api/src/modules/donations/donations.controller.ts:136`). Pagos apagados: solo documentado                                                |
-| Mercado Pago, redirect OAuth         | ❌     | `https://adoptafacil.com/api/org/mercadopago/callback`, idéntica a la que envía la API (`apps/api/src/modules/payments/mercadopago-connect.controller.ts:65`). Pagos apagados: solo documentado |
-| Mercado Pago, webhook de payouts     | ❌     | `https://adoptafacil.com/api/payments/payouts/webhook` (`apps/api/src/modules/payments/payouts.controller.ts:58`), cuando se apruebe Disbursements                                              |
+| DNS                                  | ❌     | `A @`, `A www`, `A *` → IP del VPS (§DNS)                                                                                                                                                       |
+| TLS                                  | ✅     | Caddy emite `adoptafacil.org` y `www` por HTTP-01 y `*.adoptafacil.org` por DNS-01 con `PORTALS_TLS=cloudflare` o `namecheap`; renueva solo                                                     |
+| Google Cloud, cliente OAuth web      | ❌     | orígenes JavaScript autorizados: `https://adoptafacil.org`. Google no acepta comodines: el inicio de sesión con Google se hace en el dominio principal                                          |
+| Mercado Pago, webhook (evento Order) | ❌     | `https://adoptafacil.org/api/donations/webhook` (`apps/api/src/modules/donations/donations.controller.ts:136`). Pagos apagados: solo documentado                                                |
+| Mercado Pago, redirect OAuth         | ❌     | `https://adoptafacil.org/api/org/mercadopago/callback`, idéntica a la que envía la API (`apps/api/src/modules/payments/mercadopago-connect.controller.ts:65`). Pagos apagados: solo documentado |
+| Mercado Pago, webhook de payouts     | ❌     | `https://adoptafacil.org/api/payments/payouts/webhook` (`apps/api/src/modules/payments/payouts.controller.ts:58`), cuando se apruebe Disbursements                                              |
 
 ### Código revisado
 
@@ -286,13 +319,13 @@ repo (paneles de terceros).
   (Caddy lo garantiza) y funciona detrás del prefijo `/api`. El CORS ya va con
   `credentials: true` (`apps/api/src/main.ts:17`), aunque con este despliegue
   el front y la API comparten origen y no hace falta. La cookie queda por host:
-  una sesión abierta en `adoptafacil.com` no viaja a `<org>.adoptafacil.com`, lo
+  una sesión abierta en `adoptafacil.org` no viaja a `<org>.adoptafacil.org`, lo
   cual basta porque los portales son públicos.
 - **`apps/web/vite.config.ts`**: el proxy `/api` → `localhost:3000` y
   `allowedHosts: true` son de la demo con ngrok y su comentario pide revertirlos.
   Solo afectan a `vite dev`; el build de producción no los usa. Revertirlos le
   toca al dueño del front.
-- **"adoptafacil.com/"** en `apps/web/src/features/org/pages/platform-banner-page.tsx:221`
+- **"adoptafacil.org/"** en `apps/web/src/features/org/pages/platform-banner-page.tsx:221`
   es texto de ayuda, no un enlace: no cambia con el dominio.
 
 ## Portales por subdominio (F7)
@@ -303,10 +336,11 @@ en su configuración a la vez:
 | Valor        | Caddy                                                    | Uso                                    |
 | ------------ | -------------------------------------------------------- | -------------------------------------- |
 | `off`        | imagen oficial, sin bloque comodín                       | por defecto; portales en `/o/<slug>`   |
-| `cloudflare` | compilado con `caddy-dns/cloudflare`, comodín por DNS-01 | **producción** en adoptafacil.com      |
+| `cloudflare` | compilado con `caddy-dns/cloudflare`, comodín por DNS-01 | **producción**, opción A de §DNS       |
+| `namecheap`  | compilado con `caddy-dns/namecheap`, comodín por DNS-01  | **producción**, opción B de §DNS       |
 | `internal`   | imagen oficial, comodín con la CA interna                | CI y pruebas locales, nunca producción |
 
-El bloque comodín (`deploy/portals-cloudflare.caddy`) sirve exactamente lo
+El bloque comodín (`deploy/portals-cloudflare.caddy` o `portals-namecheap.caddy`) sirve exactamente lo
 mismo que el dominio principal: SPA y `/api`. El SPA detecta el subdominio con
 `VITE_PORTAL_BASE_DOMAIN` (`apps/web/src/features/portals/model/subdomain.ts`)
 y pregunta a `/api/public/organizations/by-subdomain/<sub>` qué organización
@@ -319,7 +353,7 @@ verificados: con el certificado comodín no hace falta.
 Mismo compose con otro nombre de proyecto y dominio, idealmente en otro VPS
 pequeño (dos Caddy no pueden compartir 80/443 en una máquina):
 `docker compose -p adoptafacil-staging -f deploy/compose.yaml --env-file deploy/staging.env up -d --build`.
-Un subdominio como `staging.adoptafacil.com` sirve si ese VPS tiene su propio
+Un subdominio como `staging.adoptafacil.org` sirve si ese VPS tiene su propio
 registro `A staging`. Nunca con datos reales copiados de producción sin
 anonimizar (Ley 1581).
 
@@ -340,8 +374,8 @@ anonimizar (Ley 1581).
 - Datos persistentes tras `down` / `up`.
 - El mismo arranque corre en CI (job `docker` de `ci.yml`) con las imágenes
   reales (`node:20-bookworm-slim` + openssl), con portales en modo `internal`, y
-  además compila Caddy con `caddy-dns/cloudflare` y valida el Caddyfile de
-  producción. En el entorno cloud los repositorios de Debian están bloqueados,
+  además compila Caddy con `caddy-dns/cloudflare` y con `caddy-dns/namecheap`
+  y valida el Caddyfile de producción de cada uno. En el entorno cloud los repositorios de Debian están bloqueados,
   así que la verificación local usó `node:20-bookworm` con `--build-arg APT_PACKAGES=`.
-- No verificable aquí: la emisión real del comodín en Cloudflare, el firewall
+- No verificable aquí: la emisión real del comodín (Cloudflare o Namecheap), el firewall
   de Hostinger y los paneles externos. Quedan en §Verificación posterior.
