@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CLOSED_CAPABILITIES,
   FormalizationState,
+  Role,
   type OrganizationPublic,
 } from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
@@ -710,5 +711,185 @@ describe('OrgPublicPage — rich public portal', () => {
       expect(await screen.findByText('Libro público')).toBeInTheDocument();
       expect(screen.getByText('Pronto')).toBeInTheDocument();
     });
+  });
+});
+
+describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
+  function stubWithTemplate(template: unknown, templateOptions?: unknown) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/theme')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ tokens: {}, template, templateOptions }),
+          });
+        }
+        if (url.includes('/animals')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              items: [
+                {
+                  id: 'a1',
+                  name: 'Luna',
+                  species: 'dog',
+                  sex: 'female',
+                  size: 'medium',
+                  photoUrl: 'https://cdn.example/luna.jpg',
+                  breed: 'Criolla',
+                },
+              ],
+              total: 5,
+              limit: 8,
+              offset: 0,
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: async () => ORG });
+      }),
+    );
+  }
+
+  it.each(['editorial', 'carnet', 'impacto', 'orbita'])(
+    'con la plantilla %s cambia el hero y conserva los mismos datos',
+    async (template) => {
+      stubWithTemplate(template);
+      renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+      const hero = await screen.findByTestId(`portal-hero-${template}`);
+      expect(screen.getByTestId('portal-page')).toHaveAttribute('data-template', template);
+      expect(within(hero).getByRole('heading', { level: 1 })).toHaveTextContent('Refugio Patitas');
+      expect(await within(hero).findByTestId('portal-animal-count')).toHaveTextContent('5');
+      // Las acciones y el catálogo real siguen ahí.
+      expect(within(hero).getByTestId('portal-header-actions')).toBeInTheDocument();
+      expect(within(hero).getByRole('link', { name: /Luna/ })).toHaveAttribute(
+        'href',
+        '/o/patitas/animales/a1',
+      );
+    },
+  );
+
+  it('aplica los ajustes de la plantilla y descarta los que no le corresponden', async () => {
+    stubWithTemplate('carnet', { pattern: 'huellas', showMinis: false, density: 'intensa' });
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    const hero = await screen.findByTestId('portal-hero-carnet');
+    expect(screen.getByTestId('portal-page')).toHaveAttribute('data-pattern', 'huellas');
+    await screen.findByTestId('portal-animal-count');
+    // Sin mini carnets: el animal no aparece dentro del hero.
+    expect(within(hero).queryByRole('link', { name: /Luna/ })).not.toBeInTheDocument();
+  });
+
+  it('una plantilla desconocida cae en la Clásica', async () => {
+    stubWithTemplate('<script>');
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    await screen.findByRole('heading', { name: /Refugio Patitas/ });
+    expect(screen.getByTestId('portal-page')).toHaveAttribute('data-template', 'clasica');
+    expect(screen.queryByTestId('portal-hero-editorial')).not.toBeInTheDocument();
+  });
+});
+
+describe('OrgPublicPage — vista previa privada del dueño (Ola 3)', () => {
+  const OWNER_SESSION = {
+    session: {
+      initialStatus: 'authenticated' as const,
+      initialUser: {
+        id: 'u1',
+        name: 'Dueña',
+        email: 'duena@patitas.org',
+        roles: [Role.Owner],
+        organizationId: 'org-1',
+        accountType: 'organization' as const,
+      },
+    },
+  };
+
+  function stubUnpublished(ownSlug: string) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const respond = (status: number, body: unknown) =>
+          Promise.resolve({
+            ok: status < 400,
+            status,
+            headers: { get: () => null },
+            json: async () => body,
+          });
+        if (url.includes('/public/organizations/')) return respond(404, {});
+        if (url.endsWith('/org/profile')) {
+          return respond(200, {
+            ...ORG,
+            slug: ownSlug,
+            phone: '3001112233',
+            legalName: 'Fundación Patitas SAS',
+          });
+        }
+        if (url.endsWith('/portals/theme')) return respond(200, { tokens: {}, template: 'carnet' });
+        if (url.includes('/org/portal/preview/animals')) {
+          return respond(200, {
+            items: [
+              {
+                id: 'a1',
+                organizationId: 'org-1',
+                name: 'Luna',
+                species: 'dog',
+                sex: 'female',
+                size: 'medium',
+                status: 'available',
+                isActive: true,
+                createdAt: '2026-10-01T00:00:00.000Z',
+              },
+            ],
+            total: 1,
+            limit: 8,
+            offset: 0,
+          });
+        }
+        return respond(200, []);
+      }),
+    );
+  }
+
+  it('el dueño ve su portal sin publicar como vista previa, con su plantilla y sin datos privados', async () => {
+    stubUnpublished('patitas');
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    expect(await screen.findByTestId('portal-owner-preview')).toHaveTextContent(
+      'Solo tu equipo ve esta página',
+    );
+    expect(screen.getByTestId('portal-hero-carnet')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Refugio Patitas');
+    expect(screen.queryByText('Fundación Patitas SAS')).not.toBeInTheDocument();
+    expect(screen.queryByText(/3001112233/)).not.toBeInTheDocument();
+  });
+
+  it('la vista previa muestra los animales propios aunque el catálogo público aún no exista', async () => {
+    stubUnpublished('patitas');
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    await screen.findByTestId('portal-owner-preview');
+    expect((await screen.findAllByText('Luna')).length).toBeGreaterThan(0);
+  });
+
+  it('otra organización con sesión sigue viendo "no encontrada"', async () => {
+    stubUnpublished('otra-org');
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    expect(await screen.findByText('Organización no encontrada')).toBeInTheDocument();
+    expect(screen.queryByTestId('portal-owner-preview')).not.toBeInTheDocument();
+  });
+
+  it('el público sin sesión no ve la vista previa', async () => {
+    stubUnpublished('patitas');
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    expect(await screen.findByText('Organización no encontrada')).toBeInTheDocument();
+    expect(screen.queryByTestId('portal-owner-preview')).not.toBeInTheDocument();
   });
 });

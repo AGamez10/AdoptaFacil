@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { CampaignPublic } from '@adoptafacil/contracts';
 import { Skeleton } from '@adoptafacil/ui';
 import { fetchPublicOrgCampaigns } from '../api/public-campaigns';
+import { usePortalPreviewClient } from '../model/portal-preview-context';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
 import styles from '../styles/public-catalog.module.scss';
 
@@ -33,13 +34,14 @@ export interface PortalCampaignsSectionProps {
  * contenido, compacto (vive en el panel lateral angosto).
  */
 export function PortalCampaignsSection({ slug }: PortalCampaignsSectionProps) {
+  const preview = usePortalPreviewClient();
   const [items, setItems] = useState<CampaignPublic[]>([]);
   const [state, setState] = useState<SectionState>('loading');
 
   useEffect(() => {
     let active = true;
     setState('loading');
-    fetchPublicOrgCampaigns({ slug, limit: PAGE_SIZE, offset: 0 })
+    fetchPublicOrgCampaigns({ slug, preview, limit: PAGE_SIZE, offset: 0 })
       .then((page) => {
         if (!active) return;
         setItems(page.items);
@@ -51,7 +53,7 @@ export function PortalCampaignsSection({ slug }: PortalCampaignsSectionProps) {
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, preview]);
 
   // Ola 3 (R3-5): sin campañas activas la sección no se monta (antes decía
   // "no tiene una campaña de recaudación activa", ruido que habla de dinero).

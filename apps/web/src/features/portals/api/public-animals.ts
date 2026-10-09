@@ -1,5 +1,7 @@
 import type { AnimalSpecies, AnimalSummary, AnimalSummaryPage } from '@adoptafacil/contracts';
 
+import type { ApiClient } from '../../../shell/api';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 export interface FetchPublicAnimalsParams {
@@ -8,6 +10,9 @@ export interface FetchPublicAnimalsParams {
   limit?: number;
   offset?: number;
   signal?: AbortSignal;
+  /** Owner preview (see `PortalPreviewContext`): reads the caller's own
+   *  organization through the authenticated preview endpoint. */
+  preview?: ApiClient | null;
 }
 
 /**
@@ -27,6 +32,7 @@ export async function fetchPublicAnimals({
   limit,
   offset,
   signal,
+  preview,
 }: FetchPublicAnimalsParams): Promise<AnimalSummaryPage> {
   const params = new URLSearchParams();
   if (species) params.set('species', species);
@@ -37,12 +43,20 @@ export async function fetchPublicAnimals({
     qs ? `?${qs}` : ''
   }`;
 
-  const response = await fetch(url, signal ? { signal } : undefined);
-  if (!response.ok) {
-    throw new Error('error');
+  let body: Partial<AnimalSummaryPage> | null;
+  if (preview) {
+    body = await preview.request<Partial<AnimalSummaryPage> | null>(
+      `/org/portal/preview/animals${qs ? `?${qs}` : ''}`,
+      signal ? { signal } : {},
+    );
+  } else {
+    const response = await fetch(url, signal ? { signal } : undefined);
+    if (!response.ok) {
+      throw new Error('error');
+    }
+    body = (await response.json()) as Partial<AnimalSummaryPage> | null;
   }
 
-  const body = (await response.json()) as Partial<AnimalSummaryPage> | null;
   const items: AnimalSummary[] = Array.isArray(body?.items) ? body.items : [];
   return {
     items,

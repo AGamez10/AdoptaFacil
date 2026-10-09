@@ -66,6 +66,7 @@ export class OrganizationSummaryService {
           tx.adoptionRequest.count({
             where: { organizationId, status: { in: ['new', 'in_review'] } },
           }),
+          tx.adoptionRequest.count({ where: { organizationId, status: 'new' } }),
           tx.sponsorship.count({ where: { organizationId, status: 'active' } }),
           tx.organizationDocument.findMany({
             where: { organizationId },
@@ -88,6 +89,7 @@ export class OrganizationSummaryService {
     const [
       animalsActive,
       adoptionRequestsPending,
+      adoptionRequestsNew,
       sponsorshipsActive,
       documentRows,
       donationRows,
@@ -96,9 +98,9 @@ export class OrganizationSummaryService {
 
     let documentsExpiringSoon = 0;
     let documentsRejected = 0;
-    // Only the latest version of each document type counts: the history is
-    // append-only, so a rejected v1 stays rejected after v2 fixes it and must
-    // not keep asking the organization to "subsanar".
+    // Ola 3: solo cuenta la ÚLTIMA versión de cada tipo de documento. Antes un
+    // documento rechazado (o por vencer) seguía en los pendientes aunque la
+    // organización ya hubiera subido el reemplazo.
     const latestByType = new Map<string, (typeof documentRows)[number]>();
     for (const row of documentRows) {
       const current = latestByType.get(row.type);
@@ -128,6 +130,7 @@ export class OrganizationSummaryService {
     return {
       animalsActive,
       adoptionRequestsPending,
+      adoptionRequestsNew,
       sponsorshipsActive,
       documentsExpiringSoon,
       documentsRejected,

@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
- * M14 · resolve a real portal subdomain (`<subdomain>.adoptafacil.com`) to its
+ * M14 · resolve a real portal subdomain (`<subdomain>.adoptafacil.org`) to its
  * organization slug. Reads through the `organization_slug_by_subdomain`
  * SECURITY DEFINER function (same pattern as `organization_public`/
  * `organization_portal_theme`, T-portal-personalization-v2): no tenant context
