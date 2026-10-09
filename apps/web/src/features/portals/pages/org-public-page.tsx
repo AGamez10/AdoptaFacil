@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
   AnimalSummary,
+  Organization,
   OrganizationPublic,
+  PortalThemeConfig,
   PortalLogoPosition,
   PortalSocialNavPosition,
   PortalTemplateId,
@@ -46,6 +48,9 @@ import { PortalHelpCta } from '../components/portal-help-cta';
 import { PortalAdoptionSteps } from '../components/portal-adoption-steps';
 import { useFeature } from '../../../shell/capabilities';
 import { useDocumentTitle } from '../../../lib/use-document-title';
+import { useApiClient } from '../../../shell/api';
+import { useSession } from '../../../shell/auth';
+import { ownerPreviewOrganization } from '../model/owner-preview';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -120,6 +125,12 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const [state, setState] = useState<LoadState>('loading');
   const [animalTotal, setAnimalTotal] = useState<number | undefined>(undefined);
   const [animalSample, setAnimalSample] = useState<AnimalSummary[]>([]);
+  // Ola 3: el portal público no existe (todavía) para este enlace. Si quien
+  // mira es la propia organización, ve una vista previa privada.
+  const [publicMissing, setPublicMissing] = useState(false);
+  const [ownerPreview, setOwnerPreview] = useState(false);
+  const client = useApiClient();
+  const session = useSession();
   // Ola 1 (R1-1) / Ola 3 (R3-5): el portal solo muestra módulos encendidos.
   // Con un módulo apagado su sección ni se monta (antes pintaba "No se pudo
   // cargar" porque la API respondía 404) y no hay enlaces de dinero.
@@ -144,6 +155,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       return;
     }
     let active = true;
+    setPublicMissing(false);
+    setOwnerPreview(false);
     const encoded = encodeURIComponent(slug);
 
     // The profile drives the page state (404/error). The theme (colors +
@@ -192,13 +205,63 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         setState('ready');
       })
       .catch((err: unknown) => {
-        if (active)
-          setState(err instanceof Error && err.message === 'not-found' ? 'not-found' : 'error');
+        if (!active) return;
+        if (err instanceof Error && err.message === 'not-found') {
+          // Se decide abajo, cuando la sesión termine de cargar: dueño → vista
+          // previa; cualquier otro → "no encontrada".
+          setPublicMissing(true);
+        } else {
+          setState('error');
+        }
       });
     return () => {
       active = false;
     };
   }, [slug]);
+
+  // Ola 3: vista previa del DUEÑO. Una organización en borrador o sin aprobar
+  // no tiene portal público, pero su equipo debe poder verlo antes de
+  // publicarlo. Se lee con la sesión (su propio perfil y tema, bajo RLS) y
+  // solo si el enlace es el de SU organización; el público sigue viendo
+  // "Organización no encontrada".
+  useEffect(() => {
+    if (!publicMissing || !slug) return;
+    if (session.status === 'loading') return;
+    if (!session.isAuthenticated || session.user?.accountType !== 'organization') {
+      setState('not-found');
+      return;
+    }
+    let active = true;
+    Promise.all([
+      client.request<Organization>('/org/profile'),
+      client.request<PortalThemeConfig>('/portals/theme').catch(() => null),
+    ])
+      .then(([org, themeConfig]) => {
+        if (!active) return;
+        const preview = ownerPreviewOrganization(org, slug);
+        if (!preview) {
+          setState('not-found');
+          return;
+        }
+        const template = safeTemplate(themeConfig?.template);
+        setView(buildPortalView(preview));
+        setTheme(safePortalTheme(themeConfig?.tokens));
+        setLayout({
+          logoPosition: safeLogoPosition(themeConfig?.logoPosition),
+          socialNavPosition: safeSocialNavPosition(themeConfig?.socialNavPosition),
+          template,
+          templateOptions: resolveTemplateOptions(template, themeConfig?.templateOptions),
+        });
+        setOwnerPreview(true);
+        setState('ready');
+      })
+      .catch(() => {
+        if (active) setState('not-found');
+      });
+    return () => {
+      active = false;
+    };
+  }, [publicMissing, slug, session.status, session.isAuthenticated, session.user, client]);
 
   // Real animal count for the profile stats row (pulido visual T-D02). A small,
   // INDEPENDENT fetch (Ola 3: limit 8, la muestra alimenta los héroes de las
@@ -330,6 +393,21 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         )}
         {state === 'ready' && view && heroProps && (
           <div className="space-y-8">
+            {ownerPreview && (
+              <div
+                role="status"
+                data-testid="portal-owner-preview"
+                className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950"
+              >
+                <strong>Vista previa privada.</strong> Solo tu equipo ve esta página. Tu portal será
+                público cuando la plataforma apruebe tu organización; mientras tanto puedes
+                ajustarlo en{' '}
+                <a className="font-semibold underline" href="/organizacion/portal">
+                  Diseña tu portal
+                </a>
+                .
+              </div>
+            )}
             {/* Header (3ra iteración): perfil + KPI(s) + acciones viven TODOS
                 dentro del mismo panel (`PortalProfileSection`) — ya no hay una
                 tarjeta de KPI flotante aparte ni una fila extra a su lado. */}

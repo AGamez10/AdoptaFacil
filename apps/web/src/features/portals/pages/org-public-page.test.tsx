@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CLOSED_CAPABILITIES,
   FormalizationState,
+  Role,
   type OrganizationPublic,
 } from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
@@ -790,5 +791,77 @@ describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
     await screen.findByRole('heading', { name: /Refugio Patitas/ });
     expect(screen.getByTestId('portal-page')).toHaveAttribute('data-template', 'clasica');
     expect(screen.queryByTestId('portal-hero-editorial')).not.toBeInTheDocument();
+  });
+});
+
+describe('OrgPublicPage — vista previa privada del dueño (Ola 3)', () => {
+  const OWNER_SESSION = {
+    session: {
+      initialStatus: 'authenticated' as const,
+      initialUser: {
+        id: 'u1',
+        name: 'Dueña',
+        email: 'duena@patitas.org',
+        roles: [Role.Owner],
+        organizationId: 'org-1',
+        accountType: 'organization' as const,
+      },
+    },
+  };
+
+  function stubUnpublished(ownSlug: string) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const respond = (status: number, body: unknown) =>
+          Promise.resolve({
+            ok: status < 400,
+            status,
+            headers: { get: () => null },
+            json: async () => body,
+          });
+        if (url.includes('/public/organizations/')) return respond(404, {});
+        if (url.endsWith('/org/profile')) {
+          return respond(200, {
+            ...ORG,
+            slug: ownSlug,
+            phone: '3001112233',
+            legalName: 'Fundación Patitas SAS',
+          });
+        }
+        if (url.endsWith('/portals/theme')) return respond(200, { tokens: {}, template: 'carnet' });
+        return respond(200, []);
+      }),
+    );
+  }
+
+  it('el dueño ve su portal sin publicar como vista previa, con su plantilla y sin datos privados', async () => {
+    stubUnpublished('patitas');
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    expect(await screen.findByTestId('portal-owner-preview')).toHaveTextContent(
+      'Solo tu equipo ve esta página',
+    );
+    expect(screen.getByTestId('portal-hero-carnet')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Refugio Patitas');
+    expect(screen.queryByText('Fundación Patitas SAS')).not.toBeInTheDocument();
+    expect(screen.queryByText(/3001112233/)).not.toBeInTheDocument();
+  });
+
+  it('otra organización con sesión sigue viendo "no encontrada"', async () => {
+    stubUnpublished('otra-org');
+    renderShell({ route: '/o/patitas', ...OWNER_SESSION });
+
+    expect(await screen.findByText('Organización no encontrada')).toBeInTheDocument();
+    expect(screen.queryByTestId('portal-owner-preview')).not.toBeInTheDocument();
+  });
+
+  it('el público sin sesión no ve la vista previa', async () => {
+    stubUnpublished('patitas');
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    expect(await screen.findByText('Organización no encontrada')).toBeInTheDocument();
+    expect(screen.queryByTestId('portal-owner-preview')).not.toBeInTheDocument();
   });
 });
