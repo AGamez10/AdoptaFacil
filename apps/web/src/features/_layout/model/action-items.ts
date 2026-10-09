@@ -17,10 +17,14 @@ export interface ActionItem {
  */
 export function deriveActionItems(data: OrganizationDashboardSummary): ActionItem[] {
   const items: ActionItem[] = [];
-  if (data.adoptionRequestsPending > 0) {
+  // Ola 3: "sin revisar" son solo las que nadie ha abierto ('new'). Una
+  // solicitud que pasa a "En evaluación" ya fue atendida y sale de aquí. Con
+  // una API anterior sin ese conteo se usa el total de antes.
+  const unreviewed = data.adoptionRequestsNew ?? data.adoptionRequestsPending;
+  if (unreviewed > 0) {
     items.push({
       key: 'adoptions',
-      label: `${data.adoptionRequestsPending} solicitud${data.adoptionRequestsPending === 1 ? '' : 'es'} de adopción sin revisar`,
+      label: `${unreviewed} solicitud${unreviewed === 1 ? '' : 'es'} de adopción sin revisar`,
       href: '/adopciones',
       linkLabel: 'Ir a la bandeja',
     });

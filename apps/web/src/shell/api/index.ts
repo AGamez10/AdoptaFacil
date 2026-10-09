@@ -20,6 +20,7 @@ export {
   type ShellApi,
   type CreateShellApiConfig,
 } from './create-shell-api';
+export { DATA_CHANGED_EVENT, notifyDataChanged } from './data-changed';
 export { ApiClientProvider, useApiClient, type ApiClientProviderProps } from './api-context';
 
 // Auth contract (real, from @adoptafacil/contracts, adapted in auth-contract).

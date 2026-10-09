@@ -321,6 +321,7 @@ describe('Organization summary (S2-08, M13)', () => {
 
     expect(res.body.animalsActive).toBe(2);
     expect(res.body.adoptionRequestsPending).toBe(2); // 'new' + 'in_review', not 'rejected'
+    expect(res.body.adoptionRequestsNew).toBe(1); // only the one nobody opened yet
     expect(res.body.sponsorshipsActive).toBe(1); // not the suspended one
     expect(res.body.documentsExpiringSoon).toBe(1); // only the near-expiry Approved one
     expect(res.body.documentsRejected).toBe(1);
@@ -353,6 +354,7 @@ describe('Organization summary (S2-08, M13)', () => {
     expect(res.body).toEqual({
       animalsActive: 0,
       adoptionRequestsPending: 0,
+      adoptionRequestsNew: 0,
       sponsorshipsActive: 0,
       documentsExpiringSoon: 0,
       documentsRejected: 0,
@@ -377,5 +379,33 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${readOnlyAuditor.token}`)
       .expect(403);
     await request(server).get('/org/summary').expect(401);
+  });
+  it('Ola 3: lo atendido sale de los pendientes (reemplazo de documento y solicitud abierta)', async () => {
+    // Reemplazo del documento rechazado y renovación del que está por vencer:
+    // la versión nueva queda 'pending', y la anterior ya no cuenta.
+    await upload(owner.token, 'legal_representative_id').expect(201);
+    const renewal = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString();
+    await upload(owner.token, 'rut', renewal).expect(201);
+
+    // La solicitud 'new' pasa a 'En evaluación'.
+    const fresh = await admin.adoptionRequest.findFirst({
+      where: { organizationId: owner.orgId, status: 'new' },
+      select: { id: true },
+    });
+    expect(fresh).not.toBeNull();
+    await request(server)
+      .post(`/adoptions/${fresh!.id}/transitions`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ targetStatus: 'in_review' })
+      .expect(201);
+
+    const res = await request(server)
+      .get('/org/summary')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(200);
+    expect(res.body.documentsRejected).toBe(0);
+    expect(res.body.documentsExpiringSoon).toBe(0);
+    expect(res.body.adoptionRequestsNew).toBe(0);
+    expect(res.body.adoptionRequestsPending).toBe(2); // sigue en evaluación
   });
 });
