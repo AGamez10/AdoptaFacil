@@ -170,7 +170,14 @@ export const ADOPTION_CONTRACT_STATUSES: readonly AdoptionContractStatus[] = [
  * Rol de un firmante. Firmantes DINÁMICOS: como mínimo el representante de la
  * organización y el adoptante; se pueden añadir testigos u otros.
  */
-export type AdoptionSignerRole = 'organization_representative' | 'adopter' | 'witness';
+export type AdoptionSignerRole =
+  | 'organization_representative'
+  | 'adopter'
+  | 'witness'
+  /** Responsable firmante del hogar (estudio v4 §B): firma junto al adoptante
+   *  cuando este no alcanza la edad mínima de firma de la organización, y
+   *  asume las obligaciones del contrato de forma solidaria. Aditivo. */
+  | 'co_adopter';
 
 /**
  * Un firmante del contrato (parte de la lista dinámica). `signedAt`/`signatureId`
@@ -244,15 +251,78 @@ export interface AdoptionContractData {
   followUpMonths: number;
   /** "Firmado en ___" / "las partes fijan como domicilio la ciudad de ___". */
   signatureCity?: string;
+
+  // --- Campos aditivos de la plantilla v2 (contrato revisado, estudio v4) ---
+  // Todos opcionales: los contratos v1 ya sellados no los tienen y la
+  // plantilla v1 nunca los lee.
+
+  /** Razón social de la organización cedente (auto-rellenada al generar). */
+  organizationName?: string;
+  /** Tipo de documento del adoptante (cédula, extranjería, PPT, pasaporte). */
+  adopterDocumentType?: AdopterDocumentType;
+  /** La organización confirmó la identidad y la edad con el documento original
+   *  en la entrevista (sin guardar foto del documento). */
+  identityDocumentVerified?: boolean;
+  /** Edad mínima de firma que aplicó la organización a este contrato (18–30). */
+  minimumSignerAge?: number;
+  /** Identificación física del animal entregado. */
+  animalIdentificationType?: AnimalIdentificationType;
+  /** Número del microchip o de la placa (ausente si `none`). */
+  animalIdentificationNumber?: string;
+  /** El animal se entrega esterilizado. */
+  animalSterilized?: boolean;
+  /** Si NO se entrega esterilizado: meses que tiene el adoptante para
+   *  esterilizarlo (TODO(client): plazo por organización). Sin valor, la
+   *  cláusula queda sujeta a criterio del médico veterinario. */
+  sterilizationCommitmentMonths?: number;
+  /** Días de la semana de prueba previa (acta separada); ausente = sin prueba. */
+  trialPeriodDays?: number;
+  /** Plan de seguimiento elegido por el adoptante (estudio v4 §C). */
+  followUpPlan?: AdoptionFollowUpPlan;
+  /** Cuidador de respaldo (estudio v3/v4): nombre y celular. */
+  backupCaregiverName?: string;
+  backupCaregiverPhone?: string;
+  /** El adoptante declara que informó al cuidador y obtuvo su autorización
+   *  para entregar sus datos (Ley 1581). */
+  backupCaregiverInformed?: boolean;
+  /** Cuota de recuperación de gastos veterinarios pactada, en pesos (0 o
+   *  ausente = sin cuota). Nunca es precio de venta. */
+  recoveryFeeCop?: number;
 }
+
+/** Tipos de documento admitidos para el adoptante. */
+export type AdopterDocumentType = 'CC' | 'CE' | 'PPT' | 'PA';
+export const ADOPTER_DOCUMENT_TYPES: readonly AdopterDocumentType[] = ['CC', 'CE', 'PPT', 'PA'];
+
+/** Identificación física del animal en la entrega (estudio v3 §3). */
+export type AnimalIdentificationType = 'microchip' | 'tag' | 'none';
+export const ANIMAL_IDENTIFICATION_TYPES: readonly AnimalIdentificationType[] = [
+  'microchip',
+  'tag',
+  'none',
+];
+
+/**
+ * Plan de seguimiento post-adopción (estudio v4 §C): `light` (por defecto) =
+ * 1, 4 y 12 meses; `standard` ("acompañado") = 15 días, 1, 4 y 12 meses.
+ */
+export type AdoptionFollowUpPlan = 'light' | 'standard';
+export const ADOPTION_FOLLOW_UP_PLANS: readonly AdoptionFollowUpPlan[] = ['light', 'standard'];
+export const DEFAULT_FOLLOW_UP_PLAN: AdoptionFollowUpPlan = 'light';
+
+/** Rango permitido para la edad mínima de firma por organización (estudio v4 §B). */
+export const MIN_SIGNER_AGE_RANGE = { min: 18, max: 30 } as const;
 
 /** Entrada para `PATCH /adoptions/contracts/:id/data` — cualquier subconjunto
  *  de {@link AdoptionContractData}; solo aplicable mientras el contrato está
  *  en `draft` y nadie ha firmado todavía. */
 export type UpdateAdoptionContractDataInput = Partial<AdoptionContractData>;
 
-/** Default de {@link AdoptionContractData.followUpMonths} cuando se genera el contrato. */
-export const DEFAULT_FOLLOW_UP_MONTHS = 6;
+/** Default de {@link AdoptionContractData.followUpMonths} cuando se genera el
+ *  contrato — 12 meses desde la plantilla v2 (estudio v3/v4: la mayoría de
+ *  devoluciones llegan después de los 60 días). Los contratos v1 conservan el
+ *  valor que ya tienen guardado. */
+export const DEFAULT_FOLLOW_UP_MONTHS = 12;
 
 /**
  * Contenido CANÓNICO y versionable del contrato: es exactamente lo que se serializa
@@ -274,7 +344,18 @@ export interface AdoptionContractPayload {
   terms: string;
   /** Datos variables del texto legal fijo — ver {@link AdoptionContractData}. */
   data: AdoptionContractData;
+  /**
+   * Versión del TEXTO legal con que se generó el contrato (aditivo). Entra al
+   * sello por hash, así que liga cada firma al texto exacto que se mostró.
+   * Ausente = `v1` (contratos generados antes de la plantilla revisada).
+   */
+  templateVersion?: AdoptionContractTemplateVersion;
 }
+
+/** Versiones del texto legal del contrato. `v1` = texto original del cliente;
+ *  `v2` = texto revisado (octubre 2026). Ver `adoptions-contract-template.ts`. */
+export type AdoptionContractTemplateVersion = 'v1' | 'v2';
+export const CURRENT_ADOPTION_CONTRACT_TEMPLATE: AdoptionContractTemplateVersion = 'v2';
 
 /**
  * Contrato de adopción (§M04, RF11). Vive en el tenant de la organización dueña

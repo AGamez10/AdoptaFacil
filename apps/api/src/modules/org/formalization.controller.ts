@@ -1,7 +1,9 @@
 import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
 import {
+  computeOrganizationCapabilities,
   type FormalizationStatus,
   type FormalizationTransition,
+  type OrganizationCapabilities,
   Role,
   type RequestFormalizationTransitionInput,
 } from '@adoptafacil/contracts';
@@ -31,6 +33,14 @@ export class FormalizationController {
   @Get()
   getStatus(): Promise<FormalizationStatus> {
     return this.service.getStatus();
+  }
+
+  /** Qué funciones tiene habilitadas la organización según su estado formal y
+   *  qué desbloquea en el siguiente (matriz única en contracts). Cualquier miembro. */
+  @Get('capabilities')
+  async getCapabilities(): Promise<OrganizationCapabilities> {
+    const status = await this.service.getStatus();
+    return computeOrganizationCapabilities(status.state, status.rteVigente);
   }
 
   @Get('history')

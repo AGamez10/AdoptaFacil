@@ -181,3 +181,19 @@
   font-size: var(--fs-xs);
   color: var(--text-muted);
 }
+
+.prefill {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  font-size: var(--fs-sm);
+
+  dt {
+    color: var(--text-muted);
+  }
+
+  dd {
+    font-weight: var(--fw-semibold);
+    color: var(--text-dark);
+  }
+}

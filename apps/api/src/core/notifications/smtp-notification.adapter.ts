@@ -6,7 +6,14 @@ import { NotificationMessage, NotificationPort } from './notification.port';
 
 /** Minimal transport surface we depend on (so tests can inject a fake). */
 export interface MailTransport {
-  sendMail(options: { from: string; to: string; subject: string; text: string }): Promise<unknown>;
+  sendMail(options: {
+    from: string;
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
+  }): Promise<unknown>;
 }
 
 /** Factory for the transport; defaults to nodemailer, overridable in tests. */
@@ -58,6 +65,8 @@ export class SmtpNotificationAdapter implements NotificationPort {
         to: message.to,
         subject: message.subject,
         text: message.body,
+        ...(message.html ? { html: message.html } : {}),
+        ...(message.attachments?.length ? { attachments: message.attachments } : {}),
       });
       // Recipient + result only — never subject/body/credentials.
       this.logger.log(`email to=${message.to} result=ok`);
