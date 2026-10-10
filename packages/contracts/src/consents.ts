@@ -30,10 +30,10 @@ export const THIRD_PARTY_CONSENT_TEXTS: Readonly<
 > = {
   org_report_identification: {
     purpose: 'org_report_identification',
-    title: 'Uso de mi nombre y documento en reportes y certificados',
+    title: 'Autorización para aparecer en reportes y certificados de una organización',
     version: '2026-10-10',
-    sha256: 'a802e0ab53e0630a2dc571568c4afb5617e9139cb0177e5436f8550677d865f9',
-    text: 'Autorizo a la organización seleccionada a incluir mi nombre y mi número de documento (parcialmente oculto) en los reportes y certificados que emita con base en mis donaciones o mi voluntariado con ella. Sin esta autorización, aparezco solo como "Donante" o no aparezco. Puedo revocarla cuando quiera desde "Uso de mis datos en reportes"; la revocación vale hacia adelante y no altera los documentos ya emitidos. AdoptaFácil solo facilita este registro: la organización es la responsable del tratamiento de mis datos en cada documento.',
+    sha256: '490ebdd71765955c098e24a2ca48b67f7fce888c90cfb14146b26aae567c8fd1',
+    text: 'Esta autorización es opcional. No darla no me impide donar, apadrinar ni ser voluntario; en ese caso aparezco en los reportes sin mi nombre ni mi documento (como "Donante").\n\nAutorizo a la organización a la que estoy donando o con la que soy voluntario, responsable de mis datos en su relación conmigo, a mostrar mi nombre y mi número de documento parcialmente oculto (solo los últimos dígitos) en los reportes de transparencia y en los certificados que emita sobre mis donaciones, apadrinamientos o voluntariado.\n\nAdoptaFácil solo presta la herramienta con la que la organización genera esos reportes y certificados, y trata estos datos como encargado, por cuenta de la organización. AdoptaFácil no certifica la información que la organización publica.\n\nEsta autorización no permite usar mis datos con fines comerciales ni para entrenar inteligencia artificial; esos usos requieren autorizaciones separadas.\n\nPuedo retirarla cuando quiera desde "Uso de mis datos". El retiro aplica a los reportes y certificados que se generen después; los ya emitidos no se modifican.\n\nQueda registro de esta autorización y de su retiro: la versión de este texto, la fecha y hora (UTC) y la organización a la que la otorgué.',
     draft: true,
   },
 };
