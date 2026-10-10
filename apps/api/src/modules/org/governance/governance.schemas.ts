@@ -22,6 +22,7 @@ export const createInvitationSchema = z
   .object({
     email: z.string().trim().toLowerCase().email().max(254),
     role: orgRoleSchema,
+    signerRole: z.enum(['accountant', 'fiscal_reviewer']).optional(),
   })
   .strict();
 

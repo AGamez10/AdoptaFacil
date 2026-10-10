@@ -14,6 +14,8 @@ export { PlatformBannerPage } from './pages/platform-banner-page';
 export { OrgVolunteeringPage } from './pages/org-volunteering-page';
 export { NationalTransparencyPage } from './pages/national-transparency-page';
 export { OrgReportsPage } from './pages/org-reports-page';
+export { OrgSignersPage } from './pages/org-signers-page';
+export { OrgSigningInboxPage } from './pages/org-signing-inbox-page';
 export { OrgPlanPage } from './pages/org-plan-page';
 export { OrgProfileForm, type OrgProfileFormProps } from './components/org-profile-form';
 export * from './validation';

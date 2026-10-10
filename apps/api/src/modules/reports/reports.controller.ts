@@ -2,17 +2,23 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
+  type DecideOrgReportInput,
   type GenerateOrgReportInput,
   type OrgReport,
+  type OrgReportPendingSignature,
+  type OrgReportPolicy,
+  type SetOrgReportPolicyInput,
   type OrgReportVerification,
   type OrgReportsReadiness,
   type Paginated,
@@ -25,12 +31,19 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ReportsService } from './reports.service';
-import { generateOrgReportSchema } from './reports.schemas';
+import {
+  decideOrgReportSchema,
+  generateOrgReportSchema,
+  setOrgReportPolicySchema,
+} from './reports.schemas';
 
 /** Generan reportes (documentos que pueden llevar firmas legales). */
 const GENERATE_ROLES = [Role.Owner, Role.Administrator] as const;
 /** Ven y descargan los ya generados: + el auditor de solo lectura. */
 const VIEW_ROLES = [Role.Owner, Role.Administrator, Role.ReadOnlyAuditor] as const;
+
+/** Quien firma (el representante legal es Owner; los demás, auditores vinculados). */
+const SIGNER_ROLES = [Role.Owner, Role.ReadOnlyAuditor] as const;
 
 function sendFile(res: Response, file: { filename: string; data: Buffer }, type: string): void {
   res.setHeader('Content-Type', type);
@@ -53,8 +66,8 @@ export class ReportsController {
 
   @Get('readiness')
   @Roles(...VIEW_ROLES)
-  readiness(): Promise<OrgReportsReadiness> {
-    return this.service.readiness();
+  readiness(@CurrentUser() actor: RequestUser): Promise<OrgReportsReadiness> {
+    return this.service.readiness(actor.id);
   }
 
   @Post()
@@ -69,11 +82,41 @@ export class ReportsController {
   @Get()
   @Roles(...VIEW_ROLES)
   list(
+    @CurrentUser() actor: RequestUser,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('kind') kind?: string,
   ): Promise<Paginated<OrgReport>> {
-    return this.service.list(Number(limit), Number(offset), kind);
+    return this.service.list(actor.id, Number(limit), Number(offset), kind);
+  }
+
+  /** Firmas que la organización declara exigidas por sus estatutos. */
+  @Put('policy')
+  @Roles(Role.Owner)
+  setPolicy(
+    @CurrentUser() actor: RequestUser,
+    @Body(new ZodValidationPipe(setOrgReportPolicySchema)) dto: SetOrgReportPolicyInput,
+  ): Promise<OrgReportPolicy> {
+    return this.service.setPolicy(actor.id, dto);
+  }
+
+  /** Bandeja del firmante: documentos que debe aprobar o rechazar. */
+  @Get('pending-signatures')
+  @Roles(...SIGNER_ROLES)
+  pending(@CurrentUser() actor: RequestUser): Promise<OrgReportPendingSignature[]> {
+    return this.service.pending(actor.id);
+  }
+
+  /** Aprobar o rechazar: solo la propia cuenta del firmante (el servicio lo exige). */
+  @Post(':id/decision')
+  @HttpCode(200)
+  @Roles(...SIGNER_ROLES)
+  decide(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(decideOrgReportSchema)) dto: DecideOrgReportInput,
+  ): Promise<OrgReport> {
+    return this.service.decide(actor.id, id, dto);
   }
 
   @Get(':id/pdf')

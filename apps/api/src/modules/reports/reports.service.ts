@@ -1,25 +1,37 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type OrgReport as OrgReportRow } from '@prisma/client';
-import type {
-  GenerateOrgReportInput,
-  LegalRepresentativeRole,
-  OrganizationLocation,
-  OrgReport,
-  OrgReportKind,
-  OrgReportLegalEffect,
-  OrgReportSigner,
-  OrgReportSummary,
-  OrgReportVerification,
-  OrgReportsReadiness,
-  Paginated,
-  SocialServiceReportFilters,
+import {
+  Prisma,
+  type OrgReport as OrgReportRow,
+  type OrgReportApproval as ApprovalRecord,
+} from '@prisma/client';
+import {
+  Role,
+  type DecideOrgReportInput,
+  type GenerateOrgReportInput,
+  type LegalRepresentativeRole,
+  type OrgReportApprovalInfo,
+  type OrgReportPendingSignature,
+  type OrgReportPolicy,
+  type OrgReportStatus,
+  type SetOrgReportPolicyInput,
+  type OrganizationLocation,
+  type OrgReport,
+  type OrgReportKind,
+  type OrgReportLegalEffect,
+  type OrgReportSigner,
+  type OrgReportSummary,
+  type OrgReportVerification,
+  type OrgReportsReadiness,
+  type Paginated,
+  type SocialServiceReportFilters,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
@@ -47,6 +59,8 @@ import { REPORT_CODE_PATTERN, generateReportCode, sealHash } from './report-seal
 
 /** Firmante sellado en la fila (identificadores + hash, nunca la imagen). */
 interface SealedSigner extends OrgReportSigner {
+  /** Cuenta de la persona que firma: solo ella puede aprobar este documento. */
+  signerUserId: string;
   legalRepresentativeId: string;
   signatureHash: string;
 }
@@ -54,7 +68,20 @@ interface SealedSigner extends OrgReportSigner {
 const CODE_MAX_ATTEMPTS = 3;
 const MAX_LIST_LIMIT = 50;
 
-function toContract(row: OrgReportRow, reused?: boolean): OrgReport {
+type ApprovalRow = Pick<ApprovalRecord, 'signerRole' | 'decision' | 'decidedAt'>;
+
+/** Estado de emisión: sin firmantes requeridos ⇒ emitido; algún rechazo ⇒
+ *  rechazado; todas las aprobaciones ⇒ emitido; si no, pendiente. */
+function statusFor(sealed: SealedSigner[], approvals: ApprovalRow[]): OrgReportStatus {
+  if (sealed.length === 0) return 'issued';
+  if (approvals.some((a) => a.decision === 'rejected')) return 'rejected';
+  const approved = new Set(
+    approvals.filter((a) => a.decision === 'approved').map((a) => a.signerRole),
+  );
+  return sealed.every((s) => approved.has(s.role)) ? 'issued' : 'pending_signatures';
+}
+
+function toContract(row: OrgReportRow, reused?: boolean, approvals: ApprovalRow[] = []): OrgReport {
   const signers = (row.signers as unknown as SealedSigner[]).map(
     ({ role, fullName, position }) => ({
       role,
@@ -76,6 +103,12 @@ function toContract(row: OrgReportRow, reused?: boolean): OrgReport {
     contentHash: row.contentHash,
     generatedByUserId: row.generatedByUserId,
     createdAt: row.createdAt.toISOString(),
+    status: statusFor(row.signers as unknown as SealedSigner[], approvals),
+    approvals: approvals.map((a): OrgReportApprovalInfo => ({
+      role: a.signerRole as LegalRepresentativeRole,
+      decision: a.decision as 'approved' | 'rejected',
+      decidedAt: a.decidedAt.toISOString(),
+    })),
     ...(reused === undefined ? {} : { reused }),
   };
 }
@@ -157,23 +190,48 @@ export class ReportsService {
     return `${this.webBaseUrl}/verificar/${encodeURIComponent(code)}`;
   }
 
-  /** Firmantes vigentes (el más reciente por rol) con id y hash de la firma. */
+  /**
+   * Firmantes VÁLIDOS hoy (el registro más reciente por cargo) con id y hash de
+   * la firma. Solo cuenta quien puede firmar de verdad: el representante legal
+   * debe seguir siendo Owner de la organización y el contador / revisor fiscal
+   * debe tener su designación vigente (vinculada por la organización).
+   */
   private async currentSigners(
     tx: Prisma.TransactionClient,
     organizationId: string,
   ): Promise<Map<LegalRepresentativeRole, SealedSigner>> {
-    const rows = await tx.legalRepresentative.findMany({
-      where: { organizationId },
-      orderBy: { signedAt: 'desc' },
-    });
+    const [rows, designations, owners] = await Promise.all([
+      tx.legalRepresentative.findMany({
+        where: { organizationId },
+        orderBy: { signedAt: 'desc' },
+      }),
+      tx.orgSignerDesignation.findMany({
+        where: { organizationId, revokedAt: null },
+        select: { userId: true, role: true },
+      }),
+      tx.userRole.findMany({
+        where: { organizationId, role: Role.Owner },
+        select: { userId: true },
+      }),
+    ]);
+    const ownerIds = new Set(owners.map((o) => o.userId));
+    const designated = new Set(designations.map((d) => `${d.role}:${d.userId}`));
     const byRole = new Map<LegalRepresentativeRole, SealedSigner>();
+    const seen = new Set<string>();
     for (const row of rows) {
       const role = row.role as LegalRepresentativeRole;
-      if (byRole.has(role) || !SIGNER_ORDER.includes(role)) continue;
+      if (seen.has(role) || !SIGNER_ORDER.includes(role)) continue;
+      seen.add(role); // el más reciente manda, aunque ya no sea válido
+      const valid =
+        role === 'legal_representative'
+          ? ownerIds.has(row.memberId)
+          : designated.has(`${role}:${row.memberId}`);
+      if (!valid) continue;
       byRole.set(role, {
         role,
         fullName: row.fullName,
         position: row.position,
+        signerUserId: row.memberId,
         legalRepresentativeId: row.id,
         signatureHash: row.signatureHash,
       });
@@ -200,7 +258,7 @@ export class ReportsService {
     return { snapshot, rteVigente: profile?.rteVigente === true };
   }
 
-  async readiness(): Promise<OrgReportsReadiness> {
+  async readiness(actorUserId: string): Promise<OrgReportsReadiness> {
     const organizationId = this.requireOrgId();
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const [{ snapshot, rteVigente }, signers, schoolRows] = await Promise.all([
@@ -212,6 +270,8 @@ export class ReportsService {
           distinct: ['schoolName'],
         }),
       ]);
+      const policies = await this.policies();
+      const mySignerRole = await this.signerRoleOf(tx, organizationId, actorUserId);
       const registered = new Set(signers.keys());
       const effectFor = (kind: OrgReportKind) =>
         computeLegalEffect({
@@ -243,6 +303,8 @@ export class ReportsService {
             })
           : [SIGNATURES_PENDING_STEP],
         signaturesEnabled: this.signaturesEnabled,
+        policies,
+        ...(mySignerRole ? { mySignerRole } : {}),
         schools,
         studentServiceMinHours: studentServiceMinHours(),
       };
@@ -297,17 +359,22 @@ export class ReportsService {
         }
         roles = [];
       } else if (input.signerRoles && input.signerRoles.length > 0) {
-        const requested = input.signerRoles;
-        const missing = requested.filter((r) => !registered.has(r));
-        if (missing.length > 0) {
-          throw new BadRequestException(
-            `No hay firma registrada para: ${missing.map((r) => SIGNER_ROLE_LABEL[r]).join(', ')}. ` +
-              'Regístrala en Documentos → Representante legal.',
-          );
-        }
-        roles = SIGNER_ORDER.filter((r) => requested.includes(r));
+        roles = this.orderedAvailable(
+          input.signerRoles,
+          registered,
+          'No hay firma registrada para',
+        );
       } else {
-        roles = defaultSignerRoles(input.kind, registered);
+        const policy = await tx.orgReportPolicy.findUnique({
+          where: { organizationId_kind: { organizationId, kind: input.kind } },
+        });
+        roles = policy
+          ? this.orderedAvailable(
+              policy.requiredRoles as LegalRepresentativeRole[],
+              registered,
+              'La política de firmas de la organización exige a',
+            )
+          : defaultSignerRoles(input.kind, registered);
       }
 
       const legalEffect = computeLegalEffect({
@@ -323,6 +390,13 @@ export class ReportsService {
         legalEffect === 'informative'
           ? []
           : roles.map((r) => available.get(r)).filter((s): s is SealedSigner => !!s);
+
+      // Quien redacta no firma lo que redacta: la firma la aprueba otra cuenta.
+      if (signers.some((signer) => signer.signerUserId === actorUserId)) {
+        throw new BadRequestException(
+          'Quien redacta el documento no puede ser también su firmante. Pide a un administrador que lo redacte, o genéralo como comprobante informativo.',
+        );
+      }
 
       const payload =
         input.kind === 'donations'
@@ -521,7 +595,87 @@ export class ReportsService {
     });
   }
 
-  async list(limit: number, offset: number, kind?: string): Promise<Paginated<OrgReport>> {
+  /** Cargo con el que esta persona puede firmar en la organización, si alguno. */
+  private async signerRoleOf(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+  ): Promise<LegalRepresentativeRole | undefined> {
+    const owner = await tx.userRole.findFirst({
+      where: { organizationId, userId, role: Role.Owner },
+      select: { id: true },
+    });
+    if (owner) return 'legal_representative';
+    const designation = await tx.orgSignerDesignation.findFirst({
+      where: { organizationId, userId, revokedAt: null },
+      select: { role: true },
+    });
+    return (designation?.role as LegalRepresentativeRole | undefined) ?? undefined;
+  }
+
+  /** Cargos pedidos, en orden estable; todos deben tener un firmante válido. */
+  private orderedAvailable(
+    requested: readonly LegalRepresentativeRole[],
+    registered: ReadonlySet<LegalRepresentativeRole>,
+    prefix: string,
+  ): LegalRepresentativeRole[] {
+    const missing = requested.filter((r) => !registered.has(r));
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `${prefix}: ${missing.map((r) => SIGNER_ROLE_LABEL[r]).join(', ')}. ` +
+          'Vincula a la persona y que registre su firma (Documentos → Firmantes).',
+      );
+    }
+    return SIGNER_ORDER.filter((r) => requested.includes(r));
+  }
+
+  /** Decisiones de firmantes de un conjunto de reportes, por id de reporte. */
+  private async approvalsByReport(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    reportIds: string[],
+  ): Promise<Map<string, ApprovalRecord[]>> {
+    const byReport = new Map<string, ApprovalRecord[]>();
+    if (reportIds.length === 0) return byReport;
+    const rows = await tx.orgReportApproval.findMany({
+      where: { organizationId, reportId: { in: reportIds } },
+      orderBy: { decidedAt: 'asc' },
+    });
+    for (const row of rows) {
+      byReport.set(row.reportId, [...(byReport.get(row.reportId) ?? []), row]);
+    }
+    return byReport;
+  }
+
+  /**
+   * Un firmante adicional (contador / revisor fiscal con designación vigente)
+   * solo ve los documentos que le toca firmar: no el resto de los reportes de
+   * la organización. Owner y Administrator ven todo; un auditor sin designación
+   * conserva su lectura de siempre.
+   */
+  private async isRestrictedSigner(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const manager = await tx.userRole.findFirst({
+      where: { organizationId, userId, role: { in: [Role.Owner, Role.Administrator] } },
+      select: { id: true },
+    });
+    if (manager) return false;
+    const designation = await tx.orgSignerDesignation.findFirst({
+      where: { organizationId, userId, revokedAt: null },
+      select: { id: true },
+    });
+    return Boolean(designation);
+  }
+
+  async list(
+    actorUserId: string,
+    limit: number,
+    offset: number,
+    kind?: string,
+  ): Promise<Paginated<OrgReport>> {
     const organizationId = this.requireOrgId();
     const take = Math.min(
       Math.max(Number.isFinite(limit) && limit > 0 ? limit : 20, 1),
@@ -531,23 +685,46 @@ export class ReportsService {
     const where: Prisma.OrgReportWhereInput = { organizationId };
     if (kind === 'donations' || kind === 'social_service') where.kind = kind;
     return this.prisma.withOrgContext(organizationId, async (tx) => {
+      if (await this.isRestrictedSigner(tx, organizationId, actorUserId)) {
+        where.signers = { array_contains: [{ signerUserId: actorUserId }] };
+      }
       const [rows, total] = await Promise.all([
         tx.orgReport.findMany({ where, orderBy: { createdAt: 'desc' }, take, skip }),
         tx.orgReport.count({ where }),
       ]);
-      return { items: rows.map((r) => toContract(r)), total, limit: take, offset: skip };
+      const approvals = await this.approvalsByReport(
+        tx,
+        organizationId,
+        rows.map((r) => r.id),
+      );
+      return {
+        items: rows.map((r) => toContract(r, undefined, approvals.get(r.id) ?? [])),
+        total,
+        limit: take,
+        offset: skip,
+      };
     });
   }
 
-  private async findOwn(id: string): Promise<OrgReportRow> {
+  private async findOwn(
+    id: string,
+    actorUserId: string,
+  ): Promise<{ row: OrgReportRow; approvals: ApprovalRecord[] }> {
     const organizationId = this.requireOrgId();
-    const row = await this.prisma.withOrgContext(organizationId, (tx) =>
-      tx.orgReport.findFirst({ where: { id, organizationId } }),
-    );
-    if (!row) {
+    const found = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const row = await tx.orgReport.findFirst({ where: { id, organizationId } });
+      if (!row) return null;
+      if (await this.isRestrictedSigner(tx, organizationId, actorUserId)) {
+        const sealed = row.signers as unknown as SealedSigner[];
+        if (!sealed.some((s) => s.signerUserId === actorUserId)) return null;
+      }
+      const approvals = await this.approvalsByReport(tx, organizationId, [row.id]);
+      return { row, approvals: approvals.get(row.id) ?? [] };
+    });
+    if (!found) {
       throw new NotFoundException('Reporte no encontrado.');
     }
-    return row;
+    return found;
   }
 
   private async recordDownload(row: OrgReportRow, actorUserId: string, format: 'pdf' | 'xlsx') {
@@ -561,22 +738,40 @@ export class ReportsService {
     });
   }
 
-  /** PDF dibujado desde el snapshot sellado, con LAS firmas selladas (por id
-   *  + hash), aunque después se hayan registrado firmas nuevas. */
+  /** Borrador: lo que se dibuja si el documento todavía no está emitido. */
+  private draftOf(
+    sealed: SealedSigner[],
+    approvals: ApprovalRecord[],
+  ): 'pending_signatures' | 'rejected' | undefined {
+    const status = statusFor(sealed, approvals);
+    return status === 'issued' ? undefined : status;
+  }
+
+  /** PDF dibujado desde el snapshot sellado. Emitido ⇒ con LAS firmas que cada
+   *  firmante aprobó (por id + hash); si no, BORRADOR sin firmas ni valor. */
   async renderPdf(id: string, actorUserId: string): Promise<{ filename: string; data: Buffer }> {
-    const row = await this.findOwn(id);
+    const { row, approvals } = await this.findOwn(id, actorUserId);
     const sealed = row.signers as unknown as SealedSigner[];
+    const draft = this.draftOf(sealed, approvals);
     const signers = await Promise.all(
-      sealed.map(async (s) => ({
-        role: s.role,
-        fullName: s.fullName,
-        position: s.position,
-        image: await this.legalRepresentatives.getSignatureImageById(
-          row.organizationId,
-          s.legalRepresentativeId,
-          s.signatureHash,
-        ),
-      })),
+      sealed.map(async (s) => {
+        const approval = approvals.find(
+          (a) => a.signerRole === s.role && a.decision === 'approved',
+        );
+        return {
+          role: s.role,
+          fullName: s.fullName,
+          position: s.position,
+          image:
+            draft || !approval
+              ? null
+              : await this.legalRepresentatives.getSignatureImageById(
+                  row.organizationId,
+                  approval.legalRepresentativeId,
+                  approval.signatureHash,
+                ),
+        };
+      }),
     );
     const data = await renderReportPdf({
       code: row.code,
@@ -586,28 +781,185 @@ export class ReportsService {
       payload: row.payload as unknown as OrgReportPayload,
       signers,
       verifyUrl: this.verifyUrl(row.code),
+      ...(draft ? { draft } : {}),
     });
     await this.recordDownload(row, actorUserId, 'pdf');
     return { filename: `${row.code}.pdf`, data };
   }
 
   async renderXlsx(id: string, actorUserId: string): Promise<{ filename: string; data: Buffer }> {
-    const row = await this.findOwn(id);
+    const { row, approvals } = await this.findOwn(id, actorUserId);
+    const sealed = row.signers as unknown as SealedSigner[];
+    const draft = this.draftOf(sealed, approvals);
     const data = await renderReportXlsx({
       code: row.code,
       contentHash: row.contentHash,
       createdAt: row.createdAt,
       legalEffect: row.legalEffect as OrgReportLegalEffect,
       payload: row.payload as unknown as OrgReportPayload,
-      signers: (row.signers as unknown as SealedSigner[]).map(({ role, fullName, position }) => ({
-        role,
-        fullName,
-        position,
-      })),
+      signers: sealed.map(({ role, fullName, position }) => ({ role, fullName, position })),
       verifyUrl: this.verifyUrl(row.code),
+      ...(draft ? { draft } : {}),
     });
     await this.recordDownload(row, actorUserId, 'xlsx');
     return { filename: `${row.code}.xlsx`, data };
+  }
+
+  /** Documentos que la persona debe firmar y aún no decidió. */
+  async pending(actorUserId: string): Promise<OrgReportPendingSignature[]> {
+    const organizationId = this.requireOrgId();
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      const rows = await tx.orgReport.findMany({
+        where: { organizationId, signers: { array_contains: [{ signerUserId: actorUserId }] } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+      const approvals = await this.approvalsByReport(
+        tx,
+        organizationId,
+        rows.map((r) => r.id),
+      );
+      const out: OrgReportPendingSignature[] = [];
+      for (const row of rows) {
+        const sealed = row.signers as unknown as SealedSigner[];
+        const mine = sealed.find((s) => s.signerUserId === actorUserId);
+        const decided = approvals.get(row.id) ?? [];
+        if (!mine || decided.some((a) => a.signerRole === mine.role || a.decision === 'rejected')) {
+          continue;
+        }
+        out.push({ report: toContract(row, undefined, decided), role: mine.role });
+      }
+      return out;
+    });
+  }
+
+  /**
+   * Aprobar o rechazar un documento. Solo el propio firmante (la cuenta que se
+   * selló en el documento), con su firma vigente, una sola vez, y nunca quien
+   * lo redactó. La aprobación queda ligada a la huella del contenido y al hash
+   * de la firma usada (append-only); cuando están todas, el documento queda
+   * emitido y se audita quién lo completó.
+   */
+  async decide(actorUserId: string, id: string, input: DecideOrgReportInput): Promise<OrgReport> {
+    const organizationId = this.requireOrgId();
+    try {
+      return await this.prisma.withOrgContext(organizationId, async (tx) => {
+        const row = await tx.orgReport.findFirst({ where: { id, organizationId } });
+        const sealed = (row?.signers ?? []) as unknown as SealedSigner[];
+        const mine = sealed.find((s) => s.signerUserId === actorUserId);
+        if (!row || !mine) {
+          // 404 y no 403: ni siquiera se confirma que el documento existe.
+          throw new NotFoundException('Reporte no encontrado.');
+        }
+        if (row.generatedByUserId === actorUserId) {
+          throw new ForbiddenException('Nadie aprueba su propio borrador.');
+        }
+        const existing = await tx.orgReportApproval.findMany({
+          where: { organizationId, reportId: row.id },
+        });
+        if (existing.some((a) => a.decision === 'rejected')) {
+          throw new ConflictException('Este documento ya fue rechazado y no se emitirá.');
+        }
+        if (existing.some((a) => a.signerRole === mine.role)) {
+          throw new ConflictException('Ya registraste tu decisión sobre este documento.');
+        }
+        const current = (await this.currentSigners(tx, organizationId)).get(mine.role);
+        if (!current || current.signerUserId !== actorUserId) {
+          throw new ForbiddenException(
+            'Tu firma vigente no está registrada o ya no eres el firmante de este cargo.',
+          );
+        }
+        const approval = await tx.orgReportApproval.create({
+          data: {
+            organizationId,
+            reportId: row.id,
+            signerRole: mine.role,
+            signerUserId: actorUserId,
+            legalRepresentativeId: current.legalRepresentativeId,
+            signatureHash: current.signatureHash,
+            contentHash: row.contentHash,
+            decision: input.decision,
+          },
+        });
+        const all = [...existing, approval];
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: input.decision === 'approved' ? 'report.approved' : 'report.rejected',
+          entityType: 'org_report',
+          entityId: row.id,
+          metadata: { code: row.code, signerRole: mine.role },
+        });
+        if (statusFor(sealed, all) === 'issued') {
+          await this.audit.recordWithTx(tx, {
+            organizationId,
+            actorUserId,
+            action: 'report.issued',
+            entityType: 'org_report',
+            entityId: row.id,
+            metadata: {
+              code: row.code,
+              requestedByUserId: row.generatedByUserId,
+              signerRoles: sealed.map((s) => s.role),
+            },
+          });
+        }
+        return toContract(row, undefined, all);
+      });
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) {
+        throw new ConflictException('Ya registraste tu decisión sobre este documento.');
+      }
+      throw error;
+    }
+  }
+
+  /** Firmas que la organización declara exigidas por sus estatutos. */
+  async policies(): Promise<OrgReportPolicy[]> {
+    const organizationId = this.requireOrgId();
+    const rows = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.orgReportPolicy.findMany({ where: { organizationId } }),
+    );
+    return rows.map((r) => ({
+      kind: r.kind as OrgReportKind,
+      requiredRoles: SIGNER_ORDER.filter((role) => r.requiredRoles.includes(role)),
+    }));
+  }
+
+  /** Solo el propietario declara la política; el representante legal siempre firma. */
+  async setPolicy(actorUserId: string, input: SetOrgReportPolicyInput): Promise<OrgReportPolicy> {
+    const organizationId = this.requireOrgId();
+    const roles = SIGNER_ORDER.filter((r) => input.requiredRoles.includes(r));
+    await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const isOwner = await tx.userRole.findFirst({
+        where: { organizationId, userId: actorUserId, role: Role.Owner },
+        select: { id: true },
+      });
+      if (!isOwner) {
+        throw new ForbiddenException(
+          'Solo el propietario define las firmas que exigen los estatutos.',
+        );
+      }
+      await tx.orgReportPolicy.upsert({
+        where: { organizationId_kind: { organizationId, kind: input.kind } },
+        create: {
+          organizationId,
+          kind: input.kind,
+          requiredRoles: roles,
+          updatedByUserId: actorUserId,
+        },
+        update: { requiredRoles: roles, updatedByUserId: actorUserId, updatedAt: new Date() },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId,
+        action: 'report.policy_updated',
+        entityType: 'org_report_policy',
+        entityId: `${organizationId}:${input.kind}`,
+        metadata: { kind: input.kind, requiredRoles: roles },
+      });
+    });
+    return { kind: input.kind, requiredRoles: roles };
   }
 
   /** Verificación pública por folio (sin sesión) — superficie mínima. */

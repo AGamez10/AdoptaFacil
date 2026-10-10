@@ -7,6 +7,7 @@ import {
   type OrgReport,
   type OrgReportKind,
   type OrgReportLegalEffect,
+  type OrgReportStatus,
   type OrgReportsReadiness,
   type Paginated,
 } from '@adoptafacil/contracts';
@@ -69,6 +70,14 @@ const EFFECT_UI: Record<
     variant: 'warning',
     help: 'Sin firmas ni efecto legal: útil para llevar tus cuentas y compartirlas con tu comunidad.',
   },
+};
+
+const STATUS_UI: Record<
+  Exclude<OrgReportStatus, 'issued'>,
+  { label: string; variant: BadgeVariant }
+> = {
+  pending_signatures: { label: 'Pendiente de firmas', variant: 'warning' },
+  rejected: { label: 'Rechazado', variant: 'destructive' },
 };
 
 const KIND_UI: Record<OrgReportKind, { title: string; description: string; short: string }> = {
@@ -211,7 +220,13 @@ function ReadinessPanel({ readiness }: { readiness: OrgReportsReadiness }) {
             to="/organizacion/representante-legal"
             className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
           >
-            Gestionar firmas →
+            Gestionar mi firma →
+          </Link>
+          <Link
+            to="/organizacion/firmantes"
+            className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Firmantes y firmas exigidas →
           </Link>
         </div>
         {readiness.nextSteps.length > 0 && (
@@ -305,10 +320,18 @@ function ReportCard({
       onGenerated(report);
       await downloadReport(client, report, format);
       toast({
-        title: report.reused ? 'Reporte ya existente' : 'Reporte listo',
-        description: report.reused
-          ? `Nada cambió desde la última vez: se descargó el mismo folio ${report.code}.`
-          : `Folio ${report.code}. Quedó guardado en tu historial.`,
+        title:
+          report.status && report.status !== 'issued'
+            ? 'Borrador listo, falta firmarlo'
+            : report.reused
+              ? 'Reporte ya existente'
+              : 'Reporte listo',
+        description:
+          report.status && report.status !== 'issued'
+            ? `Folio ${report.code}. Tiene valor solo cuando cada firmante lo apruebe con su cuenta; lo que descargaste es un borrador sin firmas.`
+            : report.reused
+              ? `Nada cambió desde la última vez: se descargó el mismo folio ${report.code}.`
+              : `Folio ${report.code}. Quedó guardado en tu historial.`,
         variant: 'success',
       });
     } catch (error) {
@@ -595,9 +618,15 @@ export function OrgReportsPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant={EFFECT_UI[report.legalEffect].variant}>
-                              {EFFECT_UI[report.legalEffect].label}
-                            </Badge>
+                            {report.status && report.status !== 'issued' ? (
+                              <Badge variant={STATUS_UI[report.status].variant}>
+                                {STATUS_UI[report.status].label}
+                              </Badge>
+                            ) : (
+                              <Badge variant={EFFECT_UI[report.legalEffect].variant}>
+                                {EFFECT_UI[report.legalEffect].label}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">{summaryText(report)}</TableCell>
                           <TableCell>

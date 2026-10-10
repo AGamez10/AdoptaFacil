@@ -32,6 +32,10 @@ export const ANIMAL_VIEW_ROLES = [
 ] as const;
 
 export const ORG_DOCUMENTS_ROLES = [Role.Owner, Role.Administrator, Role.ReadOnlyAuditor] as const;
+/** Gestionan/ven a los firmantes de la organización (M13). */
+export const ORG_SIGNERS_ROLES = [Role.Owner, Role.Administrator] as const;
+/** Firman documentos: el representante legal (Owner) y los firmantes vinculados (auditor). */
+export const ORG_SIGNING_ROLES = [Role.Owner, Role.ReadOnlyAuditor] as const;
 
 /**
  * M13 (S-14) — "Dashboard de donaciones y campañas" de la organización. Es
@@ -343,6 +347,18 @@ export const navItems: NavItem[] = [
         label: 'Reportes',
         icon: ShieldIcon,
         roles: ORG_DOCUMENTS_ROLES,
+      },
+      {
+        path: '/organizacion/documentos-por-firmar',
+        label: 'Documentos por firmar',
+        icon: ShieldIcon,
+        roles: ORG_SIGNING_ROLES,
+      },
+      {
+        path: '/organizacion/firmantes',
+        label: 'Firmantes',
+        icon: ShieldIcon,
+        roles: ORG_SIGNERS_ROLES,
       },
     ],
   },

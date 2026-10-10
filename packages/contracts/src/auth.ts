@@ -217,6 +217,8 @@ export interface OrganizationInvitation {
   organizationId: string;
   email: string;
   role: Role;
+  /** Cargo de firmante adicional si la invitación es para firmar (aditivo). */
+  signerRole?: 'accountant' | 'fiscal_reviewer';
   status: 'pending' | 'accepted' | 'revoked' | 'expired';
   invitedByUserId: string;
   /** ISO-8601 UTC. */
@@ -230,6 +232,12 @@ export interface OrganizationInvitation {
 export interface CreateInvitationInput {
   email: string;
   role: Role;
+  /**
+   * Invita a un firmante adicional (contador / revisor fiscal): solo la puede
+   * enviar un Owner, el rol debe ser `read_only_auditor` y al aceptar se crea la
+   * designación de firmante (aditivo).
+   */
+  signerRole?: 'accountant' | 'fiscal_reviewer';
 }
 
 /** `POST /auth/invitations/preview` — what the invitee sees before accepting. */
