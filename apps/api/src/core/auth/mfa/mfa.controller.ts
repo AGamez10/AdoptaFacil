@@ -40,7 +40,12 @@ export class MfaController {
     @Inject(AUTH_CONFIG) private readonly authConfig: AuthConfig,
   ) {}
 
+  // The staff gate reads this on every page load (twice in dev under React
+  // StrictMode): under the 10/min controller budget a platform admin hit 429
+  // after ~5 pages and the gate failed open. Read-only on the caller's own
+  // session, so it gets the session budget; enroll/verify stay at 5/min.
   @Get('status')
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   status(@CurrentUser() user: RequestUser): Promise<MfaStatus> {
     return this.mfa.status(user);
   }

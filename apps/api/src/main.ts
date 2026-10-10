@@ -4,9 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import type { Env } from './config/env.validation';
+import { runLocalPreflight } from './config/local-preflight';
 import { applyHttpHardening } from './core/http/configure-http';
 
 async function bootstrap(): Promise<void> {
+  // Local dev only: a stopped Postgres/Redis container gets one clear message
+  // and exit, instead of an endless connection-error loop before listen().
+  await runLocalPreflight();
   // Env validation runs while the module graph is built: with NODE_ENV=production
   // it refuses simulated adapters and unsafe settings (Ola 1, R0-1), so the
   // process exits before listening.

@@ -56,12 +56,14 @@ describe('Auth rate limiting', () => {
   });
 
   it('lets page loads keep the session alive well past the 20/min default', async () => {
-    // Every full page load calls refresh/silent and me (twice each in dev).
+    // Every full page load calls refresh/silent and me (twice each in dev), and
+    // a platform admin's page also reads mfa/status.
     // 30 in a row must all reach their handlers: refresh/silent answers
     // `null` without a cookie, and me answers 401 without a token.
     for (let i = 0; i < 30; i += 1) {
       await request(server).post('/auth/refresh/silent').expect(200);
       await request(server).get('/auth/me').expect(401);
+      await request(server).get('/auth/mfa/status').expect(401);
     }
   });
 
