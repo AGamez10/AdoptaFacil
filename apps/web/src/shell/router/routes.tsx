@@ -21,6 +21,7 @@ import {
   PLATFORM_DUPLICATES_ROLES,
   PLATFORM_REVIEWS_ROLES,
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
+  PLATFORM_TEAM_ROLES,
   RESOURCE_VIEW_ROLES,
   SPONSORSHIP_VIEW_ROLES,
   VOLUNTEERING_VIEW_ROLES,
@@ -86,6 +87,7 @@ import {
   PostDetailPage,
 } from '../../features/community';
 import { AnimalsPage, RemindersInboxPage } from '../../features/animals';
+import { PlatformTeamPage } from '../../features/platform-team';
 import {
   AdoptionContractPage,
   AdoptionRequestPage,
@@ -679,6 +681,15 @@ export function AppRoutes() {
               element={
                 <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
                   <PlatformBannerPage />
+                </RequireRoles>
+              }
+            />
+            {/* F19 · espacio de trabajo del equipo de plataforma. */}
+            <Route
+              path="plataforma/equipo"
+              element={
+                <RequireRoles roles={PLATFORM_TEAM_ROLES}>
+                  <PlatformTeamPage />
                 </RequireRoles>
               }
             />

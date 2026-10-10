@@ -25,6 +25,7 @@ import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { OrgGovernanceModule } from './modules/org/governance/org-governance.module';
 import { OrgModule } from './modules/org/org.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { PlatformWorkspaceModule } from './modules/platform-workspace/platform-workspace.module';
 import { PortalsModule } from './modules/portals/portals.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { ResourcesModule } from './modules/resources/resources.module';
@@ -101,6 +102,8 @@ import { RedisModule } from './redis/redis.module';
     // M13 · reportes sellados de donaciones y servicio social (firmas por estatutos).
     ReportsModule,
     ConsentsModule,
+    // F19 · espacio de trabajo del equipo de plataforma (tareas, doble aprobación, bitácora).
+    PlatformWorkspaceModule,
   ],
 })
 export class AppModule {}

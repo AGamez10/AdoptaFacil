@@ -63,3 +63,74 @@ describe('RolesGuard', () => {
     await expect(guard.canActivate(makeContext(USER))).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
+
+describe('RolesGuard · second factor for platform authority (F19)', () => {
+  const previous = process.env.PLATFORM_MFA_REQUIRED;
+  beforeAll(() => {
+    process.env.PLATFORM_MFA_REQUIRED = 'true';
+  });
+  afterAll(() => {
+    if (previous === undefined) delete process.env.PLATFORM_MFA_REQUIRED;
+    else process.env.PLATFORM_MFA_REQUIRED = previous;
+  });
+
+  function prismaWith(heldRoles: string[], enrolled: boolean): PrismaService {
+    return {
+      withTenant: jest.fn().mockResolvedValue(heldRoles.map((role) => ({ role }))),
+      authMfaFactor: {
+        findUnique: jest.fn().mockResolvedValue(enrolled ? { confirmedAt: new Date() } : null),
+      },
+    } as unknown as PrismaService;
+  }
+
+  function contextWith(user: RequestUser, request: Record<string, unknown> = {}): ExecutionContext {
+    return {
+      getHandler: () => () => undefined,
+      getClass: () => class {},
+      switchToHttp: () => ({ getRequest: () => Object.assign(request, { user }) }),
+    } as unknown as ExecutionContext;
+  }
+
+  const PLATFORM = [Role.PlatformAdmin, Role.PlatformSuperAdmin];
+
+  it('asks an account without a factor to set one up', async () => {
+    const guard = new RolesGuard(makeReflector(PLATFORM), prismaWith(['platform_admin'], false));
+    await expect(guard.canActivate(contextWith(USER))).rejects.toMatchObject({
+      response: { code: 'MFA_ENROLLMENT_REQUIRED' },
+    });
+  });
+
+  it('asks an enrolled account whose session did not pass the code', async () => {
+    const guard = new RolesGuard(makeReflector(PLATFORM), prismaWith(['platform_admin'], true));
+    await expect(guard.canActivate(contextWith(USER))).rejects.toMatchObject({
+      response: { code: 'MFA_REQUIRED' },
+    });
+  });
+
+  it('refuses a second factor older than the work-day window', async () => {
+    const guard = new RolesGuard(makeReflector(PLATFORM), prismaWith(['platform_admin'], true));
+    const stale = { ...USER, mfaAt: Math.floor(Date.now() / 1000) - 9 * 3600 };
+    await expect(guard.canActivate(contextWith(stale))).rejects.toMatchObject({
+      response: { code: 'MFA_REQUIRED' },
+    });
+  });
+
+  it('lets a fresh second factor in and marks the request for the access log', async () => {
+    const guard = new RolesGuard(makeReflector(PLATFORM), prismaWith(['platform_admin'], true));
+    const request: Record<string, unknown> = {};
+    const fresh = { ...USER, mfaAt: Math.floor(Date.now() / 1000) - 60 };
+    await expect(guard.canActivate(contextWith(fresh, request))).resolves.toBe(true);
+    expect(request.platformAccess).toEqual({
+      teamOrganizationId: USER.organizationId,
+      roles: [Role.PlatformAdmin],
+    });
+  });
+
+  it('does not touch routes an organization role also opens', async () => {
+    const guard = new RolesGuard(
+      makeReflector([Role.Owner, Role.PlatformAdmin]),
+      prismaWith(['owner', 'platform_admin'], false),
+    );
+    await expect(guard.canActivate(contextWith(USER))).resolves.toBe(true);
+  });
+});

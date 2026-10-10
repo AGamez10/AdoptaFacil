@@ -64,6 +64,11 @@ const APPEND_ONLY_TABLES = [
   // third_party_consents (M13): historial inmutable; el trigger bloquea DELETE.
   'third_party_consents',
   'org_reports',
+  // F19 · decisions before their requests, events before their tickets (FKs).
+  'platform_sensitive_action_decisions',
+  'platform_sensitive_actions',
+  'platform_workspace_ticket_events',
+  'platform_workspace_tickets',
 ];
 
 export async function purgeOrganizations(
