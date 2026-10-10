@@ -18,7 +18,6 @@ import {
   registerOwnSignature,
 } from './support/signers';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
-import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * M13 · Reportes de donaciones y servicio social (extremo a extremo):
