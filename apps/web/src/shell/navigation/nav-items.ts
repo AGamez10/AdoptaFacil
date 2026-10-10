@@ -32,6 +32,10 @@ export const ANIMAL_VIEW_ROLES = [
 ] as const;
 
 export const ORG_DOCUMENTS_ROLES = [Role.Owner, Role.Administrator, Role.ReadOnlyAuditor] as const;
+/** Gestionan/ven a los firmantes de la organización (M13). */
+export const ORG_SIGNERS_ROLES = [Role.Owner, Role.Administrator] as const;
+/** Firman documentos: el representante legal (Owner) y los firmantes vinculados (auditor). */
+export const ORG_SIGNING_ROLES = [Role.Owner, Role.ReadOnlyAuditor] as const;
 
 /**
  * M13 (S-14) — "Dashboard de donaciones y campañas" de la organización. Es
@@ -256,6 +260,13 @@ export interface NavItem {
    */
   roles?: readonly Role[];
   /**
+   * Firmantes vinculados (auditor con cargo de firma): `signing-inbox` solo lo
+   * ve quien firma (Owner o auditor con cargo); `not-for-signers` se oculta a
+   * quien solo entró a firmar, porque la API le limita la lista a sus
+   * documentos y el menú no debe ofrecerle lo que no va a poder usar.
+   */
+  signerGate?: 'signing-inbox' | 'not-for-signers';
+  /**
    * F1-01: restricts the entry to a Persona account (`session.user.accountType
    * === 'person'`), the INVERSE of `roles` — an org account has at least one
    * `ORG_ROLES` entry and a Persona has none, so `roles` (an allow-list of "has
@@ -349,6 +360,20 @@ export const navItems: NavItem[] = [
         label: 'Reportes',
         icon: ShieldIcon,
         roles: ORG_DOCUMENTS_ROLES,
+        signerGate: 'not-for-signers',
+      },
+      {
+        path: '/organizacion/documentos-por-firmar',
+        label: 'Documentos por firmar',
+        icon: ShieldIcon,
+        roles: ORG_SIGNING_ROLES,
+        signerGate: 'signing-inbox',
+      },
+      {
+        path: '/organizacion/firmantes',
+        label: 'Firmantes',
+        icon: ShieldIcon,
+        roles: ORG_SIGNERS_ROLES,
       },
     ],
   },

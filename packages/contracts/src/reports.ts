@@ -11,6 +11,16 @@
 
 import type { LegalRepresentativeRole } from './org';
 
+/** Estado de emisión de un reporte con firmas (ver `OrgReport.status`). */
+export type OrgReportStatus = 'pending_signatures' | 'issued' | 'rejected';
+
+export interface OrgReportApprovalInfo {
+  role: LegalRepresentativeRole;
+  decision: 'approved' | 'rejected';
+  /** ISO-8601 UTC. */
+  decidedAt: string;
+}
+
 export type OrgReportKind = 'donations' | 'social_service';
 
 /**
@@ -90,6 +100,15 @@ export interface OrgReport {
   generatedByUserId: string;
   createdAt: string;
   /**
+   * Estado de emisión (aditivo): `issued` cuando están todas las aprobaciones
+   * requeridas (o no se requiere ninguna); `pending_signatures` mientras falta
+   * alguna; `rejected` si algún firmante lo rechazó. Un documento que no está
+   * `issued` se descarga como BORRADOR, sin firmas y sin valor.
+   */
+  status?: OrgReportStatus;
+  /** Decisiones ya registradas de los firmantes (aditivo). */
+  approvals?: OrgReportApprovalInfo[];
+  /**
    * `true` cuando la generación reutilizó un reporte idéntico ya existente
    * (mismos datos ⇒ mismo folio). Solo viaja en la respuesta de `POST`.
    */
@@ -109,6 +128,13 @@ export interface OrgReportSignerReadiness {
  * generar: qué valor tendrá cada documento, qué firmas faltan y qué hacer.
  */
 export interface OrgReportsReadiness {
+  /** Política de firmas declarada por la organización (aditivo). */
+  policies?: OrgReportPolicy[];
+  /**
+   * Cargo con el que la persona que consulta puede firmar: `legal_representative`
+   * si es Owner, o el cargo de su designación vigente (aditivo).
+   */
+  mySignerRole?: LegalRepresentativeRole;
   /** false ⇒ los reportes salen sin firmas hasta que cada firmante apruebe. */
   signaturesEnabled?: boolean;
   formalizationState: string;
@@ -133,8 +159,57 @@ export interface OrgReportVerification {
   periodStart: string;
   periodEnd: string;
   legalEffect: OrgReportLegalEffect;
+  /** Estado de emisión (aditivo). */
+  status?: OrgReportStatus;
   signers: Array<Pick<OrgReportSigner, 'role' | 'fullName'>>;
   rowCount: number;
   contentHash: string;
   createdAt: string;
+}
+
+// ----------------------------------------------------------------------------
+// Firma con consentimiento: firmantes adicionales, política y decisión.
+// ----------------------------------------------------------------------------
+
+/** Cargos de firmante adicional que la organización puede vincular. */
+export type AdditionalSignerRole = 'accountant' | 'fiscal_reviewer';
+
+/** `POST /org/signers/invite` (solo Owner): invita por correo a un firmante. */
+export interface InviteReportSignerInput {
+  email: string;
+  signerRole: AdditionalSignerRole;
+}
+
+/** Firmante adicional vinculado (o con invitación pendiente). */
+export interface OrgSigner {
+  id: string;
+  role: AdditionalSignerRole;
+  /** `invited` hasta que la persona acepta y crea su propia contraseña. */
+  status: 'invited' | 'active' | 'revoked';
+  email: string;
+  displayName?: string;
+  /** ISO-8601 UTC. */
+  createdAt: string;
+  revokedAt?: string;
+}
+
+/** Firmas que la organización declara exigidas por sus estatutos (por tipo). */
+export interface OrgReportPolicy {
+  kind: OrgReportKind;
+  requiredRoles: LegalRepresentativeRole[];
+}
+
+/** `PUT /org/reports/policy` (solo Owner). El representante legal siempre firma. */
+export type SetOrgReportPolicyInput = OrgReportPolicy;
+
+/** `POST /org/reports/:id/decision` — solo el propio firmante. */
+export interface DecideOrgReportInput {
+  decision: 'approved' | 'rejected';
+}
+
+/** Documento por firmar en la bandeja del firmante. */
+export interface OrgReportPendingSignature {
+  report: OrgReport;
+  /** Cargo con el que la persona debe firmar este documento. */
+  role: LegalRepresentativeRole;
 }

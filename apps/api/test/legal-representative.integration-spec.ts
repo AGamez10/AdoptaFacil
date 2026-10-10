@@ -4,7 +4,9 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
+import { CapturingNotificationPort, inviteSigner } from './support/signers';
 
 /**
  * M01 legal representative signature (S-1, RF14 relacionado / RNF10):
@@ -17,6 +19,7 @@ describe('Legal representative signature (M01, S-1)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
+  const notifications = new CapturingNotificationPort();
   const password = 'password-1234';
 
   interface Actor {
@@ -81,7 +84,10 @@ describe('Legal representative signature (M01, S-1)', () => {
   let owner: Actor;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(NOTIFICATION_PORT)
+      .useValue(notifications)
+      .compile();
     app = moduleRef.createNestApplication();
     await app.init();
     server = app.getHttpServer();
@@ -150,7 +156,7 @@ describe('Legal representative signature (M01, S-1)', () => {
     expect(allRows.some((r) => r.id === second.body.id)).toBe(true);
   });
 
-  it('requerimiento #16: registering an accountant and a fiscal reviewer never replaces the legal representative — all three stay vigente', async () => {
+  it('requerimiento #16: the accountant and the fiscal reviewer are OTHER people with their own accounts — registering them never replaces the legal representative, all three stay vigente', async () => {
     const fresh = await actorWithRoles(['owner']);
     const legalRep = await register(
       fresh.token,
@@ -158,14 +164,17 @@ describe('Legal representative signature (M01, S-1)', () => {
       Buffer.from('firma rep').toString('base64'),
       'legal_representative',
     ).expect(201);
+    // Los vincula la organización por invitación; cada uno crea su cuenta.
+    const accountantUser = await inviteSigner(server, notifications, fresh, 'accountant');
+    const reviewerUser = await inviteSigner(server, notifications, fresh, 'fiscal_reviewer');
     const accountant = await register(
-      fresh.token,
+      accountantUser.token,
       'Contador Vigente',
       Buffer.from('firma contador').toString('base64'),
       'accountant',
     ).expect(201);
     const fiscalReviewer = await register(
-      fresh.token,
+      reviewerUser.token,
       'Revisor Vigente',
       Buffer.from('firma revisor').toString('base64'),
       'fiscal_reviewer',
@@ -183,16 +192,18 @@ describe('Legal representative signature (M01, S-1)', () => {
     expect(byRole.accountant).toMatchObject({
       id: accountant.body.id,
       fullName: 'Contador Vigente',
+      memberId: accountantUser.userId,
     });
     expect(byRole.fiscal_reviewer).toMatchObject({
       id: fiscalReviewer.body.id,
       fullName: 'Revisor Vigente',
+      memberId: reviewerUser.userId,
     });
 
     // Re-registering the accountant replaces ONLY the accountant's vigente row.
     await new Promise((resolve) => setTimeout(resolve, 5));
     const newAccountant = await register(
-      fresh.token,
+      accountantUser.token,
       'Nuevo Contador',
       Buffer.from('firma nuevo contador').toString('base64'),
       'accountant',
@@ -208,6 +219,31 @@ describe('Legal representative signature (M01, S-1)', () => {
     // Legal representative and fiscal reviewer are untouched.
     expect(afterByRole.legal_representative.id).toBe(legalRep.body.id);
     expect(afterByRole.fiscal_reviewer.id).toBe(fiscalReviewer.body.id);
+  });
+
+  it('nobody signs for another or holds two seats: the Owner cannot register the accountant or fiscal reviewer, and a signer cannot register another seat or the legal representative', async () => {
+    const fresh = await actorWithRoles(['owner']);
+    // El Owner no firma por el contador ni por el revisor fiscal.
+    await register(fresh.token, 'Yo, contador', SIGNATURE_BASE64, 'accountant').expect(403);
+    await register(fresh.token, 'Yo, revisor', SIGNATURE_BASE64, 'fiscal_reviewer').expect(403);
+
+    const accountantUser = await inviteSigner(server, notifications, fresh, 'accountant');
+    // Un contador no firma como representante legal ni como revisor fiscal.
+    await register(
+      accountantUser.token,
+      'Escalada',
+      SIGNATURE_BASE64,
+      'legal_representative',
+    ).expect(403);
+    await register(accountantUser.token, 'Otro cargo', SIGNATURE_BASE64, 'fiscal_reviewer').expect(
+      403,
+    );
+    await register(accountantUser.token, 'Su cargo', SIGNATURE_BASE64, 'accountant').expect(201);
+    // Nada quedó registrado para los intentos rechazados.
+    const rows = await admin.legalRepresentative.findMany({
+      where: { organizationId: fresh.orgId },
+    });
+    expect(rows.map((r) => r.role)).toEqual(['accountant']);
   });
 
   it('records an append-only audit entry with metadata only — never the signature content', async () => {
@@ -287,8 +323,9 @@ describe('Legal representative signature (M01, S-1)', () => {
       Buffer.from('firma rep').toString('base64'),
       'legal_representative',
     ).expect(201);
+    const accountantUser = await inviteSigner(server, notifications, fresh, 'accountant');
     const accountant = await register(
-      fresh.token,
+      accountantUser.token,
       'Contador Vigente',
       Buffer.from('firma contador').toString('base64'),
       'accountant',
