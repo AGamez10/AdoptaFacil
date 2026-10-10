@@ -1,0 +1,7 @@
+# PORTALS_TLS=internal: el mismo bloque comodín con la CA interna de Caddy, para
+# probar el enrutamiento de portales sin DNS real (CI y pruebas locales). Nunca
+# en producción: los navegadores no confían en esa CA.
+*.{$APP_DOMAIN} {
+	tls internal
+	import app
+}

@@ -27,7 +27,7 @@ describe('Payouts (M15b, RF26: bank account + dispatch + webhook + no double-pay
   let payoutsService: PayoutsService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;

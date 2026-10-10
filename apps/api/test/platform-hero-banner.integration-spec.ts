@@ -20,7 +20,7 @@ describe('Platform hero banner photos (T-030, S-15)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;

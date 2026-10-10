@@ -5,12 +5,15 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  forwardRef,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   ADOPTION_CONTRACT_APPLICABLE_LAWS,
+  CURRENT_ADOPTION_CONTRACT_TEMPLATE,
   DEFAULT_FOLLOW_UP_MONTHS,
+  DEFAULT_FOLLOW_UP_PLAN,
   type AdoptionAnimalSnapshot,
   type AdoptionApplicant,
   type AdoptionContract,
@@ -44,6 +47,8 @@ import { renderAdoptionContractPdf } from './adoption-contract-pdf';
 import { checkContractTransition } from './adoption-contract-status';
 import { computeContractHash } from './adoption-contract-hash';
 import { SIGNATURE_PORT } from './signature/signature.port';
+import { AdoptionContractCopyService } from './adoption-contract-copy.service';
+import { detectSignatureImageType, resolveMinimumSignerAge } from './adoption-contract-rules';
 
 /** Formatea `{ city, address }` de `OrganizationLocation` en una sola línea
  *  de domicilio — mismo criterio que `VolunteerCertificatesService.getOrgCity`
@@ -88,6 +93,8 @@ export class AdoptionContractsService {
     @Inject(SIGNATURE_ENCRYPTION_CONFIG)
     private readonly signatureConfig: SignatureEncryptionConfig,
     private readonly legalRepresentatives: LegalRepresentativeService,
+    @Inject(forwardRef(() => AdoptionContractCopyService))
+    private readonly copies: AdoptionContractCopyService,
   ) {}
 
   private requireOrgId(): string {
@@ -135,7 +142,8 @@ export class AdoptionContractsService {
       // `healthStatusAtDelivery` quedan sin llenar: no existen en ningún
       // otro lugar del sistema, la organización los diligencia después
       // (`updateData`, mientras el contrato siga en `draft`).
-      const [profile, animalRow, adopterProfileRows] = await Promise.all([
+      const [organization, profile, animalRow, adopterProfileRows] = await Promise.all([
+        tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
         tx.organizationProfile.findUnique({ where: { organizationId } }),
         tx.animal.findUnique({ where: { id: req.animalId }, include: { breed: true } }),
         this.prisma.$queryRaw<AdopterProfileRow[]>(
@@ -149,6 +157,7 @@ export class AdoptionContractsService {
       const adopterProfile = adopterProfileRows[0];
 
       const data: AdoptionContractData = {
+        organizationName: profile?.legalName?.trim() || organization?.name || undefined,
         organizationNit: profile?.nit ?? undefined,
         organizationAddress: formatOrgAddress(location),
         animalBreed: animalRow?.breed?.name ?? animalRow?.customBreed ?? undefined,
@@ -157,6 +166,8 @@ export class AdoptionContractsService {
         adopterDocumentNumber: adopterProfile?.document_id ?? undefined,
         adopterAddress: adopterProfile?.address ?? undefined,
         followUpMonths: DEFAULT_FOLLOW_UP_MONTHS,
+        followUpPlan: DEFAULT_FOLLOW_UP_PLAN,
+        minimumSignerAge: resolveMinimumSignerAge(organizationId, process.env),
         signatureCity: location?.city,
       };
 
@@ -196,6 +207,7 @@ export class AdoptionContractsService {
         applicableLaws: ADOPTION_CONTRACT_APPLICABLE_LAWS,
         terms: input.terms?.trim() ?? '',
         data,
+        templateVersion: CURRENT_ADOPTION_CONTRACT_TEMPLATE,
       };
 
       // TOCTOU: dos requests concurrentes para el mismo `requestId` pueden pasar
@@ -468,6 +480,12 @@ export class AdoptionContractsService {
         );
       }
       fullNameOverride = repSigner.fullName;
+      // Se congela QUÉ firma registrada usó el representante: si la
+      // organización cambia de representante legal después, el contrato
+      // sellado sigue mostrando la firma de quien realmente firmó (antes se
+      // releía siempre la del representante VIGENTE).
+      signatureFileRef = repSigner.signatureFileRef;
+      signatureHash = repSigner.signatureHash;
     } else {
       if (row.status !== 'pending_signatures') {
         throw new ConflictException('El contrato aún no fue enviado a firmas.');
@@ -480,8 +498,10 @@ export class AdoptionContractsService {
         throw new BadRequestException('Debes dibujar o subir tu firma para firmar el contrato.');
       }
       const plaintext = Buffer.from(input.signatureBase64, 'base64');
-      if (plaintext.length === 0) {
-        throw new BadRequestException('La firma está vacía o no es una imagen válida.');
+      if (plaintext.length === 0 || !detectSignatureImageType(plaintext)) {
+        throw new BadRequestException(
+          'La firma está vacía o no es una imagen válida (usa PNG o JPG).',
+        );
       }
       signatureHash = hashSignature(plaintext);
       const encrypted = encryptSignature(plaintext, this.signatureConfig.signatureEncryptionKey);
@@ -540,7 +560,7 @@ export class AdoptionContractsService {
       entityId: contractId,
       metadata: { signerId: signer.id, role: signer.role, provider: result.provider },
     });
-    if (allSigned) {
+    if (updated.status === 'signed') {
       await this.audit.record({
         organizationId,
         actorUserId: actor.id,
@@ -549,6 +569,11 @@ export class AdoptionContractsService {
         entityId: contractId,
         metadata: { contentHash },
       });
+      // Copia del contrato firmado al correo de cada parte. Solo la llamada
+      // que efectivamente selló el contrato llega aquí (la función SQL ya no
+      // actualiza un contrato `signed`), y el envío es idempotente por
+      // firmante — ver AdoptionContractCopyService.
+      await this.copies.schedule(organizationId, contractId);
     }
 
     return this.fromRow(updated);
@@ -567,38 +592,53 @@ export class AdoptionContractsService {
     if (!row) {
       throw new NotFoundException('Contrato no encontrado o no eres firmante.');
     }
-    return this.renderPdfFor(row.organization_id, row.payload, row.signers);
+    return this.renderPdfFor(row.organization_id, {
+      id: row.id,
+      status: row.status as AdoptionContractStatus,
+      payload: row.payload,
+      signers: row.signers,
+      contentHash: row.content_hash ?? undefined,
+    });
   }
 
   /** Same as {@link generatePdf}, for ANY org manager (not just a listed
    *  signer) — mirrors {@link getForOrgById} vs {@link getForSigner}. */
   async generatePdfForOrg(contractId: string): Promise<Buffer> {
     const row = await this.loadForOrg(contractId);
-    const signers = row.signers as unknown as AdoptionContractSigner[];
-    const payload = row.payload as unknown as AdoptionContractPayload;
-    return this.renderPdfFor(row.organizationId, payload, signers);
+    return this.renderPdfFor(row.organizationId, {
+      id: row.id,
+      status: row.status as AdoptionContractStatus,
+      payload: row.payload as unknown as AdoptionContractPayload,
+      signers: row.signers as unknown as AdoptionContractSigner[],
+      contentHash: row.contentHash ?? undefined,
+    });
   }
 
-  private async renderPdfFor(
+  /** PDF de un contrato ya cargado (por la organización, un firmante o el
+   *  envío de copias) — firmas de TODOS los firmantes, no solo dos. */
+  async renderPdfFor(
     organizationId: string,
-    payload: AdoptionContractPayload,
-    signers: AdoptionContractSigner[],
+    contract: {
+      id: string;
+      status: AdoptionContractStatus;
+      payload: AdoptionContractPayload;
+      signers: AdoptionContractSigner[];
+      contentHash?: string;
+    },
   ): Promise<Buffer> {
-    const representative = signers.find((s) => s.role === 'organization_representative');
-    const adopter = signers.find((s) => s.role === 'adopter');
-    const [representativeSignaturePng, adopterSignaturePng] = await Promise.all([
-      representative
-        ? this.resolveSignatureImage(organizationId, signers, representative.id)
-        : Promise.resolve(null),
-      adopter
-        ? this.resolveSignatureImage(organizationId, signers, adopter.id)
-        : Promise.resolve(null),
-    ]);
+    const images = await Promise.all(
+      contract.signers.map(async (s) => {
+        const bytes = await this.resolveSignatureImage(organizationId, contract.signers, s.id);
+        return [s.id, bytes] as const;
+      }),
+    );
     return renderAdoptionContractPdf({
-      payload,
-      signers,
-      representativeSignaturePng,
-      adopterSignaturePng,
+      payload: contract.payload,
+      signers: contract.signers,
+      signatureImages: Object.fromEntries(images),
+      contractId: contract.id,
+      status: contract.status,
+      contentHash: contract.contentHash,
     });
   }
 
@@ -641,7 +681,9 @@ export class AdoptionContractsService {
     if (!signer?.signedAt) {
       return null;
     }
-    if (signer.role === 'organization_representative') {
+    if (signer.role === 'organization_representative' && !signer.signatureFileRef) {
+      // Contratos firmados antes de congelar la referencia: única opción es
+      // la firma del representante vigente (comportamiento anterior).
       const rep = await this.legalRepresentatives.getCurrentSignerForOrg(
         organizationId,
         'legal_representative',

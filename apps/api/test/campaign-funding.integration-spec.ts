@@ -9,6 +9,7 @@ import { computeProgress } from '../src/modules/campaigns/campaign-progress';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Real campaign funding end-to-end (RF15 · T-055): an APPROVED campaign-attributed
@@ -24,7 +25,7 @@ describe('Campaign funding (RF15 · T-055)', () => {
   let funding: CampaignFundingService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let tokenA = '';
   let tokenB = '';
@@ -45,6 +46,7 @@ describe('Campaign funding (RF15 · T-055)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return { token: res.body.tokens.accessToken, orgId: res.body.user.organizationId };
   }
 

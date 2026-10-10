@@ -1,0 +1,115 @@
+# 09 · Alcance del MVP 1.0
+
+## Criterio
+
+El MVP 1.0 entra a piloto solo con lo que se pueda cumplir **sin mentir al usuario**. Concretamente:
+
+- Sin dinero real.
+- Sin certificados tributarios.
+- Sin menores.
+- Sin capacidades formales autodeclaradas.
+
+Todo lo demás:
+
+- Queda apagado con flag: la API responde 404/503 y la navegación lo oculta.
+- O se difiere.
+
+## 1. Decisiones por módulo
+
+| Mód.                         | Decisión                            | Condición para entrar al MVP 1.0                                                                                                                                                                                                          |
+| ---------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M01 Organizaciones           | **KEEP + reforzar**                 | Estado operativo (Borrador→Pendiente→Observado/Aprobado/Rechazado/Suspendido); aprobación por PlatformAdmin; transiciones de formalidad solo por la plataforma con documento aprobado **y archivo existente**                             |
+| M02 Auth/RBAC                | **KEEP + arreglar**                 | Identidad fail-closed (sin fake en prod); invitaciones de miembros; solo el Owner otorga Owner; regla del último Owner; auditar revocaciones; quitar `x-org-id`                                                                           |
+| M03 Animales/clínico         | **KEEP**                            | —                                                                                                                                                                                                                                         |
+| M04 Adopciones/contrato      | **KEEP + corregir**                 | Snapshot del lado del servidor; adoptante = usuario autenticado; organización como cedente; aviso de borrador para abogado; Ley 1581; PDF tolerante a Unicode; correo con PDF a ambas partes; animal pasa a "adoptado"; UI de seguimiento |
+| M05 Donaciones               | **FLAG off**                        | Hasta D1 sin custodia y un webhook firmado (F24 → 1.1)                                                                                                                                                                                    |
+| M05 Certificados tributarios | **FLAG off**                        | Hasta RTE verificado por la plataforma (no por la DIAN falsa)                                                                                                                                                                             |
+| M06 Campañas                 | **SIMPLIFY**                        | Sin cobro; evidencia solo con archivo subido                                                                                                                                                                                              |
+| M07 Apadrinamientos          | **FLAG off / DEFER**                | Depende de pagos                                                                                                                                                                                                                          |
+| M08 Voluntariado             | **FLAG**, solo adultos              | Menores fuera (F23); certificado con razón social, NIT, logo, firmas y verificación                                                                                                                                                       |
+| M09 Recursos                 | **DEFER (flag)**                    | —                                                                                                                                                                                                                                         |
+| M10 Marketplace              | **FLAG**, solo vitrina con WhatsApp | —                                                                                                                                                                                                                                         |
+| M11 Comunidad                | **DEFER (flag)**                    | Requiere moderación y denuncia                                                                                                                                                                                                            |
+| M12 Reputación               | **DEFER (flag)**                    | Sin tests de integración                                                                                                                                                                                                                  |
+| M13 Dashboards               | **SIMPLIFY**                        | Cifras coherentes; sin copy interno                                                                                                                                                                                                       |
+| M14 Portales                 | **KEEP**                            | Publicar solo orgs aprobadas; reservados en la API                                                                                                                                                                                        |
+| M15 Pagos                    | **FLAG off**                        | `createPayout` no existe; flujo con custodia                                                                                                                                                                                              |
+| M15 Plataforma/auditoría     | **KEEP**                            | Cola de orgs con asignación (F19); consulta de auditoría                                                                                                                                                                                  |
+
+**DELETE:** ningún módulo. Se borra solo el código muerto probado: `PlaceholderPage`, `PortalDonateCta`, `OrgVolunteeringPage`, `EXAMPLE_QUEUE`, `ORG_ID_HEADER` y `getSponsorshipPayments`. Ver el 03 §4.
+
+## 2. Catálogo F1–F34: estado a `48cabad`
+
+**Leyenda:**
+
+- **NUEVO** = existe en el repo y no lo reportaba el anexo.
+- **RETROCEDIÓ** = el anexo lo daba por corregido en el repo anterior (PR #2/#3/#4) y en este repo vuelve a estar abierto.
+
+| F   | Tema                                                 | Estado                        | Evidencia / nota                                                                                                                                                                                                                                                                                                                     |
+| --- | ---------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F1  | Auditoría forense                                    | En curso                      | Este entregable                                                                                                                                                                                                                                                                                                                      |
+| F2  | Cierre de P0/P1 de seguridad                         | **RETROCEDIÓ**                | AF-001 (identidad fake por defecto: `identity.module.ts:27-31`), AF-002 (webhook fake sin firma: `payments.ts:413-467`; `render.yaml:110-111`), AF-003 (autodeclaración), AF-029 ("(prueba)": `google-sign-in-button.tsx:130`) y AF-037 (`seed-platform-admin.ts:58-61`). Los arreglos de PR #2/#3/#4 del repo anterior **no están** |
+| F3  | Invitación y matriz de roles                         | FALTA                         | Sin invitaciones; Administrator puede volverse Owner (`rbac.controller.ts:37-46`); sin regla de último Owner (`rbac.service.ts:74-76`). Los nombres de rol sí coinciden con el documento base                                                                                                                                        |
+| F4  | Landing 10/10 con three.js                           | FALTA                         | Sin three.js; copy engañoso; desborde móvil                                                                                                                                                                                                                                                                                          |
+| F5  | Navegación por lógica de negocio y flags             | FALTA                         | Sin flags; páginas "próximamente" visibles; superadmin con menú de persona                                                                                                                                                                                                                                                           |
+| F6  | Portal por subdominio                                | PARCIAL                       | Diseño y tema OK; muestra orgs no aprobadas con el badge "✓ ESAL"; sin prueba de no-fuga por host; varias vistas sin h1                                                                                                                                                                                                              |
+| F7  | Subdominios y dominios propios                       | PARCIAL                       | Resolución por host en la SPA; reservados solo en el web (`subdomain.ts:14`); sin TXT, Caddy ni on-demand TLS                                                                                                                                                                                                                        |
+| F8  | 3D interactivo                                       | FALTA                         | —                                                                                                                                                                                                                                                                                                                                    |
+| F9  | Expediente clínico + galería carrusel                | PARCIAL                       | Clínico privado OK (sin fuga en flowB); adjuntos en `clinical.service`; el carrusel solo existe para reseñas (`review-carousel.tsx`), no para animales                                                                                                                                                                               |
+| F10 | Campañas con rendición                               | PARCIAL                       | La evidencia se publica sin archivo (404); sin reporte descargable                                                                                                                                                                                                                                                                   |
+| F11 | Contrato completo firmado                            | **FAIL**                      | Cedente "Adopta Fácil" (`adoption-contract-pdf.ts:394,467`); sin aviso para abogado, sin Ley 1581 y sin correo con el PDF                                                                                                                                                                                                            |
+| F12 | Multi-firmante por cargo + firma que no se renderiza | PARCIAL / **NUEVO**           | **Bug resuelto:** la firma sí se renderiza (pdfimages: 2 imágenes). **NUEVO:** roles contador y revisor fiscal (`legal-representative.schemas.ts:21`), pero nunca se imprimen (`getCurrentSignerForOrg`, `legal-representative.service.ts:190`); sin configuración 1/2/3 firmantes                                                   |
+| F13 | Certificados con el branding de la org               | **FAIL**                      | El certificado de donación pone "AdoptaFácil" como cabecera y el badge "ESAL · RTE vigente" (`certificate-document.tsx:29-31`). La verificación pública dice "Certificado válido… RTE vigente" (`certificate-verification-page.tsx:81-85`). El de voluntariado no lleva NIT, logo ni código público                                  |
+| F14 | Reportes PDF                                         | **FAIL**                      | Un emoji rompe el PDF (WinAnsi), probado. Sin reportes de servicio social ni de adopciones                                                                                                                                                                                                                                           |
+| F15 | Correos y plantillas del superadmin                  | FALTA                         | Sin modelo de plantillas; `NOTIFICATION_DRIVER=log` en `render.yaml:98-99`                                                                                                                                                                                                                                                           |
+| F16 | Verificación y restricciones por nivel               | **FAIL**                      | Transiciones del Owner (`formalization.controller.ts:41-50`); TRANSITION_REQUIREMENTS vacío                                                                                                                                                                                                                                          |
+| F17 | RUT: consulta y precarga                             | FALTA (1.1)                   | No se inventó ninguna API: correcto                                                                                                                                                                                                                                                                                                  |
+| F18 | OCR                                                  | FALTA (1.1)                   | —                                                                                                                                                                                                                                                                                                                                    |
+| F19 | Workspace del superadmin con tickets                 | PARCIAL                       | Colas de documentos y duplicados; sin cola de orgs, asignación ni suspender/aprobar                                                                                                                                                                                                                                                  |
+| F20 | Onboarding con CTA de contacto                       | FALTA                         | Ni el teléfono ni el correo D10 aparecen en `apps/web`                                                                                                                                                                                                                                                                               |
+| F21 | Mandato electrónico                                  | FALTA                         | —                                                                                                                                                                                                                                                                                                                                    |
+| F22 | Ley 1581                                             | **FALTA (bloquea el piloto)** | Sin tablas, textos ni enlaces                                                                                                                                                                                                                                                                                                        |
+| F23 | Menores fuera                                        | **FAIL**                      | `isMinor` autodeclarado, acudiente opcional (`volunteer-enrollments.schemas.ts:15`); sin flag                                                                                                                                                                                                                                        |
+| F24 | Pagos split sin custodia                             | **FAIL** (debe ir apagado)    | Cobro con el token de la plataforma y `sponsor.id` (`mercadopago-payment.adapter.ts:150-175,255-300`); comisión no cobrada en origen; `createPayout` sin implementar; tarifa tipo Wompi                                                                                                                                              |
+| F25 | Apadrinar sin cuenta                                 | PARCIAL (1.1)                 | Existe guest checkout en donaciones; depende de pagos                                                                                                                                                                                                                                                                                |
+| F26 | Marketplace WhatsApp + voluntariado                  | PARCIAL                       | Marketplace solo con `wa.me`, como se pidió. Voluntariado sin control de menores                                                                                                                                                                                                                                                     |
+| F27 | Patrocinio B2B                                       | FALTA (1.1)                   | —                                                                                                                                                                                                                                                                                                                                    |
+| F28 | MinIO + compresión                                   | FALTA                         | Solo `disk`/`stub`; la validación confía en el MIME del cliente (`storage.controller.ts`); sin compresión                                                                                                                                                                                                                            |
+| F29 | Asistente de guía                                    | FALTA                         | —                                                                                                                                                                                                                                                                                                                                    |
+| F30 | Depurar código                                       | PARCIAL                       | knip ejecutado: lista de código muerto real en 03 §4                                                                                                                                                                                                                                                                                 |
+| F31 | Blindaje SQLi                                        | UNVERIFIED (zona seguridad)   | `$queryRawUnsafe` solo en tests (rls-no-leak); sin Semgrep en CI                                                                                                                                                                                                                                                                     |
+| F32 | EvidenceProofProvider                                | FALTA                         | Auditoría por `AuditService`, sin modelo de evidencia                                                                                                                                                                                                                                                                                |
+| F33 | Dashboard mínimo                                     | PARCIAL                       | Existe, con cifras incoherentes                                                                                                                                                                                                                                                                                                      |
+| F34 | Operación                                            | UNVERIFIED / FALTA            | Sin runbooks de backup y restore en el repo; ver zona (a)                                                                                                                                                                                                                                                                            |
+
+**Resumen F1–F34:**
+
+| Estado            | Cantidad |
+| ----------------- | -------- |
+| PASS              | 0        |
+| PARCIAL           | 10       |
+| FAIL (incluye F2) | 7        |
+| FALTA             | 14       |
+| UNVERIFIED        | 2        |
+| En curso          | 1        |
+
+**RETROCEDIÓ:** F2, que agrupa AF-001, AF-002, AF-003, AF-029 y AF-037.
+
+**NUEVO:**
+
+- Positivo: la firma ya se renderiza.
+- Pendiente:
+  - Los roles contable y fiscal no se imprimen.
+  - La cola BullMQ ignora el índice de BD de Redis.
+  - El admin aprueba documentos sin archivo.
+  - El PDF se rompe con emoji en un contrato ya firmado.
+
+## 3. Bloqueantes del piloto (orden sugerido)
+
+1. Drivers fail-closed en producción y flags de módulo con guard de API: F2 y F5.
+2. Estado operativo de la org, aprobación por la plataforma y formalidad solo por la plataforma: F16, F19 y MVP-RF-05/07.
+3. Contrato M04: integridad de datos, cedente correcto, Unicode, correo con PDF y aviso de borrador: F11 y F14.
+4. Ley 1581, T&C y consentimiento versionado: F22.
+5. Invitaciones y reglas de Owner: F3.
+6. Copy honesto, desborde móvil del panel de org y code-splitting: F4 y F5.
+7. Operación (backups y restore probado): F34.

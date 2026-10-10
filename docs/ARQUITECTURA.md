@@ -77,7 +77,7 @@ flowchart LR
 
 | Pieza     | Responsabilidad                                                                                                                                           |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenant/` | `TenantContextMiddleware`: toma `org` del JWT (o `x-org-id` válido) y ejecuta la request en un `AsyncLocalStorage`                                        |
+| `tenant/` | `TenantContextMiddleware`: toma `org` SOLO del JWT (nunca de header, query ni body) y ejecuta la request en un `AsyncLocalStorage`                        |
 | `prisma/` | `PrismaService` conecta como **`adoptafacil_app`**; `withTenant` / `withOrgContext` abren una transacción con `set_config('app.current_org_id', …, true)` |
 | `auth/`   | Registro (organización / persona), login, refresh con rotación, reset de contraseña, Google Sign-In, perfil, rate limiting                                |
 | `rbac/`   | `@Roles(...)` + `RolesGuard` deny-by-default evaluado junto con el tenant                                                                                 |

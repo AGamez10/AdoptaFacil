@@ -9,6 +9,7 @@ import {
   type LegalAcceptanceRecord,
   type LegalDocumentKey,
   type LegalStatus,
+  optionalLegalDocuments,
   requiredLegalDocuments,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
@@ -168,6 +169,7 @@ export class LegalService {
     return {
       pending,
       commercialAuthorized: latestCurrent('commercial_authorization')?.action === 'accepted',
+      aiTrainingAuthorized: latestCurrent('ai_training_authorization')?.action === 'accepted',
       history,
     };
   }
@@ -180,7 +182,7 @@ export class LegalService {
   ): Promise<LegalStatus> {
     const allowed = new Set<LegalDocumentKey>([
       ...requiredLegalDocuments(user.accountType),
-      'commercial_authorization',
+      ...optionalLegalDocuments(),
     ]);
     const valid = this.assertAcceptances(items, []).filter((i) => allowed.has(i.key));
     if (valid.length === 0) {

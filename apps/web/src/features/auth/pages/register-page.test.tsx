@@ -74,8 +74,8 @@ describe('RegisterPage — Organization vs Person', () => {
     await user.type(screen.getByLabelText('Nombre de la organización'), 'Fundación Patitas');
     await user.type(screen.getByLabelText('Nombre de contacto'), 'Ana Ruiz');
     await user.type(screen.getByLabelText('Correo electrónico'), 'org@patitas.org');
-    await user.type(screen.getByLabelText('Contraseña'), 'supersecret');
-    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
+    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret12');
     await user.click(screen.getByTestId('org-legal-terms'));
     await user.click(screen.getByTestId('org-legal-data'));
     await user.click(screen.getByTestId('org-legal-organization'));
@@ -97,8 +97,8 @@ describe('RegisterPage — Organization vs Person', () => {
     await user.type(screen.getByLabelText('Nombre'), 'Camila');
     await user.type(screen.getByLabelText('Apellido'), 'Gómez');
     await user.type(screen.getByLabelText('Correo electrónico'), 'camila@correo.com');
-    await user.type(screen.getByLabelText('Contraseña'), 'supersecret');
-    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
+    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret12');
     await user.click(screen.getByTestId('person-legal-terms'));
     await user.click(screen.getByTestId('person-legal-data'));
 
@@ -115,11 +115,12 @@ describe('RegisterPage — Organization vs Person', () => {
     expect(screen.getByTestId('person-legal-terms')).not.toBeChecked();
     expect(screen.getByTestId('person-legal-data')).not.toBeChecked();
     expect(screen.getByTestId('person-legal-commercial')).not.toBeChecked();
+    expect(screen.getByTestId('person-legal-ai')).not.toBeChecked();
     await user.type(screen.getByLabelText('Nombre'), 'Camila');
     await user.type(screen.getByLabelText('Apellido'), 'Gómez');
     await user.type(screen.getByLabelText('Correo electrónico'), 'camila@correo.com');
-    await user.type(screen.getByLabelText('Contraseña'), 'supersecret');
-    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
+    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret12');
     await user.click(screen.getByTestId('person-legal-terms'));
 
     await user.click(screen.getByRole('button', { name: 'Crear cuenta personal' }));
@@ -140,7 +141,7 @@ describe('RegisterPage — Organization vs Person', () => {
     await user.type(screen.getByLabelText('Nombre'), 'Camila');
     await user.type(screen.getByLabelText('Apellido'), 'Gómez');
     await user.type(screen.getByLabelText('Correo electrónico'), 'camila@correo.com');
-    await user.type(screen.getByLabelText('Contraseña'), 'supersecret');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
     await user.type(screen.getByLabelText('Confirmar contraseña'), 'different1');
 
     await user.click(screen.getByRole('button', { name: 'Crear cuenta personal' }));

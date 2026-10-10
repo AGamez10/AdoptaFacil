@@ -32,6 +32,7 @@ import { RolesGuard } from '../../core/rbac/roles.guard';
 import { DonationsService, type WebhookOutcome } from './donations.service';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { createDonationSchema } from './donations.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that VIEW the org's received donations/receipts (§13) — org set
  *  (Owner/Administrator/Operator), NOT the platform admin. */
@@ -48,6 +49,7 @@ const MANAGE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
  *     the PaymentPort verifies the signature and the settlement is idempotent.
  * All donation rows are tenant-scoped (RLS).
  */
+@RequireFeature('payments')
 @Controller('donations')
 export class DonationsController {
   constructor(
@@ -104,6 +106,7 @@ export class DonationsController {
    * organization isn't an ESAL with RTE vigente (so nothing was ever issued).
    */
   @Get(':id/certificate')
+  @RequireFeature('donationCertificates')
   @UseGuards(JwtAuthGuard)
   getCertificate(
     @CurrentUser() actor: RequestUser,
@@ -119,6 +122,7 @@ export class DonationsController {
    * already exists; 422 if not eligible / not approved. Management roles only.
    */
   @Post(':id/certificate')
+  @RequireFeature('donationCertificates')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...MANAGE_ROLES)

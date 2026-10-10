@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeBreakdown, MIN_DONATION_AMOUNT } from '@adoptafacil/contracts';
+import {
+  computeBreakdown,
+  DIRECT_COLLECTION_RATES,
+  MIN_DONATION_AMOUNT,
+} from '@adoptafacil/contracts';
+import { breakdownLines } from './donation-breakdown-view';
 import {
   buildDonationBreakdown,
   formatCop,
@@ -19,7 +24,7 @@ describe('donation-breakdown-view', () => {
     for (const amount of AMOUNTS) {
       for (const payer of ['organization', 'donor'] as const) {
         const { breakdown } = buildDonationBreakdown(amount, payer);
-        expect(breakdown).toEqual(computeBreakdown(amount, payer));
+        expect(breakdown).toEqual(computeBreakdown(amount, payer, DIRECT_COLLECTION_RATES));
       }
     }
   });
@@ -59,17 +64,21 @@ describe('donation-breakdown-view', () => {
     expect(out).not.toMatch(/,\d\d/);
   });
 
-  it('F-NOMENCLATURA: labels the platform fee as "Apoyo de sostenimiento", never "Comisión AdoptaFácil" (indicación fiscal)', () => {
+  it('ADR-PAG-001: a new donation shows no AdoptaFácil fee lines (direct collection)', () => {
     const { lines } = buildDonationBreakdown(50000, 'donor');
+    expect(lines.find((l) => l.key === 'platformFee')).toBeUndefined();
+    expect(lines.find((l) => l.key === 'platformIva')).toBeUndefined();
+    expect(lines.find((l) => l.key === 'gatewayFee')?.label).toBe('Comisión pasarela (estimada)');
+  });
+
+  it('F-NOMENCLATURA: a historical donation that had the fee still labels it "Apoyo de sostenimiento", never "Comisión AdoptaFácil"', () => {
+    const lines = breakdownLines(computeBreakdown(50000, 'donor'));
     expect(lines.find((l) => l.key === 'platformFee')?.label).toBe(
-      'Apoyo de sostenimiento a AdoptaFácil (4%)',
+      'Apoyo de sostenimiento a AdoptaFácil',
     );
     expect(lines.find((l) => l.key === 'platformIva')?.label).toBe(
       'IVA sobre el apoyo de sostenimiento a AdoptaFácil',
     );
     expect(lines.map((l) => l.label).join(' ')).not.toMatch(/comisión adoptaf[aá]cil/i);
-    // The GATEWAY's own fee (MercadoPago, a third party) is a real commission and keeps
-    // its name — only AdoptaFácil's own retained percentage was relabeled.
-    expect(lines.find((l) => l.key === 'gatewayFee')?.label).toBe('Comisión pasarela');
   });
 });

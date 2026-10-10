@@ -53,7 +53,7 @@ describe('Sponsorship recurring billing (S-5-REDISEÑO, M07/RF17, T-057)', () =>
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   let billing: SponsorshipBillingService;
   let poller: SponsorshipPaymentPollerService;
 

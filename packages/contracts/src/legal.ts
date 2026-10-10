@@ -16,6 +16,7 @@ export type LegalDocumentKey =
   | 'privacy_policy'
   | 'data_authorization'
   | 'commercial_authorization'
+  | 'ai_training_authorization'
   | 'privacy_notice'
   | 'cookies_policy';
 
@@ -69,7 +70,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocumentDescriptor[] = [
     slug: 'condiciones-organizaciones',
     title: 'Condiciones para organizaciones y acuerdo de tratamiento de datos',
     version: '2026-10-09',
-    sha256: 'e73d2c0d539b824a1ecd07a64fc318ba174b862100cd7220e2d3716abfcc5f3d',
+    sha256: '50835bf17a74787f3d71767978a0dd2212e60085f222565da7c4ae0c65bbf810',
     acceptance: 'required_organization',
     draft: true,
   },
@@ -78,7 +79,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocumentDescriptor[] = [
     slug: 'politica-de-datos',
     title: 'Política de tratamiento de datos personales',
     version: '2026-10-09',
-    sha256: 'd8009a086f2f0bbb1b65368d492e3e18569c44153636e82dcdec2d0e6e916c56',
+    sha256: '9991cb31a410df0f3e99d1849f7cf87d507eff5a72e70f8b088f060135faf08c',
     acceptance: 'required',
     draft: true,
   },
@@ -87,7 +88,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocumentDescriptor[] = [
     slug: 'autorizacion-datos',
     title: 'Autorización para el tratamiento de datos personales',
     version: '2026-10-09',
-    sha256: '701349cf2bc9278350c46fe3091b6d3b36e82d813f3e266b6399b61d6dc709da',
+    sha256: 'b77b4854d036e4d418f7715071de1d465bc07480e531de90bd22793a7e96bc67',
     acceptance: 'required',
     draft: true,
   },
@@ -97,6 +98,15 @@ export const LEGAL_DOCUMENTS: readonly LegalDocumentDescriptor[] = [
     title: 'Autorización opcional para usos comerciales',
     version: '2026-10-09',
     sha256: '39b1339703f6bc8ca2f9c0945ea269dce4b248733f1fe7700bf85a920fe0d75e',
+    acceptance: 'optional',
+    draft: true,
+  },
+  {
+    key: 'ai_training_authorization',
+    slug: 'autorizacion-ia',
+    title: 'Autorización opcional para mejorar el producto y entrenar inteligencia artificial',
+    version: '2026-10-09',
+    sha256: '858deb5119c5f80c70a9f35ff07eacb0743ec4640e54248c37a7be3522479c42',
     acceptance: 'optional',
     draft: true,
   },
@@ -126,7 +136,7 @@ export const LEGAL_DOCUMENTS: readonly LegalDocumentDescriptor[] = [
  * (Ley 1581 art. 9) y la comercial es opcional.
  */
 export interface LegalConsentGroup {
-  id: 'terms' | 'data' | 'organization' | 'commercial';
+  id: 'terms' | 'data' | 'organization' | 'commercial' | 'ai';
   documents: readonly LegalDocumentKey[];
   optional: boolean;
   /** Solo se muestra a cuentas de organización. */
@@ -145,6 +155,12 @@ export const LEGAL_CONSENT_GROUPS: readonly LegalConsentGroup[] = [
   {
     id: 'commercial',
     documents: ['commercial_authorization'],
+    optional: true,
+    organizationOnly: false,
+  },
+  {
+    id: 'ai',
+    documents: ['ai_training_authorization'],
     optional: true,
     organizationOnly: false,
   },
@@ -175,6 +191,8 @@ export interface LegalStatus {
   pending: LegalDocumentKey[];
   /** Si la autorización comercial opcional está vigente. */
   commercialAuthorized: boolean;
+  /** Si la autorización opcional de mejora del producto e IA está vigente. */
+  aiTrainingAuthorized: boolean;
   /** Historial completo, más reciente primero. */
   history: LegalAcceptanceRecord[];
 }
@@ -182,6 +200,11 @@ export interface LegalStatus {
 /** `POST /legal/me/acceptances`. */
 export interface AcceptLegalDocumentsInput {
   documents: LegalAcceptanceItem[];
+}
+
+/** Autorizaciones opcionales: se dan y se retiran desde "Mis autorizaciones". */
+export function optionalLegalDocuments(): LegalDocumentKey[] {
+  return LEGAL_DOCUMENTS.filter((d) => d.acceptance === 'optional').map((d) => d.key);
 }
 
 /** `POST /legal/me/revocations` — solo documentos opcionales. */

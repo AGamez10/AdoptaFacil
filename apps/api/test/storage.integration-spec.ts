@@ -25,7 +25,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const storageRoot = mkdtempSync(join(tmpdir(), 'adoptafacil-it-'));
 
   interface Actor {

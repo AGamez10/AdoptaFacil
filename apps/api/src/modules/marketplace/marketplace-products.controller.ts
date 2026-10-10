@@ -32,6 +32,7 @@ import {
   createProductSchema,
   updateProductSchema,
 } from './marketplace-products.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that may PUBLISH/EDIT a product (M10). */
 export const MARKETPLACE_WRITE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
@@ -56,6 +57,7 @@ function parseCategory(value?: string): ProductCategory | undefined {
  * + ReadOnlyAuditor; el resto, denegado (deny-by-default). Exposición pública
  * en un controller separado.
  */
+@RequireFeature('marketplace')
 @Controller('marketplace/products')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MarketplaceProductsController {

@@ -15,7 +15,7 @@ function sessionWith(roles: Role[]) {
       initialUser: {
         id: 'reviewer-1',
         name: 'Revisora',
-        email: 'revisora@adoptafacil.com',
+        email: 'revisora@adoptafacil.org',
         roles,
         organizationId: 'org-1',
         accountType: 'organization' as const,

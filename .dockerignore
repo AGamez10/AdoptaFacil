@@ -1,0 +1,19 @@
+# Contexto de build de deploy/docker/*.Dockerfile (raíz del repo).
+# Nada de secretos, dependencias locales ni salidas de build en la imagen.
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+.git
+.github
+.husky
+.env
+**/.env
+**/.env.*
+!**/.env.example
+.storage
+**/.storage
+docs
+deploy/backups
+*.log

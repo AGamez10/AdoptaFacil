@@ -1,0 +1,219 @@
+POST	/auth/register/organization	-	ThrottlerGuard	core/auth/auth.controller.ts:72
+POST	/auth/register/person	-	ThrottlerGuard	core/auth/auth.controller.ts:83
+POST	/auth/login	-	ThrottlerGuard	core/auth/auth.controller.ts:94
+POST	/auth/refresh	-	ThrottlerGuard	core/auth/auth.controller.ts:106
+POST	/auth/refresh/silent	-	ThrottlerGuard	core/auth/auth.controller.ts:125
+POST	/auth/logout	-	ThrottlerGuard	core/auth/auth.controller.ts:150
+POST	/auth/password-reset	-	ThrottlerGuard	core/auth/auth.controller.ts:160
+POST	/auth/password-reset/confirm	-	ThrottlerGuard	core/auth/auth.controller.ts:172
+GET	/auth/me	-	ThrottlerGuard	core/auth/auth.controller.ts:181
+POST	/auth/google	-	JwtAuthGuard	core/auth/auth.controller.ts:193
+PATCH	/auth/me/profile	-	ThrottlerGuard	core/auth/auth.controller.ts:211
+GET	/rbac/my-roles	-	JwtAuthGuard	core/rbac/rbac.controller.ts:23
+GET	/rbac/roles	-	JwtAuthGuard	core/rbac/rbac.controller.ts:29
+POST	/rbac/roles	Owner, Administrator, ReadOnlyAuditor	RolesGuard	core/rbac/rbac.controller.ts:37
+DELETE	/rbac/roles/:userId/:role	Owner, Administrator	RolesGuard	core/rbac/rbac.controller.ts:48
+PUT	/storage/upload	-	-	core/storage/storage.controller.ts:70
+GET	/storage/public	-	JwtAuthGuard	core/storage/storage.controller.ts:108
+GET	/storage/private	-	-	core/storage/storage.controller.ts:122
+GET	/health	-	-	health/health.controller.ts:14
+POST	/adoptions/contracts	-	JwtAuthGuard	modules/adoptions/adoption-contracts.controller.ts:57
+GET	/adoptions/contracts/by-request/:requestId	...MANAGE_ROLES	RolesGuard	modules/adoptions/adoption-contracts.controller.ts:68
+GET	/adoptions/contracts/org/:id	...MANAGE_ROLES	RolesGuard	modules/adoptions/adoption-contracts.controller.ts:78
+GET	/adoptions/contracts/:id	...MANAGE_ROLES	RolesGuard	modules/adoptions/adoption-contracts.controller.ts:86
+POST	/adoptions/contracts/:id/transitions	-	-	modules/adoptions/adoption-contracts.controller.ts:95
+POST	/adoptions/contracts/:id/signatures	...MANAGE_ROLES	RolesGuard	modules/adoptions/adoption-contracts.controller.ts:108
+PATCH	/adoptions/contracts/:id/data	-	-	modules/adoptions/adoption-contracts.controller.ts:119
+GET	/adoptions/contracts/org/:id/pdf	...MANAGE_ROLES	RolesGuard	modules/adoptions/adoption-contracts.controller.ts:135
+GET	/adoptions/contracts/:id/pdf	...MANAGE_ROLES	RolesGuard	modules/adoptions/adoption-contracts.controller.ts:151
+GET	/adoptions/contracts/org/:id/signatures/:signerId/image	-	-	modules/adoptions/adoption-contracts.controller.ts:170
+GET	/adoptions/contracts/:id/signatures/:signerId/image	...MANAGE_ROLES	RolesGuard	modules/adoptions/adoption-contracts.controller.ts:194
+POST	/adoptions	-	JwtAuthGuard	modules/adoptions/adoptions.controller.ts:34
+GET	/adoptions	-	-	modules/adoptions/adoptions.controller.ts:43
+GET	/adoptions/mine	...EVAL_ROLES	RolesGuard	modules/adoptions/adoptions.controller.ts:55
+POST	/adoptions/:id/transitions	-	-	modules/adoptions/adoptions.controller.ts:61
+POST	/adoptions/followups	-	JwtAuthGuard	modules/adoptions/followup.controller.ts:37
+GET	/adoptions/followups/by-contract/:contractId	...MANAGE_ROLES	RolesGuard	modules/adoptions/followup.controller.ts:48
+GET	/adoptions/followups/mine	...MANAGE_ROLES	RolesGuard	modules/adoptions/followup.controller.ts:58
+POST	/adoptions/followups/:id/submit	-	-	modules/adoptions/followup.controller.ts:64
+POST	/adoptions/followups/:id/complete	-	-	modules/adoptions/followup.controller.ts:74
+GET	/animals/:animalId/behavior-disclosures/current	-	JwtAuthGuard, RolesGuard	modules/animals/animal-behavior-disclosure.controller.ts:34
+POST	/animals/:animalId/behavior-disclosures	...VIEW_ROLES	-	modules/animals/animal-behavior-disclosure.controller.ts:42
+POST	/animals	-	JwtAuthGuard, RolesGuard	modules/animals/animals.controller.ts:85
+GET	/animals	...WRITE_ROLES	-	modules/animals/animals.controller.ts:94
+GET	/animals/breeds	...VIEW_ROLES	-	modules/animals/animals.controller.ts:102
+POST	/animals/breeds	...VIEW_ROLES	-	modules/animals/animals.controller.ts:108
+GET	/animals/bulk-import/template	...WRITE_ROLES	-	modules/animals/animals.controller.ts:120
+POST	/animals/bulk-import	...BULK_IMPORT_ROLES	-	modules/animals/animals.controller.ts:132
+GET	/animals/:id	...BULK_IMPORT_ROLES	-	modules/animals/animals.controller.ts:149
+PATCH	/animals/:id	...VIEW_ROLES	-	modules/animals/animals.controller.ts:155
+POST	/animals/:id/activate	...WRITE_ROLES	-	modules/animals/animals.controller.ts:165
+POST	/animals/:id/deactivate	...WRITE_ROLES	-	modules/animals/animals.controller.ts:174
+DELETE	/animals/:id	...WRITE_ROLES	-	modules/animals/animals.controller.ts:183
+POST	/animals/:id/register-death	...DELETE_ROLES	-	modules/animals/animals.controller.ts:193
+POST	/animals/:id/photos	...DELETE_ROLES	-	modules/animals/animals.controller.ts:202
+DELETE	/animals/:id/photos/:photoId	...WRITE_ROLES	-	modules/animals/animals.controller.ts:212
+GET	/animals/:animalId/clinical-events	-	JwtAuthGuard, RolesGuard	modules/animals/clinical.controller.ts:60
+GET	/animals/:animalId/clinical-events/carnet	...VIEW_ROLES	-	modules/animals/clinical.controller.ts:72
+GET	/animals/:animalId/clinical-events/card	...VIEW_ROLES	-	modules/animals/clinical.controller.ts:81
+GET	/animals/:animalId/clinical-events/carnet.pdf	...VIEW_ROLES	-	modules/animals/clinical.controller.ts:87
+POST	/animals/:animalId/clinical-events	...VIEW_ROLES	-	modules/animals/clinical.controller.ts:99
+POST	/animals/:animalId/clinical-events/uploads	...WRITE_ROLES	-	modules/animals/clinical.controller.ts:114
+GET	/animals/:animalId/clinical-events/:eventId/history	...WRITE_ROLES	-	modules/animals/clinical.controller.ts:126
+POST	/animals/:animalId/clinical-events/:eventId	...VIEW_ROLES	-	modules/animals/clinical.controller.ts:135
+GET	/public/organizations/:slug/animals	-	-	modules/animals/public-animals.controller.ts:24
+GET	/public/animals	-	-	modules/animals/public-animals.controller.ts:39
+GET	/clinical-reminders	-	JwtAuthGuard, RolesGuard	modules/animals/reminders.controller.ts:34
+POST	/clinical-reminders/:id/acknowledge	...VIEW_ROLES	-	modules/animals/reminders.controller.ts:40
+POST	/clinical-reminders/:id/dismiss	...RESOLVE_ROLES	-	modules/animals/reminders.controller.ts:49
+POST	/campaigns/:campaignId/evidences	-	JwtAuthGuard, RolesGuard	modules/campaigns/campaign-evidences.controller.ts:45
+GET	/campaigns/:campaignId/evidences	...WRITE_ROLES	-	modules/campaigns/campaign-evidences.controller.ts:55
+POST	/campaigns/funding/reconcile	-	JwtAuthGuard, RolesGuard	modules/campaigns/campaign-funding.controller.ts:23
+POST	/campaigns	-	JwtAuthGuard, RolesGuard	modules/campaigns/campaigns.controller.ts:43
+GET	/campaigns	...WRITE_ROLES	-	modules/campaigns/campaigns.controller.ts:52
+GET	/campaigns/:id	...VIEW_ROLES	-	modules/campaigns/campaigns.controller.ts:61
+PATCH	/campaigns/:id	...VIEW_ROLES	-	modules/campaigns/campaigns.controller.ts:67
+GET	/public/campaigns	-	-	modules/campaigns/public-campaigns.controller.ts:18
+GET	/public/campaigns/:id	-	-	modules/campaigns/public-campaigns.controller.ts:26
+GET	/public/campaigns/:id/accountability	-	-	modules/campaigns/public-campaigns.controller.ts:39
+GET	/public/organizations/:slug/campaigns	-	-	modules/campaigns/public-org-campaigns.controller.ts:22
+GET	/platform/community/posts	PlatformAdmin, PlatformSuperAdmin	JwtAuthGuard, RolesGuard	modules/community/community-moderation.controller.ts:33
+PATCH	/platform/community/posts/:id/moderate	-	-	modules/community/community-moderation.controller.ts:42
+POST	/community/posts	-	JwtAuthGuard	modules/community/community-posts.controller.ts:58
+GET	/community/posts	-	-	modules/community/community-posts.controller.ts:66
+GET	/community/posts/mine	-	-	modules/community/community-posts.controller.ts:75
+GET	/community/posts/:id	-	-	modules/community/community-posts.controller.ts:84
+PATCH	/community/posts/:id	-	-	modules/community/community-posts.controller.ts:89
+DELETE	/community/posts/:id	-	-	modules/community/community-posts.controller.ts:98
+POST	/community/posts/:id/comments	-	-	modules/community/community-posts.controller.ts:104
+GET	/community/posts/:id/comments	-	-	modules/community/community-posts.controller.ts:113
+DELETE	/community/comments/:id	-	-	modules/community/community-posts.controller.ts:122
+POST	/community/posts/:id/like	-	-	modules/community/community-posts.controller.ts:131
+GET	/org/dashboard/donations	-	JwtAuthGuard, RolesGuard	modules/dashboards/org-donations-dashboard.controller.ts:23
+GET	/platform/dashboard/admin	-	JwtAuthGuard, RolesGuard	modules/dashboards/platform-dashboard.controller.ts:29
+GET	/platform/dashboard/super-admin	PlatformAdmin, PlatformSuperAdmin	-	modules/dashboards/platform-dashboard.controller.ts:35
+GET	/public/donations/access/:token	-	-	modules/donations/donation-access-public.controller.ts:18
+GET	/public/donations/certificates/:code	-	-	modules/donations/donation-certificate-public.controller.ts:15
+GET	/public/donations/status/:reference	-	-	modules/donations/donation-status-public.controller.ts:23
+GET	/public/donations/organizations/:organizationId/availability	-	-	modules/donations/donation-status-public.controller.ts:29
+POST	/donations	-	-	modules/donations/donations.controller.ts:62
+GET	/donations/received	-	OptionalJwtAuthGuard	modules/donations/donations.controller.ts:72
+GET	/donations/mine	...MANAGE_ROLES	JwtAuthGuard, RolesGuard	modules/donations/donations.controller.ts:80
+GET	/donations/:id/receipt	-	JwtAuthGuard	modules/donations/donations.controller.ts:87
+GET	/donations/:id/certificate	-	JwtAuthGuard	modules/donations/donations.controller.ts:102
+POST	/donations/:id/certificate	-	JwtAuthGuard	modules/donations/donations.controller.ts:117
+POST	/donations/webhook	...MANAGE_ROLES	JwtAuthGuard, RolesGuard	modules/donations/donations.controller.ts:136
+POST	/marketplace/products	-	JwtAuthGuard, RolesGuard	modules/marketplace/marketplace-products.controller.ts:64
+GET	/marketplace/products	...MARKETPLACE_WRITE_ROLES	-	modules/marketplace/marketplace-products.controller.ts:73
+GET	/marketplace/products/:id	...MARKETPLACE_VIEW_ROLES	-	modules/marketplace/marketplace-products.controller.ts:89
+PATCH	/marketplace/products/:id	...MARKETPLACE_VIEW_ROLES	-	modules/marketplace/marketplace-products.controller.ts:95
+POST	/marketplace/products/:id/images	...MARKETPLACE_WRITE_ROLES	-	modules/marketplace/marketplace-products.controller.ts:105
+DELETE	/marketplace/products/:id/images/:imageId	...MARKETPLACE_WRITE_ROLES	-	modules/marketplace/marketplace-products.controller.ts:115
+GET	/public/marketplace/products	-	-	modules/marketplace/public-marketplace-products.controller.ts:25
+GET	/public/marketplace/products/:id	-	-	modules/marketplace/public-marketplace-products.controller.ts:40
+GET	/org/documents	-	JwtAuthGuard	modules/org/documents.controller.ts:30
+GET	/org/documents/verification	Owner, Administrator, ReadOnlyAuditor	RolesGuard	modules/org/documents.controller.ts:38
+POST	/org/documents	Owner, Administrator, ReadOnlyAuditor	RolesGuard	modules/org/documents.controller.ts:46
+GET	/org/formalization	-	JwtAuthGuard	modules/org/formalization.controller.ts:31
+GET	/org/formalization/history	-	-	modules/org/formalization.controller.ts:36
+POST	/org/formalization/transitions	-	-	modules/org/formalization.controller.ts:41
+POST	/org/formalization/dian-verification/retry	Owner	RolesGuard	modules/org/formalization.controller.ts:53
+GET	/org/legal-representative	-	JwtAuthGuard, RolesGuard	modules/org/legal-representative.controller.ts:32
+POST	/org/legal-representative	Owner, Administrator, ReadOnlyAuditor	-	modules/org/legal-representative.controller.ts:41
+GET	/org/profile	-	-	modules/org/org.controller.ts:46
+PUT	/org/profile	-	JwtAuthGuard	modules/org/org.controller.ts:53
+POST	/org/profile/uploads	Owner, Administrator	JwtAuthGuard, RolesGuard	modules/org/org.controller.ts:65
+GET	/public/organizations/:slug	Owner, Administrator	JwtAuthGuard, RolesGuard	modules/org/org.controller.ts:83
+GET	/org/summary	-	JwtAuthGuard, RolesGuard	modules/org/organization-summary.controller.ts:26
+GET	/platform/documents/queue	PlatformAdmin, PlatformSuperAdmin	JwtAuthGuard, RolesGuard	modules/org/platform-documents.controller.ts:30
+POST	/platform/documents/:id/decision	-	-	modules/org/platform-documents.controller.ts:37
+GET	/platform/duplicates/queue	PlatformAdmin, PlatformSuperAdmin	JwtAuthGuard, RolesGuard	modules/org/platform-duplicates.controller.ts:30
+POST	/platform/duplicates/:id/decision	-	-	modules/org/platform-duplicates.controller.ts:36
+GET	/platform/settings	PlatformAdmin, PlatformSuperAdmin	JwtAuthGuard, RolesGuard	modules/org/platform-settings.controller.ts:39
+PUT	/platform/settings	-	-	modules/org/platform-settings.controller.ts:44
+POST	/platform/settings/uploads	-	-	modules/org/platform-settings.controller.ts:58
+GET	/public/hero-banner	-	-	modules/org/public-platform-settings.controller.ts:17
+GET	/org/payout-bank-account	...MANAGE_ROLES	JwtAuthGuard, RolesGuard	modules/payments/bank-accounts.controller.ts:32
+PUT	/org/payout-bank-account	-	-	modules/payments/bank-accounts.controller.ts:37
+GET	/org/mercadopago/connect	-	-	modules/payments/mercadopago-connect.controller.ts:37
+GET	/org/mercadopago/status	...MANAGE_ROLES	JwtAuthGuard, RolesGuard	modules/payments/mercadopago-connect.controller.ts:44
+DELETE	/org/mercadopago/connect	...MANAGE_ROLES	JwtAuthGuard, RolesGuard	modules/payments/mercadopago-connect.controller.ts:51
+GET	/org/mercadopago/callback	...MANAGE_ROLES	JwtAuthGuard, RolesGuard	modules/payments/mercadopago-connect.controller.ts:65
+POST	/platform/payouts	-	-	modules/payments/payouts.controller.ts:39
+GET	/platform/payouts/:organizationId	...PLATFORM_ROLES	JwtAuthGuard, RolesGuard	modules/payments/payouts.controller.ts:49
+POST	/payments/payouts/webhook	...PLATFORM_ROLES	JwtAuthGuard, RolesGuard	modules/payments/payouts.controller.ts:58
+GET	/platform/reconciliation	...PLATFORM_ROLES	JwtAuthGuard, RolesGuard	modules/payments/reconciliation.controller.ts:27
+GET	/public/organizations/by-subdomain/:subdomain	-	-	modules/portals/portal-subdomain.controller.ts:16
+GET	/portals/theme	-	-	modules/portals/portal-theme.controller.ts:23
+PUT	/portals/theme	-	JwtAuthGuard	modules/portals/portal-theme.controller.ts:31
+GET	/public/organizations/:slug/theme	Owner, Administrator	JwtAuthGuard, RolesGuard	modules/portals/portal-theme.controller.ts:43
+GET	/platform/reviews/queue	PlatformAdmin, PlatformSuperAdmin	JwtAuthGuard, RolesGuard	modules/reputation/platform-reviews.controller.ts:39
+POST	/platform/reviews/:id/decision	-	-	modules/reputation/platform-reviews.controller.ts:44
+POST	/platform/reviews/:id/hide	-	-	modules/reputation/platform-reviews.controller.ts:54
+GET	/public/organizations/:slug/reputation-summary	-	-	modules/reputation/public-reputation.controller.ts:31
+GET	/public/organizations/:slug/reviews	-	-	modules/reputation/public-reputation.controller.ts:40
+POST	/public/organizations/:slug/reviews	-	-	modules/reputation/public-reputation.controller.ts:59
+POST	/reviews	-	JwtAuthGuard, RolesGuard	modules/reputation/reviews.controller.ts:39
+GET	/reviews/mine	-	-	modules/reputation/reviews.controller.ts:47
+GET	/reviews/org	-	-	modules/reputation/reviews.controller.ts:55
+POST	/reviews/:id/mark-spam	Owner, Administrator	-	modules/reputation/reviews.controller.ts:61
+GET	/public/resources/needs	-	-	modules/resources/public-resource-needs.controller.ts:18
+GET	/public/resources/needs/:id	-	-	modules/resources/public-resource-needs.controller.ts:27
+GET	/resources/deliveries	-	JwtAuthGuard, RolesGuard	modules/resources/resource-deliveries.controller.ts:41
+GET	/resources/deliveries/:id	...RESOURCE_VIEW_ROLES	-	modules/resources/resource-deliveries.controller.ts:50
+PATCH	/resources/deliveries/:id	...RESOURCE_VIEW_ROLES	-	modules/resources/resource-deliveries.controller.ts:56
+PATCH	/resources/deliveries/:id/complete	...RESOURCE_WRITE_ROLES	-	modules/resources/resource-deliveries.controller.ts:66
+PATCH	/resources/deliveries/:id/cancel	...RESOURCE_WRITE_ROLES	-	modules/resources/resource-deliveries.controller.ts:76
+POST	/resources/deliveries/:deliveryId/evidences	-	JwtAuthGuard, RolesGuard	modules/resources/resource-delivery-evidences.controller.ts:36
+GET	/resources/deliveries/:deliveryId/evidences	...RESOURCE_WRITE_ROLES	-	modules/resources/resource-delivery-evidences.controller.ts:47
+DELETE	/resources/deliveries/:deliveryId/evidences/:id	...RESOURCE_VIEW_ROLES	-	modules/resources/resource-delivery-evidences.controller.ts:55
+POST	/resources/needs	-	JwtAuthGuard, RolesGuard	modules/resources/resource-needs.controller.ts:43
+GET	/resources/needs	...RESOURCE_WRITE_ROLES	-	modules/resources/resource-needs.controller.ts:52
+GET	/resources/needs/:id	...RESOURCE_VIEW_ROLES	-	modules/resources/resource-needs.controller.ts:61
+PATCH	/resources/needs/:id	...RESOURCE_VIEW_ROLES	-	modules/resources/resource-needs.controller.ts:67
+POST	/resources/offers/:offerId/proofs	-	-	modules/resources/resource-offer-proofs.controller.ts:46
+GET	/resources/offers/:offerId/proofs	-	JwtAuthGuard	modules/resources/resource-offer-proofs.controller.ts:57
+GET	/resources/offers/:offerId/proofs/:proofId/file	...RESOURCE_VIEW_ROLES	JwtAuthGuard, RolesGuard	modules/resources/resource-offer-proofs.controller.ts:64
+PATCH	/resources/offers/:offerId/proof-validation	...RESOURCE_VIEW_ROLES	JwtAuthGuard, RolesGuard	modules/resources/resource-offer-proofs.controller.ts:79
+POST	/resources/offers	-	-	modules/resources/resource-offers.controller.ts:40
+GET	/resources/offers/received	-	JwtAuthGuard	modules/resources/resource-offers.controller.ts:49
+GET	/resources/offers/mine	...RESOURCE_VIEW_ROLES	JwtAuthGuard, RolesGuard	modules/resources/resource-offers.controller.ts:56
+PATCH	/resources/offers/:id/decision	-	JwtAuthGuard	modules/resources/resource-offers.controller.ts:62
+PATCH	/resources/offers/:id/cancel	...RESOURCE_WRITE_ROLES	JwtAuthGuard, RolesGuard	modules/resources/resource-offers.controller.ts:73
+GET	/public/sponsorships/animals/:animalId	-	-	modules/sponsorships/public-sponsorships.controller.ts:15
+GET	/public/sponsorships/status/:reference	-	-	modules/sponsorships/sponsorship-payment-status-public.controller.ts:19
+POST	/sponsorship-plans	-	JwtAuthGuard, RolesGuard	modules/sponsorships/sponsorship-plans.controller.ts:44
+GET	/sponsorship-plans	...WRITE_ROLES	-	modules/sponsorships/sponsorship-plans.controller.ts:53
+GET	/sponsorship-plans/:id	...VIEW_ROLES	-	modules/sponsorships/sponsorship-plans.controller.ts:63
+PATCH	/sponsorship-plans/:id	...VIEW_ROLES	-	modules/sponsorships/sponsorship-plans.controller.ts:69
+POST	/sponsorships	-	JwtAuthGuard, RolesGuard	modules/sponsorships/sponsorships.controller.ts:60
+POST	/sponsorships/:id/retry-payment	-	-	modules/sponsorships/sponsorships.controller.ts:76
+GET	/sponsorships/mine	-	-	modules/sponsorships/sponsorships.controller.ts:89
+GET	/sponsorships	-	-	modules/sponsorships/sponsorships.controller.ts:94
+GET	/sponsorships/:id	...VIEW_ROLES	-	modules/sponsorships/sponsorships.controller.ts:105
+GET	/sponsorships/:id/history	...VIEW_ROLES	-	modules/sponsorships/sponsorships.controller.ts:112
+GET	/sponsorships/:id/payments	...VIEW_ROLES	-	modules/sponsorships/sponsorships.controller.ts:119
+POST	/sponsorships/:id/suspend	...VIEW_ROLES	-	modules/sponsorships/sponsorships.controller.ts:125
+POST	/sponsorships/:id/reactivate	...MANAGE_ROLES	-	modules/sponsorships/sponsorships.controller.ts:136
+POST	/sponsorships/:id/cancel	...MANAGE_ROLES	-	modules/sponsorships/sponsorships.controller.ts:147
+GET	/public/volunteer-opportunities	-	-	modules/volunteering/public-volunteering.controller.ts:18
+GET	/public/organizations/:slug/volunteer-opportunities	-	-	modules/volunteering/public-volunteering.controller.ts:26
+POST	/service-hours	-	JwtAuthGuard, RolesGuard	modules/volunteering/service-hours.controller.ts:45
+GET	/service-hours/mine	-	-	modules/volunteering/service-hours.controller.ts:53
+GET	/service-hours	-	-	modules/volunteering/service-hours.controller.ts:58
+POST	/service-hours/:id/decision	...VIEW_ROLES	-	modules/volunteering/service-hours.controller.ts:68
+POST	/volunteer-certificates/:enrollmentId	-	JwtAuthGuard, RolesGuard	modules/volunteering/volunteer-certificates.controller.ts:29
+GET	/volunteer-certificates	...MANAGE_ROLES	-	modules/volunteering/volunteer-certificates.controller.ts:38
+GET	/volunteer-certificates/mine	...VIEW_ROLES	-	modules/volunteering/volunteer-certificates.controller.ts:47
+GET	/volunteer-certificates/:id	-	-	modules/volunteering/volunteer-certificates.controller.ts:52
+GET	/volunteer-certificates/:id/pdf	-	-	modules/volunteering/volunteer-certificates.controller.ts:60
+POST	/volunteer-enrollments	-	JwtAuthGuard, RolesGuard	modules/volunteering/volunteer-enrollments.controller.ts:50
+GET	/volunteer-enrollments/mine	-	-	modules/volunteering/volunteer-enrollments.controller.ts:59
+GET	/volunteer-enrollments	-	-	modules/volunteering/volunteer-enrollments.controller.ts:64
+GET	/volunteer-enrollments/:id	...VIEW_ROLES	-	modules/volunteering/volunteer-enrollments.controller.ts:75
+POST	/volunteer-enrollments/:id/decision	...VIEW_ROLES	-	modules/volunteering/volunteer-enrollments.controller.ts:81
+POST	/volunteer-enrollments/:id/complete	...MANAGE_ROLES	-	modules/volunteering/volunteer-enrollments.controller.ts:93
+POST	/volunteer-opportunities	-	JwtAuthGuard, RolesGuard	modules/volunteering/volunteer-opportunities.controller.ts:47
+GET	/volunteer-opportunities	...MANAGE_ROLES	-	modules/volunteering/volunteer-opportunities.controller.ts:56
+GET	/volunteer-opportunities/:id	...VIEW_ROLES	-	modules/volunteering/volunteer-opportunities.controller.ts:65
+PATCH	/volunteer-opportunities/:id	...VIEW_ROLES	-	modules/volunteering/volunteer-opportunities.controller.ts:71

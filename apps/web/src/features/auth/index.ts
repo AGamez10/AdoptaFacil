@@ -11,6 +11,7 @@ export { FormAlert, type FormAlertProps } from './components/form-alert';
 export {
   GoogleSignInButton,
   type GoogleSignInButtonProps,
+  useGoogleSignInAvailable,
 } from './components/google-sign-in-button';
 export { CompleteProfilePage } from './pages/complete-profile-page';
 export * from './validation';

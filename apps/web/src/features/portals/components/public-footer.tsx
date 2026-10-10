@@ -104,6 +104,7 @@ export function PublicFooter({ organization, navItems }: PublicFooterProps) {
       <div className={styles.footer__bottom}>
         <p className={styles.footer__copyright}>
           © {new Date().getFullYear()} {organization.name}. Todos los derechos reservados.
+          <span className="block opacity-75">Portal creado con AdoptaFácil</span>
         </p>
         {/* La organización responde por su portal; AdoptaFácil es solo el software. */}
         <p className={styles.footer__copyright}>

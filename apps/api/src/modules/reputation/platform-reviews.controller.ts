@@ -23,6 +23,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { PlatformReviewsService } from './platform-reviews.service';
 import { decideReviewSchema, hideReviewSchema } from './reviews.schemas';
+import { RequireFeature } from '../../core/features';
 
 /**
  * M12 review moderation (RF23), audience = PLATFORM ONLY. Deny-by-default:
@@ -30,6 +31,7 @@ import { decideReviewSchema, hideReviewSchema } from './reviews.schemas';
  * reviewed organization itself (conflict of interest, same criterion as S-3
  * duplicity and the documents queue, S1-05/S2-06).
  */
+@RequireFeature('reputation')
 @Controller('platform/reviews')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)

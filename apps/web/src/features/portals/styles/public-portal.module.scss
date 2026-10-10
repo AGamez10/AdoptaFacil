@@ -367,3 +367,35 @@ $border-subtle: hsl(var(--border) / 0.35);
   border-color: hsl(var(--primary) / 0.5);
   color: hsl(var(--primary));
 }
+
+// Ola 3 (R3-5): acciones sobre la portada del hero.
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+
+  .btn {
+    border-radius: 9999px;
+    height: 3rem;
+    padding: 0 1.5rem;
+    font-size: var(--fs-body);
+  }
+}
+
+/* Las plantillas claras (Ola 3) cambian estos valores con variables. */
+.btn--glass {
+  color: var(--tpl-glass-fg, #fff);
+  background: var(--tpl-glass-bg, rgb(255 255 255 / 0.12));
+  border: 1px solid var(--tpl-glass-border, rgb(255 255 255 / 0.35));
+  backdrop-filter: blur(8px);
+}
+
+.btn--glass:hover {
+  background: var(--tpl-glass-bg-hover, rgb(255 255 255 / 0.2));
+}
+
+.btn:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}

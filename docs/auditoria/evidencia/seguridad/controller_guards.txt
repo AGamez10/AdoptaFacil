@@ -1,0 +1,838 @@
+=== ./core/auth/auth.controller.ts
+53: @UseGuards(ThrottlerGuard)
+55: @Controller('auth')
+57: constructor(
+69: setRefreshCookie(res, refreshToken, this.authConfig.refreshTtlSeconds, this.isProduction);
+72: @Post('register/organization')
+74: async registerOrganization(
+83: @Post('register/person')
+85: async registerPerson(
+94: @Post('login')
+97: async login(
+106: @Post('refresh')
+108: async refresh(
+125: @Post('refresh/silent')
+127: async refreshSilent(
+145: clearRefreshCookie(res, this.isProduction);
+150: @Post('logout')
+152: async logout(
+157: clearRefreshCookie(res, this.isProduction);
+160: @Post('password-reset')
+163: async requestPasswordReset(
+172: @Post('password-reset/confirm')
+175: async confirmPasswordReset(
+181: @Get('me')
+182: @UseGuards(JwtAuthGuard)
+183: me(@CurrentUser() user: RequestUser): Promise<AuthenticatedUser> {
+193: @Post('google')
+196: async googleSignIn(
+211: @Patch('me/profile')
+212: @UseGuards(JwtAuthGuard)
+213: completeProfile(
+=== ./core/rbac/rbac.controller.ts
+17: @UseGuards(JwtAuthGuard)
+18: @Controller('rbac')
+20: constructor(private readonly rbac: RbacService) {}
+23: @Get('my-roles')
+24: myRoles(@CurrentUser() user: RequestUser): Promise<Role[]> {
+29: @Get('roles')
+30: @UseGuards(RolesGuard)
+31: @Roles(Role.Owner, Role.Administrator, Role.ReadOnlyAuditor)
+32: listRoles(): Promise<RoleAssignment[]> {
+37: @Post('roles')
+38: @UseGuards(RolesGuard)
+39: @Roles(Role.Owner, Role.Administrator)
+40: assign(
+48: @Delete('roles/:userId/:role')
+50: @UseGuards(RolesGuard)
+51: @Roles(Role.Owner)
+52: async revoke(@Param('userId') userId: string, @Param('role') role: Role): Promise<void> {
+=== ./core/storage/storage.controller.ts
+50: @Controller('storage')
+55: constructor(
+70: @Put('upload')
+71: @UseGuards(JwtAuthGuard)
+73: async upload(
+108: @Get('public')
+109: async servePublic(@Query('key') key: string, @Res() res: Response): Promise<void> {
+122: @Get('private')
+123: @UseGuards(JwtAuthGuard)
+124: async servePrivate(
+=== ./health/health.controller.ts
+5: @Controller('health')
+7: constructor(private readonly health: HealthService) {}
+14: @Get()
+15: check(): Promise<HealthStatus> {
+=== ./modules/adoptions/adoption-contracts.controller.ts
+51: @Controller('adoptions/contracts')
+52: @UseGuards(JwtAuthGuard)
+54: constructor(private readonly service: AdoptionContractsService) {}
+57: @Post()
+58: @UseGuards(RolesGuard)
+59: @Roles(...MANAGE_ROLES)
+60: generate(
+68: @Get('by-request/:requestId')
+69: @UseGuards(RolesGuard)
+70: @Roles(...MANAGE_ROLES)
+71: getForOrg(@Param('requestId', ParseUUIDPipe) requestId: string): Promise<AdoptionContract> {
+78: @Get('org/:id')
+79: @UseGuards(RolesGuard)
+80: @Roles(...MANAGE_ROLES)
+81: getForOrgById(@Param('id', ParseUUIDPipe) id: string): Promise<AdoptionContract> {
+86: @Get(':id')
+87: getForSigner(
+95: @Post(':id/transitions')
+96: @UseGuards(RolesGuard)
+97: @Roles(...MANAGE_ROLES)
+98: transition(
+108: @Post(':id/signatures')
+109: sign(
+119: @Patch(':id/data')
+120: @UseGuards(RolesGuard)
+121: @Roles(...MANAGE_ROLES)
+122: updateData(
+135: @Get('org/:id/pdf')
+136: @UseGuards(RolesGuard)
+137: @Roles(...MANAGE_ROLES)
+138: async pdfForOrg(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response): Promise<void> {
+151: @Get(':id/pdf')
+152: async pdf(
+170: @Get('org/:id/signatures/:signerId/image')
+171: @UseGuards(RolesGuard)
+172: @Roles(...MANAGE_ROLES)
+173: async signatureImageForOrg(
+194: @Get(':id/signatures/:signerId/image')
+195: async signatureImage(
+=== ./modules/adoptions/adoptions.controller.ts
+28: @Controller('adoptions')
+29: @UseGuards(JwtAuthGuard)
+31: constructor(private readonly service: AdoptionsService) {}
+34: @Post()
+35: create(
+43: @Get()
+44: @UseGuards(RolesGuard)
+45: @Roles(...EVAL_ROLES)
+46: list(): Promise<AdoptionRequest[]> {
+55: @Get('mine')
+56: listMine(@CurrentUser() actor: RequestUser): Promise<AdoptionRequest[]> {
+61: @Post(':id/transitions')
+62: @UseGuards(RolesGuard)
+63: @Roles(...EVAL_ROLES)
+64: transition(
+=== ./modules/adoptions/followup.controller.ts
+31: @Controller('adoptions/followups')
+32: @UseGuards(JwtAuthGuard)
+34: constructor(private readonly service: FollowUpService) {}
+37: @Post()
+38: @UseGuards(RolesGuard)
+39: @Roles(...MANAGE_ROLES)
+40: schedule(
+48: @Get('by-contract/:contractId')
+49: @UseGuards(RolesGuard)
+50: @Roles(...MANAGE_ROLES)
+51: listForContract(
+58: @Get('mine')
+59: listMine(@CurrentUser() actor: RequestUser): Promise<AdoptionFollowUpMilestone[]> {
+64: @Post(':id/submit')
+65: submit(
+74: @Post(':id/complete')
+75: @UseGuards(RolesGuard)
+76: @Roles(...MANAGE_ROLES)
+77: complete(
+=== ./modules/animals/animal-behavior-disclosure.controller.ts
+29: @Controller('animals/:animalId/behavior-disclosures')
+30: @UseGuards(JwtAuthGuard, RolesGuard)
+32: constructor(private readonly service: AnimalBehaviorDisclosureService) {}
+34: @Get('current')
+35: @Roles(...VIEW_ROLES)
+36: getCurrent(
+42: @Post()
+43: @Roles(...WRITE_ROLES)
+44: create(
+=== ./modules/animals/animals.controller.ts
+77: @Controller('animals')
+78: @UseGuards(JwtAuthGuard, RolesGuard)
+80: constructor(
+85: @Post()
+86: @Roles(...WRITE_ROLES)
+87: create(
+94: @Get()
+95: @Roles(...VIEW_ROLES)
+96: list(@Query('includeInactive') includeInactive?: string): Promise<Animal[]> {
+102: @Get('breeds')
+103: @Roles(...VIEW_ROLES)
+104: listBreeds(@Query('species') species?: string): Promise<AnimalBreed[]> {
+108: @Post('breeds')
+109: @Roles(...WRITE_ROLES)
+110: createBreed(
+120: @Get('bulk-import/template')
+121: @Roles(...BULK_IMPORT_ROLES)
+122: async downloadBulkImportTemplate(@Res() res: Response): Promise<void> {
+132: @Post('bulk-import')
+133: @Roles(...BULK_IMPORT_ROLES)
+135: FileInterceptor('file', { limits: { fileSize: BULK_IMPORT_MAX_FILE_MB * 1024 * 1024 } }),
+137: importAnimals(
+149: @Get(':id')
+150: @Roles(...VIEW_ROLES)
+151: get(@Param('id', ParseUUIDPipe) id: string): Promise<Animal> {
+155: @Patch(':id')
+156: @Roles(...WRITE_ROLES)
+157: update(
+165: @Post(':id/activate')
+166: @Roles(...WRITE_ROLES)
+167: activate(
+174: @Post(':id/deactivate')
+175: @Roles(...WRITE_ROLES)
+176: deactivate(
+183: @Delete(':id')
+185: @Roles(...DELETE_ROLES)
+186: remove(@CurrentUser() actor: RequestUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+193: @Post(':id/register-death')
+194: @Roles(...DELETE_ROLES)
+195: registerDeath(
+202: @Post(':id/photos')
+203: @Roles(...WRITE_ROLES)
+204: addPhoto(
+212: @Delete(':id/photos/:photoId')
+214: @Roles(...WRITE_ROLES)
+215: removePhoto(
+=== ./modules/animals/clinical.controller.ts
+52: @Controller('animals/:animalId/clinical-events')
+53: @UseGuards(JwtAuthGuard, RolesGuard)
+55: constructor(
+60: @Get()
+61: @Roles(...VIEW_ROLES)
+62: list(@Param('animalId', ParseUUIDPipe) animalId: string): Promise<ClinicalEvent[]> {
+72: @Get('carnet')
+73: @Roles(...VIEW_ROLES)
+74: carnetTimeline(
+81: @Get('card')
+82: @Roles(...VIEW_ROLES)
+83: carnetCard(@Param('animalId', ParseUUIDPipe) animalId: string): Promise<AnimalCardInfo> {
+87: @Get('carnet.pdf')
+88: @Roles(...VIEW_ROLES)
+89: async carnetPdf(
+99: @Post()
+100: @Roles(...WRITE_ROLES)
+101: create(
+114: @Post('uploads')
+115: @Roles(...WRITE_ROLES)
+116: createUpload(
+126: @Get(':eventId/history')
+127: @Roles(...VIEW_ROLES)
+128: history(
+135: @Post(':eventId')
+136: @Roles(...WRITE_ROLES)
+137: edit(
+=== ./modules/animals/public-animals.controller.ts
+20: @Controller()
+22: constructor(private readonly service: PublicAnimalsService) {}
+24: @Get('public/organizations/:slug/animals')
+25: async list(
+39: @Get('public/animals')
+40: async listAll(
+=== ./modules/animals/reminders.controller.ts
+29: @Controller('clinical-reminders')
+30: @UseGuards(JwtAuthGuard, RolesGuard)
+32: constructor(private readonly service: RemindersService) {}
+34: @Get()
+35: @Roles(...VIEW_ROLES)
+36: list(): Promise<ClinicalReminder[]> {
+40: @Post(':id/acknowledge')
+41: @Roles(...RESOLVE_ROLES)
+42: acknowledge(
+49: @Post(':id/dismiss')
+50: @Roles(...RESOLVE_ROLES)
+51: dismiss(
+=== ./modules/campaigns/campaign-evidences.controller.ts
+40: @Controller('campaigns/:campaignId/evidences')
+41: @UseGuards(JwtAuthGuard, RolesGuard)
+43: constructor(private readonly service: CampaignEvidencesService) {}
+45: @Post()
+46: @Roles(...WRITE_ROLES)
+47: create(
+55: @Get()
+56: @Roles(...VIEW_ROLES)
+57: list(
+=== ./modules/campaigns/campaign-funding.controller.ts
+18: @Controller('campaigns/funding')
+19: @UseGuards(JwtAuthGuard, RolesGuard)
+21: constructor(private readonly service: CampaignFundingService) {}
+23: @Post('reconcile')
+25: @Roles(...MANAGE_ROLES)
+26: reconcile(): Promise<CampaignFundingReconcileResult> {
+=== ./modules/campaigns/campaigns.controller.ts
+38: @Controller('campaigns')
+39: @UseGuards(JwtAuthGuard, RolesGuard)
+41: constructor(private readonly service: CampaignsService) {}
+43: @Post()
+44: @Roles(...WRITE_ROLES)
+45: create(
+52: @Get()
+53: @Roles(...VIEW_ROLES)
+54: list(
+61: @Get(':id')
+62: @Roles(...VIEW_ROLES)
+63: get(@Param('id', ParseUUIDPipe) id: string): Promise<Campaign> {
+67: @Patch(':id')
+68: @Roles(...WRITE_ROLES)
+69: update(
+=== ./modules/campaigns/public-campaigns.controller.ts
+14: @Controller('public/campaigns')
+16: constructor(private readonly service: PublicCampaignsService) {}
+18: @Get()
+19: list(
+26: @Get(':id')
+27: async get(@Param('id', ParseUUIDPipe) id: string): Promise<CampaignPublic> {
+39: @Get(':id/accountability')
+40: async accountability(
+=== ./modules/campaigns/public-org-campaigns.controller.ts
+14: * Separate controller (no shared `@Controller('public/campaigns')` prefix)
+18: @Controller()
+20: constructor(private readonly service: PublicCampaignsService) {}
+22: @Get('public/organizations/:slug/campaigns')
+23: async list(
+=== ./modules/community/community-moderation.controller.ts
+27: @Controller('platform/community/posts')
+28: @UseGuards(JwtAuthGuard, RolesGuard)
+29: @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
+31: constructor(private readonly service: CommunityModerationService) {}
+33: @Get()
+34: queue(
+42: @Patch(':id/moderate')
+43: moderate(
+=== ./modules/community/community-posts.controller.ts
+49: @Controller('community')
+50: @UseGuards(JwtAuthGuard)
+52: constructor(
+58: @Post('posts')
+59: create(
+66: @Get('posts')
+67: feed(
+75: @Get('posts/mine')
+76: mine(
+84: @Get('posts/:id')
+85: get(@Param('id', ParseUUIDPipe) id: string): Promise<PostDto> {
+89: @Patch('posts/:id')
+90: update(
+98: @Delete('posts/:id')
+100: remove(@CurrentUser() actor: RequestUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+104: @Post('posts/:id/comments')
+105: addComment(
+113: @Get('posts/:id/comments')
+114: listComments(
+122: @Delete('comments/:id')
+124: removeComment(
+131: @Post('posts/:id/like')
+132: toggleLike(
+=== ./modules/dashboards/org-donations-dashboard.controller.ts
+18: @Controller('org/dashboard')
+19: @UseGuards(JwtAuthGuard, RolesGuard)
+21: constructor(private readonly service: OrgDonationsDashboardService) {}
+23: @Get('donations')
+24: @Roles(Role.Owner, Role.Administrator, Role.Operator, Role.ReadOnlyAuditor)
+25: getSummary(@CurrentUser() actor: RequestUser): Promise<OrgDonationsDashboardSummary> {
+=== ./modules/dashboards/platform-dashboard.controller.ts
+21: @Controller('platform/dashboard')
+22: @UseGuards(JwtAuthGuard, RolesGuard)
+24: constructor(
+29: @Get('admin')
+30: @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
+31: getAdminSummary(): Promise<PlatformAdminDashboardSummary> {
+35: @Get('super-admin')
+36: @Roles(Role.PlatformSuperAdmin)
+37: getSuperAdminSummary(): Promise<PlatformSuperAdminDashboardSummary> {
+=== ./modules/donations/donation-access-public.controller.ts
+14: @Controller()
+16: constructor(private readonly service: DonationsService) {}
+18: @Get('public/donations/access/:token')
+19: getByToken(@Param('token') token: string): Promise<GuestDonationAccess> {
+=== ./modules/donations/donation-certificate-public.controller.ts
+11: @Controller()
+13: constructor(private readonly certificates: DonationCertificatesService) {}
+15: @Get('public/donations/certificates/:code')
+16: getPublic(@Param('code') code: string): Promise<DonationCertificateVerification> {
+=== ./modules/donations/donation-status-public.controller.ts
+19: @Controller()
+21: constructor(private readonly service: DonationsService) {}
+23: @Get('public/donations/status/:reference')
+24: getPublic(@Param('reference') reference: string): Promise<DonationPublicStatus> {
+29: @Get('public/donations/organizations/:organizationId/availability')
+30: getOrganizationAvailability(
+=== ./modules/donations/donations.controller.ts
+48: @Controller('donations')
+50: constructor(
+62: @Post()
+63: @UseGuards(OptionalJwtAuthGuard)
+64: create(
+72: @Get('received')
+73: @UseGuards(JwtAuthGuard, RolesGuard)
+74: @Roles(...MANAGE_ROLES)
+75: listReceived(): Promise<DonationWithReceipt[]> {
+80: @Get('mine')
+81: @UseGuards(JwtAuthGuard)
+82: listMine(@CurrentUser() actor: RequestUser): Promise<Donation[]> {
+87: @Get(':id/receipt')
+88: @UseGuards(JwtAuthGuard)
+89: getReceipt(
+102: @Get(':id/certificate')
+103: @UseGuards(JwtAuthGuard)
+104: getCertificate(
+117: @Post(':id/certificate')
+119: @UseGuards(JwtAuthGuard, RolesGuard)
+120: @Roles(...MANAGE_ROLES)
+121: generateCertificate(
+136: @Post('webhook')
+138: applyWebhook(
+=== ./modules/marketplace/marketplace-products.controller.ts
+59: @Controller('marketplace/products')
+60: @UseGuards(JwtAuthGuard, RolesGuard)
+62: constructor(private readonly service: MarketplaceProductsService) {}
+64: @Post()
+65: @Roles(...MARKETPLACE_WRITE_ROLES)
+66: create(
+73: @Get()
+74: @Roles(...MARKETPLACE_VIEW_ROLES)
+75: list(
+89: @Get(':id')
+90: @Roles(...MARKETPLACE_VIEW_ROLES)
+91: get(@Param('id', ParseUUIDPipe) id: string): Promise<Product> {
+95: @Patch(':id')
+96: @Roles(...MARKETPLACE_WRITE_ROLES)
+97: update(
+105: @Post(':id/images')
+106: @Roles(...MARKETPLACE_WRITE_ROLES)
+107: addImage(
+115: @Delete(':id/images/:imageId')
+116: @Roles(...MARKETPLACE_WRITE_ROLES)
+118: removeImage(
+=== ./modules/marketplace/public-marketplace-products.controller.ts
+21: @Controller('public/marketplace/products')
+23: constructor(private readonly service: PublicMarketplaceProductsService) {}
+25: @Get()
+26: list(
+33: Number(limit),
+34: Number(offset),
+35: parseCategory(category),
+40: @Get(':id')
+41: async get(@Param('id', ParseUUIDPipe) id: string): Promise<ProductPublic> {
+=== ./modules/org/documents.controller.ts
+24: @Controller('org/documents')
+25: @UseGuards(JwtAuthGuard)
+27: constructor(private readonly service: DocumentsService) {}
+30: @Get()
+31: @UseGuards(RolesGuard)
+32: @Roles(Role.Owner, Role.Administrator, Role.ReadOnlyAuditor)
+33: list(): Promise<OrganizationDocument[]> {
+38: @Get('verification')
+39: @UseGuards(RolesGuard)
+40: @Roles(Role.Owner, Role.Administrator, Role.ReadOnlyAuditor)
+41: verification(): Promise<VerificationLevel> {
+46: @Post()
+47: @UseGuards(RolesGuard)
+48: @Roles(Role.Owner, Role.Administrator)
+49: upload(
+=== ./modules/org/formalization.controller.ts
+23: @Controller('org/formalization')
+24: @UseGuards(JwtAuthGuard)
+26: constructor(
+31: @Get()
+32: getStatus(): Promise<FormalizationStatus> {
+36: @Get('history')
+37: getHistory(): Promise<FormalizationTransition[]> {
+41: @Post('transitions')
+42: @UseGuards(RolesGuard)
+43: @Roles(Role.Owner)
+44: transition(
+53: @Post('dian-verification/retry')
+55: @UseGuards(RolesGuard)
+56: @Roles(Role.Owner, Role.Administrator)
+57: async retryDianVerification(@CurrentUser() actor: RequestUser): Promise<void> {
+=== ./modules/org/legal-representative.controller.ts
+24: @Controller('org/legal-representative')
+25: @UseGuards(JwtAuthGuard, RolesGuard)
+27: constructor(private readonly service: LegalRepresentativeService) {}
+32: @Get()
+33: @Roles(Role.Owner, Role.Administrator, Role.ReadOnlyAuditor)
+34: getAllCurrent(): Promise<LegalRepresentative[]> {
+41: @Post()
+43: @Roles(Role.Owner)
+44: register(
+=== ./modules/org/org.controller.ts
+38: @Controller()
+40: constructor(
+46: @Get('org/profile')
+47: @UseGuards(JwtAuthGuard)
+48: getOwnProfile(): Promise<Organization> {
+53: @Put('org/profile')
+54: @UseGuards(JwtAuthGuard, RolesGuard)
+55: @Roles(Role.Owner, Role.Administrator)
+56: update(
+65: @Post('org/profile/uploads')
+66: @UseGuards(JwtAuthGuard, RolesGuard)
+67: @Roles(Role.Owner, Role.Administrator)
+68: createUpload(
+83: @Get('public/organizations/:slug')
+84: async getPublic(@Param('slug') slug: string): Promise<OrganizationPublic> {
+=== ./modules/org/organization-summary.controller.ts
+21: @Controller('org/summary')
+22: @UseGuards(JwtAuthGuard, RolesGuard)
+24: constructor(private readonly service: OrganizationSummaryService) {}
+26: @Get()
+27: @Roles(...VIEW_ROLES)
+28: getSummary(): Promise<OrganizationDashboardSummary> {
+=== ./modules/org/platform-documents.controller.ts
+23: @Controller('platform/documents')
+24: @UseGuards(JwtAuthGuard, RolesGuard)
+25: @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
+27: constructor(private readonly service: PlatformDocumentsService) {}
+30: @Get('queue')
+31: queue(): Promise<DocumentReviewQueueItem[]> {
+37: @Post(':id/decision')
+38: decide(
+=== ./modules/org/platform-duplicates.controller.ts
+23: @Controller('platform/duplicates')
+24: @UseGuards(JwtAuthGuard, RolesGuard)
+25: @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
+27: constructor(private readonly service: PlatformDuplicatesService) {}
+30: @Get('queue')
+31: queue(): Promise<OrganizationDuplicateFlag[]> {
+36: @Post(':id/decision')
+37: decide(
+=== ./modules/org/platform-settings.controller.ts
+30: @Controller('platform/settings')
+31: @UseGuards(JwtAuthGuard, RolesGuard)
+32: @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
+34: constructor(
+39: @Get()
+40: get(): Promise<PlatformSettings> {
+44: @Put()
+45: update(
+58: @Post('uploads')
+59: createUpload(
+=== ./modules/org/public-platform-settings.controller.ts
+9: * plain `@Controller()`, explicit `public/...` path per route). Only the
+13: @Controller()
+15: constructor(private readonly service: PlatformSettingsService) {}
+17: @Get('public/hero-banner')
+18: getHeroBanner(): Promise<PublicHeroBanner> {
+=== ./modules/payments/bank-accounts.controller.ts
+26: @Controller('org/payout-bank-account')
+27: @UseGuards(JwtAuthGuard, RolesGuard)
+28: @Roles(...MANAGE_ROLES)
+30: constructor(private readonly service: BankAccountsService) {}
+32: @Get()
+33: getMine(): Promise<OrganizationBankAccountView> {
+37: @Put()
+38: register(
+=== ./modules/payments/mercadopago-connect.controller.ts
+30: @Controller('org/mercadopago')
+32: constructor(
+37: @Get('connect')
+38: @UseGuards(JwtAuthGuard, RolesGuard)
+39: @Roles(...MANAGE_ROLES)
+40: getConnectUrl(): MercadoPagoConnectUrlView {
+44: @Get('status')
+45: @UseGuards(JwtAuthGuard, RolesGuard)
+46: @Roles(...MANAGE_ROLES)
+47: getStatus(): Promise<MercadoPagoConnectStatusView> {
+51: @Delete('connect')
+52: @UseGuards(JwtAuthGuard, RolesGuard)
+53: @Roles(...MANAGE_ROLES)
+54: async disconnect(@CurrentUser() actor: RequestUser): Promise<{ ok: true }> {
+65: @Get('callback')
+66: async callback(
+=== ./modules/payments/payouts.controller.ts
+35: @Controller()
+37: constructor(private readonly service: PayoutsService) {}
+39: @Post('platform/payouts')
+40: @UseGuards(JwtAuthGuard, RolesGuard)
+41: @Roles(...PLATFORM_ROLES)
+42: request(
+49: @Get('platform/payouts/:organizationId')
+50: @UseGuards(JwtAuthGuard, RolesGuard)
+51: @Roles(...PLATFORM_ROLES)
+52: listForOrganization(
+58: @Post('payments/payouts/webhook')
+60: applyWebhook(
+=== ./modules/payments/reconciliation.controller.ts
+21: @Controller('platform/reconciliation')
+22: @UseGuards(JwtAuthGuard, RolesGuard)
+23: @Roles(...PLATFORM_ROLES)
+25: constructor(private readonly service: ReconciliationService) {}
+27: @Get()
+28: getReport(
+=== ./modules/portals/portal-subdomain.controller.ts
+12: @Controller()
+14: constructor(private readonly subdomains: PortalSubdomainService) {}
+16: @Get('public/organizations/by-subdomain/:subdomain')
+17: async getSlug(@Param('subdomain') subdomain: string): Promise<OrganizationSlugLookup> {
+=== ./modules/portals/portal-theme.controller.ts
+18: @Controller()
+20: constructor(private readonly themes: PortalThemeService) {}
+23: @Get('portals/theme')
+24: @UseGuards(JwtAuthGuard)
+25: getOwnTheme(): Promise<PortalThemeConfig> {
+31: @Put('portals/theme')
+32: @UseGuards(JwtAuthGuard, RolesGuard)
+33: @Roles(Role.Owner, Role.Administrator)
+34: updateTheme(
+43: @Get('public/organizations/:slug/theme')
+44: getPublic(@Param('slug') slug: string): Promise<PortalThemeConfig> {
+=== ./modules/reputation/platform-reviews.controller.ts
+33: @Controller('platform/reviews')
+34: @UseGuards(JwtAuthGuard, RolesGuard)
+35: @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
+37: constructor(private readonly service: PlatformReviewsService) {}
+39: @Get('queue')
+40: queue(): Promise<ReviewModerationQueueItem[]> {
+44: @Post(':id/decision')
+46: decide(
+54: @Post(':id/hide')
+56: hide(
+=== ./modules/reputation/public-reputation.controller.ts
+27: @Controller()
+29: constructor(private readonly service: PublicReputationService) {}
+31: @Get('public/organizations/:slug/reputation-summary')
+32: async summary(@Param('slug') slug: string): Promise<OrganizationReputationSummary> {
+40: @Get('public/organizations/:slug/reviews')
+41: async reviews(
+59: @Post('public/organizations/:slug/reviews')
+61: createReview(
+=== ./modules/reputation/reviews.controller.ts
+34: @Controller('reviews')
+35: @UseGuards(JwtAuthGuard, RolesGuard)
+37: constructor(private readonly service: ReviewsService) {}
+39: @Post()
+40: create(
+47: @Get('mine')
+48: listMine(@CurrentUser() actor: RequestUser): Promise<ReviewMine[]> {
+55: @Get('org')
+56: @Roles(Role.Owner, Role.Administrator)
+57: listForOrg(): Promise<Review[]> {
+61: @Post(':id/mark-spam')
+63: @Roles(Role.Owner, Role.Administrator)
+64: markSpam(
+=== ./modules/resources/public-resource-needs.controller.ts
+14: @Controller('public/resources/needs')
+16: constructor(private readonly service: PublicResourceNeedsService) {}
+18: @Get()
+19: list(
+27: @Get(':id')
+28: async get(@Param('id', ParseUUIDPipe) id: string): Promise<ResourceNeedPublic> {
+=== ./modules/resources/resource-deliveries.controller.ts
+36: @Controller('resources/deliveries')
+37: @UseGuards(JwtAuthGuard, RolesGuard)
+39: constructor(private readonly service: ResourceDeliveriesService) {}
+41: @Get()
+42: @Roles(...RESOURCE_VIEW_ROLES)
+43: list(
+50: @Get(':id')
+51: @Roles(...RESOURCE_VIEW_ROLES)
+52: get(@Param('id', ParseUUIDPipe) id: string): Promise<ResourceDelivery> {
+56: @Patch(':id')
+57: @Roles(...RESOURCE_WRITE_ROLES)
+58: updateSchedule(
+66: @Patch(':id/complete')
+67: @Roles(...RESOURCE_WRITE_ROLES)
+68: complete(
+76: @Patch(':id/cancel')
+77: @Roles(...RESOURCE_WRITE_ROLES)
+78: cancel(
+=== ./modules/resources/resource-delivery-evidences.controller.ts
+31: @Controller('resources/deliveries/:deliveryId/evidences')
+32: @UseGuards(JwtAuthGuard, RolesGuard)
+34: constructor(private readonly service: ResourceDeliveryEvidencesService) {}
+36: @Post()
+37: @Roles(...RESOURCE_WRITE_ROLES)
+38: create(
+47: @Get()
+48: @Roles(...RESOURCE_VIEW_ROLES)
+49: list(
+55: @Delete(':id')
+57: @Roles(...RESOURCE_WRITE_ROLES)
+58: async remove(
+=== ./modules/resources/resource-needs.controller.ts
+38: @Controller('resources/needs')
+39: @UseGuards(JwtAuthGuard, RolesGuard)
+41: constructor(private readonly service: ResourceNeedsService) {}
+43: @Post()
+44: @Roles(...RESOURCE_WRITE_ROLES)
+45: create(
+52: @Get()
+53: @Roles(...RESOURCE_VIEW_ROLES)
+54: list(
+61: @Get(':id')
+62: @Roles(...RESOURCE_VIEW_ROLES)
+63: get(@Param('id', ParseUUIDPipe) id: string): Promise<ResourceNeed> {
+67: @Patch(':id')
+68: @Roles(...RESOURCE_WRITE_ROLES)
+69: update(
+=== ./modules/resources/resource-offer-proofs.controller.ts
+42: @Controller('resources/offers/:offerId')
+44: constructor(private readonly service: ResourceOfferProofsService) {}
+46: @Post('proofs')
+47: @UseGuards(JwtAuthGuard)
+49: attach(
+57: @Get('proofs')
+58: @UseGuards(JwtAuthGuard, RolesGuard)
+59: @Roles(...RESOURCE_VIEW_ROLES)
+60: list(@Param('offerId', ParseUUIDPipe) offerId: string): Promise<ResourceOfferProof[]> {
+64: @Get('proofs/:proofId/file')
+65: @UseGuards(JwtAuthGuard, RolesGuard)
+66: @Roles(...RESOURCE_VIEW_ROLES)
+67: async file(
+79: @Patch('proof-validation')
+80: @UseGuards(JwtAuthGuard, RolesGuard)
+81: @Roles(...RESOURCE_WRITE_ROLES)
+82: validate(
+=== ./modules/resources/resource-offers.controller.ts
+36: @Controller('resources/offers')
+38: constructor(private readonly service: ResourceOffersService) {}
+40: @Post()
+41: @UseGuards(JwtAuthGuard)
+42: create(
+49: @Get('received')
+50: @UseGuards(JwtAuthGuard, RolesGuard)
+51: @Roles(...RESOURCE_VIEW_ROLES)
+52: listReceived(): Promise<ResourceOffer[]> {
+56: @Get('mine')
+57: @UseGuards(JwtAuthGuard)
+58: listMine(@CurrentUser() actor: RequestUser): Promise<ResourceOfferWithNeed[]> {
+62: @Patch(':id/decision')
+63: @UseGuards(JwtAuthGuard, RolesGuard)
+64: @Roles(...RESOURCE_WRITE_ROLES)
+65: decide(
+73: @Patch(':id/cancel')
+74: @UseGuards(JwtAuthGuard)
+75: cancel(
+=== ./modules/sponsorships/public-sponsorships.controller.ts
+11: @Controller('public/sponsorships')
+13: constructor(private readonly service: PublicSponsorshipsService) {}
+15: @Get('animals/:animalId')
+16: getAnimalSummary(
+=== ./modules/sponsorships/sponsorship-payment-status-public.controller.ts
+15: @Controller()
+17: constructor(private readonly service: SponsorshipPaymentsService) {}
+19: @Get('public/sponsorships/status/:reference')
+20: getPublic(@Param('reference') reference: string): Promise<SponsorshipPaymentPublicStatus> {
+=== ./modules/sponsorships/sponsorship-plans.controller.ts
+39: @Controller('sponsorship-plans')
+40: @UseGuards(JwtAuthGuard, RolesGuard)
+42: constructor(private readonly service: SponsorshipPlansService) {}
+44: @Post()
+45: @Roles(...WRITE_ROLES)
+46: create(
+53: @Get()
+54: @Roles(...VIEW_ROLES)
+55: list(
+63: @Get(':id')
+64: @Roles(...VIEW_ROLES)
+65: get(@Param('id', ParseUUIDPipe) id: string): Promise<SponsorshipPlan> {
+69: @Patch(':id')
+70: @Roles(...WRITE_ROLES)
+71: update(
+=== ./modules/sponsorships/sponsorships.controller.ts
+51: @Controller('sponsorships')
+52: @UseGuards(JwtAuthGuard, RolesGuard)
+54: constructor(
+60: @Post()
+61: create(
+76: @Post(':id/retry-payment')
+78: retryPayment(
+89: @Get('mine')
+90: listMine(@CurrentUser() actor: RequestUser): Promise<Sponsorship[]> {
+94: @Get()
+95: @Roles(...VIEW_ROLES)
+96: list(
+105: @Get(':id')
+106: @Roles(...VIEW_ROLES)
+107: get(@Param('id', ParseUUIDPipe) id: string): Promise<Sponsorship> {
+112: @Get(':id/history')
+113: @Roles(...VIEW_ROLES)
+114: history(@Param('id', ParseUUIDPipe) id: string): Promise<SponsorshipStatusHistoryEntry[]> {
+119: @Get(':id/payments')
+120: @Roles(...VIEW_ROLES)
+121: listPayments(@Param('id', ParseUUIDPipe) id: string): Promise<SponsorshipPayment[]> {
+125: @Post(':id/suspend')
+127: @Roles(...MANAGE_ROLES)
+128: suspend(
+136: @Post(':id/reactivate')
+138: @Roles(...MANAGE_ROLES)
+139: reactivate(
+147: @Post(':id/cancel')
+149: @Roles(...MANAGE_ROLES)
+150: cancel(
+=== ./modules/volunteering/public-volunteering.controller.ts
+13: @Controller()
+15: constructor(private readonly service: VolunteerOpportunitiesService) {}
+18: @Get('public/volunteer-opportunities')
+19: listGlobal(
+26: @Get('public/organizations/:slug/volunteer-opportunities')
+27: async list(
+=== ./modules/volunteering/service-hours.controller.ts
+39: @Controller('service-hours')
+40: @UseGuards(JwtAuthGuard, RolesGuard)
+42: constructor(private readonly service: ServiceHoursService) {}
+45: @Post()
+46: create(
+53: @Get('mine')
+54: listMine(@CurrentUser() actor: RequestUser): Promise<ServiceHours[]> {
+58: @Get()
+59: @Roles(...VIEW_ROLES)
+60: listByEnrollment(
+68: @Post(':id/decision')
+70: @Roles(...MANAGE_ROLES)
+71: decide(
+=== ./modules/volunteering/volunteer-certificates.controller.ts
+24: @Controller('volunteer-certificates')
+25: @UseGuards(JwtAuthGuard, RolesGuard)
+27: constructor(private readonly service: VolunteerCertificatesService) {}
+29: @Post(':enrollmentId')
+30: @Roles(...MANAGE_ROLES)
+31: issue(
+38: @Get()
+39: @Roles(...VIEW_ROLES)
+40: listByOrg(
+47: @Get('mine')
+48: listMine(@CurrentUser() actor: RequestUser): Promise<VolunteerCertificate[]> {
+52: @Get(':id')
+53: get(
+60: @Get(':id/pdf')
+61: async pdf(
+=== ./modules/volunteering/volunteer-enrollments.controller.ts
+44: @Controller('volunteer-enrollments')
+45: @UseGuards(JwtAuthGuard, RolesGuard)
+47: constructor(private readonly service: VolunteerEnrollmentsService) {}
+50: @Post()
+51: create(
+59: @Get('mine')
+60: listMine(@CurrentUser() actor: RequestUser): Promise<VolunteerEnrollmentMine[]> {
+64: @Get()
+65: @Roles(...VIEW_ROLES)
+66: list(
+75: @Get(':id')
+76: @Roles(...VIEW_ROLES)
+77: get(@Param('id', ParseUUIDPipe) id: string): Promise<VolunteerEnrollment> {
+81: @Post(':id/decision')
+83: @Roles(...MANAGE_ROLES)
+84: decide(
+93: @Post(':id/complete')
+95: @Roles(...MANAGE_ROLES)
+96: complete(
+=== ./modules/volunteering/volunteer-opportunities.controller.ts
+42: @Controller('volunteer-opportunities')
+43: @UseGuards(JwtAuthGuard, RolesGuard)
+45: constructor(private readonly service: VolunteerOpportunitiesService) {}
+47: @Post()
+48: @Roles(...MANAGE_ROLES)
+49: create(
+56: @Get()
+57: @Roles(...VIEW_ROLES)
+58: list(
+65: @Get(':id')
+66: @Roles(...VIEW_ROLES)
+67: get(@Param('id', ParseUUIDPipe) id: string): Promise<VolunteerOpportunity> {
+71: @Patch(':id')
+72: @Roles(...MANAGE_ROLES)
+73: update(

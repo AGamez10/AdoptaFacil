@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Button, Skeleton, cn } from '@adoptafacil/ui';
 import { ChevronDownIcon, CloseIcon } from '../icons';
+import { featureForPath, useCapabilities } from '../capabilities';
 import { navItems, ORG_MEMBER_ROLES, type NavItem } from '../navigation';
 import { useNav } from '../navigation/nav-context';
 import { useSession } from '../auth';
@@ -12,9 +13,17 @@ import styles from './sidebar.module.scss';
 /** Shared visibility check for a leaf entry (top-level or inside a group). */
 function useLeafVisibility() {
   const { hasAnyRole, user } = useSession();
-  return (leaf: Pick<NavItem, 'roles' | 'personaOnly'>) =>
-    (!leaf.roles || hasAnyRole(...leaf.roles)) &&
-    (!leaf.personaOnly || user?.accountType === 'person');
+  const { capabilities } = useCapabilities();
+  return (leaf: Pick<NavItem, 'path' | 'roles' | 'personaOnly'>) => {
+    // Ola 1 (R1-1): entries of a switched-off module are hidden (the route
+    // gate and the API's 404 are the other two barriers).
+    const feature = featureForPath(leaf.path);
+    return (
+      (!feature || capabilities.features[feature]) &&
+      (!leaf.roles || hasAnyRole(...leaf.roles)) &&
+      (!leaf.personaOnly || user?.accountType === 'person')
+    );
+  };
 }
 
 /**

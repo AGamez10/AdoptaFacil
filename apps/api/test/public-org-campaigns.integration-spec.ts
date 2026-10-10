@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * S2-07 public per-organization campaign feed: GET /public/organizations/:slug/campaigns
@@ -19,7 +20,7 @@ describe('Public per-organization campaign feed (S2-07, RF15/RF16)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -38,6 +39,7 @@ describe('Public per-organization campaign feed (S2-07, RF15/RF16)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     const token = res.body.tokens.accessToken;
     const orgId = res.body.user.organizationId;
     createdOrgIds.push(orgId);

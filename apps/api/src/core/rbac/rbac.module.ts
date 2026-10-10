@@ -1,5 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { PasswordService } from '../auth/password.service';
+import { DefaultCredentialsCheck } from './default-credentials.check';
 import { RbacController } from './rbac.controller';
 import { RbacService } from './rbac.service';
 import { RolesGuard } from './roles.guard';
@@ -14,7 +16,9 @@ import { RolesGuard } from './roles.guard';
 @Module({
   imports: [AuthModule],
   controllers: [RbacController],
-  providers: [RbacService, RolesGuard],
+  // PasswordService is stateless; provided here (AuthModule does not export it)
+  // for the AF-037 boot check.
+  providers: [RbacService, RolesGuard, PasswordService, DefaultCredentialsCheck],
   exports: [RbacService, RolesGuard],
 })
 export class RbacModule {}

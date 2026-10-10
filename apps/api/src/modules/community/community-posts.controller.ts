@@ -32,6 +32,7 @@ import { CommunityCommentsService } from './community-comments.service';
 import { CommunityLikesService } from './community-likes.service';
 import { createPostSchema, updatePostSchema } from './community-posts.schemas';
 import { createCommentSchema } from './community-comments.schemas';
+import { RequireFeature } from '../../core/features';
 
 function parseType(value?: string): PostType | undefined {
   return value && (Object.values(PostType) as string[]).includes(value)
@@ -46,6 +47,7 @@ function parseType(value?: string): PostType | undefined {
  * no discrimina por rol aquí, solo por identidad). La moderación de
  * plataforma vive en un controller separado.
  */
+@RequireFeature('community')
 @Controller('community')
 @UseGuards(JwtAuthGuard)
 export class CommunityPostsController {

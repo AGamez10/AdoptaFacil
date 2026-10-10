@@ -73,25 +73,23 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
     expect(Math.abs(digits(screen.getByTestId('breakdown-net')) - 50000)).toBeLessThanOrEqual(2);
   });
 
-  it('F-NOMENCLATURA: shows "Apoyo de sostenimiento a AdoptaFácil", not "Comisión AdoptaFácil" (indicación fiscal)', () => {
+  it('ADR-PAG-001: shows no AdoptaFácil fee line, since there is no per-donation fee', () => {
     render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={vi.fn()} />);
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
 
-    expect(screen.getByText('Apoyo de sostenimiento a AdoptaFácil (4%)')).toBeInTheDocument();
+    expect(screen.queryByText(/sostenimiento a AdoptaFácil/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Comisión AdoptaFácil/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Comisión pasarela (estimada)')).toBeInTheDocument();
   });
 
-  it('F-NOMENCLATURA-CHECKBOX: the checkbox names both real components, never calling the platform cut a "comisión"', () => {
+  it('the cover-fee checkbox only mentions the gateway commission and says AdoptaFácil takes none', () => {
     render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={vi.fn()} />);
 
     expect(
       screen.getByText(
-        'Cubro el apoyo de sostenimiento a AdoptaFácil y la comisión de la pasarela para que la organización reciba el monto completo.',
+        'Cubro la comisión de la pasarela de pago para que la organización reciba el monto completo. AdoptaFácil no cobra comisión por tu donación.',
       ),
     ).toBeInTheDocument();
-    // The gateway's (MercadoPago, third party) commission keeps its real name — only
-    // AdoptaFácil's own retained percentage was relabeled (extends #100).
-    expect(screen.queryByText(/^Cubro la comisión /)).not.toBeInTheDocument();
   });
 
   it('does NOT show the guest name/email fields when there is a session', () => {

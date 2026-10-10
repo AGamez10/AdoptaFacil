@@ -1,0 +1,35 @@
+// Module: core/plans (planes y suscripciones) · Owner: @sebastian
+//
+// Suscripción de una ORGANIZACIÓN a un plan de AdoptaFácil (Gratis/Crece/Pro).
+// Es ingreso propio de AdoptaFácil por el software: nunca toca donaciones ni
+// custodia dinero de terceros (D1). El catálogo de planes vive en código
+// (`packages/contracts/src/plans.ts`); aquí solo se guarda qué plan tiene cada
+// organización y hasta cuándo.
+//
+// FRONTERA (mismo patrón que portals.prisma/resources.prisma): NO se declara
+// relación Prisma con `Organization` (org.prisma) — `organizationId` es un
+// campo plano (uuid); la FK + RLS se añaden a mano en el SQL de la migración.
+
+/// A lo sumo una suscripción por organización (tenant-scoped, RLS). La
+/// organización solo la LEE (`GET /org/plan`); la escribe la plataforma
+/// (`PUT /platform/organizations/:id/plan`) tras un pago manual, con auditoría.
+model OrganizationSubscription {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @unique @map("organization_id") @db.Uuid
+  /// PlanKey como texto: free | crece | pro.
+  plan              String
+  /// SubscriptionStatus como texto: trialing | active | past_due | canceled.
+  status            String
+  /// Fin del periodo pagado o de prueba (UTC). NULL = sin vencimiento.
+  currentPeriodEnd  DateTime? @map("current_period_end")
+  /// BillingProvider como texto. Hoy solo `manual` (link de pago + factura).
+  provider          String    @default("manual")
+  /// Referencia libre del pago (número de factura, id de transferencia).
+  providerReference String?   @map("provider_reference")
+  /// Descuento de precio fundador para refugios del piloto (0–100).
+  discountPercent   Int       @default(0) @map("discount_percent")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("organization_subscriptions")
+}

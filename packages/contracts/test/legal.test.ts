@@ -56,6 +56,9 @@ describe('qué debe aceptar cada quien', () => {
   it('la autorización comercial nunca es obligatoria', () => {
     expect(getLegalDocument('commercial_authorization').acceptance).toBe('optional');
     expect(requiredLegalDocuments('organization')).not.toContain('commercial_authorization');
+    expect(getLegalDocument('ai_training_authorization').acceptance).toBe('optional');
+    expect(requiredLegalDocuments('organization')).not.toContain('ai_training_authorization');
+    expect(requiredGuestLegalDocuments()).not.toContain('ai_training_authorization');
   });
 
   it('la autorización de datos va en una casilla distinta de los términos', () => {

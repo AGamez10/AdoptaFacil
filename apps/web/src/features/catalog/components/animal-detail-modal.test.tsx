@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { PublicAnimalSummary } from '@adoptafacil/contracts';
 import { AnimalDetailModal } from './animal-detail-modal';
+import { CapabilitiesProvider } from '../../../shell/capabilities';
+import { OPEN_CAPABILITIES } from '../../../test-utils';
 
 const ANIMAL: PublicAnimalSummary = {
   id: 'a1',
@@ -38,11 +40,22 @@ afterEach(() => {
 });
 
 describe('AnimalDetailModal', () => {
-  it('offers "Donar" linking to /donaciones with the animal’s organization', () => {
+  it('hides "Donar" while payments are switched off (Ola 1, R1-1)', () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AnimalDetailModal animal={ANIMAL} onOpenChange={() => undefined} />
       </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('donate-organization-cta')).not.toBeInTheDocument();
+  });
+
+  it('offers "Donar" linking to /donaciones with the animal’s organization', () => {
+    render(
+      <CapabilitiesProvider value={OPEN_CAPABILITIES}>
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <AnimalDetailModal animal={ANIMAL} onOpenChange={() => undefined} />
+        </MemoryRouter>
+      </CapabilitiesProvider>,
     );
 
     const cta = screen.getByTestId('donate-organization-cta');

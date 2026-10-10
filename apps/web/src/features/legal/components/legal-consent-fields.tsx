@@ -56,6 +56,16 @@ function label(group: LegalConsentGroup['id']): ReactNode {
           contacto. Puedo retirarlo cuando quiera.
         </>
       );
+    case 'ai':
+      return (
+        <>
+          <span className="font-medium">Opcional:</span> autorizo usar mis datos para{' '}
+          <DocLink docKey="ai_training_authorization">
+            mejorar el producto y entrenar inteligencia artificial
+          </DocLink>
+          . Puedo retirarlo cuando quiera.
+        </>
+      );
   }
 }
 

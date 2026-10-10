@@ -11,7 +11,7 @@ import {
 } from '../../legal';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
-import { GoogleSignInButton } from '../components/google-sign-in-button';
+import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
 import { PasswordRequirements } from '../components/password-requirements';
 import {
   collectErrors,
@@ -32,6 +32,7 @@ type PersonErrors = Partial<
  */
 export function RegisterPersonForm() {
   const { register, signInWithGoogle } = useSession();
+  const googleAvailable = useGoogleSignInAvailable();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -209,18 +210,22 @@ export function RegisterPersonForm() {
         {submitting ? 'Creando cuenta…' : 'Crear cuenta personal'}
       </Button>
 
-      <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        o
-        <span className="h-px flex-1 bg-border" />
-      </div>
       {/* Google Sign-In NEVER creates an Organization — only offered on the
           Person tab. Registering an org stays the long NIT/legal-rep form. */}
-      <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
-      <p className="text-xs text-muted-foreground">
-        Si continúas con Google, te pediremos aceptar estos mismos documentos antes de usar tu
-        cuenta.
-      </p>
+      {googleAvailable && (
+        <>
+          <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            o
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+          <p className="text-xs text-muted-foreground">
+            Si continúas con Google, te pediremos aceptar estos mismos documentos antes de usar tu
+            cuenta.
+          </p>
+        </>
+      )}
     </div>
   );
 }

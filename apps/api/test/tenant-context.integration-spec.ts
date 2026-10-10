@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { ForbiddenException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import type { NextFunction, Request, Response } from 'express';
-import {
-  ORG_ID_HEADER,
-  TenantContextMiddleware,
-} from '../src/core/tenant/tenant-context.middleware';
+import { TenantContextMiddleware } from '../src/core/tenant/tenant-context.middleware';
 import { TenantContextService } from '../src/core/tenant/tenant-context.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -14,6 +12,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
  * and the underlying `app.current_org_id` GUC is transaction-local — it never
  * leaks between transactions or requests. Exercises the REAL `org_members`
  * table as the non-superuser app role, so RLS is genuinely in force.
+ *
+ * The tenant comes ONLY from a valid access token (AF-009): an `x-org-id`
+ * header, with or without a token, never establishes or overrides it.
  */
 function fakeRequest(headers: Record<string, string>): Request {
   return { headers } as unknown as Request;
@@ -21,10 +22,17 @@ function fakeRequest(headers: Record<string, string>): Request {
 
 const NOOP_RESPONSE = {} as Response;
 
+const jwt = new JwtService({ secret: 'tenant-context-test-secret' });
+
+function bearer(org: string): Record<string, string> {
+  const token = jwt.sign({ sub: randomUUID(), org, typ: 'organization', email: 't@ctx.test' });
+  return { authorization: `Bearer ${token}` };
+}
+
 describe('Tenant context middleware + PrismaService.withTenant (org_members)', () => {
   const tenant = new TenantContextService();
   const prisma = new PrismaService(tenant);
-  const middleware = new TenantContextMiddleware(tenant);
+  const middleware = new TenantContextMiddleware(tenant, jwt);
   const orgA = randomUUID();
   const orgB = randomUUID();
 
@@ -63,28 +71,51 @@ describe('Tenant context middleware + PrismaService.withTenant (org_members)', (
     expect(tenant.getOrganizationId()).toBeUndefined();
   });
 
-  it('middleware establishes the context from a valid x-org-id header, then resets it', () => {
+  it('middleware establishes the context from a valid access token, then resets it', () => {
     let seen: string | undefined;
     const next: NextFunction = () => {
       seen = tenant.getOrganizationId();
     };
-    middleware.use(fakeRequest({ [ORG_ID_HEADER]: orgA }), NOOP_RESPONSE, next);
+    middleware.use(fakeRequest(bearer(orgA)), NOOP_RESPONSE, next);
     expect(seen).toBe(orgA);
     // Context is bound to the request's async chain and gone once it ends.
     expect(tenant.getOrganizationId()).toBeUndefined();
   });
 
-  it('middleware leaves no context when the header is missing or malformed', () => {
+  it('middleware leaves no context without a valid token (missing, forged or malformed)', () => {
     let seen: string | undefined = 'sentinel';
     const next: NextFunction = () => {
       seen = tenant.getOrganizationId();
     };
-    middleware.use(fakeRequest({ [ORG_ID_HEADER]: 'not-a-uuid' }), NOOP_RESPONSE, next);
+    middleware.use(fakeRequest({}), NOOP_RESPONSE, next);
     expect(seen).toBeUndefined();
 
     seen = 'sentinel';
-    middleware.use(fakeRequest({}), NOOP_RESPONSE, next);
+    const forged = new JwtService({ secret: 'attacker' }).sign({ sub: 'x', org: orgA });
+    middleware.use(fakeRequest({ authorization: `Bearer ${forged}` }), NOOP_RESPONSE, next);
     expect(seen).toBeUndefined();
+
+    seen = 'sentinel';
+    middleware.use(fakeRequest(bearer('not-a-uuid')), NOOP_RESPONSE, next);
+    expect(seen).toBeUndefined();
+  });
+
+  it('AF-009: an x-org-id header never sets the tenant on its own', () => {
+    let seen: string | undefined = 'sentinel';
+    const next: NextFunction = () => {
+      seen = tenant.getOrganizationId();
+    };
+    middleware.use(fakeRequest({ 'x-org-id': orgA }), NOOP_RESPONSE, next);
+    expect(seen).toBeUndefined();
+  });
+
+  it('AF-009: an x-org-id header never overrides the tenant of the token', () => {
+    let seen: string | undefined;
+    const next: NextFunction = () => {
+      seen = tenant.getOrganizationId();
+    };
+    middleware.use(fakeRequest({ ...bearer(orgA), 'x-org-id': orgB }), NOOP_RESPONSE, next);
+    expect(seen).toBe(orgA);
   });
 
   it('withTenant runs queries scoped to the request organization', async () => {
@@ -93,7 +124,7 @@ describe('Tenant context middleware + PrismaService.withTenant (org_members)', (
         const next: NextFunction = () => {
           prisma.withTenant((tx) => tx.orgMember.findMany()).then(resolve, reject);
         };
-        middleware.use(fakeRequest({ [ORG_ID_HEADER]: orgA }), NOOP_RESPONSE, next);
+        middleware.use(fakeRequest(bearer(orgA)), NOOP_RESPONSE, next);
       },
     );
     expect(rows.length).toBeGreaterThan(0);
@@ -114,7 +145,7 @@ describe('Tenant context middleware + PrismaService.withTenant (org_members)', (
       const next: NextFunction = () => {
         prisma.withTenant((tx) => tx.orgMember.findMany()).then(() => resolve(), reject);
       };
-      middleware.use(fakeRequest({ [ORG_ID_HEADER]: orgA }), NOOP_RESPONSE, next);
+      middleware.use(fakeRequest(bearer(orgA)), NOOP_RESPONSE, next);
     });
     const leaked = await prisma.orgMember.findMany();
     expect(leaked).toHaveLength(0);

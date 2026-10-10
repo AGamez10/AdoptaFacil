@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M09 (F-6, Ola 3) — banco de recursos: publicar necesidades, ofrecer
@@ -21,7 +22,7 @@ describe('Resources (M09, F-6: needs → offers → deliveries → evidence, RBA
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -40,6 +41,7 @@ describe('Resources (M09, F-6: needs → offers → deliveries → evidence, RBA
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     orgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

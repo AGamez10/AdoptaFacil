@@ -33,7 +33,7 @@ describe('Owner granted on organization registration (T-012b)', () => {
 
   const ownerEmail = `t012b-owner-${randomUUID()}@test.local`;
   const personEmail = `t012b-person-${randomUUID()}@test.local`;
-  const password = 'password123';
+  const password = 'password-1234';
 
   let ownerToken = '';
   let ownerOrgId = '';

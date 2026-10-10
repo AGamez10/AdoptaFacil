@@ -1,5 +1,11 @@
 import { PasswordService } from './password.service';
 
+// bcryptjs is pure JS: at the production cost (12) each hash/compare takes
+// hundreds of ms, and in CI turbo runs these jest workers next to vitest on a
+// 2-vCPU runner, so a single test (2 bcrypt ops) can exceed jest's default 5 s
+// (BLD-002). The cost stays the real one; only the budget is made explicit.
+jest.setTimeout(30_000);
+
 describe('PasswordService', () => {
   const service = new PasswordService();
 

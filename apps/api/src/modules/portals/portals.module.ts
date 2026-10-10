@@ -4,6 +4,8 @@ import { PortalThemeController } from './portal-theme.controller';
 import { PortalThemeService } from './portal-theme.service';
 import { PortalSubdomainController } from './portal-subdomain.controller';
 import { PortalSubdomainService } from './portal-subdomain.service';
+import { PortalPreviewController } from './portal-preview.controller';
+import { PortalPreviewService } from './portal-preview.service';
 
 /**
  * M14 · Portals (T-027) — per-organization brand personalization by TOKENS.
@@ -17,7 +19,7 @@ import { PortalSubdomainService } from './portal-subdomain.service';
  */
 @Module({
   imports: [AuthModule],
-  controllers: [PortalThemeController, PortalSubdomainController],
-  providers: [PortalThemeService, PortalSubdomainService],
+  controllers: [PortalThemeController, PortalSubdomainController, PortalPreviewController],
+  providers: [PortalThemeService, PortalSubdomainService, PortalPreviewService],
 })
 export class PortalsModule {}

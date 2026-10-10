@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   currentLegalAcceptanceItems,
   getLegalDocument,
+  type LegalDocumentKey,
   type LegalStatus,
 } from '@adoptafacil/contracts';
 import {
@@ -35,9 +36,39 @@ function formatBogota(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** Autorizaciones opcionales que la persona da o retira aquí. */
+const OPTIONAL: {
+  key: LegalDocumentKey;
+  title: string;
+  isOn: (s: LegalStatus) => boolean;
+  on: string;
+  off: string;
+  given: string;
+  revoked: string;
+}[] = [
+  {
+    key: 'commercial_authorization',
+    title: 'Usos comerciales (opcional)',
+    isOn: (s) => s.commercialAuthorized,
+    on: 'Nos autorizaste a usar tus datos de contacto con fines comerciales.',
+    off: 'No has autorizado usos comerciales de tus datos.',
+    given: 'Autorización comercial registrada',
+    revoked: 'Autorización comercial retirada',
+  },
+  {
+    key: 'ai_training_authorization',
+    title: 'Mejora del producto e inteligencia artificial (opcional)',
+    isOn: (s) => s.aiTrainingAuthorized,
+    on: 'Nos autorizaste a usar tus datos para mejorar el producto y entrenar inteligencia artificial.',
+    off: 'Solo usamos información anonimizada o agregada, que no te identifica.',
+    given: 'Autorización de IA registrada',
+    revoked: 'Autorización de IA retirada',
+  },
+];
+
 /**
  * `/mis-autorizaciones`: qué documentos aceptó la cuenta, en qué versión y
- * cuándo, y la autorización comercial opcional que puede dar o retirar.
+ * cuándo, y las autorizaciones opcionales que puede dar o retirar.
  */
 export function MyAuthorizationsPage() {
   const client = useApiClient();
@@ -52,27 +83,26 @@ export function MyAuthorizationsPage() {
       .catch(() => setFailed(true));
   }, [client]);
 
-  const toggleCommercial = useCallback(async () => {
-    if (!status) return;
-    setSaving(true);
-    try {
-      const next = status.commercialAuthorized
-        ? await revokeLegalDocument(client, 'commercial_authorization')
-        : await acceptLegalDocuments(client, {
-            documents: currentLegalAcceptanceItems(['commercial_authorization']),
-          });
-      setStatus(next);
-      toast({
-        title: next.commercialAuthorized
-          ? 'Autorización comercial registrada'
-          : 'Autorización comercial retirada',
-      });
-    } catch {
-      toast({ title: 'No pudimos guardar el cambio', variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
-  }, [client, status, toast]);
+  const toggle = useCallback(
+    async (item: (typeof OPTIONAL)[number]) => {
+      if (!status) return;
+      setSaving(true);
+      try {
+        const next = item.isOn(status)
+          ? await revokeLegalDocument(client, item.key)
+          : await acceptLegalDocuments(client, {
+              documents: currentLegalAcceptanceItems([item.key]),
+            });
+        setStatus(next);
+        toast({ title: item.isOn(next) ? item.given : item.revoked });
+      } catch {
+        toast({ title: 'No pudimos guardar el cambio', variant: 'destructive' });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [client, status, toast],
+  );
 
   if (failed) {
     return <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />;
@@ -89,27 +119,32 @@ export function MyAuthorizationsPage() {
         </p>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Usos comerciales (opcional)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <p>
-            {status.commercialAuthorized
-              ? 'Nos autorizaste a usar tus datos de contacto con fines comerciales.'
-              : 'No has autorizado usos comerciales de tus datos.'}{' '}
-            <Link
-              to={legalPath(getLegalDocument('commercial_authorization').slug)}
-              className="underline underline-offset-2"
+      {OPTIONAL.map((item) => (
+        <Card key={item.key}>
+          <CardHeader>
+            <CardTitle>{item.title}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p>
+              {item.isOn(status) ? item.on : item.off}{' '}
+              <Link
+                to={legalPath(getLegalDocument(item.key).slug)}
+                className="underline underline-offset-2"
+              >
+                Qué incluye
+              </Link>
+            </p>
+            <Button
+              variant="outline"
+              disabled={saving}
+              data-testid={`toggle-${item.key}`}
+              onClick={() => void toggle(item)}
             >
-              Qué incluye
-            </Link>
-          </p>
-          <Button variant="outline" disabled={saving} onClick={() => void toggleCommercial()}>
-            {status.commercialAuthorized ? 'Retirar autorización' : 'Autorizar'}
-          </Button>
-        </CardContent>
-      </Card>
+              {item.isOn(status) ? 'Retirar autorización' : 'Autorizar'}
+            </Button>
+          </CardContent>
+        </Card>
+      ))}
 
       <Card>
         <CardHeader>

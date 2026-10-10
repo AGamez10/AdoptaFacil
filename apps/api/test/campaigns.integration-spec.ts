@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M06 campaigns (RF15, T-053): tenant-scoped CRUD with the RBAC matrix, required
@@ -17,7 +18,7 @@ describe('Campaigns (M06, RF15: CRUD + RBAC + public exposure)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -36,6 +37,7 @@ describe('Campaigns (M06, RF15: CRUD + RBAC + public exposure)', () => {
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     createdOrgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

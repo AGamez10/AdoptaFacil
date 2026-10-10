@@ -20,7 +20,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const longMessage =
     'Tengo patio, tiempo y experiencia con perros rescatados; quiero darle un hogar.';
 

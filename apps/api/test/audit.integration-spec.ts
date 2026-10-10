@@ -50,7 +50,7 @@ describe('Audit trail on a real action (role assignment)', () => {
         organizationName: 'Refugio Audit',
         displayName: 'Owner',
         email: `t013-owner-${randomUUID()}@test.local`,
-        password: 'password123',
+        password: 'password-1234',
       })
       .expect(201);
     ownerToken = orgReg.body.tokens.accessToken;

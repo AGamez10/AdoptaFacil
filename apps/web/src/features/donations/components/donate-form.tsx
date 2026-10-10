@@ -77,7 +77,7 @@ type FormStep = 'details' | 'card';
  *   2. "card": el monto YA ESTÁ DECIDIDO (se muestra, no editable); se embebe el Card
  *      Payment Brick (MercadoPago) para tokenizar una tarjeta real. Solo al enviar ESE
  *      formulario (botón propio del Brick) se llama a `onDonate` — con el token incluido.
- * Ofrece la casilla "cubro el apoyo de sostenimiento y la comisión de la pasarela"
+ * Ofrece la casilla "cubro la comisión de la pasarela"
  * (commissionPayer = 'donor'; F-NOMENCLATURA-CHECKBOX: extiende #100 al checkbox — el
  * donante cubre AMBOS componentes, el % que retiene AdoptaFácil (apoyo, no "comisión"
  * propia por indicación fiscal) y la comisión real de la pasarela de pago (tercero,
@@ -244,8 +244,8 @@ export function DonateForm({
           onChange={(e) => setCoverFee(e.target.checked)}
         />
         <span>
-          Cubro el apoyo de sostenimiento a AdoptaFácil y la comisión de la pasarela para que la
-          organización reciba el monto completo.
+          Cubro la comisión de la pasarela de pago para que la organización reciba el monto
+          completo. AdoptaFácil no cobra comisión por tu donación.
         </span>
       </label>
 

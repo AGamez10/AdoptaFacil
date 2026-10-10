@@ -66,10 +66,11 @@ export class OrganizationSummaryService {
           tx.adoptionRequest.count({
             where: { organizationId, status: { in: ['new', 'in_review'] } },
           }),
+          tx.adoptionRequest.count({ where: { organizationId, status: 'new' } }),
           tx.sponsorship.count({ where: { organizationId, status: 'active' } }),
           tx.organizationDocument.findMany({
             where: { organizationId },
-            select: { status: true, expiresAt: true },
+            select: { type: true, version: true, status: true, expiresAt: true },
           }),
           tx.donation.findMany({
             where: { organizationId, status: 'approved', conceptKind: 'organization' },
@@ -88,6 +89,7 @@ export class OrganizationSummaryService {
     const [
       animalsActive,
       adoptionRequestsPending,
+      adoptionRequestsNew,
       sponsorshipsActive,
       documentRows,
       donationRows,
@@ -96,7 +98,15 @@ export class OrganizationSummaryService {
 
     let documentsExpiringSoon = 0;
     let documentsRejected = 0;
+    // Ola 3: solo cuenta la ÚLTIMA versión de cada tipo de documento. Antes un
+    // documento rechazado (o por vencer) seguía en los pendientes aunque la
+    // organización ya hubiera subido el reemplazo.
+    const latestByType = new Map<string, (typeof documentRows)[number]>();
     for (const row of documentRows) {
+      const current = latestByType.get(row.type);
+      if (!current || row.version > current.version) latestByType.set(row.type, row);
+    }
+    for (const row of latestByType.values()) {
       const status = effectiveStatus(row.status as DocumentStatus, row.expiresAt, now);
       if (status === DocumentStatus.Rejected) {
         documentsRejected += 1;
@@ -120,6 +130,7 @@ export class OrganizationSummaryService {
     return {
       animalsActive,
       adoptionRequestsPending,
+      adoptionRequestsNew,
       sponsorshipsActive,
       documentsExpiringSoon,
       documentsRejected,

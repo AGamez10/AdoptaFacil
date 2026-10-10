@@ -11,8 +11,8 @@ import {
   publicAnimalDetailHref,
   buildAdoptionRequestHref,
 } from '../model/animals-catalog';
+import { useFeature } from '../../../shell/capabilities';
 import { buildDonateHref } from './portal-donate-cta';
-import { IconHeart } from './portal-icons';
 import styles from '../styles/public-catalog.module.scss';
 
 export interface AnimalCardProps {
@@ -56,13 +56,10 @@ function PawPlaceholder() {
  * cableado — se conserva el enlace tal cual (nav-state con el `AnimalSummary`,
  * para que el detalle no vuelva a pedir la lista).
  *
- * El corazón de "favorito" es SOLO del navegador (estado local del
- * componente, nunca persistido): no existe ninguna funcionalidad de
- * favoritos en el backend (ni tabla, ni endpoint). Se implementa así — en
- * vez de omitirlo — para no dejar el diseño del mockup incompleto, pero
- * deliberadamente NO se guarda en ningún lado: se pierde al recargar la
- * página. TODO(client): si el negocio pide favoritos reales, esto necesita
- * un endpoint propio (probablemente atado a la cuenta del visitante).
+ * Ola 3 (R3-5): se retiró el corazón de "favorito" — vivía solo en el estado
+ * local y se perdía al recargar (auditoría UX §3: una maqueta que engaña).
+ * TODO(client): si el negocio pide favoritos reales, necesita un endpoint
+ * atado a la cuenta del visitante. "Donar" solo aparece con pagos encendidos.
  */
 export function AnimalCard({ slug, animal, organization, onOpenDetail }: AnimalCardProps) {
   const age = ageLabel(animal.computedAge);
@@ -73,7 +70,7 @@ export function AnimalCard({ slug, animal, organization, onOpenDetail }: AnimalC
   // en vez de dejar un hueco de color sólido sin ícono.
   const [photoFailed, setPhotoFailed] = useState(false);
   const showPhoto = Boolean(animal.photoUrl) && !photoFailed;
-  const [favorited, setFavorited] = useState(false);
+  const paymentsOn = useFeature('payments');
 
   return (
     <article className={styles.card}>
@@ -134,18 +131,6 @@ export function AnimalCard({ slug, animal, organization, onOpenDetail }: AnimalC
         </div>
       </Link>
 
-      <button
-        type="button"
-        className={styles.card__favorite}
-        aria-pressed={favorited}
-        aria-label={
-          favorited ? `Quitar ${animal.name} de favoritos` : `Guardar ${animal.name} en favoritos`
-        }
-        onClick={() => setFavorited((prev) => !prev)}
-      >
-        <IconHeart className="h-4 w-4" filled={favorited} />
-      </button>
-
       <div className={styles.card__actions}>
         <Link
           to={buildAdoptionRequestHref(animal.organizationId, animal)}
@@ -156,7 +141,7 @@ export function AnimalCard({ slug, animal, organization, onOpenDetail }: AnimalC
         {/* Donar: acción secundaria LIGERA (texto, no botón con borde) — jerarquía
             clara frente a "Adoptar" (T-D06, §15). "Apadrinar" ya no se ofrece
             aquí: vive solo en el detalle (modal) y solo si el animal tiene plan. */}
-        {organization && (
+        {organization && paymentsOn && (
           <div className={styles.card__actionSecondary}>
             <Link to={buildDonateHref(organization)} className={styles.card__link}>
               Donar

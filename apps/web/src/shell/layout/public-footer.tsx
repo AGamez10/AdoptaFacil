@@ -1,42 +1,71 @@
 import { Link } from 'react-router-dom';
+import {
+  OFFICIAL_EMAIL,
+  OFFICIAL_WHATSAPP_DISPLAY,
+  officialMailtoUrl,
+  officialWhatsappUrl,
+} from '../../lib/contact';
+import { useFeature } from '../capabilities';
 import { Brand } from './brand';
 import styles from './public-footer.module.scss';
 
 /**
- * Public footer — REFACTOR-VISUAL v2, Fase 3. El mockup de referencia incluye
- * redes sociales y un formulario de suscripción, pero AdoptaFácil no tiene
- * cuentas de redes propias ni un backend de newsletter — inventar esos
- * enlaces/formulario sería fabricar funcionalidad que no existe. Se mantiene
- * honesto: marca + los mismos enlaces reales del navbar + año real.
+ * Public footer. Honesto: marca, los mismos enlaces reales del navbar (solo
+ * módulos encendidos, Ola 1 R1-1) y, desde la Ola 3, los canales oficiales de
+ * contacto (D10). Sin redes ni newsletter que AdoptaFácil no tiene.
  */
 export function PublicFooter() {
+  const resources = useFeature('resources');
+  const marketplace = useFeature('marketplace');
   return (
     <footer className={styles.footer}>
       <div className={styles.footer__row}>
-        <Brand inverse to="/" />
+        <div className={styles.footer__brand}>
+          <Brand inverse to="/" />
+          <p className={styles.footer__tagline}>
+            Infraestructura digital para el rescate animal en Colombia.
+          </p>
+        </div>
 
         <nav aria-label="Enlaces del pie de página" className={styles.footer__links}>
-          <Link to="/" className={styles.footer__link}>
-            Mascotas
+          <Link to="/#adoptar" className={styles.footer__link}>
+            Animales en adopción
           </Link>
           <Link to="/campanas" className={styles.footer__link}>
             Campañas
           </Link>
-          <Link to="/recursos" className={styles.footer__link}>
-            Banco de recursos
-          </Link>
-          <Link to="/marketplace" className={styles.footer__link}>
-            Marketplace
+          {resources && (
+            <Link to="/recursos" className={styles.footer__link}>
+              Banco de recursos
+            </Link>
+          )}
+          {marketplace && (
+            <Link to="/marketplace" className={styles.footer__link}>
+              Marketplace
+            </Link>
+          )}
+          <Link to="/#organizaciones" className={styles.footer__link}>
+            Para organizaciones
           </Link>
           <Link to="/login" className={styles.footer__link}>
             Ingresar
           </Link>
-          <Link to="/register" className={styles.footer__link}>
-            Publicar mi refugio
-          </Link>
         </nav>
 
-        <p className={styles.footer__meta}>AdoptaFácil — rescate animal en Colombia</p>
+        <address className={styles.footer__contact}>
+          <span className={styles.footer__contactTitle}>Contacto</span>
+          <a
+            href={officialWhatsappUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.footer__link}
+          >
+            WhatsApp {OFFICIAL_WHATSAPP_DISPLAY}
+          </a>
+          <a href={officialMailtoUrl()} className={styles.footer__link}>
+            {OFFICIAL_EMAIL}
+          </a>
+        </address>
       </div>
       {/* Legal (Ley 1581): siempre a un clic desde cualquier página pública. */}
       <div className={styles.footer__row}>
@@ -64,6 +93,9 @@ export function PublicFooter() {
           </a>
         </nav>
       </div>
+      <p className={styles.footer__meta}>
+        © {new Date().getFullYear()} AdoptaFácil · Rescate animal en Colombia
+      </p>
     </footer>
   );
 }

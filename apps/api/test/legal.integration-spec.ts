@@ -25,7 +25,7 @@ describe('Legal: aceptación versionada', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password1234';
   const send = jest.fn().mockResolvedValue(undefined);
 
   let personToken = '';
@@ -149,6 +149,27 @@ describe('Legal: aceptación versionada', () => {
       key: 'commercial_authorization',
       action: 'revoked',
     });
+  });
+
+  it('la autorización de IA es opcional, aparte de la comercial, y se puede retirar', async () => {
+    const accepted = await request(server)
+      .post('/legal/me/acceptances')
+      .set('Authorization', `Bearer ${personToken}`)
+      .send({ documents: currentLegalAcceptanceItems(['ai_training_authorization']) })
+      .expect(200);
+    expect(accepted.body.aiTrainingAuthorized).toBe(true);
+    expect(accepted.body.commercialAuthorized).toBe(false);
+    expect(accepted.body.history[0]).toMatchObject({
+      key: 'ai_training_authorization',
+      channel: 'preferences',
+    });
+
+    const revoked = await request(server)
+      .post('/legal/me/revocations')
+      .set('Authorization', `Bearer ${personToken}`)
+      .send({ key: 'ai_training_authorization' })
+      .expect(200);
+    expect(revoked.body.aiTrainingAuthorized).toBe(false);
   });
 
   it('la autorización obligatoria no se retira desde aquí (va por el canal de datos)', async () => {

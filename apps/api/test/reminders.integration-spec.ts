@@ -23,7 +23,7 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
   let reminders: RemindersService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   // Toggleable NotificationPort stub (best-effort send).
   const notifier = {
