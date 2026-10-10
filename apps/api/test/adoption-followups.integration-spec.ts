@@ -8,6 +8,7 @@ import { FollowUpService } from '../src/modules/adoptions/followup.service';
 import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M04 post-adoption FOLLOW-UP (T-028c, RF12) end-to-end: from a SIGNED contract the
@@ -44,6 +45,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const refuge = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Seguimiento',
         displayName: 'Owner Refugio',
         email: `t028c-refuge-${randomUUID()}@test.local`,
@@ -57,6 +59,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const person = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
         email: `t028c-p-${randomUUID()}@test.local`,
         password,
@@ -69,6 +72,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const other = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otro Refugio',
         displayName: 'Owner Otro',
         email: `t028c-other-${randomUUID()}@test.local`,

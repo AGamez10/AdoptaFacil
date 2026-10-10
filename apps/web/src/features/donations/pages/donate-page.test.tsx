@@ -455,6 +455,8 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     fireEvent.change(screen.getByTestId('donation-guest-email'), {
       target: { value: 'invitado@test.dev' },
     });
+    fireEvent.click(screen.getByTestId('donation-legal-terms'));
+    fireEvent.click(screen.getByTestId('donation-legal-data'));
     // Step 1 → step 2 (Card Payment Brick, mocked above) → the Brick's own
     // submit is what actually triggers the charge (T-OrdersAPI).
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
@@ -508,6 +510,8 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     fireEvent.change(screen.getByTestId('donation-guest-email'), {
       target: { value: 'invitado@test.dev' },
     });
+    fireEvent.click(screen.getByTestId('donation-legal-terms'));
+    fireEvent.click(screen.getByTestId('donation-legal-data'));
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
     fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
 

@@ -4,10 +4,15 @@ import type { AuditService } from '../../core/audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { NotificationPort } from '../../core/notifications/notification.port';
-import type { PaymentPort } from '@adoptafacil/contracts';
+import {
+  currentLegalAcceptanceItems,
+  type PaymentPort,
+  requiredGuestLegalDocuments,
+} from '@adoptafacil/contracts';
 import type { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import type { DonationCertificatesService } from './donation-certificates.service';
 import { DonationsService } from './donations.service';
+import { LegalService } from '../../core/legal/legal.service';
 
 interface Harness {
   service: DonationsService;
@@ -45,7 +50,7 @@ function makeService(configValues: Record<string, unknown> = {}): Harness {
     organization: { findMany: organizationFindMany },
   } as unknown as PrismaService;
   const tenant = { getOrganizationId } as unknown as TenantContextService;
-  const audit = { record } as unknown as AuditService;
+  const audit = { record, recordWithTx: jest.fn() } as unknown as AuditService;
   const verifyAndNormalizeWebhook = jest.fn(
     async (payload: {
       collectionId: string;
@@ -81,6 +86,7 @@ function makeService(configValues: Record<string, unknown> = {}): Harness {
       campaignFunding,
       certificates,
       config,
+      new LegalService(prisma, audit, notifications, config),
     ),
     queryRaw,
     record,
@@ -100,6 +106,8 @@ const BASE_INPUT = {
   intendedAmount: 50_000,
   commissionPayer: 'organization' as const,
   idempotencyKey: 'idem-key-guest-1',
+  // Un invitado acepta términos y autorización de datos en el formulario.
+  legalAcceptances: currentLegalAcceptanceItems(requiredGuestLegalDocuments()),
 };
 
 /**
@@ -151,6 +159,20 @@ describe('DonationsService.create — guest checkout', () => {
     expect(h.record).toHaveBeenCalledWith(
       expect.objectContaining({ actorUserId: null, action: 'donation.created' }),
     );
+  });
+
+  it('rechaza al invitado que no aceptó términos y datos, antes de cobrar', async () => {
+    const h = makeService();
+
+    await expect(
+      h.service.create(undefined, {
+        ...BASE_INPUT,
+        legalAcceptances: undefined,
+        payer: { email: 'guest@test.dev' },
+      }),
+    ).rejects.toMatchObject({ response: { code: 'LEGAL_ACCEPTANCE_REQUIRED' } });
+    expect(h.queryRaw).not.toHaveBeenCalled();
+    expect(h.createCollection).not.toHaveBeenCalled();
   });
 
   it('rejects with BadRequestException when there is no actor and no payer.email', async () => {
@@ -386,6 +408,8 @@ describe('DonationsService.create — Split de Pagos 1:1 (sponsorMpUserId) + car
             .fn()
             .mockResolvedValue({ accessToken: 'org-token', mpUserId: 'mp-user-connected' }),
         },
+        // Prueba de la aceptación del invitado (Ley 1581), en la misma org.
+        legalAcceptance: { createMany: jest.fn() },
       }),
     );
     h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check: none yet

@@ -13,6 +13,7 @@ import {
   type NotificationPort,
 } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * Ola 1 · R2-3 (AF-017, condition C9) over HTTP against the real app: member
@@ -55,6 +56,7 @@ describe('Member invitations (R2-3, AF-017)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `inv-${randomUUID()}@test.local`,

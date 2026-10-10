@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M05 donation certificates (F-3, RF14): the certificate is issued
@@ -38,6 +39,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const esalReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Certificable',
         displayName: 'Owner ESAL',
         email: `certs-esal-${randomUUID()}@test.local`,
@@ -63,6 +65,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const informalReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Informal',
         displayName: 'Owner Informal',
         email: `certs-informal-${randomUUID()}@test.local`,
@@ -77,6 +80,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const donorReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'María Restrepo',
         email: `certs-donor-${randomUUID()}@test.local`,
         password,
@@ -89,6 +93,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const otherDonorReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Otro Donante',
         email: `certs-other-donor-${randomUUID()}@test.local`,
         password,
@@ -182,7 +187,9 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
       .expect(200);
     expect(res.body.organizationName).toBe('Refugio Certificable');
     expect(res.body.organizationNit).toBe('900123456-1');
-    expect(res.body.donorName).toBe('María Restrepo');
+    // M13: la ruta es pública y el código es enumerable (10^6 por año): el
+    // nombre del donante sale enmascarado, nunca completo.
+    expect(res.body.donorName).toBe('María R.');
     expect(res.body.amount).toBe(150000);
     // Superficie mínima: nunca ids internos en la verificación pública.
     expect(res.body.id).toBeUndefined();

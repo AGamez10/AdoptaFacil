@@ -40,4 +40,39 @@ describe('Auth rate limiting', () => {
       .send({ email, password: 'wrong-password' })
       .expect(429);
   });
+
+  it('keeps the person registration budget at 10 per minute', async () => {
+    // Invalid payloads (400) still count against the budget; the 11th is 429.
+    for (let i = 0; i < 10; i += 1) {
+      await request(server)
+        .post('/auth/register/person')
+        .send({ displayName: 'X', email: 'not-an-email', password: 'short' })
+        .expect(400);
+    }
+    await request(server)
+      .post('/auth/register/person')
+      .send({ displayName: 'X', email: 'not-an-email', password: 'short' })
+      .expect(429);
+  });
+
+  it('lets page loads keep the session alive well past the 20/min default', async () => {
+    // Every full page load calls refresh/silent and me (twice each in dev), and
+    // a platform admin's page also reads mfa/status.
+    // 30 in a row must all reach their handlers: refresh/silent answers
+    // `null` without a cookie, and me answers 401 without a token.
+    for (let i = 0; i < 30; i += 1) {
+      await request(server).post('/auth/refresh/silent').expect(200);
+      await request(server).get('/auth/me').expect(401);
+      await request(server).get('/auth/mfa/status').expect(401);
+    }
+  });
+
+  it('does not let session traffic loosen the login budget', async () => {
+    // The login budget was exhausted by the first test; the session routes'
+    // own budget never resets or widens it.
+    await request(server)
+      .post('/auth/login')
+      .send({ email, password: 'wrong-password' })
+      .expect(429);
+  });
 });

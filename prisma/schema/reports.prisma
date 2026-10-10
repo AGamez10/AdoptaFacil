@@ -1,0 +1,113 @@
+// Module: reports (M13 · reportes de la organización)
+//
+// Reportes de donaciones y de servicio social que la organización genera desde
+// su panel. Cada generación queda SELLADA: snapshot del contenido (`payload`),
+// firmantes vigentes al momento (`signers`, solo identificadores + hash de la
+// firma, nunca la imagen) y SHA-256 del conjunto (`contentHash`).
+//
+// - Tenant-scoped: organization_id + RLS (ENABLE + FORCE + tenant_isolation).
+// - APPEND-ONLY: el rol de la app solo tiene SELECT+INSERT y triggers rechazan
+//   UPDATE/DELETE/TRUNCATE para cualquier rol (mismo patrón que
+//   volunteer_certificates / legal_representatives).
+// - IDEMPOTENTE: @@unique(organizationId, kind, contentHash) — generar otra vez
+//   el mismo reporte con los mismos datos devuelve la fila existente.
+// - Las FK hacia organizations (CASCADE) y users (RESTRICT) se declaran como
+//   @relation para que el esquema coincida con la migración (gate schema-drift).
+
+/// Reporte generado por una organización (donaciones o servicio social).
+model OrgReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  /// `OrgReportKind`: 'donations' | 'social_service'.
+  kind              String
+  /// Folio público `ADF-REP-<año>-<8 caracteres>` (no enumerable).
+  code              String   @unique
+  periodStart       DateTime @map("period_start") @db.Date
+  periodEnd         DateTime @map("period_end") @db.Date
+  filters           Json     @default("{}")
+  /// `OrgReportLegalEffect`: 'informative' | 'signed' | 'certified'.
+  legalEffect       String   @map("legal_effect")
+  /// Firmantes sellados: [{ legalRepresentativeId, role, fullName, position, signatureHash }].
+  signers           Json     @default("[]")
+  /// Snapshot completo del contenido (filas + totales + datos de la organización).
+  payload           Json
+  /// Resumen para listados (OrgReportSummary).
+  summary           Json
+  contentHash       String   @map("content_hash")
+  generatedByUserId String   @map("generated_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  generatedBy  User                @relation(fields: [generatedByUserId], references: [id], onDelete: Restrict)
+  approvals    OrgReportApproval[]
+
+  @@unique([organizationId, kind, contentHash])
+  @@index([organizationId, createdAt])
+  @@map("org_reports")
+}
+
+/// Firmante adicional designado por la organización (contador / revisor
+/// fiscal). La vinculación nace de una invitación del Owner: la persona crea su
+/// propia cuenta y contraseña; la plataforma nunca las conoce. Revocar deja el
+/// historial (no se borra).
+model OrgSignerDesignation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  /// 'accountant' | 'fiscal_reviewer'.
+  role               String
+  designatedByUserId String    @map("designated_by_user_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at")
+  revokedAt          DateTime? @map("revoked_at")
+  revokedByUserId    String?   @map("revoked_by_user_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("SignerDesignationUser", fields: [userId], references: [id], onDelete: Cascade)
+  designatedBy User         @relation("SignerDesignationBy", fields: [designatedByUserId], references: [id], onDelete: Restrict)
+  revokedBy    User?        @relation("SignerDesignationRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@map("org_signer_designations")
+}
+
+/// Aprobación (o rechazo) de un firmante sobre un reporte concreto, ligada a la
+/// huella del contenido y al hash de la firma usada. APPEND-ONLY.
+model OrgReportApproval {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  reportId              String   @map("report_id") @db.Uuid
+  signerRole            String   @map("signer_role")
+  signerUserId          String   @map("signer_user_id") @db.Uuid
+  legalRepresentativeId String   @map("legal_representative_id") @db.Uuid
+  signatureHash         String   @map("signature_hash")
+  contentHash           String   @map("content_hash")
+  /// 'approved' | 'rejected'.
+  decision              String
+  decidedAt             DateTime @default(now()) @map("decided_at")
+
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  report              OrgReport           @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  signerUser          User                @relation("ReportApprovalSigner", fields: [signerUserId], references: [id], onDelete: Restrict)
+  legalRepresentative LegalRepresentative @relation(fields: [legalRepresentativeId], references: [id], onDelete: Restrict)
+
+  @@unique([reportId, signerRole])
+  @@index([organizationId])
+  @@map("org_report_approvals")
+}
+
+/// Firmas que la organización declara que exigen sus estatutos por tipo de
+/// reporte (la plataforma aplica la regla; no interpreta estatutos).
+model OrgReportPolicy {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  kind            String
+  requiredRoles   String[] @map("required_roles")
+  updatedByUserId String   @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime @default(now()) @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy    User         @relation("ReportPolicyUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, kind])
+  @@map("org_report_policies")
+}

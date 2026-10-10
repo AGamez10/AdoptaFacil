@@ -7,6 +7,7 @@ import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contract
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M15b (F-5, RF26) — conciliación básica: recaudado (donaciones `approved`,
@@ -37,6 +38,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Org ${tag}`,
         displayName: 'Owner',
         email: `reconc-${tag}-${randomUUID()}@test.local`,
@@ -55,6 +57,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Donante',
         email: `reconc-${tag}-${randomUUID()}@test.local`,
         password,

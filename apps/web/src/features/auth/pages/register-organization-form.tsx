@@ -1,8 +1,14 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@adoptafacil/ui';
-import { ApiError, type RegisterOrganizationRequest } from '../../../shell/api';
+import { Button, useToast } from '@adoptafacil/ui';
+import { toApiError, type RegisterOrganizationRequest } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import {
+  acceptancesFrom,
+  type ConsentState,
+  LegalConsentFields,
+  requiredConsentsGiven,
+} from '../../legal';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
 import { PasswordRequirements } from '../components/password-requirements';
@@ -12,6 +18,7 @@ import {
   validatePassword,
   validatePasswordConfirmation,
   validateRequired,
+  registerErrorMessage,
 } from '../validation';
 
 type OrgErrors = Partial<
@@ -27,6 +34,7 @@ type OrgErrors = Partial<
 export function RegisterOrganizationForm() {
   const { register } = useSession();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [organizationName, setOrganizationName] = useState('');
   const [contactName, setContactName] = useState('');
@@ -37,6 +45,8 @@ export function RegisterOrganizationForm() {
   const [errors, setErrors] = useState<OrgErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [consents, setConsents] = useState<ConsentState>({});
+  const [legalError, setLegalError] = useState<string | undefined>();
 
   const refs = {
     organizationName: useRef<HTMLInputElement>(null),
@@ -62,6 +72,15 @@ export function RegisterOrganizationForm() {
       if (first) refs[first].current?.focus();
       return;
     }
+    // Autorización previa (Ley 1581): sin las casillas obligatorias no se envía
+    // ningún dato al servidor.
+    if (!requiredConsentsGiven('organization', consents)) {
+      setLegalError(
+        'Para crear la cuenta debes aceptar los términos y autorizar el tratamiento de datos.',
+      );
+      return;
+    }
+    setLegalError(undefined);
 
     const request: RegisterOrganizationRequest = {
       accountType: 'organization',
@@ -69,22 +88,22 @@ export function RegisterOrganizationForm() {
       displayName: contactName.trim(),
       email: email.trim(),
       password,
+      legalAcceptances: acceptancesFrom('organization', consents),
     };
 
     setSubmitting(true);
     try {
       await register(request);
+      // Aviso al aceptar: la constancia también llega por correo.
+      toast({
+        title: 'Cuenta creada',
+        description:
+          'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
+      });
       navigate('/', { replace: true });
     } catch (error) {
-      setFormError(
-        // Same real-vs-mock code mismatch as register-person-form.tsx: the
-        // real API's 409 has no body `code`, so the client falls back to
-        // 'conflict' (STATUS_CODES[409] in `shell/api/http.ts`) — never
-        // 'email_taken', which only the mock API ever sent.
-        ApiError.is(error) && error.code === 'conflict'
-          ? 'Ya existe una cuenta con este correo.'
-          : 'No pudimos crear la cuenta. Inténtalo de nuevo.',
-      );
+      const apiError = toApiError(error);
+      setFormError(registerErrorMessage(apiError.status, apiError.code));
       setSubmitting(false);
     }
   };
@@ -146,6 +165,14 @@ export function RegisterOrganizationForm() {
         onChange={setConfirm}
         error={errors.confirm}
         required
+      />
+
+      <LegalConsentFields
+        audience="organization"
+        value={consents}
+        onChange={setConsents}
+        error={legalError}
+        idPrefix="org"
       />
 
       <Button

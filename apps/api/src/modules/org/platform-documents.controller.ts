@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import {
   Role,
   type DocumentReviewQueueItem,
+  type DocumentVerificationReport,
   type OrganizationDocument,
   type ReviewOrganizationDocumentInput,
 } from '@adoptafacil/contracts';
@@ -12,6 +13,7 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { PlatformDocumentsService } from './platform-documents.service';
+import { DocumentVerificationService } from './document-verification/document-verification.service';
 import { reviewDocumentSchema } from './documents.schemas';
 
 /**
@@ -24,12 +26,24 @@ import { reviewDocumentSchema } from './documents.schemas';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
 export class PlatformDocumentsController {
-  constructor(private readonly service: PlatformDocumentsService) {}
+  constructor(
+    private readonly service: PlatformDocumentsService,
+    private readonly verification: DocumentVerificationService,
+  ) {}
 
   /** Review queue: Pending/UnderReview documents across all organizations. */
   @Get('queue')
   queue(): Promise<DocumentReviewQueueItem[]> {
     return this.service.queue();
+  }
+
+  /** Lectura automática del documento (texto del PDF, en el servidor) y
+   *  chequeos contra lo que la organización declaró. Solo propone: no decide. */
+  @Get(':id/verification')
+  verificationReport(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<DocumentVerificationReport> {
+    return this.verification.report(id);
   }
 
   /** Observe / approve / reject a document. A reason is mandatory for

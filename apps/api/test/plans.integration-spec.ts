@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PlansService } from '../src/core/plans/plans.service';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * Planes y suscripciones: `GET /org/plan` (Owner/Administrator) and the
@@ -30,6 +31,7 @@ describe('Plans and subscriptions', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Planes',
         displayName: 'Owner',
         email: `plans-${randomUUID()}@test.local`,

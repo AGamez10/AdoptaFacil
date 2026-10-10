@@ -73,7 +73,13 @@ describe('Sidebar — org identity chip (REFACTOR-VISUAL v2, Fase 3)', () => {
       },
     });
 
-    await waitFor(() => expect(fetchMock).not.toHaveBeenCalled());
+    // La compuerta legal consulta `/legal/me` para toda sesión; lo que no debe
+    // pasar para una Persona es pedir el perfil de la organización.
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([url]) => !String(url).endsWith('/legal/me')),
+      ).toHaveLength(0),
+    );
   });
 
   it('degrades silently (no crash) when the org profile fetch fails', async () => {
@@ -288,11 +294,53 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
       'href',
       '/organizacion/transparencia-nacional',
     );
-    expect(within(sidebar).getByRole('link', { name: /Reporte exógeno 2575/ })).toHaveAttribute(
+    expect(within(sidebar).getByRole('link', { name: /^Reportes/ })).toHaveAttribute(
       'href',
-      '/organizacion/reporte-exogeno',
+      '/organizacion/reportes',
     );
     // The label link itself is untouched by the chevron toggle.
     expect(link).toHaveAttribute('href', '/organizacion/documentos');
+  });
+
+  it('firmantes: la auditora con cargo solo ve "Documentos por firmar"; sin cargo ve "Reportes"; el Owner ve ambos', async () => {
+    const stubReadiness = (body: unknown) =>
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () => body,
+        }),
+      );
+
+    stubReadiness({ mySignerRole: 'fiscal_reviewer' });
+    const signer = renderShell({ route: '/inicio', ...sessionWith([Role.ReadOnlyAuditor]) });
+    let sidebar = screen.getByTestId('org-sidebar');
+    fireEvent.click(await within(sidebar).findByRole('button', { name: 'Expandir Documentos' }));
+    expect(
+      await within(sidebar).findByRole('link', { name: 'Documentos por firmar' }),
+    ).toBeInTheDocument();
+    expect(within(sidebar).queryByRole('link', { name: /^Reportes/ })).not.toBeInTheDocument();
+    signer.unmount();
+
+    stubReadiness({});
+    const plain = renderShell({ route: '/inicio', ...sessionWith([Role.ReadOnlyAuditor]) });
+    sidebar = screen.getByTestId('org-sidebar');
+    fireEvent.click(await within(sidebar).findByRole('button', { name: 'Expandir Documentos' }));
+    expect(await within(sidebar).findByRole('link', { name: /^Reportes/ })).toBeInTheDocument();
+    expect(
+      within(sidebar).queryByRole('link', { name: 'Documentos por firmar' }),
+    ).not.toBeInTheDocument();
+    plain.unmount();
+
+    stubGenericFetch();
+    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    sidebar = screen.getByTestId('org-sidebar');
+    fireEvent.click(await within(sidebar).findByRole('button', { name: 'Expandir Documentos' }));
+    expect(
+      within(sidebar).getByRole('link', { name: 'Documentos por firmar' }),
+    ).toBeInTheDocument();
+    expect(within(sidebar).getByRole('link', { name: /^Reportes/ })).toBeInTheDocument();
   });
 });

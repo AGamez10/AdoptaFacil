@@ -8,6 +8,7 @@ import { NOTIFICATION_TRANSPORT } from '../src/core/notifications/notification.m
 import type { NotificationMessage } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * Smoke of the branded emails on the REAL flows (real AppModule, Prisma, RLS,
@@ -47,6 +48,7 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
     const org = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: ORG_NAME,
         displayName: 'Owner Correos',
         email: `flows-org-${randomUUID()}@test.local`,
@@ -60,7 +62,7 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
     personEmail = `flows-p-${randomUUID()}@test.local`;
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Padrina Ana', email: personEmail, password })
+      .send({ ...LEGAL_PERSON, displayName: 'Padrina Ana', email: personEmail, password })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     orgIds.push(person.body.user.organizationId);

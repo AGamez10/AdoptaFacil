@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import {
   Role,
+  type DocumentPrefill,
   type OrganizationDocument,
   type UploadOrganizationDocumentInput,
   type UploadOrganizationDocumentResult,
@@ -13,6 +14,7 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { DocumentsService } from './documents.service';
+import { DocumentVerificationService } from './document-verification/document-verification.service';
 import { uploadDocumentSchema } from './documents.schemas';
 
 /**
@@ -24,7 +26,10 @@ import { uploadDocumentSchema } from './documents.schemas';
 @Controller('org/documents')
 @UseGuards(JwtAuthGuard)
 export class DocumentsController {
-  constructor(private readonly service: DocumentsService) {}
+  constructor(
+    private readonly service: DocumentsService,
+    private readonly documentReader: DocumentVerificationService,
+  ) {}
 
   /** List the org's documents (effective status reflects expiry). */
   @Get()
@@ -51,5 +56,14 @@ export class DocumentsController {
     @Body(new ZodValidationPipe(uploadDocumentSchema)) dto: UploadOrganizationDocumentInput,
   ): Promise<UploadOrganizationDocumentResult> {
     return this.service.upload(actor.id, dto);
+  }
+
+  /** Lee el RUT o el certificado de Cámara subido y devuelve NIT y razón social
+   *  para llenar el perfil con un clic. Solo lectura. Owner/Administrator. */
+  @Get(':id/prefill')
+  @UseGuards(RolesGuard)
+  @Roles(Role.Owner, Role.Administrator)
+  prefill(@Param('id', new ParseUUIDPipe()) id: string): Promise<DocumentPrefill> {
+    return this.documentReader.prefill(id);
   }
 }

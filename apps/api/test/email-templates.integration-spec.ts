@@ -14,6 +14,7 @@ import { hashEmail, signUnsubscribe } from '../src/core/notifications/templates/
 import { EmailTemplateService } from '../src/core/notifications/templates/email-template.service';
 import { loadAuthConfig } from '../src/core/auth/auth.config';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * Superadmin email templates: RBAC (platform roles only), versioning, activate
@@ -42,6 +43,7 @@ describe('Email templates (superadmin panel)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Correos',
         displayName: 'Owner',
         email: `mail-${randomUUID()}@test.local`,

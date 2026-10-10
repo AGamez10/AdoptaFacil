@@ -6,15 +6,52 @@ import { featureForPath, useCapabilities } from '../capabilities';
 import { navItems, ORG_MEMBER_ROLES, type NavItem } from '../navigation';
 import { useNav } from '../navigation/nav-context';
 import { useSession } from '../auth';
+import { useApiClient } from '../api';
+import { Role, type OrgReportsReadiness } from '@adoptafacil/contracts';
 import { Brand } from './brand';
 import { useOrgIdentity } from './use-org-identity';
 import styles from './sidebar.module.scss';
+
+/**
+ * ¿La persona tiene cargo de firma? Solo se pregunta al servidor (la autoridad)
+ * si es auditora sin rol de gestión: es el único caso en que el menú cambia.
+ */
+function useSignerSeat(): boolean | null {
+  const client = useApiClient();
+  const { hasRole, user } = useSession();
+  const asksServer =
+    !!user && hasRole(Role.ReadOnlyAuditor) && !hasRole(Role.Owner) && !hasRole(Role.Administrator);
+  const [seat, setSeat] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!asksServer) return undefined;
+    let active = true;
+    client
+      .request<OrgReportsReadiness>('/org/reports/readiness')
+      .then((ready) => {
+        if (active) setSeat(!!ready.mySignerRole);
+      })
+      .catch(() => {
+        if (active) setSeat(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [asksServer, client]);
+  return asksServer ? seat : null;
+}
 
 /** Shared visibility check for a leaf entry (top-level or inside a group). */
 function useLeafVisibility() {
   const { hasAnyRole, user } = useSession();
   const { capabilities } = useCapabilities();
-  return (leaf: Pick<NavItem, 'path' | 'roles' | 'personaOnly'>) => {
+  const signerSeat = useSignerSeat();
+  return (leaf: Pick<NavItem, 'path' | 'roles' | 'personaOnly' | 'signerGate'>) => {
+    // Solo la auditora sin gestión depende del cargo (`signerSeat !== null`).
+    if (leaf.signerGate === 'signing-inbox' && signerSeat === false) return false;
+    if (leaf.signerGate === 'signing-inbox' && signerSeat === null && !hasAnyRole(Role.Owner)) {
+      return false;
+    }
+    if (leaf.signerGate === 'not-for-signers' && signerSeat === true) return false;
     // Ola 1 (R1-1): entries of a switched-off module are hidden (the route
     // gate and the API's 404 are the other two barriers).
     const feature = featureForPath(leaf.path);

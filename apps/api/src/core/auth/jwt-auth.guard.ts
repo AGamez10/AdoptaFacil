@@ -57,6 +57,7 @@ export class JwtAuthGuard implements CanActivate {
       organizationId: claims.org,
       accountType: claims.typ,
       email: claims.email,
+      mfaAt: typeof claims.mfa_at === 'number' ? claims.mfa_at : undefined,
     };
 
     const path = (request.originalUrl ?? request.url ?? '').split('?')[0];

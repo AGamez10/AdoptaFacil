@@ -69,6 +69,9 @@ function toInvitation(row: InvitationRow): OrganizationInvitation {
     organizationId: row.organizationId,
     email: row.email,
     role: row.role as Role,
+    ...(row.signerRole
+      ? { signerRole: row.signerRole as NonNullable<OrganizationInvitation['signerRole']> }
+      : {}),
     status: statusOf(row),
     invitedByUserId: row.invitedByUserId,
     expiresAt: row.expiresAt.toISOString(),
@@ -129,6 +132,30 @@ export class InvitationsService {
 
     const token = randomBytes(32).toString('base64url');
     const row = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      if (input.signerRole) {
+        // Vincular un firmante (contador / revisor fiscal) es decisión del
+        // propietario de la organización, no de la plataforma ni de un
+        // administrador. La persona entra con el rol de menor poder.
+        if (input.role !== Role.ReadOnlyAuditor) {
+          throw new BadRequestException(
+            'Un firmante adicional entra con el rol de auditor de solo lectura.',
+          );
+        }
+        const actorIsOwner = await tx.userRole.findFirst({
+          where: { organizationId, userId: actorUserId, role: Role.Owner },
+        });
+        if (!actorIsOwner) {
+          throw new ForbiddenException('Solo el propietario puede vincular un firmante.');
+        }
+        const taken = await tx.orgSignerDesignation.findFirst({
+          where: { organizationId, role: input.signerRole, revokedAt: null },
+        });
+        if (taken) {
+          throw new ConflictException(
+            'Ya hay un firmante vigente con ese cargo; revócalo antes de invitar a otro.',
+          );
+        }
+      }
       if (input.role === Role.Owner) {
         const actorIsOwner = await tx.userRole.findFirst({
           where: { organizationId, userId: actorUserId, role: Role.Owner },
@@ -147,6 +174,7 @@ export class InvitationsService {
           organizationId,
           email,
           role: input.role,
+          signerRole: input.signerRole ?? null,
           tokenHash: hashInvitationToken(token),
           invitedByUserId: actorUserId,
           expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
@@ -158,7 +186,10 @@ export class InvitationsService {
         action: 'invitation.created',
         entityType: 'organization_invitation',
         entityId: created.id,
-        metadata: { role: input.role },
+        metadata: {
+          role: input.role,
+          ...(input.signerRole ? { signerRole: input.signerRole } : {}),
+        },
       });
       return created;
     });
@@ -288,6 +319,26 @@ export class InvitationsService {
           data: { userId, organizationId, accountType: 'organization', email, passwordHash },
         });
         await tx.userRole.create({ data: { organizationId, userId, role: row.role } });
+        if (row.signerRole) {
+          // La persona acaba de crear su propia cuenta y contraseña con el
+          // enlace de la invitación: queda vinculada como firmante.
+          await tx.orgSignerDesignation.create({
+            data: {
+              organizationId,
+              userId,
+              role: row.signerRole,
+              designatedByUserId: row.invitedByUserId,
+            },
+          });
+          await this.audit.recordWithTx(tx, {
+            organizationId,
+            actorUserId: userId,
+            action: 'signer.designated',
+            entityType: 'org_signer_designation',
+            entityId: userId,
+            metadata: { signerRole: row.signerRole, designatedByUserId: row.invitedByUserId },
+          });
+        }
         await this.audit.recordWithTx(tx, {
           organizationId,
           actorUserId: userId,

@@ -32,6 +32,10 @@ export const ANIMAL_VIEW_ROLES = [
 ] as const;
 
 export const ORG_DOCUMENTS_ROLES = [Role.Owner, Role.Administrator, Role.ReadOnlyAuditor] as const;
+/** Gestionan/ven a los firmantes de la organización (M13). */
+export const ORG_SIGNERS_ROLES = [Role.Owner, Role.Administrator] as const;
+/** Firman documentos: el representante legal (Owner) y los firmantes vinculados (auditor). */
+export const ORG_SIGNING_ROLES = [Role.Owner, Role.ReadOnlyAuditor] as const;
 
 /**
  * M13 (S-14) — "Dashboard de donaciones y campañas" de la organización. Es
@@ -100,6 +104,12 @@ export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
  * — mismos dos roles que `PLATFORM_DOCUMENTS_ROLES`, declarado aparte por el
  * mismo criterio del resto de constantes de este archivo.
  */
+/**
+ * F19 — espacio de trabajo del equipo de plataforma (`/plataforma/equipo`).
+ * Copiado del `@Roles` de `WorkspaceController` (`/platform/workspace/*`).
+ */
+export const PLATFORM_TEAM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
+
 export const PLATFORM_ADMIN_DASHBOARD_ROLES = [
   Role.PlatformAdmin,
   Role.PlatformSuperAdmin,
@@ -250,6 +260,13 @@ export interface NavItem {
    */
   roles?: readonly Role[];
   /**
+   * Firmantes vinculados (auditor con cargo de firma): `signing-inbox` solo lo
+   * ve quien firma (Owner o auditor con cargo); `not-for-signers` se oculta a
+   * quien solo entró a firmar, porque la API le limita la lista a sus
+   * documentos y el menú no debe ofrecerle lo que no va a poder usar.
+   */
+  signerGate?: 'signing-inbox' | 'not-for-signers';
+  /**
    * F1-01: restricts the entry to a Persona account (`session.user.accountType
    * === 'person'`), the INVERSE of `roles` — an org account has at least one
    * `ORG_ROLES` entry and a Persona has none, so `roles` (an allow-list of "has
@@ -339,11 +356,24 @@ export const navItems: NavItem[] = [
         comingSoon: true,
       },
       {
-        path: '/organizacion/reporte-exogeno',
-        label: 'Reporte exógeno 2575',
+        path: '/organizacion/reportes',
+        label: 'Reportes',
         icon: ShieldIcon,
-        roles: ORG_MEMBER_ROLES,
-        comingSoon: true,
+        roles: ORG_DOCUMENTS_ROLES,
+        signerGate: 'not-for-signers',
+      },
+      {
+        path: '/organizacion/documentos-por-firmar',
+        label: 'Documentos por firmar',
+        icon: ShieldIcon,
+        roles: ORG_SIGNING_ROLES,
+        signerGate: 'signing-inbox',
+      },
+      {
+        path: '/organizacion/firmantes',
+        label: 'Firmantes',
+        icon: ShieldIcon,
+        roles: ORG_SIGNERS_ROLES,
       },
     ],
   },
@@ -587,6 +617,14 @@ export const navItems: NavItem[] = [
     label: 'Banner del portal',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
+  },
+  // F19 · espacio de trabajo del equipo de plataforma: tareas, doble
+  // aprobación, personas del equipo, bitácora y "Mi seguridad".
+  {
+    path: '/plataforma/equipo',
+    label: 'Equipo y seguridad',
+    icon: ShieldIcon,
+    roles: PLATFORM_TEAM_ROLES,
   },
   // Correos: plantillas de los correos por evento y de los envíos masivos,
   // editables con vista previa y versiones — mismos roles que /plataforma/*.

@@ -1,12 +1,13 @@
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useLocation, useNavigate, type Location } from 'react-router-dom';
 import { Button } from '@adoptafacil/ui';
+import { toApiError } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { AuthLayout } from '../components/auth-layout';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
 import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
-import { collectErrors, validateEmail } from '../validation';
+import { collectErrors, loginErrorMessage, validateEmail } from '../validation';
 
 interface FromState {
   from?: Location;
@@ -55,9 +56,8 @@ export function LoginPage() {
     try {
       await signIn({ email, password });
       navigate(from, { replace: true });
-    } catch {
-      // Generic message — never leak whether the email exists or which field failed.
-      setFormError('No pudimos iniciar sesión. Revisa tu correo y contraseña.');
+    } catch (error) {
+      setFormError(loginErrorMessage(toApiError(error).status));
       setSubmitting(false);
     }
   };
@@ -147,6 +147,17 @@ export function LoginPage() {
           <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
         </>
       )}
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Al usar AdoptaFácil aplican los{' '}
+        <Link to="/legal/terminos" className="underline underline-offset-2">
+          Términos
+        </Link>{' '}
+        y la{' '}
+        <Link to="/legal/politica-de-datos" className="underline underline-offset-2">
+          Política de datos
+        </Link>
+        . Si es tu primera vez con Google, te pediremos aceptarlos antes de continuar.
+      </p>
     </AuthLayout>
   );
 }

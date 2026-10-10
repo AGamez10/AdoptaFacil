@@ -8,6 +8,7 @@ import { FeaturesModule } from './core/features/features.module';
 import { PlansModule } from './core/plans/plans.module';
 import { IdentityModule } from './core/identity/identity.module';
 import { EmailTemplatesModule } from './core/notifications/email-templates.module';
+import { LegalModule } from './core/legal/legal.module';
 import { NotificationModule } from './core/notifications/notification.module';
 import { PaymentModule } from './core/payments/payment.module';
 import { RbacModule } from './core/rbac/rbac.module';
@@ -19,11 +20,13 @@ import { AnimalsModule } from './modules/animals/animals.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CommunityModule } from './modules/community/community.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { OrgGovernanceModule } from './modules/org/governance/org-governance.module';
 import { OrgModule } from './modules/org/org.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { PlatformWorkspaceModule } from './modules/platform-workspace/platform-workspace.module';
 import { PortalsModule } from './modules/portals/portals.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { ResourcesModule } from './modules/resources/resources.module';
@@ -63,6 +66,8 @@ import { RedisModule } from './redis/redis.module';
     // Shared IdentityPort provider (T-Google-SignIn): binds the fake Google
     // Sign-In verifier by default, global.
     IdentityModule,
+    // Aceptación versionada de términos y política de datos (Ley 1581), global.
+    LegalModule,
     HealthModule,
     // Module feature flags (Ola 1, R1-1): global guard that answers 404 for
     // switched-off modules + `GET /public/config/features` for the web.
@@ -99,6 +104,10 @@ import { RedisModule } from './redis/redis.module';
     ReputationModule,
     // M13 · dashboards por audiencia — PlatformAdmin/PlatformSuperAdmin (RF24, S-8).
     DashboardsModule,
+    // M13 · reportes sellados de donaciones y servicio social (firmas por estatutos).
+    ReportsModule,
+    // F19 · espacio de trabajo del equipo de plataforma (tareas, doble aprobación, bitácora).
+    PlatformWorkspaceModule,
   ],
 })
 export class AppModule {}

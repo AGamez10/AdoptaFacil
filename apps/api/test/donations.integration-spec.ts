@@ -7,6 +7,7 @@ import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contract
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M05 donations (T-050, P1) end-to-end: an authenticated PERSON donates to an
@@ -39,6 +40,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const orgReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Beneficiario',
         displayName: 'Owner Refugio',
         email: `t050-org-${randomUUID()}@test.local`,
@@ -52,6 +54,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const otherReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otra Org',
         displayName: 'Owner Otra',
         email: `t050-other-${randomUUID()}@test.local`,
@@ -64,6 +67,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const personReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Donante',
         email: `t050-p1-${randomUUID()}@test.local`,
         password,
@@ -76,6 +80,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const person2Reg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Otra Persona',
         email: `t050-p2-${randomUUID()}@test.local`,
         password,

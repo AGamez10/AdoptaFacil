@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectErrors,
+  loginErrorMessage,
+  registerErrorMessage,
   validateEmail,
   validatePassword,
   validatePasswordConfirmation,
@@ -46,5 +48,42 @@ describe('auth validation', () => {
     const ok = collectErrors({ a: undefined });
     expect(ok.isValid).toBe(true);
     expect(ok.errors).toEqual({});
+  });
+});
+
+describe('loginErrorMessage', () => {
+  it('keeps wrong credentials generic', () => {
+    expect(loginErrorMessage(401)).toBe(
+      'No pudimos iniciar sesión. Revisa tu correo y contraseña.',
+    );
+  });
+
+  it('tells a rate-limited person to wait instead of blaming the password', () => {
+    expect(loginErrorMessage(429)).toMatch(/Espera un minuto/);
+  });
+
+  it('separates an unreachable or failing server from bad credentials', () => {
+    expect(loginErrorMessage(0)).toMatch(/conectar con el servidor/);
+    expect(loginErrorMessage(503)).toMatch(/El servidor tuvo un problema/);
+  });
+});
+
+describe('registerErrorMessage', () => {
+  it('keeps the taken-email message for a 409', () => {
+    expect(registerErrorMessage(409, 'conflict')).toBe('Ya existe una cuenta con este correo.');
+  });
+
+  it('says the service is unavailable when the API cannot be reached or fails', () => {
+    expect(registerErrorMessage(0, 'network_error')).toMatch(/^El servicio no está disponible/);
+    expect(registerErrorMessage(503, 'service_unavailable')).toMatch(
+      /^El servicio no está disponible/,
+    );
+  });
+
+  it('asks to wait on a rate limit and to review the data otherwise', () => {
+    expect(registerErrorMessage(429, 'too_many_requests')).toMatch(/Espera un minuto/);
+    expect(registerErrorMessage(400, 'bad_request')).toBe(
+      'No pudimos crear la cuenta. Revisa los datos e inténtalo de nuevo.',
+    );
   });
 });
