@@ -117,6 +117,24 @@ describe('production guard (R0-1)', () => {
       /THROTTLER_STORAGE/,
     );
   });
+  it('refuses to boot production with platform MFA switched off (F19)', () => {
+    expect(() => validateEnv({ ...SAFE_PRODUCTION, PLATFORM_MFA_REQUIRED: 'false' })).toThrow(
+      /PLATFORM_MFA_REQUIRED/,
+    );
+    expect(() => validateEnv({ ...SAFE_PRODUCTION, PLATFORM_MFA_REQUIRED: 'true' })).not.toThrow();
+  });
+
+  it('keeps platform MFA on unless it is explicitly "false" (fail closed)', () => {
+    expect(validateEnv(BASE).PLATFORM_MFA_REQUIRED).toBe(true);
+    for (const value of ['', 'no', '0', 'off', 'TRUE']) {
+      expect(validateEnv({ ...BASE, PLATFORM_MFA_REQUIRED: value }).PLATFORM_MFA_REQUIRED).toBe(
+        true,
+      );
+    }
+    expect(validateEnv({ ...BASE, PLATFORM_MFA_REQUIRED: 'false' }).PLATFORM_MFA_REQUIRED).toBe(
+      false,
+    );
+  });
 });
 
 describe('module feature flags (R1-1)', () => {

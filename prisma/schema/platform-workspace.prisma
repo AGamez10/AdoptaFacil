@@ -1,0 +1,127 @@
+// Module: platform workspace + staff security (F19, Anexo #3).
+//
+// The platform team works inside a TEAM: the organization (tenant) where its
+// members hold their platform roles (PlatformAdmin / PlatformSuperAdmin). Every
+// table here that carries `organization_id` stores the TEAM's own work and is
+// protected by RLS ENABLE + FORCE + tenant_isolation, exactly like any business
+// table: team A never sees or changes team B's tasks, notes or approvals.
+//
+// Append-only by construction (enforced in the database, not only in code —
+// see migration 20261009230000_platform_workspace_security):
+//   - tickets and their events: the app role gets SELECT + INSERT only and
+//     triggers reject UPDATE/DELETE/TRUNCATE for every role. A task's current
+//     state is the state of its LAST event; two people changing it at once
+//     collide on UNIQUE(ticket_id, seq) and the loser gets a 409.
+//   - sensitive actions and their decisions: same. Exactly one decision per
+//     request (UNIQUE), and a BEFORE INSERT trigger enforces four eyes: the
+//     approver is a different person than the requester and holds
+//     platform_super_admin in the same team.
+// All timestamps UTC.
+
+/// Second factor (TOTP, RFC 6238) of an account. Auth infrastructure keyed by
+/// user, like refresh_tokens (no organization_id, no RLS). The secret is stored
+/// ENCRYPTED (AES-256-GCM, key derived from SIGNATURE_ENCRYPTION_KEY with HKDF)
+/// and never returned after enrollment. `lastUsedStep` blocks code replay.
+model AuthMfaFactor {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  secretCiphertext String    @map("secret_ciphertext")
+  /// NULL until the person proves the app works by typing a first code.
+  confirmedAt      DateTime? @map("confirmed_at")
+  lastUsedStep     BigInt?   @map("last_used_step")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_mfa_factors")
+}
+
+/// A task of the team: today, one organization pending platform review. Insert
+/// only; its state lives in PlatformWorkspaceTicketEvent. One task per
+/// (team, organization, kind): when the organization comes back for review the
+/// same task is reopened with a new event. `subjectOrganizationId` has no FK on
+/// purpose — the reviewed organization belongs to the shared catalog, and the
+/// team's history must survive whatever happens to it.
+model PlatformWorkspaceTicket {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  subjectOrganizationId String   @map("subject_organization_id") @db.Uuid
+  kind                  String   @default("organization_review")
+  createdByUserId       String?  @map("created_by_user_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  organization Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       PlatformWorkspaceTicketEvent[]
+
+  @@unique([organizationId, subjectOrganizationId, kind])
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("platform_workspace_tickets")
+}
+
+/// Immutable history of a task (assignment, status, notes). The composite FK
+/// (ticket_id, organization_id) makes it impossible to hang an event of team A
+/// on a task of team B, even bypassing the service.
+model PlatformWorkspaceTicketEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  ticketId       String   @map("ticket_id") @db.Uuid
+  seq            Int
+  /// WorkspaceTicketEventType.
+  type           String
+  /// WorkspaceTicketStatus after this event.
+  status         String
+  assigneeUserId String?  @map("assignee_user_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket       PlatformWorkspaceTicket @relation(fields: [ticketId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([ticketId, seq])
+  @@index([organizationId])
+  @@map("platform_workspace_ticket_events")
+}
+
+/// A sensitive action someone in the team asked for. Insert only; it runs
+/// only when another PlatformSuperAdmin of the team approves it.
+model PlatformSensitiveAction {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  /// SensitiveActionType.
+  type              String
+  payload           Json
+  reason            String
+  requestedByUserId String   @map("requested_by_user_id") @db.Uuid
+  requestedAt       DateTime @default(now()) @map("requested_at")
+  expiresAt         DateTime @map("expires_at")
+
+  organization Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  decisions    PlatformSensitiveActionDecision[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("platform_sensitive_actions")
+}
+
+/// The single decision on a sensitive action (approved / rejected / cancelled).
+/// Insert only, one per action; four eyes enforced by a database trigger.
+model PlatformSensitiveActionDecision {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  actionId        String   @unique @map("action_id") @db.Uuid
+  decision        String
+  decidedByUserId String   @map("decided_by_user_id") @db.Uuid
+  note            String?
+  /// Non-sensitive outcome of running the action (ids, counts). Never secrets.
+  result          Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  action       PlatformSensitiveAction @relation(fields: [actionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("platform_sensitive_action_decisions")
+}
