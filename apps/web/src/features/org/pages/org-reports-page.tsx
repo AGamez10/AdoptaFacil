@@ -357,6 +357,11 @@ function ReportCard({
         </div>
         <CardDescription>{ui.description}</CardDescription>
         <p className="text-xs text-muted-foreground">{effectUi.help}</p>
+        <p className="text-xs text-muted-foreground">
+          {kind === 'donations'
+            ? 'Por ahora el reporte no identifica a los donantes: sin su consentimiento registrado no se usan sus datos.'
+            : 'Este reporte nombra a voluntarios y no se emite hasta que exista su consentimiento registrado.'}
+        </p>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
         <fieldset className="space-y-2">

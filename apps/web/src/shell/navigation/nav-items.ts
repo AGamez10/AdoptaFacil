@@ -254,6 +254,13 @@ export interface NavItem {
    */
   roles?: readonly Role[];
   /**
+   * Firmantes vinculados (auditor con cargo de firma): `signing-inbox` solo lo
+   * ve quien firma (Owner o auditor con cargo); `not-for-signers` se oculta a
+   * quien solo entró a firmar, porque la API le limita la lista a sus
+   * documentos y el menú no debe ofrecerle lo que no va a poder usar.
+   */
+  signerGate?: 'signing-inbox' | 'not-for-signers';
+  /**
    * F1-01: restricts the entry to a Persona account (`session.user.accountType
    * === 'person'`), the INVERSE of `roles` — an org account has at least one
    * `ORG_ROLES` entry and a Persona has none, so `roles` (an allow-list of "has
@@ -347,12 +354,14 @@ export const navItems: NavItem[] = [
         label: 'Reportes',
         icon: ShieldIcon,
         roles: ORG_DOCUMENTS_ROLES,
+        signerGate: 'not-for-signers',
       },
       {
         path: '/organizacion/documentos-por-firmar',
         label: 'Documentos por firmar',
         icon: ShieldIcon,
         roles: ORG_SIGNING_ROLES,
+        signerGate: 'signing-inbox',
       },
       {
         path: '/organizacion/firmantes',

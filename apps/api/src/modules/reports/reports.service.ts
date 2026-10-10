@@ -38,6 +38,7 @@ import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.u
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LegalRepresentativeService } from '../org/legal-representative.service';
+import { assertNoIdentifiedPeople, redactDonationDonors } from './report-third-party';
 import { studentServiceMinHours } from '../volunteering/volunteer-certificate-eligibility';
 import {
   SIGNER_ORDER,
@@ -398,10 +399,17 @@ export class ReportsService {
         );
       }
 
-      const payload =
+      const built =
         input.kind === 'donations'
           ? await this.donationsPayload(tx, organizationId, snapshot, period)
           : await this.socialServicePayload(tx, organizationId, snapshot, period, filters);
+      // Sin consentimiento registrado no se emite ningún dato de terceros.
+      let payload = built;
+      if (built.kind === 'donations') {
+        payload = redactDonationDonors(built);
+      } else {
+        assertNoIdentifiedPeople(built.rows.length);
+      }
 
       const contentHash = sealHash({
         kind: input.kind,

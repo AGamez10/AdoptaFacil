@@ -427,7 +427,8 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(xlsx.body as ArrayBuffer);
     const donors = wb.getWorksheet('Donaciones')!.getColumn(3).values.slice(2);
-    expect(donors).toEqual(expect.arrayContaining(['María Restrepo', 'Donante anónimo']));
+    expect(donors).toEqual(expect.arrayContaining(['Donante', 'Donante anónimo']));
+    expect(JSON.stringify(donors)).not.toContain('María Restrepo');
 
     const downloads = await admin.auditLog.count({
       where: {
@@ -439,33 +440,33 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     expect(downloads).toBe(3); // borrador + PDF emitido + Excel
   });
 
-  it('generates the social service report for a school (signed by the legal representative only)', async () => {
+  it('BLOCKS the social service report while there is no consent registry: it names volunteers, so it is never issued', async () => {
+    const before = await admin.orgReport.count({
+      where: { organizationId: orgA.orgId, kind: 'social_service' },
+    });
     const res = await generate(drafterA, {
       kind: 'social_service',
       periodStart: monthAgo,
       periodEnd: today,
       filters: { studentServiceOnly: true, schoolName: '  Colegio San José ' },
-    }).expect(201);
-    expect(res.body.legalEffect).toBe('signed');
-    expect(res.body.signers.map((s: { role: string }) => s.role)).toEqual(['legal_representative']);
-    await request(server)
-      .post(`/org/reports/${res.body.id}/decision`)
-      .set('Authorization', `Bearer ${orgA.token}`)
-      .send({ decision: 'approved' })
-      .expect(200);
-    expect(res.body.summary).toMatchObject({ rowCount: 1, approvedHours: 8.5, volunteers: 1 });
-    expect(res.body.filters).toEqual({ studentServiceOnly: true, schoolName: 'Colegio San José' });
+    }).expect(409);
+    expect(res.body.message).toContain('consentimiento');
+    const after = await admin.orgReport.count({
+      where: { organizationId: orgA.orgId, kind: 'social_service' },
+    });
+    expect(after).toBe(before);
+  });
 
-    const row = await admin.orgReport.findUniqueOrThrow({ where: { id: res.body.id } });
-    // Minimización: nunca datos del acudiente del menor.
-    expect(JSON.stringify(row.payload)).not.toContain('Acudiente Privado');
-    expect(JSON.stringify(row.payload)).not.toContain('123123123');
-
-    const pdf = await request(server)
-      .get(`/org/reports/${res.body.id}/pdf`)
-      .set('Authorization', `Bearer ${orgA.token}`)
-      .expect(200);
-    expect(pdf.headers['content-type']).toBe('application/pdf');
+  it('donations reports never identify the donor while there is no consent registry', async () => {
+    const rows = await admin.orgReport.findMany({
+      where: { organizationId: orgA.orgId, kind: 'donations' },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    const dump = JSON.stringify(rows.map((r) => r.payload));
+    expect(dump).not.toContain('María Restrepo');
+    expect(dump).not.toContain('Donante Secreto');
+    expect(dump).not.toContain('5566778899');
+    expect(dump).not.toContain('4050');
   });
 
   it('an informal org gets an INFORMATIVE report with NO signatures, even if it registered one', async () => {
