@@ -44,6 +44,17 @@ export const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
   SMTP_FROM: z.string().min(1).optional(),
+  // Email delivery queue (BullMQ on the same Redis). Every email is a job: the
+  // request only enqueues it and a worker renders + sends it, with retries.
+  // Tune these to the SMTP provider's limits; no code change needed.
+  //   CONCURRENCY: emails a worker sends in parallel (SMTP pool size too).
+  //   RATE_MAX per RATE_DURATION_MS: ceiling across all workers.
+  //   ATTEMPTS: tries per email (exponential backoff from 30 s) before it
+  //   stays as failed in the queue.
+  EMAIL_QUEUE_CONCURRENCY: z.coerce.number().int().positive().max(50).default(5),
+  EMAIL_QUEUE_RATE_MAX: z.coerce.number().int().positive().default(10),
+  EMAIL_QUEUE_RATE_DURATION_MS: z.coerce.number().int().positive().default(1_000),
+  EMAIL_QUEUE_ATTEMPTS: z.coerce.number().int().positive().max(20).default(6),
   // T-106 (M03/RF09): interval of the repeatable clinical-reminders scan job.
   // Configurable for dev/test; defaults to daily. Kept in the validated schema so
   // it survives @nestjs/config (which only re-exposes validated keys).

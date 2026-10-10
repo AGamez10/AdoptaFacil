@@ -43,6 +43,12 @@ export interface NotificationMessage {
   attachments?: NotificationAttachment[];
   /** Additive: render this catalog event's template instead of `body`. */
   template?: NotificationTemplateRequest;
+  /**
+   * Additive: stable id of this email (e.g. `donation.thanks:<donationId>`).
+   * The same key sent again within 7 days is dropped by the delivery queue,
+   * so a repeated webhook or a retried request never emails twice.
+   */
+  idempotencyKey?: string;
 }
 
 export interface NotificationPort {

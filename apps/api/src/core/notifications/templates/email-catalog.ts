@@ -464,6 +464,7 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     required: false,
     variables: [
       ORG,
+      v('nombre', 'Nombre del donante (o "amigo(a)" si no lo dio)', 'Laura'),
       v('titulo', 'Título de la publicación', 'Ya casi llegamos a la meta'),
       v(
         'mensaje',
@@ -475,7 +476,7 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       subject: '{{organizacion}} publicó novedades sobre una campaña',
       preheader: '{{titulo}}',
       heading: '{{titulo}}',
-      body: 'Hola,\n\nComo apoyaste a **{{organizacion}}**, queremos contarte cómo va:\n\n{{mensaje}}',
+      body: 'Hola {{nombre}},\n\nComo apoyaste a **{{organizacion}}**, queremos contarte cómo va:\n\n{{mensaje}}',
     },
   },
   {

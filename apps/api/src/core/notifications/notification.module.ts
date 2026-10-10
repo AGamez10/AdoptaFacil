@@ -1,6 +1,11 @@
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Queue } from 'bullmq';
 import type { Env } from '../../config/env.validation';
+import { EMAIL_DELIVERY, EmailDeliveryWorker } from './delivery/email-delivery.worker';
+import { EMAIL_DELIVERY_QUEUE, type EmailDeliveryJobData } from './delivery/email-delivery.job';
+import { QueuedNotificationPort } from './delivery/queued-notification.port';
 import { LogNotificationAdapter } from './log-notification.adapter';
 import { SmtpNotificationAdapter } from './smtp-notification.adapter';
 import { NOTIFICATION_PORT, type NotificationPort } from './notification.port';
@@ -17,16 +22,22 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
  * default and what tests use). Swapping to SendGrid/SES later = add an adapter
  * and one line in this factory — auth/reminders are untouched.
  *
- * NOTIFICATION_PORT is the transport wrapped by the template layer
- * (`TemplatedNotificationAdapter`): messages that name a catalog event get the
- * superadmin-editable branded HTML; everything else passes through unchanged.
+ * Layers, outermost first:
+ *  - NOTIFICATION_PORT (`QueuedNotificationPort`): what modules inject. It only
+ *    enqueues the email on the `email-delivery` BullMQ queue and returns.
+ *  - EMAIL_DELIVERY (`TemplatedNotificationAdapter`): run by the queue worker
+ *    (`EmailDeliveryWorker`); renders the superadmin-editable branded HTML for
+ *    catalog events, applies opt-outs/on-off, then calls the transport.
+ *  - NOTIFICATION_TRANSPORT: log stub or SMTP.
  * The superadmin endpoints live in `EmailTemplatesModule` (it needs AuthModule,
  * which itself injects this port, so they can't live here without a cycle).
  */
 @Global()
 @Module({
+  imports: [BullModule.registerQueue({ name: EMAIL_DELIVERY_QUEUE })],
   providers: [
     EmailTemplateService,
+    EmailDeliveryWorker,
     {
       provide: NOTIFICATION_TRANSPORT,
       inject: [ConfigService],
@@ -36,10 +47,24 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
           : new LogNotificationAdapter(),
     },
     {
-      provide: NOTIFICATION_PORT,
+      provide: EMAIL_DELIVERY,
       inject: [NOTIFICATION_TRANSPORT, EmailTemplateService],
       useFactory: (transport: NotificationPort, templates: EmailTemplateService) =>
         new TemplatedNotificationAdapter(transport, templates),
+    },
+    {
+      provide: NOTIFICATION_PORT,
+      inject: [getQueueToken(EMAIL_DELIVERY_QUEUE), EMAIL_DELIVERY, ConfigService],
+      useFactory: (
+        queue: Queue<EmailDeliveryJobData>,
+        delivery: NotificationPort,
+        config: ConfigService<Env, true>,
+      ) =>
+        new QueuedNotificationPort(
+          queue,
+          delivery,
+          config.get('EMAIL_QUEUE_ATTEMPTS', { infer: true }),
+        ),
     },
   ],
   exports: [NOTIFICATION_PORT, NOTIFICATION_TRANSPORT, EmailTemplateService],

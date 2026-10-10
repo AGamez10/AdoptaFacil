@@ -4,11 +4,11 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { EMAIL_DELIVERY } from '../src/core/notifications/delivery/email-delivery.worker';
 import { NOTIFICATION_TRANSPORT } from '../src/core/notifications/notification.module';
-import {
-  NOTIFICATION_PORT,
-  type NotificationMessage,
-  type NotificationPort,
+import type {
+  NotificationMessage,
+  NotificationPort,
 } from '../src/core/notifications/notification.port';
 import { hashEmail, signUnsubscribe } from '../src/core/notifications/templates/email-compose';
 import { EmailTemplateService } from '../src/core/notifications/templates/email-template.service';
@@ -205,7 +205,7 @@ describe('Email templates (superadmin panel)', () => {
       .send({ version: 99 })
       .expect(404);
 
-    const port = app.get<NotificationPort>(NOTIFICATION_PORT);
+    const port = app.get<NotificationPort>(EMAIL_DELIVERY);
     sent.length = 0;
     await port.send({
       to: 'vol@test.local',
@@ -230,7 +230,7 @@ describe('Email templates (superadmin panel)', () => {
       .send({ enabled: false })
       .expect(200);
     sent.length = 0;
-    await app.get<NotificationPort>(NOTIFICATION_PORT).send({
+    await app.get<NotificationPort>(EMAIL_DELIVERY).send({
       to: 'vol@test.local',
       subject: 'x',
       body: 'x',
@@ -272,7 +272,7 @@ describe('Email templates (superadmin panel)', () => {
   });
 
   it('bulk emails carry List-Unsubscribe; after opting out (idempotent) they stop', async () => {
-    const port = app.get<NotificationPort>(NOTIFICATION_PORT);
+    const port = app.get<NotificationPort>(EMAIL_DELIVERY);
     const bulkMessage = {
       to: optedOut,
       subject: 'x',

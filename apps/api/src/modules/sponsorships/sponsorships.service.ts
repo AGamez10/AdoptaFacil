@@ -312,6 +312,7 @@ export class SponsorshipsService {
 
     if (paid) {
       await this.sendWelcomeBestEffort(
+        row.id,
         actor.email,
         row.organization_id,
         row.animal_id,
@@ -326,6 +327,7 @@ export class SponsorshipsService {
    *  Best-effort: never fails the subscription. Pending first payments get
    *  their confirmation through the regular billing emails instead. */
   private async sendWelcomeBestEffort(
+    sponsorshipId: string,
     to: string,
     organizationId: string,
     animalId: string,
@@ -346,6 +348,7 @@ export class SponsorshipsService {
       const link = `${this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '')}/apadrinar`;
       await this.notifications.send({
         to,
+        idempotencyKey: `sponsorship.welcome:${sponsorshipId}`,
         subject: `Ahora apadrinas a ${animalName}`,
         body: `¡Gracias! Desde hoy apadrinas a ${animalName}. Puedes ver tu apadrinamiento en ${link}`,
         template: {

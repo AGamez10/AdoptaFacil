@@ -29,6 +29,8 @@ describe('SmtpNotificationAdapter (T-109)', () => {
       port: 465,
       secure: true,
       auth: { user: 'mailer@example.test', pass: 'app-password' },
+      pool: true,
+      maxConnections: 5,
     });
   });
 
@@ -75,14 +77,14 @@ describe('SmtpNotificationAdapter (T-109)', () => {
     });
   });
 
-  it('is best-effort: a send failure does NOT throw (never tumbles the caller)', async () => {
+  it('rethrows a send failure so the delivery queue can retry it', async () => {
     const sendMail = jest.fn().mockRejectedValue(new Error('SMTP connection refused'));
     const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;
     const adapter = new SmtpNotificationAdapter(makeConfig(), createTransport);
 
     await expect(
       adapter.send({ to: 'user@dest.test', subject: 'Hola', body: 'x' }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('SMTP connection refused');
     expect(sendMail).toHaveBeenCalledTimes(1);
   });
 });

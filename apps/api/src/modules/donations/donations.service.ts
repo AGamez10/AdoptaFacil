@@ -449,6 +449,7 @@ export class DonationsService {
         // donaciones" instead of a magic link. Runs once per donation: a
         // duplicate webhook returns no row from apply_donation_webhook.
         await this.sendDonationThanks(
+          donation.id,
           donation.organization_id,
           donation.payer.email,
           donation.intended_amount,
@@ -498,6 +499,8 @@ export class DonationsService {
       const organizationName = await this.organizationName(organizationId);
       await this.notifications.send({
         to: payerEmail,
+        // One thank-you per donation, even if the gateway repeats the webhook.
+        idempotencyKey: `donation.thanks:${donationId}`,
         // Branded, superadmin-editable copy; subject/body below are the fallback.
         template: {
           event: 'donation.thanks',
@@ -524,6 +527,7 @@ export class DonationsService {
 
   /** Best-effort thank-you for an authenticated donor (never fails the webhook). */
   private async sendDonationThanks(
+    donationId: string,
     organizationId: string,
     payerEmail: string,
     amount: number,
@@ -533,6 +537,7 @@ export class DonationsService {
       const organizationName = await this.organizationName(organizationId);
       await this.notifications.send({
         to: payerEmail,
+        idempotencyKey: `donation.thanks:${donationId}`,
         subject: 'Gracias por tu donación en AdoptaFácil',
         body:
           'Hola,\n\n¡Gracias por tu donación! Tu pago fue confirmado.\n' +

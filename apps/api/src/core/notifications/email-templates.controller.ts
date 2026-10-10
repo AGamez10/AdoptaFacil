@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
@@ -38,13 +39,7 @@ import {
   setEmailTemplateEnabledSchema,
 } from './email-templates.schemas';
 import { EmailTemplateService } from './templates/email-template.service';
-
-/** `ana.maria@example.com` → `an•••@example.com` (never echo a full address). */
-export function maskEmail(email: string): string {
-  const [local, domain] = email.split('@');
-  if (!domain) return '•••';
-  return `${local.slice(0, 2)}•••@${domain}`;
-}
+import { maskEmail } from './mask-email';
 
 /**
  * Superadmin panel → "Correos". Platform roles only (deny-by-default: the
@@ -123,12 +118,19 @@ export class EmailTemplatesController {
     @Body(new ZodValidationPipe(previewEmailTemplateSchema)) dto: PreviewEmailTemplateInput,
   ): Promise<SendTestEmailResult> {
     const preview = await this.templates.preview(event, dto.content, dto.organizationName);
-    await this.transport.send({
-      to: actor.email,
-      subject: `[Prueba] ${preview.subject}`,
-      body: preview.text,
-      html: preview.html,
-    });
+    // Straight to the transport (not the queue): the admin is waiting for it.
+    try {
+      await this.transport.send({
+        to: actor.email,
+        subject: `[Prueba] ${preview.subject}`,
+        body: preview.text,
+        html: preview.html,
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudo enviar la prueba: el servidor de correo no respondió. Intenta de nuevo.',
+      );
+    }
     const organizationId = this.tenant.getOrganizationId();
     if (organizationId) {
       await this.audit.record({

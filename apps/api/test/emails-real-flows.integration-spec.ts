@@ -12,7 +12,8 @@ import { completeTestProfile } from './support/profile';
 /**
  * Smoke of the branded emails on the REAL flows (real AppModule, Prisma, RLS,
  * the fake payment gateway and the real TemplatedNotificationAdapter). Only the
- * transport (SMTP/log) is replaced, to read what would leave the server:
+ * transport (SMTP/log) is replaced, to read what would leave the server.
+ * Emails go through the delivery queue, so each check waits for the worker:
  *
  *   guest donation approved by webhook   → donation.thanks with the magic link
  *   authenticated donation approved      → donation.thanks pointing to "Mis donaciones"
@@ -86,6 +87,16 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
     expect(message.body).not.toContain('**');
   }
 
+  async function waitForMail(to: string, count = 1): Promise<NotificationMessage[]> {
+    const start = Date.now();
+    for (;;) {
+      const mine = sent.filter((m) => m.to === to);
+      if (mine.length >= count) return mine;
+      if (Date.now() - start > 15_000) return mine;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }
+
   async function approve(collectionId: string) {
     return request(server)
       .post('/donations/webhook')
@@ -110,8 +121,11 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
     await approve(res.body.collectionId);
     await approve(res.body.collectionId);
 
-    expect(sent).toHaveLength(1);
-    const [message] = sent;
+    await waitForMail(guestEmail);
+    await new Promise((r) => setTimeout(r, 1000)); // room for a duplicate to show up
+    const mine = sent.filter((m) => m.to === guestEmail);
+    expect(mine).toHaveLength(1);
+    const [message] = mine;
     expect(message.to).toBe(guestEmail);
     expect(message.subject).toBe(`¡Gracias por tu donación a ${ORG_NAME}!`);
     expectBranded(message);
@@ -136,9 +150,9 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
 
     await approve(res.body.collectionId);
 
-    expect(sent).toHaveLength(1);
-    const [message] = sent;
-    expect(message.to).toBe(personEmail);
+    const mine = await waitForMail(personEmail);
+    expect(mine).toHaveLength(1);
+    const [message] = mine;
     expectBranded(message);
     expect(message.body.replace(/\s/g, ' ')).toContain('$ 25.000');
     expect(message.body).toContain('/mis-donaciones');
@@ -169,11 +183,57 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
       .expect(201);
     expect(sponsorship.body.status).toBe('active');
 
+    await waitForMail(personEmail);
     const welcome = sent.filter((m) => m.subject.includes('Canela'));
     expect(welcome).toHaveLength(1);
     expect(welcome[0].to).toBe(personEmail);
     expectBranded(welcome[0]);
     expect(welcome[0].body.replace(/\s/g, ' ')).toContain('$ 30.000');
     expect(welcome[0].body).toContain('/apadrinar');
+  });
+
+  it('a campaign post emails each past donor of the org once, greeting them by name', async () => {
+    const donors = [
+      { fullName: 'Marta Lucía Pérez', email: `flows-d1-${randomUUID()}@test.local` },
+      { fullName: '', email: `flows-d2-${randomUUID()}@test.local` },
+    ];
+    for (const donor of [...donors, donors[0]]) {
+      const res = await request(server)
+        .post('/donations')
+        .send({
+          organizationId: orgId,
+          intendedAmount: 10_000,
+          commissionPayer: 'organization',
+          idempotencyKey: `flows-camp-${randomUUID()}`,
+          payer: donor.fullName ? donor : { email: donor.email },
+        })
+        .expect(201);
+      await approve(res.body.collectionId);
+    }
+
+    await request(server)
+      .post('/community/posts')
+      .set('Authorization', `Bearer ${orgToken}`)
+      .send({
+        type: 'campaign',
+        title: 'Ya casi llegamos',
+        body: 'Faltan $200.000 para la cirugía.',
+      })
+      .expect(201);
+
+    const isUpdate = (m: NotificationMessage) => m.subject.includes('novedades');
+    const start = Date.now();
+    while (sent.filter(isUpdate).length < 2 && Date.now() - start < 15_000) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await new Promise((r) => setTimeout(r, 500));
+    const first = sent.filter((m) => isUpdate(m) && m.to === donors[0].email);
+    const second = sent.filter((m) => isUpdate(m) && m.to === donors[1].email);
+    expect(first).toHaveLength(1); // donated twice, emailed once
+    expect(second).toHaveLength(1);
+    expect(first[0].body).toContain('Hola Marta,');
+    expect(second[0].body).toContain('Hola amigo(a),');
+    expect(first[0].headers?.['List-Unsubscribe']).toBeDefined();
+    expectBranded(first[0]);
   });
 });
