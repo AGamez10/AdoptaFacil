@@ -17,6 +17,7 @@ export const SIGNER_ROLE_LABELS: Record<AdoptionSignerRole, string> = {
   organization_representative: 'Representante de la organización',
   adopter: 'Adoptante',
   witness: 'Testigo',
+  co_adopter: 'Responsable firmante',
 };
 
 /** Badge variant per contract status (semantic). */

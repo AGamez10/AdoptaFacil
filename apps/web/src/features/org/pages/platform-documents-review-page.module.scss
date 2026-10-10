@@ -130,3 +130,22 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+.promotions {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.promotion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-md);
+  background-color: #e7f8f5;
+  color: #0f766e;
+  font-size: var(--fs-sm);
+}

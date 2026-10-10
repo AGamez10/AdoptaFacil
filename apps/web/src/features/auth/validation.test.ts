@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectErrors,
+  loginErrorMessage,
   validateEmail,
   validatePassword,
   validatePasswordConfirmation,
@@ -46,5 +47,22 @@ describe('auth validation', () => {
     const ok = collectErrors({ a: undefined });
     expect(ok.isValid).toBe(true);
     expect(ok.errors).toEqual({});
+  });
+});
+
+describe('loginErrorMessage', () => {
+  it('keeps wrong credentials generic', () => {
+    expect(loginErrorMessage(401)).toBe(
+      'No pudimos iniciar sesión. Revisa tu correo y contraseña.',
+    );
+  });
+
+  it('tells a rate-limited person to wait instead of blaming the password', () => {
+    expect(loginErrorMessage(429)).toMatch(/Espera un minuto/);
+  });
+
+  it('separates an unreachable or failing server from bad credentials', () => {
+    expect(loginErrorMessage(0)).toMatch(/conectar con el servidor/);
+    expect(loginErrorMessage(503)).toMatch(/El servidor tuvo un problema/);
   });
 });
