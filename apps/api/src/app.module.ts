@@ -18,6 +18,7 @@ import { AnimalsModule } from './modules/animals/animals.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CommunityModule } from './modules/community/community.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { OrgGovernanceModule } from './modules/org/governance/org-governance.module';
@@ -97,6 +98,8 @@ import { RedisModule } from './redis/redis.module';
     ReputationModule,
     // M13 · dashboards por audiencia — PlatformAdmin/PlatformSuperAdmin (RF24, S-8).
     DashboardsModule,
+    // M13 · reportes sellados de donaciones y servicio social (firmas por estatutos).
+    ReportsModule,
     // F19 · espacio de trabajo del equipo de plataforma (tareas, doble aprobación, bitácora).
     PlatformWorkspaceModule,
   ],

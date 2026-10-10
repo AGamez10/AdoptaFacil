@@ -208,7 +208,7 @@ export function OrgLegalRepresentativePage() {
       setSignatureBase64(null);
       toast({
         title: `${ROLE_LABELS[created.role]} registrado`,
-        description: 'Fabián lo usará para firmar los certificados de donación.',
+        description: 'Se usará para firmar los reportes y certificados de la organización.',
         variant: 'success',
       });
     } catch (error) {
@@ -226,7 +226,7 @@ export function OrgLegalRepresentativePage() {
     <PageContainer>
       <PageHeader
         title="Representante legal"
-        description="Quién firma los certificados de donación de tu organización (RF14) y su firma electrónica."
+        description="Quién firma los reportes y certificados de tu organización, y su firma electrónica."
       />
       <Link
         to="/organizacion"

@@ -26,6 +26,8 @@ for (const flag of [
   'FEATURE_REPUTATION',
   'FEATURE_RESOURCES',
   'FEATURE_MARKETPLACE',
+  // M13: firmas en reportes (apagado por defecto en producción; ver env.validation.ts).
+  'REPORTS_SIGNATURES_ENABLED',
 ]) {
   process.env[flag] ??= 'true';
 }

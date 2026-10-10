@@ -29,6 +29,7 @@ import {
   type ResetPasswordRequest,
   type ShellApi,
 } from '../api';
+import { resumeSessionOnce } from './resume-session';
 import { IDLE_TIMEOUT_MS, useIdleLogout } from './use-idle-logout';
 
 /**
@@ -363,17 +364,13 @@ export function SessionProvider({
 
     void (async () => {
       try {
-        const tokens = await api.authApi.refreshSilent?.();
-        if (!tokens) {
+        const resumed = await resumeSessionOnce(api);
+        if (!resumed) {
           if (!cancelled) setStatus('unauthenticated');
           return;
         }
-        // `me()` needs a token in the store to authenticate; `establish()`
-        // below sets it again with the same value right after (idempotent).
-        api.tokenStore.set(tokensFromContract(tokens));
-        const me = await api.authApi.me();
         if (cancelled) return;
-        await establish({ user: me, tokens });
+        await establish(resumed);
       } catch {
         if (!cancelled) {
           api.tokenStore.clear();

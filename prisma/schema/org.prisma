@@ -30,9 +30,10 @@ model Organization {
   documents                OrganizationDocument[]
   legalRepresentatives     LegalRepresentative[]
   dianVerificationAttempts DianVerificationAttempt[]
-  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[] @relation("OrganizationDuplicateFlagsFlagged")
-  duplicateFlagsAsMatched  OrganizationDuplicateFlag[] @relation("OrganizationDuplicateFlagsMatched")
+  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsFlagged")
+  duplicateFlagsAsMatched  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsMatched")
   invitations              OrganizationInvitation[]
+  reports                  OrgReport[]
   // Platform workspace (F19): the team's own work when this organization is a
   // platform team. See platform-workspace.prisma.
   workspaceTickets         PlatformWorkspaceTicket[]
@@ -227,6 +228,7 @@ model User {
   passwordResetTokens  PasswordResetToken[]
   roleAssignments      UserRole[]
   legalRepresentatives LegalRepresentative[]
+  generatedReports     OrgReport[]
   mfaFactor            AuthMfaFactor?
 
   @@unique([organizationId, email])
@@ -446,7 +448,7 @@ model OrganizationDuplicateFlag {
   createdAt             DateTime  @default(now()) @map("created_at")
 
   organization        Organization @relation("OrganizationDuplicateFlagsFlagged", fields: [organizationId], references: [id], onDelete: Cascade)
-  matchedOrganization  Organization @relation("OrganizationDuplicateFlagsMatched", fields: [matchedOrganizationId], references: [id], onDelete: Cascade)
+  matchedOrganization Organization @relation("OrganizationDuplicateFlagsMatched", fields: [matchedOrganizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([matchedOrganizationId])

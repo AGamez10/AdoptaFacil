@@ -171,6 +171,10 @@ export const envSchema = z.object({
   FEATURE_SPONSORSHIPS: featureFlag(),
   FEATURE_DONATION_CERTIFICATES: featureFlag(),
   FEATURE_COMMUNITY: featureFlag(),
+  // M13 · estampar firmas de representantes en los reportes. Apagado (falla
+  // cerrado) hasta que cada firmante apruebe el documento con su propia cuenta:
+  // sin eso, quien genera podría firmar por otros sin su consentimiento.
+  REPORTS_SIGNATURES_ENABLED: featureFlag(),
   FEATURE_REPUTATION: featureFlag(),
   FEATURE_RESOURCES: featureFlag(),
   FEATURE_MARKETPLACE: featureFlag(),

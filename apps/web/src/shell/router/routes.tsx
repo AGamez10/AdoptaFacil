@@ -35,13 +35,13 @@ import {
   ResetPasswordPage,
 } from '../../features/auth';
 import {
-  ExogenousReportPage,
   NationalTransparencyPage,
   OrgDocumentsPage,
   OrgPlanPage,
   OrgFormalizationPage,
   OrgLegalRepresentativePage,
   OrgProfilePage,
+  OrgReportsPage,
   PlatformAdminDashboardPage,
   PlatformBannerPage,
   PlatformDocumentsReviewPage,
@@ -597,13 +597,21 @@ export function AppRoutes() {
                 </RequireRoles>
               }
             />
+            {/* M13 · reportes sellados de donaciones y servicio social. Mismo
+              gate que Documentos (Owner/Administrator/ReadOnlyAuditor); el
+              backend vuelve a exigir roles en cada ruta. La antigua entrada
+              "Reporte exógeno" (ComingSoon) redirige aquí. */}
             <Route
-              path="organizacion/reporte-exogeno"
+              path="organizacion/reportes"
               element={
-                <RequireRoles roles={ORG_MEMBER_ROLES}>
-                  <ExogenousReportPage />
+                <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
+                  <OrgReportsPage />
                 </RequireRoles>
               }
+            />
+            <Route
+              path="organizacion/reporte-exogeno"
+              element={<Navigate to="/organizacion/reportes" replace />}
             />
             {/* M12 (S-7, RF23) · moderación de reseñas, cross-tenant. Audiencia
               de PLATAFORMA — ruta hermana de /plataforma/documentos y
