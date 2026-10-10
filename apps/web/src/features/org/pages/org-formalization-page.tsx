@@ -30,6 +30,7 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { Role } from '@adoptafacil/contracts';
 import { TextField } from '../components/profile-fields';
+import { CapabilitiesPanel } from '../components/capabilities-panel';
 import styles from './org-formalization-page.module.scss';
 
 const STATE_LABELS: Record<FormalizationState, string> = {
@@ -234,6 +235,12 @@ export function OrgFormalizationPage() {
                       Avanzar a {STATE_LABELS[next]}
                     </Button>
                   )}
+                  {next === FormalizationState.Formalizada && (
+                    <p className={styles.actions__hint}>
+                      Se habilita cuando el equipo de AdoptaFácil apruebe tu RUT y tu certificado de
+                      Cámara de Comercio.
+                    </p>
+                  )}
                   {next && nextNeedsPlatform && (
                     <p>
                       El paso a {STATE_LABELS[next]} lo aprueba el equipo de AdoptaFácil tras
@@ -254,6 +261,8 @@ export function OrgFormalizationPage() {
               )}
             </CardContent>
           </Card>
+
+          <CapabilitiesPanel refreshKey={history.length} />
 
           <Card>
             <CardHeader>
