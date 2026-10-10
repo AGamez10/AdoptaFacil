@@ -20,6 +20,7 @@ import {
   type AccountType,
   type AuthApi,
   type AuthSession,
+  type AuthTokens,
   type AuthenticatedUser,
   type CompleteProfileRequest,
   type ForgotPasswordRequest,
@@ -170,6 +171,13 @@ export interface SessionContextValue {
    * match, when `roles` is empty, or when there is no session.
    */
   hasAnyRole: (...roles: Role[]) => boolean;
+  /**
+   * F19 · adopt a token pair the API issued for THIS session (e.g. after the
+   * platform second factor: `POST /auth/mfa/verify` returns a new, verified
+   * pair and revokes the previous one). Same user and roles; only the in-memory
+   * tokens change. Optional so existing test doubles stay valid.
+   */
+  adoptTokens?: (tokens: AuthTokens) => void;
 }
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
@@ -450,6 +458,13 @@ export function SessionProvider({
     [api],
   );
 
+  const adoptTokens = useCallback(
+    (tokens: AuthTokens) => {
+      api.tokenStore.set(tokensFromContract(tokens));
+    },
+    [api],
+  );
+
   const signOut = useCallback(async () => {
     const refreshToken = api.tokenStore.getRefreshToken();
     // Clear locally first so the UI can't act on a stale session even if the
@@ -487,6 +502,7 @@ export function SessionProvider({
       retryRoles,
       hasRole,
       hasAnyRole,
+      adoptTokens,
     }),
     [
       status,
@@ -505,6 +521,7 @@ export function SessionProvider({
       retryRoles,
       hasRole,
       hasAnyRole,
+      adoptTokens,
     ],
   );
 
