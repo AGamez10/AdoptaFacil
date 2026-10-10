@@ -21,6 +21,7 @@ export * from './community';
 export * from './reputation';
 export * from './portals';
 export * from './dashboards';
+export * from './reports';
 export * from './features';
 export * from './legal-capabilities';
 export * from './plans';

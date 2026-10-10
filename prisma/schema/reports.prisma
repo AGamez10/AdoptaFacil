@@ -1,0 +1,46 @@
+// Module: reports (M13 · reportes de la organización)
+//
+// Reportes de donaciones y de servicio social que la organización genera desde
+// su panel. Cada generación queda SELLADA: snapshot del contenido (`payload`),
+// firmantes vigentes al momento (`signers`, solo identificadores + hash de la
+// firma, nunca la imagen) y SHA-256 del conjunto (`contentHash`).
+//
+// - Tenant-scoped: organization_id + RLS (ENABLE + FORCE + tenant_isolation).
+// - APPEND-ONLY: el rol de la app solo tiene SELECT+INSERT y triggers rechazan
+//   UPDATE/DELETE/TRUNCATE para cualquier rol (mismo patrón que
+//   volunteer_certificates / legal_representatives).
+// - IDEMPOTENTE: @@unique(organizationId, kind, contentHash) — generar otra vez
+//   el mismo reporte con los mismos datos devuelve la fila existente.
+// - Las FK hacia organizations (CASCADE) y users (RESTRICT) se declaran como
+//   @relation para que el esquema coincida con la migración (gate schema-drift).
+
+/// Reporte generado por una organización (donaciones o servicio social).
+model OrgReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  /// `OrgReportKind`: 'donations' | 'social_service'.
+  kind              String
+  /// Folio público `ADF-REP-<año>-<8 caracteres>` (no enumerable).
+  code              String   @unique
+  periodStart       DateTime @map("period_start") @db.Date
+  periodEnd         DateTime @map("period_end") @db.Date
+  filters           Json     @default("{}")
+  /// `OrgReportLegalEffect`: 'informative' | 'signed' | 'certified'.
+  legalEffect       String   @map("legal_effect")
+  /// Firmantes sellados: [{ legalRepresentativeId, role, fullName, position, signatureHash }].
+  signers           Json     @default("[]")
+  /// Snapshot completo del contenido (filas + totales + datos de la organización).
+  payload           Json
+  /// Resumen para listados (OrgReportSummary).
+  summary           Json
+  contentHash       String   @map("content_hash")
+  generatedByUserId String   @map("generated_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  generatedBy  User         @relation(fields: [generatedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, kind, contentHash])
+  @@index([organizationId, createdAt])
+  @@map("org_reports")
+}

@@ -224,4 +224,39 @@ export class LegalRepresentativeService {
       return null;
     }
   }
+
+  /**
+   * M13 (reportes): la imagen de UNA firma concreta, por el id del registro
+   * (append-only, así que un id siempre apunta a la misma firma). Se usa para
+   * volver a dibujar un reporte sellado con LAS MISMAS firmas con las que se
+   * generó, aunque después se haya registrado una firma nueva. Verifica que el
+   * SHA-256 de los bytes descifrados coincida con `expectedHash` (el sellado en
+   * el reporte); si no coincide, no se puede leer o no existe, devuelve `null`
+   * — nunca lanza, y nunca devuelve una firma de otra organización (RLS +
+   * filtro explícito por `organizationId`).
+   */
+  async getSignatureImageById(
+    organizationId: string,
+    legalRepresentativeId: string,
+    expectedHash: string,
+  ): Promise<Buffer | null> {
+    try {
+      const row = await this.prisma.withOrgContext(organizationId, (tx) =>
+        tx.legalRepresentative.findFirst({
+          where: { id: legalRepresentativeId, organizationId },
+        }),
+      );
+      if (!row || row.signatureHash !== expectedHash) {
+        return null;
+      }
+      const stored = await this.storage.readObject(row.signatureFileRef);
+      if (!stored) {
+        return null;
+      }
+      const image = decryptSignature(stored.data, this.config.signatureEncryptionKey);
+      return hashSignature(image) === expectedHash ? image : null;
+    } catch {
+      return null;
+    }
+  }
 }

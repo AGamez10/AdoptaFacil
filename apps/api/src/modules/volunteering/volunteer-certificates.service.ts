@@ -42,6 +42,7 @@ import {
   buildCertificateIssuedSubject,
 } from './volunteer-notifications';
 import { clampLimit } from './volunteer-opportunities.service';
+import { pdfText } from '../reports/report-text';
 
 function toCertificate(row: CertificateRow): VolunteerCertificate {
   return {
@@ -418,15 +419,28 @@ export class VolunteerCertificatesService {
    * before is lost.
    */
   async generatePdf(id: string, actor: RequestUser): Promise<Buffer> {
-    const row = await this.forViewer(id, actor);
-    if (!row) {
+    const stored = await this.forViewer(id, actor);
+    if (!stored) {
       throw new NotFoundException('Volunteer certificate not found');
     }
+    // Las fuentes estándar de pdf-lib solo codifican WinAnsi: un emoji o un
+    // carácter fuera de ese juego en cualquier texto del usuario (nombre,
+    // actividad, colegio, bitácora) hacía LANZAR `drawText` y la constancia no
+    // se podía descargar (500). Todo texto variable se sanea antes de dibujar.
+    const row = sanitizeCertificateForPdf(stored);
 
-    const [signer, city] = await Promise.all([
+    const [rawSigner, rawCity] = await Promise.all([
       this.legalRepresentatives.getCurrentSignerForOrg(row.organizationId).catch(() => null),
       this.getOrgCity(row.organizationId),
     ]);
+    const signer = rawSigner
+      ? {
+          ...rawSigner,
+          fullName: pdfText(rawSigner.fullName, 120),
+          position: pdfText(rawSigner.position, 120),
+        }
+      : null;
+    const city = rawCity ? pdfText(rawCity, 80) : undefined;
 
     const pdf = await PDFDocument.create();
     const serif = await pdf.embedFont(StandardFonts.TimesRoman);
@@ -456,6 +470,28 @@ export class VolunteerCertificatesService {
     const bytes = await pdf.save();
     return Buffer.from(bytes);
   }
+}
+
+/** Copia del certificado con todo texto variable apto para WinAnsi (ver
+ *  `generatePdf`). No altera lo almacenado: solo lo que se dibuja. */
+function sanitizeCertificateForPdf(row: VolunteerCertificate): VolunteerCertificate {
+  const opt = (value: string | undefined, max: number) =>
+    value === undefined ? undefined : pdfText(value, max);
+  return {
+    ...row,
+    volunteerName: pdfText(row.volunteerName, 120),
+    organizationName: pdfText(row.organizationName, 160),
+    opportunityTitle: pdfText(row.opportunityTitle, 200),
+    guardianName: opt(row.guardianName, 120),
+    guardianDocument: opt(row.guardianDocument, 40),
+    schoolName: opt(row.schoolName, 160),
+    schoolAgreementCode: opt(row.schoolAgreementCode, 60),
+    bitacora: row.bitacora.map((entry) => ({
+      ...entry,
+      description: pdfText(entry.description, 600),
+      supervisorName: opt(entry.supervisorName, 120),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -746,7 +782,7 @@ function drawBitacoraAppendix(
   const { font, row } = input;
   const margin = 50;
   const pageSize: [number, number] = [595.28, 841.89]; // A4 vertical
-  const page = pdf.addPage(pageSize);
+  let page = pdf.addPage(pageSize);
   let y = pageSize[1] - margin - 20;
 
   page.drawText(`Anexo — Bitácora de horas certificadas (${row.volunteerName})`, {
@@ -762,7 +798,12 @@ function drawBitacoraAppendix(
     const supervisor = entry.supervisorName ? ` · Supervisor: ${entry.supervisorName}` : '';
     const line = `${formatCO(entry.date)} — ${entry.hours}h — ${entry.description}${supervisor}`;
     for (const wrapped of wrapText(line, font.sans, 10, pageSize[0] - margin * 2)) {
-      if (y < margin) break; // límite simple de una sola página de anexo
+      if (y < margin) {
+        // Antes se cortaba en una sola página y las sesiones restantes se
+        // perdían en silencio: el anexo ahora continúa en páginas nuevas.
+        page = pdf.addPage(pageSize);
+        y = pageSize[1] - margin - 20;
+      }
       page.drawText(wrapped, { x: margin, y, size: 10, font: font.sans, color: INK });
       y -= 14;
     }
