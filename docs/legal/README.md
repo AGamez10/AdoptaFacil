@@ -28,8 +28,8 @@ En la web se leen en `/legal`, `/legal/<slug>` y `/legal/<slug>/<versión>`.
 
 ## Datos que faltan (marcados ⟦así⟧ en los textos)
 
-- Razón social, NIT, ciudad y dirección del responsable; dominio; fecha de publicación.
-- Proveedores reales de hosting, correo y copias de seguridad, y el **país** donde procesa cada uno.
+- Razón social y NIT: **pendientes de constitución** de la sociedad. Ciudad y dirección del responsable; fecha de publicación. Dominio: adoptafacil.org (ya completado).
+- Hosting: Hostinger (VPS), ya en la política. Falta confirmar el **país del centro de datos** elegido al contratar; como Hostinger es extranjera, puede ser transferencia internacional. Proveedores de correo y copias de seguridad, y el país donde procesa cada uno: pendientes.
 - Plazos: conservación de datos tras cerrar la cuenta, conservación de evidencia de reportes, atención de reportes, aviso de cambios (propuesto 15 días), aviso de precios (30 días), aviso de incidentes a organizaciones (72 horas), exportación al terminar (30 días), registro de trazabilidad (10 años).
 
 ## Preguntas para el abogado
