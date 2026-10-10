@@ -66,6 +66,7 @@ import { DocumentsService } from '../src/modules/org/documents.service';
 import { PlatformDocumentsService } from '../src/modules/org/platform-documents.service';
 import { AnimalsService } from '../src/modules/animals/animals.service';
 import { loadAssetOrGenerate, minimalPdf, simplePng } from './seed-assets';
+import { runLocalPreflight } from '../src/config/local-preflight';
 
 // ---------------------------------------------------------------------------
 // Credentials — NEVER hardcoded secrets. Emails are demo-only identifiers
@@ -299,6 +300,10 @@ interface CredentialRow {
 }
 
 async function main(): Promise<void> {
+  await runLocalPreflight(
+    ['postgres', 'redis'],
+    'seed:demo no puede cargar los datos de demostración',
+  );
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['warn', 'error'],
   });

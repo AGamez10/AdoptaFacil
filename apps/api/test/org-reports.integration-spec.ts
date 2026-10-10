@@ -10,6 +10,15 @@ import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
+import {
+  CapturingNotificationPort,
+  type SignerActor,
+  inviteSigner,
+  memberWithRole,
+  registerOwnSignature,
+} from './support/signers';
+import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * M13 · Reportes de donaciones y servicio social (extremo a extremo):
@@ -38,6 +47,11 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
   let orgA: Actor;
   let orgB: Actor;
   let donor: Actor;
+  /** Quien redacta (Administrator): nunca firma lo que redacta. */
+  let drafterA: Actor;
+  /** El revisor fiscal: otra persona, con su propia cuenta y contraseña. */
+  let reviewerA: SignerActor;
+  const notifications = new CapturingNotificationPort();
 
   // PNG real de 1x1 para que la firma se pueda incrustar en el PDF.
   const SIGNATURE_PNG =
@@ -116,7 +130,10 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     request(server).post('/org/reports').set('Authorization', `Bearer ${actor.token}`).send(body);
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(NOTIFICATION_PORT)
+      .useValue(notifications)
+      .compile();
     app = moduleRef.createNestApplication();
     await app.init();
     server = app.getHttpServer();
@@ -134,7 +151,15 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
       data: { formalizationState: 'esal_rte', rteVigente: true },
     });
     await registerSigner(orgA, 'legal_representative', 'Laura Gómez');
-    await registerSigner(orgA, 'fiscal_reviewer', 'Diana Revisora');
+    reviewerA = await inviteSigner(
+      server,
+      notifications,
+      orgA,
+      'fiscal_reviewer',
+      'Diana Revisora',
+    );
+    await registerOwnSignature(server, reviewerA, 'fiscal_reviewer', 'Diana Revisora').expect(201);
+    drafterA = await memberWithRole(app, admin, orgA.orgId, 'administrator');
     // La org informal también tiene una "firma" registrada: aun así sus
     // reportes deben salir informativos y SIN firmas.
     await registerSigner(orgB, 'legal_representative', 'Rescatista Firmante');
@@ -239,7 +264,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
   });
 
   it('generates a CERTIFIED donations report for the ESAL-RTE org, with both signers', async () => {
-    const res = await generate(orgA, {
+    const res = await generate(drafterA, {
       kind: 'donations',
       periodStart: monthAgo,
       periodEnd: today,
@@ -265,8 +290,99 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     expect(JSON.stringify(row.signers)).not.toContain('79000111'); // nunca el documento del firmante
   });
 
+  it('is a DRAFT without signatures until EVERY required signer approves with their own account', async () => {
+    const auth = (a: { token: string }) => ({ Authorization: `Bearer ${a.token}` });
+    const row = await request(server).get('/org/reports').set(auth(orgA)).expect(200);
+    const mine = row.body.items.find((r: { id: string }) => r.id === donationsReportId);
+    expect(mine.status).toBe('pending_signatures');
+    expect(mine.approvals).toEqual([]);
+
+    // El borrador se descarga, pero SIN firmas y marcado sin valor.
+    const draftPdf = await request(server)
+      .get(`/org/reports/${donationsReportId}/pdf`)
+      .set(auth(orgA))
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect((draftPdf.body as Buffer).length).toBeGreaterThan(1000);
+    const pub = await request(server).get(`/public/reports/${donationsCode}`).expect(200);
+    expect(pub.body.status).toBe('pending_signatures');
+
+    // Nadie aprueba su propio borrador ni por otro: quien redactó, un miembro
+    // sin la designación y el firmante equivocado reciben 404.
+    await request(server)
+      .post(`/org/reports/${donationsReportId}/decision`)
+      .set(auth(drafterA))
+      .send({ decision: 'approved' })
+      .expect(403);
+    await request(server)
+      .post(`/org/reports/${donationsReportId}/decision`)
+      .set(auth(orgB))
+      .send({ decision: 'approved' })
+      .expect(404);
+    await request(server)
+      .post(`/org/reports/${donationsReportId}/decision`)
+      .set(auth(orgA))
+      .send({ decision: 'approved', signerRole: 'fiscal_reviewer' })
+      .expect(400); // cuerpo estricto: no se elige por quién se firma
+
+    // Cada firmante ve SOLO lo suyo en su bandeja.
+    const inbox = await request(server)
+      .get('/org/reports/pending-signatures')
+      .set(auth(reviewerA))
+      .expect(200);
+    expect(inbox.body).toHaveLength(1);
+    expect(inbox.body[0]).toMatchObject({ role: 'fiscal_reviewer' });
+    expect(inbox.body[0].report.id).toBe(donationsReportId);
+
+    // 1.ª aprobación (representante legal): todavía pendiente.
+    const first = await request(server)
+      .post(`/org/reports/${donationsReportId}/decision`)
+      .set(auth(orgA))
+      .send({ decision: 'approved' })
+      .expect(200);
+    expect(first.body.status).toBe('pending_signatures');
+    // Aprobar dos veces se rechaza (una decisión por cargo).
+    await request(server)
+      .post(`/org/reports/${donationsReportId}/decision`)
+      .set(auth(orgA))
+      .send({ decision: 'approved' })
+      .expect(409);
+
+    // 2.ª aprobación (revisor fiscal): el documento queda emitido.
+    const second = await request(server)
+      .post(`/org/reports/${donationsReportId}/decision`)
+      .set(auth(reviewerA))
+      .send({ decision: 'approved' })
+      .expect(200);
+    expect(second.body.status).toBe('issued');
+    const approvals = await admin.orgReportApproval.findMany({
+      where: { reportId: donationsReportId },
+    });
+    expect(approvals.map((a) => a.signerRole).sort()).toEqual([
+      'fiscal_reviewer',
+      'legal_representative',
+    ]);
+    // Cada firma queda ligada a la huella del contenido sellado.
+    const sealedRow = await admin.orgReport.findUniqueOrThrow({ where: { id: donationsReportId } });
+    expect(approvals.every((a) => a.contentHash === sealedRow.contentHash)).toBe(true);
+    const issued = await admin.auditLog.findMany({
+      where: { organizationId: orgA.orgId, action: 'report.issued', entityId: donationsReportId },
+    });
+    expect(issued).toHaveLength(1);
+    expect((issued[0].metadata as { requestedByUserId?: string }).requestedByUserId).toBe(
+      drafterA.userId,
+    );
+    const pub2 = await request(server).get(`/public/reports/${donationsCode}`).expect(200);
+    expect(pub2.body.status).toBe('issued');
+  });
+
   it('is idempotent: generating the same report again returns the SAME folio, no duplicate', async () => {
-    const again = await generate(orgA, {
+    const again = await generate(drafterA, {
       kind: 'donations',
       periodStart: monthAgo,
       periodEnd: today,
@@ -275,8 +391,8 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     expect(again.body.code).toBe(donationsCode);
     expect(again.body.reused).toBe(true);
     const [concurrentA, concurrentB] = await Promise.all([
-      generate(orgA, { kind: 'donations', periodStart: monthAgo, periodEnd: today }),
-      generate(orgA, { kind: 'donations', periodStart: monthAgo, periodEnd: today }),
+      generate(drafterA, { kind: 'donations', periodStart: monthAgo, periodEnd: today }),
+      generate(drafterA, { kind: 'donations', periodStart: monthAgo, periodEnd: today }),
     ]);
     expect(concurrentA.body.code).toBe(donationsCode);
     expect(concurrentB.body.code).toBe(donationsCode);
@@ -315,7 +431,8 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(xlsx.body as ArrayBuffer);
     const donors = wb.getWorksheet('Donaciones')!.getColumn(3).values.slice(2);
-    expect(donors).toEqual(expect.arrayContaining(['María Restrepo', 'Donante anónimo']));
+    expect(donors).toEqual(expect.arrayContaining(['Donante', 'Donante anónimo']));
+    expect(JSON.stringify(donors)).not.toContain('María Restrepo');
 
     const downloads = await admin.auditLog.count({
       where: {
@@ -324,31 +441,36 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
         entityId: donationsReportId,
       },
     });
-    expect(downloads).toBe(2);
+    expect(downloads).toBe(3); // borrador + PDF emitido + Excel
   });
 
-  it('generates the social service report for a school (signed by the legal representative only)', async () => {
-    const res = await generate(orgA, {
+  it('BLOCKS the social service report while there is no consent registry: it names volunteers, so it is never issued', async () => {
+    const before = await admin.orgReport.count({
+      where: { organizationId: orgA.orgId, kind: 'social_service' },
+    });
+    const res = await generate(drafterA, {
       kind: 'social_service',
       periodStart: monthAgo,
       periodEnd: today,
       filters: { studentServiceOnly: true, schoolName: '  Colegio San José ' },
-    }).expect(201);
-    expect(res.body.legalEffect).toBe('signed');
-    expect(res.body.signers.map((s: { role: string }) => s.role)).toEqual(['legal_representative']);
-    expect(res.body.summary).toMatchObject({ rowCount: 1, approvedHours: 8.5, volunteers: 1 });
-    expect(res.body.filters).toEqual({ studentServiceOnly: true, schoolName: 'Colegio San José' });
+    }).expect(409);
+    expect(res.body.message).toContain('consentimiento');
+    const after = await admin.orgReport.count({
+      where: { organizationId: orgA.orgId, kind: 'social_service' },
+    });
+    expect(after).toBe(before);
+  });
 
-    const row = await admin.orgReport.findUniqueOrThrow({ where: { id: res.body.id } });
-    // Minimización: nunca datos del acudiente del menor.
-    expect(JSON.stringify(row.payload)).not.toContain('Acudiente Privado');
-    expect(JSON.stringify(row.payload)).not.toContain('123123123');
-
-    const pdf = await request(server)
-      .get(`/org/reports/${res.body.id}/pdf`)
-      .set('Authorization', `Bearer ${orgA.token}`)
-      .expect(200);
-    expect(pdf.headers['content-type']).toBe('application/pdf');
+  it('donations reports never identify the donor while there is no consent registry', async () => {
+    const rows = await admin.orgReport.findMany({
+      where: { organizationId: orgA.orgId, kind: 'donations' },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    const dump = JSON.stringify(rows.map((r) => r.payload));
+    expect(dump).not.toContain('María Restrepo');
+    expect(dump).not.toContain('Donante Secreto');
+    expect(dump).not.toContain('5566778899');
+    expect(dump).not.toContain('4050');
   });
 
   it('an informal org gets an INFORMATIVE report with NO signatures, even if it registered one', async () => {
@@ -391,14 +513,18 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
   });
 
   it('validates inputs: future dates, inverted periods, unknown kinds and unregistered signers', async () => {
-    await generate(orgA, { kind: 'donations', periodStart: today, periodEnd: '2999-01-01' }).expect(
+    await generate(drafterA, {
+      kind: 'donations',
+      periodStart: today,
+      periodEnd: '2999-01-01',
+    }).expect(400);
+    await generate(drafterA, { kind: 'donations', periodStart: today, periodEnd: monthAgo }).expect(
       400,
     );
-    await generate(orgA, { kind: 'donations', periodStart: today, periodEnd: monthAgo }).expect(
+    await generate(drafterA, { kind: 'payroll', periodStart: monthAgo, periodEnd: today }).expect(
       400,
     );
-    await generate(orgA, { kind: 'payroll', periodStart: monthAgo, periodEnd: today }).expect(400);
-    const res = await generate(orgA, {
+    const res = await generate(drafterA, {
       kind: 'donations',
       periodStart: monthAgo,
       periodEnd: today,

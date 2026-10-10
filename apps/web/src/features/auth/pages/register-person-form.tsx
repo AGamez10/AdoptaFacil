@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, useToast } from '@adoptafacil/ui';
-import { ApiError, type RegisterPersonRequest } from '../../../shell/api';
+import { toApiError, type RegisterPersonRequest } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import {
   acceptancesFrom,
@@ -19,6 +19,7 @@ import {
   validatePassword,
   validatePasswordConfirmation,
   validateRequired,
+  registerErrorMessage,
 } from '../validation';
 
 type PersonErrors = Partial<
@@ -101,16 +102,8 @@ export function RegisterPersonForm() {
       });
       navigate('/', { replace: true });
     } catch (error) {
-      setFormError(
-        // The real API returns a plain 409 with no error body `code` (Nest's
-        // default filter), so the client falls back to `STATUS_CODES[409]` =
-        // 'conflict' (see `shell/api/http.ts`) — 'email_taken' was the MOCK
-        // API's own made-up code and never matched the real backend, so this
-        // branch silently never fired outside tests using the mock.
-        ApiError.is(error) && error.code === 'conflict'
-          ? 'Ya existe una cuenta con este correo.'
-          : 'No pudimos crear la cuenta. Inténtalo de nuevo.',
-      );
+      const apiError = toApiError(error);
+      setFormError(registerErrorMessage(apiError.status, apiError.code));
       setSubmitting(false);
     }
   };

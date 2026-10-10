@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, useToast } from '@adoptafacil/ui';
-import { ApiError, type RegisterOrganizationRequest } from '../../../shell/api';
+import { toApiError, type RegisterOrganizationRequest } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import {
   acceptancesFrom,
@@ -18,6 +18,7 @@ import {
   validatePassword,
   validatePasswordConfirmation,
   validateRequired,
+  registerErrorMessage,
 } from '../validation';
 
 type OrgErrors = Partial<
@@ -101,15 +102,8 @@ export function RegisterOrganizationForm() {
       });
       navigate('/', { replace: true });
     } catch (error) {
-      setFormError(
-        // Same real-vs-mock code mismatch as register-person-form.tsx: the
-        // real API's 409 has no body `code`, so the client falls back to
-        // 'conflict' (STATUS_CODES[409] in `shell/api/http.ts`) — never
-        // 'email_taken', which only the mock API ever sent.
-        ApiError.is(error) && error.code === 'conflict'
-          ? 'Ya existe una cuenta con este correo.'
-          : 'No pudimos crear la cuenta. Inténtalo de nuevo.',
-      );
+      const apiError = toApiError(error);
+      setFormError(registerErrorMessage(apiError.status, apiError.code));
       setSubmitting(false);
     }
   };

@@ -40,7 +40,10 @@ export class LegalRepresentativeController {
    *  partial-update endpoint. Never replaces another role's current record. */
   @Post()
   @HttpCode(201)
-  @Roles(Role.Owner)
+  // El servicio decide por cargo: el representante legal es un Owner; el
+  // contador y el revisor fiscal son las personas que la organización vinculó
+  // (cuentas con rol de solo lectura).
+  @Roles(Role.Owner, Role.ReadOnlyAuditor)
   register(
     @CurrentUser() actor: RequestUser,
     @Body(new ZodValidationPipe(registerLegalRepresentativeSchema))

@@ -13,7 +13,9 @@
  *   - persona: login, apadrinar, mis donaciones/solicitudes, solicitud de adopción;
  *   - dueño de organización: login, panel completo, pendientes (campana),
  *     aprobación de la solicitud, contrato de adopción y reportes;
- *   - administrador de plataforma: login, revisión de organizaciones y tableros.
+ *   - administrador de plataforma: login, verificación en dos pasos (TOTP), revisión de
+ *     organizaciones y tableros. La primera corrida activa el segundo factor de esa
+ *     cuenta y guarda la clave en ~/.adoptafacil-smoke/ (nunca en el repo).
  *
  * Cada página falla si muestra un mensaje de error conocido, si lanza un error
  * de JavaScript, si alguna llamada al API responde 5xx o 429, o si una llamada
@@ -26,9 +28,12 @@
  * Variables (todas opcionales; se leen del entorno o del `.env` de la raíz):
  *   SMOKE_WEB_URL (http://localhost:5173), SMOKE_API_URL (http://localhost:3000),
  *   SEED_DEMO_PASSWORD, PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD,
- *   SMOKE_OUT (carpeta para capturas), PLAYWRIGHT_CHROMIUM_PATH.
+ *   SMOKE_OUT (carpeta para capturas), PLAYWRIGHT_CHROMIUM_PATH,
+ *   SMOKE_ADMIN_TOTP_SECRET o SMOKE_TOTP_FILE (clave TOTP de una cuenta ya activada).
  */
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { createHmac } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -148,6 +153,86 @@ async function login(session, email, password) {
       const alert = (await page.locator('[role=alert]').allTextContents()).join(' ').trim();
       throw new Error(`no entró${alert ? `: ${alert}` : ''}`);
     }
+  });
+}
+
+// ── Verificación en dos pasos del personal de plataforma (TOTP, RFC 6238) ──
+// La prueba no apaga la exigencia: la cumple como lo haría una persona. La
+// primera vez activa el segundo factor y guarda la clave FUERA del repo, solo
+// en esta máquina; las siguientes calcula el código con esa clave.
+function base32Decode(input) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const char of input.replace(/=+$/, '').replace(/\s+/g, '').toUpperCase()) {
+    const value = alphabet.indexOf(char);
+    if (value < 0) throw new Error('Clave TOTP con caracteres inválidos.');
+    bits += value.toString(2).padStart(5, '0');
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  return Buffer.from(bytes);
+}
+
+function totp(secret, nowMs = Date.now()) {
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(nowMs / 1000 / 30)));
+  const digest = createHmac('sha1', base32Decode(secret)).update(counter).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const code = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
+  return String(code).padStart(6, '0');
+}
+
+const totpFile = (email) =>
+  env('SMOKE_TOTP_FILE') || resolve(homedir(), '.adoptafacil-smoke', `totp-${email}.txt`);
+
+function loadTotpSecret(email) {
+  const fromEnv = env('SMOKE_ADMIN_TOTP_SECRET');
+  if (fromEnv) return fromEnv;
+  const file = totpFile(email);
+  return existsSync(file) ? readFileSync(file, 'utf8').trim() : '';
+}
+
+/** Un código que el API aún no haya aceptado (no reutiliza el de la ventana anterior). */
+async function freshTotp(page, secret, lastCode) {
+  let code = totp(secret);
+  while (code === lastCode) {
+    await page.waitForTimeout(2000);
+    code = totp(secret);
+  }
+  return code;
+}
+
+async function passPlatformMfa(session, email, password) {
+  await check(session, 'verificación en dos pasos', async (page) => {
+    const enroll = page.getByText('Activa la verificación en dos pasos');
+    const confirm = page.getByText('Confirma que eres tú');
+    try {
+      await enroll.or(confirm).first().waitFor({ timeout: 8_000 });
+    } catch {
+      return; // PLATFORM_MFA_REQUIRED=false en este entorno: nada que pasar.
+    }
+    let secret;
+    if (await enroll.isVisible()) {
+      await page.locator('#mfa-password').fill(password);
+      await page.getByRole('button', { name: 'Continuar' }).click();
+      const key = page.locator('code.font-mono');
+      await key.waitFor({ timeout: 10_000 });
+      secret = (await key.textContent())?.trim() ?? '';
+      const file = totpFile(email);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, `${secret}\n`, { mode: 0o600 });
+    } else {
+      secret = loadTotpSecret(email);
+      if (!secret) {
+        throw new Error(
+          `la cuenta ya tiene segundo factor y no hay clave guardada: define SMOKE_ADMIN_TOTP_SECRET o ${totpFile(email)}`,
+        );
+      }
+    }
+    session.lastTotp = await freshTotp(page, secret, session.lastTotp);
+    await page.locator('#mfa-code').fill(session.lastTotp);
+    await page.getByRole('button', { name: /^(Activar|Confirmar)$/ }).click();
+    await enroll.or(confirm).first().waitFor({ state: 'hidden', timeout: 15_000 });
   });
 }
 
@@ -344,6 +429,7 @@ async function main() {
   // ── Administrador de plataforma ────────────────────────────────────────
   const admin = await openSession(browser, 'plataforma');
   await login(admin, ADMIN_EMAIL, ADMIN_PASSWORD);
+  await passPlatformMfa(admin, ADMIN_EMAIL, ADMIN_PASSWORD);
   for (const route of [
     '/inicio',
     '/plataforma/organizaciones',

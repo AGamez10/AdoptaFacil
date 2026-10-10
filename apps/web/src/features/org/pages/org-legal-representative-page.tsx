@@ -5,6 +5,7 @@ import {
   type LegalRepresentative,
   type LegalRepresentativeDocumentType,
   type LegalRepresentativeRole,
+  type OrgReportsReadiness,
   type RegisterLegalRepresentativeInput,
 } from '@adoptafacil/contracts';
 import {
@@ -124,6 +125,10 @@ export function OrgLegalRepresentativePage() {
   const [loadError, setLoadError] = useState(false);
 
   const [role, setRole] = useState<LegalRepresentativeRole>('legal_representative');
+  // Cargo con el que ESTA persona puede firmar (lo decide el servidor): el
+  // propietario solo firma como representante legal; el contador y el revisor
+  // fiscal, solo en el cargo en que la organización los vinculó.
+  const [mySeat, setMySeat] = useState<LegalRepresentativeRole | null>(null);
   const [fullName, setFullName] = useState('');
   const [documentType, setDocumentType] =
     useState<LegalRepresentativeDocumentType>('cedula_ciudadania');
@@ -154,6 +159,22 @@ export function OrgLegalRepresentativePage() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    return () => {
+      active = false;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    let active = true;
+    client
+      .request<OrgReportsReadiness>('/org/reports/readiness')
+      .then((ready) => {
+        if (active && ready.mySignerRole) {
+          setMySeat(ready.mySignerRole);
+          setRole(ready.mySignerRole);
+        }
+      })
+      .catch(() => undefined); // sin esto se ofrecen todos los cargos; el servidor decide.
     return () => {
       active = false;
     };
@@ -276,11 +297,13 @@ export function OrgLegalRepresentativePage() {
                       onChange={(event) => setRole(event.target.value as LegalRepresentativeRole)}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:max-w-xs"
                     >
-                      {ROLE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
+                      {ROLE_OPTIONS.filter((option) => !mySeat || option.value === mySeat).map(
+                        (option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ),
+                      )}
                     </select>
                   </div>
                   <TextField

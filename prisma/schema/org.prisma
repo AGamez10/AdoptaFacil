@@ -35,6 +35,9 @@ model Organization {
   duplicateFlagsAsMatched  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsMatched")
   invitations              OrganizationInvitation[]
   reports                  OrgReport[]
+  signerDesignations       OrgSignerDesignation[]
+  reportApprovals          OrgReportApproval[]
+  reportPolicies           OrgReportPolicy[]
   // Platform workspace (F19): the team's own work when this organization is a
   // platform team. See platform-workspace.prisma.
   workspaceTickets         PlatformWorkspaceTicket[]
@@ -223,14 +226,19 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  credential           AuthCredential?
-  refreshTokens        RefreshToken[]
-  passwordResetTokens  PasswordResetToken[]
-  roleAssignments      UserRole[]
-  legalRepresentatives LegalRepresentative[]
-  generatedReports     OrgReport[]
-  mfaFactor            AuthMfaFactor?
+  organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credential                AuthCredential?
+  refreshTokens             RefreshToken[]
+  passwordResetTokens       PasswordResetToken[]
+  roleAssignments           UserRole[]
+  legalRepresentatives      LegalRepresentative[]
+  generatedReports          OrgReport[]
+  signerDesignationsOwn     OrgSignerDesignation[] @relation("SignerDesignationUser")
+  signerDesignationsMade    OrgSignerDesignation[] @relation("SignerDesignationBy")
+  signerDesignationsRevoked OrgSignerDesignation[] @relation("SignerDesignationRevokedBy")
+  reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
+  reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
+  mfaFactor                 AuthMfaFactor?
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -387,8 +395,9 @@ model LegalRepresentative {
   signedAt         DateTime @map("signed_at")
   createdAt        DateTime @default(now()) @map("created_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  member       User         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member          User                @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  reportApprovals OrgReportApproval[]
 
   @@index([organizationId])
   @@index([organizationId, role, signedAt])
@@ -482,6 +491,8 @@ model OrganizationInvitation {
   organizationId  String    @map("organization_id") @db.Uuid
   email           String
   role            String
+  /// Cargo de firmante adicional ('accountant' | 'fiscal_reviewer') si la invitación es para firmar.
+  signerRole      String?   @map("signer_role")
   tokenHash       String    @unique @map("token_hash")
   invitedByUserId String    @map("invited_by_user_id") @db.Uuid
   expiresAt       DateTime  @map("expires_at")

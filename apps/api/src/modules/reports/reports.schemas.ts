@@ -20,3 +20,22 @@ export const generateOrgReportSchema = z
     signerRoles: z.array(z.enum(LEGAL_REPRESENTATIVE_ROLES)).max(3).optional(),
   })
   .strict();
+
+/** `POST /org/reports/:id/decision`. Estricto: la decisión es la única entrada. */
+export const decideOrgReportSchema = z
+  .object({ decision: z.enum(['approved', 'rejected']) })
+  .strict();
+
+/** `PUT /org/reports/policy`. El representante legal siempre firma. */
+export const setOrgReportPolicySchema = z
+  .object({
+    kind: z.enum(['donations', 'social_service']),
+    requiredRoles: z
+      .array(z.enum(LEGAL_REPRESENTATIVE_ROLES))
+      .min(1)
+      .max(3)
+      .refine((roles) => roles.includes('legal_representative'), {
+        message: 'El representante legal siempre firma.',
+      }),
+  })
+  .strict();

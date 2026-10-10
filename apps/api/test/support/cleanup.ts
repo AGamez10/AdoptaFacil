@@ -62,6 +62,7 @@ const APPEND_ONLY_TABLES = [
   // legal_acceptances (prueba de autorización, Ley 1581) es append-only igual.
   'legal_acceptances',
   // org_reports (M13): append-only, mismos triggers que volunteer_certificates.
+  'org_report_approvals',
   'org_reports',
   // F19 · decisions before their requests, events before their tickets (FKs).
   'platform_sensitive_action_decisions',

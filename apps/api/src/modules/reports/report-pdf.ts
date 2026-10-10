@@ -38,6 +38,11 @@ export interface RenderReportInput {
   payload: OrgReportPayload;
   signers: RenderSigner[];
   verifyUrl: string;
+  /**
+   * Borrador: faltan aprobaciones de firmantes (o alguien lo rechazó). Se dibuja
+   * sin firmas y con un aviso de que NO tiene valor mientras no se emita.
+   */
+  draft?: 'pending_signatures' | 'rejected';
 }
 
 const PAGE_W = 841.89;
@@ -52,6 +57,11 @@ const MUTED = rgb(0.42, 0.42, 0.45);
 const LINE = rgb(0.85, 0.86, 0.88);
 const ZEBRA = rgb(0.965, 0.97, 0.975);
 const WHITE = rgb(1, 1, 1);
+
+const DRAFT_STYLE = {
+  bg: rgb(1, 0.92, 0.92),
+  fg: rgb(0.6, 0.1, 0.1),
+};
 
 const EFFECT_STYLE: Record<
   OrgReportLegalEffect,
@@ -407,8 +417,18 @@ function drawHeader(c: ReportCanvas, input: RenderReportInput, title: string): v
   );
   c.y = Math.min(c.y - 14, PAGE_H - MARGIN - qrSize - 12);
 
-  const style = EFFECT_STYLE[input.legalEffect];
-  const explanation = effectExplanation(payload.kind, input.legalEffect);
+  const style = input.draft
+    ? {
+        ...DRAFT_STYLE,
+        title:
+          input.draft === 'rejected'
+            ? 'BORRADOR RECHAZADO — SIN VALOR'
+            : 'BORRADOR — PENDIENTE DE FIRMAS, SIN VALOR HASTA QUE SE EMITA',
+      }
+    : EFFECT_STYLE[input.legalEffect];
+  const explanation = input.draft
+    ? 'Este documento todavía no está emitido: cada firmante requerido debe aprobarlo con su propia cuenta en AdoptaFácil. No lo presentes ante terceros como documento firmado.'
+    : effectExplanation(payload.kind, input.legalEffect);
   const lines = wrap(explanation, c.font.regular, 8.5, PAGE_W - MARGIN * 2 - 20);
   const boxH = 22 + lines.length * 11;
   c.page.drawRectangle({
@@ -590,6 +610,23 @@ function signerRoleLine(role: LegalRepresentativeRole, position: string): string
 }
 
 async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promise<void> {
+  if (input.draft) {
+    c.ensure(40);
+    c.y -= 10;
+    const names = input.signers
+      .map((s) => `${pdfText(s.fullName, 80)} (${SIGNER_ROLE_LABEL[s.role]})`)
+      .join('; ');
+    c.paragraph(
+      input.draft === 'rejected'
+        ? 'Un firmante rechazó este documento: no se emitirá. Genera uno nuevo después de corregirlo.'
+        : `Pendiente de la aprobación de: ${names || 'los firmantes requeridos'}.`,
+      MARGIN,
+      9,
+      PAGE_W - MARGIN * 2,
+      12,
+    );
+    return;
+  }
   if (input.legalEffect === 'informative' || input.signers.length === 0) {
     c.ensure(40);
     c.y -= 10;

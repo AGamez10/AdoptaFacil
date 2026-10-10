@@ -11,6 +11,8 @@ import {
   DONATIONS_MANAGEMENT_ROLES,
   MARKETPLACE_VIEW_ROLES,
   ORG_DOCUMENTS_ROLES,
+  ORG_SIGNERS_ROLES,
+  ORG_SIGNING_ROLES,
   ORG_PLAN_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
@@ -42,6 +44,8 @@ import {
   OrgLegalRepresentativePage,
   OrgProfilePage,
   OrgReportsPage,
+  OrgSignersPage,
+  OrgSigningInboxPage,
   PlatformAdminDashboardPage,
   PlatformBannerPage,
   PlatformDocumentsReviewPage,
@@ -622,6 +626,25 @@ export function AppRoutes() {
                 element={
                   <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
                     <OrgReportsPage />
+                  </RequireRoles>
+                }
+              />
+              {/* M13 · firmantes de la organización (contador, revisor fiscal) y
+                bandeja de quien firma. El servidor vuelve a exigir roles: el
+                Owner gestiona; Owner y los auditores vinculados firman. */}
+              <Route
+                path="organizacion/firmantes"
+                element={
+                  <RequireRoles roles={ORG_SIGNERS_ROLES}>
+                    <OrgSignersPage />
+                  </RequireRoles>
+                }
+              />
+              <Route
+                path="organizacion/documentos-por-firmar"
+                element={
+                  <RequireRoles roles={ORG_SIGNING_ROLES}>
+                    <OrgSigningInboxPage />
                   </RequireRoles>
                 }
               />

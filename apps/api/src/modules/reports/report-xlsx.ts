@@ -19,6 +19,8 @@ export interface RenderXlsxInput {
   payload: OrgReportPayload;
   signers: OrgReportSigner[];
   verifyUrl: string;
+  /** Borrador sin emitir (faltan firmas o fue rechazado). */
+  draft?: 'pending_signatures' | 'rejected';
 }
 
 const EFFECT_LABEL: Record<OrgReportLegalEffect, string> = {
@@ -60,7 +62,12 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     ['NIT', sheetText(payload.organization.nit ?? '')],
     ['Período (hora de Colombia)', `${payload.period.start} a ${payload.period.end}`],
     ['Folio', input.code],
-    ['Valor del documento', EFFECT_LABEL[input.legalEffect]],
+    [
+      'Valor del documento',
+      input.draft
+        ? 'BORRADOR sin emitir: sin valor hasta que cada firmante lo apruebe'
+        : EFFECT_LABEL[input.legalEffect],
+    ],
     [
       'Firmantes',
       input.signers.length
