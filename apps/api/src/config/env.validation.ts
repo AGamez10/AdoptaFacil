@@ -171,6 +171,10 @@ export const envSchema = z.object({
   FEATURE_SPONSORSHIPS: featureFlag(),
   FEATURE_DONATION_CERTIFICATES: featureFlag(),
   FEATURE_COMMUNITY: featureFlag(),
+  // M13 · estampar firmas de representantes en los reportes. Apagado (falla
+  // cerrado) hasta que cada firmante apruebe el documento con su propia cuenta:
+  // sin eso, quien genera podría firmar por otros sin su consentimiento.
+  REPORTS_SIGNATURES_ENABLED: featureFlag(),
   FEATURE_REPUTATION: featureFlag(),
   FEATURE_RESOURCES: featureFlag(),
   FEATURE_MARKETPLACE: featureFlag(),
@@ -195,6 +199,14 @@ export const envSchema = z.object({
   // integration suite uses it so each app instance starts with a clean
   // budget). Production must use 'redis'.
   THROTTLER_STORAGE: z.enum(['memory', 'redis']).default('redis'),
+  // Platform staff security (F19): TOTP for every session that uses a platform
+  // role. Fails closed — only the exact string "false" turns it off, and
+  // production refuses that (assertProductionSafety). The rest of the staff
+  // session policy lives in core/auth/mfa/platform-security.config.ts.
+  PLATFORM_MFA_REQUIRED: z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) => !(value === false || String(value).trim().toLowerCase() === 'false')),
 });
 
 /** Runtime config type (from the base object schema). */
@@ -288,6 +300,9 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   }
   if (env.THROTTLER_STORAGE !== 'redis') {
     fail('THROTTLER_STORAGE', 'production rate limiting must be shared in Redis');
+  }
+  if (!env.PLATFORM_MFA_REQUIRED) {
+    fail('PLATFORM_MFA_REQUIRED', 'platform staff must use two-step verification in production');
   }
 }
 

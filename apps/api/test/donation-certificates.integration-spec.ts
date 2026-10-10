@@ -187,7 +187,9 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
       .expect(200);
     expect(res.body.organizationName).toBe('Refugio Certificable');
     expect(res.body.organizationNit).toBe('900123456-1');
-    expect(res.body.donorName).toBe('María Restrepo');
+    // M13: la ruta es pública y el código es enumerable (10^6 por año): el
+    // nombre del donante sale enmascarado, nunca completo.
+    expect(res.body.donorName).toBe('María R.');
     expect(res.body.amount).toBe(150000);
     // Superficie mínima: nunca ids internos en la verificación pública.
     expect(res.body.id).toBeUndefined();

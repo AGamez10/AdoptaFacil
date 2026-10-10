@@ -19,6 +19,7 @@ import {
   PLATFORM_DUPLICATES_ROLES,
   PLATFORM_REVIEWS_ROLES,
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
+  PLATFORM_TEAM_ROLES,
   RESOURCE_VIEW_ROLES,
   SPONSORSHIP_VIEW_ROLES,
   VOLUNTEERING_VIEW_ROLES,
@@ -34,13 +35,13 @@ import {
   ResetPasswordPage,
 } from '../../features/auth';
 import {
-  ExogenousReportPage,
   NationalTransparencyPage,
   OrgDocumentsPage,
   OrgPlanPage,
   OrgFormalizationPage,
   OrgLegalRepresentativePage,
   OrgProfilePage,
+  OrgReportsPage,
   PlatformAdminDashboardPage,
   PlatformBannerPage,
   PlatformDocumentsReviewPage,
@@ -82,6 +83,7 @@ import {
   PostDetailPage,
 } from '../../features/community';
 import { AnimalsPage, RemindersInboxPage } from '../../features/animals';
+import { PlatformTeamPage } from '../../features/platform-team';
 import {
   AdoptionContractPage,
   AdoptionRequestPage,
@@ -611,13 +613,21 @@ export function AppRoutes() {
                   </RequireRoles>
                 }
               />
+              {/* M13 · reportes sellados de donaciones y servicio social. Mismo
+              gate que Documentos (Owner/Administrator/ReadOnlyAuditor); el
+              backend vuelve a exigir roles en cada ruta. La antigua entrada
+              "Reporte exógeno" (ComingSoon) redirige aquí. */}
               <Route
-                path="organizacion/reporte-exogeno"
+                path="organizacion/reportes"
                 element={
-                  <RequireRoles roles={ORG_MEMBER_ROLES}>
-                    <ExogenousReportPage />
+                  <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
+                    <OrgReportsPage />
                   </RequireRoles>
                 }
+              />
+              <Route
+                path="organizacion/reporte-exogeno"
+                element={<Navigate to="/organizacion/reportes" replace />}
               />
               {/* M12 (S-7, RF23) · moderación de reseñas, cross-tenant. Audiencia
               de PLATAFORMA — ruta hermana de /plataforma/documentos y
@@ -660,6 +670,15 @@ export function AppRoutes() {
                 element={
                   <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
                     <PlatformBannerPage />
+                  </RequireRoles>
+                }
+              />
+              {/* F19 · espacio de trabajo del equipo de plataforma. */}
+              <Route
+                path="plataforma/equipo"
+                element={
+                  <RequireRoles roles={PLATFORM_TEAM_ROLES}>
+                    <PlatformTeamPage />
                   </RequireRoles>
                 }
               />

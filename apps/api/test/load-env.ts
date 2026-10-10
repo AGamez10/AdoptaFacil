@@ -26,10 +26,17 @@ for (const flag of [
   'FEATURE_REPUTATION',
   'FEATURE_RESOURCES',
   'FEATURE_MARKETPLACE',
+  // M13: firmas en reportes (apagado por defecto en producción; ver env.validation.ts).
+  'REPORTS_SIGNATURES_ENABLED',
 ]) {
   process.env[flag] ??= 'true';
 }
 process.env.THROTTLER_STORAGE ??= 'memory';
+// F19: platform staff need a second factor (TOTP) by default. The existing
+// suites exercise platform endpoints with plain logins, so the integration run
+// switches enforcement off unless CI or a suite set it; the MFA suites
+// (platform-mfa / platform-workspace) build their app with it ON.
+process.env.PLATFORM_MFA_REQUIRED ??= 'false';
 
 const envPath = join(__dirname, '..', '..', '..', '.env');
 if (existsSync(envPath)) {

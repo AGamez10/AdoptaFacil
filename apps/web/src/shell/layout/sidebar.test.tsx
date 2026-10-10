@@ -294,9 +294,9 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
       'href',
       '/organizacion/transparencia-nacional',
     );
-    expect(within(sidebar).getByRole('link', { name: /Reporte exógeno 2575/ })).toHaveAttribute(
+    expect(within(sidebar).getByRole('link', { name: /^Reportes/ })).toHaveAttribute(
       'href',
-      '/organizacion/reporte-exogeno',
+      '/organizacion/reportes',
     );
     // The label link itself is untouched by the chevron toggle.
     expect(link).toHaveAttribute('href', '/organizacion/documentos');

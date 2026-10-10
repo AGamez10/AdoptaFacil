@@ -13,7 +13,7 @@ export { OrgDonationsDashboardSection } from './components/org-donations-dashboa
 export { PlatformBannerPage } from './pages/platform-banner-page';
 export { OrgVolunteeringPage } from './pages/org-volunteering-page';
 export { NationalTransparencyPage } from './pages/national-transparency-page';
-export { ExogenousReportPage } from './pages/exogenous-report-page';
+export { OrgReportsPage } from './pages/org-reports-page';
 export { OrgPlanPage } from './pages/org-plan-page';
 export { OrgProfileForm, type OrgProfileFormProps } from './components/org-profile-form';
 export * from './validation';

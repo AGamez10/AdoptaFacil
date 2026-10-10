@@ -160,6 +160,10 @@ export interface AccessTokenClaims {
   /** Account type. */
   typ: AccountType;
   email: string;
+  /** When the session passed the second factor (TOTP), as epoch SECONDS.
+   *  ADDITIVE, optional: only present on a platform-staff session that
+   *  verified its code (see `platform-workspace.ts`). Absent = no MFA yet. */
+  mfa_at?: number;
 }
 
 // ============================================================================

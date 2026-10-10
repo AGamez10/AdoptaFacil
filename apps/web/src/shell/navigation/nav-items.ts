@@ -100,6 +100,12 @@ export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
  * — mismos dos roles que `PLATFORM_DOCUMENTS_ROLES`, declarado aparte por el
  * mismo criterio del resto de constantes de este archivo.
  */
+/**
+ * F19 — espacio de trabajo del equipo de plataforma (`/plataforma/equipo`).
+ * Copiado del `@Roles` de `WorkspaceController` (`/platform/workspace/*`).
+ */
+export const PLATFORM_TEAM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
+
 export const PLATFORM_ADMIN_DASHBOARD_ROLES = [
   Role.PlatformAdmin,
   Role.PlatformSuperAdmin,
@@ -339,11 +345,10 @@ export const navItems: NavItem[] = [
         comingSoon: true,
       },
       {
-        path: '/organizacion/reporte-exogeno',
-        label: 'Reporte exógeno 2575',
+        path: '/organizacion/reportes',
+        label: 'Reportes',
         icon: ShieldIcon,
-        roles: ORG_MEMBER_ROLES,
-        comingSoon: true,
+        roles: ORG_DOCUMENTS_ROLES,
       },
     ],
   },
@@ -587,5 +592,13 @@ export const navItems: NavItem[] = [
     label: 'Banner del portal',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
+  },
+  // F19 · espacio de trabajo del equipo de plataforma: tareas, doble
+  // aprobación, personas del equipo, bitácora y "Mi seguridad".
+  {
+    path: '/plataforma/equipo',
+    label: 'Equipo y seguridad',
+    icon: ShieldIcon,
+    roles: PLATFORM_TEAM_ROLES,
   },
 ];
