@@ -187,13 +187,18 @@ describe('Formalization state machine (M01, RF02)', () => {
       update: { nit: '900123456-7' },
     });
 
-    for (const target of ['en_proceso', 'formalizada']) {
-      const res = await advance(ownerToken, target).expect(201);
-      expect(res.body.status.state).toBe(target);
-      expect(res.body.status.rteVigente).toBe(false);
-      expect(res.body.transition.organizationId).toBe(ownerOrgId);
-      expect(res.body.transition.actorUserId).toEqual(expect.any(String));
-    }
+    await advance(ownerToken, 'en_proceso').expect(201);
+    // Formalizada exige el RUT y el certificado de Cámara APROBADOS (decisión
+    // del cliente: lo formal se habilita solo tras verificar documentos).
+    await advance(ownerToken, 'formalizada').expect(400);
+    const rutDocId = await approvedDocument(ownerOrgId, 'rut');
+    await advance(ownerToken, 'formalizada').expect(400); // falta el certificado
+    const cerlDocId = await approvedDocument(ownerOrgId, 'existence_representation_certificate');
+    const res = await advance(ownerToken, 'formalizada').expect(201);
+    expect(res.body.status.state).toBe('formalizada');
+    expect(res.body.status.rteVigente).toBe(false);
+    expect(res.body.transition.organizationId).toBe(ownerOrgId);
+    expect(res.body.transition.actorUserId).toEqual(expect.any(String));
 
     // SEC-003: no self-declaration of ESAL.
     await advance(ownerToken, 'esal').expect(403);
@@ -201,7 +206,10 @@ describe('Formalization state machine (M01, RF02)', () => {
     await platformAdvance(ownerOrgId, { targetState: 'esal' }).expect(400);
     // …that belongs to THIS organization…
     const foreignOrg = await registerOrg();
-    const foreignDoc = await approvedDocument(foreignOrg.orgId);
+    const foreignDoc = await approvedDocument(
+      foreignOrg.orgId,
+      'existence_representation_certificate',
+    );
     await platformAdvance(ownerOrgId, {
       targetState: 'esal',
       evidenceDocumentId: foreignDoc,
@@ -216,7 +224,13 @@ describe('Formalization state machine (M01, RF02)', () => {
       evidenceDocumentId: pending.id,
     }).expect(400);
 
-    evidenceDocId = await approvedDocument(ownerOrgId);
+    // …and is the right kind: ESAL se prueba con el certificado de Cámara, no con el RUT.
+    await platformAdvance(ownerOrgId, {
+      targetState: 'esal',
+      evidenceDocumentId: rutDocId,
+    }).expect(400);
+
+    evidenceDocId = cerlDocId;
     const esal = await platformAdvance(ownerOrgId, {
       targetState: 'esal',
       evidenceDocumentId: evidenceDocId,
@@ -227,9 +241,14 @@ describe('Formalization state machine (M01, RF02)', () => {
     await waitForDianStatus(server, ownerToken, 'verified');
 
     await advance(ownerToken, 'esal_rte').expect(403);
+    // El RTE se prueba con el RUT (responsabilidad 04), no con el certificado.
+    await platformAdvance(ownerOrgId, {
+      targetState: 'esal_rte',
+      evidenceDocumentId: cerlDocId,
+    }).expect(400);
     const rte = await platformAdvance(ownerOrgId, {
       targetState: 'esal_rte',
-      evidenceDocumentId: evidenceDocId,
+      evidenceDocumentId: rutDocId,
     }).expect(201);
     expect(rte.body.status).toEqual({ state: 'esal_rte', rteVigente: true });
   });
