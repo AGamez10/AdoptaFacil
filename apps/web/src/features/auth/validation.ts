@@ -44,3 +44,22 @@ export function collectErrors<T extends Record<string, FieldError>>(
   }
   return { errors: filtered, isValid: Object.keys(filtered).length === 0 };
 }
+
+/**
+ * Login failure copy. Wrong credentials stay generic (never leak whether the
+ * email exists or which field failed), but a rate limit or an unreachable API
+ * must not read as "wrong password": that sent people to retry, which only
+ * extends the block.
+ */
+export function loginErrorMessage(status: number): string {
+  if (status === 429) {
+    return 'Hiciste varios intentos seguidos. Espera un minuto y vuelve a intentarlo.';
+  }
+  if (status === 0) {
+    return 'No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.';
+  }
+  if (status >= 500) {
+    return 'El servidor tuvo un problema al iniciar sesión. Inténtalo de nuevo en unos minutos.';
+  }
+  return 'No pudimos iniciar sesión. Revisa tu correo y contraseña.';
+}

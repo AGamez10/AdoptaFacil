@@ -46,6 +46,16 @@ import {
 import { ZodValidationPipe } from './zod-validation.pipe';
 
 /**
+ * Budget for the session-keeping routes (refresh, refresh/silent, me, logout).
+ * Every page load bootstraps the session through refresh/silent + me (twice in
+ * dev under React StrictMode), so the shared 20/min budget logged people out
+ * after ~10 page loads. These routes ride on a random single-use refresh token
+ * or a signed access token, so a higher ceiling does not open brute force;
+ * each route still keeps its own per-IP counter.
+ */
+const SESSION_THROTTLE = { default: { limit: 120, ttl: 60_000 } };
+
+/**
  * Auth endpoints. Rate limiting (ThrottlerGuard) is scoped to this controller —
  * the sensitive credential/token endpoints get a tighter per-IP budget so
  * brute-force and abuse are throttled without limiting the rest of the API.
@@ -105,6 +115,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(200)
+  @Throttle(SESSION_THROTTLE)
   async refresh(
     @Body(new ZodValidationPipe(refreshSchema)) dto: RefreshDto,
     @Res({ passthrough: true }) res: Response,
@@ -124,6 +135,7 @@ export class AuthController {
    */
   @Post('refresh/silent')
   @HttpCode(200)
+  @Throttle(SESSION_THROTTLE)
   async refreshSilent(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -149,6 +161,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(204)
+  @Throttle(SESSION_THROTTLE)
   async logout(
     @Body(new ZodValidationPipe(logoutSchema)) dto: LogoutDto,
     @Res({ passthrough: true }) res: Response,
@@ -180,6 +193,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @Throttle(SESSION_THROTTLE)
   me(@CurrentUser() user: RequestUser): Promise<AuthenticatedUser> {
     return this.auth.getAuthenticatedUser(user);
   }
