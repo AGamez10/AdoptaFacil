@@ -10,6 +10,13 @@ import { AUTH_CONFIG, loadAuthConfig } from './auth.config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { MFA_ENCRYPTION_KEY, loadMfaEncryptionKey } from './mfa/mfa-crypto';
+import { MfaController } from './mfa/mfa.controller';
+import { MfaService } from './mfa/mfa.service';
+import {
+  PLATFORM_SECURITY_CONFIG,
+  loadPlatformSecurityConfig,
+} from './mfa/platform-security.config';
 import { OptionalJwtAuthGuard } from './optional-jwt-auth.guard';
 import { PasswordService } from './password.service';
 import { RedisThrottlerStorage } from './redis-throttler.storage';
@@ -39,16 +46,28 @@ import { TokenService } from './token.service';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, MfaController],
   providers: [
     { provide: AUTH_CONFIG, useFactory: loadAuthConfig },
+    // Platform staff security (F19): session policy + TOTP second factor.
+    { provide: PLATFORM_SECURITY_CONFIG, useFactory: loadPlatformSecurityConfig },
+    { provide: MFA_ENCRYPTION_KEY, useFactory: loadMfaEncryptionKey },
+    MfaService,
     PasswordService,
     TokenService,
     AuthService,
     JwtAuthGuard,
     OptionalJwtAuthGuard,
   ],
-  exports: [AUTH_CONFIG, JwtAuthGuard, OptionalJwtAuthGuard, PasswordService, TokenService],
+  exports: [
+    AUTH_CONFIG,
+    PLATFORM_SECURITY_CONFIG,
+    JwtAuthGuard,
+    OptionalJwtAuthGuard,
+    PasswordService,
+    TokenService,
+    MfaService,
+  ],
 })
 export class AuthModule implements NestModule {
   // Only the `auth` routes read a cookie (the silent-refresh bootstrap) — no

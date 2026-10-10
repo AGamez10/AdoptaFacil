@@ -62,6 +62,11 @@ const APPEND_ONLY_TABLES = [
   // org_reports (M13): append-only, mismos triggers que volunteer_certificates.
   'org_report_approvals',
   'org_reports',
+  // F19 · decisions before their requests, events before their tickets (FKs).
+  'platform_sensitive_action_decisions',
+  'platform_sensitive_actions',
+  'platform_workspace_ticket_events',
+  'platform_workspace_tickets',
 ];
 
 export async function purgeOrganizations(

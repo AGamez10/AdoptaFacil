@@ -7,7 +7,12 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Role } from '@adoptafacil/contracts';
 import type { AuthenticatedRequest } from '../auth/auth.types';
+import {
+  loadPlatformSecurityConfig,
+  type PlatformSecurityConfig,
+} from '../auth/mfa/platform-security.config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { enforcePlatformMfa, grantedOnlyByPlatformRoles } from './platform-mfa.policy';
 import { ROLES_KEY } from './roles.decorator';
 
 /**
@@ -20,9 +25,16 @@ import { ROLES_KEY } from './roles.decorator';
  * token). This binds RBAC to the tenant: a user's roles are only ever those
  * granted within their own organization, so an Administrator of Org A holds no
  * authority under Org B.
+ *
+ * Platform authority adds a second factor: when the ONLY roles that let the
+ * caller in are platform roles, the session must have passed TOTP recently
+ * (403 MFA_ENROLLMENT_REQUIRED / MFA_REQUIRED otherwise) — see
+ * platform-mfa.policy.ts. Org roles are unaffected.
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
+  private readonly platformSecurity: PlatformSecurityConfig = loadPlatformSecurityConfig();
+
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
@@ -48,9 +60,12 @@ export class RolesGuard implements CanActivate {
       tx.userRole.findMany({ where: { userId: user.id } }),
     );
     const held = new Set<string>(rows.map((row) => row.role));
-    const permitted = required.some((role) => held.has(role));
-    if (!permitted) {
+    const matched = required.filter((role) => held.has(role));
+    if (matched.length === 0) {
       throw new ForbiddenException('Insufficient role for this operation');
+    }
+    if (grantedOnlyByPlatformRoles(matched)) {
+      await enforcePlatformMfa(request, matched, this.prisma, this.platformSecurity);
     }
     return true;
   }

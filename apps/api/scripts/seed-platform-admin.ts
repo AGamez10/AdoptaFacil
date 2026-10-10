@@ -23,6 +23,15 @@
  * roles, so a partially-failed prior run is safely completed too. An existing
  * password is NEVER changed silently: pass `--rotate-password` to replace it
  * (Argon2id) with the one given.
+ *
+ * Teams (F19): staff work in a TEAM — the organization where they hold their
+ * platform roles. Without `PLATFORM_TEAM_ORG_ID` a new account starts its own
+ * team ("<name> (Platform)"). With `PLATFORM_TEAM_ORG_ID=<uuid of an existing
+ * team>` the new account joins that team instead: this is how the SECOND lead
+ * of a team is bootstrapped, since every later staff change (invite, grant or
+ * revoke a role, reset a second factor) needs the approval of another lead of
+ * the same team. On first sign-in the account must set up two-step
+ * verification (TOTP) before using any platform tool.
  */
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -183,14 +192,20 @@ async function main(): Promise<void> {
         console.log('[seed:admin] La contraseña existente NO se cambió (usa --rotate-password).');
       }
     } else {
-      organizationId = randomUUID();
+      const teamId = (process.env.PLATFORM_TEAM_ORG_ID ?? '').trim();
+      if (teamId && !(await prisma.organization.findUnique({ where: { id: teamId } }))) {
+        fail(`PLATFORM_TEAM_ORG_ID=${teamId} no corresponde a ninguna organización.`);
+      }
+      organizationId = teamId || randomUUID();
       userId = randomUUID();
       const passwordHash = await passwords.hash(password);
 
       await prisma.$transaction(async (tx) => {
-        await tx.organization.create({
-          data: { id: organizationId, name: `${displayName} (Platform)`, status: 'approved' },
-        });
+        if (!teamId) {
+          await tx.organization.create({
+            data: { id: organizationId, name: `${displayName} (Platform)`, status: 'approved' },
+          });
+        }
         await tx.user.create({
           data: { id: userId, organizationId, accountType: 'person', email, displayName },
         });
@@ -198,7 +213,9 @@ async function main(): Promise<void> {
           data: { userId, organizationId, accountType: 'person', email, passwordHash },
         });
       });
-      console.log(`[seed:admin] Usuario creado: ${email} (userId=${userId}).`);
+      console.log(
+        `[seed:admin] Usuario creado: ${email} (userId=${userId}, equipo=${organizationId}).`,
+      );
     }
 
     // Upsert (not create): a second run never duplicates a role row, and a
@@ -212,7 +229,10 @@ async function main(): Promise<void> {
       });
     }
     console.log(`[seed:admin] Roles asegurados para ${email}: ${PLATFORM_ROLES.join(', ')}.`);
-    console.log('[seed:admin] Listo. Inicia sesión y visita /plataforma/documentos.');
+    console.log(
+      '[seed:admin] Listo. Inicia sesión: te pedirá activar la verificación en dos pasos; ' +
+        'luego visita /plataforma/equipo.',
+    );
   } finally {
     await prisma.$disconnect();
   }
