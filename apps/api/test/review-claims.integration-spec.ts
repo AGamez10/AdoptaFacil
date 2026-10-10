@@ -5,12 +5,17 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { createStaffMember } from './support/platform-team';
 
 /**
  * Ola 3 (R3-6): reservas del workspace de revisión. Solo roles de plataforma;
  * una reserva vigente es exclusiva (409 para otro revisor), se renueva por su
  * dueño, la libera su dueño (o un PlatformSuperAdmin) y queda auditada en la
  * organización reservada.
+ *
+ * F19: los revisores trabajan en EQUIPOS (la organización donde tienen sus roles
+ * de plataforma). Otro equipo ve que el expediente está tomado, pero no por
+ * quién, y su líder no puede liberar reservas ajenas a su equipo.
  */
 describe('Platform review claims (R3-6)', () => {
   let app: INestApplication;
@@ -60,6 +65,7 @@ describe('Platform review claims (R3-6)', () => {
   let reviewerA: Actor;
   let reviewerB: Actor;
   let superAdmin: Actor;
+  let otherTeamLead: Actor;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -69,8 +75,17 @@ describe('Platform review claims (R3-6)', () => {
 
     target = await actorWithRoles(['owner']);
     reviewerA = await actorWithRoles(['owner', 'platform_admin']);
-    reviewerB = await actorWithRoles(['owner', 'platform_admin']);
-    superAdmin = await actorWithRoles(['owner', 'platform_super_admin']);
+    // Same team as reviewerA.
+    reviewerB = await createStaffMember(admin, app, {
+      teamOrgId: reviewerA.orgId,
+      roles: ['platform_admin'],
+    });
+    superAdmin = await createStaffMember(admin, app, {
+      teamOrgId: reviewerA.orgId,
+      roles: ['platform_super_admin'],
+    });
+    otherTeamLead = await createStaffMember(admin, app, { roles: ['platform_super_admin'] });
+    createdOrgIds.push(otherTeamLead.orgId);
   });
 
   afterAll(async () => {
@@ -116,7 +131,24 @@ describe('Platform review claims (R3-6)', () => {
     expect(taken).toBe(1);
   });
 
-  it('only the owner releases; a PlatformSuperAdmin can override', async () => {
+  it('another team sees the claim but not who holds it, and cannot override it', async () => {
+    const list = await request(server)
+      .get('/platform/review-claims')
+      .set('Authorization', `Bearer ${otherTeamLead.token}`)
+      .expect(200);
+    const seen = list.body.find(
+      (c: { organizationId: string }) => c.organizationId === target.orgId,
+    );
+    expect(seen.reviewerUserId).not.toBe(reviewerA.userId);
+    expect(JSON.stringify(list.body)).not.toContain(reviewerA.userId);
+
+    const conflict = await claim(otherTeamLead.token, target.orgId).expect(409);
+    expect(JSON.stringify(conflict.body)).not.toContain(reviewerA.userId);
+
+    await release(otherTeamLead.token, target.orgId).expect(403);
+  });
+
+  it('only the owner releases; a PlatformSuperAdmin of the team can override', async () => {
     await release(reviewerB.token, target.orgId).expect(403);
     await release(superAdmin.token, target.orgId).expect(204);
     await release(reviewerA.token, target.orgId).expect(404);

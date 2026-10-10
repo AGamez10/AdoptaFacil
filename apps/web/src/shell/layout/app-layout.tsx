@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { PlatformMfaGate } from '../../features/platform-team';
 import { useNav } from '../navigation/nav-context';
 import { LayoutErrorBoundary } from './error-boundary';
 import { Header } from './header';
@@ -35,7 +36,10 @@ export function AppLayout() {
             fallback={(_error, reset) => <ContentError onRetry={reset} />}
           >
             <Suspense fallback={<FullPageLoading />}>
-              <Outlet />
+              {/* F19: platform staff pass their second factor before any tool. */}
+              <PlatformMfaGate>
+                <Outlet />
+              </PlatformMfaGate>
             </Suspense>
           </LayoutErrorBoundary>
         </main>

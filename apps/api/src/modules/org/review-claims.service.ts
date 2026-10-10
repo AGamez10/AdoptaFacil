@@ -35,7 +35,18 @@ export interface ReviewClaimActor {
   email: string;
   /** PlatformSuperAdmin puede liberar la reserva de otro revisor. */
   canOverride: boolean;
+  /** Equipo (organización) del revisor: los demás equipos no ven quién es. */
+  teamOrganizationId: string;
 }
+
+/** Lo que se guarda en Redis: la reserva + el equipo del revisor (interno). */
+interface StoredClaim extends DocumentReviewClaim {
+  teamOrganizationId?: string;
+}
+
+/** Revisor de otro equipo: se sabe que el expediente está tomado, no por quién. */
+export const OTHER_TEAM_REVIEWER_ID = '00000000-0000-0000-0000-000000000000';
+export const OTHER_TEAM_REVIEWER_LABEL = 'otro equipo de plataforma';
 
 /**
  * Reservas de revisión del workspace de plataforma (Ola 3, R3-6). Viven en
@@ -52,7 +63,7 @@ export class ReviewClaimsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(): Promise<DocumentReviewClaim[]> {
+  async list(viewer: Pick<ReviewClaimActor, 'teamOrganizationId'>): Promise<DocumentReviewClaim[]> {
     const keys: string[] = [];
     let cursor = '0';
     do {
@@ -64,7 +75,8 @@ export class ReviewClaimsService {
     const values = await this.redis.mget(...keys);
     return values
       .map((value) => parseClaim(value))
-      .filter((claim): claim is DocumentReviewClaim => claim !== null)
+      .filter((claim): claim is StoredClaim => claim !== null)
+      .map((claim) => presentClaim(claim, viewer.teamOrganizationId))
       .sort((a, b) => a.claimedAt.localeCompare(b.claimedAt));
   }
 
@@ -74,12 +86,13 @@ export class ReviewClaimsService {
     assertUuid(organizationId);
     const key = KEY_PREFIX + organizationId;
     const now = new Date();
-    const claim: DocumentReviewClaim = {
+    const claim: StoredClaim = {
       organizationId,
       reviewerUserId: actor.id,
       reviewerEmail: actor.email,
       claimedAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + REVIEW_CLAIM_TTL_MS).toISOString(),
+      teamOrganizationId: actor.teamOrganizationId,
     };
 
     const created = await this.redis.set(
@@ -91,23 +104,24 @@ export class ReviewClaimsService {
     );
     if (created === 'OK') {
       await this.record(actor.id, organizationId, 'platform.review_claim.taken');
-      return claim;
+      return presentClaim(claim, actor.teamOrganizationId);
     }
 
     const current = parseClaim(await this.redis.get(key));
     if (current && current.reviewerUserId !== actor.id) {
+      const shown = presentClaim(current, actor.teamOrganizationId);
       throw new ConflictException({
-        message: `Este expediente lo está revisando ${current.reviewerEmail}.`,
-        claim: current,
+        message: `Este expediente lo está revisando ${shown.reviewerEmail}.`,
+        claim: shown,
       });
     }
     // Renovación: conserva cuándo empezó, extiende el vencimiento.
-    const renewed: DocumentReviewClaim = {
+    const renewed: StoredClaim = {
       ...claim,
       claimedAt: current?.claimedAt ?? claim.claimedAt,
     };
     await this.redis.set(key, JSON.stringify(renewed), 'PX', REVIEW_CLAIM_TTL_MS);
-    return renewed;
+    return presentClaim(renewed, actor.teamOrganizationId);
   }
 
   async release(actor: ReviewClaimActor, organizationId: string): Promise<void> {
@@ -118,6 +132,11 @@ export class ReviewClaimsService {
     if (result === -1) {
       if (!actor.canOverride) {
         throw new ForbiddenException('Solo quien reservó el expediente puede liberarlo.');
+      }
+      // Un líder solo libera reservas de su propio equipo.
+      const current = parseClaim(await this.redis.get(key));
+      if (current?.teamOrganizationId && current.teamOrganizationId !== actor.teamOrganizationId) {
+        throw new ForbiddenException('La reserva es de otro equipo de plataforma.');
       }
       await this.redis.del(key);
       await this.record(actor.id, organizationId, 'platform.review_claim.overridden');
@@ -141,10 +160,25 @@ function assertUuid(organizationId: string): void {
   if (!UUID_RE.test(organizationId)) throw new BadRequestException('Invalid organization id');
 }
 
-function parseClaim(value: string | null): DocumentReviewClaim | null {
+/** Quita el dato interno del equipo y, si la reserva es de OTRO equipo, oculta
+ *  quién la tiene (F19: un equipo no ve al personal de otro). Las reservas
+ *  previas sin equipo se muestran como antes (vencen solas en 30 min). */
+function presentClaim(claim: StoredClaim, viewerTeamId: string): DocumentReviewClaim {
+  const { teamOrganizationId, ...visible } = claim;
+  if (teamOrganizationId && teamOrganizationId !== viewerTeamId) {
+    return {
+      ...visible,
+      reviewerUserId: OTHER_TEAM_REVIEWER_ID,
+      reviewerEmail: OTHER_TEAM_REVIEWER_LABEL,
+    };
+  }
+  return visible;
+}
+
+function parseClaim(value: string | null): StoredClaim | null {
   if (!value) return null;
   try {
-    const claim = JSON.parse(value) as DocumentReviewClaim;
+    const claim = JSON.parse(value) as StoredClaim;
     return typeof claim.organizationId === 'string' && typeof claim.reviewerUserId === 'string'
       ? claim
       : null;

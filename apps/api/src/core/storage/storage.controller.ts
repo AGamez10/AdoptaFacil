@@ -8,6 +8,7 @@ import {
   PayloadTooLargeException,
   Put,
   Query,
+  Req,
   Res,
   UploadedFile,
   UseGuards,
@@ -22,7 +23,12 @@ import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import type { RequestUser } from '../auth/auth.types';
+import type { AuthenticatedRequest, RequestUser } from '../auth/auth.types';
+import {
+  PLATFORM_SECURITY_CONFIG,
+  type PlatformSecurityConfig,
+} from '../auth/mfa/platform-security.config';
+import { enforcePlatformMfa } from '../rbac/platform-mfa.policy';
 import { STORAGE_PORT, type StoragePort } from './storage.port';
 import { ALLOWED_CONTENT_TYPES, parseStorageKey } from './storage-keys';
 
@@ -57,6 +63,7 @@ export class StorageController {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     config: ConfigService<Env, true>,
+    @Inject(PLATFORM_SECURITY_CONFIG) private readonly platformSecurity: PlatformSecurityConfig,
   ) {
     this.maxMb = config.get('STORAGE_MAX_FILE_MB', { infer: true });
     this.maxBytes = this.maxMb * 1024 * 1024;
@@ -124,6 +131,7 @@ export class StorageController {
   async servePrivate(
     @CurrentUser() user: RequestUser,
     @Query('key') key: string,
+    @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ): Promise<void> {
     const parsed = parseStorageKey(key ?? '');
@@ -137,6 +145,14 @@ export class StorageController {
       user.organizationId === parsed.organizationId && roles.has(Role.Owner);
     if (!isPlatform && !isOwnerOfOwningOrg) {
       throw new ForbiddenException('Not allowed to download this document');
+    }
+    // F19: reaching another org's document only through platform authority
+    // needs a fresh second factor, and lands in the staff member's team trail.
+    if (!isOwnerOfOwningOrg) {
+      const platformRoles = [Role.PlatformAdmin, Role.PlatformSuperAdmin].filter((r) =>
+        roles.has(r),
+      );
+      await enforcePlatformMfa(req, platformRoles, this.prisma, this.platformSecurity);
     }
 
     const object = await this.storage.readObject(key);

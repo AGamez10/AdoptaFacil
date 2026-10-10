@@ -7,9 +7,20 @@ export interface RequestUser {
   organizationId: string;
   accountType: AccountType;
   email: string;
+  /** Epoch seconds when this session passed the second factor (`mfa_at`
+   *  claim), if it did. Platform roles require it (see RolesGuard). */
+  mfaAt?: number;
+}
+
+/** Set by RolesGuard when a request was authorized ONLY through a platform
+ *  role, so the platform access log records it in the staff member's team. */
+export interface PlatformAccessMark {
+  teamOrganizationId: string;
+  roles: string[];
 }
 
 /** Express request augmented with the authenticated principal. */
 export interface AuthenticatedRequest extends Request {
   user?: RequestUser;
+  platformAccess?: PlatformAccessMark;
 }

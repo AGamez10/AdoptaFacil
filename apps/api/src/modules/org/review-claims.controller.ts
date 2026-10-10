@@ -26,8 +26,8 @@ export class ReviewClaimsController {
   ) {}
 
   @Get()
-  list(): Promise<DocumentReviewClaim[]> {
-    return this.claims.list();
+  list(@CurrentUser() user: RequestUser): Promise<DocumentReviewClaim[]> {
+    return this.claims.list({ teamOrganizationId: user.organizationId });
   }
 
   @Put(':organizationId')
@@ -53,6 +53,7 @@ export class ReviewClaimsController {
       id: user.id,
       email: user.email,
       canOverride: roles.includes(Role.PlatformSuperAdmin),
+      teamOrganizationId: user.organizationId,
     };
   }
 }
