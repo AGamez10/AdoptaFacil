@@ -40,6 +40,7 @@ import { createInterface } from 'node:readline';
 import { PrismaClient } from '@prisma/client';
 import { MIN_PASSWORD_LENGTH, Role } from '@adoptafacil/contracts';
 import { PasswordService } from '../src/core/auth/password.service';
+import { runLocalPreflight } from '../src/config/local-preflight';
 
 /** Load the repo-root `.env` (same file the API reads) without adding a
  *  dependency — mirrors the hand-rolled approach already used by
@@ -159,6 +160,9 @@ async function resolveCredentials(): Promise<{
 const PLATFORM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
 
 async function main(): Promise<void> {
+  // Before asking for the password: a stopped Postgres container gets one
+  // clear message with the steps, not a Prisma stack trace afterwards.
+  await runLocalPreflight(['postgres'], 'seed:admin no puede crear el administrador');
   const { email, password, displayName } = await resolveCredentials();
   // Superuser connection (bypasses RLS) — this is an ops/bootstrap script, not
   // an authenticated request; mirrors the `admin` PrismaClient used by the

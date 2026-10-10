@@ -26,6 +26,7 @@
     "seed:breeds": "pnpm --filter @adoptafacil/api run seed:breeds",
     "db:deploy": "pnpm --filter @adoptafacil/api run db:deploy",
     "smoke": "node scripts/smoke/smoke-by-role.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "postinstall": "prisma generate",
     "prepare": "husky"
   },
