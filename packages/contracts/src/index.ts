@@ -8,6 +8,7 @@ export * from './identity';
 export * from './audit';
 export * from './animals';
 export * from './adoptions';
+export * from './adoptions-contract-template';
 export * from './donations';
 export * from './payments';
 export * from './payment-gateways';

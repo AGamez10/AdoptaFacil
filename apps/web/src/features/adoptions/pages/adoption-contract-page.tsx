@@ -1,7 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { AdoptionContract, AdoptionContractData, AnimalSex } from '@adoptafacil/contracts';
-import { Role } from '@adoptafacil/contracts';
+import type {
+  AdopterDocumentType,
+  AdoptionContract,
+  AdoptionContractData,
+  AdoptionFollowUpPlan,
+  AnimalIdentificationType,
+  AnimalSex,
+} from '@adoptafacil/contracts';
+import {
+  ADOPTER_DOCUMENT_TYPE_LABELS,
+  ANIMAL_IDENTIFICATION_LABELS,
+  DEFAULT_FOLLOW_UP_MONTHS,
+  FOLLOW_UP_PLAN_LABELS,
+  Role,
+  buildAdoptionContractDocument,
+} from '@adoptafacil/contracts';
 import { Badge, Button, EmptyState, Input, Skeleton, useToast } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { ApiError, useApiClient } from '../../../shell/api';
@@ -26,21 +40,6 @@ import {
   contractStatusVariant,
   shortHash,
 } from '../model/adoptions-contract-view';
-import {
-  COMPROMISO,
-  FUNDAMENTO_LEGAL,
-  JURISDICCION,
-  OBJETO_INTRO,
-  OBJETO_NOTA,
-  OBLIGACIONES,
-  OBLIGACIONES_INTRO,
-  SANCIONES,
-  SANCIONES_INTRO,
-  VIGENCIA,
-  buildObjetoFields,
-  buildPartesText,
-  renderClauseBody,
-} from '../model/adoption-contract-template';
 import { formatBogota } from '../model/adoptions-view';
 
 const SEX_OPTIONS: Array<{ value: AnimalSex; label: string }> = [
@@ -48,6 +47,16 @@ const SEX_OPTIONS: Array<{ value: AnimalSex; label: string }> = [
   { value: 'female', label: 'Hembra' },
   { value: 'unknown', label: 'Sin especificar' },
 ];
+
+const SELECT_CLASS = 'w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+
+/** `<select>` de sí/no/sin indicar para un campo booleano opcional. */
+function yesNoValue(value: boolean | undefined): string {
+  return value === undefined ? '' : value ? 'yes' : 'no';
+}
+function parseYesNo(value: string): boolean | undefined {
+  return value === '' ? undefined : value === 'yes';
+}
 
 type LoadState = 'loading' | 'ready' | 'not-found' | 'error';
 
@@ -196,7 +205,6 @@ export function AdoptionContractPage() {
   }
 
   const representative = contract.signers.find((s) => s.role === 'organization_representative');
-  const adopter = contract.signers.find((s) => s.role === 'adopter');
   const mySigner = contract.signers.find((s) => s.userId === user?.id && !s.signedAt);
   const noOneHasSignedYet = !contract.signers.some((s) => s.signedAt);
   const canEditData = contract.status === 'draft' && noOneHasSignedYet;
@@ -204,7 +212,13 @@ export function AdoptionContractPage() {
     canManage && contract.status === 'draft' && !representative?.signedAt;
   const canSendToSignatures =
     canManage && contract.status === 'draft' && Boolean(representative?.signedAt);
-  const canSignAsAdopter = mySigner?.role === 'adopter' && contract.status === 'pending_signatures';
+  // Adoptante, responsable firmante o testigo: todos firman dibujando/subiendo
+  // su propia firma (antes solo el adoptante tenía el botón).
+  const canSignAsAdopter =
+    Boolean(mySigner) &&
+    mySigner?.role !== 'organization_representative' &&
+    contract.status === 'pending_signatures';
+  const isV2 = contract.payload.templateVersion === 'v2';
 
   const setField = <K extends keyof AdoptionContractData>(
     key: K,
@@ -294,8 +308,14 @@ export function AdoptionContractPage() {
     }
   };
 
-  const { cedente, adoptante } = buildPartesText(contract.payload);
-  const objetoFields = buildObjetoFields(contract.payload);
+  // Mismo texto legal (y misma versión) que el PDF: una sola fuente en
+  // `@adoptafacil/contracts`.
+  const contractDoc = buildAdoptionContractDocument(contract.payload, contract.signers);
+  const lastSignedAt = contract.signers
+    .map((s) => s.signedAt)
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .at(-1);
 
   return (
     <PageContainer>
@@ -331,115 +351,74 @@ export function AdoptionContractPage() {
       <div className="space-y-6">
         {/* --- Vista previa del texto legal (solo lectura) --- */}
         <section className="space-y-4 rounded-md border p-4 text-sm">
-          <h2 className="text-center text-lg font-bold">CONTRATO DE ADOPCIÓN DE ANIMAL</h2>
-
-          <div>
-            <h3 className="font-semibold">Fundamento legal</h3>
-            <p className="text-muted-foreground">{FUNDAMENTO_LEGAL}</p>
-          </div>
-
-          <div>
-            <h3 className="font-semibold">Partes</h3>
-            <p className="text-muted-foreground">{cedente}</p>
-            <p className="text-muted-foreground">{adoptante}</p>
-          </div>
-
-          <div>
-            <h3 className="font-semibold">Objeto</h3>
-            <p className="text-muted-foreground">{OBJETO_INTRO}</p>
-            <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 rounded-md border bg-muted/30 p-3 sm:grid-cols-2">
-              {objetoFields.map((f) => (
-                <div key={f.label} className="flex justify-between gap-2 text-xs">
-                  <dt className="font-medium">{f.label}</dt>
-                  <dd className="text-right text-muted-foreground">{f.value}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-2 text-muted-foreground">{OBJETO_NOTA}</p>
-          </div>
-
-          <div>
-            <h3 className="font-semibold">Obligaciones del adoptante</h3>
-            <p className="text-muted-foreground">{OBLIGACIONES_INTRO}</p>
-            <ol className="mt-1 list-decimal space-y-1 pl-5">
-              {OBLIGACIONES.map((item) => (
-                <li key={item.title}>
-                  <span className="font-medium">{item.title}: </span>
-                  <span className="text-muted-foreground">
-                    {renderClauseBody(item.body, contract.payload)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div>
-            <h3 className="font-semibold">Sanciones por incumplimiento y devolución</h3>
-            <p className="text-muted-foreground">{SANCIONES_INTRO}</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5">
-              {SANCIONES.map((item) => (
-                <li key={item.title}>
-                  <span className="font-medium">{item.title}: </span>
-                  <span className="text-muted-foreground">{item.body}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-semibold">Disposiciones finales</h3>
-            <p className="text-muted-foreground">
-              <span className="font-medium">Vigencia: </span>
-              {VIGENCIA}
+          <h2 className="text-center text-lg font-bold">{contractDoc.title}</h2>
+          {contract.status !== 'signed' && (
+            <p className="rounded-md bg-muted/40 p-2 text-center text-xs text-muted-foreground">
+              Borrador: así se verá el contrato. Cuando todas las partes firmen, cada una recibe una
+              copia en PDF en su correo y el contrato queda guardado aquí.
             </p>
-            <p className="text-muted-foreground">
-              <span className="font-medium">Jurisdicción: </span>
-              {renderClauseBody(JURISDICCION, contract.payload)}
-            </p>
-            <p className="text-muted-foreground">
-              <span className="font-medium">Compromiso: </span>
-              {COMPROMISO}
-            </p>
-          </div>
+          )}
+
+          {contractDoc.sections.map((section) => (
+            <div key={section.heading}>
+              <h3 className="font-semibold">{section.heading}</h3>
+              {section.blocks.map((block, index) =>
+                block.kind === 'fields' ? (
+                  <dl
+                    key={index}
+                    className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 rounded-md border bg-muted/30 p-3 sm:grid-cols-2"
+                  >
+                    {block.fields.map((f) => (
+                      <div key={f.label} className="flex justify-between gap-2 text-xs">
+                        <dt className="font-medium">{f.label}</dt>
+                        <dd className="text-right text-muted-foreground">{f.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : block.kind === 'clause' ? (
+                  <p key={index} className="mt-1 pl-3 text-muted-foreground">
+                    <span className="font-medium text-foreground">{block.title}: </span>
+                    {block.text}
+                  </p>
+                ) : (
+                  <p key={index} className="mt-1 text-muted-foreground">
+                    {block.text}
+                  </p>
+                ),
+              )}
+            </div>
+          ))}
+
+          <p className="text-muted-foreground">
+            Firmado en {contractDoc.signatureCity}, el{' '}
+            {lastSignedAt ? formatBogota(lastSignedAt) : '______'}.
+          </p>
 
           <div className="grid grid-cols-1 gap-4 border-t pt-3 sm:grid-cols-2">
-            {representative && (
-              <div className="text-xs">
-                <p className="font-medium">Por el Cedente (Adopta Fácil)</p>
-                {representative.signedAt && signatureUrls[representative.id] && (
+            {contract.signers.map((signer) => (
+              <div key={signer.id} className="text-xs">
+                <p className="font-medium">{contractDoc.signerLabels[signer.role]}</p>
+                {signer.signedAt && signatureUrls[signer.id] && (
                   <img
-                    src={signatureUrls[representative.id]}
-                    alt={`Firma de ${representative.fullName}`}
+                    src={signatureUrls[signer.id]}
+                    alt={`Firma de ${signer.fullName}`}
                     className="h-16 object-contain"
                   />
                 )}
-                <p>{representative.fullName}</p>
+                <p>{signer.fullName}</p>
                 <p className="text-muted-foreground">
-                  {representative.signedAt
-                    ? `Firmado el ${formatBogota(representative.signedAt)}`
+                  {signer.signedAt
+                    ? `Firmado el ${formatBogota(signer.signedAt)}`
                     : 'Pendiente de firma'}
                 </p>
               </div>
-            )}
-            {adopter && (
-              <div className="text-xs">
-                <p className="font-medium">Por el Adoptante</p>
-                {adopter.signedAt && signatureUrls[adopter.id] && (
-                  <img
-                    src={signatureUrls[adopter.id]}
-                    alt={`Firma de ${adopter.fullName}`}
-                    className="h-16 object-contain"
-                  />
-                )}
-                <p>{adopter.fullName}</p>
-                <p className="text-muted-foreground">
-                  {adopter.signedAt
-                    ? `Firmado el ${formatBogota(adopter.signedAt)}`
-                    : 'Pendiente de firma'}
-                </p>
-              </div>
-            )}
+            ))}
           </div>
+          {contract.status === 'signed' && (
+            <p className="break-all border-t pt-3 text-xs text-muted-foreground">
+              Huella SHA-256 del contenido firmado: {contract.contentHash}
+            </p>
+          )}
         </section>
 
         {/* --- Diligenciar datos (org, mientras nadie ha firmado) --- */}
@@ -497,7 +476,28 @@ export function AdoptionContractPage() {
                   onChange={(e) => setField('organizationAddress', e.target.value || undefined)}
                 />
               </FormField>
-              <FormField label="Cédula del adoptante">
+              {isV2 && (
+                <FormField label="Tipo de documento del adoptante">
+                  <select
+                    className={SELECT_CLASS}
+                    value={form.adopterDocumentType ?? ''}
+                    onChange={(e) =>
+                      setField(
+                        'adopterDocumentType',
+                        (e.target.value || undefined) as AdopterDocumentType | undefined,
+                      )
+                    }
+                  >
+                    <option value="">Sin indicar</option>
+                    {Object.entries(ADOPTER_DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
+              <FormField label="Número de documento del adoptante">
                 <Input
                   value={form.adopterDocumentNumber ?? ''}
                   onChange={(e) => setField('adopterDocumentNumber', e.target.value || undefined)}
@@ -522,7 +522,9 @@ export function AdoptionContractPage() {
                   max={60}
                   step={1}
                   value={form.followUpMonths}
-                  onChange={(e) => setField('followUpMonths', e.target.valueAsNumber || 6)}
+                  onChange={(e) =>
+                    setField('followUpMonths', e.target.valueAsNumber || DEFAULT_FOLLOW_UP_MONTHS)
+                  }
                 />
               </FormField>
             </div>
@@ -534,6 +536,156 @@ export function AdoptionContractPage() {
                 onChange={(e) => setField('healthStatusAtDelivery', e.target.value || undefined)}
               />
             </FormField>
+            {isV2 && (
+              <div className="space-y-3 border-t pt-3">
+                <h4 className="text-sm font-semibold">Entrega, identidad y seguimiento</h4>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <FormField label="Nombre de la organización (cedente)">
+                    <Input
+                      value={form.organizationName ?? ''}
+                      onChange={(e) => setField('organizationName', e.target.value || undefined)}
+                    />
+                  </FormField>
+                  <FormField label="Identificación del animal">
+                    <select
+                      className={SELECT_CLASS}
+                      value={form.animalIdentificationType ?? ''}
+                      onChange={(e) =>
+                        setField(
+                          'animalIdentificationType',
+                          (e.target.value || undefined) as AnimalIdentificationType | undefined,
+                        )
+                      }
+                    >
+                      <option value="">Sin indicar</option>
+                      {Object.entries(ANIMAL_IDENTIFICATION_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                  {form.animalIdentificationType && form.animalIdentificationType !== 'none' && (
+                    <FormField label="Número del microchip o placa">
+                      <Input
+                        value={form.animalIdentificationNumber ?? ''}
+                        onChange={(e) =>
+                          setField('animalIdentificationNumber', e.target.value || undefined)
+                        }
+                      />
+                    </FormField>
+                  )}
+                  <FormField label="¿Se entrega esterilizado?">
+                    <select
+                      className={SELECT_CLASS}
+                      value={yesNoValue(form.animalSterilized)}
+                      onChange={(e) => setField('animalSterilized', parseYesNo(e.target.value))}
+                    >
+                      <option value="">Sin indicar</option>
+                      <option value="yes">Sí</option>
+                      <option value="no">No</option>
+                    </select>
+                  </FormField>
+                  {form.animalSterilized === false && (
+                    <FormField label="Plazo para esterilizar (meses)">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={form.sterilizationCommitmentMonths ?? ''}
+                        onChange={(e) =>
+                          setField(
+                            'sterilizationCommitmentMonths',
+                            e.target.valueAsNumber || undefined,
+                          )
+                        }
+                      />
+                    </FormField>
+                  )}
+                  <FormField label="Días de semana de prueba previa (si la hubo)">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={form.trialPeriodDays ?? ''}
+                      onChange={(e) =>
+                        setField('trialPeriodDays', e.target.valueAsNumber || undefined)
+                      }
+                    />
+                  </FormField>
+                  <FormField label="Plan de seguimiento que eligió el adoptante">
+                    <select
+                      className={SELECT_CLASS}
+                      value={form.followUpPlan ?? 'light'}
+                      onChange={(e) =>
+                        setField('followUpPlan', e.target.value as AdoptionFollowUpPlan)
+                      }
+                    >
+                      {Object.entries(FOLLOW_UP_PLAN_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                          {value === 'light' ? ' (1, 4 y 12 meses)' : ' (15 días, 1, 4 y 12 meses)'}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                  <FormField label="Cuota de recuperación (pesos, 0 si no hay)">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={form.recoveryFeeCop ?? ''}
+                      onChange={(e) =>
+                        setField(
+                          'recoveryFeeCop',
+                          Number.isNaN(e.target.valueAsNumber) ? undefined : e.target.valueAsNumber,
+                        )
+                      }
+                    />
+                  </FormField>
+                  <FormField label="Cuidador de respaldo (nombre)">
+                    <Input
+                      value={form.backupCaregiverName ?? ''}
+                      onChange={(e) => setField('backupCaregiverName', e.target.value || undefined)}
+                    />
+                  </FormField>
+                  <FormField label="Cuidador de respaldo (celular)">
+                    <Input
+                      inputMode="tel"
+                      value={form.backupCaregiverPhone ?? ''}
+                      onChange={(e) =>
+                        setField('backupCaregiverPhone', e.target.value || undefined)
+                      }
+                    />
+                  </FormField>
+                </div>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={form.identityDocumentVerified ?? false}
+                    onChange={(e) => setField('identityDocumentVerified', e.target.checked)}
+                  />
+                  <span>
+                    Verifiqué el documento original del adoptante y que cumple la edad mínima de
+                    firma ({form.minimumSignerAge ?? 18} años). No se guarda copia del documento.
+                  </span>
+                </label>
+                {form.backupCaregiverName && (
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={form.backupCaregiverInformed ?? false}
+                      onChange={(e) => setField('backupCaregiverInformed', e.target.checked)}
+                    />
+                    <span>
+                      El adoptante informó al cuidador de respaldo y tiene su autorización.
+                    </span>
+                  </label>
+                )}
+              </div>
+            )}
             <Button size="sm" disabled={savingData} onClick={() => void saveData()}>
               {savingData ? 'Guardando…' : 'Guardar datos'}
             </Button>
@@ -600,7 +752,7 @@ export function AdoptionContractPage() {
               ) : (
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg"
                   aria-label="Subir imagen de la firma"
                   onChange={(e) => {
                     const file = e.target.files?.[0];

@@ -34,6 +34,7 @@ export interface NotificationTemplateRequest {
 export interface NotificationMessage {
   to: string;
   subject: string;
+  /** Texto plano (siempre presente: es la alternativa legible sin HTML). */
   body: string;
   /** Additive: HTML part (set by the template layer, not by callers). */
   html?: string;
