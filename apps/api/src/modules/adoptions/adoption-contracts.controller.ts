@@ -25,6 +25,7 @@ import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
+import { detectSignatureImageType } from './adoption-contract-rules';
 import { AdoptionContractsService } from './adoption-contracts.service';
 import {
   generateAdoptionContractSchema,
@@ -186,7 +187,10 @@ export class AdoptionContractsController {
     if (!image) {
       throw new NotFoundException('Firma no disponible todavía.');
     }
-    res.setHeader('Content-Type', 'image/png');
+    res.setHeader(
+      'Content-Type',
+      detectSignatureImageType(image) === 'jpeg' ? 'image/jpeg' : 'image/png',
+    );
     res.send(image);
   }
 
@@ -203,7 +207,10 @@ export class AdoptionContractsController {
     if (!image) {
       throw new NotFoundException('Firma no disponible todavía.');
     }
-    res.setHeader('Content-Type', 'image/png');
+    res.setHeader(
+      'Content-Type',
+      detectSignatureImageType(image) === 'jpeg' ? 'image/jpeg' : 'image/png',
+    );
     res.send(image);
   }
 }

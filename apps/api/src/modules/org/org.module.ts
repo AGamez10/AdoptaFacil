@@ -7,6 +7,9 @@ import { DianVerificationService } from './dian-verification.service';
 import { DIAN_PORT } from './dian.port';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
+import { DOCUMENT_TEXT_PORT } from './document-verification/document-text.port';
+import { DocumentVerificationService } from './document-verification/document-verification.service';
+import { PdfTextAdapter } from './document-verification/pdf-text.adapter';
 import { DuplicateDetectionService } from './duplicate-detection.service';
 import { DisabledDianAdapter } from './disabled-dian.adapter';
 import { FakeDianAdapter } from './fake-dian.adapter';
@@ -69,6 +72,8 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     { provide: SIGNATURE_ENCRYPTION_CONFIG, useFactory: loadSignatureEncryptionConfig },
     OrganizationSummaryService,
     PlatformDocumentsService,
+    DocumentVerificationService,
+    { provide: DOCUMENT_TEXT_PORT, useClass: PdfTextAdapter },
     ReviewClaimsService,
     PlatformSettingsService,
     DianVerificationService,
