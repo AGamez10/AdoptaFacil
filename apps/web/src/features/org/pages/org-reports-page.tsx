@@ -255,6 +255,7 @@ function ReportCard({
   const client = useApiClient();
   const { toast } = useToast();
   const ui = KIND_UI[kind];
+  const consent = readiness.thirdPartyConsent;
   const registered = useMemo(
     () => new Set(readiness.signers.filter((s) => s.registered).map((s) => s.role)),
     [readiness],
@@ -359,8 +360,13 @@ function ReportCard({
         <p className="text-xs text-muted-foreground">{effectUi.help}</p>
         <p className="text-xs text-muted-foreground">
           {kind === 'donations'
-            ? 'Por ahora el reporte no identifica a los donantes: sin su consentimiento registrado no se usan sus datos.'
-            : 'Este reporte nombra a voluntarios y no se emite hasta que exista su consentimiento registrado.'}
+            ? 'Solo se identifica a los donantes con cuenta que autorizaron el uso de sus datos; los demás aparecen como "Donante".'
+            : 'Solo figuran los voluntarios que autorizaron el uso de sus datos; de los demás se informa cuántos no se incluyen.'}
+          {consent
+            ? ` Hoy autorizaron ${
+                kind === 'donations' ? consent.donors.authorized : consent.volunteers.authorized
+              } de ${kind === 'donations' ? consent.donors.total : consent.volunteers.total}.`
+            : ''}
         </p>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">

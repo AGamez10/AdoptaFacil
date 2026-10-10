@@ -9,6 +9,7 @@
 // contenido) y es inmutable; generarlo otra vez con los mismos datos devuelve
 // el MISMO folio (idempotente), nunca un duplicado.
 
+import type { OrgThirdPartyConsentSummary } from './consents';
 import type { LegalRepresentativeRole } from './org';
 
 /** Estado de emisión de un reporte con firmas (ver `OrgReport.status`). */
@@ -137,6 +138,8 @@ export interface OrgReportsReadiness {
   mySignerRole?: LegalRepresentativeRole;
   /** false ⇒ los reportes salen sin firmas hasta que cada firmante apruebe. */
   signaturesEnabled?: boolean;
+  /** Resumen de consentimientos de terceros (solo conteos, sin identidades). */
+  thirdPartyConsent?: OrgThirdPartyConsentSummary;
   formalizationState: string;
   /** Valor que tendrá HOY un informe de donaciones con la política por defecto. */
   donationsLegalEffect: OrgReportLegalEffect;

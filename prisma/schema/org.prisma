@@ -35,6 +35,7 @@ model Organization {
   invitations              OrganizationInvitation[]
   reports                  OrgReport[]
   signerDesignations       OrgSignerDesignation[]
+  thirdPartyConsents       ThirdPartyConsent[]
   reportApprovals          OrgReportApproval[]
   reportPolicies           OrgReportPolicy[]
 
@@ -229,6 +230,7 @@ model User {
   signerDesignationsOwn     OrgSignerDesignation[] @relation("SignerDesignationUser")
   signerDesignationsMade    OrgSignerDesignation[] @relation("SignerDesignationBy")
   signerDesignationsRevoked OrgSignerDesignation[] @relation("SignerDesignationRevokedBy")
+  thirdPartyConsents        ThirdPartyConsent[]    @relation("ThirdPartyConsentSubject")
   reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
   reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
 

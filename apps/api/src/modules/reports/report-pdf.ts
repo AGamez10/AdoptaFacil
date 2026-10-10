@@ -575,6 +575,18 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
     { emptyText: 'No hay horas aprobadas ni certificados en este período.' },
   );
   c.y -= 4;
+  if (p.omittedWithoutConsent && p.omittedWithoutConsent > 0) {
+    c.paragraph(
+      `No se incluyen ${p.omittedWithoutConsent} voluntario(s) que no han autorizado el uso de sus datos en este tipo de documentos.`,
+      MARGIN,
+      8,
+      PAGE_W - MARGIN * 2,
+      11,
+      c.font.italic,
+      MUTED,
+    );
+    c.y -= 2;
+  }
   c.paragraph(
     `Solo se cuentan horas APROBADAS por la organización; las horas pendientes o rechazadas no suman. El servicio social estudiantil exige un mínimo de ${p.minHours} horas efectivas (Resolución 4210 de 1996, art. 6). El número de certificado permite consultar la constancia individual de cada estudiante.`,
     MARGIN,

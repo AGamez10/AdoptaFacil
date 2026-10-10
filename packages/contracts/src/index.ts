@@ -23,3 +23,4 @@ export * from './dashboards';
 export * from './reports';
 export * from './features';
 export * from './plans';
+export * from './consents';
