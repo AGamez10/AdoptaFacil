@@ -9,6 +9,12 @@ import {
   requiredGuestLegalDocuments,
   requiredLegalDocuments,
 } from '../src/legal';
+import {
+  describeLegalController,
+  LEGAL_CONTROLLER,
+  PLATFORM_DOCUMENT_NOTICE,
+  renderLegalTemplate,
+} from '../src/legal-controller';
 
 const DOCS_DIR = join(__dirname, '..', '..', '..', 'docs', 'legal');
 
@@ -70,5 +76,36 @@ describe('qué debe aceptar cada quien', () => {
   it('las casillas obligatorias cubren exactamente los documentos obligatorios', () => {
     const covered = LEGAL_CONSENT_GROUPS.filter((g) => !g.optional).flatMap((g) => g.documents);
     expect([...covered].sort()).toEqual(requiredLegalDocuments('organization').sort());
+  });
+});
+
+describe('titular configurable', () => {
+  it('los textos vigentes toman los datos del titular de una sola fuente', () => {
+    for (const doc of LEGAL_DOCUMENTS) {
+      const raw = readFileSync(join(DOCS_DIR, doc.slug, `${doc.version}.md`), 'utf8');
+      expect(raw).not.toContain('RAZÓN SOCIAL');
+      const rendered = renderLegalTemplate(raw);
+      expect(rendered).not.toMatch(/\{\{\s*titular/);
+    }
+  });
+
+  it('sustituye los marcadores con el titular dado', () => {
+    const company = {
+      ...LEGAL_CONTROLLER,
+      kind: 'company' as const,
+      name: 'AdoptaFácil S.A.S.',
+      nit: '900.000.000-1',
+    };
+    expect(renderLegalTemplate('De {{titular.nombre}}. {{titular}}.', company)).toBe(
+      `De AdoptaFácil S.A.S.. ${describeLegalController(company)}.`,
+    );
+    expect(describeLegalController(company)).toContain('NIT 900.000.000-1');
+    expect(renderLegalTemplate('{{otro}}')).toBe('{{otro}}');
+  });
+
+  it('el aviso de documentos generados aclara contador, revisor fiscal y certificado tributario', () => {
+    expect(PLATFORM_DOCUMENT_NOTICE).toContain('contador público');
+    expect(PLATFORM_DOCUMENT_NOTICE).toContain('revisor fiscal');
+    expect(PLATFORM_DOCUMENT_NOTICE).toContain('la organización donataria');
   });
 });

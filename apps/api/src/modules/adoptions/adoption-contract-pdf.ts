@@ -15,6 +15,7 @@ import {
   type AdoptionContractSigner,
   type AdoptionContractStatus,
 } from '@adoptafacil/contracts';
+import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
 
 /**
  * PDF del Contrato de Adopción. El TEXTO legal no vive aquí: sale de
@@ -449,6 +450,7 @@ export async function renderAdoptionContractPdf(
     }
   });
 
+  await stampPlatformDocumentNotice(pdf);
   const bytes = await pdf.save();
   return Buffer.from(bytes);
 }
