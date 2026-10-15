@@ -8,7 +8,7 @@ import { NOTIFICATION_TRANSPORT } from '../src/core/notifications/notification.m
 import type { NotificationMessage } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
-import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
+import { LEGAL_GUEST, LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * Smoke of the branded emails on the REAL flows (real AppModule, Prisma, RLS,
@@ -89,10 +89,14 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
     expect(message.body).not.toContain('**');
   }
 
+  // #15 also emails each guest a legal-acceptance receipt; these tests only
+  // count the flow's own email.
+  const isFlowMail = (m: NotificationMessage) => !m.subject.startsWith('Registramos tu aceptación');
+
   async function waitForMail(to: string, count = 1): Promise<NotificationMessage[]> {
     const start = Date.now();
     for (;;) {
-      const mine = sent.filter((m) => m.to === to);
+      const mine = sent.filter((m) => m.to === to && isFlowMail(m));
       if (mine.length >= count) return mine;
       if (Date.now() - start > 15_000) return mine;
       await new Promise((r) => setTimeout(r, 50));
@@ -116,6 +120,7 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
         intendedAmount: 40_000,
         commissionPayer: 'organization',
         idempotencyKey: `flows-guest-${randomUUID()}`,
+        ...LEGAL_GUEST,
         payer: { fullName: 'Invitada', email: guestEmail },
       })
       .expect(201);
@@ -125,7 +130,7 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
 
     await waitForMail(guestEmail);
     await new Promise((r) => setTimeout(r, 1000)); // room for a duplicate to show up
-    const mine = sent.filter((m) => m.to === guestEmail);
+    const mine = sent.filter((m) => m.to === guestEmail && isFlowMail(m));
     expect(mine).toHaveLength(1);
     const [message] = mine;
     expect(message.to).toBe(guestEmail);
@@ -207,6 +212,7 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
           intendedAmount: 10_000,
           commissionPayer: 'organization',
           idempotencyKey: `flows-camp-${randomUUID()}`,
+          ...LEGAL_GUEST,
           payer: donor.fullName ? donor : { email: donor.email },
         })
         .expect(201);
@@ -225,7 +231,10 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
 
     const isUpdate = (m: NotificationMessage) => m.subject.includes('novedades');
     const start = Date.now();
-    while (sent.filter(isUpdate).length < 2 && Date.now() - start < 15_000) {
+    // Earlier tests' donors are emailed too (the queue sends asynchronously),
+    // so wait for these two donors specifically.
+    const reached = (email: string) => sent.some((m) => isUpdate(m) && m.to === email);
+    while (!donors.every((d) => reached(d.email)) && Date.now() - start < 15_000) {
       await new Promise((r) => setTimeout(r, 50));
     }
     await new Promise((r) => setTimeout(r, 500));
