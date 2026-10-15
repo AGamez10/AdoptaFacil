@@ -153,7 +153,27 @@ async function login(session, email, password) {
       const alert = (await page.locator('[role=alert]').allTextContents()).join(' ').trim();
       throw new Error(`no entró${alert ? `: ${alert}` : ''}`);
     }
+    await acceptLegalGate(page);
   });
+}
+
+/** Cuentas creadas antes de una versión nueva de los textos legales ven el
+ *  diálogo "Antes de continuar": se aceptan solo las casillas obligatorias
+ *  (términos, datos y, en una organización, sus condiciones); las opcionales quedan sin marcar, como haría una persona. */
+async function acceptLegalGate(page) {
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Antes de continuar' });
+  try {
+    await dialog.waitFor({ state: 'visible', timeout: 4_000 });
+  } catch {
+    return;
+  }
+  await dialog.getByRole('checkbox', { name: /^Acepto los/ }).check();
+  await dialog.getByRole('checkbox', { name: /^Autorizo el tratamiento/ }).check();
+  // Solo cuentas de organización: condiciones para organizaciones (obligatoria).
+  const orgTerms = dialog.getByRole('checkbox', { name: /^En nombre de la organización/ });
+  if (await orgTerms.count()) await orgTerms.check();
+  await dialog.getByRole('button', { name: 'Aceptar y continuar' }).click();
+  await dialog.waitFor({ state: 'hidden', timeout: 10_000 });
 }
 
 // ── Verificación en dos pasos del personal de plataforma (TOTP, RFC 6238) ──
