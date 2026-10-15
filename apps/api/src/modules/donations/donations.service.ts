@@ -29,6 +29,7 @@ import {
   type PaymentConcept,
   type PaymentPort,
   type WebhookVerificationContext,
+  requiredGuestLegalDocuments,
 } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
@@ -40,6 +41,7 @@ import {
 } from '../../core/notifications/notification.port';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { requireCompleteProfile } from '../../core/auth/require-complete-profile';
+import { LegalService, type LegalRequestContext } from '../../core/legal/legal.service';
 import type { Env } from '../../config/env.validation';
 import { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import { DonationCertificatesService } from './donation-certificates.service';
@@ -132,6 +134,7 @@ export class DonationsService {
     private readonly campaignFunding: CampaignFundingService,
     private readonly certificates: DonationCertificatesService,
     config: ConfigService<Env, true>,
+    private readonly legal: LegalService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.certificatesEnabled =
@@ -169,7 +172,11 @@ export class DonationsService {
    * Idempotent by (organizationId, idempotencyKey): a retry returns the SAME donation
    * without a second charge or a duplicate audit entry.
    */
-  async create(actor: RequestUser | undefined, input: CreateDonationInput): Promise<Donation> {
+  async create(
+    actor: RequestUser | undefined,
+    input: CreateDonationInput,
+    legalContext: LegalRequestContext = {},
+  ): Promise<Donation> {
     if (actor) {
       await requireCompleteProfile(this.prisma, actor);
     } else if (!input.anonymous && !input.payer?.email) {
@@ -180,6 +187,12 @@ export class DonationsService {
         'Para donar sin una cuenta necesitamos al menos tu correo electrónico.',
       );
     }
+    // Un invitado no aceptó nada al registrarse: antes de cobrar y de guardar
+    // sus datos debe aceptar los términos y autorizar el tratamiento (Ley 1581
+    // art. 9). Una Persona autenticada ya lo hizo en su registro.
+    const guestAcceptances = actor
+      ? []
+      : this.legal.assertAcceptances(input.legalAcceptances, requiredGuestLegalDocuments());
 
     const concept: PaymentConcept = input.concept ?? {
       kind: 'organization',
@@ -265,6 +278,22 @@ export class DonationsService {
       throw error;
     }
     const row = rows[0];
+
+    if (guestAcceptances.length > 0) {
+      // Prueba de la autorización del invitado, en el tenant de la organización
+      // beneficiaria (responsable de sus datos), atada a esta donación.
+      await this.prisma.withOrgContext(input.organizationId, (tx) =>
+        this.legal.recordWithTx(tx, {
+          organizationId: input.organizationId,
+          actorUserId: null,
+          subject: { type: 'donation', donationId: row.id },
+          items: guestAcceptances,
+          channel: 'guest_donation',
+          context: legalContext,
+        }),
+      );
+      await this.legal.notifyAcceptance(input.payer?.email, guestAcceptances);
+    }
 
     await this.audit.record({
       organizationId: input.organizationId,

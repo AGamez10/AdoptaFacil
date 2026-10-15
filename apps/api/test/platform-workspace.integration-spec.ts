@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { totpAt } from '../src/core/auth/mfa/totp';
 import { purgeOrganizations } from './support/cleanup';
 import { createStaffMember, type StaffMember } from './support/platform-team';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * F19 · platform team workspace, end to end over HTTP with the second factor
@@ -79,6 +80,7 @@ describe('Platform workspace (F19)', () => {
     const owner = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Fundación en revisión',
         displayName: 'Owner',
         email: `ws-owner-${randomUUID()}@test.local`,

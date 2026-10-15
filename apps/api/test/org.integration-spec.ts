@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
 
 /**
@@ -28,6 +29,7 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `t101-${randomUUID()}@test.local`,
@@ -51,7 +53,12 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
 
     const personReg = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Persona', email: `t101-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Persona',
+        email: `t101-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = personReg.body.tokens.accessToken;
     createdOrgIds.push(personReg.body.user.organizationId);

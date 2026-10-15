@@ -8,6 +8,7 @@ import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port
 import { DOCUMENT_TEXT_PORT } from '../src/modules/org/document-verification/document-text.port';
 import { nitCheckDigit } from '../src/modules/org/document-verification/nit';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 const NIT = '901234567';
 const DV = String(nitCheckDigit(NIT));
@@ -39,6 +40,7 @@ describe('Document verification + capabilities (M01)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Patitas',
         displayName: 'Owner',
         email: `dv-${randomUUID()}@test.local`,
@@ -70,7 +72,12 @@ describe('Document verification + capabilities (M01)', () => {
 
     const platform = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'PA', email: `dv-pa-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'PA',
+        email: `dv-pa-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     createdOrgIds.push(platform.body.user.organizationId);
     await admin.userRole.create({

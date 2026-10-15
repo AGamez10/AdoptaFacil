@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 import { CapturingNotificationPort, inviteSigner } from './support/signers';
 
 /**
@@ -32,6 +33,7 @@ describe('Legal representative signature (M01, S-1)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s1-legalrep-${randomUUID()}@test.local`,

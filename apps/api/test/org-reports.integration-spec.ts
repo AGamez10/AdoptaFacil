@@ -9,6 +9,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import {
   CapturingNotificationPort,
   type SignerActor,
@@ -62,6 +63,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: `Owner ${name}`,
         email: `reports-${randomUUID()}@test.local`,
@@ -164,6 +166,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     const donorReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'María Restrepo',
         email: `reports-donor-${randomUUID()}@test.local`,
         password,

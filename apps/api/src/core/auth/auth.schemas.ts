@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { legalAcceptancesSchema } from '../legal/legal.schemas';
 import { MIN_PASSWORD_LENGTH } from '@adoptafacil/contracts';
 
 /** Runtime validation schemas for the auth DTOs published in
@@ -15,17 +16,22 @@ export const newPasswordSchema = z
 const password = newPasswordSchema;
 const name = z.string().trim().min(1).max(200);
 
+// `legalAcceptances` es opcional en la forma (contrato aditivo), pero el
+// servicio exige los documentos obligatorios del tipo de cuenta en su versión
+// vigente: sin ellos no se crea la cuenta (Ley 1581, autorización previa).
 export const registerOrganizationSchema = z.object({
   organizationName: name,
   displayName: name,
   email,
   password,
+  legalAcceptances: legalAcceptancesSchema.optional(),
 });
 
 export const registerPersonSchema = z.object({
   displayName: name,
   email,
   password,
+  legalAcceptances: legalAcceptancesSchema.optional(),
 });
 
 export const loginSchema = z.object({

@@ -25,6 +25,7 @@ model Organization {
   users                    User[]
   roleAssignments          UserRole[]
   auditLogs                AuditLog[]
+  legalAcceptances         LegalAcceptance[]
   profile                  OrganizationProfile?
   formalizationTransitions FormalizationTransition[]
   documents                OrganizationDocument[]

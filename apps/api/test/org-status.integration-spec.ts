@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PasswordService } from '../src/core/auth/password.service';
 import { TokenService } from '../src/core/auth/token.service';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * Ola 1 · R2-1 (AF-023, MVP-RF-07, MVP-RF-10) over HTTP against the real app:
@@ -43,6 +44,7 @@ describe('Organization status, approval and suspension (R2-1, AF-023)', () => {
     const res = await request(server)
       .post(`/auth/register/${kind}`)
       .send({
+        ...(kind === 'organization' ? LEGAL_ORG : LEGAL_PERSON),
         organizationName: name,
         displayName: name,
         email: `status-${randomUUID()}@test.local`,

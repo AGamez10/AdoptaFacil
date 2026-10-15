@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 import { createStaffMember } from './support/platform-team';
 
 /**
@@ -33,6 +34,7 @@ describe('Platform review claims (R3-6)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org',
         displayName: 'Owner',
         email: `claims-${randomUUID()}@test.local`,

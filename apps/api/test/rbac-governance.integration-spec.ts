@@ -15,6 +15,7 @@ import {
   LEGACY_SEED_EMAIL,
 } from '../src/core/rbac/default-credentials.check';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * Ola 1 · hilo 2 (RBAC y organizaciones), proven over HTTP against the real app
@@ -51,7 +52,7 @@ describe('RBAC governance (AF-007, AF-008, AF-009, AF-026, AF-037)', () => {
     const email = `gov-${randomUUID()}@test.local`;
     const res = await request(server)
       .post('/auth/register/organization')
-      .send({ organizationName: name, displayName: 'Owner', email, password })
+      .send({ ...LEGAL_ORG, organizationName: name, displayName: 'Owner', email, password })
       .expect(201);
     createdOrgIds.push(res.body.user.organizationId);
     return {
@@ -262,6 +263,7 @@ describe('RBAC governance (AF-007, AF-008, AF-009, AF-026, AF-037)', () => {
       await request(server)
         .post('/auth/register/person')
         .send({
+          ...LEGAL_PERSON,
           displayName: 'Corta',
           email: `gov-short-${randomUUID()}@test.local`,
           password: '12345678',

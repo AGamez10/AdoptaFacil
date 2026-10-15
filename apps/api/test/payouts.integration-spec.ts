@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PayoutsService } from '../src/modules/payments/payouts.service';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * M15b (F-4, RF26) — dispersión T+1 (Fase 2, not implemented by the real
@@ -38,6 +39,7 @@ describe('Payouts (M15b, RF26: bank account + dispatch + webhook + no double-pay
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Org ${tag}`,
         displayName: 'Owner',
         email: `payouts-${tag}-${randomUUID()}@test.local`,

@@ -8,6 +8,7 @@ import { totpAt } from '../src/core/auth/mfa/totp';
 import { REDIS_CLIENT } from '../src/redis/redis.service';
 import { purgeOrganizations } from './support/cleanup';
 import { createStaffMember, STAFF_PASSWORD, type StaffMember } from './support/platform-team';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * F19 security · second factor (TOTP) for platform staff, enforced as in
@@ -219,6 +220,7 @@ describe('Platform staff MFA (F19)', () => {
     const owner = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Fundación sin MFA',
         displayName: 'Owner',
         email: `mfa-owner-${Date.now()}@test.local`,

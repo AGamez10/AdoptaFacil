@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { MIN_DONATION_AMOUNT, type CommissionPayer } from '@adoptafacil/contracts';
+import {
+  MIN_DONATION_AMOUNT,
+  type CommissionPayer,
+  type LegalAcceptanceItem,
+} from '@adoptafacil/contracts';
 import { Button, Input, cn } from '@adoptafacil/ui';
 import { CardPaymentBrick } from '../../payments';
+import {
+  acceptancesFrom,
+  type ConsentState,
+  LegalConsentFields,
+  requiredConsentsGiven,
+} from '../../legal';
 import { DonationBreakdown } from './donation-breakdown';
 import { formatCop, safeBuildDonationBreakdown } from '../model/donation-breakdown-view';
 import styles from './donate-form.module.scss';
@@ -20,6 +30,9 @@ export interface DonateFormValues {
    *  correo capturados en el propio formulario. Con sesión, `DonatePage`
    *  arma el payer desde `useSession()` — este formulario no lo duplica. */
   guestPayer?: { fullName: string; email: string };
+  /** Solo sin sesión: términos y autorización de datos aceptados en el
+   *  formulario (con sesión ya se aceptaron al registrarse). */
+  legalAcceptances?: LegalAcceptanceItem[];
   /**
    * Checkout API (Orders) — T-OrdersAPI. Tokenized card data from MercadoPago's
    * Card Payment Brick (step 2 of this form, below). The card number never
@@ -86,6 +99,7 @@ export function DonateForm({
   const [anonymous, setAnonymous] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
+  const [consents, setConsents] = useState<ConsentState>({});
 
   const commissionPayer: CommissionPayer = coverFee ? 'donor' : 'organization';
   const amount = Number.parseInt(amountText, 10);
@@ -94,7 +108,9 @@ export function DonateForm({
   const askGuestIdentity = !hasSession && !anonymous;
   const guestIdentityComplete =
     !askGuestIdentity || (guestName.trim().length > 0 && EMAIL_LOOKS_VALID.test(guestEmail.trim()));
-  const canContinue = preview !== null && !submitting && guestIdentityComplete;
+  // Sin sesión, el invitado acepta términos y tratamiento de datos antes de pagar.
+  const legalComplete = hasSession || requiredConsentsGiven('guest', consents);
+  const canContinue = preview !== null && !submitting && guestIdentityComplete && legalComplete;
 
   const guestPayer = askGuestIdentity
     ? { fullName: guestName.trim(), email: guestEmail.trim() }
@@ -117,6 +133,7 @@ export function DonateForm({
               commissionPayer,
               anonymous,
               guestPayer,
+              legalAcceptances: hasSession ? undefined : acceptancesFrom('guest', consents),
               cardToken: card.cardToken,
               paymentMethodId: card.paymentMethodId,
               paymentMethodType: card.paymentMethodType,
@@ -238,6 +255,15 @@ export function DonateForm({
         <p className={styles.hint}>
           Ingresa al menos {formatCop(MIN_DONATION_AMOUNT)} para ver el desglose.
         </p>
+      )}
+
+      {!hasSession && (
+        <LegalConsentFields
+          audience="guest"
+          value={consents}
+          onChange={setConsents}
+          idPrefix="donation"
+        />
       )}
 
       <Button disabled={!canContinue} onClick={() => setStep('card')}>

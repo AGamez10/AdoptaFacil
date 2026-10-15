@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
 
 /**
@@ -32,6 +33,7 @@ describe('Organization type badge + platform policy (T-030, RF01)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio',
         displayName: 'Owner',
         email: `t030-${randomUUID()}@test.local`,
