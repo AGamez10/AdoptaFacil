@@ -249,6 +249,78 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .expect(404);
   });
 
+  it('lets the adopter upload the photo bytes with the response (multipart, private, identity-gated)', async () => {
+    const scheduled = await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Foto del primer mes', dueAt: '2030-07-01T00:00:00.000Z' })
+      .expect(201);
+    const milestoneId: string = scheduled.body.id;
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    );
+
+    // Someone who is not the adopter cannot attach evidence (404, nothing stored).
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(404);
+
+    // Only images are accepted.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', Buffer.from('hola'), { filename: 'nota.txt', contentType: 'text/plain' })
+      .expect(400);
+
+    // Unknown multipart fields are rejected like in the JSON endpoint.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .field('organizationId', refugeOrgId)
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(400);
+
+    const submitted = await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .field('answers', JSON.stringify({ estado: 'come bien' }))
+      .field('complete', 'true')
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(201);
+    expect(submitted.body.status).toBe('completed');
+
+    const listed = await request(server)
+      .get(`/adoptions/followups/by-contract/${contractId}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    const milestone = listed.body.find((m: { id: string }) => m.id === milestoneId);
+    const photo = milestone.evidence.find((e: { kind: string }) => e.kind === 'photo');
+    expect(photo.storageRef.startsWith(`private/${refugeOrgId}/`)).toBe(true);
+    expect(photo.photoUrl).toBe(
+      app.get<StoragePort>(STORAGE_PORT).resolvePublicUrl(photo.storageRef),
+    );
+
+    // The bytes really exist and are served only behind auth to the owning org.
+    const downloaded = await request(server)
+      .get(`/storage/private?key=${encodeURIComponent(photo.storageRef)}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    expect(Buffer.from(downloaded.body).equals(png)).toBe(true);
+    await request(server)
+      .get(`/storage/public?key=${encodeURIComponent(photo.storageRef)}`)
+      .expect((res) => expect(res.status).toBeGreaterThanOrEqual(400));
+
+    // A completed milestone no longer accepts evidence.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(409);
+  });
+
   it('marks a past-due milestone overdue and alerts via the worker scan (audited, UTC)', async () => {
     const service = app.get(FollowUpService);
     const overdue = await service.runOverdueScan();
