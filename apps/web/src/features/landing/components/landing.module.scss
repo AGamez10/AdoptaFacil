@@ -1175,17 +1175,6 @@
   color: var(--af-ink-soft);
 }
 
-/* ------------------------------------------------------------- catálogo */
-.catalog {
-  scroll-margin-top: 5rem;
-  background: var(--af-cream);
-  padding-block: 4.5rem;
-
-  @media (min-width: 1024px) {
-    padding-block: 6rem;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .sticker--sparkle,
   .sticker--heart {

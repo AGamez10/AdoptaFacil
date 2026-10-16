@@ -7,7 +7,6 @@ export {
   LANDING_CATALOG_ID,
   LANDING_ORGS_ID,
   PromisesSection,
-  SPECIES_QUERY,
   WaitingAnimalsSection,
 } from './components/landing-sections';
 export { HeroVisual } from './components/hero-visual';

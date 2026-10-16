@@ -4,6 +4,7 @@ import type { PublicAnimalSummary } from '@adoptafacil/contracts';
 import { PLAN_CATALOG } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
+import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
 import { OfficialContactButtons } from '../../guide/components/official-contact-buttons';
 import { officialWhatsappUrl } from '../../../lib/contact';
 import { useFeature } from '../../../shell/capabilities/capabilities-context';
@@ -34,13 +35,10 @@ import {
 } from './landing-icons';
 import styles from './landing.module.scss';
 
-/** Ancla del catálogo (la usan el hero, el navbar y el asistente). */
+/** Ancla vieja del catálogo: `/#adoptar` ahora redirige a /adoptar. */
 export const LANDING_CATALOG_ID = 'adoptar';
 /** Ancla de la sección para organizaciones. */
 export const LANDING_ORGS_ID = 'organizaciones';
-
-/** Especie en la URL pública (`?especie=perros`), en palabras de la gente. */
-export const SPECIES_QUERY: Record<string, 'dog' | 'cat'> = { perros: 'dog', gatos: 'cat' };
 
 function SectionHeading({
   eyebrow,
@@ -78,7 +76,9 @@ function pluralAnimals(total: number): string {
   return total === 1 ? 'animal espera hogar hoy' : 'animales esperan hogar hoy';
 }
 
-/** Buscador del hero: especie + ciudad → catálogo filtrado. */
+const HERO_SPECIES = { perros: 'dog', gatos: 'cat', todos: 'all' } as const;
+
+/** Buscador del hero: especie + ciudad → listado con URL limpia (/adoptar/perros/bogota). */
 function HeroSearch({ cities }: { cities: CatalogSnapshot['cities'] }) {
   const navigate = useNavigate();
   const cityId = useId();
@@ -87,11 +87,7 @@ function HeroSearch({ cities }: { cities: CatalogSnapshot['cities'] }) {
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const params = new URLSearchParams();
-    if (species !== 'todos') params.set('especie', species);
-    if (city) params.set('ciudad', city);
-    const qs = params.toString();
-    navigate(`/${qs ? `?${qs}` : ''}#${LANDING_CATALOG_ID}`);
+    navigate(buildAdoptPath(HERO_SPECIES[species], city || null));
   };
 
   return (
@@ -194,7 +190,7 @@ function HeroAvatars({ animals, total }: { animals: PublicAnimalSummary[]; total
   const named = faces.slice(0, 2).map((animal) => animal.name);
   const rest = Math.max(total - named.length, 0);
   return (
-    <a href={`#${LANDING_CATALOG_ID}`} className={styles.avatars} data-testid="hero-avatars">
+    <Link to={ADOPT_BASE_PATH} className={styles.avatars} data-testid="hero-avatars">
       <span className={styles.avatars__faces} aria-hidden="true">
         {faces.map((animal) => (
           <img key={animal.id} src={animal.photoUrl} alt="" className={styles.avatars__face} />
@@ -204,7 +200,7 @@ function HeroAvatars({ animals, total }: { animals: PublicAnimalSummary[]; total
         <strong>{named.join(', ')}</strong>
         {rest > 0 ? ` y ${rest.toLocaleString('es-CO')} más te esperan` : ' te esperan'}
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -227,10 +223,10 @@ export function LandingHero({ snapshot }: { snapshot: CatalogSnapshot }) {
             esperando. Conoce su historia, solicita en línea y firma un contrato claro.
           </p>
           <div className={styles.hero__actions}>
-            <a href={`#${LANDING_CATALOG_ID}`} className={cn(styles.btn, styles['btn--primary'])}>
+            <Link to={ADOPT_BASE_PATH} className={cn(styles.btn, styles['btn--primary'])}>
               Quiero adoptar
               <IconArrowRight className={styles.btn__icon} />
-            </a>
+            </Link>
             <a href="#ayudar" className={cn(styles.btn, styles['btn--ghost'])}>
               Otras formas de ayudar
             </a>
@@ -275,10 +271,10 @@ export function WaitingAnimalsSection({ snapshot }: { snapshot: CatalogSnapshot 
             title="Te están esperando"
             id="landing-waiting-title"
           />
-          <a href={`#${LANDING_CATALOG_ID}`} className={styles.textLink}>
+          <Link to={ADOPT_BASE_PATH} className={styles.textLink}>
             Ver todos
             <IconArrowRight aria-hidden="true" />
-          </a>
+          </Link>
         </div>
       </div>
       <ul className={styles.rail} aria-label="Animales en adopción recientes">

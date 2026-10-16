@@ -42,7 +42,7 @@ export function PublicNavbar() {
   }, [open]);
 
   const links: PublicNavLink[] = [
-    { label: 'Animales en adopción', to: '/#adoptar', anchor: true },
+    { label: 'Animales en adopción', to: '/adoptar' },
     { label: 'Campañas', to: '/campanas' },
     ...(payments ? [{ label: 'Donar', to: '/donaciones' }] : []),
     ...(resources ? [{ label: 'Banco de recursos', to: '/recursos' }] : []),
@@ -109,7 +109,7 @@ export function PublicNavbar() {
           renderLink(link, styles.navbar__mobileLink, styles['navbar__mobileLink--active']),
         )}
         <div className={styles.navbar__mobileActions}>
-          <Link to="/#adoptar" className={styles.navbar__mobilePrimary}>
+          <Link to="/adoptar" className={styles.navbar__mobilePrimary}>
             Quiero adoptar
           </Link>
           <Link to="/register" className={styles.navbar__mobileSecondary}>

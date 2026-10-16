@@ -37,7 +37,7 @@ export function useHelpWays(): HelpWay[] {
       title: 'Adopta',
       text: 'Conoce su historia, solicita en línea y firma un contrato claro con la organización.',
       cta: 'Ver animales',
-      to: '/#adoptar',
+      to: '/adoptar',
       tone: 'teal',
     },
     ...(payments
@@ -162,7 +162,7 @@ export function ActiveCampaignsSection() {
         <ul className={styles.campaigns__grid}>
           {items.map((campaign) => (
             <li key={campaign.id}>
-              <CampaignCard campaign={campaign} />
+              <CampaignCard campaign={campaign} variant="brand" />
             </li>
           ))}
         </ul>
@@ -190,10 +190,10 @@ export function FinalCtaSection() {
             minutos.
           </p>
           <div className={styles.final__actions}>
-            <a href="#adoptar" className={cn(styles.btn, styles['btn--ink'])}>
+            <Link to="/adoptar" className={cn(styles.btn, styles['btn--ink'])}>
               Conocer animales
               <IconArrowRight aria-hidden="true" />
-            </a>
+            </Link>
             <Link to="/register" className={cn(styles.btn, styles['btn--ghost'])}>
               Registrar mi organización
             </Link>

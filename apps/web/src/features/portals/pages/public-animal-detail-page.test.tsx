@@ -116,7 +116,7 @@ describe('PublicAnimalDetailPage', () => {
     renderDetail({ state: { animal: ANIMAL } });
 
     expect(screen.getByTestId('public-animal-detail')).toBeInTheDocument();
-    expect(screen.getByText('Firulais')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Firulais' })).toBeInTheDocument();
     expect(screen.getByText('Perro')).toBeInTheDocument();
     expect(screen.getByText('Macho')).toBeInTheDocument();
     expect(screen.getByText('Mediano')).toBeInTheDocument();
@@ -218,7 +218,7 @@ describe('PublicAnimalDetailPage', () => {
     stubAnimals({ items: [ANIMAL], total: 1, limit: 50, offset: 0 });
     renderDetail();
     expect(await screen.findByTestId('public-animal-detail')).toBeInTheDocument();
-    expect(screen.getByText('Firulais')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Firulais' })).toBeInTheDocument();
   });
 
   it('shows a not-found state when the animal is not in the public catalog', async () => {
@@ -251,5 +251,33 @@ describe('PublicAnimalDetailPage', () => {
 
     expect(screen.getByRole('link', { name: '← Volver al inicio' })).toHaveAttribute('href', '/');
     expect(screen.queryByText(/^Ver /)).not.toBeInTheDocument();
+  });
+
+  it('rediseño: shows the AdoptaFácil navbar, the organization card and more animals from it', async () => {
+    const OTHER: AnimalSummary = { ...ANIMAL, id: 'a2', name: 'Canela', sex: 'female' };
+    stubByUrl(
+      { id: 'org-1', name: 'Fundación Patitas', location: { city: 'Cali' } },
+      { items: [ANIMAL, OTHER], total: 2, limit: 50, offset: 0 },
+    );
+    renderDetail({ state: { animal: ANIMAL } });
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    const org = await screen.findByRole('region', { name: 'Organización responsable' });
+    expect(org).toHaveTextContent('Fundación Patitas');
+    expect(org).toHaveTextContent('Cali');
+    const similar = await screen.findByRole('region', { name: 'Más amigos de Fundación Patitas' });
+    expect(similar).toHaveTextContent('Canela');
+    expect(similar).not.toHaveTextContent('Firulais');
+    expect(screen.getByRole('link', { name: 'Más perros en adopción en Cali' })).toHaveAttribute(
+      'href',
+      '/adoptar/perros/cali',
+    );
+  });
+
+  it('rediseño: keeps the adoption request one tap away on mobile (fixed bar)', () => {
+    renderDetail({ state: { animal: ANIMAL } });
+    const links = screen.getAllByRole('link', { name: 'Solicitar adopción' });
+    expect(links).toHaveLength(2);
+    expect(links[1]?.getAttribute('href')).toBe(links[0]?.getAttribute('href'));
   });
 });
