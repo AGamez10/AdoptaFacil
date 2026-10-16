@@ -218,6 +218,29 @@ export function submitFollowUp(
   });
 }
 
+/**
+ * The adopter responds a milestone WITH a photo in the same request (multipart:
+ * `file`, plus optional `answers` as a JSON string and `complete` as
+ * "true"/"false"). The generic storage upload only accepts keys of the caller's
+ * own organization, so the adopter's photo travels through this endpoint.
+ */
+export function submitFollowUpWithPhoto(
+  client: ApiClient,
+  milestoneId: string,
+  file: File,
+  answers?: Record<string, unknown>,
+  options: { complete?: boolean } = {},
+): Promise<AdoptionFollowUpMilestone> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  if (answers !== undefined) form.append('answers', JSON.stringify(answers));
+  if (options.complete !== undefined) form.append('complete', String(options.complete));
+  return client.request<AdoptionFollowUpMilestone>(`/adoptions/followups/${milestoneId}/photo`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
 /** The org closes (completes) a milestone. */
 export function completeFollowUp(
   client: ApiClient,

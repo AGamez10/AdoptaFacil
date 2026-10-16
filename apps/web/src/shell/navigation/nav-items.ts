@@ -421,6 +421,8 @@ export const navItems: NavItem[] = [
   // (cualquier autenticado), así que el filtro real es `personaOnly` — ver su
   // doc en NavItem para por qué no puede expresarse con `roles`.
   { path: '/mis-solicitudes', label: 'Mis solicitudes', icon: PawIcon, personaOnly: true },
+  // T-028c: el adoptante responde sus hitos de seguimiento post-adopción.
+  { path: '/mis-seguimientos', label: 'Mis seguimientos', icon: PawIcon, personaOnly: true },
   // MENU-SUBMENUS: "Apadrinamientos" agrupa "Mis apadrinamientos" (donante,
   // sin @Roles) y la gestión de la org ("Apadrinamientos recibidos", antes
   // el ítem plano "Apadrinamientos", SPONSORSHIP_VIEW_ROLES) — mismas rutas y
