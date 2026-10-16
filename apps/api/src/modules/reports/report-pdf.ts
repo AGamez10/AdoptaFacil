@@ -15,6 +15,7 @@ import type {
 } from './report-payloads';
 import { SIGNER_ROLE_LABEL } from './report-legal-effect';
 import { pdfText, toWinAnsi } from './report-text';
+import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
 
 /**
  * Dibujo del PDF de un reporte (M13). Todo sale del snapshot sellado y TODA
@@ -743,5 +744,6 @@ export async function renderReportPdf(input: RenderReportInput): Promise<Buffer>
   else drawSocialService(c, input.payload);
   await drawSignatures(c, input);
   drawFooters(c, input);
+  await stampPlatformDocumentNotice(pdf);
   return Buffer.from(await pdf.save());
 }
