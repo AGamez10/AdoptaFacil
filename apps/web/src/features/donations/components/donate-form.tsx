@@ -36,12 +36,14 @@ export interface DonateFormValues {
   /**
    * Checkout API (Orders) — T-OrdersAPI. Tokenized card data from MercadoPago's
    * Card Payment Brick (step 2 of this form, below). The card number never
-   * reaches this codebase — only this opaque, single-use token does.
+   * reaches this codebase — only this opaque, single-use token does. Absent
+   * with `gateway="epayco"`: ePayco's own checkout collects the payment AFTER
+   * the donation is created (ADR-PAG-002).
    */
-  cardToken: string;
-  paymentMethodId: string;
+  cardToken?: string;
+  paymentMethodId?: string;
   paymentMethodType?: 'credit_card' | 'debit_card';
-  installments: number;
+  installments?: number;
 }
 
 export interface DonateFormProps {
@@ -62,6 +64,13 @@ export interface DonateFormProps {
    * `CardPaymentBrick`'s doc comment.
    */
   onDonate: (values: DonateFormValues) => Promise<void>;
+  /**
+   * ADR-PAG-002: con `'epayco'` NO hay paso de tarjeta — "Donar" llama a
+   * `onDonate` directo (sin datos de tarjeta) y la página abre el checkout de
+   * ePayco, que ofrece los medios que la organización tenga habilitados.
+   * Por defecto `'mercadopago'` (Card Payment Brick, sin cambios).
+   */
+  gateway?: 'mercadopago' | 'epayco';
 }
 
 type FormStep = 'details' | 'card';
@@ -92,6 +101,7 @@ export function DonateForm({
   hasSession,
   sessionEmailHint,
   onDonate,
+  gateway = 'mercadopago',
 }: DonateFormProps) {
   const [step, setStep] = useState<FormStep>('details');
   const [amountText, setAmountText] = useState('');
@@ -266,7 +276,33 @@ export function DonateForm({
         />
       )}
 
-      <Button disabled={!canContinue} onClick={() => setStep('card')}>
+      {gateway === 'epayco' && (
+        <p className={styles.hint}>
+          Pagarás en la pasarela segura de ePayco con los medios que tenga habilitados{' '}
+          {organizationName} (tarjeta, PSE, Nequi, Daviplata, efectivo…). El dinero llega directo a
+          su cuenta.
+        </p>
+      )}
+
+      <Button
+        disabled={!canContinue}
+        onClick={() => {
+          if (gateway !== 'epayco') {
+            setStep('card');
+            return;
+          }
+          // Sin paso de tarjeta: la página crea la donación y abre ePayco. Un
+          // rechazo ya lo comunica la página (toast); aquí solo se evita el
+          // "unhandled rejection".
+          onDonate({
+            intendedAmount: amount,
+            commissionPayer,
+            anonymous,
+            guestPayer,
+            legalAcceptances: hasSession ? undefined : acceptancesFrom('guest', consents),
+          }).catch(() => undefined);
+        }}
+      >
         {submitting ? 'Procesando…' : `Donar a ${organizationName}`}
       </Button>
     </div>

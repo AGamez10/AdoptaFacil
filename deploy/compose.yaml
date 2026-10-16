@@ -133,6 +133,7 @@ services:
         VITE_PORTAL_BASE_DOMAIN: ${VITE_PORTAL_BASE_DOMAIN:-}
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
         VITE_MERCADOPAGO_PUBLIC_KEY: ${VITE_MERCADOPAGO_PUBLIC_KEY:-}
+        VITE_PAYMENT_PROVIDER: ${VITE_PAYMENT_PROVIDER:-}
     image: adoptafacil-edge:${RELEASE:-local}
     restart: unless-stopped
     environment:

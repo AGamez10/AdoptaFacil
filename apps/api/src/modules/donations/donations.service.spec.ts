@@ -1,11 +1,18 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { AuditService } from '../../core/audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { NotificationPort } from '../../core/notifications/notification.port';
 import {
+  computeBreakdown,
   currentLegalAcceptanceItems,
+  DIRECT_COLLECTION_RATES,
   type PaymentPort,
   requiredGuestLegalDocuments,
 } from '@adoptafacil/contracts';
@@ -13,6 +20,7 @@ import type { CampaignFundingService } from '../campaigns/campaign-funding.servi
 import type { DonationCertificatesService } from './donation-certificates.service';
 import { DonationsService } from './donations.service';
 import { LegalService } from '../../core/legal/legal.service';
+import { encryptEpaycoSecret, loadEpaycoKeysEncryptionKey } from '../payments/epayco-keys-crypto';
 
 interface Harness {
   service: DonationsService;
@@ -942,5 +950,183 @@ describe('DonationsService.applyWebhook — cobro directo (ADR-PAG-001, PAY-003)
     );
 
     expect(h.queryRaw).toHaveBeenCalledTimes(1); // only apply_donation_webhook
+  });
+});
+
+describe('DonationsService — ePayco driver (ADR-PAG-002)', () => {
+  const KEY = loadEpaycoKeysEncryptionKey();
+  const ORG_KEYS = {
+    custId: '123456',
+    pKey: 'org-p-key-secret',
+    publicKey: 'org-public',
+    privateKey: 'org-private-secret',
+  };
+  const storedRow = {
+    custId: ORG_KEYS.custId,
+    publicKey: ORG_KEYS.publicKey,
+    pKeyEnc: encryptEpaycoSecret(ORG_KEYS.pKey, KEY),
+    privateKeyEnc: encryptEpaycoSecret(ORG_KEYS.privateKey, KEY),
+  };
+  const row = {
+    id: 'don-e1',
+    organization_id: 'org-1',
+    donor_user_id: null,
+    concept_kind: 'organization',
+    concept_id: 'org-1',
+    commission_payer: 'donor',
+    intended_amount: 50_000,
+    amount_charged: 52_300,
+    currency: 'COP',
+    breakdown: { amountCharged: 52_300 },
+    collection_id: 'af-epayco',
+    idempotency_key: 'idem-key-guest-1',
+    status: 'pending',
+    payer: null,
+    anonymous: false,
+    created_at: new Date('2026-10-15T00:00:00.000Z'),
+    updated_at: new Date('2026-10-15T00:00:00.000Z'),
+  };
+
+  function epaycoService(account: unknown = storedRow) {
+    const h = makeService({ PAYMENT_DRIVER: 'epayco', EPAYCO_TEST: true });
+    const findUnique = jest.fn().mockResolvedValue(account);
+    h.withOrgContext.mockImplementation(async (_orgId, fn) =>
+      fn({
+        organizationEpaycoAccount: { findUnique },
+        legalAcceptance: { createMany: jest.fn() },
+      }),
+    );
+    return { h, findUnique };
+  }
+
+  it("charges with the org's decrypted ePayco keys and returns the ephemeral checkout session", async () => {
+    const { h } = epaycoService();
+    const breakdown = computeBreakdown(50_000, 'donor', DIRECT_COLLECTION_RATES);
+    h.createCollection.mockResolvedValueOnce({
+      collectionId: 'af-epayco',
+      status: 'pending',
+      breakdown,
+      checkoutSessionId: 'sess-9',
+    });
+    h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check
+    h.queryRaw.mockResolvedValueOnce([row]); // create_donation
+
+    const donation = await h.service.create(undefined, {
+      ...BASE_INPUT,
+      commissionPayer: 'donor',
+      payer: { email: 'guest@test.dev' },
+    });
+
+    const input = h.createCollection.mock.calls[0][0];
+    expect(input.epaycoCollector).toEqual(ORG_KEYS);
+    expect(input.collector).toBeUndefined();
+    expect(donation.checkoutSessionId).toBe('sess-9');
+    expect(donation.checkoutTest).toBe(true);
+    // Persisted breakdown is the one the adapter charged; never a secret in audit.
+    const createArgs = h.queryRaw.mock.calls[1][0] as { values: unknown[] };
+    expect(JSON.parse(createArgs.values[7] as string)).toEqual(breakdown);
+    expect(JSON.stringify(h.record.mock.calls)).not.toContain(ORG_KEYS.pKey);
+    expect(JSON.stringify(h.record.mock.calls)).not.toContain(ORG_KEYS.privateKey);
+  });
+
+  it('409 when the organization has not connected ePayco (no platform fallback)', async () => {
+    const { h } = epaycoService(null);
+    h.queryRaw.mockResolvedValueOnce([]);
+    const error = await h.service
+      .create(undefined, { ...BASE_INPUT, payer: { email: 'guest@test.dev' } })
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as Error).message).toBe(
+      'Esta organización todavía no conectó su cuenta para recibir donaciones.',
+    );
+    expect(h.createCollection).not.toHaveBeenCalled();
+  });
+
+  it('availability follows the ePayco account', async () => {
+    const { h } = epaycoService({ id: 'acc-1' });
+    await expect(h.service.getOrganizationAvailability('org-1')).resolves.toEqual({
+      organizationId: 'org-1',
+      canReceiveDonations: true,
+    });
+    expect(h.queryRaw).not.toHaveBeenCalled();
+  });
+
+  const confirmation = {
+    x_ref_payco: '987654',
+    x_id_invoice: 'af-epayco',
+    x_cust_id_cliente: '123456',
+    collectionId: 'af-epayco',
+    status: 'approved',
+    amountCharged: 52_300,
+  };
+
+  it('webhook: resolves the org from the invoice and verifies with ITS keys', async () => {
+    const { h } = epaycoService();
+    verifyAndNormalizeWebhookRef.mockImplementationOnce(async () => ({
+      eventId: '987654',
+      collectionId: 'af-epayco',
+      status: 'approved',
+      dedupKey: 'epayco:987654:approved',
+      amountCharged: 52_300,
+      currency: 'COP',
+      receiverAccountId: '123456',
+    }));
+    h.queryRaw.mockResolvedValueOnce([row]); // invoice → donation → org
+    h.queryRaw.mockResolvedValueOnce([row]); // matchesExpectedPayment
+    h.queryRaw.mockResolvedValueOnce([{ ...row, status: 'approved' }]); // apply
+
+    const out = await h.service.applyWebhook(confirmation, '');
+    expect(out.applied).toBe(true);
+    const context = verifyAndNormalizeWebhookRef.mock.calls[0][2];
+    expect(context.epaycoCollector).toEqual(ORG_KEYS);
+    expect(context.collector).toBeUndefined();
+  });
+
+  it('webhook: falls back to the merchant id only when the invoice is unknown', async () => {
+    const { h } = epaycoService();
+    h.queryRaw.mockResolvedValueOnce([]); // unknown invoice
+    h.queryRaw.mockResolvedValueOnce([{ organization_id: 'org-1' }]); // cust id → org
+    h.queryRaw.mockResolvedValueOnce([]); // matchesExpectedPayment: unknown → true
+    h.queryRaw.mockResolvedValueOnce([]); // apply: no-op
+
+    await h.service.applyWebhook({ ...confirmation, x_id_invoice: 'af-unknown' }, '');
+    const sql = (h.queryRaw.mock.calls[1][0] as { strings: string[] }).strings.join('?');
+    expect(sql).toContain('epayco_account_organization_id');
+    expect(verifyAndNormalizeWebhookRef.mock.calls[0][2].epaycoCollector).toEqual(ORG_KEYS);
+  });
+
+  it('webhook: an amount or receiver mismatch is audited and never approves', async () => {
+    const { h } = epaycoService();
+    verifyAndNormalizeWebhookRef.mockImplementationOnce(async () => ({
+      eventId: '987654',
+      collectionId: 'af-epayco',
+      status: 'approved',
+      dedupKey: 'epayco:987654:approved',
+      amountCharged: Number.NaN,
+      currency: 'COP',
+      receiverAccountId: '555',
+    }));
+    h.queryRaw.mockResolvedValueOnce([row]);
+    h.queryRaw.mockResolvedValueOnce([row]);
+
+    const out = await h.service.applyWebhook(confirmation, '');
+    expect(out).toEqual({ applied: false, status: null, donationId: null });
+    expect(h.queryRaw).toHaveBeenCalledTimes(2);
+    expect(h.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'donation.payment_mismatch',
+        metadata: { collectionId: 'af-epayco', mismatches: ['receiver', 'amount'] },
+      }),
+    );
+  });
+
+  it('webhook: a verification failure is a 403, never a settlement', async () => {
+    const { h } = epaycoService();
+    verifyAndNormalizeWebhookRef.mockRejectedValueOnce(new Error('signature mismatch'));
+    h.queryRaw.mockResolvedValueOnce([row]);
+    await expect(h.service.applyWebhook(confirmation, '')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(h.queryRaw).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,6 +4,9 @@ import { AuthModule } from '../../core/auth/auth.module';
 import { MercadoPagoOAuthClient } from '../../core/payments/mercadopago-oauth.client';
 import { BankAccountsController } from './bank-accounts.controller';
 import { BankAccountsService } from './bank-accounts.service';
+import { EpaycoConnectController } from './epayco-connect.controller';
+import { EpaycoConnectService } from './epayco-connect.service';
+import { EPAYCO_KEYS_ENCRYPTION_KEY, loadEpaycoKeysEncryptionKey } from './epayco-keys-crypto';
 import { MercadoPagoConnectController } from './mercadopago-connect.controller';
 import { MercadoPagoConnectService } from './mercadopago-connect.service';
 import { MercadoPagoTokenRefreshProcessor } from './mercadopago-token-refresh.processor';
@@ -36,6 +39,9 @@ import { ReconciliationService } from './reconciliation.service';
  *     one public callback route) plus a daily BullMQ token-refresh scan. This
  *     is ONLY the connect infra — wiring the connected `mpUserId` into an
  *     actual split payment at checkout is a separate follow-up, not here.
+ *   - `organization_epayco_accounts` (RLS, ADR-PAG-002) — the org's OWN ePayco
+ *     merchant keys (`/org/epayco/connect|status`, Owner/Administrator), the
+ *     secrets encrypted at rest. Every ePayco checkout is created with them.
  *
  * PaymentPort: consumed from the GLOBAL `PAYMENT_PORT` provider (core
  * `PaymentModule`, @Global) — no local binding, same convention as
@@ -53,6 +59,7 @@ import { ReconciliationService } from './reconciliation.service';
     PayoutsController,
     ReconciliationController,
     MercadoPagoConnectController,
+    EpaycoConnectController,
   ],
   providers: [
     BankAccountsService,
@@ -63,6 +70,8 @@ import { ReconciliationService } from './reconciliation.service';
     MercadoPagoConnectService,
     MercadoPagoTokenRefreshScheduler,
     MercadoPagoTokenRefreshProcessor,
+    EpaycoConnectService,
+    { provide: EPAYCO_KEYS_ENCRYPTION_KEY, useFactory: loadEpaycoKeysEncryptionKey },
   ],
 })
 export class PaymentsModule {}

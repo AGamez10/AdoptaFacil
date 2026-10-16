@@ -5,6 +5,7 @@ import type { Env } from '../../config/env.validation';
 import { DisabledPaymentAdapter } from './disabled-payment.adapter';
 import { PAYMENT_PORT } from './payment.port';
 import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
+import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
 
 /**
  * Shared PaymentPort provider (T-052). Global so any module injects PAYMENT_PORT
@@ -16,6 +17,8 @@ import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
  * commission math. `mercadopago` binds the real gateway (recaudo, Fase 1) —
  * MercadoPago fully replaced Wompi; the dispersión T+1 side (Fase 2) is not
  * implemented yet (blocked on MercadoPago's Disbursements approval).
+ * `epayco` (ADR-PAG-002, pasarela principal) binds the ePayco checkout v2
+ * adapter: each session is created with the organization's own keys.
  */
 @Global()
 @Module({
@@ -27,6 +30,9 @@ import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
         const driver = config.get('PAYMENT_DRIVER', { infer: true }) ?? 'fake';
         if (driver === 'mercadopago') {
           return new MercadoPagoPaymentAdapter(config);
+        }
+        if (driver === 'epayco') {
+          return new EpaycoPaymentAdapter(config);
         }
         if (driver === 'disabled') {
           return new DisabledPaymentAdapter();

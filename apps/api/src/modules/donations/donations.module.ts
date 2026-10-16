@@ -7,6 +7,10 @@ import { DonationCertificatePublicController } from './donation-certificate-publ
 import { DonationAccessPublicController } from './donation-access-public.controller';
 import { DonationStatusPublicController } from './donation-status-public.controller';
 import { DonationCertificatesService } from './donation-certificates.service';
+import {
+  EPAYCO_KEYS_ENCRYPTION_KEY,
+  loadEpaycoKeysEncryptionKey,
+} from '../payments/epayco-keys-crypto';
 
 /**
  * M05 · Donations (T-050, P1). A Person donates to an organization, sees the
@@ -53,6 +57,12 @@ import { DonationCertificatesService } from './donation-certificates.service';
     DonationAccessPublicController,
     DonationStatusPublicController,
   ],
-  providers: [DonationsService, DonationCertificatesService],
+  providers: [
+    DonationsService,
+    DonationCertificatesService,
+    // ADR-PAG-002: decrypts the beneficiary org's ePayco keys for the charge
+    // and the confirmation (same derivation as PaymentsModule).
+    { provide: EPAYCO_KEYS_ENCRYPTION_KEY, useFactory: loadEpaycoKeysEncryptionKey },
+  ],
 })
 export class DonationsModule {}

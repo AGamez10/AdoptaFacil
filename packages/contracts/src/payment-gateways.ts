@@ -26,7 +26,11 @@ import type { PaymentCurrency } from './payments';
 // Vocabulary
 // ----------------------------------------------------------------------------
 
-/** Gateways an organization can connect. Order = launch priority. */
+/**
+ * Gateways an organization can connect. Since 2026-10-15 ePayco is the main
+ * gateway (owner's decision, ADR-PAG-002); the order here is historical and
+ * carries no meaning.
+ */
 export const GATEWAY_PROVIDERS = [
   'mercadopago',
   'wompi',
@@ -131,14 +135,32 @@ export const GATEWAY_CATALOG: readonly GatewayCapability[] = [
   },
   {
     provider: 'epayco',
+    mode: 'direct_to_org',
+    credentialKind: 'merchant_keys',
+    verifiable: true,
+    platformFeeAtSource: false,
+    // The org's own ePayco account (persona natural or jurídica): checkout v2
+    // session created with ITS keys, confirmation signed with ITS P_KEY and
+    // read back from ePayco. The money lands in the org's ePayco balance.
+    status: 'documented',
+    checkedAt: '2026-10-15',
+    sources: [
+      'https://docs.epayco.com/docs/checkout-implementacion',
+      'https://docs.epayco.com/docs/checkout-respuesta-y-confirmacion',
+    ],
+  },
+  {
+    provider: 'epayco',
     mode: 'platform_split',
     credentialKind: 'merchant_keys',
     verifiable: true,
     platformFeeAtSource: true,
     // "Pagos divididos": aggregator/gateway models only, enabled by ePayco on
-    // request; receivers must be validated ePayco merchants.
+    // request; receivers must be validated ePayco merchants. In the aggregator
+    // model the transaction is in the PRINCIPAL's name (AdoptaFácil) and the
+    // dispersion runs from its account: legal review required (ADR-PAG-002).
     status: 'requires_written_confirmation',
-    checkedAt: '2026-10-08',
+    checkedAt: '2026-10-15',
     sources: [
       'https://docs.epayco.com/docs/split-descripcion',
       'https://epayco.com/pagos-divididos/',

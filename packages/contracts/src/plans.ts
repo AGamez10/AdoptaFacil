@@ -137,8 +137,11 @@ export const SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due', 'cancele
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 /** How the subscription is collected. `manual` = payment link/transfer to
- *  AdoptaFácil's own account + electronic invoice, activated by the platform. */
-export const BILLING_PROVIDERS = ['manual'] as const;
+ *  AdoptaFácil's own account + electronic invoice, activated by the platform.
+ *  `epayco` = recurring charge with ePayco on AdoptaFácil's OWN merchant
+ *  account (ADR-PAG-002): it is AdoptaFácil's revenue for the software, so it
+ *  never touches a donation. */
+export const BILLING_PROVIDERS = ['manual', 'epayco'] as const;
 export type BillingProvider = (typeof BILLING_PROVIDERS)[number];
 
 /** The stored subscription of one organization (at most one per org). */

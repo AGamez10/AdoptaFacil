@@ -7,7 +7,8 @@ import type { FeatureKey } from '@adoptafacil/contracts';
  * 404). Paths match exactly or as a prefix followed by "/".
  */
 const FEATURE_PATHS: ReadonlyArray<readonly [FeatureKey, readonly string[]]> = [
-  ['payments', ['/donaciones', '/mis-donaciones', '/donaciones-recibidas']],
+  // `/donar` = QR de donaciones en un subdominio real de organización.
+  ['payments', ['/donaciones', '/mis-donaciones', '/donaciones-recibidas', '/donar']],
   // Donation certificates and their public verification (D9, SEC-003).
   ['donationCertificates', ['/certificado', '/verificar']],
   ['sponsorships', ['/apadrinar', '/organizacion/apadrinamientos']],
@@ -19,6 +20,8 @@ const FEATURE_PATHS: ReadonlyArray<readonly [FeatureKey, readonly string[]]> = [
 
 /** Public reviews page of an organization: /organizaciones/:slug/resenas. */
 const ORG_REVIEWS_PATH = /^\/organizaciones\/[^/]+\/resenas\/?$/;
+/** Destino del QR de donaciones de una organización: /o/:slug/donar. */
+const ORG_DONATE_PATH = /^\/o\/[^/]+\/donar\/?$/;
 
 export function featureForPath(pathname: string): FeatureKey | null {
   for (const [feature, prefixes] of FEATURE_PATHS) {
@@ -27,5 +30,6 @@ export function featureForPath(pathname: string): FeatureKey | null {
     }
   }
   if (ORG_REVIEWS_PATH.test(pathname)) return 'reputation';
+  if (ORG_DONATE_PATH.test(pathname)) return 'payments';
   return null;
 }
