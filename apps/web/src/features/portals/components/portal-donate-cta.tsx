@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import type { OrganizationPublic } from '@adoptafacil/contracts';
 import { buttonVariants, cn } from '@adoptafacil/ui';
+import { DonationsActivatingNotice } from '../../donations/components/donations-activating-notice';
+import { useDonationAvailability } from '../../donations/hooks/use-donation-availability';
 
 /**
  * Construye el enlace al flujo de donación (§M05, T-050) con la organización
@@ -16,9 +18,12 @@ import { buttonVariants, cn } from '@adoptafacil/ui';
  * el visitante del portal no viera ya en esta misma página.
  */
 export function buildDonateHref(
-  org: Pick<OrganizationPublic, 'id' | 'name' | 'logoUrl' | 'nit' | 'location'>,
+  org: Pick<OrganizationPublic, 'id' | 'name' | 'logoUrl' | 'nit' | 'location' | 'slug'>,
 ): string {
   const params = new URLSearchParams({ organizationId: org.id, organizationName: org.name });
+  // Solo navegación: si la org aún no recibe donaciones en línea, la página de
+  // donación ofrece volver a su portal (`/o/<slug>`) con otras formas de ayudar.
+  if (org.slug) params.set('organizationSlug', org.slug);
   if (org.logoUrl) params.set('organizationLogoUrl', org.logoUrl);
   if (org.nit) params.set('organizationNit', org.nit);
   if (org.location?.city) params.set('organizationCity', org.location.city);
@@ -26,7 +31,7 @@ export function buildDonateHref(
 }
 
 export interface PortalDonateCtaProps {
-  organization: Pick<OrganizationPublic, 'id' | 'name' | 'logoUrl' | 'nit' | 'location'>;
+  organization: Pick<OrganizationPublic, 'id' | 'name' | 'logoUrl' | 'nit' | 'location' | 'slug'>;
 }
 
 /**
@@ -44,6 +49,19 @@ export interface PortalDonateCtaProps {
  * (`size: 'lg'`). El `<Link>`/query params NO cambiaron — solo su posición y estilo.
  */
 export function PortalDonateCta({ organization }: PortalDonateCtaProps) {
+  const availability = useDonationAvailability(organization.id);
+  // Solo un "no" explícito de la API cambia el botón por el mensaje cálido;
+  // ante la duda el botón sigue (la página de donación vuelve a verificar).
+  if (availability === 'unavailable') {
+    return (
+      <DonationsActivatingNotice
+        organizationName={organization.name}
+        portalPath={organization.slug ? `/o/${encodeURIComponent(organization.slug)}` : undefined}
+        headingLevel={3}
+        data-testid="portal-donate-activating"
+      />
+    );
+  }
   return (
     <div className="flex flex-col items-stretch gap-1.5">
       <Link

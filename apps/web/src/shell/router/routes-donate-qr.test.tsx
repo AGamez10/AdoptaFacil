@@ -9,7 +9,7 @@ import { renderShell } from '../../test-utils';
  */
 const ORG = { id: 'org-1', name: 'Refugio Patitas', slug: 'patitas' };
 
-function stubFetch(orgStatus = 200) {
+function stubFetch(orgStatus = 200, canReceiveDonations = true) {
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
@@ -21,7 +21,7 @@ function stubFetch(orgStatus = 200) {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ canReceiveDonations: true }),
+          json: async () => ({ canReceiveDonations }),
         });
       }
       if (url.includes('/public/organizations/patitas')) {
@@ -54,6 +54,20 @@ describe('QR de donaciones — rutas públicas', () => {
     expect(await screen.findByRole('heading', { name: 'Donar' })).toBeInTheDocument();
     expect(screen.getByText('Tu aporte para Refugio Patitas.')).toBeInTheDocument();
     expect(await screen.findByPlaceholderText('50000')).toBeInTheDocument();
+  });
+
+  it('/o/:slug/donar lands on a warm message (never an error) when the org cannot receive donations yet', async () => {
+    stubFetch(200, false);
+    renderShell({ route: '/o/patitas/donar', ...guest });
+
+    const notice = await screen.findByTestId('donation-org-not-connected');
+    expect(notice).toHaveTextContent('Este refugio está activando sus donaciones en línea.');
+    expect(notice).toHaveTextContent('Refugio Patitas');
+    expect(
+      screen.getByRole('link', { name: 'Conocer a sus animales en adopción' }),
+    ).toHaveAttribute('href', '/o/patitas');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('50000')).not.toBeInTheDocument();
   });
 
   it('/o/:slug/donar shows "no encontrada" for an unknown organization', async () => {

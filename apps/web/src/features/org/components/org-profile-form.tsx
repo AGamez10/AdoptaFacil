@@ -376,8 +376,11 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
     // T-OAuth-Connect): abre la pestaña "Medios de pago" directamente en vez de
     // dejar al usuario en "Datos institucionales" sin ver el resultado de la
     // conexión que acaba de autorizar.
+    // `?tab=pagos` (avisos "Cobros pendientes de conexión") hace lo mismo.
     const [activeTab, setActiveTab] = useState<string>(() =>
-      searchParams.get('mercadopago') ? 'pagos' : TABS[0].value,
+      searchParams.get('mercadopago') || searchParams.get('tab') === 'pagos'
+        ? 'pagos'
+        : TABS[0].value,
     );
     const epayco = isEpaycoProvider();
     const paymentsEnabled = useFeature('payments');

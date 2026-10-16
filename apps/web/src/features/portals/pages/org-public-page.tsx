@@ -48,6 +48,7 @@ import { PortalHelpCta } from '../components/portal-help-cta';
 import { PortalAdoptionSteps } from '../components/portal-adoption-steps';
 import { useFeature } from '../../../shell/capabilities';
 import { useDocumentTitle } from '../../../lib/use-document-title';
+import { useDonationAvailability } from '../../donations/hooks/use-donation-availability';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { ownerPreviewOrganization } from '../model/owner-preview';
@@ -139,6 +140,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const marketplace = useFeature('marketplace');
   const resources = useFeature('resources');
   const reputation = useFeature('reputation');
+  // Si la org aún no recibe donaciones en línea (`canReceiveDonations: false`),
+  // el "Donar" del hero se oculta y "Cómo ayudar" muestra un mensaje cálido con
+  // otras formas de ayudar. Falla abierta: ante la duda, los botones siguen.
+  const donationAvailability = useDonationAvailability(view?.profile.organization.id, payments);
+  const donationsActive = donationAvailability !== 'unavailable';
 
   // "Adoptar"/"Apadrinar" (pulido visual) no inventan un flujo nuevo: solo
   // desplazan a la sección real "Mascotas en adopción" (rediseño T-D04, ya
@@ -362,6 +368,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           <PortalHeaderActions
             organization={view.profile.organization}
             onBrowseCatalog={goToCatalog}
+            donationsActive={donationsActive}
           />
         ),
       }
@@ -490,7 +497,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               </div>
 
               {payments ? (
-                <PortalHelpCta organization={view.profile.organization} />
+                <PortalHelpCta
+                  organization={view.profile.organization}
+                  donationsActive={donationsActive}
+                  onBrowseAnimals={goToCatalog}
+                />
               ) : (
                 <PortalAdoptionSteps
                   organization={view.profile.organization}

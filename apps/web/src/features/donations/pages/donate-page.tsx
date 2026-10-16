@@ -20,6 +20,7 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { FormAlert } from '../../auth/components/form-alert';
 import { createDonation, fetchOrganizationDonationAvailability } from '../api/donations-api';
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
+import { DonationsActivatingNotice } from '../components/donations-activating-notice';
 import { formatCop } from '../model/donation-breakdown-view';
 import { isEpaycoProvider } from '../../payments/lib/payment-provider';
 import { openEpaycoCheckout } from '../../payments/lib/epayco-checkout';
@@ -33,6 +34,9 @@ interface DonationTarget {
   organizationLogoUrl?: string;
   organizationCity?: string;
   organizationNit?: string;
+  /** Slug del portal público (`/o/<slug>`), para ofrecer alternativas si la
+   *  organización aún no recibe donaciones en línea. Solo navegación. */
+  organizationSlug?: string;
 }
 
 /**
@@ -56,6 +60,7 @@ function useDonationTarget(): DonationTarget | null {
         organizationLogoUrl: params.get('organizationLogoUrl') ?? undefined,
         organizationCity: params.get('organizationCity') ?? undefined,
         organizationNit: params.get('organizationNit') ?? undefined,
+        organizationSlug: params.get('organizationSlug') ?? undefined,
       };
     }
     return null;
@@ -94,7 +99,6 @@ export function DonatePage() {
   // ADR-PAG-002: con ePayco no hay Brick — tras crear la donación se abre el
   // checkout de ePayco con la sesión que devolvió la API.
   const epayco = isEpaycoProvider();
-  const gatewayName = epayco ? 'ePayco' : 'MercadoPago';
   const [epaycoCheckout, setEpaycoCheckout] = useState<{
     donation: Donation;
     sessionId: string;
@@ -107,6 +111,8 @@ export function DonatePage() {
     'loading' | 'connected' | 'not-connected' | 'error'
   >('loading');
   const targetOrganizationId = target?.organizationId;
+  // "Intentar de nuevo" tras una falla al verificar (sin recargar la página).
+  const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
 
   useEffect(() => {
     if (!targetOrganizationId) return;
@@ -122,7 +128,7 @@ export function DonatePage() {
     return () => {
       active = false;
     };
-  }, [targetOrganizationId]);
+  }, [targetOrganizationId, availabilityAttempt]);
 
   if (!target) {
     // Sin organización objetivo y CON sesión: el historial vive en `/mis-donaciones`
@@ -416,20 +422,27 @@ export function DonatePage() {
               ) : availability === 'loading' ? (
                 <Skeleton className="h-48 w-full" data-testid="donation-availability-loading" />
               ) : availability === 'not-connected' ? (
-                <FormAlert variant="error">
-                  <span data-testid="donation-org-not-connected">
-                    <strong>{target.organizationName}</strong> aún no puede recibir donaciones: no
-                    ha conectado su cuenta de {gatewayName}. Intenta más tarde o explora otras
-                    organizaciones.
-                  </span>
-                </FormAlert>
+                // Nunca un error para el donante: un mensaje cálido y otras
+                // formas reales de ayudar (aplica con cualquier pasarela).
+                <DonationsActivatingNotice
+                  data-testid="donation-org-not-connected"
+                  organizationName={target.organizationName}
+                  portalPath={
+                    target.organizationSlug
+                      ? `/o/${encodeURIComponent(target.organizationSlug)}`
+                      : undefined
+                  }
+                />
               ) : availability === 'error' ? (
-                <FormAlert variant="error">
-                  <span data-testid="donation-availability-error">
-                    No pudimos verificar si {target.organizationName} puede recibir donaciones.
-                    Recarga la página e inténtalo de nuevo.
-                  </span>
-                </FormAlert>
+                <div className={styles.done} data-testid="donation-availability-error">
+                  <EmptyState
+                    title="Estamos teniendo problemas para cargar la donación"
+                    description={`No pudimos confirmar en este momento si ${target.organizationName} ya recibe donaciones en línea. Revisa tu conexión e inténtalo de nuevo; no se te ha cobrado nada.`}
+                  />
+                  <Button onClick={() => setAvailabilityAttempt((n) => n + 1)}>
+                    Intentar de nuevo
+                  </Button>
+                </div>
               ) : (
                 <DonateForm
                   key={formInstanceKey}

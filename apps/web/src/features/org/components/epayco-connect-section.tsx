@@ -1,85 +1,45 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import {
-  EPAYCO_CUST_ID_PATTERN,
-  type ConnectEpaycoAccountInput,
-  type EpaycoConnectStatusView,
-} from '@adoptafacil/contracts';
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  useToast,
-} from '@adoptafacil/ui';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import type { EpaycoConnectStatusView } from '@adoptafacil/contracts';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, useToast } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
+import { useSession } from '../../../shell/auth';
+import {
+  clearEpaycoDraft,
+  loadEpaycoDraft,
+  type EpaycoConnectDraft,
+} from '../lib/epayco-connect-draft';
+import { EpaycoConnectWizard } from './epayco-connect-wizard';
+import { PaymentsActiveStatus, PaymentsPendingStatus } from './payments-connection-status';
 
 /** RNF: hora Colombia SOLO en presentación (UI); el backend guarda en UTC. */
 function formatConnectedAt(iso: string): string {
   return new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
 }
 
-const EMPTY_FORM: ConnectEpaycoAccountInput = {
-  custId: '',
-  pKey: '',
-  publicKey: '',
-  privateKey: '',
-};
-
-interface FieldSpec {
-  key: keyof ConnectEpaycoAccountInput;
-  label: string;
-  hint: string;
-  secret: boolean;
-}
-
-const FIELDS: FieldSpec[] = [
-  {
-    key: 'custId',
-    label: 'P_CUST_ID_CLIENTE',
-    hint: 'El número de cliente de tu cuenta ePayco (solo dígitos).',
-    secret: false,
-  },
-  {
-    key: 'pKey',
-    label: 'P_KEY',
-    hint: 'Llave secreta con la que ePayco firma las confirmaciones de pago.',
-    secret: true,
-  },
-  {
-    key: 'publicKey',
-    label: 'PUBLIC_KEY',
-    hint: 'Llave pública de la API de ePayco.',
-    secret: false,
-  },
-  {
-    key: 'privateKey',
-    label: 'PRIVATE_KEY',
-    hint: 'Llave privada de la API de ePayco.',
-    secret: true,
-  },
-];
-
 /**
- * "Conectar ePayco" (ADR-PAG-002) — Owner/Administrator registra las llaves de
- * la cuenta ePayco PROPIA de la organización. Las donaciones se cobran con esas
- * llaves, así que el dinero llega directo a la cuenta ePayco de la organización
- * (AdoptaFácil nunca lo recibe). Las dos llaves secretas (P_KEY, PRIVATE_KEY)
- * viajan una sola vez por HTTPS, la API las guarda cifradas y nunca las
- * devuelve; este componente las borra de su estado apenas termina el envío.
- * Se muestra en lugar de la tarjeta de Mercado Pago cuando
- * `VITE_PAYMENT_PROVIDER=epayco`.
+ * "Conectar ePayco" (ADR-PAG-002) — Owner/Administrator conecta la cuenta
+ * ePayco PROPIA de la organización. Las donaciones se cobran con esas llaves,
+ * así que el dinero llega directo a la cuenta ePayco de la organización
+ * (AdoptaFácil nunca lo recibe). Se muestra en lugar de la tarjeta de Mercado
+ * Pago cuando `VITE_PAYMENT_PROVIDER=epayco`.
+ *
+ * Tres estados: "Cobros activos" (conectada), "Cobros pendientes de conexión"
+ * (un estado, no un error, con un único siguiente paso y el avance guardado)
+ * y el asistente guiado (`EpaycoConnectWizard`), que deja pausar y seguir
+ * después. Las llaves secretas solo existen dentro del asistente.
  */
 export function EpaycoConnectSection() {
   const client = useApiClient();
   const { toast } = useToast();
+  const { user } = useSession();
+  const orgId = user?.organizationId;
+  const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<EpaycoConnectStatusView | null>(null);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<ConnectEpaycoAccountInput>(EMPTY_FORM);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  // `?conectar=1` (botón "Continuar conexión" de los avisos) abre el asistente directo.
+  const [wizardOpen, setWizardOpen] = useState(() => searchParams.get('conectar') === '1');
+  const [draft, setDraft] = useState<EpaycoConnectDraft | null>(() => loadEpaycoDraft(orgId));
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
@@ -88,7 +48,7 @@ export function EpaycoConnectSection() {
     client
       .request<EpaycoConnectStatusView>('/org/epayco/status')
       .then((data) => setStatus(data))
-      // Best-effort: una respuesta inesperada solo muestra el formulario.
+      // Best-effort: una respuesta inesperada muestra el estado pendiente.
       .catch(() => setStatus({ connected: false }))
       .finally(() => setLoading(false));
   }, [client]);
@@ -97,46 +57,15 @@ export function EpaycoConnectSection() {
     refreshStatus();
   }, [refreshStatus]);
 
-  const setField = (key: keyof ConnectEpaycoAccountInput) => (value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const closeWizard = () => {
+    setDraft(loadEpaycoDraft(orgId));
+    setWizardOpen(false);
+  };
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const payload: ConnectEpaycoAccountInput = {
-      custId: form.custId.trim(),
-      pKey: form.pKey.trim(),
-      publicKey: form.publicKey.trim(),
-      privateKey: form.privateKey.trim(),
-    };
-    if (!payload.custId || !payload.pKey || !payload.publicKey || !payload.privateKey) {
-      setFormError('Completa las cuatro llaves para conectar la cuenta.');
-      return;
-    }
-    if (!EPAYCO_CUST_ID_PATTERN.test(payload.custId)) {
-      setFormError('P_CUST_ID_CLIENTE debe contener solo números.');
-      return;
-    }
-    setFormError(null);
-    setSaving(true);
-    try {
-      await client.request('/org/epayco/connect', { method: 'PUT', json: payload });
-      toast({
-        title: 'Cuenta de ePayco conectada',
-        description: 'Las donaciones a tu organización llegarán directo a tu cuenta ePayco.',
-      });
-      refreshStatus();
-    } catch {
-      toast({
-        title: 'No se pudo conectar ePayco',
-        description: 'Revisa que las llaves sean las de tu cuenta e inténtalo de nuevo.',
-        variant: 'destructive',
-      });
-    } finally {
-      // Las llaves secretas nunca se quedan en memoria del componente, ni
-      // siquiera si la conexión falló (se vuelven a pegar desde ePayco).
-      setForm((prev) => ({ ...prev, pKey: '', privateKey: '' }));
-      setSaving(false);
-    }
+  const startOver = () => {
+    clearEpaycoDraft(orgId);
+    setDraft(null);
+    setWizardOpen(true);
   };
 
   const disconnect = async () => {
@@ -144,7 +73,6 @@ export function EpaycoConnectSection() {
     try {
       await client.request('/org/epayco/connect', { method: 'DELETE' });
       setConfirmingDisconnect(false);
-      setForm(EMPTY_FORM);
       toast({ title: 'ePayco desconectado' });
       refreshStatus();
     } catch {
@@ -168,8 +96,9 @@ export function EpaycoConnectSection() {
           <p className="text-sm text-muted-foreground">Consultando el estado de la conexión…</p>
         ) : status?.connected ? (
           <>
+            <PaymentsActiveStatus />
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="success">Cuenta conectada</Badge>
+              <Badge variant="outline">Cuenta conectada</Badge>
               {status.custId && (
                 <span className="text-sm text-muted-foreground" data-testid="epayco-cust-id">
                   P_CUST_ID_CLIENTE: {status.custId}
@@ -187,8 +116,7 @@ export function EpaycoConnectSection() {
               </p>
             )}
             <p className="text-sm text-muted-foreground">
-              Las donaciones llegan directo a esta cuenta de ePayco. AdoptaFácil no recibe ni
-              retiene ese dinero.
+              AdoptaFácil no recibe ni retiene ese dinero.
             </p>
             {confirmingDisconnect ? (
               <div className="flex flex-wrap items-center gap-2">
@@ -221,56 +149,33 @@ export function EpaycoConnectSection() {
               </div>
             )}
           </>
+        ) : wizardOpen ? (
+          <EpaycoConnectWizard
+            orgId={orgId}
+            draft={draft}
+            onPause={closeWizard}
+            onConnected={() => {
+              setDraft(null);
+              setWizardOpen(false);
+              refreshStatus();
+            }}
+          />
         ) : (
-          <form className="flex flex-col gap-4" onSubmit={submit} autoComplete="off" noValidate>
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-              <p>
-                Conecta la cuenta de ePayco de tu organización para recibir donaciones. El dinero
-                llega <strong>directo a tu cuenta ePayco</strong>: AdoptaFácil no lo recibe ni lo
-                retiene.
-              </p>
-              <p>
-                Encuentras estas llaves en <strong>dashboard.epayco.co</strong> → Integraciones →
-                Llaves API. Las llaves secretas (P_KEY y PRIVATE_KEY) se guardan cifradas y no se
-                vuelven a mostrar nunca.
-              </p>
-              <p>
-                ¿Tu refugio aún no está formalizado? Puedes abrir una cuenta ePayco como persona
-                natural y conectarla aquí.
-              </p>
-            </div>
-            {FIELDS.map((field) => (
-              <div key={field.key} className="flex flex-col gap-1.5">
-                <label htmlFor={`epayco-${field.key}`} className="text-sm font-medium">
-                  {field.label}
-                </label>
-                <Input
-                  id={`epayco-${field.key}`}
-                  name={`epayco-${field.key}`}
-                  type={field.secret ? 'password' : 'text'}
-                  autoComplete="off"
-                  spellCheck={false}
-                  inputMode={field.key === 'custId' ? 'numeric' : undefined}
-                  value={form[field.key]}
-                  onChange={(e) => setField(field.key)(e.target.value)}
-                  aria-describedby={`epayco-${field.key}-hint`}
-                />
-                <p id={`epayco-${field.key}-hint`} className="text-xs text-muted-foreground">
-                  {field.hint}
-                </p>
-              </div>
-            ))}
-            {formError && (
-              <p role="alert" className="text-sm text-destructive">
-                {formError}
-              </p>
-            )}
-            <div>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Conectando…' : 'Conectar ePayco'}
+          <PaymentsPendingStatus
+            draft={draft}
+            action={
+              <Button size="sm" onClick={() => setWizardOpen(true)}>
+                {draft ? 'Continuar conexión' : 'Empezar'}
               </Button>
-            </div>
-          </form>
+            }
+            secondary={
+              draft ? (
+                <Button size="sm" variant="ghost" onClick={startOver}>
+                  Empezar de nuevo
+                </Button>
+              ) : undefined
+            }
+          />
         )}
       </CardContent>
     </Card>

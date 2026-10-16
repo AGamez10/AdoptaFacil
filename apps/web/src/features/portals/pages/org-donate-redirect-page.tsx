@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import type { OrganizationPublic } from '@adoptafacil/contracts';
-import { buttonVariants, EmptyState, Skeleton } from '@adoptafacil/ui';
+import { Button, buttonVariants, EmptyState, Skeleton } from '@adoptafacil/ui';
 import { fetchPublicOrganization } from '../api/public-organization';
 import { buildDonateHref } from '../components/portal-donate-cta';
 
@@ -28,6 +28,7 @@ export function OrgDonateRedirectPage({ slugOverride }: OrgDonateRedirectPagePro
   const { slug: slugParam } = useParams<{ slug: string }>();
   const slug = slugOverride ?? slugParam;
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!slug) {
@@ -47,10 +48,18 @@ export function OrgDonateRedirectPage({ slugOverride }: OrgDonateRedirectPagePro
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, attempt]);
 
   if (state.status === 'ready') {
-    return <Navigate replace to={buildDonateHref(state.organization)} />;
+    // Si la org aún no recibe donaciones en línea, la página de donación
+    // muestra el mensaje "activando sus donaciones" con otras formas de ayudar
+    // (nunca un error): el slug viaja para ofrecer volver a su portal.
+    return (
+      <Navigate
+        replace
+        to={buildDonateHref({ ...state.organization, slug: state.organization.slug ?? slug })}
+      />
+    );
   }
 
   return (
@@ -64,17 +73,20 @@ export function OrgDonateRedirectPage({ slugOverride }: OrgDonateRedirectPagePro
         ) : state.status === 'not-found' ? (
           <EmptyState
             title="Organización no encontrada"
-            description="Este enlace de donación no corresponde a ninguna organización activa."
+            description="Este enlace no corresponde a ninguna organización activa. Puede que haya cambiado: igual puedes conocer a las mascotas que buscan hogar en AdoptaFácil."
           />
         ) : (
           <EmptyState
             title="No pudimos abrir la página de donación"
-            description="Revisa tu conexión y vuelve a escanear el código o recarga la página."
+            description="Puede ser la conexión a internet. Inténtalo de nuevo en un momento."
           />
+        )}
+        {state.status === 'error' && (
+          <Button onClick={() => setAttempt((n) => n + 1)}>Intentar de nuevo</Button>
         )}
         {state.status !== 'loading' && (
           <Link to="/" className={buttonVariants({ variant: 'outline' })}>
-            Ir a AdoptaFácil
+            Ver mascotas en adopción
           </Link>
         )}
       </div>
