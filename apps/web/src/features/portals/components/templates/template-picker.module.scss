@@ -299,6 +299,59 @@ $cream: #faf6ee;
   }
 }
 
+.thumb[data-thumb='historias'] {
+  align-items: center;
+  background-color: hsl(var(--primary) / 0.12);
+
+  // Un "celular" con una historia a pantalla completa.
+  .thumb__hero {
+    flex: none;
+    width: 46%;
+    height: 100%;
+    border-radius: 9px;
+    background:
+      linear-gradient(to top, rgb(0 0 0 / 0.55), transparent 55%),
+      linear-gradient(160deg, hsl(var(--primary) / 0.95), hsl(var(--primary) / 0.5));
+
+    span:nth-child(1) {
+      left: 7px;
+      bottom: 16px;
+      width: 60%;
+      height: 7px;
+    }
+
+    span:nth-child(2) {
+      left: 7px;
+      bottom: 7px;
+      width: 40%;
+      height: 5px;
+      border-radius: 999px;
+    }
+
+    // Barras de progreso de las historias.
+    span:nth-child(3) {
+      display: block;
+      left: 6px;
+      right: 6px;
+      top: 5px;
+      width: auto;
+      height: 2px;
+      background: linear-gradient(
+        90deg,
+        #fff 0 32%,
+        transparent 32% 36%,
+        rgb(255 255 255 / 0.45) 36% 66%,
+        transparent 66% 70%,
+        rgb(255 255 255 / 0.45) 70%
+      );
+    }
+  }
+
+  .thumb__grid {
+    display: none;
+  }
+}
+
 .tier[data-tier='paid'] {
   letter-spacing: 0.04em;
 }

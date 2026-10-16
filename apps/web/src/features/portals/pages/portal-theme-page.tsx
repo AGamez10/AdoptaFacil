@@ -34,6 +34,7 @@ import {
 } from '../model/color-conversion';
 import {
   PORTAL_THEME_FIELDS,
+  safeMediaUrl,
   safePortalTheme,
   safeTemplate,
   type PortalThemeField,
@@ -41,6 +42,7 @@ import {
 import { TemplatePicker, TemplateUpsell } from '../components/templates/template-picker';
 import { TemplateOptionsForm } from '../components/templates/template-options-form';
 import { TemplateLivePreview } from '../components/templates/template-live-preview';
+import { CoverVideoField } from '../components/templates/cover-video-field';
 import { OrgStatusCard } from '../../org/components/org-status-card';
 
 /** Empty string ⇒ "use the default token" (the field is omitted from the payload). */
@@ -234,6 +236,9 @@ export function PortalThemePage() {
   const [socialNavPosition, setSocialNavPosition] = useState<PortalSocialNavPosition>('right');
   const [template, setTemplate] = useState<PortalTemplateId>('clasica');
   const [templateOptions, setTemplateOptions] = useState<PortalTemplateOptions>({});
+  // Historias: video de portada. `coverVideoKey` undefined = sin cambios.
+  const [coverVideoUrl, setCoverVideoUrl] = useState<string | undefined>(undefined);
+  const [coverVideoKey, setCoverVideoKey] = useState<string | null | undefined>(undefined);
   const [slug, setSlug] = useState<string | undefined>(undefined);
   const [orgName, setOrgName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -262,6 +267,7 @@ export function PortalThemePage() {
         setTemplateOptions(
           resolveTemplateOptions(safeTemplate(config.template), config.templateOptions),
         );
+        setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
         setSlug(org?.slug ?? undefined);
         setOrgName(org?.name ?? undefined);
       })
@@ -332,6 +338,7 @@ export function PortalThemePage() {
           socialNavPosition,
           template,
           templateOptions,
+          ...(coverVideoKey !== undefined ? { coverVideoKey } : {}),
         },
       });
       setForm(safePortalTheme(themeConfig.tokens) as FormState);
@@ -341,6 +348,10 @@ export function PortalThemePage() {
       setTemplateOptions(
         resolveTemplateOptions(safeTemplate(themeConfig.template), themeConfig.templateOptions),
       );
+      if (coverVideoKey !== undefined) {
+        setCoverVideoUrl(safeMediaUrl(themeConfig.coverVideoUrl));
+        setCoverVideoKey(undefined);
+      }
       toast({
         title: 'Personalización guardada',
         description: 'Tu portal se re-tematizó.',
@@ -450,6 +461,15 @@ export function PortalThemePage() {
                     onChange={setTemplateOptions}
                   />
                 )}
+                {template === 'historias' && (
+                  <CoverVideoField
+                    url={coverVideoUrl}
+                    onChange={({ key, url }) => {
+                      setCoverVideoKey(key);
+                      setCoverVideoUrl(url);
+                    }}
+                  />
+                )}
                 {template === 'clasica' && (
                   <PositionToggle
                     legend="Posición del logo"
@@ -504,6 +524,7 @@ export function PortalThemePage() {
                   options={templateOptions}
                   tokens={previewTokens}
                   logoPosition={logoPosition}
+                  coverVideoUrl={coverVideoUrl}
                 />
               </CardContent>
             </Card>

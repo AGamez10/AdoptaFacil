@@ -17,6 +17,7 @@ import { brandTokensToStyle } from '../../../shell/theme';
 import { buildPortalView } from '../model/portal-view';
 import {
   safeLogoPosition,
+  safeMediaUrl,
   safePortalTheme,
   safeSocialNavPosition,
   safeTemplate,
@@ -28,6 +29,7 @@ import {
   CarnetHero,
   EditorialHero,
   ImpactoHero,
+  HistoriasHero,
   OrbitaHero,
 } from '../components/templates/template-heroes';
 import templateStyles from '../components/templates/portal-templates.module.scss';
@@ -66,6 +68,8 @@ interface Layout {
   /** Ola 3: plantilla visual del portal (mismo contenido, otra estructura). */
   template: PortalTemplateId;
   templateOptions: PortalTemplateOptions;
+  /** Historias: video de portada opcional (URL pública ya resuelta). */
+  coverVideoUrl?: string;
 }
 
 const DEFAULT_LAYOUT: Layout = {
@@ -185,6 +189,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               socialNavPosition?: unknown;
               template?: unknown;
               templateOptions?: unknown;
+              coverVideoUrl?: unknown;
             }>)
           : null,
       )
@@ -199,6 +204,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
             safeTemplate(body?.template),
             body?.templateOptions,
           ),
+          coverVideoUrl: safeMediaUrl(body?.coverVideoUrl),
         },
       }))
       .catch(() => ({ tokens: {} as PortalTheme, layout: DEFAULT_LAYOUT }));
@@ -259,6 +265,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           socialNavPosition: safeSocialNavPosition(themeConfig?.socialNavPosition),
           template,
           templateOptions: resolveTemplateOptions(template, themeConfig?.templateOptions),
+          coverVideoUrl: safeMediaUrl(themeConfig?.coverVideoUrl),
         });
         setOwnerPreview(true);
         setState('ready');
@@ -434,6 +441,12 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 <ImpactoHero {...heroProps} />
               ) : layout.template === 'orbita' ? (
                 <OrbitaHero {...heroProps} />
+              ) : layout.template === 'historias' ? (
+                <HistoriasHero
+                  {...heroProps}
+                  coverVideoUrl={layout.coverVideoUrl}
+                  onBrowseCatalog={goToCatalog}
+                />
               ) : (
                 <PortalProfileSection
                   profile={view.profile}

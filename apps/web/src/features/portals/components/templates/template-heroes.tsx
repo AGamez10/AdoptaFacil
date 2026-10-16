@@ -1,10 +1,25 @@
-import type { ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { Link } from 'react-router-dom';
 import type { AnimalSummary, PortalProfile, PortalTemplateOptions } from '@adoptafacil/contracts';
 import { OrgTypeBadge } from '../org-type-badge';
 import { initials, reviewedDocumentBadges } from '../portal-profile-section';
+import {
+  SEX_LABELS,
+  SPECIES_LABELS,
+  ageLabel,
+  buildAdoptionRequestHref,
+  publicAnimalDetailHref,
+} from '../../model/animals-catalog';
 import { ConstellationCanvas } from './constellation-canvas';
 import styles from './portal-templates.module.scss';
+import historias from './historias.module.scss';
 
 /**
  * Héroes de las plantillas Editorial, Carnet e Impacto (Ola 3). Leen los
@@ -392,6 +407,272 @@ export function OrbitaHero({
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Historias (Pro): los animales a pantalla completa, uno por "historia", que
+// se pasan con el dedo (scroll-snap nativo) o con flechas/teclado. La primera
+// es la portada (video opcional de la organización), luego un animal real por
+// historia y al final "Ver todos". Sin librería de carrusel.
+// ---------------------------------------------------------------------------
+export interface HistoriasHeroProps extends TemplateHeroProps {
+  /** Video de portada ya resuelto por la API (público, de la propia org). */
+  coverVideoUrl?: string;
+  /** Lleva al catálogo completo (sección "Mascotas en adopción"). */
+  onBrowseCatalog?: () => void;
+}
+
+/** Cada cuánto pasa sola la historia cuando `autoAdvance` está encendido. */
+export const HISTORIAS_AUTO_MS = 6000;
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/** Sin video si el visitante pidió menos movimiento o ahorrar datos. */
+function shouldPlayVideo(): boolean {
+  if (prefersReducedMotion()) return false;
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  return connection?.saveData !== true;
+}
+
+export function HistoriasHero({
+  profile,
+  slug,
+  animalCount,
+  animals,
+  actions,
+  options = {},
+  coverVideoUrl,
+  onBrowseCatalog,
+}: HistoriasHeroProps) {
+  const org = profile.organization;
+  const cover = org.coverPhotos?.[0];
+  const location = locationOf(profile);
+  const stories = animals.slice(0, 8);
+  const total = stories.length + 2; // portada + animales + "ver todos"
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [playVideo, setPlayVideo] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const autoAdvance = options.autoAdvance === true && !prefersReducedMotion();
+  const totalAnimals = typeof animalCount === 'number' ? animalCount : stories.length;
+
+  useEffect(() => {
+    setPlayVideo(Boolean(coverVideoUrl) && shouldPlayVideo());
+  }, [coverVideoUrl]);
+
+  const goTo = useCallback(
+    (next: number) => {
+      const clamped = Math.max(0, Math.min(total - 1, next));
+      setIndex(clamped);
+      const track = trackRef.current;
+      if (!track) return;
+      const left = clamped * track.clientWidth;
+      if (typeof track.scrollTo === 'function') {
+        track.scrollTo({ left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      } else {
+        track.scrollLeft = left;
+      }
+    },
+    [total],
+  );
+
+  // El dedo mueve el scroll; el índice se lee de la posición.
+  const onScroll = () => {
+    const track = trackRef.current;
+    if (!track || track.clientWidth === 0) return;
+    const next = Math.round(track.scrollLeft / track.clientWidth);
+    if (next !== index) setIndex(next);
+  };
+
+  useEffect(() => {
+    if (!autoAdvance || paused) return;
+    const timer = window.setTimeout(
+      () => goTo(index + 1 >= total ? 0 : index + 1),
+      HISTORIAS_AUTO_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [autoAdvance, paused, index, total, goTo]);
+
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      goTo(index + 1);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      goTo(index - 1);
+    }
+  };
+
+  const slideProps = (position: number, label: string) => ({
+    className: historias.slide,
+    role: 'group' as const,
+    'aria-roledescription': 'historia',
+    'aria-label': `${position + 1} de ${total}: ${label}`,
+    // Solo la historia visible recibe foco y clics.
+    ...(position === index ? {} : { inert: '' }),
+  });
+
+  return (
+    <section
+      aria-labelledby={HEADING_ID}
+      aria-roledescription="carrusel"
+      className={historias.historias}
+      data-testid="portal-hero-historias"
+      onKeyDown={onKeyDown}
+      onPointerEnter={() => setPaused(true)}
+      onPointerLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <ol className={historias.progress} aria-hidden="true">
+        {Array.from({ length: total }, (_, position) => (
+          <li
+            key={position}
+            data-state={position < index ? 'done' : position === index ? 'current' : 'next'}
+            data-running={position === index && autoAdvance && !paused ? 'true' : undefined}
+            style={{ ['--story-ms' as string]: `${HISTORIAS_AUTO_MS}ms` }}
+          />
+        ))}
+      </ol>
+
+      <div ref={trackRef} className={historias.track} onScroll={onScroll}>
+        <article {...slideProps(0, 'portada')} data-kind="cover">
+          <div className={historias.media}>
+            {playVideo && coverVideoUrl ? (
+              <video
+                src={coverVideoUrl}
+                poster={cover}
+                autoPlay
+                muted
+                loop
+                playsInline
+                aria-hidden="true"
+                data-testid="historias-cover-video"
+              />
+            ) : cover ? (
+              <img src={cover} alt="" />
+            ) : null}
+          </div>
+          <div className={historias.content}>
+            <p className={historias.kicker}>
+              <Logo profile={profile} className={historias.logo} />
+              <span>{location || 'Colombia'}</span>
+            </p>
+            <h1 id={HEADING_ID} className={historias.name}>
+              {org.name}
+            </h1>
+            {org.description && <p className={historias.lead}>{org.description}</p>}
+            {typeof animalCount === 'number' && animalCount > 0 && (
+              <p className={historias.count} data-testid="portal-animal-count">
+                <strong>{animalCount}</strong> {animalsLabel(animalCount)}
+              </p>
+            )}
+            <Seals profile={profile} className={historias.seals} />
+            {actions}
+          </div>
+        </article>
+
+        {stories.map((animal, i) => {
+          const facts = [
+            SPECIES_LABELS[animal.species],
+            animal.breed,
+            ageLabel(animal.computedAge),
+            animal.sex !== 'unknown' ? SEX_LABELS[animal.sex] : undefined,
+          ].filter(Boolean);
+          return (
+            <article key={animal.id} {...slideProps(i + 1, animal.name)} data-kind="animal">
+              <div className={historias.media}>
+                {animal.photoUrl ? (
+                  <img src={animal.photoUrl} alt={`Foto de ${animal.name}`} loading="lazy" />
+                ) : (
+                  <Paw className={historias.paw} />
+                )}
+              </div>
+              <div className={historias.content}>
+                <p className={historias.kicker}>Busca hogar</p>
+                <h2 className={historias.animalName}>{animal.name}</h2>
+                {facts.length > 0 && <p className={historias.facts}>{facts.join(' · ')}</p>}
+                <div className={historias.actions}>
+                  <Link
+                    to={buildAdoptionRequestHref(animal.organizationId, animal)}
+                    className={historias.btnPrimary}
+                  >
+                    Quiero adoptar a {animal.name}
+                  </Link>
+                  <Link
+                    to={publicAnimalDetailHref(slug, animal.id)}
+                    state={{ animal }}
+                    className={historias.btnGhost}
+                  >
+                    Ver ficha
+                  </Link>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+
+        <article {...slideProps(total - 1, 'ver todos')} data-kind="end">
+          <div className={historias.media} />
+          <div className={historias.content} data-align="center">
+            <Paw className={historias.endPaw} />
+            <h2 className={historias.animalName}>
+              {totalAnimals > 0
+                ? `Conoce a ${totalAnimals === 1 ? 'nuestro animal' : `los ${totalAnimals} animales`}`
+                : 'Pronto tendremos animales en adopción'}
+            </h2>
+            {totalAnimals > 0 && (
+              <a
+                href="#portal-section-pets"
+                className={historias.btnPrimary}
+                onClick={(event) => {
+                  if (!onBrowseCatalog) return;
+                  event.preventDefault();
+                  onBrowseCatalog();
+                }}
+              >
+                Ver todos los animales
+              </a>
+            )}
+          </div>
+        </article>
+      </div>
+
+      <button
+        type="button"
+        className={historias.nav}
+        data-side="prev"
+        onClick={() => goTo(index - 1)}
+        disabled={index === 0}
+        aria-label="Historia anterior"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 5l-7 7 7 7" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={historias.nav}
+        data-side="next"
+        onClick={() => goTo(index + 1)}
+        disabled={index === total - 1}
+        aria-label="Historia siguiente"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+      <p className="sr-only" aria-live={autoAdvance ? 'off' : 'polite'}>
+        Historia {index + 1} de {total}
+      </p>
     </section>
   );
 }

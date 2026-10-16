@@ -336,10 +336,11 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
 
     const editorial = await screen.findByRole('radio', { name: /Editorial/ });
     expect(editorial).toBeChecked();
-    // Decisión del cliente: las 5 plantillas actuales son gratis y no hay aviso de pago.
+    // Decisión del cliente: las 5 plantillas actuales son gratis; solo los diseños
+    // Pro (p. ej. Historias) llevan la marca y el aviso de la promoción.
     expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-option-carnet')).toHaveTextContent('Gratis');
-    expect(screen.queryByTestId('template-upsell')).not.toBeInTheDocument();
+    expect(screen.getByTestId('template-upsell')).toHaveTextContent(/incluidas gratis/);
 
     fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));
     fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
@@ -391,5 +392,75 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
         templateOptions: { pattern: 'huellas', showMinis: false },
       });
     });
+  });
+
+  it('Historias: sube un video de portada, lo muestra y envía su llave al guardar; "Quitar" envía null', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/org/profile/uploads')) {
+        return { key: 'public/org-1/abc-portada.mp4', url: 'http://api.test/storage/upload' };
+      }
+      if (url.includes('/storage/upload')) return {};
+      if (init?.method === 'PUT') {
+        return {
+          tokens: {},
+          template: 'historias',
+          coverVideoUrl: 'https://api.test/storage/public?key=public%2Forg-1%2Fabc-portada.mp4',
+        };
+      }
+      return { tokens: {}, template: 'clasica' };
+    });
+    const createObjectURL = vi.fn(() => 'blob:portada');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL }));
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    await screen.findByRole('radio', { name: /Clásica/ });
+    expect(screen.queryByTestId('cover-video-field')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /Historias/ }));
+    expect(screen.getByTestId('template-option-historias')).toHaveTextContent('Pro');
+
+    const file = new File(['video'], 'portada.mp4', { type: 'video/mp4' });
+    fireEvent.change(screen.getByTestId('cover-video-input'), { target: { files: [file] } });
+    expect(await screen.findByTestId('cover-video-preview')).toHaveAttribute('src', 'blob:portada');
+    const reserve = calls.find((c) => c.url.includes('/org/profile/uploads'));
+    expect(JSON.parse(String(reserve?.init?.body))).toEqual({
+      filename: 'portada.mp4',
+      contentType: 'video/mp4',
+    });
+    expect(calls.some((c) => c.url.includes('/storage/upload?key=public%2Forg-1'))).toBe(true);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => {
+      const put = calls.find((c) => c.url.endsWith('/portals/theme') && c.init?.method === 'PUT');
+      expect(JSON.parse(String(put?.init?.body))).toMatchObject({
+        template: 'historias',
+        coverVideoKey: 'public/org-1/abc-portada.mp4',
+      });
+    });
+
+    calls.length = 0;
+    fireEvent.click(await screen.findByTestId('cover-video-remove'));
+    expect(screen.queryByTestId('cover-video-preview')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => {
+      const put = calls.find((c) => c.url.endsWith('/portals/theme') && c.init?.method === 'PUT');
+      expect(JSON.parse(String(put?.init?.body)).coverVideoKey).toBeNull();
+    });
+  });
+
+  it('Historias: rechaza un archivo que no es video sin subir nada', async () => {
+    const calls: string[] = [];
+    stubFetch((url) => {
+      calls.push(url);
+      return { tokens: {}, template: 'historias' };
+    });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    const input = await screen.findByTestId('cover-video-input');
+    const file = new File(['x'], 'foto.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByText('El video debe ser MP4 o WebM.')).toBeInTheDocument();
+    expect(calls.some((url) => url.includes('/org/profile/uploads'))).toBe(false);
   });
 });

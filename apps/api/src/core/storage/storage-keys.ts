@@ -86,6 +86,8 @@ const CONTENT_TYPE_BY_EXT: Record<string, string> = {
   webp: 'image/webp',
   gif: 'image/gif',
   pdf: 'application/pdf',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
 };
 
 /** Best-effort content type from the key's file extension (used on read). */
@@ -102,3 +104,43 @@ export const ALLOWED_CONTENT_TYPES: readonly string[] = [
   'image/gif',
   'application/pdf',
 ];
+
+/**
+ * Videos (portada de la plantilla Historias): solo a llaves PÚBLICAS, nunca a
+ * documentos privados. Mismo límite de tamaño que cualquier archivo.
+ */
+export const PUBLIC_VIDEO_CONTENT_TYPES: readonly string[] = ['video/mp4', 'video/webm'];
+
+/** ¿Se acepta este tipo de archivo para esta visibilidad? */
+export function isAllowedUpload(contentType: string, visibility: StorageVisibility): boolean {
+  if (ALLOWED_CONTENT_TYPES.includes(contentType)) return true;
+  return visibility === 'public' && PUBLIC_VIDEO_CONTENT_TYPES.includes(contentType);
+}
+
+/**
+ * Rango de bytes pedido (`Range: bytes=a-b`) sobre un archivo de `size` bytes.
+ * Devuelve `null` si no hay rango (se sirve completo) y `'invalid'` si no se
+ * puede cumplir (416). Solo un rango: los navegadores no piden varios para video.
+ */
+export function parseByteRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | 'invalid' | null {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || (match[1] === '' && match[2] === '')) return 'invalid';
+  let start: number;
+  let end: number;
+  if (match[1] === '') {
+    // Sufijo: los últimos N bytes.
+    const suffix = Number(match[2]);
+    if (suffix === 0) return 'invalid';
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === '' ? size - 1 : Math.min(Number(match[2]), size - 1);
+  }
+  if (start >= size || start > end) return 'invalid';
+  return { start, end };
+}
