@@ -13,6 +13,7 @@ import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { SponsorshipBillingService } from '../src/modules/sponsorships/sponsorship-billing.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * Requerimiento #17: `POST /sponsorships` ahora cobra de inmediato y marca el
@@ -56,6 +57,7 @@ describe('Org donations/campaigns dashboard (M13, S-14)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s14-o-${randomUUID()}@test.local`,
@@ -74,6 +76,7 @@ describe('Org donations/campaigns dashboard (M13, S-14)', () => {
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: `Donante ${tag}`,
         email: `s14-p-${tag}-${randomUUID()}@test.local`,
         password,

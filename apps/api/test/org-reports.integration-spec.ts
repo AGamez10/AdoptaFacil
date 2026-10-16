@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { validateEnv } from '../src/config/env.validation';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
@@ -9,6 +10,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import {
   CapturingNotificationPort,
   type SignerActor,
@@ -62,6 +64,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: `Owner ${name}`,
         email: `reports-${randomUUID()}@test.local`,
@@ -164,6 +167,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     const donorReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'María Restrepo',
         email: `reports-donor-${randomUUID()}@test.local`,
         password,
@@ -691,12 +695,12 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
       .overrideProvider(ConfigService)
       .useFactory({
         factory: (): Pick<ConfigService, 'get'> => {
-          const real = new ConfigService();
+          // The same validated values (with their defaults) the app gets from
+          // ConfigModule; a bare `new ConfigService()` would lack the defaults.
+          const env = validateEnv(process.env) as Record<string, unknown>;
           return {
-            get: ((key: string, ...rest: unknown[]) =>
-              key === 'REPORTS_SIGNATURES_ENABLED'
-                ? false
-                : (real.get as (k: string, ...r: unknown[]) => unknown)(key, ...rest)) as never,
+            get: ((key: string) =>
+              key === 'REPORTS_SIGNATURES_ENABLED' ? false : env[key]) as never,
           };
         },
       })

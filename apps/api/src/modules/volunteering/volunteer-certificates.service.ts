@@ -43,6 +43,7 @@ import {
 } from './volunteer-notifications';
 import { clampLimit } from './volunteer-opportunities.service';
 import { pdfText } from '../reports/report-text';
+import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
 
 function toCertificate(row: CertificateRow): VolunteerCertificate {
   return {
@@ -332,6 +333,16 @@ export class VolunteerCertificatesService {
         to: created.volunteerEmail,
         subject: buildCertificateIssuedSubject(emailInput),
         body: buildCertificateIssuedBody(emailInput),
+        template: {
+          event: 'volunteering.certificate_issued',
+          organizationName: emailInput.organizationName || undefined,
+          data: {
+            nombre: emailInput.volunteerName,
+            oportunidad: emailInput.opportunityTitle,
+            organizacion: emailInput.organizationName,
+            horas: emailInput.totalApprovedHours,
+          },
+        },
       });
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
@@ -467,6 +478,7 @@ export class VolunteerCertificatesService {
       drawBitacoraAppendix(pdf, { font: { sans, sansBold }, row });
     }
 
+    await stampPlatformDocumentNotice(pdf);
     const bytes = await pdf.save();
     return Buffer.from(bytes);
   }

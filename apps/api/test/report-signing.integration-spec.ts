@@ -13,6 +13,7 @@ import {
   memberWithRole,
   registerOwnSignature,
 } from './support/signers';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * M13 · Firma con consentimiento — SEPARACIÓN entre organizaciones y firmantes.
@@ -56,6 +57,7 @@ describe('Report signing: consent, separation between organizations and signers 
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: `Owner ${name}`,
         email: `sign-${randomUUID()}@test.local`,

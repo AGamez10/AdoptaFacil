@@ -7,6 +7,8 @@ import { AuthModule } from './core/auth/auth.module';
 import { FeaturesModule } from './core/features/features.module';
 import { PlansModule } from './core/plans/plans.module';
 import { IdentityModule } from './core/identity/identity.module';
+import { EmailTemplatesModule } from './core/notifications/email-templates.module';
+import { LegalModule } from './core/legal/legal.module';
 import { NotificationModule } from './core/notifications/notification.module';
 import { PaymentModule } from './core/payments/payment.module';
 import { RbacModule } from './core/rbac/rbac.module';
@@ -56,6 +58,8 @@ import { RedisModule } from './redis/redis.module';
     RedisModule,
     QueueModule,
     NotificationModule,
+    // Superadmin-editable email templates + public bulk-email opt-out.
+    EmailTemplatesModule,
     // Shared infra ports (T-107): single StoragePort provider, global.
     StorageModule,
     // Shared PaymentPort provider (T-052): binds the fake adapter, global.
@@ -63,6 +67,8 @@ import { RedisModule } from './redis/redis.module';
     // Shared IdentityPort provider (T-Google-SignIn): binds the fake Google
     // Sign-In verifier by default, global.
     IdentityModule,
+    // Aceptación versionada de términos y política de datos (Ley 1581), global.
+    LegalModule,
     HealthModule,
     // Module feature flags (Ola 1, R1-1): global guard that answers 404 for
     // switched-off modules + `GET /public/config/features` for the web.

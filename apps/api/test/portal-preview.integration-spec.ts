@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
  * Owner preview of the organization's own portal (`GET /org/portal/preview`,
@@ -23,6 +24,7 @@ describe('Portal preview for the organization owner', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `preview-${randomUUID()}@test.local`,
@@ -110,6 +112,7 @@ describe('Portal preview for the organization owner', () => {
     const person = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona',
         email: `preview-person-${randomUUID()}@test.local`,
         password: 'password-preview-123',

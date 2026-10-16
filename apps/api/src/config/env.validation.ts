@@ -44,6 +44,17 @@ export const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
   SMTP_FROM: z.string().min(1).optional(),
+  // Email delivery queue (BullMQ on the same Redis). Every email is a job: the
+  // request only enqueues it and a worker renders + sends it, with retries.
+  // Tune these to the SMTP provider's limits; no code change needed.
+  //   CONCURRENCY: emails a worker sends in parallel (SMTP pool size too).
+  //   RATE_MAX per RATE_DURATION_MS: ceiling across all workers.
+  //   ATTEMPTS: tries per email (exponential backoff from 30 s) before it
+  //   stays as failed in the queue.
+  EMAIL_QUEUE_CONCURRENCY: z.coerce.number().int().positive().max(50).default(5),
+  EMAIL_QUEUE_RATE_MAX: z.coerce.number().int().positive().default(10),
+  EMAIL_QUEUE_RATE_DURATION_MS: z.coerce.number().int().positive().default(1_000),
+  EMAIL_QUEUE_ATTEMPTS: z.coerce.number().int().positive().max(20).default(6),
   // T-106 (M03/RF09): interval of the repeatable clinical-reminders scan job.
   // Configurable for dev/test; defaults to daily. Kept in the validated schema so
   // it survives @nestjs/config (which only re-exposes validated keys).
@@ -74,7 +85,42 @@ export const envSchema = z.object({
   // 'disabled' (Ola 1, R0-1): binds an adapter that refuses every call — the
   // production value while money stays off (D1–D7). 'fake' is rejected in
   // production by assertProductionSafety below.
-  PAYMENT_DRIVER: z.enum(['fake', 'mercadopago', 'disabled']).default('fake'),
+  // 'epayco' (ADR-PAG-002, pasarela principal desde 2026-10-15): every charge
+  // is a checkout v2 session created with the BENEFICIARY organization's own
+  // ePayco keys (stored encrypted, `organization_epayco_accounts`), so no
+  // platform credential is needed to boot in the default direct mode.
+  PAYMENT_DRIVER: z.enum(['fake', 'mercadopago', 'epayco', 'disabled']).default('fake'),
+  // ePayco (ADR-PAG-002). Base URLs are overridable only for tests/mocks.
+  EPAYCO_APIFY_BASE_URL: z.string().url().default('https://apify.epayco.co'),
+  EPAYCO_SECURE_BASE_URL: z.string().url().default('https://secure.epayco.co'),
+  // Public URL ePayco POSTs the confirmation to (this API's
+  // `/donations/webhook`). Optional: falls back to
+  // `${STORAGE_PUBLIC_BASE_URL}/donations/webhook` (the API's public base URL,
+  // same fallback MERCADOPAGO_OAUTH_REDIRECT_URI uses).
+  EPAYCO_CONFIRMATION_URL: z.string().url().optional(),
+  // Where ePayco sends the payer back after the checkout (the web's donation
+  // result page). ePayco appends `?ref_payco=…`; the API adds our own
+  // `reference` (the donation's collectionId). Optional: falls back to
+  // `${WEB_BASE_URL}/donaciones/resultado`.
+  EPAYCO_RESPONSE_URL: z.string().url().optional(),
+  // ePayco sandbox: sessions are created with `test: true`. OFF unless "true".
+  EPAYCO_TEST: featureFlag(),
+  // ADR-PAG-001: 'direct_to_org' (default) = the org collects with its own
+  // keys, platform fee 0. 'platform_split' = ePayco "pagos divididos" with
+  // AdoptaFácil as principal merchant — only honored when `planCollection`
+  // approves it (written approval ref + valid fee rate); otherwise every
+  // charge is refused (fails closed, never falls back to custody).
+  EPAYCO_COLLECTION_MODE: z.enum(['direct_to_org', 'platform_split']).default('direct_to_org'),
+  EPAYCO_SPLIT_APPROVAL_REF: z.string().min(1).optional(),
+  EPAYCO_SPLIT_FEE_RATE: z.coerce.number().min(0).lt(1).optional(),
+  // Platform merchant keys — ONLY used in 'platform_split'. Never logged.
+  EPAYCO_PLATFORM_CUST_ID: z
+    .string()
+    .regex(/^\d{1,20}$/)
+    .optional(),
+  EPAYCO_PLATFORM_P_KEY: z.string().min(1).optional(),
+  EPAYCO_PLATFORM_PUBLIC_KEY: z.string().min(1).optional(),
+  EPAYCO_PLATFORM_PRIVATE_KEY: z.string().min(1).optional(),
   // MercadoPago credentials — read ONLY from env; never hardcoded, never
   // committed. Optional at the schema level so 'fake' mode boots without them;
   // the refine below enforces their presence when PAYMENT_DRIVER=mercadopago.
@@ -237,6 +283,23 @@ const REQUIRED_MERCADOPAGO_KEYS = [
   'MERCADOPAGO_CLIENT_SECRET',
 ] as const;
 
+/**
+ * ePayco vars required ONLY for `EPAYCO_COLLECTION_MODE=platform_split`
+ * (fail-fast at boot). The default direct mode needs no platform credential:
+ * every charge uses the organization's own keys.
+ */
+const REQUIRED_EPAYCO_SPLIT_KEYS = [
+  'EPAYCO_SPLIT_APPROVAL_REF',
+  'EPAYCO_SPLIT_FEE_RATE',
+  'EPAYCO_PLATFORM_CUST_ID',
+  'EPAYCO_PLATFORM_P_KEY',
+  'EPAYCO_PLATFORM_PUBLIC_KEY',
+  'EPAYCO_PLATFORM_PRIVATE_KEY',
+] as const;
+
+/** Real gateways allowed to back the money modules in production. */
+const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['mercadopago', 'epayco'];
+
 /** Google OAuth vars required when AUTH_IDENTITY_DRIVER=google (fail-fast at boot). */
 const REQUIRED_GOOGLE_IDENTITY_KEYS = ['GOOGLE_OAUTH_CLIENT_ID'] as const;
 
@@ -271,10 +334,10 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   }
 
   if (env.FEATURE_PAYMENTS || env.FEATURE_SPONSORSHIPS) {
-    if (env.PAYMENT_DRIVER !== 'mercadopago') {
+    if (!REAL_PAYMENT_DRIVERS.includes(env.PAYMENT_DRIVER)) {
       fail(
         'PAYMENT_DRIVER',
-        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=mercadopago in production',
+        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=mercadopago or epayco in production',
       );
     }
     if (!env.PAYMENTS_PRODUCTION_APPROVAL_REF) {
@@ -326,6 +389,17 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} is required when PAYMENT_DRIVER=mercadopago`,
+        });
+      }
+    }
+  }
+  if (env.PAYMENT_DRIVER === 'epayco' && env.EPAYCO_COLLECTION_MODE === 'platform_split') {
+    for (const key of REQUIRED_EPAYCO_SPLIT_KEYS) {
+      if (env[key] === undefined || env[key] === null || env[key] === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when EPAYCO_COLLECTION_MODE=platform_split`,
         });
       }
     }

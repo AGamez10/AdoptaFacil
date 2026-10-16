@@ -12,6 +12,7 @@ import type { Env } from '../src/config/env.validation';
 import { DiskStorageAdapter } from '../src/core/storage/disk-storage.adapter';
 import { STORAGE_PORT } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * T-108 storage endpoints with the REAL disk adapter (bytes persisted to a temp
@@ -37,6 +38,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio',
         displayName: 'Owner',
         email: `t108-${randomUUID()}@test.local`,

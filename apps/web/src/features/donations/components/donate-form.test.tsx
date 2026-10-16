@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { currentLegalAcceptanceItems, requiredGuestLegalDocuments } from '@adoptafacil/contracts';
 import type { CardPaymentBrickProps } from '../../payments';
 import { DonateForm } from './donate-form';
 
@@ -156,10 +157,27 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
  * de habilitar "Donar" (step 1 — la tarjeta sigue siendo el paso 2, igual que
  * con sesión).
  */
+/** El invitado acepta términos y autorización de datos (casillas obligatorias). */
+function acceptGuestLegal(): void {
+  fireEvent.click(screen.getByTestId('donation-legal-terms'));
+  fireEvent.click(screen.getByTestId('donation-legal-data'));
+}
+
 describe('DonateForm (guest checkout — no session)', () => {
+  it('no deja continuar al invitado sin aceptar términos y datos, y no le ofrece la autorización comercial', () => {
+    render(<DonateForm organizationName="Refugio Patitas" hasSession={false} onDonate={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
+    fireEvent.click(screen.getByTestId('donate-anonymous'));
+    expect(screen.queryByTestId('donation-legal-commercial')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Donar a Refugio Patitas/ })).toBeDisabled();
+    acceptGuestLegal();
+    expect(screen.getByRole('button', { name: /Donar a Refugio Patitas/ })).toBeEnabled();
+  });
+
   it('shows the guest name/email fields and keeps "Donar" disabled until both are filled', () => {
     render(<DonateForm organizationName="Refugio Patitas" hasSession={false} onDonate={vi.fn()} />);
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
+    acceptGuestLegal();
 
     // A valid amount alone is not enough for a guest — identity is required too.
     expect(screen.getByRole('button', { name: /Donar a Refugio Patitas/ })).toBeDisabled();
@@ -197,6 +215,7 @@ describe('DonateForm (guest checkout — no session)', () => {
     expect(screen.getByTestId('donation-guest-name')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Donar a Refugio Patitas/ })).toBeDisabled();
 
+    acceptGuestLegal();
     fireEvent.click(screen.getByTestId('donate-anonymous'));
     expect(screen.queryByTestId('donation-guest-name')).not.toBeInTheDocument();
     expect(screen.queryByTestId('donation-guest-email')).not.toBeInTheDocument();
@@ -214,6 +233,7 @@ describe('DonateForm (guest checkout — no session)', () => {
     );
     fireEvent.click(screen.getByTestId('donate-anonymous'));
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
+    acceptGuestLegal();
     goToCardStep();
     fireEvent.click(screen.getByTestId('fake-card-brick-submit'));
 
@@ -234,6 +254,7 @@ describe('DonateForm (guest checkout — no session)', () => {
     fireEvent.change(screen.getByTestId('donation-guest-email'), {
       target: { value: 'invitado@test.dev' },
     });
+    acceptGuestLegal();
     goToCardStep();
     fireEvent.click(screen.getByTestId('fake-card-brick-submit'));
 
@@ -242,6 +263,9 @@ describe('DonateForm (guest checkout — no session)', () => {
       commissionPayer: 'organization',
       anonymous: false,
       guestPayer: { fullName: 'Invitado Test', email: 'invitado@test.dev' },
+      legalAcceptances: expect.arrayContaining(
+        currentLegalAcceptanceItems(requiredGuestLegalDocuments()),
+      ),
       cardToken: 'tok-test-123',
       paymentMethodId: 'visa',
       paymentMethodType: undefined,

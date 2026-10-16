@@ -1,8 +1,14 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@adoptafacil/ui';
-import { ApiError, type RegisterPersonRequest } from '../../../shell/api';
+import { Button, useToast } from '@adoptafacil/ui';
+import { toApiError, type RegisterPersonRequest } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import {
+  acceptancesFrom,
+  type ConsentState,
+  LegalConsentFields,
+  requiredConsentsGiven,
+} from '../../legal';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
 import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
@@ -13,6 +19,7 @@ import {
   validatePassword,
   validatePasswordConfirmation,
   validateRequired,
+  registerErrorMessage,
 } from '../validation';
 
 type PersonErrors = Partial<
@@ -28,6 +35,7 @@ export function RegisterPersonForm() {
   const { register, signInWithGoogle } = useSession();
   const googleAvailable = useGoogleSignInAvailable();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -38,6 +46,8 @@ export function RegisterPersonForm() {
   const [errors, setErrors] = useState<PersonErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [consents, setConsents] = useState<ConsentState>({});
+  const [legalError, setLegalError] = useState<string | undefined>();
 
   const refs = {
     firstName: useRef<HTMLInputElement>(null),
@@ -63,29 +73,37 @@ export function RegisterPersonForm() {
       if (first) refs[first].current?.focus();
       return;
     }
+    // Autorización previa (Ley 1581): sin las casillas obligatorias no se envía
+    // ningún dato al servidor.
+    if (!requiredConsentsGiven('person', consents)) {
+      setLegalError(
+        'Para crear la cuenta debes aceptar los términos y autorizar el tratamiento de datos.',
+      );
+      return;
+    }
+    setLegalError(undefined);
 
     const request: RegisterPersonRequest = {
       accountType: 'person',
       displayName: `${firstName.trim()} ${lastName.trim()}`.trim(),
       email: email.trim(),
       password,
+      legalAcceptances: acceptancesFrom('person', consents),
     };
 
     setSubmitting(true);
     try {
       await register(request);
+      // Aviso al aceptar: la constancia también llega por correo.
+      toast({
+        title: 'Cuenta creada',
+        description:
+          'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
+      });
       navigate('/', { replace: true });
     } catch (error) {
-      setFormError(
-        // The real API returns a plain 409 with no error body `code` (Nest's
-        // default filter), so the client falls back to `STATUS_CODES[409]` =
-        // 'conflict' (see `shell/api/http.ts`) — 'email_taken' was the MOCK
-        // API's own made-up code and never matched the real backend, so this
-        // branch silently never fired outside tests using the mock.
-        ApiError.is(error) && error.code === 'conflict'
-          ? 'Ya existe una cuenta con este correo.'
-          : 'No pudimos crear la cuenta. Inténtalo de nuevo.',
-      );
+      const apiError = toApiError(error);
+      setFormError(registerErrorMessage(apiError.status, apiError.code));
       setSubmitting(false);
     }
   };
@@ -168,6 +186,14 @@ export function RegisterPersonForm() {
         required
       />
 
+      <LegalConsentFields
+        audience="person"
+        value={consents}
+        onChange={setConsents}
+        error={legalError}
+        idPrefix="person"
+      />
+
       <Button
         type="button"
         className="w-full"
@@ -187,6 +213,10 @@ export function RegisterPersonForm() {
             <span className="h-px flex-1 bg-border" />
           </div>
           <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+          <p className="text-xs text-muted-foreground">
+            Si continúas con Google, te pediremos aceptar estos mismos documentos antes de usar tu
+            cuenta.
+          </p>
         </>
       )}
     </div>

@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
 
 /**
@@ -33,6 +34,7 @@ describe('Reviews / portal público sin sesión (M12, S7-b)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s7b-o-${randomUUID()}@test.local`,
@@ -52,6 +54,7 @@ describe('Reviews / portal público sin sesión (M12, S7-b)', () => {
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: `Actor ${tag}`,
         email: `s7b-p-${tag}-${randomUUID()}@test.local`,
         password,

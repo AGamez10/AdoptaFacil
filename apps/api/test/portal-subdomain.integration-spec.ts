@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
 
 /**
@@ -37,6 +38,7 @@ describe('Portal subdomain resolution (M14: public, no auth, no cross-org leak)'
     const ownerA = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Subdominio A',
         displayName: 'Owner A',
         email: `subdomain-a-${randomUUID()}@test.local`,
@@ -54,6 +56,7 @@ describe('Portal subdomain resolution (M14: public, no auth, no cross-org leak)'
     const ownerB = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Subdominio B',
         displayName: 'Owner B',
         email: `subdomain-b-${randomUUID()}@test.local`,

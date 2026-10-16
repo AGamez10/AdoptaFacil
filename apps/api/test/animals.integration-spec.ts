@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M03 animal record (RF07, T-104): create an expediente with attributes/status/
@@ -29,6 +30,7 @@ describe('Animal record (M03, RF07: expediente + breeds + soft-disable + RBAC)',
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `t104-${randomUUID()}@test.local`,
@@ -83,7 +85,12 @@ describe('Animal record (M03, RF07: expediente + breeds + soft-disable + RBAC)',
 
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `t104-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `t104-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     person = {
       token: personRes.body.tokens.accessToken,

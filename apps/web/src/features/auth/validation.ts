@@ -63,3 +63,24 @@ export function loginErrorMessage(status: number): string {
   }
   return 'No pudimos iniciar sesión. Revisa tu correo y contraseña.';
 }
+
+/**
+ * Message for a failed sign-up. A taken email keeps its own message; an API
+ * that cannot be reached (status 0, e.g. the local Docker services are down)
+ * or a 5xx must say the service is unavailable instead of a generic "try
+ * again", which sent people to retry the same form for nothing.
+ */
+export function registerErrorMessage(status: number, code: string): string {
+  // The real API's 409 has no body `code`; the client falls back to 'conflict'.
+  if (status === 409 || code === 'conflict') return 'Ya existe una cuenta con este correo.';
+  if (status === 429) {
+    return 'Hiciste varios intentos seguidos. Espera un minuto y vuelve a intentarlo.';
+  }
+  if (status === 0) {
+    return 'El servicio no está disponible: no pudimos conectar con el servidor. Inténtalo de nuevo en unos minutos.';
+  }
+  if (status >= 500) {
+    return 'El servicio no está disponible en este momento. Inténtalo de nuevo en unos minutos.';
+  }
+  return 'No pudimos crear la cuenta. Revisa los datos e inténtalo de nuevo.';
+}

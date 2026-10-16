@@ -21,6 +21,7 @@ import { formatCop } from '../../donations';
 import { deriveActionItems } from '../model/action-items';
 import { OrgDonationsDashboardSection } from '../../org/components/org-donations-dashboard-section';
 import { OrgStatusCard } from '../../org/components/org-status-card';
+import { PaymentsConnectionBanner } from '../../org/components/payments-connection-status';
 import { fetchHealth } from '../../../lib/api';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
@@ -231,6 +232,10 @@ export function HomePage() {
       )}
 
       {canViewSummary && <OrgStatusCard hideWhenApproved />}
+
+      {/* "Cobros pendientes de conexión" (ePayco, Owner/Administrator): un
+          aviso pequeño con el siguiente paso; desaparece al conectar. */}
+      <PaymentsConnectionBanner hideWhenConnected />
 
       {paymentsOn && <OrgDonationsDashboardSection />}
 

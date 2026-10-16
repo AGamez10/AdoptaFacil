@@ -12,6 +12,9 @@ export interface PortalHeaderActionsProps {
     'id' | 'name' | 'logoUrl' | 'nit' | 'location' | 'whatsapp'
   >;
   onBrowseCatalog: () => void;
+  /** `false` cuando la org aún no recibe donaciones en línea: el portal no
+   *  promete un "Donar" que no puede cumplir ("Cómo ayudar" lo explica). */
+  donationsActive?: boolean;
 }
 
 /**
@@ -22,7 +25,11 @@ export interface PortalHeaderActionsProps {
  * dinero. Cada animal tiene su propio flujo de adopción en su ficha; aquí no
  * se inventa una adopción "genérica".
  */
-export function PortalHeaderActions({ organization, onBrowseCatalog }: PortalHeaderActionsProps) {
+export function PortalHeaderActions({
+  organization,
+  onBrowseCatalog,
+  donationsActive = true,
+}: PortalHeaderActionsProps) {
   const payments = useFeature('payments');
   const sponsorships = useFeature('sponsorships');
   const whatsapp = orgWhatsappUrl(
@@ -59,7 +66,7 @@ export function PortalHeaderActions({ organization, onBrowseCatalog }: PortalHea
           Apadrinar
         </button>
       )}
-      {payments && (
+      {payments && donationsActive && (
         <Link
           to={buildDonateHref(organization)}
           className={cn(styles.btn, styles['btn--lg'], styles['btn--glass'])}

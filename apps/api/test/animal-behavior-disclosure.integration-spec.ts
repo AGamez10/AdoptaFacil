@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * M03 animal behavior disclosure (S-9, FSD v3.5 Doc 4 — "Safe Harbor" del
@@ -31,6 +32,7 @@ describe('Animal behavior disclosure (M03, S-9: FSD v3.5 Doc 4)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org',
         displayName: 'Owner',
         email: `s9-${randomUUID()}@test.local`,

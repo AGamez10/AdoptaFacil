@@ -4,6 +4,7 @@ import { FakePaymentAdapter, type PaymentPort } from '@adoptafacil/contracts';
 import { PAYMENT_PORT } from './payment.port';
 import { PaymentModule } from './payment.module';
 import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
+import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
 
 describe('PaymentModule (T-052)', () => {
   async function resolvePort(): Promise<PaymentPort> {
@@ -78,5 +79,10 @@ describe('PaymentModule (T-052)', () => {
       WEB_BASE_URL: 'http://localhost:5173',
     });
     expect(port).toBeInstanceOf(MercadoPagoPaymentAdapter);
+  });
+
+  it('binds PAYMENT_PORT to the EpaycoPaymentAdapter when PAYMENT_DRIVER=epayco (no platform keys needed)', async () => {
+    const port = await resolvePortWithEnv({ PAYMENT_DRIVER: 'epayco' });
+    expect(port).toBeInstanceOf(EpaycoPaymentAdapter);
   });
 });

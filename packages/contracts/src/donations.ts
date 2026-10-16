@@ -14,6 +14,7 @@
 // en payments.ts), IVA 19% solo sobre comisiones, COP (pesos enteros), sin
 // custodia de saldos.
 
+import type { LegalAcceptanceItem } from './legal';
 import type {
   CommissionPayer,
   PaymentBreakdown,
@@ -122,6 +123,15 @@ export interface Donation {
    * en vez de mostrar la pantalla de "gracias" localmente.
    */
   paymentLinkUrl?: string;
+  /**
+   * ePayco checkout v2 (ADR-PAG-002): sesión que el navegador abre con
+   * `ePayco.checkout.configure({ sessionId, type: 'onpage' })`. Mismas reglas
+   * que `paymentLinkUrl`: solo en la respuesta de `POST /donations`, nunca
+   * persistida. Ausente con cualquier otra pasarela.
+   */
+  checkoutSessionId?: string;
+  /** `true` cuando `checkoutSessionId` es de pruebas (sandbox de ePayco). */
+  checkoutTest?: boolean;
 }
 
 /**
@@ -175,6 +185,13 @@ export interface CreateDonationInput {
   idempotencyKey: string;
   /** "¿Donar de forma anónima frente a la organización?" (default `false`). */
   anonymous?: boolean;
+  /**
+   * ADDITIVE: términos y autorización de datos aceptados por un donante
+   * INVITADO (sin cuenta). La API los exige en su versión vigente
+   * (`requiredGuestLegalDocuments`) cuando no hay sesión; una Persona
+   * autenticada ya los aceptó al registrarse y no los envía.
+   */
+  legalAcceptances?: LegalAcceptanceItem[];
   /**
    * Checkout API (Orders) — T-OrdersAPI. Tokenized card data from MercadoPago's
    * Card Payment Brick (card number never reaches this backend). Optional on

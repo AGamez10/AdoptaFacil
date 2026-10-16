@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M05 donation certificates (F-3, RF14): the certificate is issued
@@ -38,6 +39,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const esalReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Certificable',
         displayName: 'Owner ESAL',
         email: `certs-esal-${randomUUID()}@test.local`,
@@ -63,6 +65,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const informalReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Informal',
         displayName: 'Owner Informal',
         email: `certs-informal-${randomUUID()}@test.local`,
@@ -77,6 +80,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const donorReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'María Restrepo',
         email: `certs-donor-${randomUUID()}@test.local`,
         password,
@@ -89,6 +93,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     const otherDonorReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Otro Donante',
         email: `certs-other-donor-${randomUUID()}@test.local`,
         password,

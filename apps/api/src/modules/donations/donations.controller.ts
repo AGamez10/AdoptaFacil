@@ -8,8 +8,10 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   Role,
   type CreateDonationInput,
@@ -24,6 +26,7 @@ import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../core/auth/optional-jwt-auth.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
+import { legalContextFrom } from '../../core/legal/legal.service';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { DonationsService, type WebhookOutcome } from './donations.service';
@@ -66,8 +69,9 @@ export class DonationsController {
   create(
     @CurrentUser() actor: RequestUser | undefined,
     @Body(new ZodValidationPipe(createDonationSchema)) dto: CreateDonationInput,
+    @Req() req: Request,
   ): Promise<Donation> {
-    return this.service.create(actor, dto);
+    return this.service.create(actor, dto, legalContextFrom(req));
   }
 
   /** The beneficiary org's received donations with their receipts. */

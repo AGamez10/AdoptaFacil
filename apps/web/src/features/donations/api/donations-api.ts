@@ -69,6 +69,28 @@ export async function fetchOrganizationDonationAvailability(
 }
 
 /**
+ * Fail-open variant for the portal's "Donar" buttons: only an EXPLICIT
+ * `canReceiveDonations: false` reads as `unavailable`; any failure or odd body
+ * is `unknown` (the donation page re-checks and decides). Never throws.
+ */
+export async function checkOrganizationDonationAvailability(
+  organizationId: string,
+): Promise<'available' | 'unavailable' | 'unknown'> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/public/donations/organizations/${encodeURIComponent(organizationId)}/availability`,
+    );
+    if (!response.ok) return 'unknown';
+    const body = (await response.json()) as { canReceiveDonations?: unknown } | null;
+    if (body?.canReceiveDonations === true) return 'available';
+    if (body?.canReceiveDonations === false) return 'unavailable';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
  * The ORGANIZATION generates (or re-opens) the certificate of one of its approved
  * donations (management roles). Returns the SAME certificate if one already
  * exists; 422 when the org is not an ESAL con RTE vigente or the donation isn't

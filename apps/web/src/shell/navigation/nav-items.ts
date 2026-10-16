@@ -633,4 +633,12 @@ export const navItems: NavItem[] = [
     icon: ShieldIcon,
     roles: PLATFORM_TEAM_ROLES,
   },
+  // Correos: plantillas de los correos por evento y de los envíos masivos,
+  // editables con vista previa y versiones — mismos roles que /plataforma/*.
+  {
+    path: '/plataforma/correos',
+    label: 'Correos',
+    icon: ShieldIcon,
+    roles: PLATFORM_DOCUMENTS_ROLES,
+  },
 ];

@@ -11,6 +11,7 @@ import {
 import { AdoptionContractCopyService } from '../src/modules/adoptions/adoption-contract-copy.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /** A minimal but genuinely valid 1x1 PNG — `embedPng` must accept it. Same
  *  constant already used by `legal-representative`/`volunteering` specs. */
@@ -86,6 +87,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const refuge = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Contrato',
         displayName: 'Owner Refugio',
         email: refugeEmail,
@@ -129,6 +131,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const person = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
         email: `t028b-p-${randomUUID()}@test.local`,
         password,
@@ -143,6 +146,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const other = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otro Refugio',
         displayName: 'Owner Otro',
         email: `t028b-other-${randomUUID()}@test.local`,
@@ -297,6 +301,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const bare = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Sin Representante',
         displayName: 'Owner Bare',
         email: `t028b-bare-${randomUUID()}@test.local`,
@@ -447,6 +452,13 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       expect(attachment.content.subarray(0, 5).toString('utf8')).toBe('%PDF-');
       expect(message.html).toContain('Firulais');
       expect(message.body).toContain(`/adopciones/contratos/${contractId}`);
+      // Branded template from the superadmin catalog (role label + document hash).
+      expect(message.template?.event).toBe('adoption.contract_signed');
+      expect(message.template?.data.huella).toMatch(/^[0-9a-f]{64}$/);
+      expect(['adoptante', 'representante de la organización']).toContain(
+        message.template?.data.rol,
+      );
+      expect(message.idempotencyKey).toContain(contractId);
     }
 
     // Trazabilidad sin datos personales: un evento por firmante, solo id y rol.

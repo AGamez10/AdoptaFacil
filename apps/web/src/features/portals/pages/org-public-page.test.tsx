@@ -112,6 +112,39 @@ describe('OrgPublicPage — rich public portal', () => {
     expect(href).toContain('organizationName=Refugio+Patitas');
   });
 
+  it('when the org cannot receive donations yet, the hero hides "Donar" and "Cómo ayudar" shows a warm message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const body = url.endsWith('/theme')
+          ? { tokens: {} }
+          : url.includes('/availability')
+            ? { canReceiveDonations: false }
+            : ORG;
+        return Promise.resolve({ ok: true, status: 200, json: async () => body });
+      }),
+    );
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+    await screen.findByRole('heading', { name: /Refugio Patitas/ });
+
+    const notice = await screen.findByTestId('portal-donate-activating');
+    expect(notice).toHaveTextContent('Este refugio está activando sus donaciones en línea.');
+    expect(screen.queryByTestId('portal-donate-cta')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-help-cta-donate')).not.toBeInTheDocument();
+    expect(
+      within(notice).getByRole('button', { name: 'Conocer a sus animales en adopción' }),
+    ).toBeInTheDocument();
+  });
+
+  it('the "Donar" CTA carries the portal slug so the donation page can link back', async () => {
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+    await screen.findByRole('heading', { name: /Refugio Patitas/ });
+    expect(screen.getByTestId('portal-donate-cta').getAttribute('href')).toContain(
+      'organizationSlug=patitas',
+    );
+  });
+
   it('F2-03: the "Donar" CTA also carries city/NIT (both real, already public on this same page)', async () => {
     renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
     await screen.findByRole('heading', { name: /Refugio Patitas/ });

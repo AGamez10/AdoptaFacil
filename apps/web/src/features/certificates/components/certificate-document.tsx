@@ -1,4 +1,4 @@
-import type { DonationCertificate } from '@adoptafacil/contracts';
+import { PLATFORM_DOCUMENT_NOTICE, type DonationCertificate } from '@adoptafacil/contracts';
 import { Badge, Card, CardContent, CardTitle, cn } from '@adoptafacil/ui';
 import { certificateVerifyPath, formatBogota, formatCop } from '../model/certificate-format';
 import { CertificateQr } from './certificate-qr';
@@ -72,6 +72,9 @@ export function CertificateDocument({ certificate }: CertificateDocumentProps) {
             </p>
           </div>
         </footer>
+        <p className={styles.signer} data-testid="certificate-platform-notice">
+          {PLATFORM_DOCUMENT_NOTICE}
+        </p>
       </CardContent>
     </Card>
   );

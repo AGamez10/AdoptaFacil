@@ -174,6 +174,17 @@ describe('module feature flags (R1-1)', () => {
     ).not.toThrow();
   });
 
+  it('accepts ePayco as the real gateway for money modules in production (ADR-PAG-002)', () => {
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        PAYMENT_DRIVER: 'epayco',
+        FEATURE_PAYMENTS: 'true',
+        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-10-15',
+      }),
+    ).not.toThrow();
+  });
+
   it('refuses donation certificates without payments in production', () => {
     expect(() =>
       validateEnv({ ...SAFE_PRODUCTION, FEATURE_DONATION_CERTIFICATES: 'true' }),

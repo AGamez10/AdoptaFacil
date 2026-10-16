@@ -25,6 +25,7 @@ model Organization {
   users                    User[]
   roleAssignments          UserRole[]
   auditLogs                AuditLog[]
+  legalAcceptances         LegalAcceptance[]
   profile                  OrganizationProfile?
   formalizationTransitions FormalizationTransition[]
   documents                OrganizationDocument[]
@@ -44,6 +45,9 @@ model Organization {
   workspaceTicketEvents    PlatformWorkspaceTicketEvent[]
   sensitiveActions         PlatformSensitiveAction[]
   sensitiveActionDecisions PlatformSensitiveActionDecision[]
+  // ePayco (ADR-PAG-002): the organization's own connected merchant account.
+  // See payments.prisma.
+  epaycoAccount            OrganizationEpaycoAccount?
 
   @@index([status])
   @@map("organizations")

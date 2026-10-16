@@ -10,6 +10,7 @@ import {
   type NotificationPort,
 } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON } from './support/legal';
 
 /**
  * Full password-recovery flow (T-110 / RF05): request → emailed link → set new
@@ -60,7 +61,7 @@ describe('Password recovery (request → link → confirm)', () => {
 
     const reg = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Reset User', email, password: oldPassword })
+      .send({ ...LEGAL_PERSON, displayName: 'Reset User', email, password: oldPassword })
       .expect(201);
     orgId = reg.body.user.organizationId;
     userId = reg.body.user.id;

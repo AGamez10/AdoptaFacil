@@ -1,6 +1,8 @@
 # ADR-PAG-001 · Recaudo con varias pasarelas, sin custodia
 
 > Estado: **decidido por el dueño** (2026-10-08) e implementado para Mercado Pago, apagado. No activa dinero real.
+> **2026-10-15:** el dueño eligió ePayco como pasarela principal; ver [ADR-PAG-002](./epayco.md). Este ADR (sin
+> custodia, comisión 0 % en modo directo) sigue mandando para todas las pasarelas.
 > Contrato: `packages/contracts/src/payment-gateways.ts` · pruebas: `packages/contracts/test/payment-gateways.test.ts`.
 > No es asesoría jurídica ni tributaria: lo marcado ⚖️ va al abogado y lo marcado 🧾 al contador.
 
