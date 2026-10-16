@@ -1,22 +1,51 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import type { AnimalSummary } from '@adoptafacil/contracts';
-import { buttonVariants, Card, CardContent, cn, EmptyState, Skeleton } from '@adoptafacil/ui';
+import type {
+  AnimalSummary,
+  OrganizationPublic,
+  PublicAnimalSummary,
+} from '@adoptafacil/contracts';
+import { buttonVariants, cn, EmptyState, Skeleton } from '@adoptafacil/ui';
+import { useDocumentTitle } from '../../../lib/use-document-title';
+import { PublicFooter, PublicNavbar } from '../../../shell/layout';
+import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
+import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
 import { fetchPublicAnimals } from '../api/public-animals';
-import { AnimalDetailInfo } from '../components/animal-detail-info';
 import { AnimalDetailActions } from '../components/animal-detail-actions';
+import {
+  ageLabel,
+  buildAdoptionRequestHref,
+  isRecentlyPublished,
+  SEX_LABELS,
+  SIZE_LABELS,
+  SPECIES_LABELS,
+  STATUS_LABELS,
+} from '../model/animals-catalog';
+import { resolveOrgSubdomain } from '../model/subdomain';
+import styles from './public-animal-detail-page.module.scss';
 
 // Cap del endpoint público (§RF07). En deep-link buscamos el animal dentro del
 // catálogo (no hay GET público de un animal individual y NO se crean endpoints).
 const CATALOG_CAP = 50;
+const SIMILAR_MAX = 4;
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 type DetailState = 'loading' | 'ready' | 'not-found' | 'error';
+type PublicOrgProfile = Pick<
+  OrganizationPublic,
+  'id' | 'name' | 'logoUrl' | 'description' | 'location' | 'nit'
+>;
 
 interface AnimalNavState {
-  animal?: AnimalSummary;
+  animal?: AnimalSummary | PublicAnimalSummary;
 }
+
+const ADOPTION_STEPS = [
+  'Envías tu solicitud en línea, con tu cuenta.',
+  'La organización te contacta y conoce tu hogar.',
+  'Firman un contrato claro y empieza su nueva vida.',
+];
 
 /**
  * Detalle PÚBLICO de un animal adoptable en el portal `/o/:slug/animales/:animalId`
@@ -25,45 +54,54 @@ interface AnimalNavState {
  * navegar desde una tarjeta el animal llega por nav-state (sin refetch); en deep-link
  * se resuelve buscándolo en el catálogo público de la organización.
  *
+ * Rediseño 2026-10 (marca v3): foto grande, datos en fichas de color, tarjeta de la
+ * organización, llamado principal fijo abajo en celular y "más animales" de la misma
+ * organización. En el subdominio propio de una organización no se muestra el navbar
+ * ni el pie de AdoptaFácil (es su casa digital, no la nuestra).
+ *
  * El botón "Solicitar adopción" enlaza al flujo de T-028a (Persona autenticada). La
  * ruta destino está bajo `RequireAuth`: sin sesión, returnTo a login y regreso al
  * animal (deny-by-default); con sesión, entra directo.
  *
- * F-CTA-APADRINAR: "Apadrinar" es el punto de entrada que pidió Sebastián hacia
- * `/apadrinar` (M07/RF17, S2-03 — su dominio, ya funciona end-to-end). Solo el
- * enlace, mismo mecanismo de `RequireAuth`/returnTo que "Solicitar adopción".
- *
- * F-LANDING-02: un animal se alcanza tanto desde el portal general (`/`, F-LANDING-01)
- * como desde el portal de su organización (`/o/:slug`) — por eso ofrece DOS salidas:
- * "Volver al inicio" (siempre disponible, no depende de ningún fetch) y "Ver
- * {nombre real}" hacia `/o/:slug` (fetch independiente y best-effort, igual que el
- * conteo de animales de `OrgPublicPage`; nunca un texto genérico — si el nombre no
- * carga, ese segundo enlace simplemente no aparece, "Volver al inicio" sigue ahí).
+ * F-LANDING-02: un animal se alcanza tanto desde el portal general como desde el
+ * portal de su organización — por eso ofrece "Volver al inicio" (siempre, sin fetch)
+ * y "Ver {nombre real}" (best-effort; si el nombre no carga, no aparece).
  */
 export function PublicAnimalDetailPage() {
   const { slug, animalId } = useParams<{ slug: string; animalId: string }>();
   const location = useLocation();
   const preloaded = (location.state as AnimalNavState | null)?.animal;
+  const onOrgSubdomain = Boolean(
+    resolveOrgSubdomain(
+      window.location.hostname,
+      import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined,
+    ),
+  );
 
   const [animal, setAnimal] = useState<AnimalSummary | null>(preloaded ?? null);
   const [state, setState] = useState<DetailState>(preloaded ? 'ready' : 'loading');
-  const [orgName, setOrgName] = useState<string | null>(null);
+  const [org, setOrg] = useState<PublicOrgProfile | null>(null);
+  const [others, setOthers] = useState<AnimalSummary[]>([]);
 
   useEffect(() => {
-    if (preloaded || !slug || !animalId) {
-      if (!slug || !animalId) setState('not-found');
+    if (!slug || !animalId) {
+      setState('not-found');
       return;
     }
     let active = true;
+    // Una sola lectura del catálogo de la organización: resuelve el deep-link y
+    // alimenta "más animales". Con nav-state solo sirve para lo segundo.
     fetchPublicAnimals({ slug, limit: CATALOG_CAP, offset: 0 })
       .then((page) => {
         if (!active) return;
+        setOthers(page.items.filter((a) => a.id !== animalId).slice(0, SIMILAR_MAX));
+        if (preloaded) return;
         const found = page.items.find((a) => a.id === animalId) ?? null;
         setAnimal(found);
         setState(found ? 'ready' : 'not-found');
       })
       .catch(() => {
-        if (active) setState('error');
+        if (active && !preloaded) setState('error');
       });
     return () => {
       active = false;
@@ -74,9 +112,9 @@ export function PublicAnimalDetailPage() {
     if (!slug) return;
     let active = true;
     fetch(`${API_BASE}/public/organizations/${encodeURIComponent(slug)}`)
-      .then((response) => (response.ok ? (response.json() as Promise<{ name?: string }>) : null))
+      .then((response) => (response.ok ? (response.json() as Promise<PublicOrgProfile>) : null))
       .then((body) => {
-        if (active && body?.name) setOrgName(body.name);
+        if (active && body?.name) setOrg(body);
       })
       .catch(() => {
         // Best-effort: "Ver {org}" simply stays absent; "Volver al inicio" remains.
@@ -86,45 +124,218 @@ export function PublicAnimalDetailPage() {
     };
   }, [slug]);
 
-  return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
-      {/* F1-03+: botones SECUNDARIOS (outline) — misma jerarquía que "Volver al
-          inicio" en not-found-page.tsx/AuthLayout; nunca compiten con "Solicitar
-          adopción" (sólido, más abajo), que sigue siendo el protagonista. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to="/" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
-          ← Volver al inicio
-        </Link>
-        {slug && orgName && (
-          <Link
-            to={`/o/${encodeURIComponent(slug)}`}
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-          >
-            Ver {orgName}
+  const orgName = org?.name ?? null;
+  const city =
+    (preloaded && 'organization' in preloaded ? preloaded.organization.city : undefined) ??
+    org?.location?.city;
+
+  useDocumentTitle(
+    animal
+      ? `${animal.name}, ${SPECIES_LABELS[animal.species].toLowerCase()} en adopción`
+      : undefined,
+  );
+
+  // El llamado fijo de celular ocupa el borde inferior: el botón de Ayuda sube.
+  useEffect(() => {
+    if (state !== 'ready') return;
+    const root = document.documentElement;
+    root.style.setProperty('--af-bottom-bar', '5rem');
+    return () => {
+      root.style.removeProperty('--af-bottom-bar');
+    };
+  }, [state]);
+
+  const age = animal ? ageLabel(animal.computedAge) : undefined;
+  const facts = animal
+    ? [
+        { label: 'Especie', value: SPECIES_LABELS[animal.species], tone: 'mint' },
+        { label: 'Sexo', value: SEX_LABELS[animal.sex], tone: 'sun' },
+        { label: 'Tamaño', value: SIZE_LABELS[animal.size], tone: 'sky' },
+        ...(age ? [{ label: 'Edad aproximada', value: age, tone: 'coral' }] : []),
+      ]
+    : [];
+
+  const toCard = (item: AnimalSummary): PublicAnimalSummary | null =>
+    slug && org
+      ? {
+          ...item,
+          organization: {
+            id: org.id,
+            name: org.name,
+            slug,
+            logoUrl: org.logoUrl,
+            city: org.location?.city,
+          },
+        }
+      : null;
+  const similar = others.map(toCard).filter((item): item is PublicAnimalSummary => item !== null);
+
+  const page = (
+    <main className={styles.page}>
+      <div className={styles.container}>
+        {/* F1-03+: botones SECUNDARIOS (outline): nunca compiten con "Solicitar adopción". */}
+        <div className={styles.back}>
+          <Link to="/" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+            ← Volver al inicio
           </Link>
+          {slug && orgName && (
+            <Link
+              to={`/o/${encodeURIComponent(slug)}`}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+            >
+              Ver {orgName}
+            </Link>
+          )}
+          {!onOrgSubdomain && animal && (
+            <Link to={buildAdoptPath(animal.species, city)} className={styles.backMore}>
+              Más {SPECIES_LABELS[animal.species].toLowerCase()}s en adopción
+              {city ? ` en ${city}` : ''}
+            </Link>
+          )}
+        </div>
+
+        {state === 'loading' && <Skeleton className="mt-6 h-96 w-full rounded-[2rem]" />}
+        {state === 'not-found' && (
+          <div className="mt-6">
+            <EmptyState
+              title="Animal no encontrado"
+              description="Este animal ya no está disponible para adopción o el enlace no es válido."
+            />
+          </div>
+        )}
+        {state === 'error' && (
+          <div className="mt-6">
+            <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
+          </div>
+        )}
+
+        {state === 'ready' && animal && (
+          <article className={styles.detail} data-testid="public-animal-detail">
+            <div className={styles.media}>
+              {animal.photoUrl ? (
+                <img
+                  src={animal.photoUrl}
+                  alt={`${animal.name}${animal.breed ? `, ${animal.breed}` : ''}`}
+                  className={styles.media__photo}
+                  {...{ fetchpriority: 'high' }}
+                />
+              ) : (
+                <div className={styles.media__empty}>
+                  <span>Sin foto todavía</span>
+                </div>
+              )}
+              <div className={styles.media__badges}>
+                {isRecentlyPublished(animal.createdAt) && (
+                  <span className={styles.badge}>Nuevo</span>
+                )}
+                <span className={cn(styles.badge, styles['badge--glass'])}>
+                  {STATUS_LABELS[animal.status]}
+                </span>
+              </div>
+            </div>
+
+            <div className={styles.info}>
+              <h1 className={styles.name}>{animal.name}</h1>
+              <p className={styles.subtitle}>
+                {[animal.breed, city].filter(Boolean).join(' · ') ||
+                  'Busca un hogar para toda la vida'}
+              </p>
+
+              <dl className={styles.facts}>
+                {facts.map((fact) => (
+                  <div key={fact.label} className={styles.fact} data-tone={fact.tone}>
+                    <dt>{fact.label}</dt>
+                    <dd>{fact.value}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className={styles.actions}>
+                <AnimalDetailActions
+                  animal={animal}
+                  orgName={orgName ?? undefined}
+                  donateOrganization={org ?? undefined}
+                  layout="hero"
+                />
+              </div>
+
+              {org && (
+                <section className={styles.org} aria-label="Organización responsable">
+                  {org.logoUrl ? (
+                    <img src={org.logoUrl} alt="" className={styles.org__logo} />
+                  ) : (
+                    <span className={styles.org__logo} aria-hidden="true">
+                      {org.name.charAt(0)}
+                    </span>
+                  )}
+                  <div className={styles.org__body}>
+                    <p className={styles.org__eyebrow}>Lo cuida</p>
+                    <p className={styles.org__name}>{org.name}</p>
+                    {org.location?.city && <p className={styles.org__meta}>{org.location.city}</p>}
+                  </div>
+                </section>
+              )}
+
+              <section className={styles.steps} aria-labelledby="adopt-steps-title">
+                <h2 id="adopt-steps-title" className={styles.steps__title}>
+                  Así es adoptar a {animal.name}
+                </h2>
+                <ol className={styles.steps__list}>
+                  {ADOPTION_STEPS.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+          </article>
+        )}
+
+        {state === 'ready' && similar.length > 0 && (
+          <section className={styles.similar} aria-labelledby="similar-title">
+            <div className={styles.similar__head}>
+              <h2 id="similar-title" className={styles.similar__title}>
+                Más amigos de {orgName}
+              </h2>
+              {!onOrgSubdomain && (
+                <Link to={ADOPT_BASE_PATH} className={styles.backMore}>
+                  Ver todos los animales
+                </Link>
+              )}
+            </div>
+            <ul className={styles.similar__grid}>
+              {similar.map((item) => (
+                <li key={item.id}>
+                  <AnimalSpotlightCard animal={item} />
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
 
-      <div className="mt-4">
-        {state === 'loading' && <Skeleton className="h-72 w-full" />}
-        {state === 'not-found' && (
-          <EmptyState
-            title="Animal no encontrado"
-            description="Este animal ya no está disponible para adopción o el enlace no es válido."
-          />
-        )}
-        {state === 'error' && (
-          <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
-        )}
-        {state === 'ready' && animal && (
-          <Card className="overflow-hidden" data-testid="public-animal-detail">
-            <AnimalDetailInfo animal={animal} />
-            <CardContent>
-              <AnimalDetailActions animal={animal} orgName={orgName ?? undefined} />
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {state === 'ready' && animal && (
+        <div className={styles.stickyCta}>
+          <div className={styles.stickyCta__text}>
+            <strong>{animal.name}</strong>
+            <span>te está esperando</span>
+          </div>
+          <Link
+            to={buildAdoptionRequestHref(animal.organizationId, animal)}
+            className={styles.stickyCta__button}
+          >
+            Solicitar adopción
+          </Link>
+        </div>
+      )}
     </main>
+  );
+
+  if (onOrgSubdomain) return page;
+  return (
+    <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-[var(--af-ink)]">
+      <PublicNavbar />
+      <div className="flex-1">{page}</div>
+      <PublicFooter />
+    </div>
   );
 }
