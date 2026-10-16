@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { validateEnv } from '../src/config/env.validation';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
@@ -613,12 +614,12 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
       .overrideProvider(ConfigService)
       .useFactory({
         factory: (): Pick<ConfigService, 'get'> => {
-          const real = new ConfigService();
+          // The same validated values (with their defaults) the app gets from
+          // ConfigModule; a bare `new ConfigService()` would lack the defaults.
+          const env = validateEnv(process.env) as Record<string, unknown>;
           return {
-            get: ((key: string, ...rest: unknown[]) =>
-              key === 'REPORTS_SIGNATURES_ENABLED'
-                ? false
-                : (real.get as (k: string, ...r: unknown[]) => unknown)(key, ...rest)) as never,
+            get: ((key: string) =>
+              key === 'REPORTS_SIGNATURES_ENABLED' ? false : env[key]) as never,
           };
         },
       })
