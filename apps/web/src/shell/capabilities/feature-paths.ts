@@ -14,12 +14,11 @@ const FEATURE_PATHS: ReadonlyArray<readonly [FeatureKey, readonly string[]]> = [
   ['sponsorships', ['/apadrinar', '/organizacion/apadrinamientos']],
   ['resources', ['/recursos', '/ofrecer', '/mis-ofertas', '/organizacion/recursos']],
   ['marketplace', ['/marketplace', '/organizacion/marketplace']],
+  // Muro de publicaciones: su propio interruptor (la API lo apaga si `community` está apagado).
+  ['communityWall', ['/comunidad', '/mis-publicaciones', '/plataforma/comunidad']],
   [
     'community',
     [
-      '/comunidad',
-      '/mis-publicaciones',
-      '/plataforma/comunidad',
       // Primer corte del ecosistema: directorio, negocio propio, mascotas.
       '/servicios',
       '/mi-negocio',

@@ -194,6 +194,56 @@ describe('Community directory + pet profiles (ecosystem first cut)', () => {
       .expect(404);
   });
 
+  it('only the platform marks a partner, and partners are listed first', async () => {
+    const other = await request(server)
+      .post('/community/services')
+      .set(auth(neighbor.token))
+      .send(listingBody({ category: 'walking', name: 'Paseos Andrés' }))
+      .expect(201);
+    await moderate(`/platform/community/services/${other.body.id}/moderate`, {
+      decision: 'approve',
+    }).expect(200);
+    const before = await request(server)
+      .get(`/public/community/services?city=${encodeURIComponent(city)}`)
+      .expect(200);
+    expect(before.body.items.map((i: { id: string }) => i.id)).toEqual([other.body.id, listingId]);
+    expect(before.body.items[1].isPartner).toBe(false);
+
+    // The business can neither set it on its profile nor call the platform route.
+    await request(server)
+      .patch(`/community/services/${listingId}`)
+      .set(auth(business.token))
+      .send({ isPartner: true })
+      .expect(400);
+    await request(server)
+      .patch(`/platform/community/services/${listingId}/partner`)
+      .set(auth(business.token))
+      .send({ partner: true })
+      .expect(403);
+    await moderate(`/platform/community/services/${listingId}/partner`, {
+      partner: 'yes',
+    }).expect(400);
+
+    const res = await moderate(`/platform/community/services/${listingId}/partner`, {
+      partner: true,
+      reason: 'Convenio firmado',
+    }).expect(200);
+    expect(res.body).toMatchObject({ isPartner: true, status: 'approved' });
+
+    const after = await request(server)
+      .get(`/public/community/services?city=${encodeURIComponent(city)}`)
+      .expect(200);
+    expect(after.body.items.map((i: { id: string }) => i.id)).toEqual([listingId, other.body.id]);
+    expect(after.body.items[0].isPartner).toBe(true);
+    const detail = await request(server).get(`/public/community/services/${listingId}`).expect(200);
+    expect(detail.body.isPartner).toBe(true);
+    const mine = await request(server)
+      .get('/community/services/mine')
+      .set(auth(business.token))
+      .expect(200);
+    expect(mine.body[0].isPartner).toBe(true);
+  });
+
   it('nobody reviews their own listing (403); a neighbor review starts pending', async () => {
     await request(server)
       .post(`/community/services/${listingId}/reviews`)
@@ -259,6 +309,7 @@ describe('Community directory + pet profiles (ecosystem first cut)', () => {
       expect.arrayContaining([
         'community_service_listing.created',
         'community_service_listing.approved',
+        'community_service_listing.partner_granted',
         'community_service_listing.updated',
       ]),
     );

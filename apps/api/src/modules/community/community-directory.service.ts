@@ -20,6 +20,7 @@ import {
   type ServiceReview,
   type ServiceReviewPublic,
   type ServiceReviewsPage,
+  type SetServiceListingPartnerInput,
   type UpdateServiceListingInput,
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -78,6 +79,7 @@ function toPublicListing(raw: RawPublicListing): ServiceListingPublic {
     whatsapp: opt(raw.whatsapp),
     website: opt(raw.website),
     email: opt(raw.email),
+    isPartner: raw.isPartner === true,
     ratingAverage: raw.ratingAverage === null ? undefined : Number(raw.ratingAverage),
     ratingCount: Number(raw.ratingCount ?? 0),
     createdAt: raw.createdAt,
@@ -157,6 +159,7 @@ export class CommunityDirectoryService {
       email: opt(row.email),
       status: row.status as ServiceListingStatus,
       moderationReason: opt(row.moderationReason),
+      isPartner: row.isPartner,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -371,6 +374,22 @@ export class CommunityDirectoryService {
     try {
       const rows = await this.prisma.$queryRaw<Array<{ data: RawQueueListing }>>(
         Prisma.sql`SELECT service_listing_moderate(${id}::uuid, ${input.decision}, ${reviewerUserId}::uuid, ${input.reason ?? null}) AS data`,
+      );
+      return this.toQueueListing(rows[0].data);
+    } catch (error) {
+      this.moderationError(error, 'listing');
+    }
+  }
+
+  /** Alianza con AdoptaFácil: solo la plataforma la marca (auditada en la base). */
+  async setPartner(
+    actorUserId: string,
+    id: string,
+    input: SetServiceListingPartnerInput,
+  ): Promise<ServiceListing> {
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ data: RawQueueListing }>>(
+        Prisma.sql`SELECT service_listing_set_partner(${id}::uuid, ${input.partner}::boolean, ${actorUserId}::uuid, ${input.reason ?? null}) AS data`,
       );
       return this.toQueueListing(rows[0].data);
     } catch (error) {

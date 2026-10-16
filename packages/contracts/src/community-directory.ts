@@ -63,6 +63,8 @@ export interface ServiceListing extends ServiceListingInput {
   organizationId: string;
   status: ServiceListingStatus;
   moderationReason?: string;
+  /** Aliado de AdoptaFácil: solo la plataforma lo marca. */
+  isPartner: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,6 +72,8 @@ export interface ServiceListing extends ServiceListingInput {
 /** Perfil visto en el directorio público (solo aprobados). */
 export interface ServiceListingPublic extends ServiceListingInput {
   id: string;
+  /** Aliado de AdoptaFácil (sello y primer lugar en el directorio). */
+  isPartner: boolean;
   /** Promedio de reseñas aprobadas (1–5), o ausente si no hay ninguna. */
   ratingAverage?: number;
   ratingCount: number;
@@ -117,6 +121,13 @@ export interface CreateServiceReviewInput {
 /** Decisión de plataforma sobre un perfil. `reason` obligatorio salvo al aprobar. */
 export interface ModerateServiceListingInput {
   decision: 'approve' | 'reject' | 'hide';
+  reason?: string;
+}
+
+/** Plataforma: marcar o quitar la alianza de un negocio con AdoptaFácil. */
+export interface SetServiceListingPartnerInput {
+  partner: boolean;
+  /** Nota interna para la auditoría (p. ej. referencia del acuerdo). */
   reason?: string;
 }
 

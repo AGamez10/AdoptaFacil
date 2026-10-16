@@ -10,6 +10,17 @@ export const CATEGORY_TONE: Record<ServiceCategory, string> = {
   [ServiceCategory.PetShop]: 'bg-brand-navy/10 text-brand-navy',
 };
 
+/** Sello de alianza con AdoptaFácil (solo lo marca la plataforma). */
+export function PartnerBadge({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md bg-brand-gold px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-brand-navy ${className}`}
+    >
+      Aliado AdoptaFácil
+    </span>
+  );
+}
+
 export interface ServiceCardProps {
   service: ServiceListingPublic;
 }
@@ -17,7 +28,8 @@ export interface ServiceCardProps {
 /**
  * Tarjeta del directorio de servicios (Comunidad). Una banda de color por
  * tipo, el sello "Perfil revisado" (todo perfil público pasó por la
- * moderación de la plataforma), la calificación y una acción clara.
+ * moderación de la plataforma) o, si es aliado, "Aliado AdoptaFácil", la
+ * calificación y una acción clara.
  */
 export function ServiceCard({ service }: ServiceCardProps) {
   return (
@@ -28,9 +40,13 @@ export function ServiceCard({ service }: ServiceCardProps) {
       <div
         className={`relative flex h-28 items-center justify-center ${CATEGORY_TONE[service.category]}`}
       >
-        <span className="absolute left-3 top-3 rounded-md bg-card/90 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground">
-          Perfil revisado
-        </span>
+        {service.isPartner ? (
+          <PartnerBadge className="absolute left-3 top-3" />
+        ) : (
+          <span className="absolute left-3 top-3 rounded-md bg-card/90 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+            Perfil revisado
+          </span>
+        )}
         <span
           aria-hidden="true"
           className="flex h-14 w-14 items-center justify-center rounded-full bg-card text-xl font-bold shadow-sm"

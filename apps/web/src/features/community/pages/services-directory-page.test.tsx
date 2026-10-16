@@ -12,6 +12,7 @@ function listing(id: string, over: Partial<ServiceListingPublic> = {}): ServiceL
     city: 'Medellín',
     ratingAverage: 4.5,
     ratingCount: 2,
+    isPartner: false,
     createdAt: '2026-10-01T00:00:00.000Z',
     ...over,
   };
@@ -62,6 +63,34 @@ describe('ServicesDirectoryPage — directorio público', () => {
     await waitFor(() => expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('city=Cali'));
   });
 
+  it('shows the partner badge on partners and "Perfil revisado" on the rest', async () => {
+    stubFetch(() => ({
+      items: [listing('s1', { isPartner: true, name: 'Aliada' }), listing('s2')],
+      total: 2,
+      limit: 24,
+      offset: 0,
+    }));
+    renderShell({ route: '/servicios' });
+    const cards = await screen.findAllByTestId('service-card');
+    expect(cards[0]).toHaveTextContent('Aliado AdoptaFácil');
+    expect(cards[1]).toHaveTextContent('Perfil revisado');
+    expect(cards[1]).not.toHaveTextContent('Aliado AdoptaFácil');
+  });
+
+  it('an empty directory invites businesses; an empty filter suggests another search', async () => {
+    stubFetch(() => ({ items: [], total: 0, limit: 24, offset: 0 }));
+    renderShell({ route: '/servicios' });
+    expect(
+      await screen.findByText('Muy pronto verás aquí los primeros servicios'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Prueba con otra ciudad/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Peluquerías' }));
+    expect(
+      await screen.findByText('Prueba con otra ciudad u otro tipo de servicio.'),
+    ).toBeInTheDocument();
+  });
+
   it('shows the detail with contact, reviews and nearby adoptable animals', async () => {
     stubFetch((url) => {
       if (url.includes('/reviews')) {
@@ -73,7 +102,7 @@ describe('ServicesDirectoryPage — directorio público', () => {
         };
       }
       if (url.includes('/public/animals')) return { data: [], total: 0, page: 1, limit: 4 };
-      return listing('s1', { whatsapp: '3001234567' });
+      return listing('s1', { whatsapp: '3001234567', isPartner: true });
     });
     renderShell({ route: '/servicios/s1' });
 
@@ -82,6 +111,7 @@ describe('ServicesDirectoryPage — directorio público', () => {
       'href',
       'https://wa.me/573001234567',
     );
+    expect(screen.getByText('Aliado AdoptaFácil')).toBeInTheDocument();
     expect(await screen.findByText('Excelente')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: 'Animales en adopción en Medellín' }),

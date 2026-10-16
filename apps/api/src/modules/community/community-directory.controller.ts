@@ -27,6 +27,7 @@ import {
   type ServiceListingsPage,
   type ServiceReview,
   type ServiceReviewsPage,
+  type SetServiceListingPartnerInput,
   type UpdatePetProfileInput,
   type UpdateServiceListingInput,
 } from '@adoptafacil/contracts';
@@ -44,6 +45,7 @@ import {
   createServiceListingSchema,
   createServiceReviewSchema,
   moderateServiceSchema,
+  setServicePartnerSchema,
   updatePetProfileSchema,
   updateServiceListingSchema,
 } from './community-directory.schemas';
@@ -209,6 +211,16 @@ export class CommunityDirectoryModerationController {
     @Body(new ZodValidationPipe(moderateServiceSchema)) dto: ModerateServiceListingInput,
   ): Promise<ServiceListing> {
     return this.service.moderateListing(actor.id, id, dto);
+  }
+
+  /** Marca o quita "Aliado AdoptaFácil". El negocio nunca puede hacerlo. */
+  @Patch('services/:id/partner')
+  setPartner(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(setServicePartnerSchema)) dto: SetServiceListingPartnerInput,
+  ): Promise<ServiceListing> {
+    return this.service.setPartner(actor.id, id, dto);
   }
 
   @Get('service-reviews')

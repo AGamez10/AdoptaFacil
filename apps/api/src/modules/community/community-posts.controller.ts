@@ -47,7 +47,7 @@ function parseType(value?: string): PostType | undefined {
  * no discrimina por rol aquí, solo por identidad). La moderación de
  * plataforma vive en un controller separado.
  */
-@RequireFeature('community')
+@RequireFeature('community', 'communityWall')
 @Controller('community')
 @UseGuards(JwtAuthGuard)
 export class CommunityPostsController {

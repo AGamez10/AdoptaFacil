@@ -62,6 +62,13 @@ export const moderateServiceSchema = z
     path: ['reason'],
   });
 
+export const setServicePartnerSchema = z
+  .object({
+    partner: z.boolean(),
+    reason: optionalText(500),
+  })
+  .strict();
+
 const petFields = {
   name: z.string().trim().min(1).max(80),
   species: z.enum(['dog', 'cat', 'other']),

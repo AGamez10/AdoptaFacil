@@ -135,10 +135,16 @@ export function ServicesDirectoryPage() {
         {state === 'error' && (
           <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
         )}
-        {state === 'ready' && items.length === 0 && (
+        {state === 'ready' && items.length === 0 && (category !== 'all' || city) && (
           <EmptyState
             title="Aún no hay servicios aquí"
             description="Prueba con otra ciudad u otro tipo de servicio."
+          />
+        )}
+        {state === 'ready' && items.length === 0 && category === 'all' && !city && (
+          <EmptyState
+            title="Muy pronto verás aquí los primeros servicios"
+            description="Estamos sumando veterinarias, peluquerías, paseadores y tiendas. Si tienes un negocio para mascotas, publícalo gratis."
           />
         )}
         {state === 'ready' && items.length > 0 && (

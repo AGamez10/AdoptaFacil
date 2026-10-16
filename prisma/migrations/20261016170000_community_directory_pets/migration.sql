@@ -20,6 +20,8 @@ CREATE TABLE "community_service_listings" (
     "moderation_reason" TEXT,
     "moderated_by_user_id" UUID,
     "moderated_at" TIMESTAMP(3),
+    "is_partner" BOOLEAN NOT NULL DEFAULT false,
+    "partner_since" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -135,8 +137,9 @@ CREATE POLICY tenant_isolation ON "community_pet_profiles"
 
 -- ============================================================================
 -- MÍNIMO PRIVILEGIO. El negocio escribe el contenido de SU perfil, nunca su
--- estado de moderación: UPDATE por columna (sin `status` ni `moderation_*`) y
--- un trigger que fuerza `pending` al insertar (Prisma envía los defaults).
+-- estado de moderación ni su marca de aliado: UPDATE por columna (sin
+-- `status`, `moderation_*` ni `is_partner`/`partner_since`) y un trigger que
+-- fuerza `pending` y no-aliado al insertar (Prisma envía los defaults).
 -- Las reseñas solo se leen bajo RLS; se escriben vía funciones de abajo. La
 -- ficha de mascota admite borrado (supresión a pedido de su dueña).
 -- ============================================================================
@@ -175,7 +178,8 @@ BEGIN
 END;
 $$;
 
--- Todo perfil nace pendiente y sin moderación, lo envíe quien lo envíe.
+-- Todo perfil nace pendiente, sin moderación y sin marca de aliado, lo envíe
+-- quien lo envíe.
 CREATE OR REPLACE FUNCTION community_service_listing_born_pending()
   RETURNS TRIGGER
   LANGUAGE plpgsql SET search_path = public, pg_temp
@@ -185,6 +189,8 @@ BEGIN
   NEW.moderation_reason := NULL;
   NEW.moderated_by_user_id := NULL;
   NEW.moderated_at := NULL;
+  NEW.is_partner := false;
+  NEW.partner_since := NULL;
   RETURN NEW;
 END;
 $$;
@@ -218,6 +224,7 @@ AS $$
     'whatsapp', p.whatsapp,
     'website', p.website,
     'email', p.email,
+    'isPartner', p.is_partner,
     'ratingAverage', (
       SELECT round(avg(r.rating)::numeric, 1) FROM "community_service_listing_reviews" r
       WHERE r.listing_id = p.id AND r.status = 'approved'
@@ -244,9 +251,11 @@ AS $$
   )
   SELECT jsonb_build_object(
     'items', COALESCE((
-      SELECT jsonb_agg(community_service_listing_json(page) ORDER BY page.created_at DESC)
+      -- Los aliados de AdoptaFácil van primero.
+      SELECT jsonb_agg(community_service_listing_json(page)
+        ORDER BY page.is_partner DESC, page.created_at DESC)
       FROM (
-        SELECT * FROM filtered ORDER BY created_at DESC
+        SELECT * FROM filtered ORDER BY is_partner DESC, created_at DESC
         LIMIT LEAST(GREATEST(COALESCE(p_limit, 24), 1), 50)
         OFFSET GREATEST(COALESCE(p_offset, 0), 0)
       ) page
@@ -414,6 +423,53 @@ BEGIN
 END;
 $$;
 
+-- Marcar o quitar la marca de "Aliado AdoptaFácil" (alianza con la
+-- plataforma). Solo la plataforma; el negocio no puede escribir esta columna.
+CREATE OR REPLACE FUNCTION service_listing_set_partner(
+  p_id UUID, p_partner BOOLEAN, p_actor_user_id UUID, p_reason TEXT
+)
+  RETURNS JSONB
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_row "community_service_listings";
+  v_reason TEXT := NULLIF(btrim(COALESCE(p_reason, '')), '');
+BEGIN
+  IF p_partner IS NULL THEN
+    RAISE EXCEPTION 'service_listing_set_partner: partner is required';
+  END IF;
+
+  UPDATE "community_service_listings"
+     SET is_partner = p_partner,
+         partner_since = CASE
+           WHEN p_partner AND is_partner THEN partner_since
+           WHEN p_partner THEN CURRENT_TIMESTAMP
+           ELSE NULL
+         END
+   WHERE id = p_id
+   RETURNING * INTO v_row;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'listing not found';
+  END IF;
+
+  INSERT INTO audit_logs (
+    id, organization_id, actor_user_id, action, entity_type, entity_id, metadata, created_at
+  ) VALUES (
+    gen_random_uuid(), v_row.organization_id, p_actor_user_id,
+    'community_service_listing.' || CASE WHEN p_partner THEN 'partner_granted' ELSE 'partner_revoked' END,
+    'community_service_listing', v_row.id::text,
+    jsonb_build_object('partner', p_partner, 'reason', v_reason), CURRENT_TIMESTAMP
+  );
+
+  RETURN community_service_listing_json(v_row)
+    || jsonb_build_object(
+         'organizationId', v_row.organization_id,
+         'status', v_row.status,
+         'moderationReason', v_row.moderation_reason,
+         'updatedAt', to_char(v_row.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'));
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION service_reviews_moderation_queue(
   p_limit INTEGER, p_offset INTEGER, p_status TEXT
 )
@@ -511,6 +567,7 @@ REVOKE ALL ON FUNCTION public_service_listing_reviews(UUID, INTEGER, INTEGER) FR
 REVOKE ALL ON FUNCTION create_service_listing_review(UUID, UUID, UUID, TEXT, INTEGER, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION service_listings_moderation_queue(INTEGER, INTEGER, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION service_listing_moderate(UUID, TEXT, UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION service_listing_set_partner(UUID, BOOLEAN, UUID, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION service_reviews_moderation_queue(INTEGER, INTEGER, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION service_review_moderate(UUID, TEXT, UUID, TEXT) FROM PUBLIC;
 
@@ -520,5 +577,6 @@ GRANT EXECUTE ON FUNCTION public_service_listing_reviews(UUID, INTEGER, INTEGER)
 GRANT EXECUTE ON FUNCTION create_service_listing_review(UUID, UUID, UUID, TEXT, INTEGER, TEXT) TO adoptafacil_app;
 GRANT EXECUTE ON FUNCTION service_listings_moderation_queue(INTEGER, INTEGER, TEXT) TO adoptafacil_app;
 GRANT EXECUTE ON FUNCTION service_listing_moderate(UUID, TEXT, UUID, TEXT) TO adoptafacil_app;
+GRANT EXECUTE ON FUNCTION service_listing_set_partner(UUID, BOOLEAN, UUID, TEXT) TO adoptafacil_app;
 GRANT EXECUTE ON FUNCTION service_reviews_moderation_queue(INTEGER, INTEGER, TEXT) TO adoptafacil_app;
 GRANT EXECUTE ON FUNCTION service_review_moderate(UUID, TEXT, UUID, TEXT) TO adoptafacil_app;

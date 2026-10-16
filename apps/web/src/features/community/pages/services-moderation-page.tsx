@@ -8,6 +8,7 @@ import {
 } from '@adoptafacil/contracts';
 import { Badge, Button, EmptyState, Input, Skeleton, useToast } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
+import { PartnerBadge } from '../components/service-card';
 import { useApiClient } from '../../../shell/api';
 import { SERVICE_CATEGORY_SINGULAR, SERVICE_STATUS_LABELS } from '../model/directory-view';
 
@@ -17,7 +18,8 @@ type Tab = 'services' | 'reviews';
 /**
  * `/plataforma/servicios` (Comunidad): la plataforma aprueba, rechaza u oculta
  * perfiles del directorio y sus reseñas. Rechazar u ocultar pide motivo; cada
- * decisión queda auditada en el tenant del negocio.
+ * decisión queda auditada en el tenant del negocio. Aquí también se marca a
+ * un negocio como "Aliado AdoptaFácil" (solo la plataforma puede hacerlo).
  */
 export function ServicesModerationPage() {
   const client = useApiClient();
@@ -77,6 +79,26 @@ export function ServicesModerationPage() {
     } catch (error) {
       toast({
         title: 'No se pudo aplicar la decisión',
+        description: error instanceof Error ? error.message : undefined,
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const togglePartner = async (listing: ServiceListing): Promise<void> => {
+    setBusy(listing.id);
+    try {
+      const reason = reasons[listing.id]?.trim();
+      await client.request(`/platform/community/services/${listing.id}/partner`, {
+        method: 'PATCH',
+        json: { partner: !listing.isPartner, ...(reason ? { reason } : {}) },
+      });
+      await load();
+    } catch (error) {
+      toast({
+        title: 'No se pudo cambiar la alianza',
         description: error instanceof Error ? error.message : undefined,
         variant: 'destructive',
       });
@@ -170,7 +192,10 @@ export function ServicesModerationPage() {
                   </p>
                   <h3 className="text-lg font-bold">{listing.name}</h3>
                 </div>
-                <Badge variant="secondary">{SERVICE_STATUS_LABELS[listing.status]}</Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge variant="secondary">{SERVICE_STATUS_LABELS[listing.status]}</Badge>
+                  {listing.isPartner && <PartnerBadge />}
+                </div>
               </div>
               {listing.description && <p className="mt-1 text-sm">{listing.description}</p>}
               <p className="mt-1 text-sm text-muted-foreground">
@@ -179,6 +204,14 @@ export function ServicesModerationPage() {
                   .join(' · ')}
               </p>
               {actions(listing.id, listing.status)}
+              <button
+                type="button"
+                disabled={busy === listing.id}
+                onClick={() => void togglePartner(listing)}
+                className="mt-2 text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+              >
+                {listing.isPartner ? 'Quitar alianza' : 'Marcar como aliado'}
+              </button>
             </article>
           ))}
         </div>

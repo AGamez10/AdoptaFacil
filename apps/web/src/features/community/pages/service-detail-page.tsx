@@ -12,7 +12,7 @@ import { useSession } from '../../../shell/auth';
 import { fetchGlobalPublicAnimals } from '../../catalog/api/public-animals';
 import { CatalogAnimalCard } from '../../catalog/components/catalog-animal-card';
 import { getPublicService, listPublicServiceReviews } from '../api/public-services';
-import { CATEGORY_TONE } from '../components/service-card';
+import { CATEGORY_TONE, PartnerBadge } from '../components/service-card';
 import {
   SERVICE_CATEGORY_SINGULAR,
   initials,
@@ -140,6 +140,7 @@ export function ServiceDetailPage() {
                   <h1 className="text-2xl font-extrabold text-foreground sm:text-3xl">
                     {service.name}
                   </h1>
+                  {service.isPartner && <PartnerBadge className="mt-1" />}
                   <p className="text-sm text-foreground/80">
                     {ratingLabel(service.ratingAverage, service.ratingCount)}
                   </p>

@@ -158,7 +158,18 @@ describe('RLS (community_service_listings, community_service_listing_reviews, co
     ).rejects.toThrow();
   });
 
-  it('no-leak: a listing inserted as approved is forced back to pending', async () => {
+  it('no-leak: the app role cannot mark its own listing as a partner', async () => {
+    await expect(
+      withOrgContext(prisma, orgA, (tx) =>
+        tx.serviceListing.update({
+          where: { id: seededA.listingId },
+          data: { isPartner: true },
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('no-leak: a listing inserted as approved or partner is forced back to pending, no partner', async () => {
     const row = await withOrgContext(prisma, orgA, (tx) =>
       tx.serviceListing.create({
         data: {
@@ -169,10 +180,14 @@ describe('RLS (community_service_listings, community_service_listing_reviews, co
           department: 'Antioquia',
           city: 'Medellín',
           status: 'approved',
+          isPartner: true,
+          partnerSince: new Date(),
         },
       }),
     );
     expect(row.status).toBe('pending');
+    expect(row.isPartner).toBe(false);
+    expect(row.partnerSince).toBeNull();
   });
 
   it('no-leak: the app role cannot write reviews directly', async () => {

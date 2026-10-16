@@ -147,6 +147,9 @@ model ServiceListing {
   moderationReason  String?   @map("moderation_reason")
   moderatedByUserId String?   @map("moderated_by_user_id") @db.Uuid
   moderatedAt       DateTime? @map("moderated_at")
+  /// Aliado de AdoptaFácil: lo marca solo la plataforma (función SECURITY DEFINER).
+  isPartner         Boolean   @default(false) @map("is_partner")
+  partnerSince      DateTime? @map("partner_since")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
