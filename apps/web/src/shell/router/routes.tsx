@@ -96,6 +96,7 @@ import {
   MyAdoptionRequestsPage,
   MyFollowUpsPage,
 } from '../../features/adoptions';
+import { ThirdPartyConsentsPage } from '../../features/consents';
 import {
   DonatePage,
   DonationAccessPage,
@@ -309,6 +310,9 @@ export function AppRoutes() {
               {/* "Mis donaciones": historial del usuario, DENTRO del shell (conserva el
               menú). `/donaciones` es pública y arma su propio chrome sin menú. */}
               <Route path="mis-donaciones" element={<MyDonationsPage />} />
+              {/* M13 · "Uso de mis datos en reportes": cada persona gestiona SOLO sus
+              consentimientos (el sujeto sale del JWT); cualquier autenticado. */}
+              <Route path="uso-de-mis-datos" element={<ThirdPartyConsentsPage />} />
               {/* M04 · adopciones (T-028a): tablero de evaluación (org) + solicitud (persona).
               F1-02: el tablero de evaluación solo tenía el gate del ITEM de nav (#86) —
               tecleando la URL directo, cualquier autenticado entraba a la vista de gestión.

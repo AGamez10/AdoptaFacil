@@ -377,6 +377,13 @@ export const navItems: NavItem[] = [
       },
     ],
   },
+  // M13: cada persona decide si su nombre y documento aparecen en los reportes
+  // y certificados de las organizaciones con las que ha donado o trabajado.
+  {
+    path: '/uso-de-mis-datos',
+    label: 'Uso de mis datos',
+    icon: ShieldIcon,
+  },
   // MENU-SUBMENUS: "Donaciones" agrupa las dos entradas planas que existían
   // (mismas rutas, mismos roles de siempre) — el padre solo expande/colapsa,
   // nunca navega (no tiene página propia).
