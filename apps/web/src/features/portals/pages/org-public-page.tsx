@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import type {
   AnimalSummary,
   Organization,
-  OrganizationPublic,
   PortalThemeConfig,
   PortalLogoPosition,
   PortalSocialNavPosition,
@@ -23,6 +22,7 @@ import {
   safeTemplate,
 } from '../model/theme';
 import { fetchPublicAnimals } from '../api/public-animals';
+import { fetchPublicOrganization } from '../api/public-organization';
 import { PortalProfileSection } from '../components/portal-profile-section';
 import {
   CarnetHero,
@@ -163,10 +163,9 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     // The profile drives the page state (404/error). The theme (colors +
     // layout, S2-PORTAL) is best-effort: if it fails or is absent, the portal
     // simply renders the default design/layout.
-    const profile = fetch(`${API_BASE}/public/organizations/${encoded}`).then((response) => {
-      if (response.status === 404) throw new Error('not-found');
-      if (!response.ok) throw new Error('error');
-      return response.json() as Promise<OrganizationPublic>;
+    const profile = fetchPublicOrganization(slug).then((data) => {
+      if (!data) throw new Error('not-found');
+      return data;
     });
 
     const brand = fetch(`${API_BASE}/public/organizations/${encoded}/theme`)

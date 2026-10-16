@@ -16,6 +16,10 @@ import {
 } from '../data/colombian-locations';
 import { IMAGE_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
 import { MercadoPagoConnectSection } from './mercadopago-connect-section';
+import { EpaycoConnectSection } from './epayco-connect-section';
+import { DonationQrCard } from '../../donations';
+import { isEpaycoProvider } from '../../payments/lib/payment-provider';
+import { useFeature } from '../../../shell/capabilities';
 import {
   OrgSelectField,
   OrgStaticField,
@@ -375,6 +379,8 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
     const [activeTab, setActiveTab] = useState<string>(() =>
       searchParams.get('mercadopago') ? 'pagos' : TABS[0].value,
     );
+    const epayco = isEpaycoProvider();
+    const paymentsEnabled = useFeature('payments');
     const [form, setForm] = useState<FormState>(() => initialState(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
     const [saving, setSaving] = useState(false);
@@ -774,7 +780,26 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
             qué pestaña del perfil estuviera activa. No participa del guardado
             de este formulario (conectar/desconectar ya es inmediato). */}
         <OrgTabPanel value="pagos" activeValue={activeTab}>
-          <MercadoPagoConnectSection />
+          <div className="flex flex-col gap-6">
+            {/* ADR-PAG-002: con VITE_PAYMENT_PROVIDER=epayco la organización
+                conecta SU cuenta ePayco (llaves API) en vez de Mercado Pago. */}
+            {epayco ? <EpaycoConnectSection /> : <MercadoPagoConnectSection />}
+            {/* QR de donaciones: junto a la cuenta que recibe el dinero. Usa el
+                slug/subdominio GUARDADO (`initial`), no lo que se está editando. */}
+            {paymentsEnabled && (
+              <DonationQrCard
+                organization={{
+                  name: initial.name,
+                  slug: initial.slug,
+                  subdomain: initial.subdomain,
+                }}
+                onConfigureLink={() => {
+                  setActiveTab('institucional');
+                  window.setTimeout(() => document.getElementById('org-slug')?.focus(), 0);
+                }}
+              />
+            )}
+          </div>
         </OrgTabPanel>
 
         <OrgTabPanel value="nosotros" activeValue={activeTab}>

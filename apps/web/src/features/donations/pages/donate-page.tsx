@@ -21,6 +21,8 @@ import { FormAlert } from '../../auth/components/form-alert';
 import { createDonation, fetchOrganizationDonationAvailability } from '../api/donations-api';
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
 import { formatCop } from '../model/donation-breakdown-view';
+import { isEpaycoProvider } from '../../payments/lib/payment-provider';
+import { openEpaycoCheckout } from '../../payments/lib/epayco-checkout';
 import styles from './donate-page.module.scss';
 
 interface DonationTarget {
@@ -89,7 +91,18 @@ export function DonatePage() {
   // tarjeta" after a declined charge, T-OrdersAPI) — the form owns its own
   // amount/step state, so a plain re-render alone wouldn't reset it.
   const [formInstanceKey, setFormInstanceKey] = useState(0);
-  // Solo se puede donar a una organización con su cuenta de MercadoPago conectada.
+  // ADR-PAG-002: con ePayco no hay Brick — tras crear la donación se abre el
+  // checkout de ePayco con la sesión que devolvió la API.
+  const epayco = isEpaycoProvider();
+  const gatewayName = epayco ? 'ePayco' : 'MercadoPago';
+  const [epaycoCheckout, setEpaycoCheckout] = useState<{
+    donation: Donation;
+    sessionId: string;
+    test: boolean;
+    status: 'opening' | 'open' | 'error';
+  } | null>(null);
+  // Solo se puede donar a una organización con su cuenta de pagos conectada
+  // (MercadoPago, o ePayco con VITE_PAYMENT_PROVIDER=epayco).
   const [availability, setAvailability] = useState<
     'loading' | 'connected' | 'not-connected' | 'error'
   >('loading');
@@ -145,6 +158,21 @@ export function DonatePage() {
     );
   }
 
+  const launchEpaycoCheckout = async (donation: Donation, sessionId: string, test: boolean) => {
+    setEpaycoCheckout({ donation, sessionId, test, status: 'opening' });
+    try {
+      await openEpaycoCheckout({ sessionId, test });
+      setEpaycoCheckout({ donation, sessionId, test, status: 'open' });
+    } catch {
+      setEpaycoCheckout({ donation, sessionId, test, status: 'error' });
+      toast({
+        title: 'No se pudo abrir la pasarela de ePayco',
+        description: 'Revisa tu conexión e inténtalo de nuevo. No se te ha cobrado nada.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const donate = async ({
     intendedAmount,
     commissionPayer,
@@ -182,6 +210,14 @@ export function DonatePage() {
         paymentMethodType,
         installments,
       });
+      if (epayco && donation.checkoutSessionId) {
+        await launchEpaycoCheckout(
+          donation,
+          donation.checkoutSessionId,
+          donation.checkoutTest === true,
+        );
+        return;
+      }
       setDone(donation);
       toast(
         donation.status === 'approved'
@@ -276,7 +312,45 @@ export function DonatePage() {
                   {user.email && ` (${user.email})`}
                 </p>
               )}
-              {done ? (
+              {epaycoCheckout ? (
+                <div className={styles.done} data-testid="epayco-checkout-panel">
+                  {epaycoCheckout.status === 'opening' ? (
+                    <p className={styles['done__hint']} data-testid="epayco-checkout-opening">
+                      Abriendo la pasarela segura de ePayco…
+                    </p>
+                  ) : epaycoCheckout.status === 'error' ? (
+                    <FormAlert variant="error">
+                      <span data-testid="epayco-checkout-error">
+                        No pudimos cargar la pasarela de pagos de ePayco. Revisa tu conexión (o
+                        desactiva el bloqueador de anuncios) e inténtalo de nuevo. Tu donación quedó
+                        registrada como pendiente: no se te ha cobrado nada.
+                      </span>
+                    </FormAlert>
+                  ) : (
+                    <EmptyState
+                      title="Completa tu pago en ePayco"
+                      description={`Abrimos la ventana segura de ePayco para pagar ${formatCop(epaycoCheckout.donation.amountCharged)} con los medios que tenga habilitados ${target.organizationName}. Cuando ePayco confirme el pago te enviaremos el recibo automático.`}
+                    />
+                  )}
+                  {epaycoCheckout.status !== 'opening' && (
+                    <Button
+                      variant={epaycoCheckout.status === 'error' ? 'default' : 'outline'}
+                      onClick={() =>
+                        void launchEpaycoCheckout(
+                          epaycoCheckout.donation,
+                          epaycoCheckout.sessionId,
+                          epaycoCheckout.test,
+                        )
+                      }
+                      data-testid="epayco-checkout-reopen"
+                    >
+                      {epaycoCheckout.status === 'error'
+                        ? 'Reintentar abrir el pago'
+                        : 'Abrir de nuevo la ventana de pago'}
+                    </Button>
+                  )}
+                </div>
+              ) : done ? (
                 done.status === 'declined' ? (
                   // T-OrdersAPI: a declined charge is a SUCCESSFUL API call
                   // (the request itself succeeded; the gateway rejected the
@@ -345,7 +419,7 @@ export function DonatePage() {
                 <FormAlert variant="error">
                   <span data-testid="donation-org-not-connected">
                     <strong>{target.organizationName}</strong> aún no puede recibir donaciones: no
-                    ha conectado su cuenta de MercadoPago. Intenta más tarde o explora otras
+                    ha conectado su cuenta de {gatewayName}. Intenta más tarde o explora otras
                     organizaciones.
                   </span>
                 </FormAlert>
@@ -364,6 +438,7 @@ export function DonatePage() {
                   hasSession={hasSession}
                   sessionEmailHint={hasSession ? user?.email : undefined}
                   onDonate={donate}
+                  gateway={epayco ? 'epayco' : 'mercadopago'}
                 />
               )}
             </CardContent>

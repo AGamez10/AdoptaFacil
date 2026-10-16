@@ -121,6 +121,29 @@ export interface CreateCollectionInput {
    * logged, never audited. The real driver refuses to charge without it.
    */
   collector?: CollectorCredentials;
+  /**
+   * ADR-PAG-002 (ePayco): the BENEFICIARY organization's own ePayco merchant
+   * keys, resolved SERVER-SIDE from its connected account. Same rules as
+   * `collector`: server-only, never serialized, logged or audited. The ePayco
+   * driver refuses to charge without it.
+   */
+  epaycoCollector?: EpaycoCollectorCredentials;
+}
+
+/**
+ * The organization's own ePayco merchant keys (dashboard → Integraciones →
+ * Llaves API). `custId` and `publicKey` are not secrets; `privateKey` and
+ * `pKey` are, and are stored encrypted at rest.
+ */
+export interface EpaycoCollectorCredentials {
+  /** `P_CUST_ID_CLIENTE`: the merchant id at ePayco. Not a secret. */
+  custId: string;
+  /** `P_KEY`: signs/verifies the confirmation (`x_signature`). Secret. */
+  pKey: string;
+  /** `PUBLIC_KEY` for the Apify login. Not a secret. */
+  publicKey: string;
+  /** `PRIVATE_KEY` for the Apify login. Secret. */
+  privateKey: string;
 }
 
 /** Server-only credentials of the organization that receives the money. */
@@ -143,6 +166,12 @@ export interface CollectionResult {
    * present.
    */
   paymentLinkUrl?: string;
+  /**
+   * ePayco checkout v2: the session the browser opens with
+   * `ePayco.checkout.configure({ sessionId })`. Ephemeral, like
+   * `paymentLinkUrl`. Absent for every other driver.
+   */
+  checkoutSessionId?: string;
 }
 
 /** Normalized, idempotent webhook event (dedup by `dedupKey`). */
@@ -181,6 +210,8 @@ export interface WebhookVerificationContext {
    * real adapter reads the payment back WITH them. Server-only.
    */
   collector?: CollectorCredentials;
+  /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
+  epaycoCollector?: EpaycoCollectorCredentials;
 }
 
 /** Colombian bank account type (RF26 payouts — ahorros/corriente). */

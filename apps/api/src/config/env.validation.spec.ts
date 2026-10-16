@@ -120,3 +120,40 @@ describe('validateEnv — AUTH_IDENTITY_DRIVER fail-fast (T-Google-SignIn)', () 
     ).not.toThrow();
   });
 });
+
+describe('validateEnv — PAYMENT_DRIVER=epayco (ADR-PAG-002)', () => {
+  it('boots in direct mode with no platform ePayco keys', () => {
+    const env = validateEnv({ ...BASE, PAYMENT_DRIVER: 'epayco' });
+    expect(env.PAYMENT_DRIVER).toBe('epayco');
+    expect(env.EPAYCO_COLLECTION_MODE).toBe('direct_to_org');
+    expect(env.EPAYCO_TEST).toBe(false);
+  });
+
+  it('fails fast in platform_split without approval ref, fee rate and platform keys', () => {
+    expect(() =>
+      validateEnv({ ...BASE, PAYMENT_DRIVER: 'epayco', EPAYCO_COLLECTION_MODE: 'platform_split' }),
+    ).toThrow(/EPAYCO_SPLIT_APPROVAL_REF[\s\S]*EPAYCO_PLATFORM_PRIVATE_KEY/);
+  });
+
+  it('accepts platform_split with every required value', () => {
+    expect(() =>
+      validateEnv({
+        ...BASE,
+        PAYMENT_DRIVER: 'epayco',
+        EPAYCO_COLLECTION_MODE: 'platform_split',
+        EPAYCO_SPLIT_APPROVAL_REF: 'ticket-1',
+        EPAYCO_SPLIT_FEE_RATE: '0.04',
+        EPAYCO_PLATFORM_CUST_ID: '999000',
+        EPAYCO_PLATFORM_P_KEY: 'p',
+        EPAYCO_PLATFORM_PUBLIC_KEY: 'pub',
+        EPAYCO_PLATFORM_PRIVATE_KEY: 'priv',
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a fee rate outside [0, 1)', () => {
+    expect(() =>
+      validateEnv({ ...BASE, PAYMENT_DRIVER: 'epayco', EPAYCO_SPLIT_FEE_RATE: '1.5' }),
+    ).toThrow(/EPAYCO_SPLIT_FEE_RATE/);
+  });
+});

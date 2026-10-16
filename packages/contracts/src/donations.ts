@@ -123,6 +123,15 @@ export interface Donation {
    * en vez de mostrar la pantalla de "gracias" localmente.
    */
   paymentLinkUrl?: string;
+  /**
+   * ePayco checkout v2 (ADR-PAG-002): sesión que el navegador abre con
+   * `ePayco.checkout.configure({ sessionId, type: 'onpage' })`. Mismas reglas
+   * que `paymentLinkUrl`: solo en la respuesta de `POST /donations`, nunca
+   * persistida. Ausente con cualquier otra pasarela.
+   */
+  checkoutSessionId?: string;
+  /** `true` cuando `checkoutSessionId` es de pruebas (sandbox de ePayco). */
+  checkoutTest?: boolean;
 }
 
 /**

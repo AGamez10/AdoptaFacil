@@ -55,6 +55,7 @@ import {
   PlatformSuperAdminDashboardPage,
 } from '../../features/org';
 import {
+  OrgDonateRedirectPage,
   OrgPublicPage,
   PortalThemePage,
   PublicAnimalDetailPage,
@@ -97,6 +98,7 @@ import {
 import {
   DonatePage,
   DonationAccessPage,
+  DonationResultPage,
   MyDonationsPage,
   ReceivedDonationsPage,
 } from '../../features/donations';
@@ -204,6 +206,21 @@ export function AppRoutes() {
           AnimalSummary fields only (no clinical data). The "Solicitar adopción"
           button links to the /adopciones/solicitar flow, itself under RequireAuth. */}
         <Route path="/o/:slug/animales/:animalId" element={<PublicAnimalDetailPage />} />
+        {/* QR de donaciones por organización (ADR-PAG-002 §QR, módulo
+          `payments`): URL ESTABLE que resuelve la org pública y entra al flujo
+          `/donaciones`. `/donar` solo tiene sentido en un subdominio real de
+          organización; en el dominio principal lleva a `/donaciones`. */}
+        <Route path="/o/:slug/donar" element={<OrgDonateRedirectPage />} />
+        <Route
+          path="/donar"
+          element={
+            portalSubdomain.status === 'ready' ? (
+              <OrgDonateRedirectPage slugOverride={portalSubdomain.slug} />
+            ) : (
+              <Navigate replace to="/donaciones" />
+            )
+          }
+        />
         {/* Public certificate VERIFICATION, REAL (§M05/RF14, F-3) — no session,
           queries `GET /public/donations/certificates/:code`. */}
         <Route path="/verificar" element={<CertificateVerificationPage />} />
@@ -247,6 +264,9 @@ export function AppRoutes() {
           credencial (`GET /public/donations/access/:token`, sin auth). Mismo
           SEAM que `/donaciones` y `/verificar/:code` arriba. */}
         <Route path="/donaciones/comprobante" element={<DonationAccessPage />} />
+        {/* ADR-PAG-002: regreso del checkout de ePayco. Solo informa que el pago se
+          está confirmando; la aprobación llega por la confirmación firmada. */}
+        <Route path="/donaciones/resultado" element={<DonationResultPage />} />
         {/* T-OrdersAPI (2026-09-30): the `/donaciones/gracias` and
           `/apadrinar/gracias` redirect-landing routes were RETIRED along with
           Checkout Pro — Checkout API/Orders embeds the card form on our own

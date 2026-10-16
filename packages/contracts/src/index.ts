@@ -13,6 +13,8 @@ export * from './adoptions-contract-template';
 export * from './donations';
 export * from './payments';
 export * from './payment-gateways';
+export * from './donation-links';
+export * from './epayco';
 export * from './campaigns';
 export * from './sponsorships';
 export * from './volunteering';

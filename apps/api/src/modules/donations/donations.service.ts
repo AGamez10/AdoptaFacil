@@ -14,6 +14,7 @@ import {
   computeBreakdown,
   DIRECT_COLLECTION_RATES,
   type CollectorCredentials,
+  type EpaycoCollectorCredentials,
   type CreateDonationInput,
   type Donation,
   type DonationCertificate,
@@ -46,6 +47,24 @@ import type { Env } from '../../config/env.validation';
 import { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { buildDonationAccessLink } from './donation-access-link';
+import {
+  EPAYCO_KEYS_ENCRYPTION_KEY,
+  loadEpaycoKeysEncryptionKey,
+} from '../payments/epayco-keys-crypto';
+import { loadEpaycoCollector } from '../payments/epayco-connect.service';
+
+/** Reference/invoice shape we accept from a gateway body before querying. */
+const GATEWAY_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Read one scalar field of an ePayco confirmation (parsed form/JSON or raw string). */
+function epaycoField(payload: unknown, key: string): string | undefined {
+  const source =
+    typeof payload === 'string' ? Object.fromEntries(new URLSearchParams(payload)) : payload;
+  if (!source || typeof source !== 'object') return undefined;
+  const value = (source as Record<string, unknown>)[key];
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+}
 
 /**
  * How long a guest's donation access link (magic link) stays valid (client's
@@ -124,6 +143,9 @@ export class DonationsService {
   private readonly certificatesEnabled: boolean;
   /** Real gateway ⇒ every charge needs the organization's own account. */
   private readonly requiresCollector: boolean;
+  /** ADR-PAG-002: ePayco driver ⇒ the collector is the org's ePayco account. */
+  private readonly epayco: boolean;
+  private readonly epaycoTest: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -135,11 +157,16 @@ export class DonationsService {
     private readonly certificates: DonationCertificatesService,
     config: ConfigService<Env, true>,
     private readonly legal: LegalService,
+    @Inject(EPAYCO_KEYS_ENCRYPTION_KEY)
+    private readonly epaycoKey: Buffer = loadEpaycoKeysEncryptionKey(),
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.certificatesEnabled =
       config.get('FEATURE_DONATION_CERTIFICATES', { infer: true }) === true;
-    this.requiresCollector = config.get('PAYMENT_DRIVER', { infer: true }) !== 'fake';
+    const driver = config.get('PAYMENT_DRIVER', { infer: true });
+    this.requiresCollector = driver !== 'fake';
+    this.epayco = driver === 'epayco';
+    this.epaycoTest = config.get('EPAYCO_TEST', { infer: true }) === true;
   }
 
   private requireOrgId(): string {
@@ -216,8 +243,13 @@ export class DonationsService {
     // account there is no donation: never a fallback to the platform account
     // (that fallback was custody, PAY-001). The fake driver (dev/test) keeps
     // working without one.
-    const collector = await this.resolveCollector(input.organizationId);
-    if (!collector && this.requiresCollector) {
+    // ePayco (ADR-PAG-002): the collector is the org's own ePayco account
+    // (keys decrypted server-side, never returned/logged/audited).
+    const epaycoCollector = this.epayco
+      ? await this.resolveEpaycoCollector(input.organizationId)
+      : undefined;
+    const collector = this.epayco ? undefined : await this.resolveCollector(input.organizationId);
+    if (this.epayco ? !epaycoCollector : !collector && this.requiresCollector) {
       throw new ConflictException(
         'Esta organización todavía no conectó su cuenta para recibir donaciones.',
       );
@@ -246,7 +278,12 @@ export class DonationsService {
       paymentMethodType: input.paymentMethodType,
       installments: input.installments,
       collector,
+      epaycoCollector,
     });
+    // ePayco: the adapter is the one that knows the collection mode (a
+    // gateway split could carry an approved platform fee), so what it charged
+    // is what we persist; for every other driver the local math is identical.
+    const persistedBreakdown = this.epayco ? collection.breakdown : breakdown;
 
     let rows: DonationRow[];
     try {
@@ -258,8 +295,8 @@ export class DonationsService {
           ${concept.id}::uuid,
           ${input.commissionPayer},
           ${input.intendedAmount}::int,
-          ${breakdown.amountCharged}::int,
-          ${JSON.stringify(breakdown)}::jsonb,
+          ${persistedBreakdown.amountCharged}::int,
+          ${JSON.stringify(persistedBreakdown)}::jsonb,
           ${collection.collectionId},
           ${input.idempotencyKey},
           ${input.payer ? JSON.stringify(input.payer) : null}::jsonb,
@@ -304,7 +341,7 @@ export class DonationsService {
       // NUNCA datos personales en claro; solo cifras/estructura.
       metadata: {
         intendedAmount: input.intendedAmount,
-        amountCharged: breakdown.amountCharged,
+        amountCharged: persistedBreakdown.amountCharged,
         commissionPayer: input.commissionPayer,
         collectionId: collection.collectionId,
       },
@@ -338,6 +375,10 @@ export class DonationsService {
       ...this.fromRow(row),
       ...(immediateStatus ? { status: immediateStatus } : {}),
       paymentLinkUrl: collection.paymentLinkUrl,
+      // ePayco checkout v2: ephemeral, like `paymentLinkUrl` (never persisted).
+      ...(collection.checkoutSessionId
+        ? { checkoutSessionId: collection.checkoutSessionId, checkoutTest: this.epaycoTest }
+        : {}),
     };
   }
 
@@ -384,14 +425,22 @@ export class DonationsService {
     // the adapter must read it back with that organization's token. The
     // account id in the body is NOT trusted for anything else: a forged one
     // only makes the read-back fail (the order is not in that account).
-    const notifiedOrgId = await this.resolveNotifiedOrganizationId(payload);
-    const collector = notifiedOrgId ? await this.resolveCollector(notifiedOrgId) : undefined;
+    const notifiedOrgId = this.epayco
+      ? await this.resolveEpaycoNotifiedOrganizationId(payload)
+      : await this.resolveNotifiedOrganizationId(payload);
+    const collector =
+      notifiedOrgId && !this.epayco ? await this.resolveCollector(notifiedOrgId) : undefined;
+    // ADR-PAG-002: the confirmation is signed with the ORGANIZATION's P_KEY,
+    // so it is verified with the keys of the org that owns the payment.
+    const epaycoCollector =
+      notifiedOrgId && this.epayco ? await this.resolveEpaycoCollector(notifiedOrgId) : undefined;
 
     let event: NormalizedWebhookEvent;
     try {
       event = await this.payment.verifyAndNormalizeWebhook(payload, signature, {
         ...context,
         collector,
+        epaycoCollector,
       });
     } catch (error) {
       // `verifyAndNormalizeWebhook` throws for several DISTINCT reasons (real
@@ -405,7 +454,7 @@ export class DonationsService {
       throw new ForbiddenException('Webhook verification failed.');
     }
 
-    if (!(await this.matchesExpectedPayment(event, notifiedOrgId))) {
+    if (!(await this.matchesExpectedPayment(event, notifiedOrgId, epaycoCollector?.custId))) {
       return { applied: false, status: null, donationId: null };
     }
 
@@ -709,6 +758,42 @@ export class DonationsService {
     return { accessToken: row.accessToken, accountId: row.mpUserId };
   }
 
+  /** ADR-PAG-002: the org's own ePayco keys, decrypted under its RLS context. */
+  private resolveEpaycoCollector(
+    organizationId: string,
+  ): Promise<EpaycoCollectorCredentials | undefined> {
+    return loadEpaycoCollector(this.prisma, this.epaycoKey, organizationId);
+  }
+
+  /**
+   * Organization that owns an ePayco confirmation. Primary path: our own
+   * reference (`x_id_invoice` = `collection_id`) → the donation's
+   * organization (`donation_by_collection_id`). Fallback, for a reference we
+   * do not know: the merchant (`x_cust_id_cliente`) → its organization, only
+   * when exactly one matches. Either way the body is NOT trusted beyond
+   * picking whose keys verify it: a forged invoice or merchant only makes the
+   * signature/merchant check in the adapter fail.
+   */
+  private async resolveEpaycoNotifiedOrganizationId(payload: unknown): Promise<string | undefined> {
+    const invoice = epaycoField(payload, 'x_id_invoice');
+    if (invoice && GATEWAY_REFERENCE_PATTERN.test(invoice)) {
+      const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+        SELECT * FROM donation_by_collection_id(${invoice})
+      `);
+      if (rows[0]) {
+        return rows[0].organization_id;
+      }
+    }
+    const custId = epaycoField(payload, 'x_cust_id_cliente');
+    if (!custId || !/^\d{1,20}$/.test(custId)) {
+      return undefined;
+    }
+    const rows = await this.prisma.$queryRaw<{ organization_id: string }[]>(Prisma.sql`
+      SELECT * FROM epayco_account_organization_id(${custId})
+    `);
+    return rows.length === 1 ? rows[0].organization_id : undefined;
+  }
+
   /**
    * Organization connected with the Mercado Pago account named in a webhook
    * body (`user_id`). Exactly one match or nothing: an account connected to
@@ -737,6 +822,7 @@ export class DonationsService {
   private async matchesExpectedPayment(
     event: NormalizedWebhookEvent,
     notifiedOrgId: string | undefined,
+    expectedReceiverAccountId?: string,
   ): Promise<boolean> {
     if (
       notifiedOrgId === undefined &&
@@ -753,7 +839,11 @@ export class DonationsService {
       return true; // unknown collection: `apply_donation_webhook` is a no-op
     }
     const mismatches: string[] = [];
-    if (notifiedOrgId !== undefined && donation.organization_id !== notifiedOrgId) {
+    if (
+      (notifiedOrgId !== undefined && donation.organization_id !== notifiedOrgId) ||
+      (expectedReceiverAccountId !== undefined &&
+        event.receiverAccountId !== expectedReceiverAccountId)
+    ) {
       mismatches.push('receiver');
     }
     if (event.amountCharged !== undefined && event.amountCharged !== donation.amount_charged) {
@@ -785,6 +875,15 @@ export class DonationsService {
   async getOrganizationAvailability(
     organizationId: string,
   ): Promise<DonationOrganizationAvailability> {
+    if (this.epayco) {
+      const account = await this.prisma.withOrgContext(organizationId, (tx) =>
+        tx.organizationEpaycoAccount.findUnique({
+          where: { organizationId },
+          select: { id: true },
+        }),
+      );
+      return { organizationId, canReceiveDonations: Boolean(account) };
+    }
     const mpUserId = await this.resolveSponsorMpUserId(organizationId);
     return { organizationId, canReceiveDonations: Boolean(mpUserId) };
   }

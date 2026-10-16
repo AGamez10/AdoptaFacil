@@ -92,3 +92,30 @@ model OrganizationMercadoPagoAccount {
   @@index([expiresAt])
   @@map("organization_mercadopago_accounts")
 }
+
+/// ADR-PAG-001/002 (cobro directo con ePayco, sin custodia): the org's OWN
+/// ePayco merchant account. The checkout session is created with these keys,
+/// so the organization is the merchant of record and receives the money in its
+/// own ePayco balance. One row per organization; `custId` is globally unique
+/// (one ePayco account never backs two organizations). `pKeyEnc` and
+/// `privateKeyEnc` are AES-256-GCM ciphertexts (see
+/// apps/api/src/modules/payments/epayco-keys-crypto.ts) — never returned by any
+/// endpoint, logged or audited (audit carries at most `custId`).
+model OrganizationEpaycoAccount {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @unique @map("organization_id") @db.Uuid
+  /// P_CUST_ID_CLIENTE (numeric merchant id at ePayco). Not a secret.
+  custId         String   @unique @map("cust_id")
+  /// PUBLIC_KEY (Apify login user). Not a secret.
+  publicKey      String   @map("public_key")
+  /// P_KEY, encrypted (base64 iv||tag||ciphertext).
+  pKeyEnc        String   @map("p_key_enc")
+  /// PRIVATE_KEY, encrypted (base64 iv||tag||ciphertext).
+  privateKeyEnc  String   @map("private_key_enc")
+  connectedAt    DateTime @default(now()) @map("connected_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_epayco_accounts")
+}
