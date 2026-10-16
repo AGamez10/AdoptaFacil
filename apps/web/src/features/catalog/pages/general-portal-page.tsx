@@ -18,8 +18,9 @@ import {
   WaysToHelpSection,
   useCatalogSnapshot,
 } from '../../landing';
-import styles from '../../landing/components/landing.module.scss';
-import { GeneralCatalogSection } from '../components/general-catalog-section';
+import { buildAdoptPath } from '../model/adopt-filters';
+
+const LEGACY_SPECIES: Record<string, 'dog' | 'cat'> = { perros: 'dog', gatos: 'cat' };
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -45,7 +46,7 @@ function useHeroBannerPhotos(): string[] {
   return photos;
 }
 
-/** Los enlaces `/#adoptar` y `/#organizaciones` del navbar llevan a su sección
+/** Los enlaces `/#organizaciones` y `/#ayudar` llevan a su sección
  *  (react-router no desplaza a anclas por sí solo). */
 function useScrollToHash() {
   const { hash } = useLocation();
@@ -72,6 +73,7 @@ function useScrollToHash() {
  */
 export function GeneralPortalPage() {
   const { status } = useSession();
+  const { hash, search } = useLocation();
   const heroBannerPhotos = useHeroBannerPhotos();
   const snapshot = useCatalogSnapshot();
   useDocumentTitle('Adopción responsable en Colombia');
@@ -85,6 +87,14 @@ export function GeneralPortalPage() {
     return <Navigate to="/inicio" replace />;
   }
 
+  // El catálogo completo vive ahora en /adoptar; los enlaces viejos
+  // (`/#adoptar`, `/?especie=gatos&ciudad=Medellín#adoptar`) siguen sirviendo.
+  const legacy = new URLSearchParams(search);
+  if (hash === `#${LANDING_CATALOG_ID}` || legacy.has('especie') || legacy.has('ciudad')) {
+    const species = LEGACY_SPECIES[legacy.get('especie') ?? ''] ?? 'all';
+    return <Navigate to={buildAdoptPath(species, legacy.get('ciudad'))} replace />;
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-foreground">
       <PublicNavbar />
@@ -93,7 +103,7 @@ export function GeneralPortalPage() {
         {/* Landing marca v3 (rediseño 2026-10): primero animales reales y
             "Quiero adoptar", luego las formas de ayudar (donar y recursos
             solo con su módulo encendido), cómo adoptar, la red en cifras
-            reales, el catálogo completo, campañas, comunidad, la propuesta
+            reales, campañas, comunidad, la propuesta
             para organizaciones y el cierre. Ninguna cifra que no salga de
             la API. */}
         <LandingHero snapshot={snapshot} />
@@ -101,12 +111,6 @@ export function GeneralPortalPage() {
         <WaysToHelpSection />
         <AdoptionStepsSection photos={heroBannerPhotos} />
         <ImpactSection snapshot={snapshot} />
-
-        <section id={LANDING_CATALOG_ID} className={styles.catalog} aria-label="Catálogo">
-          <div className="mx-auto w-full max-w-6xl space-y-8 px-4 sm:px-6">
-            <GeneralCatalogSection />
-          </div>
-        </section>
 
         <ActiveCampaignsSection />
         <CommunitySection />

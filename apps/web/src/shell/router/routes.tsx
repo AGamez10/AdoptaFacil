@@ -27,7 +27,7 @@ import {
   VOLUNTEERING_VIEW_ROLES,
 } from '../navigation';
 import { AnimalDetailPage } from '../pages/animal-detail-page';
-import { GeneralPortalPage } from '../../features/catalog';
+import { AdoptPage, GeneralPortalPage } from '../../features/catalog';
 import { HomePage, NotFoundPage } from '../../features/_layout';
 import {
   CompleteProfilePage,
@@ -190,6 +190,11 @@ export function AppRoutes() {
             )
           }
         />
+        {/* Listado público de adopción con URLs limpias por especie y ciudad
+          (rediseño 2026-10): /adoptar, /adoptar/perros, /adoptar/perros/bogota. */}
+        <Route path="/adoptar" element={<AdoptPage />} />
+        <Route path="/adoptar/:especie" element={<AdoptPage />} />
+        <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
         {/* Public auth screens */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
