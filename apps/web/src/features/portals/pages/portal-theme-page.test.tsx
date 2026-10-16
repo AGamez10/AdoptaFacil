@@ -336,10 +336,11 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
 
     const editorial = await screen.findByRole('radio', { name: /Editorial/ });
     expect(editorial).toBeChecked();
-    // Decisión del cliente: las 5 plantillas actuales son gratis y no hay aviso de pago.
+    // Decisión del cliente: las 5 plantillas actuales son gratis; solo los diseños
+    // Pro (p. ej. Historias) llevan la marca y el aviso de la promoción.
     expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-option-carnet')).toHaveTextContent('Gratis');
-    expect(screen.queryByTestId('template-upsell')).not.toBeInTheDocument();
+    expect(screen.getByTestId('template-upsell')).toHaveTextContent(/incluidas gratis/);
 
     fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));
     fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
