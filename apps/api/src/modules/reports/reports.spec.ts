@@ -168,8 +168,9 @@ const breakdown = (net: number) => ({
   gatewayIva: 570,
 });
 
-function donationsPayload() {
+function donationsPayload(consentedUserIds: ReadonlySet<string> = new Set(['u-maria'])) {
   return buildDonationsPayload({
+    consentedUserIds,
     organization: ORG,
     period: { start: '2026-09-01', end: '2026-09-30' },
     campaignNames: new Map([['c1', 'Cirugía de Luna']]),
@@ -182,6 +183,7 @@ function donationsPayload() {
         amountCharged: 100000,
         breakdown: breakdown(91670),
         payer: { fullName: 'María Restrepo', documentId: '1020304050' },
+        donorUserId: 'u-maria',
         anonymous: false,
         approvedAt: new Date('2026-09-10T15:00:00Z'),
         receiptId: 'abcdef12-0000',
@@ -194,6 +196,7 @@ function donationsPayload() {
         amountCharged: 50000,
         breakdown: breakdown(41670),
         payer: { fullName: 'Secreto Real', documentId: '99999999' },
+        donorUserId: 'u-secreto',
         anonymous: true,
         approvedAt: new Date('2026-09-05T15:00:00Z'),
       },
@@ -214,6 +217,58 @@ describe('report-payloads', () => {
     expect(p.rows[0].concept).toBe('Campaña: Cirugía de Luna');
   });
 
+  it('donaciones: sin consentimiento vigente no se identifica al donante, pero los montos se conservan', () => {
+    const p = donationsPayload(new Set());
+    expect(p.rows.map((r) => r.donor)).toEqual(['Donante anónimo', 'Donante']);
+    expect(p.rows.map((r) => r.donorDocument)).toEqual(['', '']);
+    expect(JSON.stringify(p)).not.toContain('María');
+    expect(JSON.stringify(p)).not.toContain('4050');
+    expect(p.totals.amountCharged).toBe(150000);
+  });
+
+  it('donaciones: el consentimiento de otra persona (o del donante anónimo) no identifica a nadie', () => {
+    const other = donationsPayload(new Set(['u-otra-persona', 'u-secreto']));
+    expect(other.rows.map((r) => r.donor)).toEqual(['Donante anónimo', 'Donante']);
+    expect(JSON.stringify(other)).not.toContain('Secreto');
+  });
+
+  it('servicio social: solo figuran voluntarios con consentimiento; los demás se cuentan sin nombre', () => {
+    const period = resolveReportPeriod(
+      '2026-09-01',
+      '2026-09-30',
+      new Date('2026-10-09T12:00:00Z'),
+    );
+    const base = {
+      organization: ORG,
+      period: {
+        start: period.startDate,
+        end: period.endDate,
+        fromUtc: period.fromUtc,
+        toUtcExclusive: period.toUtcExclusive,
+      },
+      filters: {},
+      minHours: 80,
+      enrollments: ['v1', 'v2'].map((id) => ({
+        id: `e-${id}`,
+        volunteerUserId: id,
+        volunteerName: `Nombre ${id}`,
+        opportunityTitle: 'Paseo',
+        appliesToStudentService: false,
+        schoolName: null,
+        schoolAgreementCode: null,
+        hours: [{ date: new Date('2026-09-02T15:00:00Z'), hours: 5, status: 'approved' }],
+      })),
+    };
+    const partial = buildSocialServicePayload({ ...base, consentedUserIds: new Set(['v1']) });
+    expect(partial.rows.map((r) => r.volunteerName)).toEqual(['Nombre v1']);
+    expect(partial.omittedWithoutConsent).toBe(1);
+    expect(JSON.stringify(partial)).not.toContain('Nombre v2');
+    const none = buildSocialServicePayload({ ...base });
+    expect(none.rows).toEqual([]);
+    expect(none.omittedWithoutConsent).toBe(2);
+    expect(none.totals.volunteers).toBe(0);
+  });
+
   it('servicio social: solo horas aprobadas del período, filtros y faltantes', () => {
     const period = resolveReportPeriod(
       '2026-09-01',
@@ -230,9 +285,11 @@ describe('report-payloads', () => {
       },
       filters: { studentServiceOnly: true },
       minHours: 80,
+      consentedUserIds: new Set(['v1']),
       enrollments: [
         {
           id: 'e1',
+          volunteerUserId: 'v1',
           volunteerName: 'Juan Estudiante',
           opportunityTitle: 'Paseo de perros',
           appliesToStudentService: true,

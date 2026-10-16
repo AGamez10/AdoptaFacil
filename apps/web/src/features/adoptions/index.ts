@@ -3,3 +3,4 @@ export { AdoptionsKanbanPage } from './pages/adoptions-kanban-page';
 export { AdoptionRequestPage } from './pages/adoption-request-page';
 export { MyAdoptionRequestsPage } from './pages/my-adoption-requests-page';
 export { AdoptionContractPage } from './pages/adoption-contract-page';
+export { MyFollowUpsPage } from './pages/my-followups-page';

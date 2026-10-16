@@ -63,6 +63,8 @@ const APPEND_ONLY_TABLES = [
   'legal_acceptances',
   // org_reports (M13): append-only, mismos triggers que volunteer_certificates.
   'org_report_approvals',
+  // third_party_consents (M13): historial inmutable; el trigger bloquea DELETE.
+  'third_party_consents',
   'org_reports',
   // F19 · decisions before their requests, events before their tickets (FKs).
   'platform_sensitive_action_decisions',

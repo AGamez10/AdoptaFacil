@@ -170,6 +170,13 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
         cert: sheetText(r.certificateNo),
       });
     }
+    if (payload.omittedWithoutConsent && payload.omittedWithoutConsent > 0) {
+      detail.addRow({
+        name: sheetText(
+          `No se incluyen ${payload.omittedWithoutConsent} voluntario(s) sin autorización de uso de datos.`,
+        ),
+      });
+    }
     detail.views = [{ state: 'frozen', ySplit: 1 }];
     detail.autoFilter = { from: 'A1', to: 'J1' };
 

@@ -13,11 +13,14 @@ body {
   color: var(--text-dark);
 }
 
+/* Títulos con la tipografía de marca v3 (Bricolage Grotesque). Los portales
+   de cada organización fijan su propia fuente con --font-display. */
 h1,
 h2,
 h3 {
-  font-family: var(--font-display);
-  font-weight: var(--fw-semibold);
+  font-family: var(--font-brand);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.015em;
 }
 
 /* Números tabulares para montos/cifras — nunca mono para dinero. */

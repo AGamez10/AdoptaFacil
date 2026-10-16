@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { CampaignPublic } from '@adoptafacil/contracts';
-import { EmptyState, Skeleton } from '@adoptafacil/ui';
+import { cn, EmptyState, Skeleton } from '@adoptafacil/ui';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { listPublicCampaigns } from '../api/public-campaigns';
 import { CampaignCard } from '../components/campaign-card';
+import styles from './public-campaigns-page.module.scss';
 
 type ListState = 'loading' | 'ready' | 'error';
 const PAGE_SIZE = 24;
@@ -37,34 +38,42 @@ export function PublicCampaignsPage() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-[var(--af-ink)]">
       <PublicNavbar />
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6">
-        <header className="mb-8 space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Campañas de recaudación</h1>
-          <p className="text-sm text-muted-foreground">
-            Apoya las campañas activas de las organizaciones de rescate.
-          </p>
+      <main className="flex-1">
+        <header className={styles.hero}>
+          <div className={styles.container}>
+            <p className={styles.eyebrow}>Cada aporte se nota</p>
+            <h1 className={styles.title}>Campañas de recaudación</h1>
+            <p className={styles.lead}>
+              Cirugías, alimento y esterilizaciones de las organizaciones de rescate. Cada campaña
+              muestra su meta, su avance y, después, en qué se gastó.
+            </p>
+          </div>
         </header>
 
-        {state === 'loading' && <Skeleton className="h-64 w-full" />}
-        {state === 'error' && (
-          <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
-        )}
-        {state === 'ready' && items.length === 0 && (
-          <EmptyState
-            title="Sin campañas activas"
-            description="No hay campañas activas ahora. Vuelve pronto."
-          />
-        )}
-        {state === 'ready' && items.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((campaign) => (
-              <CampaignCard key={campaign.id} campaign={campaign} />
-            ))}
-          </div>
-        )}
+        <div className={cn(styles.container, styles.body)}>
+          {state === 'loading' && <Skeleton className="h-64 w-full rounded-[1.5rem]" />}
+          {state === 'error' && (
+            <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
+          )}
+          {state === 'ready' && items.length === 0 && (
+            <EmptyState
+              title="Sin campañas activas"
+              description="No hay campañas activas ahora. Vuelve pronto."
+            />
+          )}
+          {state === 'ready' && items.length > 0 && (
+            <ul className={styles.grid}>
+              {items.map((campaign) => (
+                <li key={campaign.id}>
+                  <CampaignCard campaign={campaign} variant="brand" />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </main>
 
       <PublicFooter />

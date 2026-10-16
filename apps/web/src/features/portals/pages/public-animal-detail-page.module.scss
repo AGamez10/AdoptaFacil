@@ -1,0 +1,369 @@
+/* Ficha pública de un animal — marca v3. Móvil primero. */
+
+.page {
+  padding: 1.25rem 0 7rem;
+
+  @media (min-width: 768px) {
+    padding: 2rem 0 5rem;
+  }
+}
+
+.container {
+  width: 100%;
+  max-width: var(--af-container);
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+
+  @media (min-width: 640px) {
+    padding-inline: 2rem;
+  }
+}
+
+.back {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+
+  /* En celular el enlace al listado vive abajo ("Más amigos…"). */
+  > .backMore {
+    display: none;
+
+    @media (min-width: 640px) {
+      display: inline;
+    }
+  }
+}
+
+.backMore {
+  font-weight: var(--fw-bold);
+  color: var(--af-teal-ink);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.detail {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 1.25rem;
+
+  @media (min-width: 960px) {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 3rem;
+    margin-top: 2rem;
+  }
+}
+
+.media {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--af-r-block);
+  background: var(--af-mint-soft);
+  box-shadow: var(--af-shadow-card);
+  aspect-ratio: 4 / 5;
+
+  @media (min-width: 960px) {
+    position: sticky;
+    top: 5.5rem;
+  }
+}
+
+.media__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media__empty {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  font-weight: var(--fw-semibold);
+  color: var(--af-teal-ink);
+}
+
+.media__badges {
+  position: absolute;
+  inset: 1rem 1rem auto;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.badge {
+  border-radius: var(--r-full);
+  background: var(--af-sun);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-ink);
+}
+
+.badge--glass {
+  background: rgb(255 255 255 / 0.9);
+  backdrop-filter: blur(6px);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.name {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: clamp(2.75rem, 9vw, 4.5rem);
+  font-weight: var(--fw-extra);
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+  color: var(--af-ink);
+}
+
+.subtitle {
+  margin: -0.5rem 0 0;
+  font-size: 1.125rem;
+  color: var(--af-ink-soft);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.fact {
+  border-radius: var(--af-r-card);
+  padding: 0.85rem 1rem;
+
+  dt {
+    font-size: 0.75rem;
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--af-ink-soft);
+  }
+
+  dd {
+    margin: 0.15rem 0 0;
+    font-family: var(--font-brand);
+    font-size: 1.25rem;
+    font-weight: var(--fw-bold);
+    color: var(--af-ink);
+  }
+
+  &[data-tone='mint'] {
+    background: var(--af-mint);
+  }
+
+  &[data-tone='sun'] {
+    background: var(--af-sun-soft);
+  }
+
+  &[data-tone='sky'] {
+    background: var(--af-sky);
+  }
+
+  &[data-tone='coral'] {
+    background: var(--af-coral-soft);
+  }
+}
+
+.actions {
+  border-radius: var(--af-r-block);
+  background: var(--af-paper);
+  padding: 1.25rem;
+  box-shadow: var(--af-shadow-card);
+}
+
+.org {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  border: 1.5px solid var(--af-line);
+  border-radius: var(--af-r-card);
+  padding: 1rem;
+}
+
+.org__logo {
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--af-teal-deep);
+  object-fit: cover;
+  font-family: var(--font-brand);
+  font-size: 1.35rem;
+  font-weight: var(--fw-extra);
+  color: #fff;
+}
+
+.org__body {
+  min-width: 0;
+
+  p {
+    margin: 0;
+  }
+}
+
+.org__eyebrow {
+  font-size: 0.75rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--af-teal-ink);
+}
+
+.org__name {
+  font-weight: var(--fw-bold);
+  font-size: 1.0625rem;
+  color: var(--af-ink);
+}
+
+.org__meta {
+  font-size: 0.875rem;
+  color: var(--af-ink-soft);
+}
+
+.steps {
+  border-radius: var(--af-r-card);
+  background: var(--af-teal-deep);
+  padding: 1.25rem 1.25rem 1.4rem;
+  color: #fff;
+}
+
+.steps__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.steps__list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.65rem;
+    counter-increment: step;
+    line-height: 1.45;
+
+    &::before {
+      content: counter(step);
+      display: inline-grid;
+      width: 1.6rem;
+      height: 1.6rem;
+      flex: none;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--af-sun);
+      font-weight: var(--fw-extra);
+      font-size: 0.85rem;
+      color: var(--af-ink);
+    }
+  }
+}
+
+.similar {
+  margin-top: 3.5rem;
+}
+
+.similar__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.similar__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+}
+
+.similar__grid {
+  display: grid;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (min-width: 560px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Llamado principal fijo en celular. */
+.stickyCta {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--af-line);
+  background: rgb(255 248 239 / 0.96);
+  backdrop-filter: blur(10px);
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom));
+
+  @media (min-width: 960px) {
+    display: none;
+  }
+}
+
+.stickyCta__text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.2;
+
+  strong {
+    overflow: hidden;
+    font-family: var(--font-brand);
+    font-size: 1.1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    font-size: 0.8125rem;
+    color: var(--af-ink-soft);
+  }
+}
+
+.stickyCta__button {
+  display: inline-flex;
+  min-height: 3rem;
+  flex: none;
+  align-items: center;
+  border-radius: var(--r-full);
+  background: var(--af-teal-ink);
+  padding: 0 1.35rem;
+  font-weight: var(--fw-bold);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 4px 0 #084a41;
+
+  &:focus-visible {
+    outline: 3px solid var(--af-ink);
+    outline-offset: 2px;
+  }
+}

@@ -27,7 +27,7 @@ import {
   VOLUNTEERING_VIEW_ROLES,
 } from '../navigation';
 import { AnimalDetailPage } from '../pages/animal-detail-page';
-import { GeneralPortalPage } from '../../features/catalog';
+import { AdoptPage, GeneralPortalPage } from '../../features/catalog';
 import { HomePage, NotFoundPage } from '../../features/_layout';
 import {
   CompleteProfilePage,
@@ -94,7 +94,9 @@ import {
   AdoptionRequestPage,
   AdoptionsKanbanPage,
   MyAdoptionRequestsPage,
+  MyFollowUpsPage,
 } from '../../features/adoptions';
+import { ThirdPartyConsentsPage } from '../../features/consents';
 import {
   DonatePage,
   DonationAccessPage,
@@ -190,6 +192,11 @@ export function AppRoutes() {
             )
           }
         />
+        {/* Listado público de adopción con URLs limpias por especie y ciudad
+          (rediseño 2026-10): /adoptar, /adoptar/perros, /adoptar/perros/bogota. */}
+        <Route path="/adoptar" element={<AdoptPage />} />
+        <Route path="/adoptar/:especie" element={<AdoptPage />} />
+        <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
         {/* Public auth screens */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -303,6 +310,9 @@ export function AppRoutes() {
               {/* "Mis donaciones": historial del usuario, DENTRO del shell (conserva el
               menú). `/donaciones` es pública y arma su propio chrome sin menú. */}
               <Route path="mis-donaciones" element={<MyDonationsPage />} />
+              {/* M13 · "Uso de mis datos en reportes": cada persona gestiona SOLO sus
+              consentimientos (el sujeto sale del JWT); cualquier autenticado. */}
+              <Route path="uso-de-mis-datos" element={<ThirdPartyConsentsPage />} />
               {/* M04 · adopciones (T-028a): tablero de evaluación (org) + solicitud (persona).
               F1-02: el tablero de evaluación solo tenía el gate del ITEM de nav (#86) —
               tecleando la URL directo, cualquier autenticado entraba a la vista de gestión.
@@ -331,6 +341,9 @@ export function AppRoutes() {
               (`personaOnly`, nav-items.ts) y la propia página muestra "Mis
               solicitudes" vacío/con error si algo raro llegara a pasar por URL. */}
               <Route path="mis-solicitudes" element={<MyAdoptionRequestsPage />} />
+              {/* T-028c: "Mis seguimientos" del adoptante — GET /adoptions/followups/mine
+              autoriza por identidad (sin @Roles), igual que "Mis solicitudes". */}
+              <Route path="mis-seguimientos" element={<MyFollowUpsPage />} />
               {/* M03 · animales + expediente clínico + recordatorios (T-031, wires
               T-104/T-105/T-106). Cada ruta exige los MISMOS @Roles que su endpoint
               (deny-by-default). El panel clínico es EMBEBIBLE por animalId → vive

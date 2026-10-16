@@ -158,7 +158,8 @@ export interface PortalTemplateInfo {
   id: PortalTemplateId;
   name: string;
   tagline: string;
-  /** TODO(client): lo define el hilo de planes. Hoy es solo un parámetro. */
+  /** Decisión del cliente (2026-10-16): las 5 plantillas actuales son gratis
+   *  en todos los planes; `paid` queda para los futuros diseños "super Pro". */
   tier: PortalTemplateTier;
 }
 
@@ -178,25 +179,25 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     id: 'editorial',
     name: 'Editorial',
     tagline: 'Como una revista: titulares grandes, mucho aire y foto en arco.',
-    tier: 'paid',
+    tier: 'free',
   },
   {
     id: 'carnet',
     name: 'Carnet',
     tagline: 'Inspirada en el carnet de cada animal: fichas con personalidad.',
-    tier: 'paid',
+    tier: 'free',
   },
   {
     id: 'impacto',
     name: 'Impacto',
     tagline: 'Oscura y directa: el número de animales que buscan hogar manda.',
-    tier: 'paid',
+    tier: 'free',
   },
   {
     id: 'orbita',
     name: 'Órbita',
     tagline: 'Una constelación en 3D que forma una huella y reacciona al cursor.',
-    tier: 'paid',
+    tier: 'free',
   },
   {
     id: 'historias',

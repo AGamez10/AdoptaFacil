@@ -83,11 +83,14 @@ export function PublicCampaignDetailPage() {
   }, [id]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-foreground">
       <PublicNavbar />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
-        <Link to="/campanas" className="text-sm text-primary hover:underline">
+        <Link
+          to="/campanas"
+          className="text-sm font-bold text-[var(--af-teal-ink)] hover:underline"
+        >
           ← Volver a campañas
         </Link>
 
@@ -103,9 +106,12 @@ export function PublicCampaignDetailPage() {
             <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
           )}
           {state === 'ready' && campaign && (
-            <Card data-testid="public-campaign-detail">
+            <Card
+              data-testid="public-campaign-detail"
+              className="rounded-[2rem] border-0 shadow-[var(--af-shadow-card)]"
+            >
               <CardHeader className="gap-2">
-                <CardTitle className="flex flex-wrap items-center gap-2">
+                <CardTitle className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-brand)] text-3xl font-extrabold tracking-tight">
                   {campaign.title}
                   <Badge variant="secondary">{CATEGORY_LABELS[campaign.category]}</Badge>
                   <Badge variant={campaignStatusVariant(campaign.status)}>

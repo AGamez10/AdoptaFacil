@@ -36,6 +36,8 @@ export interface DonationSourceRow {
     gatewayIva: number;
   };
   payer: { fullName?: string; documentId?: string } | null;
+  /** Cuenta del donante, si donó con sesión; solo así puede constar su consentimiento. */
+  donorUserId?: string | null;
   anonymous: boolean;
   /** Fecha de aprobación (emisión del recibo) o, en su defecto, de actualización. */
   approvedAt: Date;
@@ -87,7 +89,10 @@ export function buildDonationsPayload(input: {
   donations: DonationSourceRow[];
   campaignNames: Map<string, string>;
   animalNames: Map<string, string>;
+  /** Personas con consentimiento vigente para esta organización; sin él, no se identifica. */
+  consentedUserIds?: ReadonlySet<string>;
 }): DonationsReportPayload {
+  const consented = input.consentedUserIds ?? new Set<string>();
   const sorted = [...input.donations].sort(
     (a, b) => a.approvedAt.getTime() - b.approvedAt.getTime() || a.id.localeCompare(b.id),
   );
@@ -95,11 +100,17 @@ export function buildDonationsPayload(input: {
   const rows: DonationReportRow[] = sorted.map((d) => {
     const b = d.breakdown;
     const fees = b.platformFee + b.platformIva + b.gatewayFee + b.gatewayIva;
+    // Solo se identifica al donante con cuenta, no anónimo y con consentimiento vigente.
+    const identified = !d.anonymous && !!d.donorUserId && consented.has(d.donorUserId);
     return {
       date: d.approvedAt.toISOString(),
       receiptNo: (d.receiptId ?? d.id).slice(0, 8).toUpperCase(),
-      donor: d.anonymous ? 'Donante anónimo' : d.payer?.fullName?.trim() || 'Donante',
-      donorDocument: d.anonymous ? '' : maskDocument(d.payer?.documentId),
+      donor: d.anonymous
+        ? 'Donante anónimo'
+        : identified
+          ? d.payer?.fullName?.trim() || 'Donante'
+          : 'Donante',
+      donorDocument: identified ? maskDocument(d.payer?.documentId) : '',
       concept: conceptLabel(d.conceptKind, d.conceptId, names),
       amountCharged: d.amountCharged,
       fees,
@@ -150,6 +161,7 @@ export function buildDonationsPayload(input: {
 
 export interface EnrollmentSourceRow {
   id: string;
+  volunteerUserId?: string;
   volunteerName: string;
   opportunityTitle: string;
   appliesToStudentService: boolean;
@@ -183,6 +195,8 @@ export interface SocialServiceReportPayload {
   rows: SocialServiceReportRow[];
   totals: { volunteers: number; hoursInPeriod: number; certificates: number; completed: number };
   bySchool: Array<{ school: string; volunteers: number; hours: number }>;
+  /** Voluntarios que habrían figurado pero no autorizaron el uso de sus datos (solo el conteo). */
+  omittedWithoutConsent?: number;
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -193,7 +207,11 @@ export function buildSocialServicePayload(input: {
   filters: SocialServiceReportFilters;
   minHours: number;
   enrollments: EnrollmentSourceRow[];
+  /** Personas con consentimiento vigente para esta organización. */
+  consentedUserIds?: ReadonlySet<string>;
 }): SocialServiceReportPayload {
+  const consented = input.consentedUserIds ?? new Set<string>();
+  let omittedWithoutConsent = 0;
   const { fromUtc, toUtcExclusive } = input.period;
   const inPeriod = (d: Date) => d >= fromUtc && d < toUtcExclusive;
   const school = input.filters.schoolName?.trim();
@@ -209,6 +227,10 @@ export function buildSocialServicePayload(input: {
     );
     const certifiedInPeriod = e.certificate ? inPeriod(e.certificate.issuedAt) : false;
     if (hoursInPeriod === 0 && !certifiedInPeriod) continue;
+    if (!e.volunteerUserId || !consented.has(e.volunteerUserId)) {
+      omittedWithoutConsent += 1;
+      continue;
+    }
 
     const hoursTotal = round2(approved.reduce((s, h) => s + h.hours, 0));
     const missingHours = e.appliesToStudentService
@@ -266,6 +288,7 @@ export function buildSocialServicePayload(input: {
     bySchool: [...schoolMap.entries()]
       .map(([s, v]) => ({ school: s, ...v }))
       .sort((a, b) => a.school.localeCompare(b.school, 'es')),
+    omittedWithoutConsent,
   };
 }
 

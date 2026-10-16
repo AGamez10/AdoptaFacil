@@ -366,6 +366,30 @@ describe('F1-01 · "Mis solicitudes" shows only to a Persona account (personaOnl
   });
 });
 
+describe('T-028c · "Mis seguimientos" shows only to a Persona account (personaOnly)', () => {
+  function nav() {
+    return screen.getByRole('navigation', { name: 'Navegación principal' });
+  }
+
+  it('shows "Mis seguimientos" to a Persona, pointing at its own route', async () => {
+    renderShell({ route: '/', ...sessionWith([]) });
+    await waitFor(() =>
+      expect(within(nav()).getByRole('link', { name: 'Mis seguimientos' })).toHaveAttribute(
+        'href',
+        '/mis-seguimientos',
+      ),
+    );
+  });
+
+  it('hides "Mis seguimientos" from an org account (Operator)', async () => {
+    renderShell({ route: '/', ...sessionWith([Role.Operator]) });
+    await waitFor(() =>
+      expect(within(nav()).getByRole('link', { name: 'Adopciones' })).toBeInTheDocument(),
+    );
+    expect(within(nav()).queryByRole('link', { name: 'Mis seguimientos' })).not.toBeInTheDocument();
+  });
+});
+
 describe('T-065 · "Transparencia" route redirects home (no stale "Ola 1" placeholder)', () => {
   it('redirects /transparencia to home for an org role — never shows "en construcción"/"Ola 1"', async () => {
     renderShell({ route: '/transparencia', ...sessionWith([Role.Owner]) });

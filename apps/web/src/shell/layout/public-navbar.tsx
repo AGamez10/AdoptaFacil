@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { buttonVariants, cn } from '@adoptafacil/ui';
+import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../capabilities';
 import { Brand } from './brand';
 import styles from './public-navbar.module.scss';
@@ -13,15 +13,16 @@ interface PublicNavLink {
 }
 
 /**
- * Public top nav (visitantes sin sesión). Ola 3 (R3-5 · F5): la navegación
- * sigue la lógica de negocio del MVP — primero adoptar (animales y
- * campañas), luego la oferta para organizaciones — y solo enlaza a rutas que
- * existen y a módulos encendidos (Ola 1, R1-1). En móvil los enlaces viven
- * en un menú desplegable accesible (antes simplemente desaparecían).
+ * Public top nav (visitantes sin sesión), marca v3. La navegación sigue la
+ * lógica de negocio del MVP — primero adoptar (animales y campañas), luego la
+ * oferta para organizaciones — y solo enlaza a rutas que existen y a módulos
+ * encendidos (Ola 1, R1-1). En móvil los enlaces viven en un panel desplegable
+ * accesible, con las dos acciones principales siempre visibles.
  */
 export function PublicNavbar() {
   const resources = useFeature('resources');
   const marketplace = useFeature('marketplace');
+  const payments = useFeature('payments');
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const location = useLocation();
@@ -41,8 +42,9 @@ export function PublicNavbar() {
   }, [open]);
 
   const links: PublicNavLink[] = [
-    { label: 'Animales en adopción', to: '/#adoptar', anchor: true },
+    { label: 'Animales en adopción', to: '/adoptar' },
     { label: 'Campañas', to: '/campanas' },
+    ...(payments ? [{ label: 'Donar', to: '/donaciones' }] : []),
     ...(resources ? [{ label: 'Banco de recursos', to: '/recursos' }] : []),
     ...(marketplace ? [{ label: 'Marketplace', to: '/marketplace' }] : []),
     { label: 'Para organizaciones', to: '/#organizaciones', anchor: true },
@@ -64,9 +66,9 @@ export function PublicNavbar() {
     );
 
   return (
-    <header className={styles.navbar}>
+    <header className={styles.navbar} data-open={open}>
       <div className={styles.navbar__row}>
-        <Link to="/" aria-label="Ir al inicio">
+        <Link to="/" aria-label="Ir al inicio" className={styles.navbar__brand}>
           <Brand />
         </Link>
 
@@ -77,16 +79,10 @@ export function PublicNavbar() {
         </nav>
 
         <div className={styles.navbar__actions}>
-          <Link
-            to="/login"
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), styles.navbar__login)}
-          >
+          <Link to="/login" className={styles.navbar__login}>
             Ingresar
           </Link>
-          <Link
-            to="/register"
-            className={cn(buttonVariants({ size: 'sm' }), styles.navbar__register)}
-          >
+          <Link to="/register" className={styles.navbar__register}>
             Registrar mi organización
           </Link>
           <button
@@ -113,11 +109,14 @@ export function PublicNavbar() {
           renderLink(link, styles.navbar__mobileLink, styles['navbar__mobileLink--active']),
         )}
         <div className={styles.navbar__mobileActions}>
-          <Link to="/login" className={cn(buttonVariants({ variant: 'outline' }), 'w-full')}>
-            Ingresar
+          <Link to="/adoptar" className={styles.navbar__mobilePrimary}>
+            Quiero adoptar
           </Link>
-          <Link to="/register" className={cn(buttonVariants(), 'w-full')}>
+          <Link to="/register" className={styles.navbar__mobileSecondary}>
             Registrar mi organización
+          </Link>
+          <Link to="/login" className={styles.navbar__mobileSecondary}>
+            Ingresar
           </Link>
         </div>
       </nav>

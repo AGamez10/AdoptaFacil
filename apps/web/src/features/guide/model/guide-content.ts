@@ -50,7 +50,7 @@ export const GUIDE_FLOWS: readonly GuideFlow[] = [
     steps: [
       {
         text: 'Mira los animales disponibles: filtra por especie o busca por nombre, raza o ciudad.',
-        to: '/#adoptar',
+        to: '/adoptar',
         linkLabel: 'Ver animales',
       },
       {
@@ -320,7 +320,7 @@ export interface MapEntry {
 /** Mapa para visitantes. Los módulos apagados se filtran en el componente. */
 export const PUBLIC_MAP: readonly MapEntry[] = [
   {
-    to: '/#adoptar',
+    to: '/adoptar',
     label: 'Animales en adopción',
     description: 'Todos los animales disponibles.',
   },

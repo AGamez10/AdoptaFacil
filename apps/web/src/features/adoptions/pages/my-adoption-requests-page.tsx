@@ -92,6 +92,13 @@ export function MyAdoptionRequestsPage() {
                           Ver contrato
                         </Button>
                       )}
+                      {/* T-028c: con contrato, la organización programa seguimientos
+                          que el adoptante responde en "Mis seguimientos". */}
+                      {request.contractRef && (
+                        <Button variant="outline" onClick={() => navigate('/mis-seguimientos')}>
+                          Ver seguimientos
+                        </Button>
+                      )}
                     </div>
                   </li>
                 ))}
