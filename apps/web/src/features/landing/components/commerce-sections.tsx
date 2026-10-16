@@ -162,7 +162,7 @@ export function ActiveCampaignsSection() {
         <ul className={styles.campaigns__grid}>
           {items.map((campaign) => (
             <li key={campaign.id}>
-              <CampaignCard campaign={campaign} />
+              <CampaignCard campaign={campaign} variant="brand" />
             </li>
           ))}
         </ul>

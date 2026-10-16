@@ -57,3 +57,144 @@
 .cta:hover {
   opacity: 0.92;
 }
+
+/* Variante de marca v3 (landing y /campanas). */
+.card--brand {
+  gap: 0.75rem;
+  height: 100%;
+  border: 0;
+  border-radius: var(--af-r-card);
+  background: var(--af-paper);
+  box-shadow: var(--af-shadow-card);
+  padding: 1.35rem;
+  color: var(--af-ink);
+  transition:
+    transform var(--transition-base),
+    box-shadow var(--transition-base);
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--af-shadow-pop);
+  }
+
+  --tone: var(--af-mint);
+
+  &[data-tone='sun'] {
+    --tone: var(--af-sun-soft);
+  }
+
+  &[data-tone='coral'] {
+    --tone: var(--af-coral-soft);
+  }
+
+  &[data-tone='sky'] {
+    --tone: var(--af-sky);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &:hover {
+      transform: none;
+    }
+  }
+}
+
+.brand__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand__tag {
+  border-radius: var(--r-full);
+  background: var(--tone);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+}
+
+.brand__org {
+  font-size: 0.8125rem;
+  color: var(--af-ink-soft);
+}
+
+.brand__title {
+  font-family: var(--font-brand);
+  font-size: 1.375rem;
+  font-weight: var(--fw-extra);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  color: var(--af-ink);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
+}
+
+.brand__text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.9375rem;
+  color: var(--af-ink-soft);
+}
+
+.brand__progress {
+  margin-top: auto;
+
+  p {
+    margin: 0.4rem 0 0;
+    font-size: 0.875rem;
+    color: var(--af-ink-soft);
+  }
+
+  strong {
+    color: var(--af-ink);
+  }
+}
+
+.brand__bar {
+  height: 0.65rem;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--af-mint-soft);
+
+  > div {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--af-teal-ink);
+  }
+}
+
+.brand__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.brand__cta {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  border-radius: var(--r-full);
+  background: var(--af-ink);
+  padding: 0 1.15rem;
+  font-weight: var(--fw-bold);
+  color: #fff;
+  text-decoration: none;
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
+}
