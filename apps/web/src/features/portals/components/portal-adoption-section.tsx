@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ANIMAL_SEXES,
   ANIMAL_SIZES,
@@ -18,6 +19,7 @@ import {
   IconCat,
   IconChevronDown,
   IconDog,
+  IconFilter,
   IconGender,
   IconPaw,
   IconRuler,
@@ -39,6 +41,7 @@ import styles from '../styles/public-catalog.module.scss';
 
 const PAGE_SIZE = 12;
 const HEADING_ID = 'portal-section-pets';
+const FILTERS_ID = 'portal-catalog-filters';
 
 type Filter<T extends string> = T | 'all';
 type SectionState = 'loading' | 'ready' | 'error';
@@ -90,6 +93,9 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
   const [age, setAge] = useState<Filter<AgeBucket>>('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<CatalogSort>('recent');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const sheetTitleRef = useRef<HTMLHeadingElement>(null);
+  const filtersToggleRef = useRef<HTMLButtonElement>(null);
 
   // Un único fetch (sin `species`) al cambiar de organización — los filtros
   // ya no re-consultan el backend, ver doc comment de arriba.
@@ -154,6 +160,162 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
 
   const speciesFilters: readonly Filter<AnimalSpecies>[] = ['all', ...ANIMAL_SPECIES];
 
+  const activeFilterCount = [species, sex, size, age].filter((value) => value !== 'all').length;
+
+  const closeFilters = () => {
+    setFiltersOpen(false);
+    filtersToggleRef.current?.focus();
+  };
+
+  // Panel de filtros en celular: Escape lo cierra y la página no se desplaza
+  // por detrás mientras está abierto.
+  useEffect(() => {
+    if (!filtersOpen) return;
+    sheetTitleRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeFilters();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    // Si la pantalla crece (girar el celular), el panel ya no aplica.
+    const wide = window.matchMedia?.('(min-width: 768px)');
+    const onWide = () => wide?.matches && setFiltersOpen(false);
+    wide?.addEventListener?.('change', onWide);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKey);
+      wide?.removeEventListener?.('change', onWide);
+    };
+  }, [filtersOpen]);
+
+  // Fuera del árbol mientras está abierto: un ancestro animado (las
+  // plantillas revelan secciones al desplazar) rompería el `position: fixed`.
+  const filterPanel = (
+    <>
+      {filtersOpen && (
+        <div aria-hidden className={styles.sheetBackdrop} onClick={() => setFiltersOpen(false)} />
+      )}
+      <div
+        id={FILTERS_ID}
+        className={styles.filterSheet}
+        data-open={filtersOpen}
+        role={filtersOpen ? 'dialog' : undefined}
+        aria-modal={filtersOpen ? true : undefined}
+        aria-labelledby={filtersOpen ? `${FILTERS_ID}-title` : undefined}
+        data-testid="catalog-filters"
+      >
+        <div className={styles.filterSheet__header}>
+          <h3
+            id={`${FILTERS_ID}-title`}
+            ref={sheetTitleRef}
+            tabIndex={-1}
+            className={styles.filterSheet__title}
+          >
+            Filtros
+          </h3>
+          <button
+            type="button"
+            className={styles.filterSheet__close}
+            aria-label="Cerrar filtros"
+            onClick={closeFilters}
+          >
+            ×
+          </button>
+        </div>
+
+        <label className={styles.filterField}>
+          <IconPaw aria-hidden className="h-4 w-4" />
+          <select
+            className={styles.filterField__select}
+            aria-label="Filtrar por tipo de animal"
+            value={species}
+            onChange={(event) => setSpecies(event.target.value as Filter<AnimalSpecies>)}
+          >
+            <option value="all">Tipo: todos</option>
+            {ANIMAL_SPECIES.map((s) => (
+              <option key={s} value={s}>
+                {SPECIES_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
+        </label>
+
+        <label className={styles.filterField}>
+          <IconGender aria-hidden className="h-4 w-4" />
+          <select
+            className={styles.filterField__select}
+            aria-label="Filtrar por sexo"
+            value={sex}
+            onChange={(event) => setSex(event.target.value as Filter<AnimalSex>)}
+          >
+            <option value="all">Sexo: todos</option>
+            {ANIMAL_SEXES.map((s) => (
+              <option key={s} value={s}>
+                {SEX_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
+        </label>
+
+        <label className={styles.filterField}>
+          <IconCalendar aria-hidden className="h-4 w-4" />
+          <select
+            className={styles.filterField__select}
+            aria-label="Filtrar por edad"
+            value={age}
+            onChange={(event) => setAge(event.target.value as Filter<AgeBucket>)}
+          >
+            <option value="all">Edad: todas</option>
+            {(Object.keys(AGE_BUCKET_LABELS) as AgeBucket[]).map((bucket) => (
+              <option key={bucket} value={bucket}>
+                {AGE_BUCKET_LABELS[bucket]}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
+        </label>
+
+        <label className={styles.filterField}>
+          <IconRuler aria-hidden className="h-4 w-4" />
+          <select
+            className={styles.filterField__select}
+            aria-label="Filtrar por tamaño"
+            value={size}
+            onChange={(event) => setSize(event.target.value as Filter<AnimalSize>)}
+          >
+            <option value="all">Tamaño: todos</option>
+            {ANIMAL_SIZES.map((s) => (
+              <option key={s} value={s}>
+                {SIZE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
+        </label>
+
+        <div className={styles.filterSheet__footer}>
+          {hasActiveFilters && (
+            <button type="button" className={styles.clearFilters} onClick={clearFilters}>
+              Limpiar filtros
+            </button>
+          )}
+          <button
+            type="button"
+            className={cn(styles.btn, styles['btn--primary'], styles.filterSheet__apply)}
+            onClick={closeFilters}
+          >
+            {state === 'ready'
+              ? `Ver ${filteredItems.length} ${filteredItems.length === 1 ? 'animal' : 'animales'}`
+              : 'Ver animales'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <section aria-labelledby={HEADING_ID} data-testid="portal-adoption-section">
       <div className="mb-4 flex flex-col gap-1">
@@ -183,77 +345,25 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
             />
           </div>
 
-          <label className={styles.filterField}>
-            <IconPaw aria-hidden className="h-4 w-4" />
-            <select
-              className={styles.filterField__select}
-              aria-label="Filtrar por tipo de animal"
-              value={species}
-              onChange={(event) => setSpecies(event.target.value as Filter<AnimalSpecies>)}
-            >
-              <option value="all">Tipo: todos</option>
-              {ANIMAL_SPECIES.map((s) => (
-                <option key={s} value={s}>
-                  {SPECIES_LABELS[s]}
-                </option>
-              ))}
-            </select>
-            <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
-          </label>
+          {/* En celular los filtros viven en un panel que abre este botón;
+              en pantallas grandes se ven siempre en la misma fila. */}
+          <button
+            type="button"
+            className={cn(styles.btn, styles['btn--outline'], styles.filtersToggle)}
+            ref={filtersToggleRef}
+            aria-expanded={filtersOpen}
+            aria-controls={FILTERS_ID}
+            onClick={() => setFiltersOpen(true)}
+            data-testid="catalog-filters-toggle"
+          >
+            <IconFilter aria-hidden className="h-4 w-4" />
+            Filtros
+            {activeFilterCount > 0 && (
+              <span className={styles.filtersToggle__count}>{activeFilterCount}</span>
+            )}
+          </button>
 
-          <label className={styles.filterField}>
-            <IconGender aria-hidden className="h-4 w-4" />
-            <select
-              className={styles.filterField__select}
-              aria-label="Filtrar por sexo"
-              value={sex}
-              onChange={(event) => setSex(event.target.value as Filter<AnimalSex>)}
-            >
-              <option value="all">Sexo: todos</option>
-              {ANIMAL_SEXES.map((s) => (
-                <option key={s} value={s}>
-                  {SEX_LABELS[s]}
-                </option>
-              ))}
-            </select>
-            <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
-          </label>
-
-          <label className={styles.filterField}>
-            <IconCalendar aria-hidden className="h-4 w-4" />
-            <select
-              className={styles.filterField__select}
-              aria-label="Filtrar por edad"
-              value={age}
-              onChange={(event) => setAge(event.target.value as Filter<AgeBucket>)}
-            >
-              <option value="all">Edad: todas</option>
-              {(Object.keys(AGE_BUCKET_LABELS) as AgeBucket[]).map((bucket) => (
-                <option key={bucket} value={bucket}>
-                  {AGE_BUCKET_LABELS[bucket]}
-                </option>
-              ))}
-            </select>
-            <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
-          </label>
-
-          <label className={styles.filterField}>
-            <IconRuler aria-hidden className="h-4 w-4" />
-            <select
-              className={styles.filterField__select}
-              aria-label="Filtrar por tamaño"
-              value={size}
-              onChange={(event) => setSize(event.target.value as Filter<AnimalSize>)}
-            >
-              <option value="all">Tamaño: todos</option>
-              {ANIMAL_SIZES.map((s) => (
-                <option key={s} value={s}>
-                  {SIZE_LABELS[s]}
-                </option>
-              ))}
-            </select>
-            <IconChevronDown aria-hidden className="h-3.5 w-3.5" />
-          </label>
+          {filtersOpen ? createPortal(filterPanel, document.body) : filterPanel}
 
           <button
             type="button"
@@ -292,7 +402,11 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
 
           <div className={styles.sortField}>
             {hasActiveFilters && (
-              <button type="button" className={styles.clearFilters} onClick={clearFilters}>
+              <button
+                type="button"
+                className={cn(styles.clearFilters, styles.clearFilters__wide)}
+                onClick={clearFilters}
+              >
                 Limpiar filtros
               </button>
             )}

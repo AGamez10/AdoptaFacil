@@ -90,11 +90,13 @@ export function TransparencyIndicator({ className }: TransparencyIndicatorProps)
         </span>
       </span>
 
-      <span aria-hidden className={styles.indicator__divider}>
+      {/* En celular la rendición se omite a la vista (sigue en la etiqueta
+          accesible): con ella el encabezado no cabía en la pantalla. */}
+      <span aria-hidden className={cn(styles.indicator__divider, styles['indicator__wide-only'])}>
         ·
       </span>
 
-      <span className={styles.indicator__group}>
+      <span className={cn(styles.indicator__group, styles['indicator__wide-only'])}>
         <span className={cn(styles.indicator__label, styles['indicator__label--long'])}>
           Rendición
         </span>
