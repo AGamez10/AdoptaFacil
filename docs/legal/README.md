@@ -42,6 +42,8 @@ AdoptaFácil la opera, mientras se constituye la sociedad, **una persona natural
 - Encargados: Hostinger (VPS), Cloudflare (dominio y red), correo, copias de seguridad y pasarelas (Mercado Pago, ePayco), en la política, sección 7. Falta confirmar el **país del centro de datos** elegido al contratar; como Hostinger es extranjera, puede ser transferencia internacional. Proveedores de correo y copias de seguridad, y el país donde procesa cada uno: pendientes.
 - Plazos: conservación de datos tras cerrar la cuenta, conservación de evidencia de reportes, atención de reportes, aviso de cambios (propuesto 15 días), aviso de precios (30 días), aviso de incidentes a organizaciones (72 horas), exportación al terminar (30 días), registro de trazabilidad (10 años).
 
+Las respuestas del asesor del cliente a estas preguntas, contrastadas con los textos, están en `revision-asesor.md`, junto con el checklist de transferencia internacional y la tabla del acuerdo encargado-responsable.
+
 ## Preguntas para el abogado
 
 1. Reparto responsable/encargado propuesto y validez del acuerdo de transmisión (Decreto 1074 de 2015, art. 2.2.2.25.5.2).
