@@ -1,6 +1,7 @@
 import {
   getLegalDocumentBySlug,
   LEGAL_DOCUMENTS,
+  renderLegalTemplate,
   type LegalDocumentDescriptor,
 } from '@adoptafacil/contracts';
 
@@ -25,6 +26,7 @@ export interface LegalDocumentContent {
   descriptor: LegalDocumentDescriptor;
   version: string;
   isCurrent: boolean;
+  /** Texto con los datos del titular ya sustituidos (`{{titular…}}`). */
   markdown: string;
 }
 
@@ -35,7 +37,12 @@ export function getLegalContent(slug: string, version?: string): LegalDocumentCo
   const wanted = version ?? descriptor.version;
   const markdown = BY_SLUG_VERSION.get(`${slug}@${wanted}`);
   if (markdown === undefined) return null;
-  return { descriptor, version: wanted, isCurrent: wanted === descriptor.version, markdown };
+  return {
+    descriptor,
+    version: wanted,
+    isCurrent: wanted === descriptor.version,
+    markdown: renderLegalTemplate(markdown),
+  };
 }
 
 /** Versiones publicadas de un documento, más reciente primero. */

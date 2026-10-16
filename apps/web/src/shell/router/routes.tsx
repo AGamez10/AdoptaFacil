@@ -103,6 +103,11 @@ import {
   ReceivedDonationsPage,
 } from '../../features/donations';
 import { SponsorPage, SponsorshipsPage } from '../../features/sponsorships';
+import {
+  EmailUnsubscribePage,
+  PlatformEmailTemplateEditorPage,
+  PlatformEmailTemplatesPage,
+} from '../../features/notifications';
 import { CertificateEmissionPage, CertificateVerificationPage } from '../../features/certificates';
 import {
   MyVolunteeringPage,
@@ -267,6 +272,9 @@ export function AppRoutes() {
         {/* ADR-PAG-002: regreso del checkout de ePayco. Solo informa que el pago se
           está confirmando; la aprobación llega por la confirmación firmada. */}
         <Route path="/donaciones/resultado" element={<DonationResultPage />} />
+        {/* Baja voluntaria de correos masivos (Ley 1581) — pública, sin sesión:
+          el enlace firmado del correo ES la credencial. */}
+        <Route path="/correo/baja" element={<EmailUnsubscribePage />} />
         {/* T-OrdersAPI (2026-09-30): the `/donaciones/gracias` and
           `/apadrinar/gracias` redirect-landing routes were RETIRED along with
           Checkout Pro — Checkout API/Orders embeds the card form on our own
@@ -722,6 +730,24 @@ export function AppRoutes() {
                 element={
                   <RequireRoles roles={PLATFORM_TEAM_ROLES}>
                     <PlatformTeamPage />
+                  </RequireRoles>
+                }
+              />
+              {/* Correos: plantillas editables por el superadmin — mismo gate
+                que el resto de /plataforma/*. */}
+              <Route
+                path="plataforma/correos"
+                element={
+                  <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
+                    <PlatformEmailTemplatesPage />
+                  </RequireRoles>
+                }
+              />
+              <Route
+                path="plataforma/correos/:event"
+                element={
+                  <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
+                    <PlatformEmailTemplateEditorPage />
                   </RequireRoles>
                 }
               />

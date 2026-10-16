@@ -23,7 +23,11 @@ const DEFAULT_PAGE = 20;
 /** Best-effort cap on how many past donors get emailed for one campaign post
  *  — a community post is not a mailing-list feature; this is a courtesy
  *  notification to people who have already supported this specific org. */
-const MAX_CAMPAIGN_NOTIFY_RECIPIENTS = 100;
+// Emails only go into the delivery queue here (the worker sends them at the
+// provider's pace), so this cap guards memory, not SMTP throughput.
+const MAX_CAMPAIGN_NOTIFY_RECIPIENTS = 5_000;
+// Recipients enqueued in parallel per round trip batch.
+const NOTIFY_ENQUEUE_BATCH = 100;
 
 /** Clamp a requested page size to [1, MAX_PAGE] — shared by every list read
  *  in this module. */
@@ -200,16 +204,23 @@ export class CommunityPostsService {
           where: { organizationId, status: 'approved' },
           select: { payer: true },
         });
-        const emails = Array.from(
-          new Set(
-            donations
-              .map((d) => (d.payer as { email?: string } | null)?.email)
-              .filter((email): email is string => !!email),
-          ),
-        ).slice(0, MAX_CAMPAIGN_NOTIFY_RECIPIENTS);
+        // One entry per address (first name seen wins), for a personal greeting.
+        const recipients = new Map<string, CampaignRecipient>();
+        for (const d of donations) {
+          const payer = d.payer as { email?: string; fullName?: string } | null;
+          const email = payer?.email?.trim();
+          if (!email || recipients.has(email.toLowerCase())) continue;
+          recipients.set(email.toLowerCase(), { email, name: payer?.fullName?.trim() });
+          if (recipients.size >= MAX_CAMPAIGN_NOTIFY_RECIPIENTS) break;
+        }
+        const emails = [...recipients.values()];
         return { post: this.toPost(row), images: row.images, notifyEmails: emails };
       }
-      return { post: this.toPost(row), images: row.images, notifyEmails: [] as string[] };
+      return {
+        post: this.toPost(row),
+        images: row.images,
+        notifyEmails: [] as CampaignRecipient[],
+      };
     });
 
     if (created.notifyEmails.length > 0) {
@@ -228,25 +239,50 @@ export class CommunityPostsService {
     return { post: created.post, imageUploads };
   }
 
-  /** Best-effort email to the org's own past donors about a new campaign
-   *  post — never blocks/fails the post creation itself. */
+  /** Best-effort, personalized email to the org's own past donors about a new
+   *  campaign post. Only enqueues (see QueuedNotificationPort), in parallel
+   *  batches, so even thousands of donors never slow the post creation. */
   private async notifyDonorsBestEffort(
     organizationId: string,
     post: Post,
-    emails: string[],
+    recipients: CampaignRecipient[],
   ): Promise<void> {
     const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
     const orgName = org?.name ?? 'una organización de AdoptaFácil';
     const subject = `${orgName} publicó novedades sobre una campaña`;
     const body = post.title ? `"${post.title}": ${post.body}` : post.body;
-    for (const to of emails) {
-      try {
-        await this.notifications.send({ to, subject, body });
-      } catch (error) {
-        this.logger.warn(
-          `No se pudo notificar a ${to} sobre la publicación ${post.id}: ${(error as Error).message}`,
-        );
-      }
+    for (let i = 0; i < recipients.length; i += NOTIFY_ENQUEUE_BATCH) {
+      const batch = recipients.slice(i, i + NOTIFY_ENQUEUE_BATCH);
+      await Promise.all(
+        batch.map(async ({ email, name }) => {
+          try {
+            // Bulk event: the template layer adds the unsubscribe link and
+            // skips anyone who opted out (Ley 1581).
+            await this.notifications.send({
+              to: email,
+              subject,
+              body,
+              // One email per donor per post, whatever retries happen.
+              idempotencyKey: `community.campaign_update:${post.id}:${email.toLowerCase()}`,
+              template: {
+                event: 'community.campaign_update',
+                organizationName: org?.name ?? undefined,
+                data: {
+                  organizacion: orgName,
+                  nombre: firstName(name) ?? 'amigo(a)',
+                  titulo: post.title ?? `Novedades de ${orgName}`,
+                  mensaje: post.body,
+                },
+              },
+            });
+          } catch (error) {
+            // Never the recipient address in the log (Ley 1581).
+            this.logger.warn(
+              `No se pudo notificar a un donante sobre la publicación ${post.id}: ${(error as Error).message}`,
+            );
+          }
+        }),
+      );
     }
   }
 
@@ -347,4 +383,14 @@ export class CommunityPostsService {
     }
     return error instanceof Error ? error : new Error(message);
   }
+}
+
+interface CampaignRecipient {
+  email: string;
+  name?: string;
+}
+
+function firstName(fullName: string | undefined): string | undefined {
+  const first = fullName?.split(/\s+/)[0];
+  return first ? first : undefined;
 }

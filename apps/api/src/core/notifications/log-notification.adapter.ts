@@ -11,6 +11,14 @@ export class LogNotificationAdapter implements NotificationPort {
   private readonly logger = new Logger('NotificationPort');
 
   async send(message: NotificationMessage): Promise<void> {
-    this.logger.log(`[SIMULATED] to=${message.to} subject="${message.subject}"`);
+    const extras = [
+      message.html ? 'html=yes' : '',
+      message.attachments?.length ? `attachments=${message.attachments.length}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    this.logger.log(
+      `[SIMULATED] to=${message.to} subject="${message.subject}"${extras ? ` ${extras}` : ''}`,
+    );
   }
 }

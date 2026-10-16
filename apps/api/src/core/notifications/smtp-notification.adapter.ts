@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Env } from '../../config/env.validation';
+import { maskEmail } from './mask-email';
 import { NotificationMessage, NotificationPort } from './notification.port';
 
 /** Minimal transport surface we depend on (so tests can inject a fake). */
@@ -12,6 +13,7 @@ export interface MailTransport {
     subject: string;
     text: string;
     html?: string;
+    headers?: Record<string, string>;
     attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
   }): Promise<unknown>;
 }
@@ -22,16 +24,18 @@ export type MailTransportFactory = (options: {
   port: number;
   secure: boolean;
   auth: { user: string; pass: string };
+  pool?: boolean;
+  maxConnections?: number;
 }) => MailTransport;
 
 /**
  * Real SMTP NotificationPort (T-109). Credentials come EXCLUSIVELY from env
  * (SMTP_HOST/PORT/USER/PASS/FROM) — never hardcoded. Selected when
- * NOTIFICATION_DRIVER=smtp; the log stub stays the default. Sending is
- * BEST-EFFORT: any failure (bad creds, network, rate limit) is caught and
- * reported as a failure WITHOUT throwing, so it never tumbles the request/app
- * (coherent with T-106). NEVER logs the body or credentials (Ley 1581) — at most
- * recipient + result. Swapping to SendGrid/SES later = new adapter + one line in
+ * NOTIFICATION_DRIVER=smtp; the log stub stays the default. A failed send
+ * THROWS so the email delivery queue can retry it with backoff; callers never
+ * see it, because modules send through the queue, never through this adapter
+ * directly. NEVER logs the body or credentials (Ley 1581) — at most the
+ * masked recipient + result. Swapping to SendGrid/SES later = new adapter + one line in
  * NotificationModule; consumers (auth, reminders) are untouched.
  */
 @Injectable()
@@ -55,6 +59,9 @@ export class SmtpNotificationAdapter implements NotificationPort {
       port,
       secure: port === 465, // implicit TLS on 465; STARTTLS otherwise
       auth: { user, pass },
+      // Reuse SMTP connections across queued sends (one per worker slot).
+      pool: true,
+      maxConnections: config.get('EMAIL_QUEUE_CONCURRENCY', { infer: true }) ?? 5,
     });
   }
 
@@ -65,14 +72,20 @@ export class SmtpNotificationAdapter implements NotificationPort {
         to: message.to,
         subject: message.subject,
         text: message.body,
+        // Additive: only sent when the template layer produced them.
         ...(message.html ? { html: message.html } : {}),
+        ...(message.headers ? { headers: message.headers } : {}),
         ...(message.attachments?.length ? { attachments: message.attachments } : {}),
       });
-      // Recipient + result only — never subject/body/credentials.
-      this.logger.log(`email to=${message.to} result=ok`);
+      // Masked recipient + result only — never subject/body/credentials.
+      this.logger.log(`email to=${maskEmail(message.to)} result=ok`);
     } catch (error) {
-      // Best-effort: report and continue; never throw, never log the body/creds.
-      this.logger.warn(`email to=${message.to} result=failed (${(error as Error).message})`);
+      // Never the body/creds. Rethrown so the delivery queue retries it (or
+      // gives up on a permanent SMTP 5xx); the queue keeps callers safe.
+      this.logger.warn(
+        `email to=${maskEmail(message.to)} result=failed (${(error as Error).message})`,
+      );
+      throw error;
     }
   }
 }

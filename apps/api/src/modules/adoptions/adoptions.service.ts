@@ -30,7 +30,9 @@ import { checkAdoptionTransition } from './adoption-status';
 import {
   buildAdoptionStatusEmailBody,
   buildAdoptionStatusEmailSubject,
+  buildAdoptionRequestsLink,
 } from './adoption-request-email';
+import { ADOPTION_STATUS_EMAIL_LABELS } from './adoption-status-labels';
 
 /** Shape returned by the `create_adoption_request` SQL function (snake_case). */
 interface AdoptionRow {
@@ -223,6 +225,17 @@ export class AdoptionsService {
         to: applicant.email,
         subject: buildAdoptionStatusEmailSubject(emailInput),
         body: buildAdoptionStatusEmailBody(emailInput),
+        template: {
+          event: 'adoption.status_changed',
+          organizationName,
+          data: {
+            nombre: emailInput.applicantName,
+            animal: emailInput.animalName,
+            organizacion: organizationName,
+            estado: ADOPTION_STATUS_EMAIL_LABELS[emailInput.status],
+            enlace: buildAdoptionRequestsLink(this.webBaseUrl),
+          },
+        },
       });
     } catch (error) {
       this.logger.warn(`No se pudo notificar al solicitante: ${(error as Error).message}`);

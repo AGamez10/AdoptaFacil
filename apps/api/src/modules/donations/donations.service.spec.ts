@@ -663,7 +663,7 @@ describe('DonationsService.applyWebhook — guest access link (magic link)', () 
     );
   });
 
-  it('does NOT issue an access link for an authenticated donor (donorUserId present)', async () => {
+  it('does NOT issue an access link for an authenticated donor, but thanks them (link to "Mis donaciones")', async () => {
     const h = makeService();
     h.queryRaw.mockResolvedValueOnce([webhookRow({ donor_user_id: 'user-1' })]);
 
@@ -673,7 +673,14 @@ describe('DonationsService.applyWebhook — guest access link (magic link)', () 
     );
 
     expect(h.donationAccessLinkCreate).not.toHaveBeenCalled();
-    expect(h.send).not.toHaveBeenCalled();
+    expect(h.send).toHaveBeenCalledTimes(1);
+    const message = h.send.mock.calls[0][0] as {
+      body: string;
+      template: { event: string; data: { enlace: string } };
+    };
+    expect(message.template.event).toBe('donation.thanks');
+    expect(message.template.data.enlace).toBe('https://app.test.local/mis-donaciones');
+    expect(message.body).not.toContain('token=');
   });
 
   it('does NOT issue an access link when the webhook declines the donation', async () => {
