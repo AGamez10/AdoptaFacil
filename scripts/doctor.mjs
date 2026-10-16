@@ -81,6 +81,13 @@ async function portInUse(port) {
   return !['ECONNREFUSED', 'error'].includes(result);
 }
 
+// En algunos Windows "localhost" resuelve primero a IPv6 (::1) y Docker Desktop
+// solo publica el puerto en IPv4: los contenedores están arriba pero no llegan.
+const LOCALHOST_FIX =
+  'Los contenedores sí están arriba. En .env cambia "localhost" por "127.0.0.1" en DATABASE_URL, DATABASE_URL_APP y REDIS_URL';
+const onlyLocalhostFails = async (target, check) =>
+  target.host === 'localhost' && (await check('127.0.0.1', target.port)) === 'ok';
+
 const DOCKER_UP =
   'Abre Docker Desktop, espera "Engine running" y en la carpeta del proyecto corre: docker compose up -d';
 
@@ -141,6 +148,8 @@ async function main() {
     else {
       const result = await postgresProbe(db.host, db.port);
       if (result === 'ok') ok('Postgres responde', `${db.host}:${db.port}`);
+      else if (await onlyLocalhostFails(db, postgresProbe))
+        bad(`Postgres responde en 127.0.0.1 pero no en "localhost"`, LOCALHOST_FIX);
       else bad(`Postgres no responde en ${db.host}:${db.port} (${result})`, DOCKER_UP);
     }
     const redis = hostPort(env.REDIS_URL, 6379);
@@ -148,6 +157,8 @@ async function main() {
     else {
       const result = await redisProbe(redis.host, redis.port);
       if (result === 'ok') ok('Redis responde', `${redis.host}:${redis.port}`);
+      else if (await onlyLocalhostFails(redis, redisProbe))
+        bad(`Redis responde en 127.0.0.1 pero no en "localhost"`, LOCALHOST_FIX);
       else bad(`Redis no responde en ${redis.host}:${redis.port} (${result})`, DOCKER_UP);
     }
 
