@@ -28,46 +28,55 @@
 
 El acuerdo ya existe: es la **Parte B de las Condiciones para organizaciones**, que acepta el Owner al crear la organización y queda registrado con versión, hash, fecha, IP y navegador. No se redactó otro modelo para no tener dos textos.
 
-| Requisito                                                        | Dónde está                |
-| ---------------------------------------------------------------- | ------------------------- |
-| Papeles de cada parte                                            | Parte B, 8.1 a 8.3        |
-| Objeto y finalidades: solo para prestar el servicio              | 9.1                       |
-| Instrucciones documentadas de la organización                    | 9.1                       |
-| Medidas de seguridad                                             | 9.2                       |
-| Confidencialidad del personal y los proveedores                  | 9.3                       |
-| Subencargados: lista, país y aviso previo de cambios             | 9.4 y Política, sección 7 |
-| Incidentes: aviso en ⟦72 horas⟧ y colaboración ante la SIC       | 9.5                       |
-| Consultas y reclamos de titulares                                | 9.6 y 9.8                 |
-| Devolución, supresión y certificado al terminar                  | 9.7                       |
-| Verificación o auditoría por la organización                     | 9.9                       |
-| Uso de datos para IA: solo anonimizados salvo doble autorización | 9.1                       |
-| Obligaciones de la organización como responsable                 | 10.1 a 10.4               |
-| Cesión a la futura sociedad                                      | Parte A, 5A.3             |
+| Requisito                                                                                      | Dónde está                |
+| ---------------------------------------------------------------------------------------------- | ------------------------- |
+| Papeles de cada parte                                                                          | Parte B, 8.1 a 8.3        |
+| Objeto y finalidades: solo para prestar el servicio                                            | 9.1                       |
+| Instrucciones documentadas de la organización                                                  | 9.1                       |
+| Medidas de seguridad                                                                           | 9.2                       |
+| Confidencialidad del personal y los proveedores                                                | 9.3                       |
+| Subencargados: lista, país, aviso previo de cambios y responsabilidad de AdoptaFácil por ellos | 9.4 y Política, sección 7 |
+| Incidentes: aviso pactado en ⟦72 horas⟧ y colaboración en el reporte legal a la SIC            | 9.5                       |
+| Confidencialidad después de terminar                                                           | 9.10                      |
+| Consultas y reclamos de titulares                                                              | 9.6 y 9.8                 |
+| Devolución, supresión y certificado al terminar                                                | 9.7                       |
+| Verificación o auditoría por la organización                                                   | 9.9                       |
+| Uso de datos para IA: solo anonimizados salvo doble autorización                               | 9.1                       |
+| Obligaciones de la organización como responsable                                               | 10.1 a 10.4               |
+| Cesión a la futura sociedad                                                                    | Parte A, 5A.3             |
+
+El asesor envió después un modelo de acuerdo completo. Sus cláusulas útiles ya estaban o se agregaron (responsabilidad por subencargados, contenido del aviso de incidente, confidencialidad después de terminar). No se adoptó su cláusula 5, que exige autorización previa de la organización para cada subencargado: con varias organizaciones en la misma plataforma no es operable, y en su lugar hay aviso previo con derecho a terminar. Tampoco la evidencia anual de pruebas de seguridad, que queda como pregunta para el abogado.
 
 **Pendiente del abogado:** si basta la aceptación en la plataforma o hace falta un contrato firmado aparte con cada organización (pregunta 13 del README).
 
-## 3. Checklist de transferencia internacional de datos
+## 3. Checklist de transmisión y transferencia internacional de datos
 
-Para cada proveedor que trate datos personales, antes de salir a producción y cada vez que cambie:
+Solo para Colombia, con los proveedores del proyecto. Primero se clasifica cada proveedor:
 
-| Proveedor                   | Datos que recibe                                 | País                                   | Contrato o términos de tratamiento de datos | Garantías de seguridad | Política actualizada |
-| --------------------------- | ------------------------------------------------ | -------------------------------------- | ------------------------------------------- | ---------------------- | -------------------- |
-| Hostinger (VPS)             | Toda la base de datos y los archivos             | ⟦Confirmar el centro de datos elegido⟧ | ⟦ ⟧                                         | ⟦ ⟧                    | Sí (sección 7)       |
-| Cloudflare                  | Tráfico del sitio (IP, navegador, solicitudes)   | ⟦Red global; confirmar⟧                | ⟦ ⟧                                         | ⟦ ⟧                    | Sí (sección 7)       |
-| Proveedor de correo         | Correo, nombre y contenido de los mensajes       | ⟦Pendiente de elegir⟧                  | ⟦ ⟧                                         | ⟦ ⟧                    | Marcado pendiente    |
-| Copias de seguridad         | Copia de la base de datos                        | ⟦Pendiente de elegir⟧                  | ⟦ ⟧                                         | ⟦ ⟧                    | Marcado pendiente    |
-| Google (inicio de sesión)   | Nombre, correo y foto de la cuenta de Google     | ⟦Confirmar⟧                            | ⟦ ⟧                                         | ⟦ ⟧                    | Sí (sección 7)       |
-| Mercado Pago o ePayco       | Datos de pago, en la cuenta de cada organización | ⟦Confirmar por pasarela⟧               | Contrato de la organización con la pasarela | ⟦ ⟧                    | Sí (sección 7)       |
-| Proveedor de IA (si se usa) | Solo datos anonimizados, salvo autorización      | ⟦Pendiente de elegir⟧                  | Debe prohibir que use los datos para sí     | ⟦ ⟧                    | Sí (sección 5)       |
+- **Transmisión** (art. 2.2.2.25.5.2 del Decreto 1074 de 2015): el proveedor trata los datos por cuenta de AdoptaFácil, como encargado. Se cubre con un contrato de transmisión. Son todos los proveedores de la tabla.
+- **Transferencia** (art. 26 de la Ley 1581 de 2012): los datos se entregan a otro responsable que decide sobre ellos. Exige país con nivel adecuado, una excepción del artículo 26 o declaración de conformidad de la SIC. Hoy no hay ninguna.
 
-Por cada fila:
+⟦ABOGADO: confirmar esta clasificación y si la transmisión a un encargado en un país sin nivel adecuado necesita algo más que el contrato y la autorización de la política (sección 8).⟧
 
-1. Anotar el país donde se guardan o procesan los datos. Si cambia, actualizar la tabla de la política (sección 7) y publicar una versión nueva.
-2. Revisar si el país tiene un nivel adecuado de protección según la lista de la SIC. ⟦ABOGADO: confirmar la lista vigente.⟧
-3. Si no lo tiene, confirmar que la autorización del titular cubre la transferencia (política, sección 8) o que aplica una excepción del artículo 26 de la Ley 1581 de 2012. ⟦ABOGADO⟧
-4. Guardar el contrato o los términos de tratamiento de datos del proveedor: que solo trate los datos por cuenta de AdoptaFácil, con medidas de seguridad, sin usarlos para sí y con aviso de incidentes.
-5. Decidir si hace falta declaración de conformidad ante la SIC. ⟦ABOGADO⟧
-6. Revisar la tabla una vez al año y cada vez que se contrate un proveedor nuevo.
+| Proveedor                   | Tipo        | Datos que recibe                                 | País                                   | Contrato de transmisión o términos de datos | Garantías de seguridad |
+| --------------------------- | ----------- | ------------------------------------------------ | -------------------------------------- | ------------------------------------------- | ---------------------- |
+| Hostinger (VPS)             | Transmisión | Toda la base de datos y los archivos             | ⟦Confirmar el centro de datos elegido⟧ | ⟦ ⟧                                         | ⟦ ⟧                    |
+| Cloudflare                  | Transmisión | Tráfico del sitio (IP, navegador, solicitudes)   | ⟦Red global; confirmar⟧                | ⟦ ⟧                                         | ⟦ ⟧                    |
+| Proveedor de correo         | Transmisión | Correo, nombre y contenido de los mensajes       | ⟦Pendiente de elegir⟧                  | ⟦ ⟧                                         | ⟦ ⟧                    |
+| Copias de seguridad         | Transmisión | Copia de la base de datos                        | ⟦Pendiente de elegir⟧                  | ⟦ ⟧                                         | ⟦ ⟧                    |
+| Google (inicio de sesión)   | ⟦Confirmar⟧ | Nombre, correo y foto de la cuenta de Google     | ⟦Confirmar⟧                            | ⟦ ⟧                                         | ⟦ ⟧                    |
+| Mercado Pago o ePayco       | ⟦Confirmar⟧ | Datos de pago, en la cuenta de cada organización | ⟦Confirmar por pasarela⟧               | Contrato de la organización con la pasarela | ⟦ ⟧                    |
+| Proveedor de IA (si se usa) | Transmisión | Solo datos anonimizados, salvo autorización      | ⟦Pendiente de elegir⟧                  | Debe prohibir que use los datos para sí     | ⟦ ⟧                    |
+
+Por cada fila, antes de salir a producción y cada vez que cambie:
+
+1. Anotar el país donde se guardan o procesan los datos. Si cambia, actualizar la política (sección 7) y publicar una versión nueva.
+2. Guardar el contrato o los términos de datos del proveedor. Deben decir que solo trata los datos por cuenta de AdoptaFácil, con medidas de seguridad, sin usarlos para sí, con aviso de incidentes y con supresión al terminar.
+3. Revisar las garantías técnicas: cifrado en tránsito y en reposo, acceso con segundo factor, y certificaciones (ISO 27001 o SOC 2) si las tiene.
+4. Si alguna fila resulta ser transferencia, revisar si el país tiene nivel adecuado según la SIC, si aplica una excepción del artículo 26 o si hace falta declaración de conformidad. ⟦ABOGADO⟧
+5. Revisar la tabla una vez al año y cada vez que se contrate un proveedor nuevo.
+
+**Incidentes, dos plazos distintos.** Las ⟦72 horas⟧ del acuerdo con las organizaciones son un plazo **pactado** entre AdoptaFácil y cada organización. Aparte, la ley obliga al responsable a informar a la SIC los incidentes de seguridad (Ley 1581 de 2012, art. 17, literal n, y art. 18, literal k). ⟦ABOGADO: confirmar el plazo y el canal de ese reporte.⟧
 
 ## 4. Cláusula de consentimiento y política de privacidad: comparación
 
@@ -87,3 +96,11 @@ No se redactaron textos nuevos: los que el asesor propone ya existen en los 9 te
 | Conservación de soportes                                                | **Nuevo:** propuesta de 10 años, marcada ⟦CONTADOR⟧                  |
 
 Los plazos de consultas (10 días hábiles) y reclamos (15 días hábiles) de la política ya siguen los de la Ley 1581 de 2012, artículos 14 y 15. ⟦ABOGADO: confirmar.⟧
+
+## 5. Segundo envío del asesor: qué se descartó y por qué
+
+- **Citas que no corresponden.** La "Resolución 13 de 2021 DIAN" no regula la protección de datos personales, que es competencia de la SIC. El "Decreto 2242 de 2015" trata de factura electrónica, no de firma electrónica: la norma correcta es la Ley 527 de 1999 y el Decreto 2364 de 2012, compilado en el Decreto 1074 de 2015. No se usaron. La "Sentencia C-091/21" no se pudo verificar. La sentencia de control de constitucionalidad de la Ley 1581 que el asesor cita sin número es la C-748 de 2011. ⟦ABOGADO: confirmar.⟧
+- **Una sola casilla para AdoptaFácil y la organización, con transferencia incluida.** No se adoptó. Los textos ya separan cada autorización por finalidad: términos, datos, condiciones de organización, comercial e IA. La política distingue transmisión de transferencia (sección 8).
+- **Casilla comercial con varios canales.** Se adoptó en otra forma: los usos comerciales van solo por correo, y cada canal adicional tendrá su propia casilla cuando exista.
+- **Registro de transferencias y evaluación de impacto como pasos obligatorios.** Hoy no hay transferencias. El checklist de la sección 3 cumple esa función para las transmisiones. ⟦ABOGADO: decidir si se exige una evaluación de impacto formal antes de usar un proveedor de IA.⟧
+- **Chile y México.** Fuera de alcance: la plataforma opera solo en Colombia.
