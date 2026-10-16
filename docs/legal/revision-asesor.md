@@ -104,3 +104,12 @@ Los plazos de consultas (10 días hábiles) y reclamos (15 días hábiles) de la
 - **Casilla comercial con varios canales.** Se adoptó en otra forma: los usos comerciales van solo por correo, y cada canal adicional tendrá su propia casilla cuando exista.
 - **Registro de transferencias y evaluación de impacto como pasos obligatorios.** Hoy no hay transferencias. El checklist de la sección 3 cumple esa función para las transmisiones. ⟦ABOGADO: decidir si se exige una evaluación de impacto formal antes de usar un proveedor de IA.⟧
 - **Chile y México.** Fuera de alcance: la plataforma opera solo en Colombia.
+
+## 6. Siguientes pasos exactos
+
+1. **Cliente:** completar en `packages/contracts/src/legal-controller.ts` (`LEGAL_CONTROLLER`) el nombre, la cédula, el NIT del RUT, la matrícula mercantil y el domicilio. Confirmar el país del centro de datos del VPS de Hostinger y elegir el proveedor de correo y el de copias de seguridad. Con eso se llenan la política (sección 7) y la tabla de la sección 3.
+2. **Abogado:** revisar los 9 textos de la versión 2026-10-15 y cada marca ⟦ABOGADO⟧, usando las secciones 1 a 5 de este archivo y las preguntas 1 a 13 del README.
+3. **Contador:** responder las preguntas 1 a 5 del README y confirmar los campos y el firmante del certificado de donación tributario (fila C1).
+4. **Producto, después del contador:** agregar al certificado de donación la forma de pago, la clase de bien, la destinación y el firmante nombrado.
+5. **Producto, después del abogado:** publicar una versión nueva de los textos con las redacciones definitivas (`docs/legal/<slug>/<fecha>.md` y su hash en `packages/contracts/src/legal.ts`).
+6. Para regenerar el documento del abogado: `python3 -I /mnt/project-files/legal/build_legal.py /mnt/project-files/legal/textos-legales-adoptafacil.html`, desde la raíz del repositorio.
