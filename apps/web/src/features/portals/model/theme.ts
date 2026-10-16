@@ -108,3 +108,18 @@ export function safeTemplate(raw: unknown): PortalTemplateId {
     ? (raw as PortalTemplateId)
     : DEFAULT_PORTAL_TEMPLATE;
 }
+
+/**
+ * Video de portada (Historias). La API ya lo resuelve desde una llave pública
+ * de la propia organización; aquí solo se acepta una URL http(s) absoluta,
+ * para nunca poner en `<video src>` un esquema inesperado.
+ */
+export function safeMediaUrl(raw: unknown): string | undefined {
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}

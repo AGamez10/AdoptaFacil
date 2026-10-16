@@ -774,6 +774,7 @@ describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
                   size: 'medium',
                   photoUrl: 'https://cdn.example/luna.jpg',
                   breed: 'Criolla',
+                  organizationId: 'org-1',
                 },
               ],
               total: 5,
@@ -815,6 +816,73 @@ describe('OrgPublicPage — plantillas del portal (Ola 3)', () => {
     await screen.findByTestId('portal-animal-count');
     // Sin mini carnets: el animal no aparece dentro del hero.
     expect(within(hero).queryByRole('link', { name: /Luna/ })).not.toBeInTheDocument();
+  });
+
+  it('Historias: portada + una historia por animal + "ver todos", con flechas y video de portada', async () => {
+    stubWithTemplate('historias');
+    const fetchMock = vi.mocked(fetch);
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      if (String(input).endsWith('/theme')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            tokens: {},
+            template: 'historias',
+            coverVideoUrl: 'https://cdn.example/portada.mp4',
+          }),
+        } as Response);
+      }
+      return base(input, init);
+    });
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    const hero = await screen.findByTestId('portal-hero-historias');
+    expect(screen.getByTestId('portal-page')).toHaveAttribute('data-template', 'historias');
+    expect(within(hero).getByRole('heading', { level: 1 })).toHaveTextContent('Refugio Patitas');
+    expect(await within(hero).findByTestId('portal-animal-count')).toHaveTextContent('5');
+    expect(within(hero).getByTestId('historias-cover-video')).toHaveAttribute(
+      'src',
+      'https://cdn.example/portada.mp4',
+    );
+
+    // Historia del animal: adoptar va al flujo real, "Ver ficha" al detalle.
+    const adopt = within(hero).getByRole('link', { name: 'Quiero adoptar a Luna' });
+    expect(adopt.getAttribute('href')).toMatch(/^\/adopciones\/solicitar\?/);
+    expect(adopt.getAttribute('href')).toContain('animalId=a1');
+    expect(within(hero).getByRole('link', { name: 'Ver ficha' })).toHaveAttribute(
+      'href',
+      '/o/patitas/animales/a1',
+    );
+    expect(within(hero).getByText('Conoce a los 5 animales')).toBeInTheDocument();
+
+    // Portada + 1 animal + "ver todos" = 3 historias; las flechas avanzan.
+    expect(within(hero).getByText('Historia 1 de 3')).toBeInTheDocument();
+    expect(within(hero).getByRole('button', { name: 'Historia anterior' })).toBeDisabled();
+    await userEvent.click(within(hero).getByRole('button', { name: 'Historia siguiente' }));
+    expect(within(hero).getByText('Historia 2 de 3')).toBeInTheDocument();
+    expect(within(hero).getByRole('group', { name: /2 de 3: Luna/ })).not.toHaveAttribute('inert');
+    expect(within(hero).getByRole('group', { name: /1 de 3: portada/ })).toHaveAttribute('inert');
+  });
+
+  it('Historias: descarta un video de portada que no es una URL http(s)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const body = url.endsWith('/theme')
+          ? { tokens: {}, template: 'historias', coverVideoUrl: 'javascript:alert(1)' }
+          : url.includes('/animals')
+            ? { items: [], total: 0, limit: 8, offset: 0 }
+            : ORG;
+        return Promise.resolve({ ok: true, status: 200, json: async () => body });
+      }),
+    );
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+
+    const hero = await screen.findByTestId('portal-hero-historias');
+    expect(within(hero).queryByTestId('historias-cover-video')).not.toBeInTheDocument();
   });
 
   it('una plantilla desconocida cae en la Clásica', async () => {

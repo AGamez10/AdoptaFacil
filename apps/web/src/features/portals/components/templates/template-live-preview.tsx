@@ -14,7 +14,13 @@ import { fetchPublicAnimals } from '../../api/public-animals';
 import { buildPortalView } from '../../model/portal-view';
 import { AnimalCard } from '../animal-card';
 import { PortalProfileSection } from '../portal-profile-section';
-import { CarnetHero, EditorialHero, ImpactoHero, OrbitaHero } from './template-heroes';
+import {
+  CarnetHero,
+  EditorialHero,
+  HistoriasHero,
+  ImpactoHero,
+  OrbitaHero,
+} from './template-heroes';
 import catalogStyles from '../../styles/public-catalog.module.scss';
 import portalStyles from '../../styles/public-portal.module.scss';
 import templateStyles from './portal-templates.module.scss';
@@ -33,6 +39,8 @@ export interface TemplateLivePreviewProps {
   options: PortalTemplateOptions;
   tokens: PortalTheme;
   logoPosition: PortalLogoPosition;
+  /** Historias: video de portada elegido en el editor (aún sin guardar). */
+  coverVideoUrl?: string;
 }
 
 /** Perfil de muestra mientras la organización no tiene datos públicos. */
@@ -61,6 +69,7 @@ export function TemplateLivePreview({
   options,
   tokens,
   logoPosition,
+  coverVideoUrl,
 }: TemplateLivePreviewProps) {
   const [device, setDevice] = useState<Device>('desktop');
   const [organization, setOrganization] = useState<OrganizationPublic | null>(null);
@@ -187,6 +196,8 @@ export function TemplateLivePreview({
                 <ImpactoHero {...heroProps} />
               ) : template === 'orbita' ? (
                 <OrbitaHero {...heroProps} />
+              ) : template === 'historias' ? (
+                <HistoriasHero {...heroProps} coverVideoUrl={coverVideoUrl} />
               ) : (
                 <PortalProfileSection
                   profile={profile}
