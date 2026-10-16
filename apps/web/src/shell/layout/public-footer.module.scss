@@ -1,79 +1,114 @@
+/* Pie público — marca v3: bloque oscuro con borde ondulado. */
 .footer {
-  border-top: 1px solid var(--border-hairline);
-  background-color: hsl(var(--navy));
-  color: hsl(0 0% 100% / 0.72);
+  position: relative;
+  margin-top: 3rem;
+  background-color: var(--af-teal-deep);
+  color: rgb(255 255 255 / 0.78);
 }
 
-.footer__row {
+.footer__wave {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: 3rem;
+  color: var(--af-teal-deep);
+}
+
+.footer__inner {
   display: grid;
-  gap: 2rem;
-  max-width: 72rem;
+  max-width: var(--af-container);
+  gap: 2.5rem;
   margin: 0 auto;
-  padding: 3rem 1rem 2rem;
+  padding: 3rem 1.25rem 2.5rem;
 
   @media (min-width: 640px) {
-    padding: 3.5rem 1.5rem 2rem;
+    padding: 3.5rem 2rem 3rem;
   }
 
-  @media (min-width: 900px) {
-    grid-template-columns: 1.2fr 1.4fr 1fr;
-    align-items: start;
+  @media (min-width: 1024px) {
+    grid-template-columns: 1fr 2fr;
+    gap: 4rem;
   }
 }
 
 .footer__brand {
   display: grid;
-  gap: 0.75rem;
+  align-content: start;
+  gap: 1rem;
 }
 
 .footer__tagline {
-  max-width: 18rem;
-  font-size: var(--fs-sm);
-  line-height: 1.55;
-}
-
-.footer__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
-  font-size: var(--fs-sm);
-}
-
-.footer__link {
-  &:hover {
-    color: var(--text-light);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--brand);
-    outline-offset: 2px;
-  }
+  max-width: 20rem;
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 1.25rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.25;
+  color: #fff;
 }
 
 .footer__contact {
   display: grid;
-  gap: 0.4rem;
-  font-size: var(--fs-sm);
+  gap: 0.5rem;
   font-style: normal;
 }
 
-.footer__contactTitle {
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
-  letter-spacing: 0.12em;
+.footer__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem 1.5rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.footer__col {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.footer__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-extra);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: hsl(0 0% 100% / 0.5);
+  color: var(--af-teal);
+}
+
+.footer__link {
+  justify-self: start;
+  font-size: 0.9375rem;
+  color: rgb(255 255 255 / 0.82);
+  text-decoration: none;
+  transition: color var(--transition-base);
+
+  &:hover {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--af-mint);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
 }
 
 .footer__meta {
-  max-width: 72rem;
+  max-width: var(--af-container);
   margin: 0 auto;
-  padding: 1.25rem 1rem 2rem;
-  border-top: 1px solid hsl(0 0% 100% / 0.08);
-  font-size: var(--fs-xs);
-  color: hsl(0 0% 100% / 0.55);
+  border-top: 1px solid rgb(255 255 255 / 0.12);
+  padding: 1.25rem 1.25rem 2rem;
+  font-size: 0.8125rem;
+  color: rgb(255 255 255 / 0.65);
 
   @media (min-width: 640px) {
-    padding: 1.25rem 1.5rem 2rem;
+    padding-inline: 2rem;
   }
 }

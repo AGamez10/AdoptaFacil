@@ -229,4 +229,21 @@ describe('GeneralCatalogSection', () => {
     expect(await screen.findAllByTestId('animal-card')).toHaveLength(12);
     expect(screen.getByRole('button', { name: 'Ver más' })).toBeInTheDocument();
   });
+
+  it('applies the species and city sent by the hero search in the URL (?especie=gatos&ciudad=…)', async () => {
+    stubCatalog({ data: [FIRULAIS, MICHI, ROCKY], total: 3, page: 1, limit: 50 });
+    render(
+      <MemoryRouter
+        initialEntries={['/?especie=gatos&ciudad=Medell%C3%ADn']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <GeneralCatalogSection />
+      </MemoryRouter>,
+    );
+    const cards = await screen.findAllByTestId('animal-card');
+    expect(cards).toHaveLength(1);
+    expect(screen.getByText('Michi')).toBeInTheDocument();
+    expect(screen.getByTestId('active-filter-chip-species')).toHaveTextContent('Gato');
+    expect(screen.getByTestId('active-filter-chip-city-Medellín')).toBeInTheDocument();
+  });
 });

@@ -49,9 +49,10 @@
 }
 
 .logo__wordmark {
-  font-family: var(--font-display);
-  font-weight: var(--fw-semibold);
+  font-family: var(--font-brand);
+  font-weight: var(--fw-extra);
   font-size: var(--fs-h3);
+  letter-spacing: -0.03em;
   line-height: 1;
   white-space: nowrap;
 }
@@ -65,7 +66,7 @@
 }
 
 .logo__wordmark-accent {
-  color: var(--brand-dark);
+  color: var(--af-teal-ink);
 }
 
 .logo__wordmark-accent--light {

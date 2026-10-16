@@ -7,12 +7,16 @@ import { useDocumentTitle } from '../../../lib/use-document-title';
 import {
   ActiveCampaignsSection,
   AdoptionStepsSection,
+  CommunitySection,
   FinalCtaSection,
   ForOrganizationsSection,
+  ImpactSection,
   LANDING_CATALOG_ID,
   LandingHero,
   PromisesSection,
+  WaitingAnimalsSection,
   WaysToHelpSection,
+  useCatalogSnapshot,
 } from '../../landing';
 import styles from '../../landing/components/landing.module.scss';
 import { GeneralCatalogSection } from '../components/general-catalog-section';
@@ -69,6 +73,7 @@ function useScrollToHash() {
 export function GeneralPortalPage() {
   const { status } = useSession();
   const heroBannerPhotos = useHeroBannerPhotos();
+  const snapshot = useCatalogSnapshot();
   useDocumentTitle('Adopción responsable en Colombia');
   useScrollToHash();
 
@@ -81,17 +86,21 @@ export function GeneralPortalPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-foreground">
       <PublicNavbar />
 
       <main className="flex-1">
-        {/* Landing comercial (Ola 3): primero las formas de ayudar que el
-            producto cumple HOY (donar y recursos solo con su módulo
-            encendido), luego el catálogo real, cómo adoptar, campañas
-            activas reales, la propuesta para organizaciones y el cierre.
-            Ninguna cifra que no salga de la API. */}
-        <LandingHero />
+        {/* Landing marca v3 (rediseño 2026-10): primero animales reales y
+            "Quiero adoptar", luego las formas de ayudar (donar y recursos
+            solo con su módulo encendido), cómo adoptar, la red en cifras
+            reales, el catálogo completo, campañas, comunidad, la propuesta
+            para organizaciones y el cierre. Ninguna cifra que no salga de
+            la API. */}
+        <LandingHero snapshot={snapshot} />
+        <WaitingAnimalsSection snapshot={snapshot} />
         <WaysToHelpSection />
+        <AdoptionStepsSection photos={heroBannerPhotos} />
+        <ImpactSection snapshot={snapshot} />
 
         <section id={LANDING_CATALOG_ID} className={styles.catalog} aria-label="Catálogo">
           <div className="mx-auto w-full max-w-6xl space-y-8 px-4 sm:px-6">
@@ -99,8 +108,8 @@ export function GeneralPortalPage() {
           </div>
         </section>
 
-        <AdoptionStepsSection photos={heroBannerPhotos} />
         <ActiveCampaignsSection />
+        <CommunitySection />
         <ForOrganizationsSection />
         <PromisesSection />
         <FinalCtaSection />

@@ -1,97 +1,143 @@
+/* Navegación pública — marca v3. Vidrio cálido sobre la portada crema. */
 .navbar {
   position: sticky;
   top: 0;
   z-index: 30;
-  background-color: var(--bg-surface);
-  border-bottom: 1px solid var(--border-hairline);
+  border-bottom: 1px solid rgb(20 32 46 / 0.06);
+  background-color: rgb(255 248 239 / 0.86);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+}
+
+.navbar[data-open='true'] {
+  background-color: var(--af-cream);
 }
 
 .navbar__row {
   display: flex;
+  height: 4.25rem;
+  max-width: var(--af-container);
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
-  max-width: 72rem;
   margin: 0 auto;
-  height: 4rem;
-  padding: 0 1rem;
+  padding: 0 1.25rem;
 
   @media (min-width: 640px) {
-    padding: 0 1.5rem;
+    padding: 0 2rem;
+  }
+}
+
+.navbar__brand {
+  display: inline-flex;
+  border-radius: var(--r-md);
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 4px;
   }
 }
 
 .navbar__links {
   display: none;
   align-items: center;
-  gap: 1.25rem;
-  font-size: var(--fs-sm);
+  gap: 0.25rem;
   white-space: nowrap;
-  font-weight: var(--fw-medium);
-  color: hsl(var(--navy-soft));
-
-  @media (min-width: 768px) {
-    display: flex;
-  }
 
   @media (min-width: 1024px) {
-    gap: 1.75rem;
+    display: flex;
   }
 }
 
-.navbar__link:hover {
-  color: hsl(var(--primary));
+.navbar__link {
+  border-radius: var(--r-full);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-semibold);
+  color: var(--af-ink);
+  transition: background-color var(--transition-base);
+
+  &:hover {
+    background: rgb(20 32 46 / 0.06);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
 }
 
 .navbar__link--active {
-  color: hsl(var(--primary));
-  font-weight: var(--fw-semibold);
+  background: var(--af-mint);
+  color: var(--af-teal-deep);
 }
 
 .navbar__actions {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
   flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-/* Ola 3 (R3-5): vidrio sutil sobre el hero y menú móvil. */
-.navbar {
-  background-color: rgb(255 255 255 / 0.88);
-  backdrop-filter: saturate(1.4) blur(10px);
-}
-
-.navbar__login {
-  display: none;
-
-  @media (min-width: 480px) {
-    display: inline-flex;
-  }
-}
-
+.navbar__login,
 .navbar__register {
   display: none;
+  min-height: 2.75rem;
+  align-items: center;
+  border-radius: var(--r-full);
+  padding: 0 1.1rem;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-base),
+    transform var(--transition-base);
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
 
   @media (min-width: 640px) {
     display: inline-flex;
   }
 }
 
+.navbar__login {
+  color: var(--af-ink);
+
+  &:hover {
+    background: rgb(20 32 46 / 0.06);
+  }
+}
+
+.navbar__register {
+  background: var(--af-ink);
+  color: #fff;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: #000;
+  }
+}
+
+/* Hamburguesa (CSS puro) */
 .navbar__toggle {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 2.75rem;
   height: 2.75rem;
-  border-radius: var(--r-md);
-  color: hsl(var(--navy));
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-full);
+  background: var(--af-ink);
+  color: #fff;
 
   &:focus-visible {
-    outline: 2px solid hsl(var(--ring));
+    outline: 3px solid var(--af-teal-ink);
     outline-offset: 2px;
   }
 
-  @media (min-width: 768px) {
+  @media (min-width: 1024px) {
     display: none;
   }
 }
@@ -100,13 +146,13 @@
 .navbar__burger::before,
 .navbar__burger::after {
   display: block;
-  width: 1.25rem;
+  width: 1.1rem;
   height: 2px;
   border-radius: 2px;
   background-color: currentColor;
   transition:
-    transform 0.25s ease,
-    background-color 0.25s ease;
+    transform 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .navbar__burger {
@@ -114,9 +160,9 @@
 
   &::before,
   &::after {
-    content: '';
     position: absolute;
     left: 0;
+    content: '';
   }
 
   &::before {
@@ -138,53 +184,83 @@
       transform: translateY(-6px) rotate(-45deg);
     }
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    &,
-    &::before,
-    &::after {
-      transition: none;
-    }
-  }
 }
 
+/* Panel móvil */
 .navbar__mobile {
   display: flex;
+  max-height: calc(100dvh - 4.25rem);
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0.5rem 1rem 1.25rem;
-  border-top: 1px solid var(--border-hairline);
+  overflow-y: auto;
+  border-top: 1px solid rgb(20 32 46 / 0.08);
+  padding: 1rem 1.25rem 1.5rem;
 
   &[hidden] {
     display: none;
   }
 
-  @media (min-width: 768px) {
+  @media (min-width: 1024px) {
     display: none;
   }
 }
 
 .navbar__mobileLink {
-  display: flex;
-  align-items: center;
-  min-height: 2.75rem;
-  padding: 0 0.5rem;
-  border-radius: var(--r-md);
-  font-weight: var(--fw-medium);
-  color: hsl(var(--navy));
+  border-radius: 1rem;
+  padding: 0.85rem 0.75rem;
+  font-family: var(--font-brand);
+  font-size: 1.5rem;
+  font-weight: var(--fw-extra);
+  letter-spacing: -0.02em;
+  color: var(--af-ink);
 
-  &:hover {
-    background-color: var(--brand-light);
+  &:hover,
+  &:focus-visible {
+    background: rgb(20 32 46 / 0.06);
+    outline: none;
   }
 }
 
 .navbar__mobileLink--active {
-  color: hsl(var(--primary));
-  font-weight: var(--fw-semibold);
+  color: var(--af-teal-ink);
 }
 
 .navbar__mobileActions {
   display: grid;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.navbar__mobilePrimary,
+.navbar__mobileSecondary {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-full);
+  font-weight: var(--fw-bold);
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
+}
+
+.navbar__mobilePrimary {
+  background: var(--af-teal-ink);
+  color: #fff;
+  box-shadow: 0 4px 0 #084a41;
+}
+
+.navbar__mobileSecondary {
+  border: 2px solid var(--af-ink);
+  color: var(--af-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navbar__burger,
+  .navbar__burger::before,
+  .navbar__burger::after {
+    transition: none;
+  }
 }

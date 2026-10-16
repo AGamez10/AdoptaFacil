@@ -5,14 +5,8 @@ import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
 import { listPublicCampaigns } from '../../campaigns/api/public-campaigns';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
-import {
-  IconArrowRight,
-  IconBox,
-  IconHeart,
-  IconMegaphone,
-  IconPaw,
-  IconSpark,
-} from './landing-icons';
+import { BoneSticker, CatMascot, DogMascot, HeartSticker, Sparkle } from './illustrations';
+import { IconArrowRight, IconBox, IconHeart, IconMegaphone, IconPaw } from './landing-icons';
 import styles from './commerce.module.scss';
 
 /** Ancla de "Formas de ayudar" (la usa el hero). */
@@ -84,6 +78,14 @@ export function useHelpWays(): HelpWay[] {
   ];
 }
 
+/** Ilustración de cada bloque de color (decorativa). */
+function WayArt({ tone }: { tone: HelpWay['tone'] }) {
+  if (tone === 'teal') return <DogMascot className={styles.way__art} />;
+  if (tone === 'gold') return <CatMascot className={styles.way__art} />;
+  if (tone === 'coral') return <HeartSticker className={styles.way__art} color="#ff7a59" />;
+  return <BoneSticker className={styles.way__art} color="#ffffff" />;
+}
+
 /** Bloque "Hay muchas formas de ayudar": una tarjeta grande por camino. */
 export function WaysToHelpSection() {
   const ways = useHelpWays();
@@ -104,6 +106,7 @@ export function WaysToHelpSection() {
         <ul className={styles.ways__grid} data-count={ways.length}>
           {ways.map(({ key, Icon, title, text, cta, to, tone }) => (
             <li key={key} className={styles.way} data-tone={tone} data-testid={`way-${key}`}>
+              <WayArt tone={tone} />
               <span className={styles.way__icon} aria-hidden="true">
                 <Icon />
               </span>
@@ -174,7 +177,11 @@ export function FinalCtaSection() {
     <section className={styles.final} aria-labelledby="landing-final-title">
       <div className={styles.container}>
         <div className={styles.final__card}>
-          <IconSpark className={styles.final__spark} aria-hidden="true" />
+          <div className={styles.final__art} aria-hidden="true">
+            <DogMascot className={styles.final__dog} />
+            <CatMascot className={styles.final__cat} />
+            <Sparkle className={styles.final__spark} />
+          </div>
           <h2 id="landing-final-title" className={styles.final__title}>
             Alguien te está esperando.
           </h2>
@@ -183,7 +190,7 @@ export function FinalCtaSection() {
             minutos.
           </p>
           <div className={styles.final__actions}>
-            <a href="#adoptar" className={cn(styles.btn, styles['btn--light'])}>
+            <a href="#adoptar" className={cn(styles.btn, styles['btn--ink'])}>
               Conocer animales
               <IconArrowRight aria-hidden="true" />
             </a>
