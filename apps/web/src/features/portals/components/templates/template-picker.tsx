@@ -27,6 +27,8 @@ export function tierLabel(template: PortalTemplateInfo): string {
  * cobren (`PORTAL_TEMPLATE_TIERS_ENFORCED`), dice que las Pro están incluidas.
  */
 export function TemplateUpsell() {
+  // Hoy todas las plantillas son gratis: sin plantillas de pago no hay nada que vender.
+  if (!PORTAL_TEMPLATES.some((template) => template.tier === 'paid')) return null;
   return (
     <p className={styles.upsell} data-testid="template-upsell">
       <span className={styles.upsell__badge}>PRO</span>

@@ -94,6 +94,7 @@ import {
   AdoptionRequestPage,
   AdoptionsKanbanPage,
   MyAdoptionRequestsPage,
+  MyFollowUpsPage,
 } from '../../features/adoptions';
 import {
   DonatePage,
@@ -336,6 +337,9 @@ export function AppRoutes() {
               (`personaOnly`, nav-items.ts) y la propia página muestra "Mis
               solicitudes" vacío/con error si algo raro llegara a pasar por URL. */}
               <Route path="mis-solicitudes" element={<MyAdoptionRequestsPage />} />
+              {/* T-028c: "Mis seguimientos" del adoptante — GET /adoptions/followups/mine
+              autoriza por identidad (sin @Roles), igual que "Mis solicitudes". */}
+              <Route path="mis-seguimientos" element={<MyFollowUpsPage />} />
               {/* M03 · animales + expediente clínico + recordatorios (T-031, wires
               T-104/T-105/T-106). Cada ruta exige los MISMOS @Roles que su endpoint
               (deny-by-default). El panel clínico es EMBEBIBLE por animalId → vive

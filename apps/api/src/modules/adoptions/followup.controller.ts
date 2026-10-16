@@ -1,10 +1,25 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  PayloadTooLargeException,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   Role,
   type AdoptionFollowUpMilestone,
   type ScheduleFollowUpMilestoneInput,
   type SubmitFollowUpInput,
 } from '@adoptafacil/contracts';
+import type { Env } from '../../config/env.validation';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
@@ -12,7 +27,20 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { FollowUpService } from './followup.service';
-import { scheduleFollowUpSchema, submitFollowUpSchema } from './followup.schemas';
+import {
+  FOLLOWUP_PHOTO_CONTENT_TYPES,
+  parseFollowUpPhotoFields,
+  scheduleFollowUpSchema,
+  submitFollowUpSchema,
+} from './followup.schemas';
+
+/** Minimal shape of a multer memory-storage file (no @types/multer installed). */
+interface UploadedFileLike {
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
+  originalname: string;
+}
 
 /** Roles that SCHEDULE/CLOSE follow-up (§13) — org set (Owner/Administrator/
  *  Operator), same as evaluation/contract. NOT the platform admin. The adopter
@@ -31,7 +59,14 @@ const MANAGE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
 @Controller('adoptions/followups')
 @UseGuards(JwtAuthGuard)
 export class FollowUpController {
-  constructor(private readonly service: FollowUpService) {}
+  private readonly maxMb: number;
+
+  constructor(
+    private readonly service: FollowUpService,
+    config: ConfigService<Env, true>,
+  ) {
+    this.maxMb = config.get('STORAGE_MAX_FILE_MB', { infer: true });
+  }
 
   /** Schedule a milestone on a signed contract (org). */
   @Post()
@@ -68,6 +103,31 @@ export class FollowUpController {
     @Body(new ZodValidationPipe(submitFollowUpSchema)) dto: SubmitFollowUpInput,
   ): Promise<AdoptionFollowUpMilestone> {
     return this.service.submit(actor, id, dto);
+  }
+
+  /**
+   * The adopter responds a milestone WITH a photo (multipart: `file`, plus the
+   * optional text fields `answers` as JSON and `complete`). Only images; size
+   * capped like every other upload (STORAGE_MAX_FILE_MB).
+   */
+  @Post(':id/photo')
+  @UseInterceptors(FileInterceptor('file'))
+  submitWithPhoto(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: UploadedFileLike | undefined,
+    @Body() fields: Record<string, unknown>,
+  ): Promise<AdoptionFollowUpMilestone> {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Adjunta la foto (campo "file").');
+    }
+    if (file.size > this.maxMb * 1024 * 1024) {
+      throw new PayloadTooLargeException(`La foto supera el límite de ${this.maxMb} MB.`);
+    }
+    if (!FOLLOWUP_PHOTO_CONTENT_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException('Formato no permitido. Sube una foto JPG, PNG o WebP.');
+    }
+    return this.service.submitWithPhoto(actor, id, file, parseFollowUpPhotoFields(fields));
   }
 
   /** The org closes (completes) a milestone. */

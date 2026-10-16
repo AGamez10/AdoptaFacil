@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
@@ -293,37 +293,50 @@ describe('RBAC governance (AF-007, AF-008, AF-009, AF-026, AF-037)', () => {
   describe('AF-037 · no seed account with a default password', () => {
     const originalEnv = process.env.NODE_ENV;
 
-    /** Runs the real seed script with only the given credential env vars. */
-    function runSeed(env: Record<string, string>, args: string[] = []) {
+    /** Runs the real seed script with only the given credential env vars.
+     *  Async on purpose: spawnSync froze the event loop for several seconds,
+     *  the app's BullMQ blocking connection dropped meanwhile, and its
+     *  reconnection then kept `app.close()` in afterAll from ever finishing. */
+    function runSeed(
+      env: Record<string, string>,
+      args: string[] = [],
+    ): Promise<{ status: number | null; stderr: string }> {
       const clean = { ...process.env };
       delete clean.PLATFORM_ADMIN_EMAIL;
       delete clean.PLATFORM_ADMIN_PASSWORD;
-      return spawnSync(
-        'pnpm',
-        ['exec', 'ts-node', '--transpile-only', 'scripts/seed-platform-admin.ts', ...args],
-        { cwd: join(__dirname, '..'), env: { ...clean, ...env }, encoding: 'utf8' },
-      );
+      return new Promise((resolve, reject) => {
+        const child = spawn(
+          'pnpm',
+          ['exec', 'ts-node', '--transpile-only', 'scripts/seed-platform-admin.ts', ...args],
+          { cwd: join(__dirname, '..'), env: { ...clean, ...env } },
+        );
+        let stderr = '';
+        child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk));
+        child.on('error', reject);
+        child.on('close', (status) => resolve({ status, stderr }));
+      });
     }
 
-    it('the seed refuses to run without explicit credentials (no defaults)', () => {
-      const run = runSeed({});
+    it('the seed refuses to run without explicit credentials (no defaults)', async () => {
+      const run = await runSeed({});
       expect(run.status).toBe(1);
       expect(run.stderr).toMatch(/No hay valores por defecto/);
     });
 
-    it('the seed refuses the old default and short passwords', () => {
+    it('the seed refuses the old default and short passwords', async () => {
       const email = `gov-seed-${randomUUID()}@test.local`;
       expect(
-        runSeed({ PLATFORM_ADMIN_EMAIL: email, PLATFORM_ADMIN_PASSWORD: 'changeme123' }).status,
+        (await runSeed({ PLATFORM_ADMIN_EMAIL: email, PLATFORM_ADMIN_PASSWORD: 'changeme123' }))
+          .status,
       ).toBe(1);
-      const variant = runSeed({
+      const variant = await runSeed({
         PLATFORM_ADMIN_EMAIL: email,
         PLATFORM_ADMIN_PASSWORD: 'ChangeMe1234',
       });
       expect(variant.status).toBe(1);
       expect(variant.stderr).toMatch(/valor por defecto conocido/);
       expect(
-        runSeed({ PLATFORM_ADMIN_EMAIL: email, PLATFORM_ADMIN_PASSWORD: 'corta' }).status,
+        (await runSeed({ PLATFORM_ADMIN_EMAIL: email, PLATFORM_ADMIN_PASSWORD: 'corta' })).status,
       ).toBe(1);
     });
 

@@ -85,7 +85,22 @@ function hostAndPort(url: string, fallbackPort: number): { host: string; port: n
 export function describeMissingServices(
   missing: string[],
   what = 'La API no puede arrancar',
+  localhostOnly: string[] = [],
 ): string {
+  if (missing.length === 0 && localhostOnly.length > 0) {
+    // The containers ARE up: 127.0.0.1 answers, but `localhost` resolves to
+    // IPv6 (::1) first on some Windows machines and Docker Desktop only
+    // publishes the port on IPv4. Saying "Docker is off" here misleads.
+    return [
+      '',
+      `[AdoptaFácil] ${what}: ${localhostOnly.join(' y ')} responde en 127.0.0.1 pero no en "localhost".`,
+      'Los contenedores sí están arriba; tu equipo resuelve "localhost" por IPv6 y Docker solo publica IPv4.',
+      'Para arreglarlo, en el archivo .env de la raíz cambia "localhost" por "127.0.0.1" en:',
+      '  DATABASE_URL, DATABASE_URL_APP y REDIS_URL',
+      'y vuelve a ejecutar el comando. Para revisar todo de una vez: pnpm doctor',
+      '',
+    ].join('\n');
+  }
   return [
     '',
     `[AdoptaFácil] ${what}: no responde ${missing.join(' ni ')}.`,
@@ -101,22 +116,51 @@ export function describeMissingServices(
 
 export type LocalService = 'postgres' | 'redis';
 
+export interface ServiceCheck {
+  /** Services that answer nowhere ("Postgres (localhost:5433)"). */
+  missing: string[];
+  /** Services that answer on 127.0.0.1 but not on the `localhost` in .env. */
+  localhostOnly: string[];
+}
+
+async function checkService(
+  label: string,
+  target: { host: string; port: number },
+  answers: (host: string, port: number) => Promise<boolean>,
+  result: ServiceCheck,
+): Promise<void> {
+  if (await answers(target.host, target.port)) return;
+  if (target.host === 'localhost' && (await answers('127.0.0.1', target.port))) {
+    result.localhostOnly.push(label);
+  } else {
+    result.missing.push(`${label} (${target.host}:${target.port})`);
+  }
+}
+
+/** Which of `services` do not answer, and which only fail through `localhost`. */
+export async function checkLocalServices(
+  services: readonly LocalService[] = ['postgres', 'redis'],
+): Promise<ServiceCheck> {
+  const files = readEnvFiles();
+  const value = (name: string) => process.env[name] ?? files[name] ?? '';
+  const result: ServiceCheck = { missing: [], localhostOnly: [] };
+  const db = hostAndPort(value('DATABASE_URL'), 5432);
+  if (services.includes('postgres') && db) {
+    await checkService('Postgres', db, postgresAnswers, result);
+  }
+  const redis = hostAndPort(value('REDIS_URL'), 6379);
+  if (services.includes('redis') && redis) {
+    await checkService('Redis', redis, redisAnswers, result);
+  }
+  return result;
+}
+
 /** Which of `services` do not answer, as human labels ("Postgres (localhost:5433)"). */
 export async function findMissingServices(
   services: readonly LocalService[] = ['postgres', 'redis'],
 ): Promise<string[]> {
-  const files = readEnvFiles();
-  const value = (name: string) => process.env[name] ?? files[name] ?? '';
-  const missing: string[] = [];
-  const db = hostAndPort(value('DATABASE_URL'), 5432);
-  if (services.includes('postgres') && db && !(await postgresAnswers(db.host, db.port))) {
-    missing.push(`Postgres (${db.host}:${db.port})`);
-  }
-  const redis = hostAndPort(value('REDIS_URL'), 6379);
-  if (services.includes('redis') && redis && !(await redisAnswers(redis.host, redis.port))) {
-    missing.push(`Redis (${redis.host}:${redis.port})`);
-  }
-  return missing;
+  const { missing, localhostOnly } = await checkLocalServices(services);
+  return [...missing, ...localhostOnly.map((label) => `${label} (localhost)`)];
 }
 
 /**
@@ -129,9 +173,9 @@ export async function runLocalPreflight(
   what = 'La API no puede arrancar',
 ): Promise<void> {
   if (process.env.NODE_ENV === 'production' || process.env.SKIP_SERVICE_PREFLIGHT === '1') return;
-  const missing = await findMissingServices(services);
-  if (missing.length > 0) {
-    console.error(describeMissingServices(missing, what));
+  const { missing, localhostOnly } = await checkLocalServices(services);
+  if (missing.length > 0 || localhostOnly.length > 0) {
+    console.error(describeMissingServices(missing, what, localhostOnly));
     process.exit(1);
   }
 }
