@@ -22,6 +22,7 @@ export * from './volunteering';
 export * from './resources';
 export * from './marketplace';
 export * from './community';
+export * from './community-directory';
 export * from './reputation';
 export * from './portals';
 export * from './dashboards';

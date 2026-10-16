@@ -35,21 +35,21 @@
 /// (nunca por el cliente). Nunca se borra físicamente salvo por su propia
 /// autora (auto-servicio) — la moderación de plataforma solo cambia `status`.
 model Post {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String?   @map("organization_id") @db.Uuid
-  authorUserId   String    @map("author_user_id") @db.Uuid
-  authorName     String    @map("author_name")
-  type           String
-  title          String?
-  body           String
-  status         String    @default("published")
-  commentCount   Int       @default(0) @map("comment_count")
-  likeCount      Int       @default(0) @map("like_count")
-  moderationReason   String?   @map("moderation_reason")
-  moderatedByUserId  String?   @map("moderated_by_user_id") @db.Uuid
-  moderatedAt        DateTime? @map("moderated_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String?   @map("organization_id") @db.Uuid
+  authorUserId      String    @map("author_user_id") @db.Uuid
+  authorName        String    @map("author_name")
+  type              String
+  title             String?
+  body              String
+  status            String    @default("published")
+  commentCount      Int       @default(0) @map("comment_count")
+  likeCount         Int       @default(0) @map("like_count")
+  moderationReason  String?   @map("moderation_reason")
+  moderatedByUserId String?   @map("moderated_by_user_id") @db.Uuid
+  moderatedAt       DateTime? @map("moderated_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   images   PostImage[]
   comments Comment[]
@@ -114,4 +114,99 @@ model PostLike {
   @@id([postId, userId])
   @@index([organizationId])
   @@map("community_post_likes")
+}
+
+// ---------------------------------------------------------------------------
+// Primer corte del ecosistema (directorio de servicios + ficha de mascota).
+// A diferencia de los modelos de arriba, la FK a `organizations` SÍ se modela
+// (con su campo de vuelta en org.prisma), como ya hacen legal y ePayco, para
+// que el gate de deriva de esquema no crezca.
+// ---------------------------------------------------------------------------
+
+/// Perfil de un servicio del ecosistema (veterinaria, peluquería, paseador,
+/// tienda). Tenant-scoped (RLS ENABLE+FORCE+tenant_isolation) al tenant de
+/// quien lo publica. Nace `pending`; la plataforma lo aprueba vía función
+/// SECURITY DEFINER. El rol de la app NO puede escribir `status` ni las
+/// columnas de moderación (GRANT por columna) y un trigger lo devuelve a
+/// `pending` cuando cambia su contenido.
+model ServiceListing {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  createdByUserId   String    @map("created_by_user_id") @db.Uuid
+  category          String
+  name              String
+  description       String?
+  department        String
+  city              String
+  address           String?
+  phone             String?
+  whatsapp          String?
+  website           String?
+  email             String?
+  status            String    @default("pending")
+  moderationReason  String?   @map("moderation_reason")
+  moderatedByUserId String?   @map("moderated_by_user_id") @db.Uuid
+  moderatedAt       DateTime? @map("moderated_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reviews      ServiceListingReview[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([status, category])
+  @@map("community_service_listings")
+}
+
+/// Reseña de un servicio. `organization_id` replica el del perfil reseñado
+/// (como los comentarios de M11), así el negocio ve las reseñas de SU perfil
+/// bajo RLS. Se escribe y modera solo vía funciones SECURITY DEFINER; nace
+/// `pending` (estados de M12). Una por persona y perfil.
+model ServiceListingReview {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  listingId         String    @map("listing_id") @db.Uuid
+  authorUserId      String    @map("author_user_id") @db.Uuid
+  authorName        String    @map("author_name")
+  rating            Int
+  comment           String?
+  status            String    @default("pending")
+  moderationReason  String?   @map("moderation_reason")
+  moderatedByUserId String?   @map("moderated_by_user_id") @db.Uuid
+  moderatedAt       DateTime? @map("moderated_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  listing      ServiceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, authorUserId])
+  @@index([organizationId])
+  @@index([status])
+  @@map("community_service_listing_reviews")
+}
+
+/// Ficha privada de la mascota de una persona (p. ej. la que adoptó).
+/// Tenant-scoped al tenant personal de su dueña; nunca se expone en público.
+/// La dueña puede borrarla (supresión de sus datos).
+model PetProfile {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  ownerUserId    String    @map("owner_user_id") @db.Uuid
+  name           String
+  species        String
+  breed          String?
+  sex            String?
+  birthDate      DateTime? @map("birth_date") @db.Date
+  sterilized     Boolean?
+  adoptedFrom    String?   @map("adopted_from")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([ownerUserId])
+  @@map("community_pet_profiles")
 }

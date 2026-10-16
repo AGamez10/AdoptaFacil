@@ -514,6 +514,8 @@ export const navItems: NavItem[] = [
     children: [
       { path: '/comunidad', label: 'Feed', icon: ChatIcon },
       { path: '/mis-publicaciones', label: 'Mis publicaciones', icon: ChatIcon },
+      { path: '/mis-mascotas', label: 'Mis mascotas', icon: PawIcon },
+      { path: '/mi-negocio', label: 'Mi negocio', icon: ShoppingBagIcon },
     ],
   },
   // S2-01: "Campañas" RESTORED — T-065 removed it because the link pointed at
@@ -583,6 +585,13 @@ export const navItems: NavItem[] = [
     path: '/plataforma/comunidad',
     label: 'Moderación de comunidad',
     icon: ChatIcon,
+    roles: COMMUNITY_MODERATION_ROLES,
+  },
+  // Comunidad · revisión de perfiles y reseñas del directorio de servicios.
+  {
+    path: '/plataforma/servicios',
+    label: 'Directorio de servicios',
+    icon: ShoppingBagIcon,
     roles: COMMUNITY_MODERATION_ROLES,
   },
   // M12 (S-7, RF23) · moderación de reseñas, audiencia de PLATAFORMA — ruta
