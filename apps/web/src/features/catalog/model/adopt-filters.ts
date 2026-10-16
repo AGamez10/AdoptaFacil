@@ -18,11 +18,8 @@ export const ADOPT_BASE_PATH = '/adoptar';
 
 export type SpeciesSlug = 'perros' | 'gatos' | 'otros' | 'animales';
 
-export const SPECIES_SLUGS: Record<AnimalSpecies, Exclude<SpeciesSlug, 'animales'>> = {
-  dog: 'perros',
-  cat: 'gatos',
-  other: 'otros',
-};
+export { SPECIES_SLUGS, buildAdoptPath, citySlug } from '../../../seo/page-meta.js';
+import { citySlug } from '../../../seo/page-meta.js';
 
 const SPECIES_BY_SLUG: Record<string, AnimalSpecies | undefined> = {
   perros: 'dog',
@@ -31,33 +28,11 @@ const SPECIES_BY_SLUG: Record<string, AnimalSpecies | undefined> = {
 };
 
 /** Nombre en plural para títulos ("Perros en adopción en Bogotá"). */
-export const SPECIES_PLURAL: Record<AnimalSpecies | 'all', string> = {
-  dog: 'Perros',
-  cat: 'Gatos',
-  other: 'Otros animales',
-  all: 'Perros y gatos',
-};
-
-/** "Bogotá D.C." → "bogota-dc"; quita tildes y signos, solo minúsculas y guiones. */
-export function citySlug(city: string): string {
-  return city
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+export { SPECIES_PLURAL } from '../../../seo/page-meta.js';
 
 export function speciesFromSlug(slug: string | undefined): AnimalSpecies | 'all' | null {
   if (!slug || slug === 'animales') return 'all';
   return SPECIES_BY_SLUG[slug] ?? null;
-}
-
-export function buildAdoptPath(species: AnimalSpecies | 'all', city?: string | null): string {
-  const speciesPart = species === 'all' ? 'animales' : SPECIES_SLUGS[species];
-  if (city) return `${ADOPT_BASE_PATH}/${speciesPart}/${citySlug(city)}`;
-  if (species === 'all') return ADOPT_BASE_PATH;
-  return `${ADOPT_BASE_PATH}/${speciesPart}`;
 }
 
 export type AgeGroup = 'cachorro' | 'joven' | 'adulto' | 'mayor';
@@ -143,7 +118,4 @@ export function applyAdoptFilters(
 }
 
 /** Título de la página según especie y ciudad ("Perros en adopción en Bogotá"). */
-export function adoptTitle(species: AnimalSpecies | 'all', city: string | null): string {
-  const base = `${SPECIES_PLURAL[species]} en adopción`;
-  return city ? `${base} en ${city}` : `${base} en Colombia`;
-}
+export { adoptTitle } from '../../../seo/page-meta.js';

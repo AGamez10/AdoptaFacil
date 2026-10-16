@@ -28,6 +28,7 @@ import {
 } from '../navigation';
 import { AnimalDetailPage } from '../pages/animal-detail-page';
 import { AdoptPage, GeneralPortalPage } from '../../features/catalog';
+import { GuidePage, GuidesIndexPage } from '../../features/guias';
 import { HomePage, NotFoundPage } from '../../features/_layout';
 import {
   CompleteProfilePage,
@@ -195,6 +196,9 @@ export function AppRoutes() {
         <Route path="/adoptar" element={<AdoptPage />} />
         <Route path="/adoptar/:especie" element={<AdoptPage />} />
         <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
+        {/* Guías públicas de adopción (SEO, rediseño 2026-10). */}
+        <Route path="/guias" element={<GuidesIndexPage />} />
+        <Route path="/guias/:slug" element={<GuidePage />} />
         {/* Public auth screens */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />

@@ -1,0 +1,208 @@
+[
+  {
+    "slug": "como-adoptar-un-perro-en-colombia",
+    "title": "Cómo adoptar un perro en Colombia, paso a paso",
+    "description": "Qué hacer antes, durante y después de adoptar un perro en Colombia: cómo elegir, qué suelen pedir las fundaciones y cómo es el contrato de adopción.",
+    "species": "dog",
+    "updated": "2026-10-16",
+    "intro": "Adoptar es darle una segunda oportunidad a un perro que ya pasó por la calle o por un abandono. También es un compromiso de 10 a 15 años. Esta guía te cuenta cómo suele ser el proceso con refugios, fundaciones y rescatistas en Colombia, para que llegues preparado.",
+    "sections": [
+      {
+        "heading": "1. Piensa en tu rutina antes de enamorarte de una foto",
+        "paragraphs": [
+          "Pregúntate cuánto tiempo pasas en casa, si vives en apartamento o casa, si en tu conjunto o arriendo se permiten mascotas y quién lo va a pasear todos los días.",
+          "Un perro joven y muy activo necesita más paseos y juego; un perro adulto o mayor suele ser más tranquilo y ya tiene su carácter formado. No hay una opción mejor: hay la que encaja con tu vida."
+        ]
+      },
+      {
+        "heading": "2. Busca por ciudad y conoce su historia",
+        "paragraphs": [
+          "En AdoptaFácil puedes ver perros en adopción de organizaciones de todo el país y filtrar por ciudad, tamaño, sexo y edad. Cada ficha muestra quién lo cuida y cómo contactarla.",
+          "Si un perro te llama la atención, pregunta a la organización cómo se lleva con niños, con otros perros o con gatos, y si tiene alguna necesidad especial."
+        ],
+        "links": [{ "label": "Ver perros en adopción", "to": "/adoptar/perros" }]
+      },
+      {
+        "heading": "3. Envía tu solicitud",
+        "paragraphs": [
+          "Cada organización define sus propios requisitos. Es común que pidan tus datos, que cuentes cómo es tu hogar y que todos en casa estén de acuerdo. Muchas hacen una entrevista o una visita para asegurarse de que el perro llega a un buen lugar.",
+          "No lo tomes como desconfianza: es la forma en que protegen a un animal que ya fue abandonado una vez."
+        ]
+      },
+      {
+        "heading": "4. Firma el contrato de adopción",
+        "paragraphs": [
+          "El contrato deja por escrito tus compromisos (cuidado, salud, no abandonar) y los de la organización. Léelo con calma y pregunta lo que no entiendas antes de firmar.",
+          "Algunas organizaciones piden un aporte para cubrir vacunas, desparasitación o esterilización. Pregunta siempre qué incluye y pide soporte."
+        ]
+      },
+      {
+        "heading": "5. Prepara la llegada",
+        "paragraphs": [
+          "Ten listos platos para agua y comida, una cama, collar con placa de identificación, correa y el alimento que venía comiendo. Agenda una cita con un veterinario de confianza en las primeras semanas."
+        ],
+        "links": [
+          {
+            "label": "Guía de los primeros días",
+            "to": "/guias/primeros-dias-con-un-perro-adoptado"
+          }
+        ]
+      }
+    ],
+    "faq": [
+      {
+        "q": "¿Adoptar un perro cuesta dinero?",
+        "a": "Adoptar no es comprar. Algunas organizaciones piden un aporte voluntario o fijo para cubrir vacunas, desparasitación o esterilización; cada una define el suyo y debe explicarte qué incluye."
+      },
+      {
+        "q": "¿Qué documentos piden para adoptar?",
+        "a": "Depende de cada organización. Lo usual es tu documento de identidad, datos de contacto y de vivienda, y en algunos casos una entrevista o visita al hogar."
+      },
+      {
+        "q": "¿Puedo adoptar si vivo en apartamento?",
+        "a": "Sí. Lo importante es que el perro tenga paseos diarios, compañía y que tu conjunto o contrato de arriendo permita mascotas. Pregunta a la organización qué perro se adapta mejor a un espacio pequeño."
+      }
+    ]
+  },
+  {
+    "slug": "primeros-dias-con-un-perro-adoptado",
+    "title": "Los primeros días con un perro adoptado",
+    "description": "Cómo ayudar a tu perro adoptado a adaptarse a su nuevo hogar: rutina, paseos, alimentación, primera visita al veterinario y paciencia.",
+    "species": "dog",
+    "updated": "2026-10-16",
+    "intro": "Los primeros días son de cambio para todos. Tu perro llega a un lugar con olores, ruidos y personas nuevas. Con paciencia y una rutina clara, la mayoría se adapta en pocas semanas.",
+    "sections": [
+      {
+        "heading": "Dale un espacio tranquilo",
+        "paragraphs": [
+          "Prepara un rincón con su cama y agua, lejos del ruido. Deja que explore la casa a su ritmo y evita llenar los primeros días de visitas."
+        ]
+      },
+      {
+        "heading": "Crea una rutina desde el primer día",
+        "paragraphs": [
+          "Comida, paseos y descanso a horas parecidas le dan seguridad. Si cambias de alimento, hazlo de forma gradual durante varios días para cuidar su digestión."
+        ]
+      },
+      {
+        "heading": "Paseos cortos y con placa de identificación",
+        "paragraphs": [
+          "Al principio no conoce el barrio y puede asustarse. Sal siempre con correa y con una placa que tenga tu teléfono. Aumenta la duración de los paseos poco a poco."
+        ]
+      },
+      {
+        "heading": "Visita al veterinario",
+        "paragraphs": [
+          "Agenda una revisión en las primeras semanas, aunque la organización te haya entregado su historial. El veterinario te dirá qué vacunas y desparasitaciones siguen y cuándo."
+        ]
+      },
+      {
+        "heading": "Ten paciencia con los errores",
+        "paragraphs": [
+          "Es normal que haya accidentes en casa o que llore las primeras noches. Premia lo que hace bien en lugar de regañar lo que hace mal. Si algo te preocupa, habla con la organización que te lo entregó: quieren que la adopción funcione."
+        ]
+      }
+    ],
+    "faq": [
+      {
+        "q": "¿Cuánto tarda un perro adoptado en adaptarse?",
+        "a": "Varía mucho. Muchos se sienten cómodos en unas semanas, y otros necesitan algunos meses para mostrar su carácter completo. La rutina y la paciencia ayudan."
+      },
+      {
+        "q": "¿Es normal que no coma los primeros días?",
+        "a": "Puede pasar por el estrés del cambio. Si no come por más de un día o notas vómito, diarrea o decaimiento, consulta con un veterinario."
+      },
+      {
+        "q": "¿Qué hago si no se adapta?",
+        "a": "Habla primero con la organización que te lo entregó; puede orientarte o recomendarte un adiestrador. Nunca lo abandones."
+      }
+    ]
+  },
+  {
+    "slug": "cuidados-de-un-cachorro",
+    "title": "Cuidados básicos de un cachorro adoptado",
+    "description": "Vacunas, desparasitación, alimentación, socialización y esterilización: lo esencial para cuidar a un cachorro adoptado en su primer año.",
+    "species": "dog",
+    "updated": "2026-10-16",
+    "intro": "Un cachorro aprende rápido y crece todavía más rápido. El primer año marca su salud y su carácter, así que vale la pena organizarse desde el inicio.",
+    "sections": [
+      {
+        "heading": "Plan de salud con tu veterinario",
+        "paragraphs": [
+          "Las vacunas y la desparasitación se aplican en varias dosis durante los primeros meses. El calendario exacto lo define tu veterinario según la edad y la historia del cachorro. Guarda el carné de vacunas en un lugar seguro."
+        ]
+      },
+      {
+        "heading": "Alimentación para su etapa",
+        "paragraphs": [
+          "Los cachorros necesitan un alimento formulado para su edad y tamaño, repartido en varias comidas al día. Evita darle comida de la mesa: algunos alimentos comunes, como el chocolate, la cebolla o las uvas, son tóxicos para los perros."
+        ]
+      },
+      {
+        "heading": "Socialización",
+        "paragraphs": [
+          "Cuando tu veterinario lo autorice, preséntale personas, sonidos y otros perros vacunados de forma tranquila y positiva. Un cachorro bien socializado suele ser un adulto más seguro."
+        ]
+      },
+      {
+        "heading": "Esterilización",
+        "paragraphs": [
+          "Esterilizar evita camadas no deseadas, una de las causas del abandono. Muchas organizaciones ya entregan a sus animales esterilizados o te piden hacerlo a cierta edad; pregunta y sigue la indicación de tu veterinario."
+        ]
+      }
+    ],
+    "faq": [
+      {
+        "q": "¿Cuándo puede salir a la calle un cachorro?",
+        "a": "Cuando tu veterinario confirme que tiene las vacunas necesarias. Mientras tanto, puedes socializarlo en casa."
+      },
+      {
+        "q": "¿Cuántas veces al día come un cachorro?",
+        "a": "Normalmente varias veces al día en raciones pequeñas. La cantidad depende del alimento, la edad y el tamaño esperado; sigue la guía del empaque y la de tu veterinario."
+      },
+      {
+        "q": "¿Es mejor adoptar un cachorro o un perro adulto?",
+        "a": "Depende de tu tiempo y tu experiencia. Los cachorros necesitan mucha educación; un adulto ya muestra su carácter y suele adaptarse más rápido a una rutina."
+      }
+    ]
+  },
+  {
+    "slug": "adoptar-perro-adulto-o-cachorro",
+    "title": "¿Adoptar un perro adulto o un cachorro?",
+    "description": "Ventajas de adoptar un perro adulto, un cachorro o un perro mayor, y cómo decidir según tu tiempo, tu espacio y tu familia.",
+    "species": "dog",
+    "updated": "2026-10-16",
+    "intro": "Los cachorros se adoptan rápido; los adultos y los mayores esperan mucho más tiempo en los refugios. Conocer las diferencias te ayuda a elegir bien y, quizá, a darle una oportunidad a quien más la espera.",
+    "sections": [
+      {
+        "heading": "Cachorro: energía y aprendizaje",
+        "paragraphs": [
+          "Un cachorro necesita tiempo para enseñarle dónde hacer sus necesidades, a caminar con correa y a quedarse solo. Su tamaño y carácter adultos son más difíciles de prever, sobre todo si es mestizo."
+        ]
+      },
+      {
+        "heading": "Adulto: lo que ves es lo que hay",
+        "paragraphs": [
+          "Un perro adulto ya tiene su tamaño y su personalidad. La organización puede contarte cómo se comporta con niños, otros animales o al quedarse solo, y muchos ya saben vivir en casa."
+        ]
+      },
+      {
+        "heading": "Mayor: compañía tranquila",
+        "paragraphs": [
+          "Los perros mayores suelen ser calmados y agradecidos. Pueden necesitar más visitas al veterinario, así que conviene preguntar por su estado de salud y planear esos gastos."
+        ]
+      }
+    ],
+    "faq": [
+      {
+        "q": "¿Un perro adulto se encariña igual con su nueva familia?",
+        "a": "Sí. Los perros adultos crean vínculos fuertes con su nueva familia; solo necesitan tiempo y una rutina estable."
+      },
+      {
+        "q": "¿Qué perro es mejor si tengo niños pequeños?",
+        "a": "Un adulto de carácter conocido y tranquilo suele ser buena opción, porque la organización ya sabe cómo se comporta con niños. Pregunta siempre antes de decidir."
+      }
+    ],
+    "links": [{ "label": "Ver perros adultos en adopción", "to": "/adoptar/perros?edad=adulto" }]
+  }
+]

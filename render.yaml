@@ -178,3 +178,8 @@ services:
       # URL pública de adoptafacil-api — se llena tras el primer deploy (ver DEPLOY.md).
       - key: VITE_API_URL
         sync: false
+      # Dominio público del sitio (https://…, sin barra final). Lo usan las
+      # URLs canónicas, Open Graph y sitemap.xml que genera el build (SEO).
+      # Sin él el sitio funciona igual, pero sin sitemap ni canónicas absolutas.
+      - key: VITE_SITE_URL
+        sync: false

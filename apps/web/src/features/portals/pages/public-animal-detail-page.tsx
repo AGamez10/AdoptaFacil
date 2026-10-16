@@ -6,7 +6,8 @@ import type {
   PublicAnimalSummary,
 } from '@adoptafacil/contracts';
 import { buttonVariants, cn, EmptyState, Skeleton } from '@adoptafacil/ui';
-import { useDocumentTitle } from '../../../lib/use-document-title';
+import { animalDescription, animalTitle, SPECIES_PLURAL } from '../../../seo/page-meta.js';
+import { breadcrumbLd, useSeo } from '../../../seo/seo';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
@@ -129,11 +130,23 @@ export function PublicAnimalDetailPage() {
     (preloaded && 'organization' in preloaded ? preloaded.organization.city : undefined) ??
     org?.location?.city;
 
-  useDocumentTitle(
-    animal
-      ? `${animal.name}, ${SPECIES_LABELS[animal.species].toLowerCase()} en adopción`
-      : undefined,
-  );
+  useSeo({
+    title: animal ? animalTitle(animal, city) : undefined,
+    description: animal ? animalDescription(animal, orgName, city) : undefined,
+    path: slug && animalId ? `/o/${slug}/animales/${animalId}` : undefined,
+    image: animal?.photoUrl,
+    noindex: state === 'not-found',
+    jsonLd: animal
+      ? [
+          breadcrumbLd([
+            { name: 'Inicio', path: '/' },
+            { name: 'Adoptar', path: ADOPT_BASE_PATH },
+            { name: SPECIES_PLURAL[animal.species], path: buildAdoptPath(animal.species) },
+            { name: animal.name, path: `/o/${slug ?? ''}/animales/${animal.id}` },
+          ]),
+        ]
+      : [],
+  });
 
   // El llamado fijo de celular ocupa el borde inferior: el botón de Ayuda sube.
   useEffect(() => {
