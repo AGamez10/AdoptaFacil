@@ -6,6 +6,7 @@ import { cn } from '@adoptafacil/ui';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { OfficialContactButtons } from '../../guide/components/official-contact-buttons';
 import { officialWhatsappUrl } from '../../../lib/contact';
+import { useFeature } from '../../../shell/capabilities/capabilities-context';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
 import { HeroVisual } from './hero-visual';
 import {
@@ -431,8 +432,10 @@ export function AdoptionStepsSection({ photos = [] }: AdoptionStepsSectionProps)
 
 /**
  * Comunidad: todo el ecosistema que rodea a una mascota (veterinarias,
- * peluquerías, paseadores, tiendas). Aún no está construido, así que se
- * anuncia como "muy pronto" y el único llamado es escribirnos por WhatsApp.
+ * peluquerías, paseadores, tiendas). Con el módulo `community` apagado se
+ * anuncia como "muy pronto" y el único llamado es escribirnos por WhatsApp;
+ * encendido, lleva al directorio (/servicios) y a publicar un negocio
+ * (/mi-negocio).
  */
 const ECOSYSTEM = [
   { title: 'Veterinarias', text: 'Consultas, vacunas y urgencias cerca de ti.', tone: 'mint' },
@@ -444,6 +447,7 @@ const ECOSYSTEM = [
 ] as const;
 
 export function CommunitySection() {
+  const communityOn = useFeature('community');
   return (
     <section
       className={cn(styles.section, styles['section--sky'])}
@@ -453,24 +457,36 @@ export function CommunitySection() {
       <div className={cn(styles.container, styles.community)}>
         <div className={styles.community__copy}>
           <SectionHeading
-            eyebrow="Comunidad · muy pronto"
+            eyebrow={communityOn ? 'Comunidad' : 'Comunidad · muy pronto'}
             title="Todo el mundo de tu mascota, en un solo lugar."
             id="landing-community-title"
           >
             Después de adoptar empieza lo mejor. Estamos sumando a los negocios y profesionales que
             cuidan a los animales en Colombia, para que encuentres todo sin salir de AdoptaFácil.
           </SectionHeading>
-          <a
-            href={officialWhatsappUrl(
-              'Hola, tengo un negocio para mascotas y quiero aparecer en la comunidad de AdoptaFácil.',
-            )}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(styles.btn, styles['btn--ink'])}
-          >
-            Tengo un negocio para mascotas
-            <IconArrowRight className={styles.btn__icon} />
-          </a>
+          {communityOn ? (
+            <div className={styles.community__actions}>
+              <Link to="/servicios" className={cn(styles.btn, styles['btn--ink'])}>
+                Ver servicios cerca de mí
+                <IconArrowRight className={styles.btn__icon} />
+              </Link>
+              <Link to="/mi-negocio" className={cn(styles.btn, styles['btn--ghost'])}>
+                Tengo un negocio para mascotas
+              </Link>
+            </div>
+          ) : (
+            <a
+              href={officialWhatsappUrl(
+                'Hola, tengo un negocio para mascotas y quiero aparecer en la comunidad de AdoptaFácil.',
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(styles.btn, styles['btn--ink'])}
+            >
+              Tengo un negocio para mascotas
+              <IconArrowRight className={styles.btn__icon} />
+            </a>
+          )}
         </div>
         <ul className={styles.ecosystem}>
           {ECOSYSTEM.map(({ title, text, tone }) => (

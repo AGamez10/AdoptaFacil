@@ -95,6 +95,15 @@ describe('GeneralPortalPage (landing)', () => {
       'href',
       '/recursos',
     );
+    const community = screen.getByTestId('landing-community');
+    expect(within(community).queryByText(/muy pronto/i)).not.toBeInTheDocument();
+    expect(within(community).getByRole('link', { name: /Ver servicios/ })).toHaveAttribute(
+      'href',
+      '/servicios',
+    );
+    expect(
+      within(community).getByRole('link', { name: 'Tengo un negocio para mascotas' }),
+    ).toHaveAttribute('href', '/mi-negocio');
   });
 
   it('hides the campaigns block when there are no active campaigns', async () => {
