@@ -88,3 +88,43 @@
   gap: 0.25rem;
   flex-shrink: 0;
 }
+
+/* Celular y tableta (sin el detalle al lado): fichas en dos columnas con la
+   foto arriba, como en el portal público. En escritorio sigue la lista. */
+@media (max-width: 1023.98px) {
+  .list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+  }
+
+  .row {
+    position: relative;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-color: var(--border-hairline);
+  }
+
+  .row__avatar,
+  .row__avatar-fallback {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    border: none;
+    border-radius: 0;
+  }
+
+  .row__body {
+    padding: 0.5rem 0.625rem 0.625rem;
+  }
+
+  .row__badges {
+    position: absolute;
+    top: 0.4rem;
+    left: 0.4rem;
+    align-items: flex-start;
+  }
+}

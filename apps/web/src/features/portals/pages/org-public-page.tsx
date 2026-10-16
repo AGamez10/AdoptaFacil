@@ -46,6 +46,8 @@ import { PublicHeader, type PublicHeaderNavItem } from '../components/public-hea
 import { PublicFooter } from '../components/public-footer';
 import { PortalHelpCta } from '../components/portal-help-cta';
 import { PortalAdoptionSteps } from '../components/portal-adoption-steps';
+import { PortalMobileActionBar } from '../components/portal-mobile-action-bar';
+import { buildDonateHref } from '../components/portal-donate-cta';
 import { useFeature } from '../../../shell/capabilities';
 import { useDocumentTitle } from '../../../lib/use-document-title';
 import { useDonationAvailability } from '../../donations/hooks/use-donation-availability';
@@ -540,6 +542,14 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           <div className="mx-auto w-full px-4 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0">
             <PublicFooter organization={view.profile.organization} navItems={navItems} />
           </div>
+        )}
+        {state === 'ready' && view && (
+          <PortalMobileActionBar
+            onAdopt={goToCatalog}
+            donateHref={
+              payments && donationsActive ? buildDonateHref(view.profile.organization) : undefined
+            }
+          />
         )}
       </div>
     </PortalPreviewContext.Provider>

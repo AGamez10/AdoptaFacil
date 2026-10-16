@@ -131,6 +131,14 @@ export function IconList(props: IconProps) {
   );
 }
 
+export function IconFilter(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 6h16M7 12h10M10 18h4" />
+    </svg>
+  );
+}
+
 export function IconRuler(props: IconProps) {
   return (
     <svg {...base(props)}>
