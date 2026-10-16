@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ANIMAL_SPECIES,
   type AnimalSpecies,
@@ -53,7 +54,11 @@ function matchesQuery(animal: PublicAnimalSummary, query: string): boolean {
  * species/city/page/limit) — el filtro por ciudad y sus contadores se
  * calculan aquí, sobre datos reales ya cargados, nunca inventados.
  */
+/** `?especie=perros|gatos` → especie del catálogo (lo envía el buscador del hero). */
+const SPECIES_FROM_QUERY: Record<string, AnimalSpecies> = { perros: 'dog', gatos: 'cat' };
+
 export function GeneralCatalogSection() {
+  const [searchParams] = useSearchParams();
   const [items, setItems] = useState<PublicAnimalSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [state, setState] = useState<SectionState>('loading');
@@ -63,6 +68,16 @@ export function GeneralCatalogSection() {
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
 
   const [selectedAnimal, setSelectedAnimal] = useState<PublicAnimalSummary | null>(null);
+
+  // Filtros que llegan en la URL (buscador del hero): se aplican al cargar y
+  // cada vez que cambian, sin volver a pedir el catálogo.
+  const especieParam = searchParams.get('especie') ?? '';
+  const ciudadParam = searchParams.get('ciudad') ?? '';
+  useEffect(() => {
+    if (!especieParam && !ciudadParam) return;
+    setSpecies(SPECIES_FROM_QUERY[especieParam] ?? 'all');
+    setSelectedCities(ciudadParam ? new Set([ciudadParam]) : new Set());
+  }, [especieParam, ciudadParam]);
 
   useEffect(() => {
     let active = true;

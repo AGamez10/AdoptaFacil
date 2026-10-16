@@ -115,3 +115,8 @@ export const IconSpark = (p: IconProps) => (
     <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6" />
   </svg>
 );
+export const IconCheck = (p: IconProps) => (
+  <svg {...base} strokeWidth={2.4} {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
