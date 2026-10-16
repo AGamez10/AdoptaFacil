@@ -65,6 +65,7 @@ cambio coordinado (avisar a los consumidores, incl. Fabián).
 | resources        | `src/resources.ts`        | @fabian    | 0   | Stub                                                                                                                                                                                                                       |
 | marketplace      | `src/marketplace.ts`      | @fabian    | 0   | Stub                                                                                                                                                                                                                       |
 | community        | `src/community.ts`        | @fabian    | 0   | Stub                                                                                                                                                                                                                       |
+| notifications    | `src/notifications.ts`    | plataforma | 1   | Publicado (plantillas de correo del superadmin + baja de masivos)                                                                                                                                                          |
 
 > Al publicar un contrato: cambia su estado a **Publicado**, anota el PR y avisa a
 > los consumidores.

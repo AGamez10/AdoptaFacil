@@ -452,6 +452,13 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       expect(attachment.content.subarray(0, 5).toString('utf8')).toBe('%PDF-');
       expect(message.html).toContain('Firulais');
       expect(message.body).toContain(`/adopciones/contratos/${contractId}`);
+      // Branded template from the superadmin catalog (role label + document hash).
+      expect(message.template?.event).toBe('adoption.contract_signed');
+      expect(message.template?.data.huella).toMatch(/^[0-9a-f]{64}$/);
+      expect(['adoptante', 'representante de la organización']).toContain(
+        message.template?.data.rol,
+      );
+      expect(message.idempotencyKey).toContain(contractId);
     }
 
     // Trazabilidad sin datos personales: un evento por firmante, solo id y rol.

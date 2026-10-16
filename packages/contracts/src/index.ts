@@ -27,4 +27,5 @@ export * from './reports';
 export * from './features';
 export * from './legal-capabilities';
 export * from './plans';
+export * from './notifications';
 export * from './platform-workspace';

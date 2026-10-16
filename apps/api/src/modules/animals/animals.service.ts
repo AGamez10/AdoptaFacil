@@ -27,7 +27,10 @@ import {
   SponsorshipStatus,
   type UpdateAnimalInput,
 } from '@adoptafacil/contracts';
-import type { NotificationPort } from '../../core/notifications/notification.port';
+import type {
+  NotificationPort,
+  NotificationTemplateRequest,
+} from '../../core/notifications/notification.port';
 import { NOTIFICATION_PORT } from '../../core/notifications/notification.port';
 import { AuditService } from '../../core/audit/audit.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
@@ -380,11 +383,19 @@ export class AnimalsService {
       },
     );
 
+    const organizationName = activeSponsors.length
+      ? await this.organizationNameBestEffort(organizationId)
+      : undefined;
     for (const sponsor of activeSponsors) {
       await this.notifyBestEffort(
         sponsor.sponsor_email,
         'Un animal que apadrinas falleció',
         `${animal.name} falleció y tu apadrinamiento fue suspendido. La organización se pondrá en contacto contigo.`,
+        {
+          event: 'sponsorship.animal_deceased',
+          organizationName,
+          data: { animal: animal.name, organizacion: organizationName ?? 'La organización' },
+        },
       );
     }
 
@@ -393,9 +404,26 @@ export class AnimalsService {
 
   /** Best-effort notification — a delivery failure never fails the request
    *  (same convention as `SponsorshipBillingService.notifyBestEffort`). */
-  private async notifyBestEffort(to: string, subject: string, body: string): Promise<void> {
+  private async organizationNameBestEffort(organizationId: string): Promise<string | undefined> {
     try {
-      await this.notifications.send({ to, subject, body });
+      const org = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true },
+      });
+      return org?.name ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async notifyBestEffort(
+    to: string,
+    subject: string,
+    body: string,
+    template?: NotificationTemplateRequest,
+  ): Promise<void> {
+    try {
+      await this.notifications.send({ to, subject, body, template });
     } catch {
       // Best-effort: the death registration already succeeded; a notification
       // failure must not roll it back or surface as a request error.
