@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -24,6 +25,10 @@ import {
 import { AuditService } from '../../core/audit/audit.service';
 import type { Env } from '../../config/env.validation';
 import { PAYMENT_PORT } from '../../core/payments/payment.port';
+import {
+  NOTIFICATION_PORT,
+  type NotificationPort,
+} from '../../core/notifications/notification.port';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -162,12 +167,15 @@ function toHistoryEntry(row: HistoryRow): SponsorshipStatusHistoryEntry {
  */
 @Injectable()
 export class SponsorshipsService {
+  private readonly logger = new Logger(SponsorshipsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
     @Inject(PAYMENT_PORT) private readonly payments: PaymentPort,
+    @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
   ) {}
 
   /**
@@ -302,7 +310,58 @@ export class SponsorshipsService {
       });
     });
 
+    if (paid) {
+      await this.sendWelcomeBestEffort(
+        row.id,
+        actor.email,
+        row.organization_id,
+        row.animal_id,
+        plan.amount,
+      );
+    }
+
     return { ...fromRawRow(row), firstPaymentStatus: collection.status };
+  }
+
+  /** Thank-you + welcome for a sponsorship whose first payment is approved.
+   *  Best-effort: never fails the subscription. Pending first payments get
+   *  their confirmation through the regular billing emails instead. */
+  private async sendWelcomeBestEffort(
+    sponsorshipId: string,
+    to: string,
+    organizationId: string,
+    animalId: string,
+    amount: number,
+  ): Promise<void> {
+    try {
+      const [org, animal] = await Promise.all([
+        this.prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true },
+        }),
+        this.prisma.withOrgContext(organizationId, (tx) =>
+          tx.animal.findUnique({ where: { id: animalId }, select: { name: true } }),
+        ),
+      ]);
+      const animalName = animal?.name ?? 'tu ahijado';
+      const organizationName = org?.name ?? undefined;
+      const link = `${this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '')}/apadrinar`;
+      await this.notifications.send({
+        to,
+        idempotencyKey: `sponsorship.welcome:${sponsorshipId}`,
+        subject: `Ahora apadrinas a ${animalName}`,
+        body: `¡Gracias! Desde hoy apadrinas a ${animalName}. Puedes ver tu apadrinamiento en ${link}`,
+        template: {
+          event: 'sponsorship.welcome',
+          organizationName,
+          data: { animal: animalName, organizacion: organizationName, monto: amount, enlace: link },
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar la bienvenida del apadrinamiento: ${(error as Error).message}`,
+      );
+    }
   }
 
   /**

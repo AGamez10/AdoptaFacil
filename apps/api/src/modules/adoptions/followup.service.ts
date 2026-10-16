@@ -310,6 +310,10 @@ export class FollowUpService {
           subject: `Seguimiento de adopción pendiente: ${row.title}`,
           // NO PII/clinical detail beyond the milestone title.
           body: `Tu hito de seguimiento "${row.title}" venció el ${row.due_at.toISOString()}. Por favor complétalo.`,
+          template: {
+            event: 'adoption.followup_overdue',
+            data: { hito: row.title, fecha: row.due_at.toISOString() },
+          },
         });
       } catch (error) {
         sent = false;

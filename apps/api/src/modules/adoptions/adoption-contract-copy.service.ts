@@ -20,9 +20,18 @@ import {
   buildContractCopyHtml,
   buildContractCopySubject,
   buildContractCopyText,
+  buildContractLink,
 } from './adoption-contract-email';
 import { AdoptionContractsService } from './adoption-contracts.service';
 import { CONTRACT_COPY_JOB, FOLLOWUP_QUEUE } from './followup.constants';
+
+/** How each signer is named in the branded email (`{{rol}}`). */
+const SIGNER_ROLE_LABELS: Record<string, string> = {
+  adopter: 'adoptante',
+  co_adopter: 'coadoptante',
+  witness: 'testigo',
+  organization_representative: 'representante de la organización',
+};
 
 /** Acción de auditoría que marca "copia enviada a este firmante". Es a la vez
  *  el registro de trazabilidad y la marca de idempotencia. */
@@ -244,6 +253,23 @@ export class AdoptionContractCopyService {
       };
       await this.notifications.send({
         to: recipient.email,
+        // One copy per signer, even if this job is retried.
+        idempotencyKey: `adoption.contract_signed:${claim.contract.id}:${recipient.email.toLowerCase()}`,
+        // Branded, superadmin-editable copy; the subject/body/html below are
+        // the fallback if the template can't be rendered.
+        template: {
+          event: 'adoption.contract_signed',
+          organizationName: claim.organizationName,
+          data: {
+            nombre: recipient.fullName,
+            animal: animalName,
+            organizacion: claim.organizationName,
+            fecha: claim.contract.signedAt,
+            enlace: buildContractLink(webBaseUrl, claim.contract.id),
+            rol: SIGNER_ROLE_LABELS[recipient.role] ?? 'firmante',
+            huella: claim.contract.contentHash,
+          },
+        },
         subject: buildContractCopySubject(emailInput),
         body: buildContractCopyText(emailInput),
         html: buildContractCopyHtml(emailInput),
