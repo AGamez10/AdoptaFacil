@@ -26,7 +26,7 @@ import { useApiClient } from '../../../shell/api';
 
 /** What each paid capability means for a shelter, in its own words. */
 const CAPABILITY_LABELS: Record<PlanCapability, string> = {
-  portalAllDesigns: 'Los 4 diseños de portal público',
+  portalAllDesigns: 'Todos los diseños de portal público',
   portalAdvancedCustomization: 'Personalización avanzada del portal',
   portalRemoveSeal: 'Portal sin el sello "Hecho con AdoptaFácil"',
   customDomain: 'Dominio propio (www.turefugio.org)',
