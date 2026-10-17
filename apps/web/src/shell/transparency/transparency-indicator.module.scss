@@ -50,3 +50,11 @@
 .indicator__divider {
   color: var(--border-hairline-strong);
 }
+
+.indicator__wide-only {
+  display: none;
+
+  @media (min-width: 640px) {
+    display: flex;
+  }
+}

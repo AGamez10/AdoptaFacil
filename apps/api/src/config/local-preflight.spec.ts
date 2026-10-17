@@ -46,4 +46,11 @@ describe('local preflight', () => {
     expect(text).toContain('docker compose up -d');
     expect(text).toContain('pnpm doctor');
   });
+
+  it('when only "localhost" fails, says the containers are up and to use 127.0.0.1', () => {
+    const text = describeMissingServices([], 'La API no puede arrancar', ['Redis']);
+    expect(text).toContain('Redis responde en 127.0.0.1 pero no en "localhost"');
+    expect(text).toContain('DATABASE_URL, DATABASE_URL_APP y REDIS_URL');
+    expect(text).not.toContain('docker compose up -d');
+  });
 });

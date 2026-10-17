@@ -70,6 +70,19 @@ $ink: #1d1a16;
       radial-gradient(60rem 30rem at 50% -10%, hsl(var(--primary) / 0.12), transparent 70%), #f4f6fb;
   }
 
+  &[data-template='historias'] {
+    --tpl-heading-font: var(--font-display);
+    --tpl-heading-weight: 600;
+    --tpl-card-bg: hsl(var(--card));
+    --tpl-card-border: 0 solid transparent;
+    --tpl-card-top: 0 solid transparent;
+    --tpl-card-radius: 24px;
+    --tpl-card-shadow: 0 20px 44px -30px hsl(var(--primary) / 0.55);
+    --tpl-photo-ratio: 4 / 5;
+
+    background-color: hsl(var(--background));
+  }
+
   &[data-template='impacto'] {
     --tpl-heading-font: var(--font-sans, inherit);
     --tpl-heading-size: clamp(1.6rem, 3vw, 2.25rem);

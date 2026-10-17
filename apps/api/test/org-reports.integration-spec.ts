@@ -432,6 +432,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     await wb.xlsx.load(xlsx.body as ArrayBuffer);
     const donors = wb.getWorksheet('Donaciones')!.getColumn(3).values.slice(2);
     expect(donors).toEqual(expect.arrayContaining(['Donante', 'Donante anónimo']));
+    // Sin consentimiento vigente nadie queda identificado.
     expect(JSON.stringify(donors)).not.toContain('María Restrepo');
 
     const downloads = await admin.auditLog.count({
@@ -444,33 +445,113 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     expect(downloads).toBe(3); // borrador + PDF emitido + Excel
   });
 
-  it('BLOCKS the social service report while there is no consent registry: it names volunteers, so it is never issued', async () => {
-    const before = await admin.orgReport.count({
-      where: { organizationId: orgA.orgId, kind: 'social_service' },
-    });
+  it('social service WITHOUT consent: the volunteer is not named, only counted as omitted', async () => {
     const res = await generate(drafterA, {
       kind: 'social_service',
       periodStart: monthAgo,
       periodEnd: today,
       filters: { studentServiceOnly: true, schoolName: '  Colegio San José ' },
-    }).expect(409);
-    expect(res.body.message).toContain('consentimiento');
-    const after = await admin.orgReport.count({
-      where: { organizationId: orgA.orgId, kind: 'social_service' },
-    });
-    expect(after).toBe(before);
+    }).expect(201);
+    expect(res.body.summary).toMatchObject({ rowCount: 0, volunteers: 0 });
+    const row = await admin.orgReport.findUniqueOrThrow({ where: { id: res.body.id } });
+    expect((row.payload as { omittedWithoutConsent?: number }).omittedWithoutConsent).toBe(1);
+    expect(JSON.stringify(row.payload)).not.toContain('Estudiante');
   });
 
-  it('donations reports never identify the donor while there is no consent registry', async () => {
-    const rows = await admin.orgReport.findMany({
-      where: { organizationId: orgA.orgId, kind: 'donations' },
+  it('CONSENT: the person grants it, the next reports identify them; revoking removes them again; issued documents never change', async () => {
+    const before = await admin.orgReport.findUniqueOrThrow({ where: { id: donationsReportId } });
+
+    // La persona ve sus organizaciones y otorga SOLO por su cuenta.
+    const mine = await request(server)
+      .get('/me/consents')
+      .set('Authorization', `Bearer ${donor.token}`)
+      .expect(200);
+    const item = mine.body.items.find(
+      (i: { organizationId: string }) => i.organizationId === orgA.orgId,
+    );
+    expect(item).toMatchObject({ authorized: false, purpose: 'org_report_identification' });
+    const text = mine.body.texts[0];
+    await request(server)
+      .post('/me/consents')
+      .set('Authorization', `Bearer ${donor.token}`)
+      .send({ organizationId: orgA.orgId, purpose: text.purpose, version: text.version })
+      .expect(201);
+
+    const withConsent = await generate(drafterA, {
+      kind: 'donations',
+      periodStart: monthAgo,
+      periodEnd: today,
+    }).expect(201);
+    const dump = JSON.stringify(
+      (await admin.orgReport.findUniqueOrThrow({ where: { id: withConsent.body.id } })).payload,
+    );
+    expect(dump).toContain('María Restrepo');
+    expect(dump).toContain('••••4050');
+    expect(dump).not.toContain('1020304050');
+    expect(dump).not.toContain('Donante Secreto'); // el anónimo nunca
+    expect(withConsent.body.id).not.toBe(donationsReportId);
+
+    const social = await generate(drafterA, {
+      kind: 'social_service',
+      periodStart: monthAgo,
+      periodEnd: today,
+      filters: { studentServiceOnly: true, schoolName: '  Colegio San José ' },
+    }).expect(201);
+    expect(social.body.summary).toMatchObject({ rowCount: 1, approvedHours: 8.5, volunteers: 1 });
+    expect(social.body.legalEffect).toBe('signed');
+    const stored = await admin.orgReport.findUniqueOrThrow({ where: { id: social.body.id } });
+    expect(JSON.stringify(stored.payload)).not.toContain('Acudiente Privado');
+    expect(JSON.stringify(stored.payload)).not.toContain('123123123');
+    await request(server)
+      .post(`/org/reports/${social.body.id}/decision`)
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .send({ decision: 'approved' })
+      .expect(200);
+    const pdf = await request(server)
+      .get(`/org/reports/${social.body.id}/pdf`)
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .expect(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+
+    // El readiness muestra solo conteos.
+    const ready = await request(server)
+      .get('/org/reports/readiness')
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .expect(200);
+    expect(ready.body.thirdPartyConsent).toMatchObject({
+      registryAvailable: true,
+      volunteers: { total: 1, authorized: 1 },
+      donors: { total: 1, authorized: 1 },
     });
-    expect(rows.length).toBeGreaterThan(0);
-    const dump = JSON.stringify(rows.map((r) => r.payload));
-    expect(dump).not.toContain('María Restrepo');
-    expect(dump).not.toContain('Donante Secreto');
-    expect(dump).not.toContain('5566778899');
-    expect(dump).not.toContain('4050');
+    expect(JSON.stringify(ready.body.thirdPartyConsent)).not.toContain(donor.userId);
+
+    // Revocar vale hacia adelante.
+    await request(server)
+      .post('/me/consents/revoke')
+      .set('Authorization', `Bearer ${donor.token}`)
+      .send({ organizationId: orgA.orgId, purpose: text.purpose })
+      .expect(200);
+    const afterRevoke = await generate(drafterA, {
+      kind: 'donations',
+      periodStart: monthAgo,
+      periodEnd: today,
+    }).expect(201);
+    const dump2 = JSON.stringify(
+      (await admin.orgReport.findUniqueOrThrow({ where: { id: afterRevoke.body.id } })).payload,
+    );
+    expect(dump2).not.toContain('María Restrepo');
+    // Lo ya emitido no cambia (sellado).
+    const sealed = await admin.orgReport.findUniqueOrThrow({ where: { id: withConsent.body.id } });
+    expect(JSON.stringify(sealed.payload)).toContain('María Restrepo');
+    expect(before.contentHash).toBe(
+      (await admin.orgReport.findUniqueOrThrow({ where: { id: donationsReportId } })).contentHash,
+    );
+
+    const audit = await admin.auditLog.findMany({
+      where: { organizationId: orgA.orgId, action: { in: ['consent.granted', 'consent.revoked'] } },
+    });
+    expect(audit.map((a) => a.action).sort()).toEqual(['consent.granted', 'consent.revoked']);
+    expect(JSON.stringify(audit)).not.toContain('María');
   });
 
   it('an informal org gets an INFORMATIVE report with NO signatures, even if it registered one', async () => {

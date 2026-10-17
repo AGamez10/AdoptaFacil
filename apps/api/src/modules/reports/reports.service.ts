@@ -30,6 +30,7 @@ import {
   type OrgReportSummary,
   type OrgReportVerification,
   type OrgReportsReadiness,
+  type OrgThirdPartyConsentSummary,
   type Paginated,
   type SocialServiceReportFilters,
 } from '@adoptafacil/contracts';
@@ -38,7 +39,6 @@ import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.u
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LegalRepresentativeService } from '../org/legal-representative.service';
-import { assertNoIdentifiedPeople, redactDonationDonors } from './report-third-party';
 import { studentServiceMinHours } from '../volunteering/volunteer-certificate-eligibility';
 import {
   SIGNER_ORDER,
@@ -306,6 +306,7 @@ export class ReportsService {
         signaturesEnabled: this.signaturesEnabled,
         policies,
         ...(mySignerRole ? { mySignerRole } : {}),
+        thirdPartyConsent: await this.consentSummary(tx, organizationId),
         schools,
         studentServiceMinHours: studentServiceMinHours(),
       };
@@ -399,18 +400,10 @@ export class ReportsService {
         );
       }
 
-      const built =
+      const payload =
         input.kind === 'donations'
           ? await this.donationsPayload(tx, organizationId, snapshot, period)
           : await this.socialServicePayload(tx, organizationId, snapshot, period, filters);
-      // Sin consentimiento registrado no se emite ningún dato de terceros.
-      let payload = built;
-      if (built.kind === 'donations') {
-        payload = redactDonationDonors(built);
-      } else {
-        assertNoIdentifiedPeople(built.rows.length);
-      }
-
       const contentHash = sealHash({
         kind: input.kind,
         period: { start: period.startDate, end: period.endDate },
@@ -555,6 +548,7 @@ export class ReportsService {
           gatewayIva: number;
         },
         payer: (d.payer as { fullName?: string; documentId?: string } | null) ?? null,
+        donorUserId: d.donorUserId,
         anonymous: d.anonymous,
         approvedAt: d.receipt?.issuedAt ?? d.updatedAt,
         receiptId: d.receipt?.id,
@@ -562,6 +556,7 @@ export class ReportsService {
       })),
       campaignNames: new Map(campaigns.map((c) => [c.id, c.title])),
       animalNames: new Map(animals.map((a) => [a.id, a.name])),
+      consentedUserIds: await this.consentedUserIds(tx, organizationId),
     });
   }
 
@@ -590,8 +585,10 @@ export class ReportsService {
       },
       filters,
       minHours: studentServiceMinHours(),
+      consentedUserIds: await this.consentedUserIds(tx, organizationId),
       enrollments: enrollments.map((e) => ({
         id: e.id,
+        volunteerUserId: e.volunteerUserId,
         volunteerName: e.volunteerName,
         opportunityTitle: e.opportunity.title,
         appliesToStudentService: e.appliesToStudentService,
@@ -601,6 +598,51 @@ export class ReportsService {
         certificate: e.certificate ?? undefined,
       })),
     });
+  }
+
+  /** Cuántos voluntarios y donantes con cuenta autorizaron; solo conteos, sin identidades. */
+  private async consentSummary(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ): Promise<OrgThirdPartyConsentSummary> {
+    const consented = await this.consentedUserIds(tx, organizationId);
+    const [volunteers, donors] = await Promise.all([
+      tx.volunteerEnrollment.findMany({
+        where: { organizationId, status: { in: ['accepted', 'completed'] } },
+        select: { volunteerUserId: true },
+        distinct: ['volunteerUserId'],
+      }),
+      tx.donation.findMany({
+        where: { organizationId, status: 'approved', donorUserId: { not: null }, anonymous: false },
+        select: { donorUserId: true },
+        distinct: ['donorUserId'],
+      }),
+    ]);
+    const count = (ids: Array<string | null>) => ({
+      total: ids.length,
+      authorized: ids.filter((id) => id && consented.has(id)).length,
+    });
+    return {
+      registryAvailable: true,
+      volunteers: count(volunteers.map((v) => v.volunteerUserId)),
+      donors: count(donors.map((d) => d.donorUserId)),
+    };
+  }
+
+  /**
+   * Personas con consentimiento VIGENTE de esta organización para ser
+   * identificadas en sus documentos. Lee bajo RLS: una organización nunca ve
+   * (ni puede usar) el consentimiento dado a otra.
+   */
+  private async consentedUserIds(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ): Promise<ReadonlySet<string>> {
+    const rows = await tx.thirdPartyConsent.findMany({
+      where: { organizationId, purpose: 'org_report_identification', revokedAt: null },
+      select: { subjectUserId: true },
+    });
+    return new Set(rows.map((r) => r.subjectUserId));
   }
 
   /** Cargo con el que esta persona puede firmar en la organización, si alguno. */

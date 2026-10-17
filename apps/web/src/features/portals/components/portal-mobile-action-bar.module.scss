@@ -1,0 +1,64 @@
+/* Barra fija del portal en celular. Colores de la organización (tokens HSL
+   del portal), nunca fijos. Desde 768px no se muestra: allí las mismas
+   acciones están en la portada. */
+
+$bar-height: 4.25rem;
+
+.bar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 45;
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.625rem 1rem calc(0.625rem + env(safe-area-inset-bottom, 0px));
+  background: hsl(var(--card) / 0.96);
+  border-top: 1px solid hsl(var(--border) / 0.5);
+  box-shadow: 0 -8px 24px rgba(20, 30, 40, 0.08);
+  backdrop-filter: blur(8px);
+
+  @media (min-width: 768px) {
+    display: none;
+  }
+
+  @media print {
+    display: none;
+  }
+}
+
+.action {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  height: 3rem;
+  border-radius: 0.75rem;
+  font-size: var(--fs-base, 1rem);
+  font-weight: var(--fw-semibold);
+
+  &:focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+.action--primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.action--secondary {
+  border: 1.5px solid hsl(var(--primary));
+  background: hsl(var(--card));
+  color: hsl(var(--primary));
+}
+
+/* Espacio para la barra: el pie y el botón "Ayuda" no quedan debajo de ella. */
+@media (max-width: 767.98px) {
+  :global(html.af-has-bottom-bar) {
+    --af-bottom-bar: #{$bar-height};
+  }
+
+  :global(html.af-has-bottom-bar body) {
+    padding-bottom: calc(#{$bar-height} + env(safe-area-inset-bottom, 0px));
+  }
+}

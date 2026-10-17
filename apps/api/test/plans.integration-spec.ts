@@ -104,7 +104,8 @@ describe('Plans and subscriptions', () => {
     setEnforced(true);
     const res = await getPlan(owner.token).expect(200);
     expect(res.body.effectivePlan).toBe('free');
-    expect(res.body.limits.portalDesigns).toBe(1);
+    // Las 5 plantillas del portal son gratis en todos los planes (decisión 2026-10-16).
+    expect(res.body.limits.portalDesigns).toBe(5);
     expect(res.body.capabilities.customDomain).toBe(false);
   });
 

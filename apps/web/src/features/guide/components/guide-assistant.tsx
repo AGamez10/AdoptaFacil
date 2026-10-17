@@ -269,7 +269,7 @@ export function GuideAssistant() {
         <span aria-hidden="true" className={styles.toggle__icon}>
           ?
         </span>
-        <span>{open ? 'Cerrar ayuda' : 'Ayuda'}</span>
+        <span className={styles.toggle__label}>{open ? 'Cerrar ayuda' : 'Ayuda'}</span>
       </button>
     </div>
   );

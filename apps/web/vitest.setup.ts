@@ -1,8 +1,14 @@
 // Adds jest-dom matchers (toBeInTheDocument, toHaveClass, …) to Vitest's expect
 // and polyfills the DOM APIs the shell's UI primitives touch under jsdom.
 import '@testing-library/jest-dom/vitest';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { preloadLazyPages } from './src/shell/router/lazy-page';
+
+// Las pantallas privadas se cargan con import() (shell/router/lazy-page.ts):
+// en pruebas se dejan listas antes de cada archivo para que pinten igual que
+// cuando estaban en el paquete inicial. Sin rutas importadas, no carga nada.
+beforeAll(() => preloadLazyPages(), 30_000);
 
 // Unmount React trees between tests so the drawer/overlay portals don't leak.
 afterEach(() => cleanup());

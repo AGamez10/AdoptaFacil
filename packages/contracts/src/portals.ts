@@ -140,7 +140,14 @@ export type PortalSocialNavPosition = 'left' | 'right';
  * Plantillas del portal público (Ola 3). Mismo contenido y mismos datos, otra
  * identidad visual y otra estructura. Conjunto cerrado: nunca HTML ni CSS libre.
  */
-export const PORTAL_TEMPLATE_IDS = ['clasica', 'editorial', 'carnet', 'impacto', 'orbita'] as const;
+export const PORTAL_TEMPLATE_IDS = [
+  'clasica',
+  'editorial',
+  'carnet',
+  'impacto',
+  'orbita',
+  'historias',
+] as const;
 export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
 
@@ -151,7 +158,8 @@ export interface PortalTemplateInfo {
   id: PortalTemplateId;
   name: string;
   tagline: string;
-  /** TODO(client): lo define el hilo de planes. Hoy es solo un parámetro. */
+  /** Decisión del cliente (2026-10-16): las 5 plantillas actuales son gratis
+   *  en todos los planes; `paid` queda para los futuros diseños "super Pro". */
   tier: PortalTemplateTier;
 }
 
@@ -171,24 +179,30 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     id: 'editorial',
     name: 'Editorial',
     tagline: 'Como una revista: titulares grandes, mucho aire y foto en arco.',
-    tier: 'paid',
+    tier: 'free',
   },
   {
     id: 'carnet',
     name: 'Carnet',
     tagline: 'Inspirada en el carnet de cada animal: fichas con personalidad.',
-    tier: 'paid',
+    tier: 'free',
   },
   {
     id: 'impacto',
     name: 'Impacto',
     tagline: 'Oscura y directa: el número de animales que buscan hogar manda.',
-    tier: 'paid',
+    tier: 'free',
   },
   {
     id: 'orbita',
     name: 'Órbita',
     tagline: 'Una constelación en 3D que forma una huella y reacciona al cursor.',
+    tier: 'free',
+  },
+  {
+    id: 'historias',
+    name: 'Historias',
+    tagline: 'Tus animales a pantalla completa: se pasan con el dedo, con video de portada.',
     tier: 'paid',
   },
 ];
@@ -261,7 +275,23 @@ export const PORTAL_TEMPLATE_OPTIONS: Readonly<
     },
     { key: 'showCount', label: 'Mostrar el número de animales', kind: 'toggle', default: true },
   ],
+  historias: [
+    {
+      key: 'autoAdvance',
+      label: 'Pasar a la siguiente historia sola cada pocos segundos',
+      kind: 'toggle',
+      default: false,
+    },
+  ],
 };
+
+/**
+ * Video de portada de la plantilla Historias (opcional). Se sube al
+ * almacenamiento público de la organización (StoragePort) y se guarda solo su
+ * llave; nunca una URL libre de otro sitio.
+ */
+export const PORTAL_COVER_VIDEO_TYPES = ['video/mp4', 'video/webm'] as const;
+export type PortalCoverVideoType = (typeof PORTAL_COVER_VIDEO_TYPES)[number];
 
 /** Ajustes efectivos: los guardados válidos sobre los valores por defecto. */
 export function resolveTemplateOptions(
@@ -300,6 +330,8 @@ export interface PortalThemeConfig {
   template?: PortalTemplateId;
   /** Ajustes de esa plantilla (Ola 3), ya resueltos con sus valores por defecto. */
   templateOptions?: PortalTemplateOptions;
+  /** Video de portada (plantilla Historias), URL pública lista para `<video>`. */
+  coverVideoUrl?: string;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */
@@ -311,6 +343,11 @@ export interface UpdatePortalThemeInput {
   template?: PortalTemplateId;
   /** Ajustes de la plantilla. Omitidos, se conservan los guardados. */
   templateOptions?: PortalTemplateOptions;
+  /**
+   * Llave del video de portada en el almacenamiento público de la organización
+   * (`public/<orgId>/<archivo>.mp4` o `.webm`). Omitida, se conserva; `null` lo quita.
+   */
+  coverVideoKey?: string | null;
 }
 
 // ----------------------------------------------------------------------------

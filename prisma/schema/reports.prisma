@@ -111,3 +111,25 @@ model OrgReportPolicy {
   @@unique([organizationId, kind])
   @@map("org_report_policies")
 }
+
+/// Consentimiento de una persona (donante, voluntario) para que una organización
+/// use sus datos identificables en reportes y certificados emitidos. RLS por
+/// organización; la organización solo lee, la persona otorga y revoca por
+/// funciones SECURITY DEFINER (`grant_third_party_consent`, etc.).
+model ThirdPartyConsent {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  subjectUserId  String    @map("subject_user_id") @db.Uuid
+  purpose        String
+  textVersion    String    @map("text_version")
+  textSha256     String    @map("text_sha256")
+  channel        String
+  grantedAt      DateTime  @default(now()) @map("granted_at")
+  revokedAt      DateTime? @map("revoked_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subject      User         @relation("ThirdPartyConsentSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+
+  @@index([subjectUserId])
+  @@map("third_party_consents")
+}

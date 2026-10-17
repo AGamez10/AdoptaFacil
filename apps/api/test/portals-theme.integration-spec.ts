@@ -269,6 +269,69 @@ describe('Portal theme (M14: tokens + RBAC + public read)', () => {
         .expect(400);
     });
 
+    it('Historias: guarda un video de portada propio y público, lo expone como URL y lo quita con null', async () => {
+      const orgId = createdOrgIds[0];
+      const reserve = await request(server)
+        .post('/org/profile/uploads')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ filename: 'portada.webm', contentType: 'video/webm' })
+        .expect(201);
+      const key: string = reserve.body.key;
+      expect(key.startsWith(`public/${orgId}/`)).toBe(true);
+
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: {}, template: 'historias', coverVideoKey: key })
+        .expect(200)
+        .expect((res) => {
+          expect(res.body.template).toBe('historias');
+          expect(res.body.templateOptions).toEqual({ autoAdvance: false });
+          expect(res.body.coverVideoUrl).toContain('portada.webm');
+          expect(res.body.tokens).not.toHaveProperty('__coverVideo');
+        });
+
+      // Solo colores: el video se conserva y sale en público.
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: {} })
+        .expect(200);
+      const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+      expect(pub.body.coverVideoUrl).toContain('portada.webm');
+      expect(pub.body.tokens).not.toHaveProperty('__coverVideo');
+
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: {}, coverVideoKey: null })
+        .expect(200)
+        .expect((res) => expect(res.body).not.toHaveProperty('coverVideoUrl'));
+    });
+
+    it('Historias: rechaza un video ajeno, privado, que no es video o una URL libre', async () => {
+      const orgId = createdOrgIds[0];
+      const otherOrg = randomUUID();
+      const cases: Array<[string, number]> = [
+        [`public/${otherOrg}/${randomUUID()}-x.mp4`, 403],
+        [`private/${orgId}/${randomUUID()}-x.mp4`, 400],
+        [`public/${orgId}/${randomUUID()}-x.png`, 400],
+        ['https://otro-sitio.example/video.mp4', 400],
+      ];
+      for (const [coverVideoKey, status] of cases) {
+        await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ tokens: {}, coverVideoKey })
+          .expect(status);
+      }
+      await request(server)
+        .put('/portals/theme')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ tokens: { __coverVideo: 'x' } })
+        .expect(400);
+    });
+
     it('un slug desconocido recibe la plantilla por defecto', async () => {
       const res = await request(server)
         .get(`/public/organizations/does-not-exist-${randomUUID().slice(0, 6)}/theme`)

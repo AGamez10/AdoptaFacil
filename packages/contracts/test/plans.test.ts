@@ -22,9 +22,9 @@ const sub = (overrides: Partial<SubFields> = {}): SubFields => ({
 });
 
 describe('plan catalog', () => {
-  it('free includes no paid capability and pro includes all of them', () => {
+  it('free includes no paid capability (all current designs are free) and pro includes all of them', () => {
     for (const capability of PLAN_CAPABILITIES) {
-      expect(PLAN_CATALOG.free.capabilities[capability]).toBe(false);
+      expect(PLAN_CATALOG.free.capabilities[capability]).toBe(capability === 'portalAllDesigns');
       expect(PLAN_CATALOG.pro.capabilities[capability]).toBe(true);
     }
   });
@@ -42,8 +42,8 @@ describe('plan catalog', () => {
     }
   });
 
-  it('the portal is the hook: all designs from crece, own domain only in pro', () => {
-    expect(minimumPlanFor('portalAllDesigns')).toBe('crece');
+  it('every current portal design is free; no seal from crece, own domain only in pro', () => {
+    expect(minimumPlanFor('portalAllDesigns')).toBe('free');
     expect(minimumPlanFor('portalRemoveSeal')).toBe('crece');
     expect(minimumPlanFor('customDomain')).toBe('pro');
   });
