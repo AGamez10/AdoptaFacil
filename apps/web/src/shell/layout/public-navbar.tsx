@@ -44,6 +44,7 @@ export function PublicNavbar() {
   const links: PublicNavLink[] = [
     { label: 'Animales en adopción', to: '/adoptar' },
     { label: 'Campañas', to: '/campanas' },
+    { label: 'Guías', to: '/guias' },
     ...(payments ? [{ label: 'Donar', to: '/donaciones' }] : []),
     ...(resources ? [{ label: 'Banco de recursos', to: '/recursos' }] : []),
     ...(marketplace ? [{ label: 'Marketplace', to: '/marketplace' }] : []),

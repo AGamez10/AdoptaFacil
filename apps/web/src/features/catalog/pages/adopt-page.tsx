@@ -3,10 +3,15 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import type { AnimalSex, AnimalSize } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
-import { useDocumentTitle } from '../../../lib/use-document-title';
+import { adoptDescription } from '../../../seo/page-meta.js';
+import { breadcrumbLd, itemListLd, useSeo } from '../../../seo/seo';
 import { CatMascot, DogMascot } from '../../landing/components/illustrations';
 import landing from '../../landing/components/landing.module.scss';
-import { SEX_LABELS, SIZE_LABELS } from '../../portals/model/animals-catalog';
+import {
+  publicAnimalDetailHref,
+  SEX_LABELS,
+  SIZE_LABELS,
+} from '../../portals/model/animals-catalog';
 import { AnimalSpotlightCard } from '../components/animal-spotlight-card';
 import { ColombiaMap, type CityCount } from '../components/colombia-map';
 import {
@@ -117,7 +122,7 @@ function AdoptListing({
   );
 
   const title = adoptTitle(species, city);
-  useDocumentTitle(title);
+  const canonicalPath = buildAdoptPath(species, city);
 
   // Al cambiar de especie o ciudad, vuelve a la primera tanda de tarjetas.
   useEffect(() => setVisible(PAGE_STEP), [species, citySlugParam, searchParams]);
@@ -159,6 +164,24 @@ function AdoptListing({
       : []),
     ...(city ? [{ label: city, to: buildAdoptPath(species, city) }] : []),
   ];
+
+  useSeo({
+    title,
+    description: adoptDescription(species, city, status === 'ready' ? results.length : null),
+    path: canonicalPath,
+    // Las combinaciones de filtros extra no son páginas propias para buscadores.
+    noindex: extraFilters.length > 0 || (status === 'ready' && results.length === 0),
+    jsonLd: [
+      breadcrumbLd(crumbs.map((crumb) => ({ name: crumb.label, path: crumb.to }))),
+      itemListLd(
+        results.slice(0, 24).map((animal) => ({
+          name: animal.name,
+          path: publicAnimalDetailHref(animal.organization.slug, animal.id),
+          image: animal.photoUrl,
+        })),
+      ),
+    ],
+  });
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-[var(--af-ink)]">

@@ -46,7 +46,7 @@ describe('GeneralPortalPage (landing)', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Adopta un amigo. Cambia dos vidas.' }),
     ).toBeInTheDocument();
-    expect(document.title).toBe('Adopción responsable en Colombia · AdoptaFácil');
+    expect(document.title).toBe('Adopción de perros y gatos en Colombia · AdoptaFácil');
     await settle();
   });
 
