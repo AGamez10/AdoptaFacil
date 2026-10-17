@@ -10,14 +10,22 @@ export interface BrandProps {
   /** Si se indica, el logo es un enlace al INICIO del lugar donde vive: `/inicio`
    * dentro del sistema (sesión iniciada) y `/` en las pantallas públicas. */
   to?: string;
+  /** `false` muestra solo el ícono (el encabezado del panel en celulares angostos). */
+  withWordmark?: boolean;
 }
 
 /** AdoptaFácil brand mark used in the sidebar and mobile header — the real
  * logo asset (see `Logo`), never a text initial. Con `to`, siempre redirige
  * al inicio del lugar donde se muestra (requisito: el logo nunca es decorativo). */
-export function Brand({ className, inverse = false, to }: BrandProps) {
+export function Brand({ className, inverse = false, to, withWordmark = true }: BrandProps) {
   const logo = (
-    <Logo variant="mark" tone={inverse ? 'dark' : 'light'} size="sm" className={className} />
+    <Logo
+      variant="mark"
+      tone={inverse ? 'dark' : 'light'}
+      size="sm"
+      withWordmark={withWordmark}
+      className={className}
+    />
   );
   if (!to) return logo;
   return (

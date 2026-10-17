@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PORTAL_THEME_FIELDS, safePortalTheme, safeTemplate } from './theme';
+import { PORTAL_THEME_FIELDS, safeMediaUrl, safePortalTheme, safeTemplate } from './theme';
 
 /** T-027 · client-side defence: only the known safe token subset is ever kept
  *  (the backend is the authority, but the portal never applies an unknown key). */
@@ -37,8 +37,20 @@ describe('safeTemplate (Ola 3)', () => {
   it('acepta solo las plantillas del catálogo y cae en la Clásica', () => {
     expect(safeTemplate('carnet')).toBe('carnet');
     expect(safeTemplate('impacto')).toBe('impacto');
+    expect(safeTemplate('historias')).toBe('historias');
     expect(safeTemplate('otra')).toBe('clasica');
     expect(safeTemplate(undefined)).toBe('clasica');
     expect(safeTemplate(3)).toBe('clasica');
+  });
+});
+
+describe('safeMediaUrl (Historias)', () => {
+  it('acepta solo URLs http(s) absolutas', () => {
+    expect(safeMediaUrl('https://cdn.example/v.mp4')).toBe('https://cdn.example/v.mp4');
+    expect(safeMediaUrl('javascript:alert(1)')).toBeUndefined();
+    expect(safeMediaUrl('data:video/mp4;base64,AAAA')).toBeUndefined();
+    expect(safeMediaUrl('/relativa.mp4')).toBeUndefined();
+    expect(safeMediaUrl(42)).toBeUndefined();
+    expect(safeMediaUrl('')).toBeUndefined();
   });
 });

@@ -36,6 +36,7 @@ model Organization {
   invitations              OrganizationInvitation[]
   reports                  OrgReport[]
   signerDesignations       OrgSignerDesignation[]
+  thirdPartyConsents       ThirdPartyConsent[]
   reportApprovals          OrgReportApproval[]
   reportPolicies           OrgReportPolicy[]
   // Platform workspace (F19): the team's own work when this organization is a
@@ -243,6 +244,7 @@ model User {
   signerDesignationsOwn     OrgSignerDesignation[] @relation("SignerDesignationUser")
   signerDesignationsMade    OrgSignerDesignation[] @relation("SignerDesignationBy")
   signerDesignationsRevoked OrgSignerDesignation[] @relation("SignerDesignationRevokedBy")
+  thirdPartyConsents        ThirdPartyConsent[]    @relation("ThirdPartyConsentSubject")
   reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
   reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
   mfaFactor                 AuthMfaFactor?

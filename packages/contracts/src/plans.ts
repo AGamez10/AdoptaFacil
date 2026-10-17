@@ -20,7 +20,8 @@ export type PlanKey = (typeof PLAN_KEYS)[number];
 /** Boolean capabilities a plan may include. Only brand/reach/convenience
  *  features live here — never a safety, compliance or transparency feature. */
 export const PLAN_CAPABILITIES = [
-  /** All 4 public-portal designs (free gets the first one only). */
+  /** All public-portal designs. Client decision (2026-10-16): every current
+   *  design is free on every plan; future "super Pro" designs will be paid. */
   'portalAllDesigns',
   /** Section order, typography, cover gallery or video on the portal. */
   'portalAdvancedCustomization',
@@ -85,16 +86,16 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     tagline: 'Todo para rescatar, adoptar y recaudar, con un portal público propio.',
     monthlyPriceCop: 0,
     annualPriceCop: 0,
-    limits: { members: 3, storageMb: 1024, portalDesigns: 1 },
-    capabilities: { ...NONE },
+    limits: { members: 3, storageMb: 1024, portalDesigns: 5 },
+    capabilities: { ...NONE, portalAllDesigns: true },
   },
   crece: {
     key: 'crece',
     name: 'Crece',
-    tagline: 'Un portal que se ve tuyo: los 4 diseños, sin sello y tu marca en los correos.',
+    tagline: 'Un portal que se ve tuyo: sin sello y con tu marca en los correos.',
     monthlyPriceCop: 39_000,
     annualPriceCop: 390_000,
-    limits: { members: 10, storageMb: 10 * 1024, portalDesigns: 4 },
+    limits: { members: 10, storageMb: 10 * 1024, portalDesigns: 5 },
     capabilities: {
       ...NONE,
       portalAllDesigns: true,
@@ -111,7 +112,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     tagline: 'Tu propio dominio, reportes para empresas y soporte prioritario.',
     monthlyPriceCop: 79_000,
     annualPriceCop: 790_000,
-    limits: { members: null, storageMb: 50 * 1024, portalDesigns: 4 },
+    limits: { members: null, storageMb: 50 * 1024, portalDesigns: 5 },
     capabilities: {
       portalAllDesigns: true,
       portalAdvancedCustomization: true,
@@ -125,6 +126,15 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     },
   },
 };
+
+/**
+ * Promoción de lanzamiento (decisión del cliente, 2026-10-16): toda organización
+ * tiene Pro gratis durante estos meses desde el lanzamiento. Mientras
+ * `PLAN_ENFORCEMENT` esté apagado todas tienen Pro sin vencimiento; al
+ * encenderlo, cada organización arranca en `trialing` con
+ * `currentPeriodEnd` = fecha de lanzamiento + estos meses.
+ */
+export const LAUNCH_PRO_PROMO_MONTHS = 3;
 
 /** IVA rate applied on top of the plan price (the subscription is a taxed
  *  service of AdoptaFácil). TODO(client): confirmar con el contador. */

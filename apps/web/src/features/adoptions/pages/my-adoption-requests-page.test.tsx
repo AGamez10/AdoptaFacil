@@ -117,4 +117,21 @@ describe('MyAdoptionRequestsPage', () => {
     expect(within(modal).queryByText('Aprobada')).not.toBeInTheDocument();
     expect(within(modal).queryByText('Rechazada')).not.toBeInTheDocument();
   });
+
+  it('T-028c: a request with a contract links to "Mis seguimientos"', async () => {
+    const user = userEvent.setup();
+    stubMine([{ ...REQUEST, status: 'approved', contractRef: 'ct-1' }]);
+    renderShell({ route: '/mis-solicitudes', ...personaSession() });
+
+    await user.click(await screen.findByRole('button', { name: 'Ver seguimientos' }));
+    expect(await screen.findByRole('heading', { name: 'Mis seguimientos' })).toBeInTheDocument();
+  });
+
+  it('T-028c: no "Ver seguimientos" while the request has no contract', async () => {
+    stubMine([REQUEST]);
+    renderShell({ route: '/mis-solicitudes', ...personaSession() });
+
+    await screen.findByText('Firulais');
+    expect(screen.queryByRole('button', { name: 'Ver seguimientos' })).not.toBeInTheDocument();
+  });
 });

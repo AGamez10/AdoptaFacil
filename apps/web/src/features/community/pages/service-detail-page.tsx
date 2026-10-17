@@ -10,7 +10,7 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { fetchGlobalPublicAnimals } from '../../catalog/api/public-animals';
-import { CatalogAnimalCard } from '../../catalog/components/catalog-animal-card';
+import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { getPublicService, listPublicServiceReviews } from '../api/public-services';
 import { CATEGORY_TONE, PartnerBadge } from '../components/service-card';
 import {
@@ -216,7 +216,7 @@ export function ServiceDetailPage() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {animals.map((animal) => (
-                    <CatalogAnimalCard key={animal.id} animal={animal} />
+                    <AnimalSpotlightCard key={animal.id} animal={animal} />
                   ))}
                 </div>
               )}

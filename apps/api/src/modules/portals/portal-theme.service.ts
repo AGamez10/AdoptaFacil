@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   DEFAULT_PORTAL_TEMPLATE,
@@ -16,6 +16,8 @@ import {
 import { AuditService } from '../../core/audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
+import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
+import { parseStorageKey } from '../../core/storage/storage-keys';
 
 /**
  * Ola 3: la plantilla elegida viaja DENTRO del JSON `tokens` bajo esta clave
@@ -27,6 +29,20 @@ import { TenantContextService } from '../../core/tenant/tenant-context.service';
 const TEMPLATE_KEY = '__template';
 /** Ajustes de la plantilla, guardados igual que la plantilla (sin migración). */
 const OPTIONS_KEY = '__templateOptions';
+/** Llave del video de portada (plantilla Historias), guardada igual. */
+const VIDEO_KEY = '__coverVideo';
+
+/** Solo un video PÚBLICO de la propia organización, en mp4 o webm. */
+function assertCoverVideoKey(key: string, organizationId: string): void {
+  const parsed = parseStorageKey(key);
+  const isVideo = /\.(mp4|webm)$/i.test(key);
+  if (!parsed || parsed.visibility !== 'public' || !isVideo) {
+    throw new BadRequestException('El video de portada debe ser un archivo mp4 o webm subido.');
+  }
+  if (parsed.organizationId !== organizationId) {
+    throw new ForbiddenException('El video de portada no es de tu organización.');
+  }
+}
 
 function isTemplate(value: unknown): value is PortalTemplateId {
   return typeof value === 'string' && (PORTAL_TEMPLATE_IDS as readonly string[]).includes(value);
@@ -37,17 +53,20 @@ function splitStored(raw: unknown): {
   tokens: PortalTheme;
   template?: PortalTemplateId;
   options?: unknown;
+  coverVideoKey?: string;
 } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { tokens: {} };
   const {
     [TEMPLATE_KEY]: template,
     [OPTIONS_KEY]: options,
+    [VIDEO_KEY]: coverVideoKey,
     ...tokens
   } = raw as Record<string, unknown>;
   return {
     tokens: tokens as PortalTheme,
     ...(isTemplate(template) ? { template } : {}),
     ...(options !== undefined ? { options } : {}),
+    ...(typeof coverVideoKey === 'string' ? { coverVideoKey } : {}),
   };
 }
 
@@ -67,13 +86,21 @@ function assertOptions(template: PortalTemplateId, options: PortalTemplateOption
   }
 }
 
-/** Respuesta pública/propia: tokens limpios + plantilla + ajustes resueltos. */
-function present(stored: ReturnType<typeof splitStored>, fallback?: PortalTemplateId) {
+/** Respuesta pública/propia: tokens limpios + plantilla + ajustes resueltos
+ *  + la URL pública del video de portada (nunca la llave cruda). */
+function present(
+  stored: ReturnType<typeof splitStored>,
+  storage: StoragePort,
+  fallback?: PortalTemplateId,
+) {
   const template = stored.template ?? fallback;
   return {
     tokens: stored.tokens,
     ...(template
       ? { template, templateOptions: resolveTemplateOptions(template, stored.options) }
+      : {}),
+    ...(stored.coverVideoKey
+      ? { coverVideoUrl: storage.resolvePublicUrl(stored.coverVideoKey) }
       : {}),
   };
 }
@@ -91,6 +118,7 @@ export class PortalThemeService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
   ) {}
 
   private requireOrgId(): string {
@@ -108,7 +136,7 @@ export class PortalThemeService {
       const row = await tx.portalTheme.findUnique({ where: { organizationId } });
       const stored = splitStored(row?.tokens);
       return {
-        ...present(stored),
+        ...present(stored, this.storage),
         logoPosition: (row?.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row?.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
       };
@@ -141,10 +169,17 @@ export class PortalThemeService {
       } else if (template === previous.template && template) {
         options = resolveTemplateOptions(template, previous.options);
       }
+      // Video de portada: omitido se conserva, `null` lo quita.
+      if (typeof input.coverVideoKey === 'string') {
+        assertCoverVideoKey(input.coverVideoKey, organizationId);
+      }
+      const coverVideoKey =
+        input.coverVideoKey === undefined ? previous.coverVideoKey : input.coverVideoKey;
       const tokens = {
         ...input.tokens,
         ...(template ? { [TEMPLATE_KEY]: template } : {}),
         ...(options && Object.keys(options).length > 0 ? { [OPTIONS_KEY]: options } : {}),
+        ...(coverVideoKey ? { [VIDEO_KEY]: coverVideoKey } : {}),
       } as unknown as Prisma.InputJsonValue;
       const row = await tx.portalTheme.upsert({
         where: { organizationId },
@@ -179,12 +214,13 @@ export class PortalThemeService {
             ...(input.socialNavPosition !== undefined ? ['socialNavPosition'] : []),
             ...(input.template !== undefined ? ['template'] : []),
             ...(input.templateOptions !== undefined ? ['templateOptions'] : []),
+            ...(input.coverVideoKey !== undefined ? ['coverVideo'] : []),
           ],
         },
       });
       const stored = splitStored(row.tokens);
       return {
-        ...present(stored),
+        ...present(stored, this.storage),
         logoPosition: (row.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
       };
@@ -210,7 +246,7 @@ export class PortalThemeService {
     const data = rows[0]?.data;
     const stored = splitStored(data?.tokens);
     return {
-      ...present(stored, DEFAULT_PORTAL_TEMPLATE),
+      ...present(stored, this.storage, DEFAULT_PORTAL_TEMPLATE),
       logoPosition: data?.logoPosition ?? 'left',
       socialNavPosition: data?.socialNavPosition ?? 'right',
     };

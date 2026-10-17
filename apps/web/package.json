@@ -6,7 +6,7 @@
   "description": "AdoptaFácil web shell (React + Vite) — walking skeleton",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender-seo.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",

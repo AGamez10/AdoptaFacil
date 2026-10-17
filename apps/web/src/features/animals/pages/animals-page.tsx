@@ -265,7 +265,7 @@ export function AnimalsPage() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
             <div className={cn('space-y-3', selectedId && 'hidden lg:block')}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-row items-center gap-2">
                 <div className="relative flex-1">
                   <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -273,14 +273,14 @@ export function AnimalsPage() {
                     placeholder="Buscar por nombre…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8"
+                    className="!pl-9"
                   />
                 </div>
                 <select
                   aria-label="Filtrar por especie"
                   value={speciesFilter}
                   onChange={(e) => setSpeciesFilter(e.target.value as 'all' | AnimalSpecies)}
-                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-40"
+                  className="flex h-10 w-32 shrink-0 rounded-md border border-input bg-background px-2 py-2 text-sm sm:w-40 sm:px-3"
                 >
                   {SPECIES_FILTER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>

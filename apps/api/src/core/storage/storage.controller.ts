@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { Role } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import type { Env } from '../../config/env.validation';
@@ -30,7 +30,7 @@ import {
 } from '../auth/mfa/platform-security.config';
 import { enforcePlatformMfa } from '../rbac/platform-mfa.policy';
 import { STORAGE_PORT, type StoragePort } from './storage.port';
-import { ALLOWED_CONTENT_TYPES, parseStorageKey } from './storage-keys';
+import { isAllowedUpload, parseByteRange, parseStorageKey } from './storage-keys';
 
 /** Minimal shape of a multer memory-storage file (no @types/multer installed). */
 interface UploadedFileLike {
@@ -96,7 +96,7 @@ export class StorageController {
     if (file.size > this.maxBytes) {
       throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);
     }
-    if (!ALLOWED_CONTENT_TYPES.includes(file.mimetype)) {
+    if (!isAllowedUpload(file.mimetype, parsed.visibility)) {
       throw new BadRequestException(`Unsupported content type: ${file.mimetype}`);
     }
 
@@ -113,7 +113,11 @@ export class StorageController {
   }
 
   @Get('public')
-  async servePublic(@Query('key') key: string, @Res() res: Response): Promise<void> {
+  async servePublic(
+    @Query('key') key: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
     const parsed = parseStorageKey(key ?? '');
     if (!parsed || parsed.visibility !== 'public') {
       throw new NotFoundException();
@@ -123,6 +127,20 @@ export class StorageController {
       throw new NotFoundException();
     }
     res.setHeader('Content-Type', object.contentType ?? 'application/octet-stream');
+    // Rangos de bytes: Safari en iPhone no reproduce un video sin ellos.
+    res.setHeader('Accept-Ranges', 'bytes');
+    const size = object.data.length;
+    const range = parseByteRange(req.headers.range, size);
+    if (range === 'invalid') {
+      res.status(416).setHeader('Content-Range', `bytes */${size}`);
+      res.end();
+      return;
+    }
+    if (range) {
+      res.status(206).setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+      res.send(object.data.subarray(range.start, range.end + 1));
+      return;
+    }
     res.send(object.data);
   }
 

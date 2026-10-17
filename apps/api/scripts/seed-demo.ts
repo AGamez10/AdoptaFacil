@@ -52,7 +52,10 @@ import {
   DocumentType,
   FORMALIZATION_SEQUENCE,
   FormalizationState,
+  getLegalDocument,
+  type LegalAcceptanceItem,
   OrganizationType,
+  requiredLegalDocuments,
 } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { AuthService } from '../src/core/auth/auth.service';
@@ -67,6 +70,14 @@ import { PlatformDocumentsService } from '../src/modules/org/platform-documents.
 import { AnimalsService } from '../src/modules/animals/animals.service';
 import { loadAssetOrGenerate, minimalPdf, simplePng } from './seed-assets';
 import { runLocalPreflight } from '../src/config/local-preflight';
+
+/** La cuenta demo acepta los textos legales vigentes, como en el registro real. */
+function demoAcceptances(accountType: 'organization' | 'person'): LegalAcceptanceItem[] {
+  return requiredLegalDocuments(accountType).map((key) => ({
+    key,
+    version: getLegalDocument(key).version,
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Credentials — NEVER hardcoded secrets. Emails are demo-only identifiers
@@ -354,6 +365,7 @@ async function main(): Promise<void> {
           displayName: def.ownerDisplayName,
           email: def.ownerEmail,
           password: DEMO_PASSWORD,
+          legalAcceptances: demoAcceptances('organization'),
         });
         organizationId = session.user.organizationId;
         ownerUserId = session.user.id;
@@ -417,29 +429,6 @@ async function main(): Promise<void> {
       );
       console.log(`[seed:demo] Perfil actualizado (logo/portada reales vía StoragePort).`);
 
-      // 1c. Formalization — step through REAL adjacent transitions only as far
-      // as needed (idempotent: a second run finds the target already reached).
-      await tenant.run({ organizationId }, async () => {
-        const status = await formalization.getStatus();
-        let currentIndex = FORMALIZATION_SEQUENCE.indexOf(status.state);
-        const targetIndex = FORMALIZATION_SEQUENCE.indexOf(def.formalizationTarget);
-        if (currentIndex >= targetIndex) {
-          console.log(`[seed:demo] Formalización ya en "${status.state}" — sin cambios.`);
-          return;
-        }
-        // ESAL / ESAL_RTE are platform-only (R2-2, SEC-003): the platform
-        // reviewer moves the org there in 1e, once a document is approved.
-        while (
-          currentIndex < targetIndex &&
-          !PLATFORM_ONLY_STATES.includes(FORMALIZATION_SEQUENCE[currentIndex + 1])
-        ) {
-          const nextState = FORMALIZATION_SEQUENCE[currentIndex + 1];
-          await formalization.transition(ownerUserId, { targetState: nextState });
-          currentIndex += 1;
-          console.log(`[seed:demo] Formalización avanzada a "${nextState}".`);
-        }
-      });
-
       // 1d. Documents — upload (idempotent by type) + approve via PlatformAdmin
       // (idempotent: skips if already decided).
       for (const docDef of def.documents) {
@@ -479,6 +468,29 @@ async function main(): Promise<void> {
           console.log(`[seed:demo] Documento ${docDef.type} queda pendiente a propósito (demo).`);
         }
       }
+
+      // 1c. Formalization — step through REAL adjacent transitions only as far
+      // as needed (idempotent: a second run finds the target already reached).
+      await tenant.run({ organizationId }, async () => {
+        const status = await formalization.getStatus();
+        let currentIndex = FORMALIZATION_SEQUENCE.indexOf(status.state);
+        const targetIndex = FORMALIZATION_SEQUENCE.indexOf(def.formalizationTarget);
+        if (currentIndex >= targetIndex) {
+          console.log(`[seed:demo] Formalización ya en "${status.state}" — sin cambios.`);
+          return;
+        }
+        // ESAL / ESAL_RTE are platform-only (R2-2, SEC-003): the platform
+        // reviewer moves the org there in 1e, once a document is approved.
+        while (
+          currentIndex < targetIndex &&
+          !PLATFORM_ONLY_STATES.includes(FORMALIZATION_SEQUENCE[currentIndex + 1])
+        ) {
+          const nextState = FORMALIZATION_SEQUENCE[currentIndex + 1];
+          await formalization.transition(ownerUserId, { targetState: nextState });
+          currentIndex += 1;
+          console.log(`[seed:demo] Formalización avanzada a "${nextState}".`);
+        }
+      });
 
       // 1e. Platform-only formalization states — the PlatformAdmin cites an
       // approved, current document of this org as evidence (R2-2, SEC-003).
@@ -569,6 +581,7 @@ async function main(): Promise<void> {
         displayName: DONOR_NAME,
         email: DONOR_EMAIL,
         password: DEMO_PASSWORD,
+        legalAcceptances: demoAcceptances('person'),
       });
       console.log(`\n[seed:demo] Persona donante creada (${DONOR_EMAIL}).`);
     }

@@ -166,6 +166,7 @@ el primer deploy — por eso no se pueden precompletar en `render.yaml`. Con los
      mismo — así resuelve las URLs de descarga de documentos/fotos).
 3. En `adoptafacil-web`, llena:
    - `VITE_API_URL` = URL pública de **adoptafacil-api**.
+   - `VITE_SITE_URL` = dominio público del sitio web (p. ej. `https://adoptafacil.onrender.com` o el dominio propio). Lo usa el build para las URLs canónicas, Open Graph y `sitemap.xml`. Si cambias de dominio, actualízalo y vuelve a desplegar. Tras el deploy, verifica que cada página pública tenga su propio título con `curl -s <sitio>/adoptar/perros | grep '<title>'`.
 4. Guardar cada env var redeploya el servicio automáticamente.
 
 ## 4. Migrar y sembrar datos iniciales
@@ -324,6 +325,7 @@ not found` durante el build (T-D07):** pnpm salta TODAS las devDependencies
 | `TRUST_PROXY_HOPS`                  | api      | Proxies delante de la API (rate limit por IP real)         | Fijo: `1` (verificar en staging)                        |
 | `THROTTLER_STORAGE`                 | api      | Dónde viven los contadores del rate limit                  | Fijo: `redis`                                           |
 | `VITE_API_URL`                      | web      | URL pública de la API                                      | Manual — ver paso 3                                     |
+| `VITE_SITE_URL`                     | web      | Dominio público del sitio (SEO: canónicas y sitemap)       | Manual — ver paso 3                                     |
 | `NODE_VERSION`                      | ambos    | Versión de Node                                            | Fijo: `20`                                              |
 
 ## 7. Fuera de alcance de este Blueprint

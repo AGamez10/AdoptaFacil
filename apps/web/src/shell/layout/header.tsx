@@ -37,7 +37,14 @@ export function Header() {
       </Button>
 
       {/* Brand on móvil/tablet (the sidebar carries it on escritorio) */}
-      <Brand className="lg:hidden" to="/inicio" />
+      {/* En celulares angostos solo el ícono: con el nombre completo el
+          encabezado no cabía y toda la página se desplazaba de lado. */}
+      <span className="hidden min-[480px]:inline-flex lg:hidden">
+        <Brand to="/inicio" />
+      </span>
+      <span className="inline-flex min-[480px]:hidden">
+        <Brand to="/inicio" withWordmark={false} />
+      </span>
 
       {/* Persistent transparency indicator (§M14) */}
       <div className={styles.topbar__actions}>

@@ -377,6 +377,13 @@ export const navItems: NavItem[] = [
       },
     ],
   },
+  // M13: cada persona decide si su nombre y documento aparecen en los reportes
+  // y certificados de las organizaciones con las que ha donado o trabajado.
+  {
+    path: '/uso-de-mis-datos',
+    label: 'Uso de mis datos',
+    icon: ShieldIcon,
+  },
   // MENU-SUBMENUS: "Donaciones" agrupa las dos entradas planas que existían
   // (mismas rutas, mismos roles de siempre) — el padre solo expande/colapsa,
   // nunca navega (no tiene página propia).
@@ -421,6 +428,8 @@ export const navItems: NavItem[] = [
   // (cualquier autenticado), así que el filtro real es `personaOnly` — ver su
   // doc en NavItem para por qué no puede expresarse con `roles`.
   { path: '/mis-solicitudes', label: 'Mis solicitudes', icon: PawIcon, personaOnly: true },
+  // T-028c: el adoptante responde sus hitos de seguimiento post-adopción.
+  { path: '/mis-seguimientos', label: 'Mis seguimientos', icon: PawIcon, personaOnly: true },
   // MENU-SUBMENUS: "Apadrinamientos" agrupa "Mis apadrinamientos" (donante,
   // sin @Roles) y la gestión de la org ("Apadrinamientos recibidos", antes
   // el ítem plano "Apadrinamientos", SPONSORSHIP_VIEW_ROLES) — mismas rutas y

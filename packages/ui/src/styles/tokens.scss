@@ -96,12 +96,8 @@
    * Elevación — sombras tenues en capas (nada de sombras duras).
    * --------------------------------------------------------------------- */
   --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-sm:
-    0 1px 3px rgba(16, 24, 40, 0.08),
-    0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow-md:
-    0 4px 12px rgba(16, 24, 40, 0.06),
-    0 2px 4px rgba(16, 24, 40, 0.04);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.06), 0 2px 4px rgba(16, 24, 40, 0.04);
   --shadow-lg: 0 16px 32px rgba(16, 24, 40, 0.12);
 
   /* ---------------------------------------------------------------------
@@ -113,6 +109,43 @@
   --r-xl: 1rem;
   --r-2xl: 1.25rem;
   --r-full: 9999px;
+
+  /* ---------------------------------------------------------------------
+   * Marca v3 (rediseño 2026-10) — superficies públicas de AdoptaFácil.
+   *
+   * Mezcla editorial (portada con mucho aire), bloques de color amplios y
+   * tipografía fuerte, con esquinas redondeadas y tono amable. Los colores
+   * de texto están medidos para AA (4.5:1) sobre --af-cream y blanco; los
+   * de relleno grande (--af-mint, --af-sun, --af-sky) nunca llevan texto
+   * claro encima, solo --af-ink.
+   *
+   * --font-display (Fraunces) se queda para los portales de cada
+   * organización, que lo usan como su tipografía de títulos.
+   * --------------------------------------------------------------------- */
+  --font-brand:
+    'Bricolage Grotesque', 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --af-ink: #14202e; /* texto principal, 16.4:1 sobre crema */
+  --af-ink-soft: #3f4c5c; /* texto secundario, 8.3:1 sobre crema */
+  --af-cream: #fff8ef; /* fondo editorial cálido */
+  --af-paper: #ffffff;
+  --af-teal: #25baa6; /* marca, solo relleno o sobre oscuro */
+  --af-teal-ink: #0d6c5f; /* teal para texto y botones, 6.3:1 con blanco */
+  --af-teal-deep: #0b3d37; /* bloques oscuros grandes */
+  --af-mint: #c9f2e6; /* bloques claros grandes */
+  --af-mint-soft: #e8faf4;
+  --af-sun: #ffc94d;
+  --af-sun-soft: #fff1c9;
+  --af-coral: #ff7a59;
+  --af-coral-soft: #ffe3da;
+  --af-sky: #dcedff;
+  --af-line: #eadfce; /* separadores sobre crema */
+
+  --af-r-card: 1.5rem;
+  --af-r-block: 2rem;
+  --af-shadow-card: 0 1px 2px rgb(20 32 46 / 0.06), 0 12px 32px -12px rgb(20 32 46 / 0.18);
+  --af-shadow-pop: 0 24px 60px -20px rgb(20 32 46 / 0.35);
+  --af-container: 76rem;
 
   /* ---------------------------------------------------------------------
    * Movimiento
