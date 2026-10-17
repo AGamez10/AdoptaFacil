@@ -72,23 +72,42 @@ export function HeroVisual() {
     observer?.observe(canvas);
     document.addEventListener('visibilitychange', sync);
 
-    setMode('loading');
-    const cancelIdle = whenIdle(() => {
-      import('../scene/network-globe')
-        .then(({ mountNetworkGlobe }) => {
-          if (disposed) return;
-          handle = mountNetworkGlobe(canvas, { staticFrame });
-          setMode('scene');
-          sync();
-        })
-        .catch(() => {
-          if (!disposed) setMode('fallback');
-        });
-    });
+    let cancelIdle = () => {};
+    const load = () => {
+      setMode('loading');
+      cancelIdle = whenIdle(() => {
+        import('../scene/network-globe')
+          .then(({ mountNetworkGlobe }) => {
+            if (disposed) return;
+            handle = mountNetworkGlobe(canvas, { staticFrame });
+            setMode('scene');
+            sync();
+          })
+          .catch(() => {
+            if (!disposed) setMode('fallback');
+          });
+      });
+    };
+    // three.js pesa ~125 KB: se baja solo cuando la sección se acerca a la
+    // pantalla (antes del primer cuadro visible), no en la primera carga.
+    const near =
+      typeof IntersectionObserver === 'function'
+        ? new IntersectionObserver(
+            ([entry]) => {
+              if (!entry?.isIntersecting) return;
+              near?.disconnect();
+              load();
+            },
+            { rootMargin: '600px 0px' },
+          )
+        : null;
+    if (near) near.observe(canvas);
+    else load();
 
     return () => {
       disposed = true;
       cancelIdle();
+      near?.disconnect();
       observer?.disconnect();
       document.removeEventListener('visibilitychange', sync);
       handle?.dispose();
