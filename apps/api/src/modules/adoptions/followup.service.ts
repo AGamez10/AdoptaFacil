@@ -387,6 +387,21 @@ export class FollowUpService {
   }
 
   /** Load a milestone for the adopter via the SECURITY DEFINER function. */
+  /**
+   * 404 unless `userId` is the adopter of the milestone and it still takes
+   * answers. Runs as a guard BEFORE the multipart body is read, so a stranger
+   * cannot make the API buffer a large upload for someone else's milestone.
+   */
+  async assertAdopterCanSubmit(milestoneId: string, userId: string): Promise<void> {
+    const current = await this.loadForAdopter(milestoneId, userId);
+    if (!current) {
+      throw new NotFoundException('Hito de seguimiento no encontrado o no eres el adoptante.');
+    }
+    if (!canSubmitFollowUp(current.status as FollowUpMilestoneStatus)) {
+      throw new ConflictException(`El hito no admite respuestas (estado: ${current.status}).`);
+    }
+  }
+
   private async loadForAdopter(milestoneId: string, userId: string): Promise<MilestoneRow | null> {
     const rows = await this.prisma.$queryRaw<MilestoneRow[]>(Prisma.sql`
       SELECT * FROM adoption_followup_for_adopter(${milestoneId}::uuid, ${userId}::uuid)

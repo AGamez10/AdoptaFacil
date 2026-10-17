@@ -25,6 +25,7 @@ import type { Env } from '../../config/env.validation';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
+import { FollowUpAdopterGuard } from './followup-adopter.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
@@ -118,6 +119,7 @@ export class FollowUpController {
    * the duration read from the file itself (never trusted from the client).
    */
   @Post(':id/photo')
+  @UseGuards(FollowUpAdopterGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
   submitWithPhoto(
     @CurrentUser() actor: RequestUser,
