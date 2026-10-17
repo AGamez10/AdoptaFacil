@@ -316,8 +316,15 @@ export function resolveTemplateOptions(
   return out;
 }
 
-/** ¿Se cobra la plantilla? Hasta que existan planes, nunca se bloquea. */
+/** ¿Se cobra la plantilla? Hasta que existan planes, nunca se bloquea.
+ *  @deprecated El cobro lo decide la API con `PLAN_ENFORCEMENT` y el plan de
+ *  cada organización; usa `PortalThemeConfig.premiumDesignsAvailable`. */
 export const PORTAL_TEMPLATE_TIERS_ENFORCED = false;
+
+/** ¿La plantilla es de pago ("super Pro")? */
+export function isPremiumTemplate(id: PortalTemplateId): boolean {
+  return PORTAL_TEMPLATES.find((t) => t.id === id)?.tier === 'paid';
+}
 
 /** Respuesta de lectura del tema (propio o público). */
 export interface PortalThemeConfig {
@@ -332,6 +339,15 @@ export interface PortalThemeConfig {
   templateOptions?: PortalTemplateOptions;
   /** Video de portada (plantilla Historias), URL pública lista para `<video>`. */
   coverVideoUrl?: string;
+  /**
+   * Plantilla de pago elegida que hoy no está disponible porque el plan de la
+   * organización no la incluye (terminó el lanzamiento o la suscripción). El
+   * portal se muestra con `template`, que es una gratuita; la elección queda
+   * guardada y vuelve sola al pagar un plan. Solo en la lectura propia.
+   */
+  lockedTemplate?: PortalTemplateId;
+  /** Si el plan vigente incluye las plantillas de pago. Solo en la lectura propia. */
+  premiumDesignsAvailable?: boolean;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */

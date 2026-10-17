@@ -14,6 +14,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  FOLLOWUP_VIDEO_CONTENT_TYPES,
+  FOLLOWUP_VIDEO_MAX_SECONDS,
   Role,
   type AdoptionFollowUpMilestone,
   type ScheduleFollowUpMilestoneInput,
@@ -26,6 +28,7 @@ import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
+import { mp4DurationSeconds } from '../../core/media/mp4-duration';
 import { FollowUpService } from './followup.service';
 import {
   FOLLOWUP_PHOTO_CONTENT_TYPES,
@@ -60,12 +63,14 @@ const MANAGE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
 @UseGuards(JwtAuthGuard)
 export class FollowUpController {
   private readonly maxMb: number;
+  private readonly maxVideoMb: number;
 
   constructor(
     private readonly service: FollowUpService,
     config: ConfigService<Env, true>,
   ) {
     this.maxMb = config.get('STORAGE_MAX_FILE_MB', { infer: true });
+    this.maxVideoMb = config.get('FOLLOWUP_VIDEO_MAX_MB', { infer: true });
   }
 
   /** Schedule a milestone on a signed contract (org). */
@@ -106,12 +111,14 @@ export class FollowUpController {
   }
 
   /**
-   * The adopter responds a milestone WITH a photo (multipart: `file`, plus the
-   * optional text fields `answers` as JSON and `complete`). Only images; size
-   * capped like every other upload (STORAGE_MAX_FILE_MB).
+   * The adopter responds a milestone WITH a photo or a short video (multipart:
+   * `file`, plus the optional text fields `answers` as JSON and `complete`).
+   * Photos: JPG/PNG/WebP up to STORAGE_MAX_FILE_MB. Videos: mp4/mov (what phone
+   * cameras record) up to FOLLOWUP_VIDEO_MAX_MB and FOLLOWUP_VIDEO_MAX_SECONDS,
+   * the duration read from the file itself (never trusted from the client).
    */
   @Post(':id/photo')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
   submitWithPhoto(
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -119,13 +126,37 @@ export class FollowUpController {
     @Body() fields: Record<string, unknown>,
   ): Promise<AdoptionFollowUpMilestone> {
     if (!file || !file.buffer) {
-      throw new BadRequestException('Adjunta la foto (campo "file").');
+      throw new BadRequestException('Adjunta la foto o el video (campo "file").');
+    }
+    const isVideo = (FOLLOWUP_VIDEO_CONTENT_TYPES as readonly string[]).includes(file.mimetype);
+    if (isVideo) {
+      if (file.size > this.maxVideoMb * 1024 * 1024) {
+        throw new PayloadTooLargeException(`El video supera el límite de ${this.maxVideoMb} MB.`);
+      }
+      const seconds = mp4DurationSeconds(file.buffer);
+      if (seconds === null) {
+        throw new BadRequestException(
+          'No pudimos leer el video. Grábalo con la cámara del celular.',
+        );
+      }
+      // Medio segundo de margen por el redondeo de las cámaras.
+      if (seconds > FOLLOWUP_VIDEO_MAX_SECONDS + 0.5) {
+        throw new BadRequestException(
+          `El video dura ${Math.round(seconds)} s. El máximo es ${FOLLOWUP_VIDEO_MAX_SECONDS} s.`,
+        );
+      }
+      return this.service.submitWithPhoto(actor, id, file, parseFollowUpPhotoFields(fields), {
+        kind: 'video',
+        maxBytes: this.maxVideoMb * 1024 * 1024,
+      });
     }
     if (file.size > this.maxMb * 1024 * 1024) {
       throw new PayloadTooLargeException(`La foto supera el límite de ${this.maxMb} MB.`);
     }
     if (!FOLLOWUP_PHOTO_CONTENT_TYPES.includes(file.mimetype)) {
-      throw new BadRequestException('Formato no permitido. Sube una foto JPG, PNG o WebP.');
+      throw new BadRequestException(
+        'Formato no permitido. Sube una foto JPG, PNG o WebP, o un video MP4 o MOV.',
+      );
     }
     return this.service.submitWithPhoto(actor, id, file, parseFollowUpPhotoFields(fields));
   }

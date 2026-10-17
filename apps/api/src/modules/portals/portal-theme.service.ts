@@ -2,7 +2,12 @@ import { BadRequestException, ForbiddenException, Inject, Injectable } from '@ne
 import { Prisma } from '@prisma/client';
 import {
   DEFAULT_PORTAL_TEMPLATE,
+  PLAN_CATALOG,
+  PLAN_REQUIRED_CODE,
   PORTAL_TEMPLATE_IDS,
+  isPremiumTemplate,
+  minimumPlanFor,
+  type PlanRequiredError,
   PORTAL_TEMPLATE_OPTIONS,
   resolveTemplateOptions,
   type PortalLogoPosition,
@@ -14,6 +19,7 @@ import {
   type UpdatePortalThemeInput,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { PlansService } from '../../core/plans/plans.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
@@ -87,22 +93,46 @@ function assertOptions(template: PortalTemplateId, options: PortalTemplateOption
 }
 
 /** Respuesta pública/propia: tokens limpios + plantilla + ajustes resueltos
- *  + la URL pública del video de portada (nunca la llave cruda). */
+ *  + la URL pública del video de portada (nunca la llave cruda).
+ *
+ *  Con `premiumAllowed` en false, una plantilla de pago guardada se reemplaza
+ *  por la gratuita por defecto (y sus ajustes y el video, que son de ella, no
+ *  se aplican); la elección guardada viaja en `lockedTemplate` para la lectura
+ *  propia y vuelve sola cuando la organización paga un plan. */
 function present(
   stored: ReturnType<typeof splitStored>,
   storage: StoragePort,
   fallback?: PortalTemplateId,
+  premiumAllowed = true,
 ) {
-  const template = stored.template ?? fallback;
+  const chosen = stored.template ?? fallback;
+  const locked = chosen !== undefined && !premiumAllowed && isPremiumTemplate(chosen);
+  const template = locked ? DEFAULT_PORTAL_TEMPLATE : chosen;
   return {
     tokens: stored.tokens,
     ...(template
-      ? { template, templateOptions: resolveTemplateOptions(template, stored.options) }
+      ? {
+          template,
+          templateOptions: resolveTemplateOptions(template, locked ? undefined : stored.options),
+        }
       : {}),
-    ...(stored.coverVideoKey
+    ...(stored.coverVideoKey && !locked
       ? { coverVideoUrl: storage.resolvePublicUrl(stored.coverVideoKey) }
       : {}),
+    ...(locked ? { lockedTemplate: chosen } : {}),
   };
+}
+
+/** 403 `PLAN_REQUIRED` al elegir una plantilla de pago sin un plan que la incluya. */
+function premiumTemplateRequired(): ForbiddenException {
+  const requiredPlan = minimumPlanFor('portalPremiumDesigns');
+  const body: PlanRequiredError = {
+    code: PLAN_REQUIRED_CODE,
+    capability: 'portalPremiumDesigns',
+    requiredPlan,
+    message: `Esta plantilla está disponible desde el plan ${PLAN_CATALOG[requiredPlan].name}.`,
+  };
+  return new ForbiddenException(body);
 }
 
 /**
@@ -119,6 +149,7 @@ export class PortalThemeService {
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    private readonly plans: PlansService,
   ) {}
 
   private requireOrgId(): string {
@@ -132,11 +163,13 @@ export class PortalThemeService {
   /** The caller's own theme (empty tokens when none saved yet). */
   async getOwnTheme(): Promise<PortalThemeConfig> {
     const organizationId = this.requireOrgId();
+    const premiumAllowed = await this.plans.hasCapability(organizationId, 'portalPremiumDesigns');
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const row = await tx.portalTheme.findUnique({ where: { organizationId } });
       const stored = splitStored(row?.tokens);
       return {
-        ...present(stored, this.storage),
+        ...present(stored, this.storage, undefined, premiumAllowed),
+        premiumDesignsAvailable: premiumAllowed,
         logoPosition: (row?.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row?.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
       };
@@ -152,6 +185,13 @@ export class PortalThemeService {
     input: UpdatePortalThemeInput,
   ): Promise<PortalThemeConfig> {
     const organizationId = this.requireOrgId();
+    const premiumAllowed = await this.plans.hasCapability(organizationId, 'portalPremiumDesigns');
+    // Elegir una plantilla de pago exige un plan que la incluya. Conservar la
+    // ya guardada (petición sin `template`) no se bloquea: se muestra la
+    // gratuita hasta que la organización pague, sin perder su elección.
+    if (input.template !== undefined && isPremiumTemplate(input.template) && !premiumAllowed) {
+      throw premiumTemplateRequired();
+    }
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       // `tokens` se reemplaza entero; la plantilla guardada se conserva si
@@ -220,7 +260,8 @@ export class PortalThemeService {
       });
       const stored = splitStored(row.tokens);
       return {
-        ...present(stored, this.storage),
+        ...present(stored, this.storage, undefined, premiumAllowed),
+        premiumDesignsAvailable: premiumAllowed,
         logoPosition: (row.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
       };
@@ -245,10 +286,34 @@ export class PortalThemeService {
     >(Prisma.sql`SELECT organization_portal_theme(${slug}) AS data`);
     const data = rows[0]?.data;
     const stored = splitStored(data?.tokens);
+    const premiumAllowed =
+      stored.template && isPremiumTemplate(stored.template)
+        ? await this.premiumAllowedForSlug(slug)
+        : true;
+    const { lockedTemplate: _hidden, ...shown } = present(
+      stored,
+      this.storage,
+      DEFAULT_PORTAL_TEMPLATE,
+      premiumAllowed,
+    );
     return {
-      ...present(stored, this.storage, DEFAULT_PORTAL_TEMPLATE),
+      ...shown,
       logoPosition: data?.logoPosition ?? 'left',
       socialNavPosition: data?.socialNavPosition ?? 'right',
     };
+  }
+
+  /** Plan de la organización dueña del portal público. Lee el id por la
+   *  función SECURITY DEFINER `organization_public` (sin contexto de tenant) y
+   *  el plan bajo el contexto de ESA organización (RLS). Slug desconocido: no
+   *  hay nada que bloquear. */
+  private async premiumAllowedForSlug(slug: string): Promise<boolean> {
+    if (!this.plans.enforced) return true;
+    const rows = await this.prisma.$queryRaw<Array<{ data: { id?: string } | null }>>(
+      Prisma.sql`SELECT organization_public(${slug}) AS data`,
+    );
+    const organizationId = rows[0]?.data?.id;
+    if (!organizationId) return true;
+    return this.plans.hasCapability(organizationId, 'portalPremiumDesigns');
   }
 }

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Role, type AdoptionFollowUpMilestone } from '@adoptafacil/contracts';
 import { AppProviders } from '../../../shell/app-providers';
@@ -89,5 +89,31 @@ describe('AdoptionFollowUpPanel', () => {
     expect(await screen.findByText('Sin hitos programados.')).toBeInTheDocument();
     // Managing controls still render (no exception tore the tree down).
     expect(screen.getByRole('button', { name: 'Programar hito' })).toBeInTheDocument();
+  });
+
+  it('shows the adopter answers and offers the private video to the org', async () => {
+    stubFetch([
+      {
+        ...OVERDUE,
+        status: 'completed',
+        questionnaire: [{ id: 'q1', prompt: '¿Come bien?', type: 'yes_no', required: true }],
+        evidence: [
+          {
+            id: 'e1',
+            milestoneId: 'm1',
+            kind: 'video',
+            answers: { q1: true },
+            storageRef: 'org-1/followups/v.mp4',
+            submittedByUserId: 'u2',
+            createdAt: '2026-07-01T12:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+    render(providers([Role.Owner], <AdoptionFollowUpPanel contractId="c1" canManage />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver respuesta' }));
+    expect(screen.getByText('¿Come bien?:')).toBeInTheDocument();
+    expect(screen.getByText('Sí')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ver video' })).toBeInTheDocument();
   });
 });

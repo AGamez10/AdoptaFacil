@@ -20,6 +20,7 @@ import {
 } from '@adoptafacil/contracts';
 import type { Env } from '../../../config/env.validation';
 import { AuditService } from '../../../core/audit/audit.service';
+import { PlansService } from '../../../core/plans/plans.service';
 import { PasswordService } from '../../../core/auth/password.service';
 import { TokenService } from '../../../core/auth/token.service';
 import { isUniqueConstraintViolation } from '../../../core/errors/prisma-conflict.util';
@@ -98,6 +99,7 @@ export class InvitationsService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly plans: PlansService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
@@ -131,6 +133,7 @@ export class InvitationsService {
     }
 
     const token = randomBytes(32).toString('base64url');
+    const plan = this.plans.enforced ? await this.plans.effectivePlan(organizationId) : null;
     const row = await this.prisma.withOrgContext(organizationId, async (tx) => {
       if (input.signerRole) {
         // Vincular un firmante (contador / revisor fiscal) es decisión del
@@ -163,6 +166,25 @@ export class InvitationsService {
         if (!actorIsOwner) {
           throw new ForbiddenException('Only an Owner can invite another Owner');
         }
+      }
+      // Límite de miembros del plan (solo con PLAN_ENFORCEMENT): cuenta el
+      // equipo actual más las invitaciones pendientes de OTROS correos, porque
+      // cada una ocupará un puesto al aceptarse. Reinvitar al mismo correo no
+      // ocupa un puesto nuevo.
+      if (plan) {
+        const [members, pending] = await Promise.all([
+          this.plans.countMembers(tx, organizationId),
+          tx.organizationInvitation.count({
+            where: {
+              organizationId,
+              acceptedAt: null,
+              revokedAt: null,
+              expiresAt: { gt: new Date() },
+              email: { not: email },
+            },
+          }),
+        ]);
+        await this.plans.assertWithinLimit(organizationId, 'members', members + pending + 1, plan);
       }
       // Re-inviting replaces the pending invitation (its link stops working).
       await tx.organizationInvitation.updateMany({
@@ -295,6 +317,7 @@ export class InvitationsService {
     const passwordHash = await this.passwords.hash(input.password);
     const userId = randomUUID();
     const displayName = input.displayName.trim();
+    const plan = this.plans.enforced ? await this.plans.effectivePlan(organizationId) : null;
     try {
       await this.prisma.withOrgContext(organizationId, async (tx) => {
         // Single use: only one acceptance wins, even under concurrent requests.
@@ -309,6 +332,11 @@ export class InvitationsService {
         });
         if (claimed.count !== 1) {
           throw new BadRequestException(INVALID_INVITATION);
+        }
+        // El plan pudo bajar entre la invitación y la aceptación.
+        if (plan) {
+          const members = await this.plans.countMembers(tx, organizationId);
+          await this.plans.assertWithinLimit(organizationId, 'members', members + 1, plan);
         }
         await tx.user.create({
           data: { id: userId, organizationId, accountType: 'organization', email, displayName },

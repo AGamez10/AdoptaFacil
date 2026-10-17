@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { PORTAL_TEMPLATES, isPremiumTemplate } from '../src/portals';
 import {
   PLAN_CAPABILITIES,
   PLAN_CATALOG,
   PLAN_KEYS,
+  launchPromoEnd,
   minimumPlanFor,
   minimumPlanForLimit,
   priceWithIva,
@@ -48,6 +50,12 @@ describe('plan catalog', () => {
     expect(minimumPlanFor('customDomain')).toBe('pro');
   });
 
+  it('premium portal designs need a paid plan (decisión 2026-10-17)', () => {
+    expect(minimumPlanFor('portalPremiumDesigns')).toBe('crece');
+    const premium = PORTAL_TEMPLATES.filter((t) => isPremiumTemplate(t.id)).map((t) => t.id);
+    expect(premium).toEqual(['historias']);
+  });
+
   it('finds the cheapest plan for a limit', () => {
     expect(minimumPlanForLimit('members', 3)).toBe('free');
     expect(minimumPlanForLimit('members', 4)).toBe('crece');
@@ -82,5 +90,27 @@ describe('resolveEffectivePlan', () => {
     expect(resolveEffectivePlan(sub({ plan: 'pro', currentPeriodEnd: null }), NOW, true)).toBe(
       'pro',
     );
+  });
+});
+
+describe('launch promotion', () => {
+  const launch = new Date('2026-11-01T00:00:00Z');
+  const end = launchPromoEnd(launch);
+
+  it('lasts three calendar months from the launch date', () => {
+    expect(end.toISOString()).toBe('2027-02-01T00:00:00.000Z');
+  });
+
+  it('gives pro to an org without subscription until it ends, then free', () => {
+    expect(resolveEffectivePlan(null, new Date('2027-01-31T23:00:00Z'), true, end)).toBe('pro');
+    expect(resolveEffectivePlan(null, new Date('2027-02-02T00:00:00Z'), true, end)).toBe('free');
+  });
+
+  it('does not override a stored subscription, even a canceled one', () => {
+    const during = new Date('2026-12-01T00:00:00Z');
+    expect(
+      resolveEffectivePlan(sub({ currentPeriodEnd: '2027-06-01T00:00:00Z' }), during, true, end),
+    ).toBe('crece');
+    expect(resolveEffectivePlan(sub({ status: 'canceled' }), during, true, end)).toBe('free');
   });
 });

@@ -21,6 +21,7 @@ import { Role } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlansService } from '../plans/plans.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthenticatedRequest, RequestUser } from '../auth/auth.types';
@@ -62,6 +63,7 @@ export class StorageController {
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly plans: PlansService,
     config: ConfigService<Env, true>,
     @Inject(PLATFORM_SECURITY_CONFIG) private readonly platformSecurity: PlatformSecurityConfig,
   ) {
@@ -100,6 +102,8 @@ export class StorageController {
       throw new BadRequestException(`Unsupported content type: ${file.mimetype}`);
     }
 
+    // Cuota de espacio del plan (solo con los planes encendidos).
+    await this.plans.assertStorageAvailable(parsed.organizationId, file.size);
     await this.storage.saveObject(key, file.buffer, file.mimetype);
     await this.audit.record({
       organizationId: parsed.organizationId,

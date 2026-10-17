@@ -73,4 +73,17 @@ describe('DiskStorageAdapter (T-108)', () => {
     expect(adapter.resolvePublicUrl(`public/${ORG}/a-x.jpg`)).toContain('/storage/public?key=');
     expect(adapter.resolvePublicUrl(`private/${ORG}/a-x.pdf`)).toContain('/storage/private?key=');
   });
+
+  it('measures what an org holds across public and private, and only that org', async () => {
+    const other = '7f9619ff-8b86-d011-b42d-00cf4fc964ff';
+    expect(await adapter.measureOrganizationUsage(ORG)).toBe(0);
+    await adapter.saveObject(`public/${ORG}/a-foto.jpg`, Buffer.alloc(100));
+    await adapter.saveObject(`private/${ORG}/b-acta.pdf`, Buffer.alloc(50));
+    await adapter.saveObject(`public/${other}/c-foto.jpg`, Buffer.alloc(999));
+    expect(await adapter.measureOrganizationUsage(ORG)).toBe(150);
+    // The cached total follows new saves.
+    await adapter.saveObject(`public/${ORG}/d-foto.jpg`, Buffer.alloc(10));
+    expect(await adapter.measureOrganizationUsage(ORG)).toBe(160);
+    expect(await makeAdapter(root).measureOrganizationUsage(other)).toBe(999);
+  });
 });

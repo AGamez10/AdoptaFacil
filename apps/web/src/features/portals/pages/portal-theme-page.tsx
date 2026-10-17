@@ -235,6 +235,11 @@ export function PortalThemePage() {
   const [logoPosition, setLogoPosition] = useState<PortalLogoPosition>('left');
   const [socialNavPosition, setSocialNavPosition] = useState<PortalSocialNavPosition>('right');
   const [template, setTemplate] = useState<PortalTemplateId>('clasica');
+  // Planes: si el plan incluye las plantillas de pago y cuál quedó bloqueada.
+  // Con una bloqueada, guardar sin cambiar de plantilla no la reemplaza.
+  const [premiumAvailable, setPremiumAvailable] = useState(true);
+  const [lockedTemplate, setLockedTemplate] = useState<PortalTemplateId | undefined>(undefined);
+  const [templateTouched, setTemplateTouched] = useState(false);
   const [templateOptions, setTemplateOptions] = useState<PortalTemplateOptions>({});
   // Historias: video de portada. `coverVideoKey` undefined = sin cambios.
   const [coverVideoUrl, setCoverVideoUrl] = useState<string | undefined>(undefined);
@@ -268,6 +273,8 @@ export function PortalThemePage() {
           resolveTemplateOptions(safeTemplate(config.template), config.templateOptions),
         );
         setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
+        setPremiumAvailable(config.premiumDesignsAvailable !== false);
+        setLockedTemplate(config.lockedTemplate);
         setSlug(org?.slug ?? undefined);
         setOrgName(org?.name ?? undefined);
       })
@@ -287,6 +294,7 @@ export function PortalThemePage() {
 
   // Al cambiar de plantilla, sus ajustes arrancan en los valores por defecto.
   const chooseTemplate = (next: PortalTemplateId) => {
+    setTemplateTouched(true);
     setTemplate(next);
     setTemplateOptions(resolveTemplateOptions(next, next === template ? templateOptions : {}));
   };
@@ -336,8 +344,9 @@ export function PortalThemePage() {
           tokens: tokensFromForm(form),
           logoPosition,
           socialNavPosition,
-          template,
-          templateOptions,
+          // Con una plantilla de pago bloqueada, guardar colores no la reemplaza
+          // por la gratuita que se está mostrando: se omite la plantilla.
+          ...(lockedTemplate && !templateTouched ? {} : { template, templateOptions }),
           ...(coverVideoKey !== undefined ? { coverVideoKey } : {}),
         },
       });
@@ -348,6 +357,9 @@ export function PortalThemePage() {
       setTemplateOptions(
         resolveTemplateOptions(safeTemplate(themeConfig.template), themeConfig.templateOptions),
       );
+      setPremiumAvailable(themeConfig.premiumDesignsAvailable !== false);
+      setLockedTemplate(themeConfig.lockedTemplate);
+      setTemplateTouched(false);
       if (coverVideoKey !== undefined) {
         setCoverVideoUrl(safeMediaUrl(themeConfig.coverVideoUrl));
         setCoverVideoKey(undefined);
@@ -433,7 +445,7 @@ export function PortalThemePage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
           <div className="space-y-6">
-            <TemplateUpsell />
+            <TemplateUpsell premiumAvailable={premiumAvailable} lockedTemplate={lockedTemplate} />
 
             {/* Ola 3: plantilla del portal. Mismo contenido, otra estructura;
                 el nivel de plan es un parámetro (TODO(client)). */}
@@ -445,7 +457,11 @@ export function PortalThemePage() {
                 </p>
               </CardHeader>
               <CardContent>
-                <TemplatePicker value={template} onChange={chooseTemplate} />
+                <TemplatePicker
+                  value={template}
+                  onChange={chooseTemplate}
+                  premiumAvailable={premiumAvailable}
+                />
               </CardContent>
             </Card>
 

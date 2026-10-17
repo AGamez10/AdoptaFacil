@@ -87,6 +87,7 @@ const CONTENT_TYPE_BY_EXT: Record<string, string> = {
   gif: 'image/gif',
   pdf: 'application/pdf',
   mp4: 'video/mp4',
+  mov: 'video/quicktime',
   webm: 'video/webm',
 };
 

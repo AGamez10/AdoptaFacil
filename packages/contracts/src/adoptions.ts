@@ -506,8 +506,16 @@ export interface FollowUpQuestion {
   required?: boolean;
 }
 
-/** Tipo de evidencia asociada a un hito. */
-export type FollowUpEvidenceKind = 'photo' | 'questionnaire';
+/** Tipo de evidencia asociada a un hito. `video` es aditivo (2026-10-17). */
+export type FollowUpEvidenceKind = 'photo' | 'questionnaire' | 'video';
+
+/** Duración máxima del video de seguimiento (aprobada por el cliente el 2026-10-17). */
+export const FOLLOWUP_VIDEO_MAX_SECONDS = 30;
+/** Peso máximo por defecto del video de seguimiento, en MB. Configurable en el
+ *  servidor (`FOLLOWUP_VIDEO_MAX_MB`). TODO(client): confirmar los 50 MB. */
+export const FOLLOWUP_VIDEO_DEFAULT_MAX_MB = 50;
+/** Formatos de video aceptados: los que graban las cámaras de los celulares. */
+export const FOLLOWUP_VIDEO_CONTENT_TYPES = ['video/mp4', 'video/quicktime'] as const;
 
 /**
  * Evidencia de un hito (foto vía StoragePort y/o respuestas del cuestionario).
@@ -518,7 +526,8 @@ export interface AdoptionFollowUpEvidence {
   milestoneId: string;
   kind: FollowUpEvidenceKind;
   answers?: Record<string, unknown>;
-  /** URL pública de la foto (resuelta por el StoragePort), si aplica. */
+  /** URL de la foto o del video (resuelta por el StoragePort), si aplica.
+   *  Con `kind: 'video'` apunta al video. */
   photoUrl?: string;
   /** Clave opaca de almacenamiento (StoragePort), si aplica. */
   storageRef?: string;

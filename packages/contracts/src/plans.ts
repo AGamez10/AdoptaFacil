@@ -23,6 +23,11 @@ export const PLAN_CAPABILITIES = [
   /** All public-portal designs. Client decision (2026-10-16): every current
    *  design is free on every plan; future "super Pro" designs will be paid. */
   'portalAllDesigns',
+  /** Premium ("super Pro") portal designs, the ones with `tier: 'paid'` in
+   *  `PORTAL_TEMPLATES`. Client decision (2026-10-17): free for everyone during
+   *  the launch promotion; afterwards they need a paid plan, and an org that
+   *  stops paying falls back to a free design (its choice is kept, not erased). */
+  'portalPremiumDesigns',
   /** Section order, typography, cover gallery or video on the portal. */
   'portalAdvancedCustomization',
   /** Hide the "Hecho con AdoptaFácil" seal on the portal. */
@@ -66,6 +71,7 @@ export interface PlanDefinition {
 
 const NONE: Record<PlanCapability, boolean> = {
   portalAllDesigns: false,
+  portalPremiumDesigns: false,
   portalAdvancedCustomization: false,
   portalRemoveSeal: false,
   customDomain: false,
@@ -99,6 +105,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     capabilities: {
       ...NONE,
       portalAllDesigns: true,
+      portalPremiumDesigns: true,
       portalAdvancedCustomization: true,
       portalRemoveSeal: true,
       brandedEmails: true,
@@ -115,6 +122,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     limits: { members: null, storageMb: 50 * 1024, portalDesigns: 5 },
     capabilities: {
       portalAllDesigns: true,
+      portalPremiumDesigns: true,
       portalAdvancedCustomization: true,
       portalRemoveSeal: true,
       customDomain: true,
@@ -135,6 +143,16 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
  * `currentPeriodEnd` = fecha de lanzamiento + estos meses.
  */
 export const LAUNCH_PRO_PROMO_MONTHS = 3;
+
+/**
+ * Last instant of the launch promotion: `launchDate` + {@link LAUNCH_PRO_PROMO_MONTHS}
+ * calendar months (UTC). The launch date is the server setting `PLAN_LAUNCH_DATE`.
+ */
+export function launchPromoEnd(launchDate: Date): Date {
+  const end = new Date(launchDate.getTime());
+  end.setUTCMonth(end.getUTCMonth() + LAUNCH_PRO_PROMO_MONTHS);
+  return end;
+}
 
 /** IVA rate applied on top of the plan price (the subscription is a taxed
  *  service of AdoptaFácil). TODO(client): confirmar con el contador. */
@@ -180,9 +198,14 @@ export interface OrganizationPlanView {
   subscription: OrganizationSubscription | null;
   /** When the effective paid plan falls back to free if not renewed (ISO). */
   graceEndsAt: string | null;
+  /** End of the launch promotion (Pro for free) while it applies to this org
+   *  (no paid subscription yet), ISO-8601 UTC; absent/null otherwise. */
+  launchPromoEndsAt?: string | null;
   limits: PlanLimits;
   capabilities: Record<PlanCapability, boolean>;
-  usage: { members: number };
+  /** `storageMb`: espacio usado en MB (redondeado hacia arriba), cuando el
+   *  almacenamiento sabe medirlo. */
+  usage: { members: number; storageMb?: number };
   catalog: PlanDefinition[];
 }
 
@@ -240,6 +263,7 @@ export function graceEnd(currentPeriodEnd: Date): Date {
 /**
  * The plan in effect for an organization at `now`:
  * - enforcement off → `pro` (nothing is gated);
+ * - no subscription and the launch promotion still running (`promoEndsAt`) → `pro`;
  * - no subscription or `canceled` → `free`;
  * - otherwise the subscribed plan until `currentPeriodEnd` + grace days, then
  *   `free`. An open-ended period (`null`) never lapses.
@@ -248,8 +272,10 @@ export function resolveEffectivePlan(
   subscription: Pick<OrganizationSubscription, 'plan' | 'status' | 'currentPeriodEnd'> | null,
   now: Date,
   enforced: boolean,
+  promoEndsAt?: Date | null,
 ): PlanKey {
   if (!enforced) return 'pro';
+  if (!subscription && promoEndsAt && now.getTime() <= promoEndsAt.getTime()) return 'pro';
   if (!subscription || subscription.status === 'canceled') return 'free';
   if (subscription.currentPeriodEnd === null) return subscription.plan;
   const end = new Date(subscription.currentPeriodEnd);

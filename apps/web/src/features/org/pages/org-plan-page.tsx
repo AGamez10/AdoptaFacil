@@ -23,10 +23,12 @@ import {
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
+import { officialWhatsappUrl } from '../../../lib/contact';
 
 /** What each paid capability means for a shelter, in its own words. */
 const CAPABILITY_LABELS: Record<PlanCapability, string> = {
   portalAllDesigns: 'Todos los diseños de portal público',
+  portalPremiumDesigns: 'Plantillas Pro del portal (como Historias, con video)',
   portalAdvancedCustomization: 'Personalización avanzada del portal',
   portalRemoveSeal: 'Portal sin el sello "Hecho con AdoptaFácil"',
   customDomain: 'Dominio propio (www.turefugio.org)',
@@ -67,13 +69,24 @@ const colombiaDate = new Intl.DateTimeFormat('es-CO', {
 
 function formatLimit(limit: PlanLimit, value: number | null): string {
   if (value === null) return 'Sin límite';
-  if (limit === 'storageMb') return value >= 1024 ? `${value / 1024} GB` : `${value} MB`;
+  if (limit === 'storageMb')
+    return value >= 1024 ? `${Math.round((value / 1024) * 10) / 10} GB` : `${value} MB`;
   return String(value);
 }
 
 /** Where a shelter asks for a paid plan while billing is manual (payment link
- *  or transfer to AdoptaFácil + electronic invoice). TODO(client): canal real. */
-const BILLING_CONTACT_URL = import.meta.env.VITE_BILLING_CONTACT_URL;
+ *  or transfer to AdoptaFácil + electronic invoice). `VITE_BILLING_CONTACT_URL`
+ *  overrides it; by default the official WhatsApp opens with the plan written. */
+const BILLING_CONTACT_URL = import.meta.env.VITE_BILLING_CONTACT_URL as string | undefined;
+
+function planRequestUrl(plan: PlanDefinition): string {
+  if (BILLING_CONTACT_URL) {
+    return `${BILLING_CONTACT_URL}${BILLING_CONTACT_URL.includes('?') ? '&' : '?'}plan=${plan.key}`;
+  }
+  return officialWhatsappUrl(
+    `Hola, quiero el plan ${plan.name} de AdoptaFácil para mi organización.`,
+  );
+}
 
 function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean }) {
   const paid = plan.monthlyPriceCop > 0;
@@ -116,20 +129,15 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
       </CardContent>
       {paid && !current && (
         <CardFooter>
-          {BILLING_CONTACT_URL ? (
-            <a
-              className={cn(buttonVariants(), 'w-full')}
-              href={`${BILLING_CONTACT_URL}${BILLING_CONTACT_URL.includes('?') ? '&' : '?'}plan=${plan.key}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Quiero el plan {plan.name}
-            </a>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Muy pronto podrás pasarte a {plan.name} desde aquí.
-            </p>
-          )}
+          <a
+            className={cn(buttonVariants(), 'w-full')}
+            href={planRequestUrl(plan)}
+            target="_blank"
+            rel="noreferrer"
+            data-testid={`plan-request-${plan.key}`}
+          >
+            Quiero el plan {plan.name}
+          </a>
         </CardFooter>
       )}
     </Card>
@@ -200,11 +208,13 @@ export function OrgPlanPage() {
           <CardDescription>
             {!view.enforced
               ? 'Durante el piloto tienes todas las funciones sin costo.'
-              : periodEnd
-                ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
-                : current === 'free'
-                  ? 'Sin costo y sin fecha de vencimiento.'
-                  : 'Sin fecha de vencimiento.'}
+              : view.launchPromoEndsAt
+                ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
+                : periodEnd
+                  ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
+                  : current === 'free'
+                    ? 'Sin costo y sin fecha de vencimiento.'
+                    : 'Sin fecha de vencimiento.'}
             {view.graceEndsAt && view.subscription?.status === 'past_due' && (
               <>
                 {' '}
@@ -220,6 +230,14 @@ export function OrgPlanPage() {
             {LIMIT_LABELS.members}: <strong>{view.usage.members}</strong>
             {membersMax !== null && ` de ${membersMax}`}
           </p>
+          {view.usage.storageMb !== undefined && (
+            <p className="text-sm">
+              {LIMIT_LABELS.storageMb}:{' '}
+              <strong>{formatLimit('storageMb', view.usage.storageMb)}</strong>
+              {view.limits.storageMb !== null &&
+                ` de ${formatLimit('storageMb', view.limits.storageMb)}`}
+            </p>
+          )}
         </CardContent>
       </Card>
 

@@ -352,6 +352,44 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     expect(screen.getByRole('radio', { name: /Carnet/ })).toBeChecked();
   });
 
+  it('planes: sin plan que incluya Historias la bloquea, explica la vuelta a Clásica y no la borra al guardar', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const locked = {
+      tokens: {},
+      template: 'clasica',
+      lockedTemplate: 'historias',
+      premiumDesignsAvailable: false,
+    };
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/org/profile')) return { id: 'org-1', name: 'Org' };
+      if (url.includes('/org/status')) return { organizationId: 'org-1', status: 'approved' };
+      return locked;
+    });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByRole('radio', { name: /Clásica/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Historias/ })).toBeDisabled();
+    expect(screen.getByTestId('template-option-historias')).toHaveAttribute('data-locked', 'true');
+    expect(screen.getByTestId('template-upsell')).toHaveTextContent(
+      /volvió a la plantilla Clásica/,
+    );
+    expect(screen.getByRole('link', { name: 'Ver planes' })).toHaveAttribute(
+      'href',
+      '/organizacion/plan',
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => {
+      const put = calls.find((c) => c.init?.method === 'PUT');
+      expect(put).toBeDefined();
+      const body = JSON.parse(String(put?.init?.body));
+      // Guardar colores no reemplaza la plantilla elegida por la gratuita que se muestra.
+      expect(body.template).toBeUndefined();
+      expect(body.templateOptions).toBeUndefined();
+    });
+  });
+
   it('muestra los ajustes de la plantilla, los refleja en la vista previa y los envía al guardar', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     stubFetch((url, init) => {
