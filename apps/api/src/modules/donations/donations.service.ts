@@ -52,6 +52,10 @@ import {
   loadEpaycoKeysEncryptionKey,
 } from '../payments/epayco-keys-crypto';
 import { loadEpaycoCollector } from '../payments/epayco-connect.service';
+import {
+  loadMercadoPagoTokensEncryptionKey,
+  openMercadoPagoToken,
+} from '../payments/mercadopago-tokens-crypto';
 
 /** Reference/invoice shape we accept from a gateway body before querying. */
 const GATEWAY_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -140,6 +144,8 @@ export interface WebhookOutcome {
 export class DonationsService {
   private readonly logger = new Logger('Donations');
   private readonly webBaseUrl: string;
+  /** Mercado Pago tokens are stored encrypted (mercadopago-tokens-crypto.ts). */
+  private readonly mpTokenKey = loadMercadoPagoTokensEncryptionKey();
   private readonly certificatesEnabled: boolean;
   /** Real gateway ⇒ every charge needs the organization's own account. */
   private readonly requiresCollector: boolean;
@@ -819,7 +825,10 @@ export class DonationsService {
     if (!row?.accessToken || !row.mpUserId) {
       return undefined;
     }
-    return { accessToken: row.accessToken, accountId: row.mpUserId };
+    return {
+      accessToken: openMercadoPagoToken(row.accessToken, this.mpTokenKey),
+      accountId: row.mpUserId,
+    };
   }
 
   /** ADR-PAG-002: the org's own ePayco keys, decrypted under its RLS context. */
