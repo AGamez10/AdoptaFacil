@@ -40,6 +40,8 @@ export function composeEmail(
 
   const html = renderLayout({
     theme: def.theme,
+    accentColor: content.accentColor,
+    icon: content.icon,
     category: def.category,
     preheaderHtml: renderInlineHtml(content.preheader, values, true),
     headingHtml: renderInlineHtml(content.heading, values, true),

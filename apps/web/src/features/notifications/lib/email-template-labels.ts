@@ -1,4 +1,4 @@
-import type { EmailCategory, EmailTheme } from '@adoptafacil/contracts';
+import type { EmailAccentColor, EmailCategory, EmailTheme } from '@adoptafacil/contracts';
 
 export const CATEGORY_LABELS: Record<EmailCategory, { title: string; hint: string }> = {
   transactional: {
@@ -29,3 +29,15 @@ export const FIELD_HELP = {
   ctaLabel: 'Texto del botón. El enlace del botón lo pone AdoptaFácil y no se puede cambiar.',
   footerNote: 'Recuadro opcional al final del mensaje.',
 } as const;
+
+/** Same hex values as the API email layout (decorative accent only). */
+export const ACCENT_COLOR_LABELS: Record<EmailAccentColor, { label: string; hex: string }> = {
+  teal: { label: 'Verde agua', hex: '#25BAA6' },
+  navy: { label: 'Azul noche', hex: '#202D3E' },
+  coral: { label: 'Coral', hex: '#FF8F66' },
+  gold: { label: 'Dorado', hex: '#F2B84B' },
+  blue: { label: 'Azul', hex: '#4F7CAC' },
+  red: { label: 'Rojo', hex: '#E5604A' },
+  purple: { label: 'Morado', hex: '#8E6CC8' },
+  green: { label: 'Verde', hex: '#4C9A52' },
+};

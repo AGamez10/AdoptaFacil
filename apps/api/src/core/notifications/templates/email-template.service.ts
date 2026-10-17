@@ -6,14 +6,18 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type EmailTemplateVersion as VersionRow } from '@prisma/client';
-import type {
-  CreateEmailTemplateVersionInput,
-  EmailEventKey,
-  EmailPreview,
-  EmailTemplateContent,
-  EmailTemplateDetail,
-  EmailTemplateSummary,
-  EmailTemplateVersion,
+import {
+  EMAIL_ACCENT_COLORS,
+  EMAIL_ICONS,
+  type CreateEmailTemplateVersionInput,
+  type EmailAccentColor,
+  type EmailEventKey,
+  type EmailIcon,
+  type EmailPreview,
+  type EmailTemplateContent,
+  type EmailTemplateDetail,
+  type EmailTemplateSummary,
+  type EmailTemplateVersion,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../../config/env.validation';
 import { AuditService } from '../../audit/audit.service';
@@ -210,6 +214,8 @@ export class EmailTemplateService {
           ...content,
           ctaLabel: content.ctaLabel ?? null,
           footerNote: content.footerNote ?? null,
+          accentColor: content.accentColor ?? null,
+          icon: content.icon ?? null,
           changeNote: input.changeNote?.trim() || null,
           createdByUserId: actorUserId,
         },
@@ -360,6 +366,8 @@ function pickContent(input: EmailTemplateContent): EmailTemplateContent {
     body: input.body,
     ...(input.ctaLabel?.trim() ? { ctaLabel: input.ctaLabel } : {}),
     ...(input.footerNote?.trim() ? { footerNote: input.footerNote } : {}),
+    ...(input.accentColor ? { accentColor: input.accentColor } : {}),
+    ...(input.icon ? { icon: input.icon } : {}),
   };
 }
 
@@ -371,7 +379,17 @@ function toContent(row: VersionRow): EmailTemplateContent {
     body: row.body,
     ...(row.ctaLabel ? { ctaLabel: row.ctaLabel } : {}),
     ...(row.footerNote ? { footerNote: row.footerNote } : {}),
+    ...(isAccentColor(row.accentColor) ? { accentColor: row.accentColor } : {}),
+    ...(isIcon(row.icon) ? { icon: row.icon } : {}),
   };
+}
+
+function isAccentColor(value: string | null): value is EmailAccentColor {
+  return (EMAIL_ACCENT_COLORS as readonly string[]).includes(value ?? '');
+}
+
+function isIcon(value: string | null): value is EmailIcon {
+  return (EMAIL_ICONS as readonly string[]).includes(value ?? '');
 }
 
 function toVersion(row: VersionRow): EmailTemplateVersion {

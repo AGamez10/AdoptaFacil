@@ -23,6 +23,9 @@ model EmailTemplateVersion {
   body            String
   ctaLabel        String?  @map("cta_label")
   footerNote      String?  @map("footer_note")
+  /// Design (item 12): closed palette key and header icon; null = theme default.
+  accentColor     String?  @map("accent_color")
+  icon            String?
   changeNote      String?  @map("change_note")
   createdByUserId String?  @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")

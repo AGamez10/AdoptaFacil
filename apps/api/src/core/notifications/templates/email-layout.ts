@@ -1,4 +1,9 @@
-import type { EmailCategory, EmailTheme } from '@adoptafacil/contracts';
+import type {
+  EmailAccentColor,
+  EmailCategory,
+  EmailIcon,
+  EmailTheme,
+} from '@adoptafacil/contracts';
 import { escapeHtml } from './email-render';
 
 /**
@@ -31,6 +36,18 @@ const THEMES: Record<EmailTheme, ThemeStyle> = {
   alert: { accent: '#E5604A', soft: '#FDECE8', icon: '⏰', kicker: 'Aviso importante' },
 };
 
+// Accent palette the editor offers (item 12). Decorative only, like the themes.
+const ACCENTS: Record<EmailAccentColor, { accent: string; soft: string }> = {
+  teal: { accent: '#25BAA6', soft: '#E6F7F4' },
+  navy: { accent: '#202D3E', soft: '#E8ECF2' },
+  coral: { accent: '#FF8F66', soft: '#FFF0EA' },
+  gold: { accent: '#F2B84B', soft: '#FDF4E2' },
+  blue: { accent: '#4F7CAC', soft: '#EAF1F8' },
+  red: { accent: '#E5604A', soft: '#FDECE8' },
+  purple: { accent: '#8E6CC8', soft: '#F1ECFA' },
+  green: { accent: '#4C9A52', soft: '#EBF5EC' },
+};
+
 const INK = '#202D3E';
 const MUTED = '#5B6878';
 const BUTTON = '#198072';
@@ -39,6 +56,9 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial
 
 export interface LayoutInput {
   theme: EmailTheme;
+  /** Optional overrides chosen in the editor (closed palette, validated). */
+  accentColor?: EmailAccentColor;
+  icon?: EmailIcon;
   category: EmailCategory;
   /** Escaped HTML. */
   preheaderHtml: string;
@@ -61,7 +81,11 @@ export function themeStyle(theme: EmailTheme): ThemeStyle {
 }
 
 export function renderLayout(input: LayoutInput): string {
-  const theme = THEMES[input.theme];
+  const theme = {
+    ...THEMES[input.theme],
+    ...(input.accentColor ? ACCENTS[input.accentColor] : {}),
+    ...(input.icon ? { icon: input.icon } : {}),
+  };
   const org = input.organizationName ? escapeHtml(input.organizationName) : '';
   const web = escapeHtml(input.webBaseUrl);
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EMAIL_ACCENT_COLORS, EMAIL_ICONS } from '@adoptafacil/contracts';
 import { CONTENT_LIMITS } from './templates/email-render';
 
 /** One admin-edited copy. `.strict()` rejects unknown keys. The
@@ -11,6 +12,8 @@ const contentShape = {
   body: z.string().trim().min(1).max(CONTENT_LIMITS.body),
   ctaLabel: z.string().trim().max(CONTENT_LIMITS.ctaLabel).optional(),
   footerNote: z.string().trim().max(CONTENT_LIMITS.footerNote).optional(),
+  accentColor: z.enum(EMAIL_ACCENT_COLORS).optional(),
+  icon: z.enum(EMAIL_ICONS).optional(),
 };
 
 export const emailTemplateContentSchema = z.object(contentShape).strict();

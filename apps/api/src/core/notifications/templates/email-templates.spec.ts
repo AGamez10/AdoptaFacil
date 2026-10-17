@@ -152,6 +152,20 @@ describe('composeEmail', () => {
     expect(email.text).not.toContain('**');
   });
 
+  it('uses the accent color and icon chosen in the editor, else the theme ones', () => {
+    const d = def('donation.thanks');
+    const data = { monto: 1, enlace: 'https://app.adoptafacil.test/x' };
+    const themed = composeEmail(d, d.defaults, data, { webBaseUrl: WEB });
+    expect(themed.html).toContain('background:#FF8F66;');
+    expect(themed.html).toContain('💛');
+    const custom = composeEmail(d, { ...d.defaults, accentColor: 'purple', icon: '🎉' }, data, {
+      webBaseUrl: WEB,
+    });
+    expect(custom.html).toContain('background:#8E6CC8;');
+    expect(custom.html).toContain('🎉');
+    expect(custom.html).not.toContain('background:#FF8F66;');
+  });
+
   it('omits the button when the URL value is unsafe', () => {
     const d = def('donation.thanks');
     const email = composeEmail(
