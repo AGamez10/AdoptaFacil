@@ -8,6 +8,7 @@ export const FEATURE_ENV_KEYS = {
   sponsorships: 'FEATURE_SPONSORSHIPS',
   donationCertificates: 'FEATURE_DONATION_CERTIFICATES',
   community: 'FEATURE_COMMUNITY',
+  communityWall: 'FEATURE_COMMUNITY_WALL',
   reputation: 'FEATURE_REPUTATION',
   resources: 'FEATURE_RESOURCES',
   marketplace: 'FEATURE_MARKETPLACE',
@@ -19,5 +20,7 @@ export function readFeatureFlags(config: ConfigService<Env, true>): FeatureFlags
   for (const [feature, envKey] of Object.entries(FEATURE_ENV_KEYS)) {
     flags[feature as FeatureKey] = config.get(envKey, { infer: true }) === true;
   }
+  // El muro es una parte de Comunidad: sin Comunidad no hay muro.
+  flags.communityWall = flags.communityWall && flags.community;
   return flags;
 }

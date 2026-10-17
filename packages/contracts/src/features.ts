@@ -12,6 +12,9 @@ export const FEATURE_KEYS = [
   'sponsorships',
   'donationCertificates',
   'community',
+  /** Muro de publicaciones de Comunidad. Solo se enciende si `community`
+   *  también lo está, para que el directorio pueda salir sin el muro. */
+  'communityWall',
   'reputation',
   'resources',
   'marketplace',
@@ -38,6 +41,7 @@ export const CLOSED_CAPABILITIES: PublicCapabilities = {
     sponsorships: false,
     donationCertificates: false,
     community: false,
+    communityWall: false,
     reputation: false,
     resources: false,
     marketplace: false,

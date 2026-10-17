@@ -100,6 +100,11 @@ const CommunityFeedPage = lazyPage(loadCommunity, 'CommunityFeedPage');
 const CommunityModerationPage = lazyPage(loadCommunity, 'CommunityModerationPage');
 const MyPostsPage = lazyPage(loadCommunity, 'MyPostsPage');
 const PostDetailPage = lazyPage(loadCommunity, 'PostDetailPage');
+const MyPetsPage = lazyPage(loadCommunity, 'MyPetsPage');
+const MyServicesPage = lazyPage(loadCommunity, 'MyServicesPage');
+const ServiceDetailPage = lazyPage(loadCommunity, 'ServiceDetailPage');
+const ServicesDirectoryPage = lazyPage(loadCommunity, 'ServicesDirectoryPage');
+const ServicesModerationPage = lazyPage(loadCommunity, 'ServicesModerationPage');
 const loadAnimals = () => import('../../features/animals');
 const AnimalsPage = lazyPage(loadAnimals, 'AnimalsPage');
 const RemindersInboxPage = lazyPage(loadAnimals, 'RemindersInboxPage');
@@ -273,6 +278,11 @@ export function AppRoutes() {
           /organizacion/marketplace below. */}
           <Route path="/marketplace" element={<PublicMarketplacePage />} />
           <Route path="/marketplace/:id" element={<PublicProductDetailPage />} />
+          {/* Comunidad · directorio PÚBLICO de servicios del ecosistema (sin
+          sesión): solo perfiles aprobados por la plataforma. Gestión propia en
+          /mi-negocio y ficha privada en /mis-mascotas, abajo (RequireAuth). */}
+          <Route path="/servicios" element={<ServicesDirectoryPage />} />
+          <Route path="/servicios/:id" element={<ServiceDetailPage />} />
           {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
           no auth required to read; an authenticated visitor sees a "leave a
           review" form here instead of on a separate route. */}
@@ -440,6 +450,12 @@ export function AppRoutes() {
                 <Route path="comunidad" element={<CommunityFeedPage />} />
                 <Route path="comunidad/:id" element={<PostDetailPage />} />
                 <Route path="mis-publicaciones" element={<MyPostsPage />} />
+                {/* Comunidad · sin `@Roles` en el backend: una Persona gestiona su
+                propio tenant y, en una organización, el servidor exige
+                Owner/Administrator (403 si no). La ficha de mascota es solo
+                para cuentas de persona (lo aplica el servidor). */}
+                <Route path="mi-negocio" element={<MyServicesPage />} />
+                <Route path="mis-mascotas" element={<MyPetsPage />} />
                 {/* M05/RF14 (F-3) · certificado de donación REAL, leído por donationId
               (nav-state) desde el recibo real de la donación. */}
                 <Route path="certificado" element={<CertificateEmissionPage />} />
@@ -640,6 +656,14 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={COMMUNITY_MODERATION_ROLES}>
                       <CommunityModerationPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="plataforma/servicios"
+                  element={
+                    <RequireRoles roles={COMMUNITY_MODERATION_ROLES}>
+                      <ServicesModerationPage />
                     </RequireRoles>
                   }
                 />
