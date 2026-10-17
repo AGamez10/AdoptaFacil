@@ -1,7 +1,10 @@
 import 'reflect-metadata';
 import type { FeatureKey } from '@adoptafacil/contracts';
 import { CampaignFundingController } from '../../modules/campaigns/campaign-funding.controller';
+import { CommunityModerationController } from '../../modules/community/community-moderation.controller';
 import { CommunityModule } from '../../modules/community/community.module';
+import { CommunityPostsController } from '../../modules/community/community-posts.controller';
+import { PublicCommunityServicesController } from '../../modules/community/community-directory.controller';
 import { OrgDonationsDashboardController } from '../../modules/dashboards/org-donations-dashboard.controller';
 import { DonationCertificatePublicController } from '../../modules/donations/donation-certificate-public.controller';
 import { DonationsModule } from '../../modules/donations/donations.module';
@@ -51,6 +54,12 @@ describe('feature flag coverage (R1-1)', () => {
 
   it('gates the public certificate verification behind donationCertificates', () => {
     expect(featuresOf(DonationCertificatePublicController)).toEqual(['donationCertificates']);
+  });
+
+  it('gates the community wall behind its own flag, and the directory without it', () => {
+    expect(featuresOf(CommunityPostsController)).toEqual(['community', 'communityWall']);
+    expect(featuresOf(CommunityModerationController)).toEqual(['community', 'communityWall']);
+    expect(featuresOf(PublicCommunityServicesController)).toEqual(['community']);
   });
 
   it('gates money surfaces that live in MVP modules', () => {

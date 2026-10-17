@@ -53,8 +53,14 @@ export function PublicFooter() {
         <nav aria-label="Enlaces del pie de página" className={styles.footer__cols}>
           <div className={styles.footer__col}>
             <p className={styles.footer__title}>Ayudar</p>
-            <Link to="/adoptar" className={styles.footer__link}>
-              Animales en adopción
+            <Link to="/adoptar/perros" className={styles.footer__link}>
+              Perros en adopción
+            </Link>
+            <Link to="/adoptar/gatos" className={styles.footer__link}>
+              Gatos en adopción
+            </Link>
+            <Link to="/guias" className={styles.footer__link}>
+              Guías para adoptar
             </Link>
             <Link to="/campanas" className={styles.footer__link}>
               Campañas

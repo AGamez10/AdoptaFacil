@@ -4,6 +4,8 @@ import { cn, EmptyState, Skeleton } from '@adoptafacil/ui';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { listPublicCampaigns } from '../api/public-campaigns';
 import { CampaignCard } from '../components/campaign-card';
+import { STATIC_PAGES } from '../../../seo/page-meta.js';
+import { useSeo } from '../../../seo/seo';
 import styles from './public-campaigns-page.module.scss';
 
 type ListState = 'loading' | 'ready' | 'error';
@@ -19,6 +21,7 @@ const PAGE_SIZE = 24;
 export function PublicCampaignsPage() {
   const [items, setItems] = useState<CampaignPublic[]>([]);
   const [state, setState] = useState<ListState>('loading');
+  useSeo({ ...STATIC_PAGES['/campanas'], path: '/campanas' });
 
   useEffect(() => {
     let active = true;

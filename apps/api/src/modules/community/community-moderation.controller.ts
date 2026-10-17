@@ -25,7 +25,7 @@ import { RequireFeature } from '../../core/features';
  * funciones SECURITY DEFINER acotadas — mismo patrón que
  * `PlatformDocumentsController` (M01, RF03).
  */
-@RequireFeature('community')
+@RequireFeature('community', 'communityWall')
 @Controller('platform/community/posts')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
