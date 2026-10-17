@@ -9,10 +9,15 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Máquina donde corren los jobs: variable de repositorio CI_RUNS_ON (JSON).
+#   - sin definir            -> "ubuntu-latest" (máquinas de GitHub, consumen minutos)
+#   - ["self-hosted","linux"] -> runner propio en WSL2 (docs/operacion/runner-propio.md)
+# Los puertos de los servicios no chocan con el Postgres (5433) ni el Redis
+# (6379) de desarrollo, porque en un runner propio se publican en el equipo.
 jobs:
   quality:
     name: Lint · Typecheck · Build · Unit tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +49,7 @@ jobs:
 
   rls-no-leak:
     name: rls-no-leak · postura RLS · deriva de esquema (RNF03 gate)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     services:
       postgres:
         image: postgres:16
@@ -53,7 +58,7 @@ jobs:
           POSTGRES_PASSWORD: adoptafacil
           POSTGRES_DB: adoptafacil
         ports:
-          - 5432:5432
+          - 55432:5432
         options: >-
           --health-cmd "pg_isready -U adoptafacil -d adoptafacil"
           --health-interval 5s
@@ -62,7 +67,7 @@ jobs:
       redis:
         image: redis:7
         ports:
-          - 6379:6379
+          - 56379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
@@ -70,11 +75,11 @@ jobs:
           --health-retries 10
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil?schema=public
+      DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:55432/adoptafacil?schema=public
       # Misma base sin el parámetro ?schema= de Prisma (psql lo rechaza).
-      PG_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil
-      DATABASE_URL_APP: postgresql://adoptafacil_app:adoptafacil_app@localhost:5432/adoptafacil?schema=public
-      REDIS_URL: redis://localhost:6379
+      PG_URL: postgresql://adoptafacil:adoptafacil@localhost:55432/adoptafacil
+      DATABASE_URL_APP: postgresql://adoptafacil_app:adoptafacil_app@localhost:55432/adoptafacil?schema=public
+      REDIS_URL: redis://localhost:56379
     steps:
       - uses: actions/checkout@v4
 
@@ -105,7 +110,7 @@ jobs:
       # (trinquete sobre la deriva heredada; ver el script).
       - name: Schema drift
         env:
-          SHADOW_DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil_shadow
+          SHADOW_DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:55432/adoptafacil_shadow
         run: |
           psql "$PG_URL" -c 'CREATE DATABASE adoptafacil_shadow'
           scripts/ci/schema-drift.sh
@@ -115,7 +120,7 @@ jobs:
 
   docker:
     name: Imágenes Docker + compose de producción (arranque de punta a punta)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -185,3 +190,8 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker compose -f deploy/compose.yaml --env-file deploy/.env logs --no-color --tail 200
+
+      # En un runner propio la pila quedaría corriendo en el equipo: se baja siempre.
+      - name: Stop stack
+        if: always()
+        run: docker compose -f deploy/compose.yaml --env-file deploy/.env down -v --remove-orphans || true
