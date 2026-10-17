@@ -82,29 +82,51 @@ function unsubscribeKey(secret: string): Buffer {
   return createHmac('sha256', secret).update('adoptafacil:email-unsubscribe:v1').digest();
 }
 
-export function signUnsubscribe(secret: string, emailHash: string): string {
-  return createHmac('sha256', unsubscribeKey(secret)).update(emailHash).digest('base64url');
+/** With `organizationId` the token covers `hash:orgId`, so an organization's
+ *  link cannot be replayed as a platform-wide opt-out (or for another org). */
+export function signUnsubscribe(
+  secret: string,
+  emailHash: string,
+  organizationId?: string,
+): string {
+  const payload = organizationId ? `${emailHash}:${organizationId}` : emailHash;
+  return createHmac('sha256', unsubscribeKey(secret)).update(payload).digest('base64url');
 }
 
-export function verifyUnsubscribe(secret: string, emailHash: string, token: string): boolean {
+export function verifyUnsubscribe(
+  secret: string,
+  emailHash: string,
+  token: string,
+  organizationId?: string,
+): boolean {
   if (!/^[0-9a-f]{64}$/.test(emailHash) || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
-  const expected = Buffer.from(signUnsubscribe(secret, emailHash));
+  const expected = Buffer.from(signUnsubscribe(secret, emailHash, organizationId));
   const given = Buffer.from(token);
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
-export function buildUnsubscribeUrl(webBaseUrl: string, secret: string, email: string): string {
+function orgParam(organizationId?: string): string {
+  return organizationId ? `&o=${organizationId}` : '';
+}
+
+export function buildUnsubscribeUrl(
+  webBaseUrl: string,
+  secret: string,
+  email: string,
+  organizationId?: string,
+): string {
   const h = hashEmail(email);
-  const t = signUnsubscribe(secret, h);
-  return `${webBaseUrl.replace(/\/+$/, '')}/correo/baja?h=${h}&t=${t}`;
+  const t = signUnsubscribe(secret, h, organizationId);
+  return `${webBaseUrl.replace(/\/+$/, '')}/correo/baja?h=${h}&t=${t}${orgParam(organizationId)}`;
 }
 
 export function buildOneClickUnsubscribeUrl(
   apiBaseUrl: string,
   secret: string,
   email: string,
+  organizationId?: string,
 ): string {
   const h = hashEmail(email);
-  const t = signUnsubscribe(secret, h);
-  return `${apiBaseUrl.replace(/\/+$/, '')}/public/email/unsubscribe?h=${h}&t=${t}`;
+  const t = signUnsubscribe(secret, h, organizationId);
+  return `${apiBaseUrl.replace(/\/+$/, '')}/public/email/unsubscribe?h=${h}&t=${t}${orgParam(organizationId)}`;
 }

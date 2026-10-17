@@ -49,6 +49,7 @@ describe('TemplatedNotificationAdapter', () => {
       'ana@example.co',
       { monto: 1 },
       'Huellitas',
+      undefined,
     );
     const sent = inner.send.mock.calls[0][0];
     expect(sent).toMatchObject({

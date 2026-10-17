@@ -37,7 +37,7 @@ export class TemplatedNotificationAdapter implements NotificationPort {
     if (def.category === 'bulk') {
       let suppressed: boolean;
       try {
-        suppressed = await this.templates.isSuppressed(message.to);
+        suppressed = await this.templates.isSuppressed(message.to, template.organizationId);
       } catch (error) {
         this.logger.warn(
           `bulk email event=${def.event} skipped: opt-out list unavailable (${(error as Error).message})`,
@@ -63,6 +63,7 @@ export class TemplatedNotificationAdapter implements NotificationPort {
         message.to,
         template.data,
         template.organizationName,
+        template.organizationId,
       );
     } catch (error) {
       this.logger.warn(

@@ -28,7 +28,7 @@ export class PublicEmailController {
     const input = new ZodValidationPipe(emailUnsubscribeSchema).transform(
       fromBody ?? query,
     ) as EmailUnsubscribeInput;
-    await this.templates.unsubscribe(input.h, input.t, fromBody ? 'link' : 'one_click');
+    await this.templates.unsubscribe(input.h, input.t, fromBody ? 'link' : 'one_click', input.o);
     return { unsubscribed: true };
   }
 }

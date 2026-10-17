@@ -29,6 +29,9 @@ export interface NotificationTemplateRequest {
   data: Record<string, string | number | null | undefined>;
   /** Shown in the email header and as `{{organizacion}}`. */
   organizationName?: string;
+  /** Additive: the organization a bulk email speaks for. Its unsubscribe link
+   *  then opts the recipient out of THAT organization's emails only. */
+  organizationId?: string;
 }
 
 export interface NotificationMessage {

@@ -173,6 +173,19 @@ describe('Public unsubscribe page', () => {
     expect(JSON.parse(String(call?.init?.body))).toEqual({ h, t });
   });
 
+  it('an organization link opts out of that organization only', async () => {
+    const o = '6f9619ff-8b86-d011-b42d-00cf4fc964ff';
+    const calls = stubFetch(() => ({ unsubscribed: true }));
+    renderShell({ route: `/correo/baja?h=${h}&t=${t}&o=${o}` });
+    expect(
+      await screen.findByText('¿Dejar de recibir correos de esta organización?'),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sí, no quiero recibir más' }));
+    await screen.findByText('Listo, no te escribiremos más novedades');
+    const call = calls.find((c) => c.url.includes('/public/email/unsubscribe'));
+    expect(JSON.parse(String(call?.init?.body))).toEqual({ h, t, o });
+  });
+
   it('rejects a malformed link without calling the API', async () => {
     const calls = stubFetch(() => ({}));
     renderShell({ route: '/correo/baja?h=zz&t=1' });

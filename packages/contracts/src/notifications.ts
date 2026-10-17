@@ -32,6 +32,7 @@ export const EMAIL_EVENT_KEYS = [
   'volunteering.certificate_issued',
   'community.campaign_update',
   'platform.announcement',
+  'org.urgent_announcement',
 ] as const;
 
 export type EmailEventKey = (typeof EMAIL_EVENT_KEYS)[number];
@@ -145,6 +146,42 @@ export interface SendTestEmailResult {
 export interface EmailUnsubscribeInput {
   h: string;
   t: string;
+  /** Additive: present on links of an organization's emails — the opt-out
+   *  then applies only to that organization. */
+  o?: string;
+}
+
+/** Who an organization's urgent announcement goes to (its own contacts). */
+export const ANNOUNCEMENT_AUDIENCES = ['donors', 'adopters', 'volunteers'] as const;
+export type AnnouncementAudience = (typeof ANNOUNCEMENT_AUDIENCES)[number];
+
+/**
+ * Announcements an organization may send per rolling 24 h.
+ * TODO(client): confirmar el tope; 3 al día evita el abuso sin frenar urgencias.
+ */
+export const ORG_ANNOUNCEMENT_DAILY_LIMIT = 3;
+
+/** `GET /org/announcements/audience`: distinct reachable addresses per audience
+ *  (after opt-outs). `total` counts each address once across audiences. */
+export interface OrgAnnouncementAudience {
+  donors: number;
+  adopters: number;
+  volunteers: number;
+  total: number;
+  /** Announcements still allowed in the current 24 h window. */
+  remainingToday: number;
+}
+
+/** `POST /org/announcements` (Owner, Administrator). */
+export interface SendOrgAnnouncementInput {
+  audiences: AnnouncementAudience[];
+  title: string;
+  message: string;
+}
+
+export interface SendOrgAnnouncementResult {
+  /** Emails enqueued (opted-out addresses are skipped at delivery). */
+  recipients: number;
 }
 
 export interface EmailUnsubscribeResult {

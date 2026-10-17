@@ -41,7 +41,7 @@ describe('email catalog', () => {
       EMAIL_CATALOG.filter((d) => d.category === 'bulk')
         .map((d) => d.event)
         .sort(),
-    ).toEqual(['community.campaign_update', 'platform.announcement']);
+    ).toEqual(['community.campaign_update', 'org.urgent_announcement', 'platform.announcement']);
     expect(EMAIL_CATALOG.filter((d) => d.required).map((d) => d.event)).toEqual([
       'auth.password_reset',
     ]);
