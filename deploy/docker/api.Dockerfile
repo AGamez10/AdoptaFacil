@@ -8,10 +8,10 @@
 # postura RLS (deploy/scripts/migrate.sh). Los colectores BullMQ corren dentro
 # del mismo proceso de la API: no hay contenedor de workers aparte.
 
-ARG NODE_IMAGE=node:20-bookworm-slim
+ARG NODE_IMAGE=node:24-bookworm-slim
 # openssl: lo exige el motor de consultas de Prisma (debian-openssl-3.0.x).
 # Solo para verificar sin acceso a los repositorios de Debian se puede construir
-# con --build-arg NODE_IMAGE=node:20-bookworm --build-arg APT_PACKAGES=
+# con --build-arg NODE_IMAGE=node:24-bookworm --build-arg APT_PACKAGES=
 # (la imagen completa ya trae libssl3 y certificados).
 ARG APT_PACKAGES="openssl ca-certificates"
 

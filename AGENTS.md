@@ -55,7 +55,7 @@ roadmap) → (2) Consolidación operativa → (3) Metodología → (4) Instructi
 
 - **Monorepo:** pnpm workspaces + Turborepo. Paquetes: `apps/api`, `apps/web`,
   `packages/contracts`, `packages/ui`.
-- **Backend:** NestJS sobre Node 20 LTS.
+- **Backend:** NestJS sobre Node 24 LTS.
 - **BD:** PostgreSQL 16 + Prisma (esquema dividido por módulo en `prisma/schema/*.prisma`).
 - **Frontend:** React 18 + Vite + Tailwind + shadcn/ui.
 - **Colas/caché:** Redis 7 + BullMQ (6 colas operativas: recordatorios clínicos, seguimientos de adopción, verificación DIAN, facturación de apadrinamientos, renovación de tokens MercadoPago y payouts).
@@ -107,7 +107,7 @@ donations, resources, marketplace, community.
 
 ## Entorno (Windows) — problemas conocidos
 
-- **Node 20 LTS** (vía fnm) + **pnpm 9.15.9** (fijados). No usar otras versiones.
+- **Node 24 LTS** (vía fnm) + **pnpm 9.15.9** (fijados). No usar otras versiones.
 - Puerto de Postgres del proyecto: **5433**.
 - Aviso `Unlink of file ... failed` en `git pull`: es el antivirus/VS Code tocando `.git`; el pull
   termina bien igual. Confirmar con `git status && git fsck` (los "dangling commit" son inofensivos).

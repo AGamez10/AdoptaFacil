@@ -14,7 +14,7 @@ transacciones, con desglose transparente (IVA solo sobre la comisión).
 | Capa       | Tecnología                                                                       |
 | ---------- | -------------------------------------------------------------------------------- |
 | Monorepo   | pnpm 9.15.9 (workspaces) + Turborepo                                             |
-| Backend    | NestJS sobre Node 20 LTS                                                         |
+| Backend    | NestJS sobre Node 24 LTS                                                         |
 | Base       | PostgreSQL 16 + Prisma 5 (esquema dividido por módulo), Row-Level Security       |
 | Colas      | Redis 7 + BullMQ (recordatorios, seguimientos, DIAN, facturación, payouts)       |
 | Frontend   | React 18 + Vite 5 + Tailwind + Radix (`packages/ui`)                             |
