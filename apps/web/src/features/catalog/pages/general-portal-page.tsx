@@ -3,7 +3,8 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { PublicHeroBanner } from '@adoptafacil/contracts';
 import { useSession } from '../../../shell/auth';
 import { FullPageLoading, PublicFooter, PublicNavbar } from '../../../shell/layout';
-import { useDocumentTitle } from '../../../lib/use-document-title';
+import { STATIC_PAGES } from '../../../seo/page-meta.js';
+import { organizationLd, useSeo, websiteLd } from '../../../seo/seo';
 import {
   ActiveCampaignsSection,
   AdoptionStepsSection,
@@ -76,7 +77,12 @@ export function GeneralPortalPage() {
   const { hash, search } = useLocation();
   const heroBannerPhotos = useHeroBannerPhotos();
   const snapshot = useCatalogSnapshot();
-  useDocumentTitle('Adopción responsable en Colombia');
+  useSeo({
+    title: STATIC_PAGES['/'].title,
+    description: STATIC_PAGES['/'].description,
+    path: '/',
+    jsonLd: [organizationLd(), websiteLd()],
+  });
   useScrollToHash();
 
   if (status === 'loading') {

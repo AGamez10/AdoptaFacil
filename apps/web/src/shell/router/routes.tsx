@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { EmptyState, Skeleton } from '@adoptafacil/ui';
 import { RequireAuth, RequireRoles } from '../auth';
@@ -26,8 +27,8 @@ import {
   SPONSORSHIP_VIEW_ROLES,
   VOLUNTEERING_VIEW_ROLES,
 } from '../navigation';
-import { AnimalDetailPage } from '../pages/animal-detail-page';
 import { AdoptPage, GeneralPortalPage } from '../../features/catalog';
+import { GuidePage, GuidesIndexPage } from '../../features/guias';
 import { HomePage, NotFoundPage } from '../../features/_layout';
 import {
   CompleteProfilePage,
@@ -36,97 +37,115 @@ import {
   RegisterPage,
   ResetPasswordPage,
 } from '../../features/auth';
-import {
-  NationalTransparencyPage,
-  OrgDocumentsPage,
-  OrgPlanPage,
-  OrgFormalizationPage,
-  OrgLegalRepresentativePage,
-  OrgProfilePage,
-  OrgReportsPage,
-  OrgSignersPage,
-  OrgSigningInboxPage,
-  PlatformAdminDashboardPage,
-  PlatformBannerPage,
-  PlatformDocumentsReviewPage,
-  PlatformDuplicatesReviewPage,
-  PlatformOrganizationsReviewPage,
-  PlatformReviewsReviewPage,
-  PlatformSuperAdminDashboardPage,
-} from '../../features/org';
-import {
-  OrgDonateRedirectPage,
-  OrgPublicPage,
-  PortalThemePage,
-  PublicAnimalDetailPage,
-  usePortalSubdomainSlug,
-} from '../../features/portals';
-import {
-  CampaignDetailPage,
-  CampaignsPage,
-  PublicCampaignDetailPage,
-  PublicCampaignsPage,
-} from '../../features/campaigns';
-import {
-  MyResourceOffersPage,
-  OfferResourcePage,
-  PublicResourceDetailPage,
-  PublicResourcesPage,
-  ResourceNeedDetailPage,
-  ResourcesPage,
-} from '../../features/resources';
-import {
-  MarketplacePage,
-  ProductDetailPage,
-  PublicMarketplacePage,
-  PublicProductDetailPage,
-} from '../../features/marketplace';
-import {
-  CommunityFeedPage,
-  CommunityModerationPage,
-  MyPostsPage,
-  PostDetailPage,
-} from '../../features/community';
-import { AnimalsPage, RemindersInboxPage } from '../../features/animals';
-import { PlatformTeamPage } from '../../features/platform-team';
-import {
-  AdoptionContractPage,
-  AdoptionRequestPage,
-  AdoptionsKanbanPage,
-  MyAdoptionRequestsPage,
-  MyFollowUpsPage,
-} from '../../features/adoptions';
-import { ThirdPartyConsentsPage } from '../../features/consents';
-import {
-  DonatePage,
-  DonationAccessPage,
-  DonationResultPage,
-  MyDonationsPage,
-  ReceivedDonationsPage,
-} from '../../features/donations';
-import { SponsorPage, SponsorshipsPage } from '../../features/sponsorships';
-import {
-  EmailUnsubscribePage,
-  PlatformEmailTemplateEditorPage,
-  PlatformEmailTemplatesPage,
-} from '../../features/notifications';
-import { CertificateEmissionPage, CertificateVerificationPage } from '../../features/certificates';
-import {
-  MyVolunteeringPage,
-  VolunteerOpportunitiesPage,
-  VolunteerOpportunityDetailPage,
-} from '../../features/volunteering';
+import { PublicAnimalDetailPage } from '../../features/portals/pages/public-animal-detail-page';
+import { usePortalSubdomainSlug } from '../../features/portals/use-portal-subdomain-slug';
 import {
   LegalAcceptanceGate,
   LegalDocumentPage,
   LegalIndexPage,
   MyAuthorizationsPage,
 } from '../../features/legal';
-import {
-  MyReviewsPage,
-  OrgReviewsPage,
-  OrganizationReputationPage,
-} from '../../features/reputation';
+import { lazyPage } from './lazy-page';
+
+// Pantallas que se cargan al visitarlas (fuera del paquete inicial).
+// Portales de organización: plantillas pesadas que solo usa quien visita uno.
+const OrgPublicPage = lazyPage(
+  () => import('../../features/portals/pages/org-public-page'),
+  'OrgPublicPage',
+);
+const PortalThemePage = lazyPage(
+  () => import('../../features/portals/pages/portal-theme-page'),
+  'PortalThemePage',
+);
+const OrgDonateRedirectPage = lazyPage(
+  () => import('../../features/portals/pages/org-donate-redirect-page'),
+  'OrgDonateRedirectPage',
+);
+const loadOrg = () => import('../../features/org');
+const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
+const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
+const OrgPlanPage = lazyPage(loadOrg, 'OrgPlanPage');
+const OrgFormalizationPage = lazyPage(loadOrg, 'OrgFormalizationPage');
+const OrgLegalRepresentativePage = lazyPage(loadOrg, 'OrgLegalRepresentativePage');
+const OrgProfilePage = lazyPage(loadOrg, 'OrgProfilePage');
+const OrgReportsPage = lazyPage(loadOrg, 'OrgReportsPage');
+const OrgSignersPage = lazyPage(loadOrg, 'OrgSignersPage');
+const OrgSigningInboxPage = lazyPage(loadOrg, 'OrgSigningInboxPage');
+const PlatformAdminDashboardPage = lazyPage(loadOrg, 'PlatformAdminDashboardPage');
+const PlatformBannerPage = lazyPage(loadOrg, 'PlatformBannerPage');
+const PlatformDocumentsReviewPage = lazyPage(loadOrg, 'PlatformDocumentsReviewPage');
+const PlatformDuplicatesReviewPage = lazyPage(loadOrg, 'PlatformDuplicatesReviewPage');
+const PlatformOrganizationsReviewPage = lazyPage(loadOrg, 'PlatformOrganizationsReviewPage');
+const PlatformReviewsReviewPage = lazyPage(loadOrg, 'PlatformReviewsReviewPage');
+const PlatformSuperAdminDashboardPage = lazyPage(loadOrg, 'PlatformSuperAdminDashboardPage');
+const loadCampaigns = () => import('../../features/campaigns');
+const CampaignDetailPage = lazyPage(loadCampaigns, 'CampaignDetailPage');
+const CampaignsPage = lazyPage(loadCampaigns, 'CampaignsPage');
+const PublicCampaignDetailPage = lazyPage(loadCampaigns, 'PublicCampaignDetailPage');
+const PublicCampaignsPage = lazyPage(loadCampaigns, 'PublicCampaignsPage');
+const loadResources = () => import('../../features/resources');
+const MyResourceOffersPage = lazyPage(loadResources, 'MyResourceOffersPage');
+const OfferResourcePage = lazyPage(loadResources, 'OfferResourcePage');
+const PublicResourceDetailPage = lazyPage(loadResources, 'PublicResourceDetailPage');
+const PublicResourcesPage = lazyPage(loadResources, 'PublicResourcesPage');
+const ResourceNeedDetailPage = lazyPage(loadResources, 'ResourceNeedDetailPage');
+const ResourcesPage = lazyPage(loadResources, 'ResourcesPage');
+const loadMarketplace = () => import('../../features/marketplace');
+const MarketplacePage = lazyPage(loadMarketplace, 'MarketplacePage');
+const ProductDetailPage = lazyPage(loadMarketplace, 'ProductDetailPage');
+const PublicMarketplacePage = lazyPage(loadMarketplace, 'PublicMarketplacePage');
+const PublicProductDetailPage = lazyPage(loadMarketplace, 'PublicProductDetailPage');
+const loadCommunity = () => import('../../features/community');
+const CommunityFeedPage = lazyPage(loadCommunity, 'CommunityFeedPage');
+const CommunityModerationPage = lazyPage(loadCommunity, 'CommunityModerationPage');
+const MyPostsPage = lazyPage(loadCommunity, 'MyPostsPage');
+const PostDetailPage = lazyPage(loadCommunity, 'PostDetailPage');
+const MyPetsPage = lazyPage(loadCommunity, 'MyPetsPage');
+const MyServicesPage = lazyPage(loadCommunity, 'MyServicesPage');
+const ServiceDetailPage = lazyPage(loadCommunity, 'ServiceDetailPage');
+const ServicesDirectoryPage = lazyPage(loadCommunity, 'ServicesDirectoryPage');
+const ServicesModerationPage = lazyPage(loadCommunity, 'ServicesModerationPage');
+const loadAnimals = () => import('../../features/animals');
+const AnimalsPage = lazyPage(loadAnimals, 'AnimalsPage');
+const RemindersInboxPage = lazyPage(loadAnimals, 'RemindersInboxPage');
+const loadPlatformTeam = () => import('../../features/platform-team');
+const PlatformTeamPage = lazyPage(loadPlatformTeam, 'PlatformTeamPage');
+const loadAdoptions = () => import('../../features/adoptions');
+const AdoptionContractPage = lazyPage(loadAdoptions, 'AdoptionContractPage');
+const AdoptionRequestPage = lazyPage(loadAdoptions, 'AdoptionRequestPage');
+const AdoptionsKanbanPage = lazyPage(loadAdoptions, 'AdoptionsKanbanPage');
+const MyAdoptionRequestsPage = lazyPage(loadAdoptions, 'MyAdoptionRequestsPage');
+const MyFollowUpsPage = lazyPage(loadAdoptions, 'MyFollowUpsPage');
+const loadConsents = () => import('../../features/consents');
+const ThirdPartyConsentsPage = lazyPage(loadConsents, 'ThirdPartyConsentsPage');
+const loadDonations = () => import('../../features/donations');
+const DonatePage = lazyPage(loadDonations, 'DonatePage');
+const DonationAccessPage = lazyPage(loadDonations, 'DonationAccessPage');
+const DonationResultPage = lazyPage(loadDonations, 'DonationResultPage');
+const MyDonationsPage = lazyPage(loadDonations, 'MyDonationsPage');
+const ReceivedDonationsPage = lazyPage(loadDonations, 'ReceivedDonationsPage');
+const loadSponsorships = () => import('../../features/sponsorships');
+const SponsorPage = lazyPage(loadSponsorships, 'SponsorPage');
+const SponsorshipsPage = lazyPage(loadSponsorships, 'SponsorshipsPage');
+const loadNotifications = () => import('../../features/notifications');
+const EmailUnsubscribePage = lazyPage(loadNotifications, 'EmailUnsubscribePage');
+const PlatformEmailTemplateEditorPage = lazyPage(
+  loadNotifications,
+  'PlatformEmailTemplateEditorPage',
+);
+const PlatformEmailTemplatesPage = lazyPage(loadNotifications, 'PlatformEmailTemplatesPage');
+const loadCertificates = () => import('../../features/certificates');
+const CertificateEmissionPage = lazyPage(loadCertificates, 'CertificateEmissionPage');
+const CertificateVerificationPage = lazyPage(loadCertificates, 'CertificateVerificationPage');
+const loadVolunteering = () => import('../../features/volunteering');
+const MyVolunteeringPage = lazyPage(loadVolunteering, 'MyVolunteeringPage');
+const VolunteerOpportunitiesPage = lazyPage(loadVolunteering, 'VolunteerOpportunitiesPage');
+const VolunteerOpportunityDetailPage = lazyPage(loadVolunteering, 'VolunteerOpportunityDetailPage');
+const loadReputation = () => import('../../features/reputation');
+const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
+const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
+const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
+const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
 
 /**
  * Route tree for the shell.
@@ -178,87 +197,97 @@ export function AppRoutes() {
   return (
     // Ola 1 (R1-1): switched-off modules render "not found" before any route.
     <FeatureRouteGate>
-      <Routes>
-        {/* Public general portal (F-LANDING-01) — the platform's entry point.
+      {/* Las pantallas privadas llegan en su propio archivo (ver lazy-page.ts). */}
+      <Suspense fallback={<Skeleton className="h-screen w-full" />}>
+        <Routes>
+          {/* Public general portal (F-LANDING-01) — the platform's entry point.
           On a real organization subdomain (portalSubdomain.status === 'ready')
           this renders that org's rich portal instead (F-1, M14). */}
-        <Route
-          path="/"
-          element={
-            portalSubdomain.status === 'ready' ? (
-              <OrgPublicPage slugOverride={portalSubdomain.slug} />
-            ) : (
-              <GeneralPortalPage />
-            )
-          }
-        />
-        {/* Listado público de adopción con URLs limpias por especie y ciudad
+          <Route
+            path="/"
+            element={
+              portalSubdomain.status === 'ready' ? (
+                <OrgPublicPage slugOverride={portalSubdomain.slug} />
+              ) : (
+                <GeneralPortalPage />
+              )
+            }
+          />
+          {/* Listado público de adopción con URLs limpias por especie y ciudad
           (rediseño 2026-10): /adoptar, /adoptar/perros, /adoptar/perros/bogota. */}
-        <Route path="/adoptar" element={<AdoptPage />} />
-        <Route path="/adoptar/:especie" element={<AdoptPage />} />
-        <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
-        {/* Public auth screens */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/forgot" element={<ForgotPasswordPage />} />
-        {/* Public reset screen reached from the emailed link (M02 / RF05, T-110).
+          <Route path="/adoptar" element={<AdoptPage />} />
+          <Route path="/adoptar/:especie" element={<AdoptPage />} />
+          <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
+          {/* Guías públicas de adopción (SEO, rediseño 2026-10). */}
+          <Route path="/guias" element={<GuidesIndexPage />} />
+          <Route path="/guias/:slug" element={<GuidePage />} />
+          {/* Public auth screens */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot" element={<ForgotPasswordPage />} />
+          {/* Public reset screen reached from the emailed link (M02 / RF05, T-110).
           HANDOFF(@fabian): minimal shell route for the auth reset page (the page
           itself lives in features/auth). Cross-review this single line. */}
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        {/* Legal (Ley 1581): términos, política de datos, cookies y alcance de la
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Legal (Ley 1581): términos, política de datos, cookies y alcance de la
             plataforma, públicos y versionados — `/legal/:slug/:version` muestra
             exactamente la versión que alguien aceptó. */}
-        <Route path="/legal" element={<LegalIndexPage />} />
-        <Route path="/legal/:slug" element={<LegalDocumentPage />} />
-        <Route path="/legal/:slug/:version" element={<LegalDocumentPage />} />
-        {/* Public rich organization portal (§M14, T-026) — no auth, public fields
+          <Route path="/legal" element={<LegalIndexPage />} />
+          <Route path="/legal/:slug" element={<LegalDocumentPage />} />
+          <Route path="/legal/:slug/:version" element={<LegalDocumentPage />} />
+          {/* Public rich organization portal (§M14, T-026) — no auth, public fields
           only: real profile + placeholder sections wired per docs/TASKS.md. */}
-        <Route path="/o/:slug" element={<OrgPublicPage />} />
-        {/* Public animal detail within the org portal (§M14/M03, T-052) — public,
+          <Route path="/o/:slug" element={<OrgPublicPage />} />
+          {/* Public animal detail within the org portal (§M14/M03, T-052) — public,
           AnimalSummary fields only (no clinical data). The "Solicitar adopción"
           button links to the /adopciones/solicitar flow, itself under RequireAuth. */}
-        <Route path="/o/:slug/animales/:animalId" element={<PublicAnimalDetailPage />} />
-        {/* QR de donaciones por organización (ADR-PAG-002 §QR, módulo
+          <Route path="/o/:slug/animales/:animalId" element={<PublicAnimalDetailPage />} />
+          {/* QR de donaciones por organización (ADR-PAG-002 §QR, módulo
           `payments`): URL ESTABLE que resuelve la org pública y entra al flujo
           `/donaciones`. `/donar` solo tiene sentido en un subdominio real de
           organización; en el dominio principal lleva a `/donaciones`. */}
-        <Route path="/o/:slug/donar" element={<OrgDonateRedirectPage />} />
-        <Route
-          path="/donar"
-          element={
-            portalSubdomain.status === 'ready' ? (
-              <OrgDonateRedirectPage slugOverride={portalSubdomain.slug} />
-            ) : (
-              <Navigate replace to="/donaciones" />
-            )
-          }
-        />
-        {/* Public certificate VERIFICATION, REAL (§M05/RF14, F-3) — no session,
+          <Route path="/o/:slug/donar" element={<OrgDonateRedirectPage />} />
+          <Route
+            path="/donar"
+            element={
+              portalSubdomain.status === 'ready' ? (
+                <OrgDonateRedirectPage slugOverride={portalSubdomain.slug} />
+              ) : (
+                <Navigate replace to="/donaciones" />
+              )
+            }
+          />
+          {/* Public certificate VERIFICATION, REAL (§M05/RF14, F-3) — no session,
           queries `GET /public/donations/certificates/:code`. */}
-        <Route path="/verificar" element={<CertificateVerificationPage />} />
-        <Route path="/verificar/:code" element={<CertificateVerificationPage />} />
-        {/* Public campaigns portal (§M14/M06, T-055) — no auth, active campaigns from
+          <Route path="/verificar" element={<CertificateVerificationPage />} />
+          <Route path="/verificar/:code" element={<CertificateVerificationPage />} />
+          {/* Public campaigns portal (§M14/M06, T-055) — no auth, active campaigns from
           /public/campaigns + public detail by id. The AUTHENTICATED org management
           screen lives at /organizacion/campanas below (S2-01), a separate surface. */}
-        <Route path="/campanas" element={<PublicCampaignsPage />} />
-        <Route path="/campanas/:id" element={<PublicCampaignDetailPage />} />
-        {/* Public resource bank (M09, F-6) — no auth, needs still accepting help
+          <Route path="/campanas" element={<PublicCampaignsPage />} />
+          <Route path="/campanas/:id" element={<PublicCampaignDetailPage />} />
+          {/* Public resource bank (M09, F-6) — no auth, needs still accepting help
           from /public/resources/needs + public detail by id. Offering itself
           requires auth (see /ofrecer below, RequireAuth); the AUTHENTICATED
           org management screen lives at /organizacion/recursos below. */}
-        <Route path="/recursos" element={<PublicResourcesPage />} />
-        <Route path="/recursos/:id" element={<PublicResourceDetailPage />} />
-        {/* Public marketplace (M10, F-7) — no auth, active products from
+          <Route path="/recursos" element={<PublicResourcesPage />} />
+          <Route path="/recursos/:id" element={<PublicResourceDetailPage />} />
+          {/* Public marketplace (M10, F-7) — no auth, active products from
           /public/marketplace/products. Contact happens via WhatsApp, off-platform
           (no cart/checkout). The AUTHENTICATED org management screen lives at
           /organizacion/marketplace below. */}
-        <Route path="/marketplace" element={<PublicMarketplacePage />} />
-        <Route path="/marketplace/:id" element={<PublicProductDetailPage />} />
-        {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
+          <Route path="/marketplace" element={<PublicMarketplacePage />} />
+          <Route path="/marketplace/:id" element={<PublicProductDetailPage />} />
+          {/* Comunidad · directorio PÚBLICO de servicios del ecosistema (sin
+          sesión): solo perfiles aprobados por la plataforma. Gestión propia en
+          /mi-negocio y ficha privada en /mis-mascotas, abajo (RequireAuth). */}
+          <Route path="/servicios" element={<ServicesDirectoryPage />} />
+          <Route path="/servicios/:id" element={<ServiceDetailPage />} />
+          {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
           no auth required to read; an authenticated visitor sees a "leave a
           review" form here instead of on a separate route. */}
-        <Route path="/organizaciones/:slug/resenas" element={<OrganizationReputationPage />} />
-        {/* M05 · donación (§M05, requisito FINAL del cliente: donar NUNCA exige
+          <Route path="/organizaciones/:slug/resenas" element={<OrganizationReputationPage />} />
+          {/* M05 · donación (§M05, requisito FINAL del cliente: donar NUNCA exige
           cuenta ni login — checkout de invitado; ePayco lo soporta). Movida FUERA de <RequireAuth>/<AppLayout> (antes vivía
           bajo el gate de sesión padre — ver el SEAM que dejó esta nota en la
           sección protegida de abajo). `POST /donations` usa
@@ -268,20 +297,20 @@ export function AppRoutes() {
           página arma su chrome público (mismo patrón que `/campanas`) y lee
           `useSession()` directamente para decidir si prellena la identidad
           del donante o pide nombre+correo. */}
-        <Route path="/donaciones" element={<DonatePage />} />
-        {/* Comprobante de INVITADO vía "magic link" (requisito FINAL del cliente:
+          <Route path="/donaciones" element={<DonatePage />} />
+          {/* Comprobante de INVITADO vía "magic link" (requisito FINAL del cliente:
           tampoco obligar a registrarse para volver a consultar una donación).
           Pública, fuera de <RequireAuth> — el token de la query string ES la
           credencial (`GET /public/donations/access/:token`, sin auth). Mismo
           SEAM que `/donaciones` y `/verificar/:code` arriba. */}
-        <Route path="/donaciones/comprobante" element={<DonationAccessPage />} />
-        {/* ADR-PAG-002: regreso del checkout de ePayco. Solo informa que el pago se
+          <Route path="/donaciones/comprobante" element={<DonationAccessPage />} />
+          {/* ADR-PAG-002: regreso del checkout de ePayco. Solo informa que el pago se
           está confirmando; la aprobación llega por la confirmación firmada. */}
-        <Route path="/donaciones/resultado" element={<DonationResultPage />} />
-        {/* Baja voluntaria de correos masivos (Ley 1581) — pública, sin sesión:
+          <Route path="/donaciones/resultado" element={<DonationResultPage />} />
+          {/* Baja voluntaria de correos masivos (Ley 1581) — pública, sin sesión:
           el enlace firmado del correo ES la credencial. */}
-        <Route path="/correo/baja" element={<EmailUnsubscribePage />} />
-        {/* T-OrdersAPI (2026-09-30): the `/donaciones/gracias` and
+          <Route path="/correo/baja" element={<EmailUnsubscribePage />} />
+          {/* T-OrdersAPI (2026-09-30): the `/donaciones/gracias` and
           `/apadrinar/gracias` redirect-landing routes were RETIRED along with
           Checkout Pro — Checkout API/Orders embeds the card form on our own
           site (no external redirect, so no return URL to resolve). Both
@@ -291,484 +320,499 @@ export function AppRoutes() {
           return lands on `/donaciones/resultado` above. Mercado Pago (and its
           Card Payment Brick) was retired on 2026-10-17. */}
 
-        {/* Protected — guard first, then the shell layout */}
-        <Route element={<RequireAuth />}>
-          {/* Si falta aceptar la versión vigente de un documento obligatorio, la
+          {/* Protected — guard first, then the shell layout */}
+          <Route element={<RequireAuth />}>
+            {/* Si falta aceptar la versión vigente de un documento obligatorio, la
               compuerta lo pide antes de dejar usar la cuenta. */}
-          <Route element={<LegalAcceptanceGate />}>
-            <Route element={<AppLayout />}>
-              {/* F-LANDING-01: "/" now belongs to the public general portal, so the
+            <Route element={<LegalAcceptanceGate />}>
+              <Route element={<AppLayout />}>
+                {/* F-LANDING-01: "/" now belongs to the public general portal, so the
               authenticated shell's home moved to /inicio (nav entry updated to
               match). Not an index route anymore — there is no bare protected "". */}
-              <Route path="inicio" element={<HomePage />} />
-              {/* T-Google-SignIn: "Completa tu perfil" — reached when donar/
+                <Route path="inicio" element={<HomePage />} />
+                {/* T-Google-SignIn: "Completa tu perfil" — reached when donar/
               apadrinar, solicitar adopción o inscribirse a voluntariado
               responde 422 INCOMPLETE_PROFILE. Cualquier autenticado (no
               gated por rol; el gate real vive en los 3 endpoints backend). */}
-              <Route path="perfil/completar" element={<CompleteProfilePage />} />
-              <Route path="mis-autorizaciones" element={<MyAuthorizationsPage />} />
-              {/* "Mis donaciones": historial del usuario, DENTRO del shell (conserva el
+                <Route path="perfil/completar" element={<CompleteProfilePage />} />
+                <Route path="mis-autorizaciones" element={<MyAuthorizationsPage />} />
+                {/* "Mis donaciones": historial del usuario, DENTRO del shell (conserva el
               menú). `/donaciones` es pública y arma su propio chrome sin menú. */}
-              <Route path="mis-donaciones" element={<MyDonationsPage />} />
-              {/* M13 · "Uso de mis datos en reportes": cada persona gestiona SOLO sus
+                <Route path="mis-donaciones" element={<MyDonationsPage />} />
+                {/* M13 · "Uso de mis datos en reportes": cada persona gestiona SOLO sus
               consentimientos (el sujeto sale del JWT); cualquier autenticado. */}
-              <Route path="uso-de-mis-datos" element={<ThirdPartyConsentsPage />} />
-              {/* M04 · adopciones (T-028a): tablero de evaluación (org) + solicitud (persona).
+                <Route path="uso-de-mis-datos" element={<ThirdPartyConsentsPage />} />
+                {/* M04 · adopciones (T-028a): tablero de evaluación (org) + solicitud (persona).
               F1-02: el tablero de evaluación solo tenía el gate del ITEM de nav (#86) —
               tecleando la URL directo, cualquier autenticado entraba a la vista de gestión.
               `ADOPTIONS_MANAGEMENT_ROLES` está calcada de `EVAL_ROLES` en
               `adoptions.controller.ts` (`GET /adoptions`); reutilizada, no redefinida.
               "Solicitar adopción" es de PERSONA (`POST /adoptions` sin `@Roles`, cualquier
               autenticado) — se queda solo con `RequireAuth`, sin role-guard. */}
-              <Route
-                path="adopciones"
-                element={
-                  <RequireRoles roles={ADOPTIONS_MANAGEMENT_ROLES}>
-                    <AdoptionsKanbanPage />
-                  </RequireRoles>
-                }
-              />
-              <Route path="adopciones/solicitar" element={<AdoptionRequestPage />} />
-              {/* T-028b (nuevo requerimiento): detalle del contrato — SIN
+                <Route
+                  path="adopciones"
+                  element={
+                    <RequireRoles roles={ADOPTIONS_MANAGEMENT_ROLES}>
+                      <AdoptionsKanbanPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route path="adopciones/solicitar" element={<AdoptionRequestPage />} />
+                {/* T-028b (nuevo requerimiento): detalle del contrato — SIN
               <RequireRoles>, a diferencia de "/adopciones": la visitan tanto
               la organización (gestiona) como el adoptante (firma su parte);
               la página misma decide qué mostrar según el rol/identidad —
               RolesGuard en la API sigue siendo la autoridad real. */}
-              <Route path="adopciones/contratos/:id" element={<AdoptionContractPage />} />
-              {/* F1-01: "Mis solicitudes" de la Persona — GET /adoptions/mine no tiene
+                <Route path="adopciones/contratos/:id" element={<AdoptionContractPage />} />
+                {/* F1-01: "Mis solicitudes" de la Persona — GET /adoptions/mine no tiene
               gate de rol (igual que /donaciones), así que esta ruta tampoco lleva
               <RequireRoles>; el nav item ya la oculta a cuentas de organización
               (`personaOnly`, nav-items.ts) y la propia página muestra "Mis
               solicitudes" vacío/con error si algo raro llegara a pasar por URL. */}
-              <Route path="mis-solicitudes" element={<MyAdoptionRequestsPage />} />
-              {/* T-028c: "Mis seguimientos" del adoptante — GET /adoptions/followups/mine
+                <Route path="mis-solicitudes" element={<MyAdoptionRequestsPage />} />
+                {/* T-028c: "Mis seguimientos" del adoptante — GET /adoptions/followups/mine
               autoriza por identidad (sin @Roles), igual que "Mis solicitudes". */}
-              <Route path="mis-seguimientos" element={<MyFollowUpsPage />} />
-              {/* M03 · animales + expediente clínico + recordatorios (T-031, wires
+                <Route path="mis-seguimientos" element={<MyFollowUpsPage />} />
+                {/* M03 · animales + expediente clínico + recordatorios (T-031, wires
               T-104/T-105/T-106). Cada ruta exige los MISMOS @Roles que su endpoint
               (deny-by-default). El panel clínico es EMBEBIBLE por animalId → vive
               en el detalle /animales/:animalId, no como ruta top-level. */}
-              <Route
-                path="animales"
-                element={
-                  <RequireRoles roles={ANIMAL_VIEW_ROLES}>
-                    <AnimalsPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="animales/:animalId"
-                element={
-                  <RequireRoles roles={ANIMAL_VIEW_ROLES}>
-                    <AnimalDetailPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="recordatorios"
-                element={
-                  <RequireRoles roles={ANIMAL_VIEW_ROLES}>
-                    <RemindersInboxPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M05 · donación (T-050/T-051, checkout de invitado): la ruta `/donaciones`
+                <Route
+                  path="animales"
+                  element={
+                    <RequireRoles roles={ANIMAL_VIEW_ROLES}>
+                      <AnimalsPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="animales/:animalId"
+                  element={
+                    <RequireRoles roles={ANIMAL_VIEW_ROLES}>
+                      <AnimalDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="recordatorios"
+                  element={
+                    <RequireRoles roles={ANIMAL_VIEW_ROLES}>
+                      <RemindersInboxPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M05 · donación (T-050/T-051, checkout de invitado): la ruta `/donaciones`
               vivía aquí, gateada por este <RequireAuth> padre — SEAM ya resuelto
               (requisito FINAL del cliente: donar nunca exige cuenta ni login). Movida
               fuera de <RequireAuth>/<AppLayout>, declarada arriba junto con las demás
               rutas públicas (justo después de "/organizaciones/:slug/resenas"). No se
               borra esta nota para que quien busque "donaciones" en la zona protegida
               encuentre el puntero. */}
-              {/* F-DONACIONES-RECIBIDAS: la contraparte de gestión de org de "donaciones"
+                {/* F-DONACIONES-RECIBIDAS: la contraparte de gestión de org de "donaciones"
               arriba — GET /donations/received (MANAGE_ROLES: Owner/Administrador/
               Operador) ya existía en el backend sin página/ruta en el frontend (lo
               que TEST-SWEEP había notado). `DONATIONS_MANAGEMENT_ROLES` está calcada
               del `@Roles` de ese endpoint; mismo patrón exacto que F1-02 con
               "Adopciones" vs. "Mis solicitudes". */}
-              <Route
-                path="donaciones-recibidas"
-                element={
-                  <RequireRoles roles={DONATIONS_MANAGEMENT_ROLES}>
-                    <ReceivedDonationsPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M07 · apadrinamiento P1 (RF17, S2-03). Mismo SEAM que donaciones: la
+                <Route
+                  path="donaciones-recibidas"
+                  element={
+                    <RequireRoles roles={DONATIONS_MANAGEMENT_ROLES}>
+                      <ReceivedDonationsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M07 · apadrinamiento P1 (RF17, S2-03). Mismo SEAM que donaciones: la
               org/animal objetivo llega por query param (animalId [+ animalName,
               organizationName]) desde el detalle público de un animal (§M14,
               fuera de alcance de S2-03); sin objetivo, "mis apadrinamientos". */}
-              <Route path="apadrinar" element={<SponsorPage />} />
-              {/* M08 (S-6, RF18/RF19) · "Mi voluntariado" — explorar oportunidades,
+                <Route path="apadrinar" element={<SponsorPage />} />
+                {/* M08 (S-6, RF18/RF19) · "Mi voluntariado" — explorar oportunidades,
               inscribirse, registrar horas y descargar certificados. Mismo
               SEAM que apadrinamientos/donaciones: ningún endpoint de "mine"
               lleva `@Roles` (cualquier Persona autenticada), así que la ruta
               no lleva <RequireRoles>. */}
-              <Route path="voluntariado" element={<MyVolunteeringPage />} />
-              {/* M09 · ofrecer ayuda / mis ofertas (F-6). Mismo SEAM que
+                <Route path="voluntariado" element={<MyVolunteeringPage />} />
+                {/* M09 · ofrecer ayuda / mis ofertas (F-6). Mismo SEAM que
               donaciones/apadrinamientos: `POST /resources/offers` y
               `GET /resources/offers/mine` no llevan `@Roles` (cualquier
               autenticado), así que ninguna de las dos rutas lleva
               <RequireRoles>. El objetivo llega por query param
               (needId + needTitle + unit + organizationName) desde el
               detalle público de una necesidad (/recursos/:id). */}
-              <Route path="ofrecer" element={<OfferResourcePage />} />
-              <Route path="mis-ofertas" element={<MyResourceOffersPage />} />
-              {/* M11 · comunidad (F-8). Ninguna de estas rutas lleva `@Roles` en el
+                <Route path="ofrecer" element={<OfferResourcePage />} />
+                <Route path="mis-ofertas" element={<MyResourceOffersPage />} />
+                {/* M11 · comunidad (F-8). Ninguna de estas rutas lleva `@Roles` en el
               backend (`POST/GET /community/posts`, comentarios, likes son
               cualquier autenticado), así que ninguna lleva <RequireRoles> —
               mismo patrón que Donaciones/Banco de recursos. La moderación de
               PLATAFORMA vive aparte, más abajo. */}
-              <Route path="comunidad" element={<CommunityFeedPage />} />
-              <Route path="comunidad/:id" element={<PostDetailPage />} />
-              <Route path="mis-publicaciones" element={<MyPostsPage />} />
-              {/* M05/RF14 (F-3) · certificado de donación REAL, leído por donationId
+                <Route path="comunidad" element={<CommunityFeedPage />} />
+                <Route path="comunidad/:id" element={<PostDetailPage />} />
+                <Route path="mis-publicaciones" element={<MyPostsPage />} />
+                {/* Comunidad · sin `@Roles` en el backend: una Persona gestiona su
+                propio tenant y, en una organización, el servidor exige
+                Owner/Administrator (403 si no). La ficha de mascota es solo
+                para cuentas de persona (lo aplica el servidor). */}
+                <Route path="mi-negocio" element={<MyServicesPage />} />
+                <Route path="mis-mascotas" element={<MyPetsPage />} />
+                {/* M05/RF14 (F-3) · certificado de donación REAL, leído por donationId
               (nav-state) desde el recibo real de la donación. */}
-              <Route path="certificado" element={<CertificateEmissionPage />} />
-              {/* /campanas ahora es PÚBLICO (portal de campañas, T-055) — declarado
+                <Route path="certificado" element={<CertificateEmissionPage />} />
+                {/* /campanas ahora es PÚBLICO (portal de campañas, T-055) — declarado
               arriba fuera de RequireAuth; ya no es un placeholder protegido. */}
-              {/* T-065 (pre-demo): la ruta se mantiene registrada (no se borra, reversible
+                {/* T-065 (pre-demo): la ruta se mantiene registrada (no se borra, reversible
               post-30) pero ya NO muestra el placeholder ("se implementará en la Ola
               1...") — nada de "pendiente" visible en la demo. Redirige a inicio; el
               indicador REAL de transparencia (Nivel/%/Rendición) ya vive en la barra
               superior del shell en todas las pantallas. */}
-              <Route path="transparencia" element={<Navigate to="/inicio" replace />} />
-              {/* M01 · organization profile + formalization (my lines, before catch-all).
+                <Route path="transparencia" element={<Navigate to="/inicio" replace />} />
+                {/* M01 · organization profile + formalization (my lines, before catch-all).
               T-062: gated to ORG_MEMBER_ROLES — a Persona has no org to manage;
               matches GET /org/profile and GET /org/formalization (any authenticated
               member, no @Roles — the backend scopes by tenant, not role). */}
-              <Route
-                path="organizacion"
-                element={
-                  <RequireRoles roles={ORG_MEMBER_ROLES}>
-                    <OrgProfilePage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="organizacion/formalizacion"
-                element={
-                  <RequireRoles roles={ORG_MEMBER_ROLES}>
-                    <OrgFormalizationPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M01 · gestión documental de la org (T-031, wires T-103, RF03). */}
-              <Route
-                path="organizacion/documentos"
-                element={
-                  <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
-                    <OrgDocumentsPage />
-                  </RequireRoles>
-                }
-              />
-              {/* Planes y suscripciones · mismo gate que GET /org/plan. */}
-              <Route
-                path="organizacion/plan"
-                element={
-                  <RequireRoles roles={ORG_PLAN_ROLES}>
-                    <OrgPlanPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M13 (S-14) · el dashboard de donaciones/campañas ahora es una sección
+                <Route
+                  path="organizacion"
+                  element={
+                    <RequireRoles roles={ORG_MEMBER_ROLES}>
+                      <OrgProfilePage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/formalizacion"
+                  element={
+                    <RequireRoles roles={ORG_MEMBER_ROLES}>
+                      <OrgFormalizationPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M01 · gestión documental de la org (T-031, wires T-103, RF03). */}
+                <Route
+                  path="organizacion/documentos"
+                  element={
+                    <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
+                      <OrgDocumentsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Planes y suscripciones · mismo gate que GET /org/plan. */}
+                <Route
+                  path="organizacion/plan"
+                  element={
+                    <RequireRoles roles={ORG_PLAN_ROLES}>
+                      <OrgPlanPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M13 (S-14) · el dashboard de donaciones/campañas ahora es una sección
               de "Inicio" (antes pantalla propia, casi duplicada); la ruta vieja
               redirige para no romper enlaces/favoritos. */}
-              <Route
-                path="organizacion/dashboard-donaciones"
-                element={<Navigate to="/inicio" replace />}
-              />
-              {/* M01 · representante legal + firma electrónica (S-1, RF14 relacionado
+                <Route
+                  path="organizacion/dashboard-donaciones"
+                  element={<Navigate to="/inicio" replace />}
+                />
+                {/* M01 · representante legal + firma electrónica (S-1, RF14 relacionado
               / RNF10). CRUCE DE DOMINIO (@sebastian, avisar a @fabian): único
               archivo tocado fuera de features/org/** en esta tarea — un
               <Route> más, mismo gate de roles que /organizacion/documentos
               (ORG_DOCUMENTS_ROLES, ya importado arriba). */}
-              <Route
-                path="organizacion/representante-legal"
-                element={
-                  <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
-                    <OrgLegalRepresentativePage />
-                  </RequireRoles>
-                }
-              />
-              {/* M14 · portal personalization by tokens (T-027). Owner/Admin gate the
+                <Route
+                  path="organizacion/representante-legal"
+                  element={
+                    <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
+                      <OrgLegalRepresentativePage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M14 · portal personalization by tokens (T-027). Owner/Admin gate the
               EDIT action (backend PUT + PortalThemePage itself); T-062 gates
               VIEW/ENTRY here to ORG_MEMBER_ROLES, matching GET /portals/theme. */}
-              <Route
-                path="organizacion/portal"
-                element={
-                  <RequireRoles roles={ORG_MEMBER_ROLES}>
-                    <PortalThemePage />
-                  </RequireRoles>
-                }
-              />
-              {/* M06 · gestión de campañas de recaudación para la organización (RF15,
+                <Route
+                  path="organizacion/portal"
+                  element={
+                    <RequireRoles roles={ORG_MEMBER_ROLES}>
+                      <PortalThemePage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M06 · gestión de campañas de recaudación para la organización (RF15,
               S2-01). Reconecta el screen autenticado que T-065 dejó sin ruta;
               gated a CAMPAIGNS_VIEW_ROLES, calcado del @Roles real de
               CampaignsController (GET /campaigns). */}
-              <Route
-                path="organizacion/campanas"
-                element={
-                  <RequireRoles roles={CAMPAIGNS_VIEW_ROLES}>
-                    <CampaignsPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="organizacion/campanas/:id"
-                element={
-                  <RequireRoles roles={CAMPAIGNS_VIEW_ROLES}>
-                    <CampaignDetailPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M09 · gestión del banco de recursos de la organización (F-6).
+                <Route
+                  path="organizacion/campanas"
+                  element={
+                    <RequireRoles roles={CAMPAIGNS_VIEW_ROLES}>
+                      <CampaignsPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/campanas/:id"
+                  element={
+                    <RequireRoles roles={CAMPAIGNS_VIEW_ROLES}>
+                      <CampaignDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M09 · gestión del banco de recursos de la organización (F-6).
               Gated a RESOURCE_VIEW_ROLES, calcado del @Roles real de
               `ResourceNeedsController` (GET /resources/needs). */}
-              <Route
-                path="organizacion/recursos"
-                element={
-                  <RequireRoles roles={RESOURCE_VIEW_ROLES}>
-                    <ResourcesPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="organizacion/recursos/:id"
-                element={
-                  <RequireRoles roles={RESOURCE_VIEW_ROLES}>
-                    <ResourceNeedDetailPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M10 · gestión del marketplace de la organización (F-7). Gated a
+                <Route
+                  path="organizacion/recursos"
+                  element={
+                    <RequireRoles roles={RESOURCE_VIEW_ROLES}>
+                      <ResourcesPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/recursos/:id"
+                  element={
+                    <RequireRoles roles={RESOURCE_VIEW_ROLES}>
+                      <ResourceNeedDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M10 · gestión del marketplace de la organización (F-7). Gated a
               MARKETPLACE_VIEW_ROLES, calcado del @Roles real de
               `MarketplaceProductsController` (GET /marketplace/products). */}
-              <Route
-                path="organizacion/marketplace"
-                element={
-                  <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
-                    <MarketplacePage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="organizacion/marketplace/:id"
-                element={
-                  <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
-                    <ProductDetailPage />
-                  </RequireRoles>
-                }
-              />
-              {/* Fix (M12/S7-b) · lo que el Owner/Administrator necesita para poder
+                <Route
+                  path="organizacion/marketplace"
+                  element={
+                    <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
+                      <MarketplacePage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/marketplace/:id"
+                  element={
+                    <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
+                      <ProductDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Fix (M12/S7-b) · lo que el Owner/Administrator necesita para poder
               usar "marcar como spam": ver las reseñas públicas de su propia
               organización primero (antes no había ningún lugar en la UI desde
               donde encontrarlas). Gated a ORG_REVIEWS_ROLES, calcado del
               @Roles real de `GET /reviews/org`. */}
-              <Route
-                path="organizacion/resenas"
-                element={
-                  <RequireRoles roles={ORG_REVIEWS_ROLES}>
-                    <OrgReviewsPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M07 · apadrinamientos RECIBIDOS por la organización (RF17, S2-03).
+                <Route
+                  path="organizacion/resenas"
+                  element={
+                    <RequireRoles roles={ORG_REVIEWS_ROLES}>
+                      <OrgReviewsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M07 · apadrinamientos RECIBIDOS por la organización (RF17, S2-03).
               Gated a SPONSORSHIP_VIEW_ROLES, calcado del @Roles real de
               SponsorshipsController (GET /sponsorships) — ver nota en nav-items.ts. */}
-              <Route
-                path="organizacion/apadrinamientos"
-                element={
-                  <RequireRoles roles={SPONSORSHIP_VIEW_ROLES}>
-                    <SponsorshipsPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M01 · revisión documental cross-tenant (T-031, wires T-103, RF03).
+                <Route
+                  path="organizacion/apadrinamientos"
+                  element={
+                    <RequireRoles roles={SPONSORSHIP_VIEW_ROLES}>
+                      <SponsorshipsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M01 · revisión documental cross-tenant (T-031, wires T-103, RF03).
               Audiencia de PLATAFORMA — denegada a roles de organización. */}
-              <Route
-                path="plataforma/documentos"
-                element={
-                  <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
-                    <PlatformDocumentsReviewPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M01, S-3 · organizaciones posiblemente duplicadas (nombre similar),
+                <Route
+                  path="plataforma/documentos"
+                  element={
+                    <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
+                      <PlatformDocumentsReviewPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M01, S-3 · organizaciones posiblemente duplicadas (nombre similar),
               ruta hermana de la revisión de documentos. Audiencia de PLATAFORMA
               — denegada a roles de organización. */}
-              {/* R2-1 · aprobación de organizaciones: solo las aprobadas son
+                {/* R2-1 · aprobación de organizaciones: solo las aprobadas son
               públicas. Audiencia de PLATAFORMA. */}
-              <Route
-                path="plataforma/organizaciones"
-                element={
-                  <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
-                    <PlatformOrganizationsReviewPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="plataforma/organizaciones-duplicadas"
-                element={
-                  <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
-                    <PlatformDuplicatesReviewPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M11 · moderación básica de comunidad, cross-tenant (F-8).
+                <Route
+                  path="plataforma/organizaciones"
+                  element={
+                    <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
+                      <PlatformOrganizationsReviewPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="plataforma/organizaciones-duplicadas"
+                  element={
+                    <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
+                      <PlatformDuplicatesReviewPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M11 · moderación básica de comunidad, cross-tenant (F-8).
               Audiencia de PLATAFORMA — denegada a roles de organización. */}
-              <Route
-                path="plataforma/comunidad"
-                element={
-                  <RequireRoles roles={COMMUNITY_MODERATION_ROLES}>
-                    <CommunityModerationPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M08 (S-6, RF18/RF19) · voluntariado + servicio social estudiantil —
+                <Route
+                  path="plataforma/comunidad"
+                  element={
+                    <RequireRoles roles={COMMUNITY_MODERATION_ROLES}>
+                      <CommunityModerationPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="plataforma/servicios"
+                  element={
+                    <RequireRoles roles={COMMUNITY_MODERATION_ROLES}>
+                      <ServicesModerationPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M08 (S-6, RF18/RF19) · voluntariado + servicio social estudiantil —
               esta era una entrada Fase-12 "ComingSoon" (sin backend); ahora
               real, gated a VOLUNTEERING_VIEW_ROLES (copiado VERBATIM del
               controller). `org-volunteering-page.tsx` (features/org) queda sin
               referenciar — fuera del alcance de archivos de S-6 tocar/eliminar
               ese módulo ajeno; señalado en el reporte de cierre. */}
-              <Route
-                path="organizacion/voluntariado"
-                element={
-                  <RequireRoles roles={VOLUNTEERING_VIEW_ROLES}>
-                    <VolunteerOpportunitiesPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="organizacion/voluntariado/:id"
-                element={
-                  <RequireRoles roles={VOLUNTEERING_VIEW_ROLES}>
-                    <VolunteerOpportunityDetailPage />
-                  </RequireRoles>
-                }
-              />
-              {/* Fase 12 (REFACTOR-VISUAL v2) · módulos aún no construidos —
+                <Route
+                  path="organizacion/voluntariado"
+                  element={
+                    <RequireRoles roles={VOLUNTEERING_VIEW_ROLES}>
+                      <VolunteerOpportunitiesPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/voluntariado/:id"
+                  element={
+                    <RequireRoles roles={VOLUNTEERING_VIEW_ROLES}>
+                      <VolunteerOpportunityDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Fase 12 (REFACTOR-VISUAL v2) · módulos aún no construidos —
               "ComingSoon", sin backend detrás. Gated a ORG_MEMBER_ROLES como
               "Mi organización"/"Formalización": una Persona no tiene org que
               gestionar. */}
-              <Route
-                path="organizacion/transparencia-nacional"
-                element={
-                  <RequireRoles roles={ORG_MEMBER_ROLES}>
-                    <NationalTransparencyPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M13 · reportes sellados de donaciones y servicio social. Mismo
+                <Route
+                  path="organizacion/transparencia-nacional"
+                  element={
+                    <RequireRoles roles={ORG_MEMBER_ROLES}>
+                      <NationalTransparencyPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M13 · reportes sellados de donaciones y servicio social. Mismo
               gate que Documentos (Owner/Administrator/ReadOnlyAuditor); el
               backend vuelve a exigir roles en cada ruta. La antigua entrada
               "Reporte exógeno" (ComingSoon) redirige aquí. */}
-              <Route
-                path="organizacion/reportes"
-                element={
-                  <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
-                    <OrgReportsPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M13 · firmantes de la organización (contador, revisor fiscal) y
+                <Route
+                  path="organizacion/reportes"
+                  element={
+                    <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
+                      <OrgReportsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M13 · firmantes de la organización (contador, revisor fiscal) y
                 bandeja de quien firma. El servidor vuelve a exigir roles: el
                 Owner gestiona; Owner y los auditores vinculados firman. */}
-              <Route
-                path="organizacion/firmantes"
-                element={
-                  <RequireRoles roles={ORG_SIGNERS_ROLES}>
-                    <OrgSignersPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="organizacion/documentos-por-firmar"
-                element={
-                  <RequireRoles roles={ORG_SIGNING_ROLES}>
-                    <OrgSigningInboxPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="organizacion/reporte-exogeno"
-                element={<Navigate to="/organizacion/reportes" replace />}
-              />
-              {/* M12 (S-7, RF23) · moderación de reseñas, cross-tenant. Audiencia
+                <Route
+                  path="organizacion/firmantes"
+                  element={
+                    <RequireRoles roles={ORG_SIGNERS_ROLES}>
+                      <OrgSignersPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/documentos-por-firmar"
+                  element={
+                    <RequireRoles roles={ORG_SIGNING_ROLES}>
+                      <OrgSigningInboxPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/reporte-exogeno"
+                  element={<Navigate to="/organizacion/reportes" replace />}
+                />
+                {/* M12 (S-7, RF23) · moderación de reseñas, cross-tenant. Audiencia
               de PLATAFORMA — ruta hermana de /plataforma/documentos y
               /plataforma/organizaciones-duplicadas (misma zona ya existente,
               no una nueva). */}
-              <Route
-                path="plataforma/resenas"
-                element={
-                  <RequireRoles roles={PLATFORM_REVIEWS_ROLES}>
-                    <PlatformReviewsReviewPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M12 (S-7, RF23) · "Mis reseñas" de la Persona — GET /reviews/mine
+                <Route
+                  path="plataforma/resenas"
+                  element={
+                    <RequireRoles roles={PLATFORM_REVIEWS_ROLES}>
+                      <PlatformReviewsReviewPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M12 (S-7, RF23) · "Mis reseñas" de la Persona — GET /reviews/mine
               no tiene gate de rol, así que esta ruta tampoco lleva
               <RequireRoles>, mismo criterio que "Mi voluntariado". */}
-              <Route path="resenas" element={<MyReviewsPage />} />
-              {/* M13 (S-8, RF24) · dashboards por audiencia de PLATAFORMA — la
+                <Route path="resenas" element={<MyReviewsPage />} />
+                {/* M13 (S-8, RF24) · dashboards por audiencia de PLATAFORMA — la
               audiencia Organización ya vive en /organizacion/* (S2-08). */}
-              <Route
-                path="plataforma/dashboard"
-                element={
-                  <RequireRoles roles={PLATFORM_ADMIN_DASHBOARD_ROLES}>
-                    <PlatformAdminDashboardPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="plataforma/dashboard/financiero"
-                element={
-                  <RequireRoles roles={PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES}>
-                    <PlatformSuperAdminDashboardPage />
-                  </RequireRoles>
-                }
-              />
-              {/* M01/T-030 · S-15 (pedido del cliente): fotos del banner del
+                <Route
+                  path="plataforma/dashboard"
+                  element={
+                    <RequireRoles roles={PLATFORM_ADMIN_DASHBOARD_ROLES}>
+                      <PlatformAdminDashboardPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="plataforma/dashboard/financiero"
+                  element={
+                    <RequireRoles roles={PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES}>
+                      <PlatformSuperAdminDashboardPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* M01/T-030 · S-15 (pedido del cliente): fotos del banner del
               portal general — mismo gate que el resto de /plataforma/*. */}
-              <Route
-                path="plataforma/banner"
-                element={
-                  <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
-                    <PlatformBannerPage />
-                  </RequireRoles>
-                }
-              />
-              {/* F19 · espacio de trabajo del equipo de plataforma. */}
-              <Route
-                path="plataforma/equipo"
-                element={
-                  <RequireRoles roles={PLATFORM_TEAM_ROLES}>
-                    <PlatformTeamPage />
-                  </RequireRoles>
-                }
-              />
-              {/* Correos: plantillas editables por el superadmin — mismo gate
+                <Route
+                  path="plataforma/banner"
+                  element={
+                    <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
+                      <PlatformBannerPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* F19 · espacio de trabajo del equipo de plataforma. */}
+                <Route
+                  path="plataforma/equipo"
+                  element={
+                    <RequireRoles roles={PLATFORM_TEAM_ROLES}>
+                      <PlatformTeamPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Correos: plantillas editables por el superadmin — mismo gate
                 que el resto de /plataforma/*. */}
-              <Route
-                path="plataforma/correos"
-                element={
-                  <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
-                    <PlatformEmailTemplatesPage />
-                  </RequireRoles>
-                }
-              />
-              <Route
-                path="plataforma/correos/:event"
-                element={
-                  <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
-                    <PlatformEmailTemplateEditorPage />
-                  </RequireRoles>
-                }
-              />
-              <Route path="*" element={<NotFoundPage />} />
+                <Route
+                  path="plataforma/correos"
+                  element={
+                    <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
+                      <PlatformEmailTemplatesPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="plataforma/correos/:event"
+                  element={
+                    <RequireRoles roles={PLATFORM_DOCUMENTS_ROLES}>
+                      <PlatformEmailTemplateEditorPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route path="*" element={<NotFoundPage />} />
+              </Route>
             </Route>
           </Route>
-        </Route>
-      </Routes>
+        </Routes>
+      </Suspense>
     </FeatureRouteGate>
   );
 }
