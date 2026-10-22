@@ -44,8 +44,11 @@ jobs:
       - name: Build (api + web)
         run: pnpm turbo run build
 
+      # En un runner propio más lento (ver docs/operacion/runner-propio.md),
+      # jest y vitest compiten por los mismos núcleos y algunas pruebas de UI
+      # pasan de los 5 s por defecto. Se corren de a un paquete y con más margen.
       - name: Unit tests (jest + vitest)
-        run: pnpm turbo run test
+        run: pnpm turbo run test --concurrency=1 -- --testTimeout=30000
 
   rls-no-leak:
     name: rls-no-leak · postura RLS · deriva de esquema (RNF03 gate)
