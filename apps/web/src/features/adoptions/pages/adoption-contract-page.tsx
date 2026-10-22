@@ -34,6 +34,7 @@ import {
   transitionAdoptionContract,
   updateAdoptionContractData,
 } from '../api/adoptions-api';
+import { AdoptionDeliveryPanel } from '../components/adoption-delivery-panel';
 import {
   CONTRACT_STATUS_LABELS,
   SIGNER_ROLE_LABELS,
@@ -420,6 +421,14 @@ export function AdoptionContractPage() {
             </p>
           )}
         </section>
+
+        {/* --- Ajuste 6: acta de entrega (org, con el contrato firmado) --- */}
+        {canManage && contract.status === 'signed' && (
+          <AdoptionDeliveryPanel
+            contractId={contract.id}
+            animalName={contract.payload.animal.name}
+          />
+        )}
 
         {/* --- Diligenciar datos (org, mientras nadie ha firmado) --- */}
         {canManage && canEditData && (

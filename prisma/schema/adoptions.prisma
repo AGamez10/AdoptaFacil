@@ -78,6 +78,8 @@ model AdoptionContract {
   /// UTC del sellado (NULL hasta signed).
   signedAt       DateTime? @map("signed_at")
 
+  deliveries AdoptionDelivery[]
+
   @@unique([requestId, version])
   @@index([organizationId])
   @@index([status])
@@ -143,4 +145,52 @@ model AdoptionFollowUpEvidence {
   @@index([organizationId])
   @@index([milestoneId])
   @@map("adoption_followup_evidence")
+}
+
+/// Ajuste 6 — ACTA DE ENTREGA del animal. Tenant-scoped (organization_id + RLS
+/// ENABLE+FORCE + tenant_isolation). Estados: pending_confirmation → confirmed
+/// (TERMINAL: el trigger `adoption_delivery_freeze` aborta cualquier UPDATE de una
+/// fila confirmada) | cancelled. El código de confirmación solo se guarda como
+/// hash. El adoptante (cross-tenant) lee y confirma vía funciones SECURITY
+/// DEFINER de la migración; confirmar marca el animal como adoptado y programa
+/// los hitos de `milestone_plan` en la misma transacción.
+///
+/// FRONTERAS: la relación con el contrato SÍ se modela (ambas tablas M04, y la
+/// cascada desde la organización llega por ahí); el animal se referencia por id.
+model AdoptionDelivery {
+  id               String    @id @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  contractId       String    @map("contract_id") @db.Uuid
+  requestId        String    @map("request_id") @db.Uuid
+  animalId         String    @map("animal_id") @db.Uuid
+  adopterUserId    String    @map("adopter_user_id") @db.Uuid
+  /// Dato personal del adoptante (Ley 1581) — para correo y alertas.
+  adopterName      String    @map("adopter_name")
+  adopterEmail     String    @map("adopter_email")
+  animalName       String    @map("animal_name")
+  /// AdoptionDeliveryStatus como texto.
+  status           String    @default("pending_confirmation")
+  /// AdoptionDeliveryDetails.
+  details          Json
+  /// AdoptionAnimalRecord (ficha que recibe el adoptante).
+  record           Json
+  /// AdoptionDeliveryMilestonePlanItem[].
+  milestonePlan    Json      @map("milestone_plan")
+  /// SHA-256 hex del acta canónica (detalles + ficha + plan).
+  contentHash      String    @map("content_hash")
+  /// SHA-256 hex de "id:código"; NULL cuando ya no hay código activo.
+  codeHash         String?   @map("code_hash")
+  codeExpiresAt    DateTime? @map("code_expires_at")
+  codeAttempts     Int       @default(0) @map("code_attempts")
+  createdByUserId  String    @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  confirmedAt      DateTime? @map("confirmed_at")
+
+  contract AdoptionContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([contractId])
+  @@index([adopterUserId])
+  @@map("adoption_deliveries")
 }

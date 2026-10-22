@@ -325,6 +325,41 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'adoption.delivery_code',
+    label: 'Código para confirmar la entrega',
+    description:
+      'Se envía al adoptante cuando la organización registra la entrega del animal, con el código para confirmarla.',
+    audience: 'La familia adoptante',
+    category: 'transactional',
+    theme: 'adoption',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre de quien recibe', 'Ana María'),
+      ANIMAL,
+      ORG,
+      v('codigo', 'Código de confirmación', '482913'),
+      v('minutos', 'Minutos de vigencia del código', '30'),
+      v(
+        'enlace',
+        'Enlace para confirmar la entrega',
+        'https://adoptafacil.co/mis-adopciones/entrega/abc?codigo=482913',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Confirma que recibiste a {{animal}}',
+      preheader: 'Tu código para confirmar la entrega es {{codigo}}.',
+      heading: '¡Llegó el día! 🐾',
+      body:
+        'Hola {{nombre}},\n\n**{{organizacion}}** registró la entrega de **{{animal}}**. ' +
+        'Para confirmarla, abre el enlace con tu sesión iniciada o escribe este código:\n\n**{{codigo}}**\n\n' +
+        'El código vence en {{minutos}} minutos. Al confirmar recibes la ficha de {{animal}} con sus vacunas y cuidados.',
+      ctaLabel: 'Confirmar la entrega',
+      footerNote: 'Si no estás recibiendo a {{animal}} en este momento, ignora este correo.',
+    },
+  },
+  {
     event: 'volunteering.enrollment_received',
     label: 'Inscripción de voluntariado recibida',
     description: 'Se envía al voluntario cuando se inscribe a una oportunidad.',

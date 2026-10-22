@@ -116,6 +116,8 @@ const AdoptionRequestPage = lazyPage(loadAdoptions, 'AdoptionRequestPage');
 const AdoptionsKanbanPage = lazyPage(loadAdoptions, 'AdoptionsKanbanPage');
 const MyAdoptionRequestsPage = lazyPage(loadAdoptions, 'MyAdoptionRequestsPage');
 const MyFollowUpsPage = lazyPage(loadAdoptions, 'MyFollowUpsPage');
+const MyAnimalsPage = lazyPage(loadAdoptions, 'MyAnimalsPage');
+const DeliveryConfirmPage = lazyPage(loadAdoptions, 'DeliveryConfirmPage');
 const loadConsents = () => import('../../features/consents');
 const ThirdPartyConsentsPage = lazyPage(loadConsents, 'ThirdPartyConsentsPage');
 const loadDonations = () => import('../../features/donations');
@@ -373,6 +375,10 @@ export function AppRoutes() {
                 {/* T-028c: "Mis seguimientos" del adoptante — GET /adoptions/followups/mine
               autoriza por identidad (sin @Roles), igual que "Mis solicitudes". */}
                 <Route path="mis-seguimientos" element={<MyFollowUpsPage />} />
+                {/* Ajuste 6: el adoptante confirma la entrega (QR/código) y ve la
+              ficha de sus animales; autorizan por identidad en la API, sin @Roles. */}
+                <Route path="mis-adopciones/entrega/:id" element={<DeliveryConfirmPage />} />
+                <Route path="mis-animales" element={<MyAnimalsPage />} />
                 {/* M03 · animales + expediente clínico + recordatorios (T-031, wires
               T-104/T-105/T-106). Cada ruta exige los MISMOS @Roles que su endpoint
               (deny-by-default). El panel clínico es EMBEBIBLE por animalId → vive

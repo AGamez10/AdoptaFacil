@@ -430,6 +430,8 @@ export const navItems: NavItem[] = [
   { path: '/mis-solicitudes', label: 'Mis solicitudes', icon: PawIcon, personaOnly: true },
   // T-028c: el adoptante responde sus hitos de seguimiento post-adopción.
   { path: '/mis-seguimientos', label: 'Mis seguimientos', icon: PawIcon, personaOnly: true },
+  // Ajuste 6: ficha de los animales recibidos (entrega confirmada).
+  { path: '/mis-animales', label: 'Mis animales', icon: PawIcon, personaOnly: true },
   // MENU-SUBMENUS: "Apadrinamientos" agrupa "Mis apadrinamientos" (donante,
   // sin @Roles) y la gestión de la org ("Apadrinamientos recibidos", antes
   // el ítem plano "Apadrinamientos", SPONSORSHIP_VIEW_ROLES) — mismas rutas y
