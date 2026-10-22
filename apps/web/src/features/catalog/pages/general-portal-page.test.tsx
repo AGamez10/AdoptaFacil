@@ -228,14 +228,21 @@ describe('GeneralPortalPage (landing)', () => {
     ).toMatch(/^https:\/\/wa\.me\/573028528926\?text=/);
   });
 
-  it('shows the organization plans without publishing prices that are still being validated', async () => {
+  it('shows the same optional plans and prices as the plans screen, flagging what is not built yet', async () => {
     renderLanding();
     await settle();
     expect(
       within(screen.getByTestId('plan-free')).getByText('Gratis, siempre'),
     ).toBeInTheDocument();
-    expect(within(screen.getByTestId('plan-crece')).getByText('Muy pronto')).toBeInTheDocument();
-    expect(within(screen.getByTestId('plan-pro')).getByText('Muy pronto')).toBeInTheDocument();
-    expect(screen.getByTestId('landing-plans').textContent).not.toMatch(/\$\s?\d/);
+    const crece = within(screen.getByTestId('plan-crece'));
+    expect(crece.getByText('$39.000 al mes')).toBeInTheDocument();
+    expect(crece.getByText(/Opcional/)).toBeInTheDocument();
+    expect(crece.getByText('Todo lo del plan Gratis')).toBeInTheDocument();
+    expect(crece.getByText('Hasta 10 personas del equipo')).toBeInTheDocument();
+    const pro = within(screen.getByTestId('plan-pro'));
+    expect(pro.getByText('$79.000 al mes')).toBeInTheDocument();
+    expect(pro.getByText('Dominio propio (www.turefugio.org)')).toBeInTheDocument();
+    expect(pro.getAllByText('Próximamente').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('landing-plans').textContent).not.toMatch(/Muy pronto/);
   });
 });

@@ -60,10 +60,10 @@ export interface PlanDefinition {
   name: string;
   /** One-line pitch for the plans screen. */
   tagline: string;
-  /** Price in COP per month BEFORE IVA. TODO(client): por validar con los
-   *  refugios del piloto (propuesta 39.000 / 79.000). */
+  /** Price in COP per month BEFORE IVA. Client decision (2026-10-22): these
+   *  prices are published as OPTIONAL plans; the free plan stays free. */
   monthlyPriceCop: number;
-  /** Price in COP per year BEFORE IVA (2 months free). TODO(client). */
+  /** Price in COP per year BEFORE IVA (2 months free). */
   annualPriceCop: number;
   limits: PlanLimits;
   capabilities: Record<PlanCapability, boolean>;
@@ -82,9 +82,10 @@ const NONE: Record<PlanCapability, boolean> = {
   prioritySupport: false,
 };
 
-/** The plan catalog. Prices are a proposal pending validation with the pilot
- *  shelters (TODO(client)); the API reads them from here so the plans screen and
- *  the enforcement never disagree. */
+/** The plan catalog: the single source of truth for the landing, the plans
+ *  screen and the enforcement, so they never disagree. Paid plans are optional
+ *  (client decision 2026-10-22); publishing a price never turns charging on —
+ *  that is `PLAN_ENFORCEMENT` plus a manual or ePayco subscription. */
 export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
   free: {
     key: 'free',
@@ -134,6 +135,101 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     },
   },
 };
+
+/**
+ * How each capability is described to organizations, and whether it already
+ * works today. `available: false` = sold in the plan but still being built: the
+ * landing and the plans screen show it as "próximamente", so no page promises
+ * something the product does not do yet (Estatuto del Consumidor, publicidad).
+ */
+export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; available: boolean }> = {
+  portalAllDesigns: { label: 'Todos los diseños de portal público', available: true },
+  portalPremiumDesigns: {
+    label: 'Plantillas Pro del portal (como Historias, con video)',
+    available: true,
+  },
+  portalAdvancedCustomization: {
+    label: 'Personalización avanzada del portal',
+    available: true,
+  },
+  portalRemoveSeal: {
+    label: 'Portal sin el sello "Hecho con AdoptaFácil"',
+    available: false,
+  },
+  customDomain: { label: 'Dominio propio (www.turefugio.org)', available: false },
+  brandedEmails: { label: 'Correos a adoptantes y donantes con tu marca', available: false },
+  dataExport: { label: 'Exportar tus datos a Excel', available: false },
+  impactReport: { label: 'Reporte de impacto en PDF para donantes', available: false },
+  corporateSponsorship: { label: 'Patrocinio de empresas', available: false },
+  prioritySupport: { label: 'Soporte prioritario por WhatsApp', available: true },
+};
+
+/** Included in every plan, free too: what protects the animal, the adopter and
+ *  transparency is never sold. */
+export const PLAN_ALWAYS_INCLUDED = [
+  'Portal público en tu subdominio, con tu logo',
+  'Animales ilimitados con ficha clínica',
+  'Adopciones con contrato y seguimiento',
+  'Recaudo de donaciones, también si aún no estás formalizado',
+  'Comprobantes de donación y documentos de la organización',
+] as const;
+
+export const PLAN_LIMIT_LABELS: Record<PlanLimit, string> = {
+  members: 'Miembros del equipo',
+  storageMb: 'Almacenamiento',
+  portalDesigns: 'Diseños de portal',
+};
+
+/** "Sin límite", "1 GB", "512 MB" or the plain number. */
+export function formatPlanLimit(limit: PlanLimit, value: number | null): string {
+  if (value === null) return 'Sin límite';
+  if (limit === 'storageMb') {
+    return value >= 1024 ? `${Math.round((value / 1024) * 10) / 10} GB` : `${value} MB`;
+  }
+  return String(value);
+}
+
+export interface PlanHighlight {
+  text: string;
+  /** False while the feature is still being built ("próximamente"). */
+  available: boolean;
+}
+
+/**
+ * Short list of what a plan adds, derived from {@link PLAN_CATALOG} so the
+ * landing cannot drift from the plans screen: the free plan lists what is
+ * always included plus its limits; a paid plan lists "todo lo del plan
+ * anterior", what it adds over that plan, and its limits.
+ */
+export function planHighlights(key: PlanKey): PlanHighlight[] {
+  const plan = PLAN_CATALOG[key];
+  const index = PLAN_KEYS.indexOf(key);
+  const previous = index > 0 ? PLAN_CATALOG[PLAN_KEYS[index - 1]] : null;
+  const members =
+    plan.limits.members === null
+      ? 'Equipo sin límite de personas'
+      : `Hasta ${plan.limits.members} personas del equipo`;
+  const storage = `${formatPlanLimit('storageMb', plan.limits.storageMb)} para fotos y documentos`;
+  if (!previous) {
+    return [
+      ...PLAN_ALWAYS_INCLUDED.slice(0, 4).map((text) => ({ text, available: true })),
+      { text: members, available: true },
+      { text: storage, available: true },
+    ];
+  }
+  const added = PLAN_CAPABILITIES.filter(
+    (capability) => plan.capabilities[capability] && !previous.capabilities[capability],
+  ).map((capability) => ({
+    text: PLAN_CAPABILITY_INFO[capability].label,
+    available: PLAN_CAPABILITY_INFO[capability].available,
+  }));
+  return [
+    { text: `Todo lo del plan ${previous.name}`, available: true },
+    ...added,
+    { text: members, available: true },
+    { text: storage, available: true },
+  ];
+}
 
 /**
  * Promoción de lanzamiento (decisión del cliente, 2026-10-16): toda organización

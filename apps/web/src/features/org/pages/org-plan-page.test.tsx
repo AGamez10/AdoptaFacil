@@ -62,6 +62,8 @@ describe('OrgPlanPage', () => {
     expect(screen.getByText(/46\.410/)).toBeInTheDocument();
     expect(screen.getByText(/94\.010/)).toBeInTheDocument();
     expect(screen.getByText('Dominio propio (www.turefugio.org)')).toBeInTheDocument();
+    expect(screen.getAllByText('Opcional')).toHaveLength(2);
+    expect(screen.getAllByText('Próximamente').length).toBeGreaterThan(0);
     expect(
       screen.getByText(/Recaudo de donaciones, también si aún no estás formalizado/),
     ).toBeInTheDocument();

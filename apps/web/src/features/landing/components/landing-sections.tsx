@@ -1,7 +1,13 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { PublicAnimalSummary } from '@adoptafacil/contracts';
-import { PLAN_CATALOG } from '@adoptafacil/contracts';
+import {
+  LAUNCH_PRO_PROMO_MONTHS,
+  PLAN_CATALOG,
+  PLAN_KEYS,
+  planHighlights,
+  type PlanKey,
+  type PublicAnimalSummary,
+} from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
@@ -531,37 +537,13 @@ const ORG_FEATURES = [
 ] as const;
 
 /**
- * Planes para organizaciones (catálogo real de `packages/contracts`). Los
- * precios de Crece y Pro están por validar con los refugios del piloto
- * (TODO(client) en `plans.ts`), así que aquí no se publican todavía.
+ * Planes para organizaciones: precios, límites y lista salen del catálogo único
+ * de `packages/contracts` (`PLAN_CATALOG`, `planHighlights`), el mismo que usa
+ * "Plan y facturación" dentro del panel. Los planes de pago son opcionales.
  */
-const SHOW_PAID_PRICES = false;
-
-const PLAN_HIGHLIGHTS: Record<keyof typeof PLAN_CATALOG, string[]> = {
-  free: [
-    'Portal público con tu logo',
-    'Animales, adopciones y contrato en línea',
-    'Campañas y recaudo de donaciones',
-    'Hasta 3 personas del equipo',
-  ],
-  crece: [
-    'Todo lo del plan Gratis',
-    'Los 4 diseños de portal, sin sello',
-    'Correos con tu marca',
-    'Reporte de impacto y exportar datos',
-  ],
-  pro: [
-    'Todo lo del plan Crece',
-    'Tu propio dominio',
-    'Apadrinamiento de empresas',
-    'Soporte prioritario por WhatsApp',
-  ],
-};
-
-function planPrice(key: keyof typeof PLAN_CATALOG): string {
+function planPrice(key: PlanKey): string {
   const plan = PLAN_CATALOG[key];
   if (plan.monthlyPriceCop === 0) return 'Gratis, siempre';
-  if (!SHOW_PAID_PRICES) return 'Muy pronto';
   return `$${plan.monthlyPriceCop.toLocaleString('es-CO')} al mes`;
 }
 
@@ -627,10 +609,11 @@ export function ForOrganizationsSection() {
           <h3 className={styles.plans__title}>Planes para organizaciones</h3>
           <p className={styles.plans__lead}>
             Lo que protege al animal, al adoptante y la transparencia es gratis para siempre. Los
-            planes suman marca, alcance y comodidad.
+            planes de pago son opcionales: suman marca, alcance y comodidad. Al lanzar, cada
+            organización tiene Pro gratis por {LAUNCH_PRO_PROMO_MONTHS} meses.
           </p>
           <ul className={styles.plans__grid}>
-            {(['free', 'crece', 'pro'] as const).map((key) => (
+            {PLAN_KEYS.map((key) => (
               <li
                 key={key}
                 className={cn(styles.plan, key === 'free' && styles['plan--featured'])}
@@ -638,12 +621,21 @@ export function ForOrganizationsSection() {
               >
                 <p className={styles.plan__name}>{PLAN_CATALOG[key].name}</p>
                 <p className={styles.plan__price}>{planPrice(key)}</p>
+                {PLAN_CATALOG[key].monthlyPriceCop > 0 && (
+                  <p className={styles.plan__note}>
+                    Opcional · + IVA, o{' '}
+                    {`$${PLAN_CATALOG[key].annualPriceCop.toLocaleString('es-CO')}`} al año
+                  </p>
+                )}
                 <p className={styles.plan__tagline}>{PLAN_CATALOG[key].tagline}</p>
                 <ul className={styles.plan__list}>
-                  {PLAN_HIGHLIGHTS[key].map((item) => (
-                    <li key={item}>
+                  {planHighlights(key).map((item) => (
+                    <li key={item.text}>
                       <IconCheck className={styles.plan__check} />
-                      {item}
+                      <span>
+                        {item.text}
+                        {!item.available && <span className={styles.plan__soon}>Próximamente</span>}
+                      </span>
                     </li>
                   ))}
                 </ul>
