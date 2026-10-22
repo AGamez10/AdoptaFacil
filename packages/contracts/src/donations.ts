@@ -200,10 +200,15 @@ export interface CreateDonationInput {
    * without one); the REAL gateway adapter requires it and throws a clear
    * error otherwise. See `CreateCollectionInput` (payments.ts) for the full
    * field-by-field rationale — these four mirror it verbatim.
+   * @deprecated Mercado Pago retirado 2026-10-17: the web no longer sends a card (ePayco collects in its
+   * own checkout). Kept because contracts are additive-only.
    */
   cardToken?: string;
+  /** @deprecated Mercado Pago retirado 2026-10-17. */
   paymentMethodId?: string;
+  /** @deprecated Mercado Pago retirado 2026-10-17. */
   paymentMethodType?: 'credit_card' | 'debit_card';
+  /** @deprecated Mercado Pago retirado 2026-10-17. */
   installments?: number;
 }
 
@@ -282,9 +287,9 @@ export interface GuestDonationAccess {
 
 /**
  * Proyección PÚBLICA y MÍNIMA para la pantalla de "gracias" post-checkout
- * (`GET /public/donations/status/:reference`), a la que MercadoPago redirige
- * al donante de vuelta (`back_urls` + `auto_return`) con `external_reference`
- * (== nuestro propio `collectionId`) en la query string. Deliberadamente
+ * (`GET /public/donations/status/:reference`), a la que la pasarela redirige
+ * al donante de vuelta con nuestra propia referencia (== `collectionId`) en la
+ * query string. Deliberadamente
  * acotada — mismo criterio de exposición que `DonationCertificateVerification`/
  * `GuestDonationAccess`: solo estado/monto/nombre de la organización, NUNCA la
  * identidad del donante ni ids internos.
@@ -300,7 +305,7 @@ export interface DonationPublicStatus {
  * PUBLIC availability of an organization to RECEIVE donations
  * (`GET /public/donations/organizations/:organizationId/availability`, no auth).
  * `canReceiveDonations` is `true` only when the organization has connected its
- * MercadoPago account (OAuth). Deliberately a single boolean — the connected
+ * ePayco account (Mercado Pago, retired 2026-10-17, no longer counts). Deliberately a single boolean — the connected
  * account id itself is never exposed.
  */
 export interface DonationOrganizationAvailability {

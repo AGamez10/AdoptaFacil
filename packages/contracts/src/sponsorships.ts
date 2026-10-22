@@ -216,6 +216,7 @@ export interface CancelSponsorshipInput {
  * token.
  */
 export interface PaySponsorshipPaymentInput {
+  /** @deprecated Mercado Pago retirado 2026-10-17: the web no longer tokenizes cards (no Card Payment Brick). */
   cardToken?: string;
   paymentMethodId?: string;
   paymentMethodType?: 'credit_card' | 'debit_card';

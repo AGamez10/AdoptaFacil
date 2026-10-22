@@ -29,7 +29,9 @@ import type { PaymentCurrency } from './payments';
 /**
  * Gateways an organization can connect. Since 2026-10-15 ePayco is the main
  * gateway (owner's decision, ADR-PAG-002); the order here is historical and
- * carries no meaning.
+ * carries no meaning. `mercadopago` stays in the list (contracts are
+ * additive-only) but was retired from the product on 2026-10-17: no flow
+ * offers it any more, and its catalog entries below are a historical record.
  */
 export const GATEWAY_PROVIDERS = [
   'mercadopago',

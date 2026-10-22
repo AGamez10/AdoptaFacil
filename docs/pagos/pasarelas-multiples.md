@@ -3,6 +3,10 @@
 > Estado: **decidido por el dueño** (2026-10-08) e implementado para Mercado Pago, apagado. No activa dinero real.
 > **2026-10-15:** el dueño eligió ePayco como pasarela principal; ver [ADR-PAG-002](./epayco.md). Este ADR (sin
 > custodia, comisión 0 % en modo directo) sigue mandando para todas las pasarelas.
+> **2026-10-17:** Mercado Pago retirado del producto por decisión del dueño; la tabla y los tokens se
+> eliminan con la migración 20261017110000 por decisión del dueño. Sin driver `mercadopago`, sin "Conectar
+> Mercado Pago", sin Card Payment Brick ni renovación de tokens. Lo que sigue sobre Mercado Pago es registro
+> histórico de la decisión.
 > Contrato: `packages/contracts/src/payment-gateways.ts` · pruebas: `packages/contracts/test/payment-gateways.test.ts`.
 > No es asesoría jurídica ni tributaria: lo marcado ⚖️ va al abogado y lo marcado 🧾 al contador.
 

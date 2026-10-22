@@ -21,8 +21,8 @@ function formatConnectedAt(iso: string): string {
  * "Conectar ePayco" (ADR-PAG-002) — Owner/Administrator conecta la cuenta
  * ePayco PROPIA de la organización. Las donaciones se cobran con esas llaves,
  * así que el dinero llega directo a la cuenta ePayco de la organización
- * (AdoptaFácil nunca lo recibe). Se muestra en lugar de la tarjeta de Mercado
- * Pago cuando `VITE_PAYMENT_PROVIDER=epayco`.
+ * (AdoptaFácil nunca lo recibe). Es la única pasarela (Mercado Pago se
+ * retiró el 2026-10-17); se oculta solo con `VITE_PAYMENT_PROVIDER=off`.
  *
  * Tres estados: "Cobros activos" (conectada), "Cobros pendientes de conexión"
  * (un estado, no un error, con un único siguiente paso y el avance guardado)

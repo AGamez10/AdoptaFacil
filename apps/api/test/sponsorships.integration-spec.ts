@@ -18,8 +18,8 @@ import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 /**
  * Requerimiento #17: `subscribe()` now ALWAYS calls `PaymentPort.createCollection`
  * — this test file's app runs against `.env`'s real `PAYMENT_DRIVER` otherwise
- * (this repo's env is currently `mercadopago`, which hard-requires a tokenized
- * card), so every test here would 500 without this override. Overriding with a
+ * (a real gateway driver needs the organization's connected account), so
+ * every test here would 500 without this override. Overriding with a
  * controllable `FakePaymentAdapter` subclass keeps this file network-free/
  * deterministic (same reasoning the adapter's own doc comment gives) AND lets
  * the "declined" test flip the outcome without touching any other test.

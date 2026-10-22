@@ -23,7 +23,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** La página de donar consulta si la organización tiene MercadoPago conectado. */
+/** La página de donar consulta si la organización tiene ePayco conectado. */
 function stubOrgConnected() {
   vi.stubGlobal(
     'fetch',

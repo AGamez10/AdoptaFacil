@@ -5,8 +5,8 @@ import { renderShell } from '../../../test-utils';
 
 /**
  * Pestaña "Medios de pago" (ADR-PAG-002): "QR de donaciones" de la
- * organización y "Conectar ePayco" (con VITE_PAYMENT_PROVIDER=epayco, en lugar
- * de Mercado Pago). Mismo stub de fetch que `org-profile-page-mercadopago.test.tsx`.
+ * organización y "Conectar ePayco" (la única pasarela; Mercado Pago se retiró
+ * el 2026-10-17).
  */
 function ownerSession() {
   return {
@@ -62,7 +62,7 @@ describe('Medios de pago — QR de donaciones', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
     stubFetch((url) =>
-      url.includes('/org/mercadopago/status') ? { body: { connected: false } } : { body: BASE_ORG },
+      url.includes('/org/epayco/status') ? { body: { connected: false } } : { body: BASE_ORG },
     );
     renderShell({ route: '/organizacion', ...ownerSession() });
 
@@ -88,7 +88,7 @@ describe('Medios de pago — QR de donaciones', () => {
   it('uses the real subdomain URL when the org has one and the portal domain is configured', async () => {
     vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.org');
     stubFetch((url) =>
-      url.includes('/org/mercadopago/status')
+      url.includes('/org/epayco/status')
         ? { body: { connected: false } }
         : { body: { ...BASE_ORG, subdomain: 'patitas' } },
     );
@@ -102,7 +102,7 @@ describe('Medios de pago — QR de donaciones', () => {
 
   it('shows an empty state that takes the manager to set the portal link when there is no slug', async () => {
     stubFetch((url) =>
-      url.includes('/org/mercadopago/status')
+      url.includes('/org/epayco/status')
         ? { body: { connected: false } }
         : { body: { id: 'org-1', name: 'Refugio Patitas' } },
     );
@@ -187,6 +187,28 @@ describe('Medios de pago — asistente "Conectar ePayco" (VITE_PAYMENT_PROVIDER=
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     // Sin formulario plano: las llaves se piden dentro del asistente.
     expect(screen.queryByLabelText('P_KEY')).not.toBeInTheDocument();
+  });
+
+  it('shows the ePayco card by default (VITE_PAYMENT_PROVIDER unset) and never Mercado Pago', async () => {
+    const calls = stubFetch(statusStub());
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByRole('heading', { name: 'ePayco' })).toBeInTheDocument();
+    expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
+    expect(calls.some((c) => c.url.includes('/org/mercadopago'))).toBe(false);
+  });
+
+  it('kill switch (VITE_PAYMENT_PROVIDER=off): a calm note, no connect card, no status call', async () => {
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', 'off');
+    const calls = stubFetch(statusStub());
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByTestId('payments-online-off')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ePayco' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
+    expect(calls.some((c) => c.url.includes('/org/epayco/status'))).toBe(false);
   });
 
   it('"Sí" path: one field per screen, then PUTs the four keys, clears the secrets and the draft', async () => {

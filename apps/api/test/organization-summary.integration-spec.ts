@@ -115,8 +115,8 @@ describe('Organization summary (S2-08, M13)', () => {
 
   beforeAll(async () => {
     // Requerimiento #17: `POST /sponsorships` now charges a real collection —
-    // overridden here so this file's `.env` (`PAYMENT_DRIVER=mercadopago`)
-    // doesn't force a tokenized card just to subscribe a fixture sponsorship
+    // overridden here so this file's `.env` (a real `PAYMENT_DRIVER`)
+    // doesn't force a gateway checkout just to subscribe a fixture sponsorship
     // (this file never asserts anything payment-specific; only the
     // sponsorship/donation-amount test files above own that coverage).
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })

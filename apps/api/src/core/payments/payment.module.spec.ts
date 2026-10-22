@@ -3,8 +3,8 @@ import { Test } from '@nestjs/testing';
 import { FakePaymentAdapter, type PaymentPort } from '@adoptafacil/contracts';
 import { PAYMENT_PORT } from './payment.port';
 import { PaymentModule } from './payment.module';
-import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
 import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
+import { DisabledPaymentAdapter } from './disabled-payment.adapter';
 
 describe('PaymentModule (T-052)', () => {
   async function resolvePort(): Promise<PaymentPort> {
@@ -14,7 +14,7 @@ describe('PaymentModule (T-052)', () => {
     return moduleRef.get<PaymentPort>(PAYMENT_PORT);
   }
 
-  /** Isolated env (ignores the real .env) so the mercadopago-driver test is deterministic. */
+  /** Isolated env (ignores the real .env) so the driver tests are deterministic. */
   async function resolvePortWithEnv(env: Record<string, string>): Promise<PaymentPort> {
     const moduleRef = await Test.createTestingModule({
       imports: [
@@ -69,20 +69,13 @@ describe('PaymentModule (T-052)', () => {
     expect(p1.status).toBe('scheduled');
   });
 
-  it('binds PAYMENT_PORT to the MercadoPagoPaymentAdapter when PAYMENT_DRIVER=mercadopago', async () => {
-    const port = await resolvePortWithEnv({
-      PAYMENT_DRIVER: 'mercadopago',
-      MERCADOPAGO_BASE_URL: 'https://api.mercadopago.com',
-      MERCADOPAGO_PUBLIC_KEY: 'TEST-pub-dummy',
-      MERCADOPAGO_ACCESS_TOKEN: 'TEST-token-dummy',
-      MERCADOPAGO_WEBHOOK_SECRET: 'test_webhook_secret_dummy',
-      WEB_BASE_URL: 'http://localhost:5173',
-    });
-    expect(port).toBeInstanceOf(MercadoPagoPaymentAdapter);
-  });
-
   it('binds PAYMENT_PORT to the EpaycoPaymentAdapter when PAYMENT_DRIVER=epayco (no platform keys needed)', async () => {
     const port = await resolvePortWithEnv({ PAYMENT_DRIVER: 'epayco' });
     expect(port).toBeInstanceOf(EpaycoPaymentAdapter);
+  });
+
+  it('binds the DisabledPaymentAdapter when PAYMENT_DRIVER=disabled', async () => {
+    const port = await resolvePortWithEnv({ PAYMENT_DRIVER: 'disabled' });
+    expect(port).toBeInstanceOf(DisabledPaymentAdapter);
   });
 });

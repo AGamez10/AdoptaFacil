@@ -23,7 +23,6 @@ ALTER TABLE "donation_access_links" DROP CONSTRAINT "donation_access_links_donat
 ALTER TABLE "donation_receipts" DROP CONSTRAINT "donation_receipts_organization_id_fkey";
 ALTER TABLE "donations" DROP CONSTRAINT "donations_organization_id_fkey";
 ALTER TABLE "organization_bank_accounts" DROP CONSTRAINT "organization_bank_accounts_organization_id_fkey";
-ALTER TABLE "organization_mercadopago_accounts" DROP CONSTRAINT "organization_mercadopago_accounts_organization_id_fkey";
 ALTER TABLE "organization_subscriptions" DROP CONSTRAINT "organization_subscriptions_organization_id_fkey";
 ALTER TABLE "payouts" DROP CONSTRAINT "payouts_organization_id_fkey";
 ALTER TABLE "platform_settings" ALTER COLUMN "updated_at" DROP DEFAULT;

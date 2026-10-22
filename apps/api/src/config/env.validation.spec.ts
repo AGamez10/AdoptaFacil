@@ -33,62 +33,25 @@ describe('validateEnv — NOTIFICATION_DRIVER fail-fast (T-109)', () => {
 });
 
 describe('validateEnv — PAYMENT_DRIVER fail-fast (T-052)', () => {
-  it('boots with the default fake driver (no MERCADOPAGO_* vars needed)', () => {
+  it('boots with the default fake driver (no gateway vars needed)', () => {
     expect(() => validateEnv({ ...BASE })).not.toThrow();
     expect(validateEnv({ ...BASE }).PAYMENT_DRIVER).toBe('fake');
   });
 
-  it('fails fast when driver=mercadopago and credentials are missing', () => {
-    expect(() => validateEnv({ ...BASE, PAYMENT_DRIVER: 'mercadopago' })).toThrow(
-      /MERCADOPAGO_PUBLIC_KEY/,
-    );
+  // Mercado Pago retired from the product on 2026-10-17 (owner decision).
+  it("rejects PAYMENT_DRIVER='mercadopago' (Mercado Pago retired)", () => {
+    expect(() => validateEnv({ ...BASE, PAYMENT_DRIVER: 'mercadopago' })).toThrow(/PAYMENT_DRIVER/);
   });
 
-  it('accepts driver=mercadopago when all MERCADOPAGO_* vars are present', () => {
-    expect(() =>
-      validateEnv({
-        ...BASE,
-        PAYMENT_DRIVER: 'mercadopago',
-        MERCADOPAGO_BASE_URL: 'https://api.mercadopago.com',
-        MERCADOPAGO_PUBLIC_KEY: 'TEST-pub-dummy',
-        MERCADOPAGO_ACCESS_TOKEN: 'TEST-token-dummy',
-        MERCADOPAGO_WEBHOOK_SECRET: 'test_webhook_secret_dummy',
-        MERCADOPAGO_APP_ID: 'app-id-dummy',
-        MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
-      }),
-    ).not.toThrow();
-  });
-
-  // T-OAuth-Connect: MERCADOPAGO_APP_ID/MERCADOPAGO_CLIENT_SECRET are required
-  // the SAME way as the pre-existing MERCADOPAGO_* keys above (Split de Pagos
-  // 1:1 connect flow needs them for the OAuth dance).
-  it('fails fast when driver=mercadopago and MERCADOPAGO_CLIENT_SECRET is missing (T-OAuth-Connect)', () => {
-    expect(() =>
-      validateEnv({
-        ...BASE,
-        PAYMENT_DRIVER: 'mercadopago',
-        MERCADOPAGO_BASE_URL: 'https://api.mercadopago.com',
-        MERCADOPAGO_PUBLIC_KEY: 'TEST-pub-dummy',
-        MERCADOPAGO_ACCESS_TOKEN: 'TEST-token-dummy',
-        MERCADOPAGO_WEBHOOK_SECRET: 'test_webhook_secret_dummy',
-        MERCADOPAGO_APP_ID: 'app-id-dummy',
-      }),
-    ).toThrow(/MERCADOPAGO_CLIENT_SECRET/);
-  });
-
-  it('MERCADOPAGO_OAUTH_REDIRECT_URI is optional even when driver=mercadopago', () => {
-    expect(() =>
-      validateEnv({
-        ...BASE,
-        PAYMENT_DRIVER: 'mercadopago',
-        MERCADOPAGO_BASE_URL: 'https://api.mercadopago.com',
-        MERCADOPAGO_PUBLIC_KEY: 'TEST-pub-dummy',
-        MERCADOPAGO_ACCESS_TOKEN: 'TEST-token-dummy',
-        MERCADOPAGO_WEBHOOK_SECRET: 'test_webhook_secret_dummy',
-        MERCADOPAGO_APP_ID: 'app-id-dummy',
-        MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
-      }),
-    ).not.toThrow();
+  it('ignores leftover MERCADOPAGO_* vars in an old .env (not part of the schema any more)', () => {
+    const env = validateEnv({
+      ...BASE,
+      PAYMENT_DRIVER: 'epayco',
+      MERCADOPAGO_PUBLIC_KEY: 'TEST-pub-dummy',
+      MERCADOPAGO_ACCESS_TOKEN: 'TEST-token-dummy',
+    }) as Record<string, unknown>;
+    expect(env.PAYMENT_DRIVER).toBe('epayco');
+    expect(Object.keys(env).some((k) => k.startsWith('MERCADOPAGO_'))).toBe(false);
   });
 });
 

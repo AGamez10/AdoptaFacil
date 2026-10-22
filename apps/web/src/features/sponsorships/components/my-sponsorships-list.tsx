@@ -1,18 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Sponsorship } from '@adoptafacil/contracts';
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Skeleton,
-  useToast,
-} from '@adoptafacil/ui';
+import { Badge, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
-import { CardPaymentBrick, type CardPaymentBrickResult } from '../../payments';
-import { listMySponsorships, retrySponsorshipPayment } from '../api/sponsorships-api';
+import { listMySponsorships } from '../api/sponsorships-api';
 import {
   formatBogota,
   formatCop,
@@ -38,26 +28,16 @@ import styles from './my-sponsorships-list.module.scss';
  * aquí en vez de mostrar un botón que siempre falla. Documentado en el reporte
  * de cierre — requeriría OTRO endpoint nuevo tipo `sponsorship_history_for_sponsor`,
  * mismo patrón que `sponsorships_for_sponsor`, no agregado sin acordarlo antes.
+ *
+ * Mercado Pago retirado (2026-10-17): "Pagar de nuevo" abría su Card Payment
+ * Brick. Mientras ePayco no tenga cobro de apadrinamientos, una suspensión por
+ * pago fallido muestra un aviso tranquilo en vez de un botón que no funciona.
  */
 export function MySponsorshipsList() {
   const client = useApiClient();
-  const { toast } = useToast();
   const [sponsorships, setSponsorships] = useState<Sponsorship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  // T-OrdersAPI: "Pagar de nuevo" no cobra de inmediato — primero abre el
-  // Card Payment Brick EN LÍNEA para esta fila (reemplaza el antiguo redirect
-  // de Checkout Pro). `payingId` controla cuál fila lo muestra; `retryingId`
-  // sigue indicando "llamada al backend en vuelo" (ahora disparada por el
-  // propio Brick, no por el click en "Pagar de nuevo").
-  const [payingId, setPayingId] = useState<string | null>(null);
-  const [retryingId, setRetryingId] = useState<string | null>(null);
-
-  const load = async (): Promise<void> => {
-    const body = await listMySponsorships(client);
-    setSponsorships(normalizeSponsorships(body));
-  };
-
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -74,44 +54,6 @@ export function MySponsorshipsList() {
       active = false;
     };
   }, [client]);
-
-  /**
-   * T-OrdersAPI: called by the Card Payment Brick's own `onSubmit` ONCE it
-   * tokenized a real card — this is now the ONLY place that actually calls
-   * `POST /retry-payment` (clicking "Pagar de nuevo" just opens the Brick,
-   * see below). Async + re-throws on failure so the Brick shows its own
-   * error state (same contract `CardPaymentBrick`'s doc comment describes).
-   */
-  const payWithCard = async (
-    sponsorship: Sponsorship,
-    card: CardPaymentBrickResult,
-  ): Promise<void> => {
-    setRetryingId(sponsorship.id);
-    try {
-      await retrySponsorshipPayment(client, sponsorship.id, {
-        cardToken: card.cardToken,
-        paymentMethodId: card.paymentMethodId,
-        paymentMethodType: card.paymentMethodType,
-        installments: card.installments,
-      });
-      setPayingId(null);
-      await load();
-      toast({
-        title: 'Pago enviado',
-        description: 'Cuando se confirme el pago, tu apadrinamiento se reactivará automáticamente.',
-        variant: 'success',
-      });
-    } catch (error) {
-      toast({
-        title: 'No se pudo procesar el pago',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
-        variant: 'destructive',
-      });
-      throw error;
-    } finally {
-      setRetryingId(null);
-    }
-  };
 
   if (loading) return <Skeleton className="h-64 w-full" />;
 
@@ -165,38 +107,12 @@ export function MySponsorshipsList() {
                   </p>
                 )}
                 {isBillingFailureSuspension(sponsorship) && (
-                  <div className={styles['recovery']}>
-                    <div className="flex items-center gap-2">
-                      <p className={styles['hint--error']}>Suspendido por pago fallido.</p>
-                      {payingId !== sponsorship.id && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPayingId(sponsorship.id)}
-                        >
-                          Pagar de nuevo
-                        </Button>
-                      )}
-                    </div>
-                    {/* T-OrdersAPI: el Brick se abre EN LÍNEA (reemplaza el antiguo
-                        redirect a Checkout Pro) — solo al enviarlo se llama de
-                        verdad a `retry-payment`, con el token real incluido. */}
-                    {payingId === sponsorship.id && (
-                      <div className={styles['recovery__brick']}>
-                        <CardPaymentBrick
-                          amount={sponsorship.planAmount ?? 0}
-                          onResult={(card) => payWithCard(sponsorship, card)}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={retryingId === sponsorship.id}
-                          onClick={() => setPayingId(null)}
-                        >
-                          Cancelar
-                        </Button>
-                      </div>
-                    )}
+                  <div className={styles['recovery']} data-testid="sponsorship-retry-soon">
+                    <p className={styles['hint--error']}>Suspendido por pago fallido.</p>
+                    <p className={styles.hint}>
+                      Pronto podrás ponerte al día con pago en línea desde aquí. Te avisaremos por
+                      correo cuando esté disponible.
+                    </p>
                   </div>
                 )}
               </li>

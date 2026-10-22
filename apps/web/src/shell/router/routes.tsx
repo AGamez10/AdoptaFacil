@@ -259,8 +259,7 @@ export function AppRoutes() {
           review" form here instead of on a separate route. */}
         <Route path="/organizaciones/:slug/resenas" element={<OrganizationReputationPage />} />
         {/* M05 · donación (§M05, requisito FINAL del cliente: donar NUNCA exige
-          cuenta ni login — checkout de invitado, MercadoPago Checkout Pro ya
-          lo soporta). Movida FUERA de <RequireAuth>/<AppLayout> (antes vivía
+          cuenta ni login — checkout de invitado; ePayco lo soporta). Movida FUERA de <RequireAuth>/<AppLayout> (antes vivía
           bajo el gate de sesión padre — ver el SEAM que dejó esta nota en la
           sección protegida de abajo). `POST /donations` usa
           `OptionalJwtAuthGuard`: si llega un bearer token válido la donación
@@ -288,8 +287,9 @@ export function AppRoutes() {
           site (no external redirect, so no return URL to resolve). Both
           `DonationThanksPage`/`SponsorshipThanksPage` and the public status
           fetch helpers they used are DELETED (unreachable otherwise); the
-          equivalent "thank you" state is now shown IN-PAGE, right after the
-          Card Payment Brick submits (`DonatePage`, `MySponsorshipsList`). */}
+          equivalent "thank you" state is shown IN-PAGE (`DonatePage`); ePayco's
+          return lands on `/donaciones/resultado` above. Mercado Pago (and its
+          Card Payment Brick) was retired on 2026-10-17. */}
 
         {/* Protected — guard first, then the shell layout */}
         <Route element={<RequireAuth />}>
