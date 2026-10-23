@@ -39,7 +39,7 @@
     "ioredis": "^5.4.2",
     "jsbarcode": "^3.12.3",
     "multer": "^2.0.2",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.2.1",
     "pdf-lib": "^1.17.1",
     "qrcode": "1.5.4",
     "reflect-metadata": "^0.2.2",
