@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { OrganizationSubscription as SubscriptionRow, Prisma } from '@prisma/client';
 import {
+  BRANDED_EMAIL_MONTHLY_LIMIT,
   PLAN_CATALOG,
   PLAN_KEYS,
   PLAN_REQUIRED_CODE,
@@ -152,10 +153,16 @@ export class PlansService {
 
   /** `GET /org/plan`: plan, limits, usage and catalog for the caller's org. */
   async view(organizationId: string, now = new Date()): Promise<OrganizationPlanView> {
-    const [row, members] = await this.prisma.withOrgContext(organizationId, (tx) =>
+    const [row, members, emailUsage] = await this.prisma.withOrgContext(organizationId, (tx) =>
       Promise.all([
         tx.organizationSubscription.findUnique({ where: { organizationId } }),
         this.countMembers(tx, organizationId),
+        tx.organizationEmailUsage.findUnique({
+          where: {
+            organizationId_month: { organizationId, month: now.toISOString().slice(0, 7) },
+          },
+          select: { brandedCount: true },
+        }),
       ]),
     );
     const subscription = row ? toContract(row) : null;
@@ -184,6 +191,14 @@ export class PlansService {
       capabilities: definition.capabilities,
       usage: {
         members,
+        ...(planIncludes(effectivePlan, 'brandedEmails')
+          ? {
+              brandedEmails: {
+                sent: emailUsage?.brandedCount ?? 0,
+                limit: BRANDED_EMAIL_MONTHLY_LIMIT[effectivePlan],
+              },
+            }
+          : {}),
         ...(this.storage?.measureOrganizationUsage
           ? {
               storageMb: Math.ceil(

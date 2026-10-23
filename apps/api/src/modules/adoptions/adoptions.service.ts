@@ -228,6 +228,7 @@ export class AdoptionsService {
         template: {
           event: 'adoption.status_changed',
           organizationName,
+          organizationId: row.organizationId,
           data: {
             nombre: emailInput.applicantName,
             animal: emailInput.animalName,

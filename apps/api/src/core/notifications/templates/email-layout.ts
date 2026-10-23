@@ -1,4 +1,5 @@
 import type { EmailCategory, EmailTheme } from '@adoptafacil/contracts';
+import type { EmailBrand } from '../branding/org-email-branding';
 import { escapeHtml } from './email-render';
 
 /**
@@ -54,7 +55,18 @@ export interface LayoutInput {
   unsubscribeUrl?: string;
   /** Raw, already validated absolute URL of the web app (footer link). */
   webBaseUrl: string;
+  /**
+   * Organization brand (plan Crece/Pro, only with `organizationName`): the
+   * organization's name heads the email ("a través de AdoptaFácil" below) and
+   * its portal colors paint the top bar and the button. The footer (who sends,
+   * Ley 1581, unsubscribe) never changes.
+   */
+  brand?: EmailBrand;
 }
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+const color = (value: string | undefined, fallback: string) =>
+  value && HEX_RE.test(value) ? value : fallback;
 
 export function themeStyle(theme: EmailTheme): ThemeStyle {
   return THEMES[theme];
@@ -65,9 +77,19 @@ export function renderLayout(input: LayoutInput): string {
   const org = input.organizationName ? escapeHtml(input.organizationName) : '';
   const web = escapeHtml(input.webBaseUrl);
 
-  const sender = org
-    ? `<span style="font-size:13px;color:${MUTED};">${org} <span style="color:#9AA5B1;">·</span> a través de AdoptaFácil</span>`
-    : `<span style="font-size:13px;color:${MUTED};">Infraestructura digital para el rescate animal</span>`;
+  const branded = Boolean(input.brand && org);
+  const accent = branded ? color(input.brand?.accent, theme.accent) : theme.accent;
+  const buttonBg = branded ? color(input.brand?.button, BUTTON) : BUTTON;
+  const buttonText = branded ? color(input.brand?.buttonText, '#ffffff') : '#ffffff';
+
+  const sender = branded
+    ? `<span style="font-size:13px;color:${MUTED};">a través de 🐾 Adopta<span style="color:${BUTTON};">Fácil</span></span>`
+    : org
+      ? `<span style="font-size:13px;color:${MUTED};">${org} <span style="color:#9AA5B1;">·</span> a través de AdoptaFácil</span>`
+      : `<span style="font-size:13px;color:${MUTED};">Infraestructura digital para el rescate animal</span>`;
+  const masthead = branded
+    ? `<td style="font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${INK};word-break:break-word;">${org}</td>`
+    : `<td style="font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${INK};">🐾 Adopta<span style="color:${BUTTON};">Fácil</span></td>`;
 
   const paragraphs = input.paragraphsHtml
     .map(
@@ -80,8 +102,8 @@ export function renderLayout(input: LayoutInput): string {
       ? `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px 0;">
   <tr>
-    <td align="center" bgcolor="${BUTTON}" style="border-radius:10px;">
-      <a href="${escapeHtml(input.ctaUrl)}" target="_blank" rel="noopener" style="display:inline-block;padding:14px 28px;font-family:${FONT};font-size:16px;font-weight:700;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:10px;">${input.ctaLabelHtml}</a>
+    <td align="center" bgcolor="${buttonBg}" style="border-radius:10px;">
+      <a href="${escapeHtml(input.ctaUrl)}" target="_blank" rel="noopener" style="display:inline-block;padding:14px 28px;font-family:${FONT};font-size:16px;font-weight:700;line-height:1.2;color:${buttonText};text-decoration:none;border-radius:10px;">${input.ctaLabelHtml}</a>
     </td>
   </tr>
 </table>
@@ -121,12 +143,12 @@ export function renderLayout(input: LayoutInput): string {
   <tr>
     <td align="center" style="padding:28px 12px;">
       <table role="presentation" class="af-card" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;font-family:${FONT};box-shadow:0 2px 12px rgba(32,45,62,0.06);">
-        <tr><td style="height:6px;line-height:6px;font-size:0;background:${theme.accent};">&nbsp;</td></tr>
+        <tr><td style="height:6px;line-height:6px;font-size:0;background:${accent};">&nbsp;</td></tr>
         <tr>
           <td class="af-pad" style="padding:24px 40px 8px 40px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td style="font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${INK};">🐾 Adopta<span style="color:${BUTTON};">Fácil</span></td>
+                ${masthead}
               </tr>
               <tr><td style="padding-top:2px;">${sender}</td></tr>
             </table>

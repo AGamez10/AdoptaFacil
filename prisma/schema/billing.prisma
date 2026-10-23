@@ -33,3 +33,22 @@ model OrganizationSubscription {
 
   @@map("organization_subscriptions")
 }
+
+/// Correos con la marca de la organización enviados en un mes (plan Crece/Pro,
+/// `brandedEmails`). Un contador por organización y mes (`YYYY-MM`, UTC): sirve
+/// para el tope mensual del plan. Pasado el tope el correo SIGUE saliendo, solo
+/// que con la marca de AdoptaFácil (un recibo o un contrato nunca se pierden por
+/// un límite comercial). Tenant-scoped (RLS); lo escribe la cola de correos bajo
+/// el contexto de la organización.
+model OrganizationEmailUsage {
+  organizationId String   @map("organization_id") @db.Uuid
+  /// Mes calendario UTC, `YYYY-MM`.
+  month          String
+  brandedCount   Int      @default(0) @map("branded_count")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, month])
+  @@map("organization_email_usage")
+}

@@ -49,6 +49,7 @@ describe('TemplatedNotificationAdapter', () => {
       'ana@example.co',
       { monto: 1 },
       'Huellitas',
+      undefined,
     );
     const sent = inner.send.mock.calls[0][0];
     expect(sent).toMatchObject({
@@ -114,5 +115,58 @@ describe('TemplatedNotificationAdapter', () => {
       template: { event: 'auth.password_reset', data: { enlace: 'https://x.co' } },
     });
     expect(inner.send).toHaveBeenCalledWith(plain);
+  });
+
+  describe('correos con la marca de la organización', () => {
+    const branded = {
+      organizationName: 'Huellitas',
+      brand: { accent: '#123456', button: '#123456', buttonText: '#ffffff' },
+      fromName: 'Huellitas vía AdoptaFácil',
+      replyTo: 'contacto@huellitas.org',
+    };
+    const withOrg = {
+      ...plain,
+      template: {
+        event: 'donation.thanks' as const,
+        data: { monto: 1 },
+        organizationName: 'Huellitas',
+        organizationId: 'org-1',
+      },
+    };
+
+    it('con plan y cupo: renderiza con la marca, nombre de remitente y responder a', async () => {
+      const inner = { send: jest.fn() };
+      const templates = makeTemplates();
+      const branding = { claim: jest.fn().mockResolvedValue(branded) };
+      await new TemplatedNotificationAdapter(inner, templates, branding).send(withOrg);
+      expect(branding.claim).toHaveBeenCalledWith('org-1');
+      expect((templates.render as jest.Mock).mock.calls[0][5]).toEqual(branded.brand);
+      expect(inner.send.mock.calls[0][0]).toMatchObject({
+        fromName: 'Huellitas vía AdoptaFácil',
+        replyTo: 'contacto@huellitas.org',
+      });
+    });
+
+    it('sin plan o sin cupo: el correo sale igual, con la marca de AdoptaFácil', async () => {
+      const inner = { send: jest.fn() };
+      const templates = makeTemplates();
+      const branding = { claim: jest.fn().mockResolvedValue(null) };
+      await new TemplatedNotificationAdapter(inner, templates, branding).send(withOrg);
+      expect(inner.send).toHaveBeenCalledTimes(1);
+      expect((templates.render as jest.Mock).mock.calls[0][5]).toBeUndefined();
+      expect(inner.send.mock.calls[0][0].fromName).toBeUndefined();
+      expect(inner.send.mock.calls[0][0].replyTo).toBeUndefined();
+    });
+
+    it('un evento apagado no gasta cupo de marca', async () => {
+      const inner = { send: jest.fn() };
+      const templates = makeTemplates({
+        resolve: jest.fn().mockResolvedValue({ enabled: false, activeVersion: null, content: {} }),
+      });
+      const branding = { claim: jest.fn().mockResolvedValue(branded) };
+      await new TemplatedNotificationAdapter(inner, templates, branding).send(withOrg);
+      expect(branding.claim).not.toHaveBeenCalled();
+      expect(inner.send).not.toHaveBeenCalled();
+    });
   });
 });

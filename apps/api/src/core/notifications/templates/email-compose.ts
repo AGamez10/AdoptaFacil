@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { EmailPreview, EmailTemplateContent } from '@adoptafacil/contracts';
+import type { EmailBrand } from '../branding/org-email-branding';
 import type { EmailEventDefinition } from './email-catalog';
 import { renderLayout, renderTextFooter } from './email-layout';
 import {
@@ -16,6 +17,8 @@ export interface ComposeOptions {
   webBaseUrl: string;
   /** Bulk emails only. */
   unsubscribeUrl?: string;
+  /** Organization brand (plan Crece/Pro): its name heads the email and its colors paint it. */
+  brand?: EmailBrand;
 }
 
 /** Pure: event + copy + data → subject, preheader, html and text parts. */
@@ -50,6 +53,7 @@ export function composeEmail(
     organizationName: options.organizationName,
     unsubscribeUrl: def.category === 'bulk' ? options.unsubscribeUrl : undefined,
     webBaseUrl: options.webBaseUrl,
+    ...(options.brand && options.organizationName ? { brand: options.brand } : {}),
   });
 
   const textParts = [stripMarks(heading), '', stripMarks(renderPlain(content.body, values)).trim()];

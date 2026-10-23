@@ -107,4 +107,20 @@ describe('OrgPlanPage', () => {
     renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Operator]) });
     expect(screen.queryByText(/Estás en el plan/)).not.toBeInTheDocument();
   });
+
+  it('shows branded emails used this month against the plan cap, and the cap per plan', async () => {
+    stubPlan(
+      viewFor({
+        effectivePlan: 'crece',
+        usage: { members: 2, brandedEmails: { sent: 1250, limit: 5000 } },
+      }),
+    );
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByText(/Correos con tu marca este mes/)).toHaveTextContent(
+      'Correos con tu marca este mes: 1.250 de 5.000.',
+    );
+    expect(screen.getAllByText(/hasta 5\.000 al mes/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/hasta 20\.000 al mes/).length).toBeGreaterThan(0);
+  });
 });

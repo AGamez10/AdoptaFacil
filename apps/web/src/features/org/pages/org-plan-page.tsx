@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  BRANDED_EMAIL_MONTHLY_LIMIT,
   PLAN_ALWAYS_INCLUDED,
   PLAN_CAPABILITIES,
   PLAN_CAPABILITY_INFO,
@@ -38,6 +39,8 @@ const cop = new Intl.NumberFormat('es-CO', {
   currency: 'COP',
   maximumFractionDigits: 0,
 });
+
+const count = new Intl.NumberFormat('es-CO');
 
 /** Dates are stored in UTC; Colombia time is for display only. */
 const colombiaDate = new Intl.DateTimeFormat('es-CO', {
@@ -99,6 +102,8 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
             {included.map((capability) => (
               <li key={capability}>
                 {PLAN_CAPABILITY_INFO[capability].label}
+                {capability === 'brandedEmails' &&
+                  ` (hasta ${count.format(BRANDED_EMAIL_MONTHLY_LIMIT[plan.key])} al mes)`}
                 {!PLAN_CAPABILITY_INFO[capability].available && (
                   <Badge variant="secondary" className="ml-2">
                     Próximamente
@@ -218,6 +223,14 @@ export function OrgPlanPage() {
               <strong>{formatLimit('storageMb', view.usage.storageMb)}</strong>
               {view.limits.storageMb !== null &&
                 ` de ${formatLimit('storageMb', view.limits.storageMb)}`}
+            </p>
+          )}
+          {view.usage.brandedEmails && (
+            <p className="text-sm">
+              Correos con tu marca este mes:{' '}
+              <strong>{count.format(view.usage.brandedEmails.sent)}</strong> de{' '}
+              {count.format(view.usage.brandedEmails.limit)}. Pasado el tope, tus correos siguen
+              saliendo con la marca de AdoptaFácil.
             </p>
           )}
         </CardContent>

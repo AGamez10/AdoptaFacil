@@ -8,7 +8,8 @@ import { NotificationMessage, NotificationPort } from './notification.port';
 /** Minimal transport surface we depend on (so tests can inject a fake). */
 export interface MailTransport {
   sendMail(options: {
-    from: string;
+    from: string | { name: string; address: string };
+    replyTo?: string;
     to: string;
     subject: string;
     text: string;
@@ -42,6 +43,7 @@ export type MailTransportFactory = (options: {
 export class SmtpNotificationAdapter implements NotificationPort {
   private readonly logger = new Logger('NotificationPort');
   private readonly from: string;
+  private readonly fromAddress: string;
   private readonly transport: MailTransport;
 
   constructor(
@@ -54,6 +56,10 @@ export class SmtpNotificationAdapter implements NotificationPort {
     const user = config.get('SMTP_USER', { infer: true }) as string;
     const pass = config.get('SMTP_PASS', { infer: true }) as string;
     this.from = config.get('SMTP_FROM', { infer: true }) as string;
+    // `"AdoptaFácil" <no-reply@adoptafacil.org>` or a bare address: a branded
+    // email keeps this ADDRESS (no SPF/DKIM per organization) and only changes
+    // the display name.
+    this.fromAddress = /<([^>]+)>/.exec(this.from)?.[1]?.trim() ?? this.from.trim();
     this.transport = createTransport({
       host,
       port,
@@ -68,7 +74,8 @@ export class SmtpNotificationAdapter implements NotificationPort {
   async send(message: NotificationMessage): Promise<void> {
     try {
       await this.transport.sendMail({
-        from: this.from,
+        from: message.fromName ? { name: message.fromName, address: this.fromAddress } : this.from,
+        ...(message.replyTo ? { replyTo: message.replyTo } : {}),
         to: message.to,
         subject: message.subject,
         text: message.body,

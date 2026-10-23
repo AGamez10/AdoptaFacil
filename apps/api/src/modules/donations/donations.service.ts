@@ -589,6 +589,7 @@ export class DonationsService {
         template: {
           event: 'donation.thanks',
           organizationName,
+          organizationId,
           data: { enlace: accessLink, monto: amount },
         },
         subject: 'Tu comprobante de donación en AdoptaFácil',
@@ -629,6 +630,7 @@ export class DonationsService {
         template: {
           event: 'donation.thanks',
           organizationName,
+          organizationId,
           data: { enlace: link, monto: amount },
         },
       });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PORTAL_TEMPLATES, isPremiumTemplate } from '../src/portals';
 import {
+  BRANDED_EMAIL_MONTHLY_LIMIT,
   PLAN_CAPABILITIES,
   PLAN_CAPABILITY_INFO,
   PLAN_CATALOG,
@@ -89,6 +90,10 @@ describe('planHighlights (landing and plans screen share the catalog)', () => {
     expect(PLAN_CAPABILITY_INFO.dataExport.available).toBe(true);
     // Y el reporte de impacto (GET /org/exports/impact-report.pdf).
     expect(PLAN_CAPABILITY_INFO.impactReport.available).toBe(true);
+    // Correos con marca, con tope mensual por plan (Gratis no los incluye).
+    expect(PLAN_CAPABILITY_INFO.brandedEmails.available).toBe(true);
+    expect(BRANDED_EMAIL_MONTHLY_LIMIT.free).toBe(0);
+    expect(BRANDED_EMAIL_MONTHLY_LIMIT.crece).toBeLessThan(BRANDED_EMAIL_MONTHLY_LIMIT.pro);
   });
 });
 

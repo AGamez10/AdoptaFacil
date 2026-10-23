@@ -157,11 +157,24 @@ export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; avail
     available: false,
   },
   customDomain: { label: 'Dominio propio (www.turefugio.org)', available: false },
-  brandedEmails: { label: 'Correos a adoptantes y donantes con tu marca', available: false },
+  brandedEmails: { label: 'Correos a adoptantes y donantes con tu marca', available: true },
   dataExport: { label: 'Exportar tus datos a Excel', available: true },
   impactReport: { label: 'Reporte de impacto en PDF para donantes', available: true },
   corporateSponsorship: { label: 'Patrocinio de empresas', available: false },
   prioritySupport: { label: 'Soporte prioritario por WhatsApp', available: true },
+};
+
+/**
+ * Correos con la marca de la organización por mes calendario (UTC), por plan.
+ * Pasado el tope el correo SIGUE saliendo, con la marca de AdoptaFácil: un
+ * límite comercial nunca detiene un recibo, un contrato o un seguimiento.
+ * Propuesta del 2026-10-23 (Crece 5.000 y Pro 20.000), ajustable aquí.
+ * TODO(client): confirmar los topes.
+ */
+export const BRANDED_EMAIL_MONTHLY_LIMIT: Record<PlanKey, number> = {
+  free: 0,
+  crece: 5_000,
+  pro: 20_000,
 };
 
 /** Included in every plan, free too: what protects the animal, the adopter and
@@ -301,7 +314,13 @@ export interface OrganizationPlanView {
   capabilities: Record<PlanCapability, boolean>;
   /** `storageMb`: espacio usado en MB (redondeado hacia arriba), cuando el
    *  almacenamiento sabe medirlo. */
-  usage: { members: number; storageMb?: number };
+  usage: {
+    members: number;
+    storageMb?: number;
+    /** Correos con la marca enviados este mes (UTC) y el tope del plan
+     *  ({@link BRANDED_EMAIL_MONTHLY_LIMIT}); ausente si el plan no los incluye. */
+    brandedEmails?: { sent: number; limit: number };
+  };
   catalog: PlanDefinition[];
 }
 

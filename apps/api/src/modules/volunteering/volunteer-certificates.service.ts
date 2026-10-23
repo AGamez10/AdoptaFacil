@@ -336,6 +336,7 @@ export class VolunteerCertificatesService {
         template: {
           event: 'volunteering.certificate_issued',
           organizationName: emailInput.organizationName || undefined,
+          organizationId,
           data: {
             nombre: emailInput.volunteerName,
             oportunidad: emailInput.opportunityTitle,
