@@ -12,7 +12,7 @@ concurrency:
 jobs:
   quality:
     name: Lint · Typecheck · Build · Unit tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +44,7 @@ jobs:
 
   rls-no-leak:
     name: rls-no-leak (RNF03 gate)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     services:
       postgres:
         image: postgres:16
