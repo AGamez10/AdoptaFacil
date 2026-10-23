@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PORTAL_TEMPLATES, isPremiumTemplate } from '../src/portals';
 import {
   PLAN_CAPABILITIES,
+  PLAN_CAPABILITY_INFO,
   PLAN_CATALOG,
   PLAN_KEYS,
   launchPromoEnd,
@@ -84,6 +85,8 @@ describe('planHighlights (landing and plans screen share the catalog)', () => {
     expect(pro[0].text).toBe('Todo lo del plan Crece');
     expect(pro.map((h) => h.text)).toContain('Equipo sin límite de personas');
     expect(pro.find((h) => h.text.startsWith('Dominio propio'))?.available).toBe(false);
+    // Exportar a Excel ya funciona (GET /org/exports/data.xlsx).
+    expect(PLAN_CAPABILITY_INFO.dataExport.available).toBe(true);
   });
 });
 
