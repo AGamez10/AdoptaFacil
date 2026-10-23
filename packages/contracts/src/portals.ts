@@ -136,6 +136,32 @@ export type PortalTheme = Partial<Record<PortalThemeToken, string>>;
 export type PortalLogoPosition = 'left' | 'center' | 'right';
 export type PortalSocialNavPosition = 'left' | 'right';
 
+/**
+ * Plantilla visual del portal público (M14, plantillas gratuitas). TODAS muestran
+ * exactamente las mismas secciones y respetan las mismas reglas de visibilidad que
+ * el portal `'clasico'` (el diseño original, default): solo cambia la presentación.
+ * Todas son gratuitas — no existe hoy un plan de pago que las restrinja.
+ *
+ * SÓLO TIPO (ver nota CJS arriba): la lista de VALORES vive en el backend
+ * (`portals.schemas.ts`, enum Zod) y en la feature web (registro de plantillas).
+ */
+export type PortalTemplateId =
+  | 'clasico'
+  | 'hogar'
+  | 'revista'
+  | 'expediente'
+  | 'cartel'
+  | 'orbita'
+  | 'galeria'
+  | 'mosaico'
+  | 'match'
+  | 'estudio'
+  | 'cine'
+  | 'aurora'
+  | 'constelacion'
+  | 'portada'
+  | 'hilo';
+
 /** Respuesta de lectura del tema (propio o público). */
 export interface PortalThemeConfig {
   tokens: PortalTheme;
@@ -143,6 +169,8 @@ export interface PortalThemeConfig {
   logoPosition?: PortalLogoPosition;
   /** De qué lado va el sidebar de redes/contacto (S2-PORTAL). Default: 'right'. */
   socialNavPosition?: PortalSocialNavPosition;
+  /** Plantilla visual del portal público. Default: 'clasico'. */
+  template?: PortalTemplateId;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */
@@ -150,6 +178,8 @@ export interface UpdatePortalThemeInput {
   tokens: PortalTheme;
   logoPosition?: PortalLogoPosition;
   socialNavPosition?: PortalSocialNavPosition;
+  /** Omitirla deja la plantilla guardada intacta. */
+  template?: PortalTemplateId;
 }
 
 // ----------------------------------------------------------------------------

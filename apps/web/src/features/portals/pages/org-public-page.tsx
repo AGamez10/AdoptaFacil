@@ -4,6 +4,7 @@ import type {
   OrganizationPublic,
   PortalLogoPosition,
   PortalSocialNavPosition,
+  PortalTemplateId,
   PortalTheme,
   PortalView,
 } from '@adoptafacil/contracts';
@@ -28,6 +29,8 @@ import { PortalPublicLedgerSection } from '../components/portal-public-ledger-se
 import { PublicHeader, type PublicHeaderNavItem } from '../components/public-header';
 import { PublicFooter } from '../components/public-footer';
 import { PortalHelpCta } from '../components/portal-help-cta';
+import { TemplatePortal } from '../templates/template-portal';
+import { safeTemplateId } from '../templates/registry';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -91,6 +94,9 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const [view, setView] = useState<PortalView | null>(null);
   const [theme, setTheme] = useState<PortalTheme>({});
   const [layout, setLayout] = useState<Layout>(DEFAULT_LAYOUT);
+  // Plantilla visual elegida por la organización (M14, plantillas gratuitas).
+  // 'clasico' (o cualquier valor desconocido) = este mismo diseño de siempre.
+  const [template, setTemplate] = useState<PortalTemplateId>('clasico');
   const [state, setState] = useState<LoadState>('loading');
   const [animalTotal, setAnimalTotal] = useState<number | undefined>(undefined);
 
@@ -128,6 +134,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               tokens?: unknown;
               logoPosition?: unknown;
               socialNavPosition?: unknown;
+              template?: unknown;
             }>)
           : null,
       )
@@ -137,8 +144,13 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           logoPosition: safeLogoPosition(body?.logoPosition),
           socialNavPosition: safeSocialNavPosition(body?.socialNavPosition),
         },
+        template: safeTemplateId(body?.template),
       }))
-      .catch(() => ({ tokens: {} as PortalTheme, layout: DEFAULT_LAYOUT }));
+      .catch(() => ({
+        tokens: {} as PortalTheme,
+        layout: DEFAULT_LAYOUT,
+        template: 'clasico' as PortalTemplateId,
+      }));
 
     profile
       .then(async (data) => {
@@ -147,6 +159,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         setView(buildPortalView(data));
         setTheme(brandResult.tokens);
         setLayout(brandResult.layout);
+        setTemplate(brandResult.template);
         setState('ready');
       })
       .catch((err: unknown) => {
@@ -232,7 +245,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     ...(hasContactInfo ? [{ label: 'Contacto', href: '#portal-contact-info' }] : []),
   ];
 
-  return (
+  const classic = (
     <>
       {state === 'ready' && view && (
         <PublicHeader organization={view.profile.organization} navItems={navItems} />
@@ -360,4 +373,19 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       )}
     </>
   );
+
+  // Plantilla elegida: mismas secciones y reglas, otro diseño. Si algo falla al
+  // cargarla, `TemplatePortal` pinta el portal clásico de arriba.
+  if (state === 'ready' && view && slug && template !== 'clasico') {
+    return (
+      <TemplatePortal
+        template={template}
+        slug={slug}
+        organization={view.profile.organization}
+        themeStyle={themeStyle}
+        fallback={classic}
+      />
+    );
+  }
+  return classic;
 }

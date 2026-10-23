@@ -4,6 +4,7 @@ import {
   type Organization,
   type PortalLogoPosition,
   type PortalSocialNavPosition,
+  type PortalTemplateId,
   type PortalTheme,
   type PortalThemeConfig,
 } from '@adoptafacil/contracts';
@@ -30,6 +31,7 @@ import {
 } from '../model/color-conversion';
 import { PORTAL_THEME_FIELDS, safePortalTheme, type PortalThemeField } from '../model/theme';
 import { PortalMiniPreview } from '../components/portal-mini-preview';
+import { safeTemplateId, TEMPLATE_CATALOG } from '../templates/registry';
 
 /** Empty string ⇒ "use the default token" (the field is omitted from the payload). */
 type FormState = Partial<Record<string, string>>;
@@ -195,6 +197,54 @@ const LOGO_POSITION_OPTIONS = [
   { value: 'right' as const, label: 'Derecha', dotClass: 'right-1' },
 ];
 
+interface TemplatePickerProps {
+  value: PortalTemplateId;
+  onChange: (value: PortalTemplateId) => void;
+}
+
+/**
+ * Selector de plantilla del portal (M14). Todas son GRATUITAS: solo cambia el
+ * diseño; el contenido y las reglas de visibilidad son los mismos del clásico.
+ * Cambia solo el state del formulario; no guarda hasta pulsar "Guardar".
+ */
+function TemplatePicker({ value, onChange }: TemplatePickerProps) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="sr-only">Plantilla del portal</legend>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {TEMPLATE_CATALOG.map((tpl) => (
+          <button
+            key={tpl.id}
+            type="button"
+            aria-pressed={value === tpl.id}
+            data-testid={`template-${tpl.id}`}
+            onClick={() => onChange(tpl.id)}
+            className={`flex flex-col gap-1.5 rounded-md border p-2 text-left text-xs transition-colors ${
+              value === tpl.id
+                ? 'border-primary bg-primary/5 text-foreground'
+                : 'border-input text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            <span
+              aria-hidden
+              className="block h-10 w-full rounded"
+              style={{
+                background: `linear-gradient(135deg, ${tpl.swatch[0]} 0 55%, ${tpl.swatch[1]} 55% 100%)`,
+                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)',
+              }}
+            />
+            <span className="flex items-center justify-between gap-1">
+              <span className="font-medium text-foreground">{tpl.name}</span>
+              <Badge variant="secondary">Gratis</Badge>
+            </span>
+            <span className="leading-snug">{tpl.description}</span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 const SOCIAL_NAV_POSITION_OPTIONS = [
   { value: 'left' as const, label: 'Izquierda', dotClass: 'left-1' },
   { value: 'right' as const, label: 'Derecha', dotClass: 'right-1' },
@@ -220,6 +270,7 @@ export function PortalThemePage() {
   const [form, setForm] = useState<FormState>({});
   const [logoPosition, setLogoPosition] = useState<PortalLogoPosition>('left');
   const [socialNavPosition, setSocialNavPosition] = useState<PortalSocialNavPosition>('right');
+  const [template, setTemplate] = useState<PortalTemplateId>('clasico');
   const [slug, setSlug] = useState<string | undefined>(undefined);
   const [orgName, setOrgName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -243,6 +294,7 @@ export function PortalThemePage() {
         setForm(safePortalTheme(config.tokens) as FormState);
         setLogoPosition(config.logoPosition ?? 'left');
         setSocialNavPosition(config.socialNavPosition ?? 'right');
+        setTemplate(safeTemplateId(config.template));
         setSlug(org?.slug ?? undefined);
         setOrgName(org?.name ?? undefined);
       })
@@ -306,11 +358,12 @@ export function PortalThemePage() {
     try {
       const themeConfig = await client.request<PortalThemeConfig>('/portals/theme', {
         method: 'PUT',
-        json: { tokens: tokensFromForm(form), logoPosition, socialNavPosition },
+        json: { tokens: tokensFromForm(form), logoPosition, socialNavPosition, template },
       });
       setForm(safePortalTheme(themeConfig.tokens) as FormState);
       setLogoPosition(themeConfig.logoPosition ?? 'left');
       setSocialNavPosition(themeConfig.socialNavPosition ?? 'right');
+      setTemplate(safeTemplateId(themeConfig.template));
       toast({
         title: 'Personalización guardada',
         description: 'Tu portal se re-tematizó.',
@@ -389,6 +442,19 @@ export function PortalThemePage() {
                     />
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Plantilla del portal</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Todas las plantillas son gratuitas y muestran la misma información de tu
+                  organización; solo cambia el diseño. Tus colores se aplican a cualquiera.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <TemplatePicker value={template} onChange={setTemplate} />
               </CardContent>
             </Card>
 

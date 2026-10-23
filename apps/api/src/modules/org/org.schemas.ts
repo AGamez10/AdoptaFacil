@@ -6,7 +6,17 @@ import { OrganizationType } from '@adoptafacil/contracts';
  *  through this endpoint (they are driven by the M01 state machine, T-102). */
 
 const shortText = (max: number) => z.string().trim().max(max);
-const url = z.string().trim().url().max(2000);
+/**
+ * Público por naturaleza (logo, portadas, redes, mapa): SOLO http(s). `z.url()`
+ * por sí solo acepta `javascript:`/`data:` (cualquier cosa que `new URL()`
+ * parsee), y estos valores terminan como `href`/`src` en el portal público.
+ */
+const url = z
+  .string()
+  .trim()
+  .url()
+  .max(2000)
+  .refine((value) => /^https?:\/\//i.test(value), 'El enlace debe empezar por http:// o https://');
 /** lowercase slug: letters/digits separated by single hyphens. */
 const slug = z
   .string()

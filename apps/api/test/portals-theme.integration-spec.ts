@@ -152,6 +152,32 @@ describe('Portal theme (M14: tokens + RBAC + public read)', () => {
     expect(JSON.stringify(events[0].metadata)).not.toContain('142 72% 29%');
   });
 
+  it('persists the chosen template and exposes it publicly (M14 plantillas gratuitas)', async () => {
+    await request(server)
+      .put('/portals/theme')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ tokens: { primary: '142 72% 29%' }, template: 'hilo' })
+      .expect(200)
+      .expect((res) => expect(res.body.template).toBe('hilo'));
+    const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+    expect(pub.body.template).toBe('hilo');
+    // Omitirla en un PUT posterior deja la plantilla guardada intacta.
+    await request(server)
+      .put('/portals/theme')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ tokens: { primary: '142 72% 29%' } })
+      .expect(200)
+      .expect((res) => expect(res.body.template).toBe('hilo'));
+  });
+
+  it('rejects an unknown template (closed enum)', async () => {
+    await request(server)
+      .put('/portals/theme')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ tokens: {}, template: 'premium' })
+      .expect(400);
+  });
+
   describe('public endpoint GET /public/organizations/:slug/theme', () => {
     it('returns the saved tokens for a known slug (no auth)', async () => {
       const res = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { securityHeaders } from './core/http/security-headers';
 import type { Env } from './config/env.validation';
 
 async function bootstrap(): Promise<void> {
@@ -15,6 +16,7 @@ async function bootstrap(): Promise<void> {
     .map((origin) => origin.trim())
     .filter(Boolean);
   app.enableCors({ origin: origins, credentials: true });
+  app.use(securityHeaders(config.get('NODE_ENV', { infer: true }) === 'production'));
 
   // Render (and most PaaS) inject PORT and require the app to bind to it;
   // API_PORT stays the source of truth for local dev (docker-compose has no PORT).

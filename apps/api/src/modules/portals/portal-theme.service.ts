@@ -10,6 +10,7 @@ import type {
 import { AuditService } from '../../core/audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
+import { safePortalTemplate } from './portals.schemas';
 
 /**
  * M14 portal theme (T-027). The theme is tenant-scoped: an org reads/edits only
@@ -43,6 +44,7 @@ export class PortalThemeService {
         tokens: (row?.tokens as PortalTheme | undefined) ?? {},
         logoPosition: (row?.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row?.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
+        template: safePortalTemplate(row?.template),
       };
     });
   }
@@ -68,6 +70,7 @@ export class PortalThemeService {
           ...(input.socialNavPosition !== undefined
             ? { socialNavPosition: input.socialNavPosition }
             : {}),
+          ...(input.template !== undefined ? { template: input.template } : {}),
         },
         update: {
           tokens,
@@ -75,6 +78,7 @@ export class PortalThemeService {
           ...(input.socialNavPosition !== undefined
             ? { socialNavPosition: input.socialNavPosition }
             : {}),
+          ...(input.template !== undefined ? { template: input.template } : {}),
         },
       });
       await this.audit.recordWithTx(tx, {
@@ -90,6 +94,7 @@ export class PortalThemeService {
           layout: [
             ...(input.logoPosition !== undefined ? ['logoPosition'] : []),
             ...(input.socialNavPosition !== undefined ? ['socialNavPosition'] : []),
+            ...(input.template !== undefined ? ['template'] : []),
           ],
         },
       });
@@ -97,13 +102,14 @@ export class PortalThemeService {
         tokens: (row.tokens as PortalTheme) ?? {},
         logoPosition: (row.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
+        template: safePortalTemplate(row.template),
       };
     });
   }
 
   /**
    * Public theme by slug. Reads through the `organization_portal_theme` SECURITY
-   * DEFINER function (public tokens + layout only, no tenant context needed, RLS
+   * DEFINER function (public tokens + layout + template only, no tenant context needed, RLS
    * not evaded). Returns the defaults when the org has no theme or the slug is
    * unknown — the portal then simply renders the design-system default layout.
    */
@@ -114,6 +120,7 @@ export class PortalThemeService {
           tokens: PortalTheme;
           logoPosition: PortalLogoPosition;
           socialNavPosition: PortalSocialNavPosition;
+          template?: string;
         } | null;
       }>
     >(Prisma.sql`SELECT organization_portal_theme(${slug}) AS data`);
@@ -122,6 +129,7 @@ export class PortalThemeService {
       tokens: data?.tokens ?? {},
       logoPosition: data?.logoPosition ?? 'left',
       socialNavPosition: data?.socialNavPosition ?? 'right',
+      template: safePortalTemplate(data?.template),
     };
   }
 }

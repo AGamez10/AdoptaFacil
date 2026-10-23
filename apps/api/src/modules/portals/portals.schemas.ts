@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import type { PortalColorToken, PortalTheme, PortalThemeToken } from '@adoptafacil/contracts';
+import type {
+  PortalColorToken,
+  PortalTemplateId,
+  PortalTheme,
+  PortalThemeToken,
+} from '@adoptafacil/contracts';
 
 /**
  * M14 personalization (T-027) — runtime validation for a tenant's brand tokens.
@@ -98,6 +103,41 @@ export const portalThemeTokensSchema = z
 const logoPositionSchema = z.enum(['left', 'center', 'right']);
 const socialNavPositionSchema = z.enum(['left', 'right']);
 
+/**
+ * Plantillas visuales del portal público (todas gratuitas). Enum cerrado: el
+ * portal solo puede pedir una plantilla que exista en la web, nunca markup libre.
+ * El `satisfies` obliga a que esta lista y el contrato `PortalTemplateId` no se
+ * desalineen.
+ */
+export const PORTAL_TEMPLATE_IDS = [
+  'clasico',
+  'hogar',
+  'revista',
+  'expediente',
+  'cartel',
+  'orbita',
+  'galeria',
+  'mosaico',
+  'match',
+  'estudio',
+  'cine',
+  'aurora',
+  'constelacion',
+  'portada',
+  'hilo',
+] as const satisfies readonly PortalTemplateId[];
+
+/** Default de una organización que nunca eligió plantilla (el diseño original). */
+export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasico';
+
+const templateSchema = z.enum(PORTAL_TEMPLATE_IDS);
+
+/** Normaliza un valor leído de la BD: cualquier cosa fuera del enum ⇒ default. */
+export function safePortalTemplate(value: unknown): PortalTemplateId {
+  const parsed = templateSchema.safeParse(value);
+  return parsed.success ? parsed.data : DEFAULT_PORTAL_TEMPLATE;
+}
+
 /** PUT /portals/theme body. `logoPosition`/`socialNavPosition` are optional and
  *  independent of `tokens` (S2-PORTAL) — a request may update either or both. */
 export const updatePortalThemeSchema = z
@@ -105,6 +145,7 @@ export const updatePortalThemeSchema = z
     tokens: portalThemeTokensSchema,
     logoPosition: logoPositionSchema.optional(),
     socialNavPosition: socialNavPositionSchema.optional(),
+    template: templateSchema.optional(),
   })
   .strict();
 

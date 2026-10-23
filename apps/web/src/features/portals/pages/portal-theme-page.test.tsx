@@ -296,6 +296,45 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     });
   });
 
+  describe('M14: selector de plantilla (todas gratuitas)', () => {
+    it('lists the 15 templates, every one marked "Gratis", with the saved one pressed', async () => {
+      stubFetchByUrl({ tokens: {}, template: 'cine' });
+      renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+      await screen.findByRole('group', { name: 'Plantilla del portal' });
+      const picker = screen.getByRole('group', { name: 'Plantilla del portal' });
+      const buttons = within(picker).getAllByRole('button');
+      expect(buttons).toHaveLength(15);
+      buttons.forEach((b) => expect(within(b).getByText('Gratis')).toBeInTheDocument());
+      expect(screen.getByTestId('template-cine')).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('template-clasico')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('falls back to Clásico when the API returns an unknown template', async () => {
+      stubFetchByUrl({ tokens: {}, template: '<script>' });
+      renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+      await screen.findByRole('group', { name: 'Plantilla del portal' });
+      expect(screen.getByTestId('template-clasico')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('sends the chosen template on save', async () => {
+      const calls: Array<{ url: string; init?: RequestInit }> = [];
+      stubFetch((url, init) => {
+        calls.push({ url, init });
+        if (init?.method === 'PUT') return { tokens: {}, template: 'hilo' };
+        return { tokens: {} };
+      });
+      renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+      await screen.findByRole('group', { name: 'Plantilla del portal' });
+      fireEvent.click(screen.getByTestId('template-hilo'));
+      fireEvent.click(screen.getByRole('button', { name: /Guardar personalización/ }));
+      await waitFor(() => {
+        const put = calls.find((c) => c.url.includes('/portals/theme') && c.init?.method === 'PUT');
+        expect(JSON.parse(String(put?.init?.body))).toMatchObject({ template: 'hilo' });
+      });
+      expect(screen.getByTestId('template-hilo')).toHaveAttribute('aria-pressed', 'true');
+    });
+  });
+
   describe('S2-REORG: contenido de la organización ya NO vive aquí', () => {
     it('never shows "Nosotros"/contacto extendido — movidos a Mi organización', async () => {
       renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
