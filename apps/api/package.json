@@ -16,6 +16,7 @@
     "seed:admin": "ts-node --transpile-only scripts/seed-platform-admin.ts",
     "seed:demo": "ts-node --transpile-only scripts/seed-demo.ts",
     "seed:breeds": "ts-node --transpile-only scripts/seed-breeds.ts",
+    "seed:trafico": "ts-node --transpile-only scripts/seed-trafico.ts",
     "db:deploy": "prisma migrate deploy"
   },
   "prisma": {
