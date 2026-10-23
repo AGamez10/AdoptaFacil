@@ -45,10 +45,20 @@ jobs:
         run: pnpm turbo run build
 
       # En un runner propio más lento (ver docs/operacion/runner-propio.md),
-      # jest y vitest compiten por los mismos núcleos y algunas pruebas de UI
-      # pasan de los 5 s por defecto. Se corren de a un paquete y con más margen.
+      # jest y vitest abren un proceso por núcleo: compiten por la CPU (pruebas
+      # de UI que pasan de los 5 s) y pueden dejar sin memoria la VM de WSL,
+      # que se lleva el runner. Se corren de a un paquete, con pocos procesos y
+      # más margen. A vitest se le limita por variables de entorno porque
+      # `--maxWorkers` rompe su validación de hilos.
       - name: Unit tests (jest + vitest)
-        run: pnpm turbo run test --concurrency=1 -- --testTimeout=30000
+        env:
+          VITEST_MAX_FORKS: '2'
+          VITEST_MIN_FORKS: '1'
+          VITEST_MAX_THREADS: '2'
+          VITEST_MIN_THREADS: '1'
+        run: |
+          pnpm turbo run test --concurrency=1 --filter='!@adoptafacil/api' -- --testTimeout=30000
+          pnpm --filter @adoptafacil/api run test --testTimeout=30000 --maxWorkers=2
 
   rls-no-leak:
     name: rls-no-leak · postura RLS · deriva de esquema (RNF03 gate)
