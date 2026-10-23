@@ -348,6 +348,14 @@ export interface PortalThemeConfig {
   lockedTemplate?: PortalTemplateId;
   /** Si el plan vigente incluye las plantillas de pago. Solo en la lectura propia. */
   premiumDesignsAvailable?: boolean;
+  /**
+   * Sello "Hecho con AdoptaFácil" (`portalRemoveSeal`). En la lectura pública es
+   * el valor efectivo: true solo si la organización lo pidió y su plan lo
+   * incluye. En la lectura propia es la elección guardada.
+   */
+  hideSeal?: boolean;
+  /** Si el plan vigente permite quitar el sello. Solo en la lectura propia. */
+  removeSealAvailable?: boolean;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */
@@ -364,6 +372,8 @@ export interface UpdatePortalThemeInput {
    * (`public/<orgId>/<archivo>.mp4` o `.webm`). Omitida, se conserva; `null` lo quita.
    */
   coverVideoKey?: string | null;
+  /** Ocultar el sello "Hecho con AdoptaFácil" (exige `portalRemoveSeal`). Omitido, se conserva. */
+  hideSeal?: boolean;
 }
 
 // ----------------------------------------------------------------------------

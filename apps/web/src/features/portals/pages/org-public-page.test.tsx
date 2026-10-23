@@ -37,6 +37,7 @@ interface StubOptions {
   theme?: Record<string, unknown>;
   logoPosition?: string;
   socialNavPosition?: string;
+  hideSeal?: unknown;
 }
 
 function stubFetch({
@@ -46,6 +47,7 @@ function stubFetch({
   theme = {},
   logoPosition,
   socialNavPosition,
+  hideSeal,
 }: StubOptions = {}) {
   vi.stubGlobal(
     'fetch',
@@ -55,7 +57,7 @@ function stubFetch({
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => ({ tokens: theme, logoPosition, socialNavPosition }),
+          json: async () => ({ tokens: theme, logoPosition, socialNavPosition, hideSeal }),
         });
       }
       return Promise.resolve({ ok: orgOk, status: orgStatus, json: async () => org });
@@ -381,6 +383,35 @@ describe('OrgPublicPage — rich public portal', () => {
     const seals = screen.getByRole('list', { name: 'Documentos revisados por la plataforma' });
     expect(within(seals).getAllByRole('listitem')).toHaveLength(2);
     expect(seals).toHaveTextContent('RUT revisado por AdoptaFácil');
+  });
+
+  it('shows the "Hecho con AdoptaFácil" seal in the footer by default', async () => {
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+    const footer = await screen.findByTestId('public-footer');
+    expect(footer).toHaveTextContent('Portal creado con AdoptaFácil');
+    expect(screen.getByTestId('public-footer-legal')).toHaveTextContent(
+      'Portal hecho con AdoptaFácil',
+    );
+  });
+
+  it('without the seal (plan with portalRemoveSeal) the legal links stay in the footer', async () => {
+    stubFetch({ hideSeal: true });
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+    const footer = await screen.findByTestId('public-footer');
+    expect(footer).not.toHaveTextContent('creado con AdoptaFácil');
+    expect(footer).not.toHaveTextContent('hecho con AdoptaFácil');
+    const legal = within(screen.getByTestId('public-footer-legal'));
+    for (const name of ['Términos', 'Datos personales', 'Qué es AdoptaFácil', 'Reportar']) {
+      expect(legal.getByRole('link', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('keeps the seal when the API sends anything other than true', async () => {
+    stubFetch({ hideSeal: 'true' });
+    renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
+    expect(await screen.findByTestId('public-footer')).toHaveTextContent(
+      'Portal creado con AdoptaFácil',
+    );
   });
 
   it('applies the org brand tokens at runtime, scoped and safe-subset only', async () => {

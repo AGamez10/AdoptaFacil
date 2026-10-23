@@ -70,6 +70,8 @@ interface Layout {
   templateOptions: PortalTemplateOptions;
   /** Historias: video de portada opcional (URL pública ya resuelta). */
   coverVideoUrl?: string;
+  /** Sin el sello "Hecho con AdoptaFácil" (plan con `portalRemoveSeal`). */
+  hideSeal?: boolean;
 }
 
 const DEFAULT_LAYOUT: Layout = {
@@ -190,6 +192,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               template?: unknown;
               templateOptions?: unknown;
               coverVideoUrl?: unknown;
+              hideSeal?: unknown;
             }>)
           : null,
       )
@@ -205,6 +208,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
             body?.templateOptions,
           ),
           coverVideoUrl: safeMediaUrl(body?.coverVideoUrl),
+          // La API ya cruzó la elección con el plan; ante la duda, sello.
+          hideSeal: body?.hideSeal === true,
         },
       }))
       .catch(() => ({ tokens: {} as PortalTheme, layout: DEFAULT_LAYOUT }));
@@ -266,6 +271,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           template,
           templateOptions: resolveTemplateOptions(template, themeConfig?.templateOptions),
           coverVideoUrl: safeMediaUrl(themeConfig?.coverVideoUrl),
+          // La lectura propia trae la elección; se aplica solo si el plan la incluye.
+          hideSeal: themeConfig?.hideSeal === true && themeConfig.removeSealAvailable !== false,
         });
         setOwnerPreview(true);
         setState('ready');
@@ -553,7 +560,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         </main>
         {state === 'ready' && view && (
           <div className="mx-auto w-full px-4 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0">
-            <PublicFooter organization={view.profile.organization} navItems={navItems} />
+            <PublicFooter
+              organization={view.profile.organization}
+              navItems={navItems}
+              showSeal={!layout.hideSeal}
+            />
           </div>
         )}
         {state === 'ready' && view && (

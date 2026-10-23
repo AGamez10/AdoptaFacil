@@ -154,7 +154,7 @@ export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; avail
   },
   portalRemoveSeal: {
     label: 'Portal sin el sello "Hecho con AdoptaFácil"',
-    available: false,
+    available: true,
   },
   customDomain: { label: 'Dominio propio (www.turefugio.org)', available: false },
   brandedEmails: { label: 'Correos a adoptantes y donantes con tu marca', available: true },
