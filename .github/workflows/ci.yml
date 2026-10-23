@@ -121,6 +121,10 @@ jobs:
   docker:
     name: Imágenes Docker + compose de producción (arranque de punta a punta)
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
+    # Proyecto propio por corrida: en un runner propio el stack de desarrollo
+    # (nombre "adoptafacil") comparte volúmenes y deja una base con otra clave.
+    env:
+      COMPOSE_PROJECT_NAME: adoptafacil-ci-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
 
