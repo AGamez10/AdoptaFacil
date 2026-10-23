@@ -4,7 +4,7 @@ import { ADOPTION_MESSAGE_MIN_LENGTH, ADOPTION_STATUSES } from '@adoptafacil/con
 /** Runtime validation for M04 adoption requests (T-028a). `.strict()` rejects
  *  unknown keys so no extra field can be smuggled in. */
 
-const uuid = z.string().uuid();
+const uuid = z.guid();
 
 const applicantSchema = z
   .object({
