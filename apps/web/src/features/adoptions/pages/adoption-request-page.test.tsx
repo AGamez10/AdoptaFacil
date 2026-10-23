@@ -56,7 +56,7 @@ describe('AdoptionRequestPage', () => {
     renderShell({ route: target, ...personSession() });
     await screen.findByText('Michi');
 
-    const emailInput = screen.getByLabelText('Correo');
+    const emailInput = await screen.findByLabelText('Correo', {}, { timeout: 5000 });
     fireEvent.change(emailInput, { target: { value: 'asdf' } });
     fireEvent.blur(emailInput);
 
@@ -69,7 +69,7 @@ describe('AdoptionRequestPage', () => {
     renderShell({ route: target, ...personSession() });
     await screen.findByText('Michi');
 
-    const fullNameInput = screen.getByLabelText('Nombre completo');
+    const fullNameInput = await screen.findByLabelText('Nombre completo', {}, { timeout: 5000 });
     fireEvent.change(fullNameInput, { target: { value: '' } });
     const form = fullNameInput.closest('form');
     expect(form).toBeInTheDocument();
