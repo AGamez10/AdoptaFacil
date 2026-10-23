@@ -118,8 +118,14 @@ jobs:
           psql "$PG_URL" -c 'CREATE DATABASE adoptafacil_shadow'
           scripts/ci/schema-drift.sh
 
+      # En partes (cada una en su propio proceso): en una sola corrida la
+      # memoria de jest crece suite a suite y, en un runner propio con poca
+      # RAM, termina sin memoria y vuelve lentas las colas de correo.
       - name: Integration + RLS no-leak (smoke /health + cross-org isolation)
-        run: pnpm --filter @adoptafacil/api run test:integration
+        run: |
+          for shard in 1/4 2/4 3/4 4/4; do
+            pnpm --filter @adoptafacil/api run test:integration --shard=$shard --testTimeout=120000
+          done
 
   docker:
     name: Imágenes Docker + compose de producción (arranque de punta a punta)
