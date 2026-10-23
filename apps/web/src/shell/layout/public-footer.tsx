@@ -28,6 +28,9 @@ export function PublicFooter() {
           <Link to="/marketplace" className={styles.footer__link}>
             Marketplace
           </Link>
+          <Link to="/voluntariados" className={styles.footer__link}>
+            Voluntariados
+          </Link>
           <Link to="/login" className={styles.footer__link}>
             Ingresar
           </Link>

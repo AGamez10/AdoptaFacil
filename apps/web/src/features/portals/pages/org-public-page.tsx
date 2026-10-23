@@ -20,6 +20,7 @@ import { PortalAdoptionSection } from '../components/portal-adoption-section';
 import { PortalProductsSection } from '../components/portal-products-section';
 import { PortalNeedsSection } from '../components/portal-needs-section';
 import { PortalCampaignsSection } from '../components/portal-campaigns-section';
+import { PortalVolunteeringSection } from '../components/portal-volunteering-section';
 import { PortalAboutSection } from '../components/portal-about-section';
 import { PortalReviewsSection } from '../components/portal-reviews-section';
 import { PortalContactInfoSection } from '../components/portal-contact-info-section';
@@ -225,6 +226,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const navItems: PublicHeaderNavItem[] = [
     { label: 'Inicio', href: '#portal-top' },
     { label: 'Animales', href: '#portal-section-pets' },
+    { label: 'Voluntariado', href: '#portal-section-volunteering' },
     { label: 'Cómo ayudar', href: '#portal-help-cta' },
     ...(aboutUs ? [{ label: 'Nosotros', href: '#portal-about' }] : []),
     { label: 'Reseñas', href: '#portal-reviews' },
@@ -313,6 +315,10 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                     <PortalPlaceholderSection key={section.kind} section={section} />
                   ),
                 )}
+                {/* "Voluntariado" (RF18, M08): fuera del blueprint de
+                    secciones porque ya nace cableada a datos reales
+                    (`GET /public/organizations/:slug/volunteer-opportunities`). */}
+                <PortalVolunteeringSection slug={slug as string} />
               </div>
 
               <aside

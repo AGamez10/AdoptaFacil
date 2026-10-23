@@ -6,11 +6,11 @@ import styles from './public-navbar.module.scss';
 /**
  * Public top nav (visitantes sin sesión) — REFACTOR-VISUAL v2, Fase 3.
  * Solo enlaza a rutas que existen de verdad hoy: el catálogo general (`/`),
- * las campañas públicas (`/campanas`), el banco de recursos (`/recursos`) y el
- * marketplace (`/marketplace`) — las tres últimas son páginas públicas de solo
- * lectura (las acciones que requieren sesión, p. ej. ofrecer ayuda, ya pasan
+ * las campañas públicas (`/campanas`), el banco de recursos (`/recursos`), el
+ * marketplace (`/marketplace`) y los voluntariados (`/voluntariados`) — las
+ * cuatro últimas son páginas públicas de solo lectura (las acciones que requieren sesión, p. ej. ofrecer ayuda, ya pasan
  * por `RequireAuth` en su propia ruta). El mockup también muestra "Quiénes
- * somos"/"Voluntariado"/"Transparencia" en esta barra, pero esas pantallas no
+ * somos"/"Transparencia" en esta barra, pero esas pantallas no
  * existen todavía (Transparencia nacional es uno de los 3 placeholders de
  * Fase 12) — enlazar ahí sería navegación a la nada, así que se omiten hasta
  * que la pantalla real exista.
@@ -56,6 +56,14 @@ export function PublicNavbar() {
             }
           >
             Marketplace
+          </NavLink>
+          <NavLink
+            to="/voluntariados"
+            className={({ isActive }) =>
+              cn(styles.navbar__link, isActive && styles['navbar__link--active'])
+            }
+          >
+            Voluntariados
           </NavLink>
         </nav>
 
