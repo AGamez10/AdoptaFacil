@@ -75,7 +75,7 @@ function stubApi(
       const url = String(input);
       calls.push({ url, init });
       let body: unknown = [];
-      if (url.includes('/org/exports/data.xlsx')) {
+      if (url.includes('/org/exports/')) {
         if (exportError) {
           return Promise.resolve({
             ok: false,
@@ -247,5 +247,18 @@ describe('OrgReportsPage (M13)', () => {
 
     expect(await screen.findByText('ADF-REP-2026-ABCDEFGH')).toBeInTheDocument();
     expect(screen.queryByTestId('data-export-card')).not.toBeInTheDocument();
+  });
+
+  it('the impact report downloads this year as a PDF, from January 1st to today', async () => {
+    stubApi();
+    renderShell({ route: '/organizacion/reportes', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Descargar este año' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes('/org/exports/impact-report.pdf?start='))).toBe(true),
+    );
+    const url = calls.find((c) => c.url.includes('impact-report.pdf'))!.url;
+    expect(url).toMatch(/start=\d{4}-01-01&end=\d{4}-\d{2}-\d{2}$/);
+    expect(screen.getByTestId('impact-report-card')).toHaveTextContent('Solo cifras');
   });
 });

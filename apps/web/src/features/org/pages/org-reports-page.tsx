@@ -34,6 +34,7 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient, type ApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { DataExportCard } from '../components/data-export-card';
+import { ImpactReportCard } from '../components/impact-report-card';
 
 /**
  * `/organizacion/reportes` (M13) — el dueño del refugio genera en un clic el
@@ -593,7 +594,12 @@ export function OrgReportsPage() {
             ))}
           </div>
 
-          {canGenerate && <DataExportCard />}
+          {canGenerate && (
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <ImpactReportCard />
+              <DataExportCard />
+            </div>
+          )}
 
           <Card className="mt-6">
             <CardHeader>
