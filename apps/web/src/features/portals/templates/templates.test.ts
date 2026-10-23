@@ -130,6 +130,16 @@ describe('registro de plantillas', () => {
     }
   });
 
+  it('asigna cada Premium a su plan: Álbum y Revelado en Crece; Velitas, Linterna y Terminal en Pro', () => {
+    expect(PREMIUM_CATALOG.map((t) => [t.id, t.plan])).toEqual([
+      ['album', 'crece'],
+      ['revelado', 'crece'],
+      ['velitas', 'pro'],
+      ['linterna', 'pro'],
+      ['terminal', 'pro'],
+    ]);
+  });
+
   it('normaliza un id desconocido a clásico', () => {
     expect(safeTemplateId('cine')).toBe('cine');
     expect(safeTemplateId('premium')).toBe('clasico');

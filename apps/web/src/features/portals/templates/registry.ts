@@ -137,35 +137,36 @@ export const TEMPLATE_CATALOG: readonly TemplateInfo[] = [
  */
 export const PREMIUM_TEMPLATES_ENABLED = false;
 
+/** Plan de pago que habilitará cada Premium (Pro incluye también las de Crece). */
+export type PremiumPlan = 'crece' | 'pro';
+
 export interface PremiumTemplateInfo {
   id: PortalPremiumTemplateId;
   name: string;
   description: string;
   /** Nombre de cada experiencia. */
   modes: { light: string; dark: string };
+  /** Plan mínimo que la habilitará cuando se encienda la puerta. */
+  plan: PremiumPlan;
   swatch: [string, string];
 }
 
+/** Orden de venta: primero las de Crece y luego las de Pro, cada grupo de más a menos destacada. */
 export const PREMIUM_CATALOG: readonly PremiumTemplateInfo[] = [
   {
     id: 'album',
     name: 'Álbum',
     modes: { light: 'Láminas', dark: 'Holográfica' },
     description: 'Álbum de láminas con sobres para abrir, y cartas holográficas en modo oscuro.',
+    plan: 'crece',
     swatch: ['#EEF3FA', '#FFD23F'],
-  },
-  {
-    id: 'linterna',
-    name: 'Linterna',
-    modes: { light: 'Mañana', dark: 'Noche' },
-    description: 'Amanece en el refugio; de noche, una linterna descubre quién espera.',
-    swatch: ['#FFF4E0', '#05070D'],
   },
   {
     id: 'revelado',
     name: 'Revelado',
     modes: { light: 'Mesa de luz', dark: 'Cuarto oscuro' },
     description: 'Negativos con lupa y, en modo oscuro, copias que se revelan bajo luz roja.',
+    plan: 'crece',
     swatch: ['#F4F1EA', '#B3261E'],
   },
   {
@@ -173,13 +174,23 @@ export const PREMIUM_CATALOG: readonly PremiumTemplateInfo[] = [
     name: 'Velitas',
     modes: { light: 'Papel', dark: 'Velitas' },
     description: 'Cerros de papel recortado y banderines; de noche, faroles y una vela por animal.',
+    plan: 'pro',
     swatch: ['#EEF4EE', '#F2A541'],
+  },
+  {
+    id: 'linterna',
+    name: 'Linterna',
+    modes: { light: 'Mañana', dark: 'Noche' },
+    description: 'Amanece en el refugio; de noche, una linterna descubre quién espera.',
+    plan: 'pro',
+    swatch: ['#FFF4E0', '#05070D'],
   },
   {
     id: 'terminal',
     name: 'Terminal',
     modes: { light: 'Pases', dark: 'Tablero' },
     description: 'Pases de abordar hacia un hogar y un tablero de salidas con letras que giran.',
+    plan: 'pro',
     swatch: ['#F3F4F6', '#FFC72C'],
   },
 ];
