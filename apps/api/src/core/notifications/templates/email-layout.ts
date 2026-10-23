@@ -83,7 +83,7 @@ export function renderLayout(input: LayoutInput): string {
   const buttonText = branded ? color(input.brand?.buttonText, '#ffffff') : '#ffffff';
 
   const sender = branded
-    ? `<span style="font-size:13px;color:${MUTED};">a través de 🐾 Adopta<span style="color:${BUTTON};">Fácil</span></span>`
+    ? `<span style="font-size:13px;color:${MUTED};">a través de AdoptaFácil</span>`
     : org
       ? `<span style="font-size:13px;color:${MUTED};">${org} <span style="color:#9AA5B1;">·</span> a través de AdoptaFácil</span>`
       : `<span style="font-size:13px;color:${MUTED};">Infraestructura digital para el rescate animal</span>`;

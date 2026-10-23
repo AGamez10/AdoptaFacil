@@ -68,7 +68,7 @@ describe('email-layout con marca', () => {
       brand: { accent: '#123456', button: '#654321', buttonText: '#ffffff' },
     });
     expect(html).toContain('Huellitas &lt;script&gt;</td>');
-    expect(html).toContain('a través de 🐾 Adopta');
+    expect(html).toContain('a través de AdoptaFácil');
     expect(html).toContain('background:#123456');
     expect(html).toContain('bgcolor="#654321"');
     expect(html).not.toContain('<script>');

@@ -128,7 +128,7 @@ describe('Org branded emails (brandedEmails: marca, tope mensual, nunca bloquea)
     expect(email.fromName).toBe('Fundación Marca A vía AdoptaFácil');
     expect(email.replyTo).toBe('contacto@marca-a.org');
     expect(email.html).toContain('Fundación Marca A</td>');
-    expect(email.html).toContain('a través de 🐾 Adopta');
+    expect(email.html).toContain('a través de AdoptaFácil');
     expect(email.html).toContain('background:#157f3c');
     expect((await usage(orgA))?.brandedCount).toBe(1);
   });
