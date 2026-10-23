@@ -180,7 +180,7 @@ export function PortalTemplateView({
     <>
       <div
         ref={rootRef}
-        className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}`}
+        className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}${design.premium ? ' pk' : ''}`}
         style={themeStyle}
         data-testid="portal-template"
         data-template={design.id}

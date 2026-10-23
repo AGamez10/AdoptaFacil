@@ -1,4 +1,11 @@
-import { contrastRatio, MIN_CONTRAST_RATIO, updatePortalThemeSchema } from './portals.schemas';
+import {
+  contrastRatio,
+  MIN_CONTRAST_RATIO,
+  PORTAL_PREMIUM_TEMPLATE_IDS,
+  PORTAL_TEMPLATE_IDS,
+  safePortalTemplate,
+  updatePortalThemeSchema,
+} from './portals.schemas';
 
 /** T-027 · token validation is the deny-by-default gate for M14 personalization
  *  (tokens only, never arbitrary CSS): format, range and unknown keys. Contrast
@@ -75,5 +82,22 @@ describe('contrastRatio', () => {
 
   it('returns null for unparsable input', () => {
     expect(contrastRatio('nope', '0 0% 100%')).toBeNull();
+  });
+});
+
+describe('plantillas Premium (apagadas)', () => {
+  const tokens = { primary: '142 72% 29%' };
+
+  it.each(PORTAL_PREMIUM_TEMPLATE_IDS)('no deja guardar %s sin un plan activo', (id) => {
+    expect(updatePortalThemeSchema.safeParse({ tokens, template: id }).success).toBe(false);
+  });
+
+  it.each(PORTAL_PREMIUM_TEMPLATE_IDS)('una fila con %s se lee como el clásico', (id) => {
+    expect(safePortalTemplate(id)).toBe('clasico');
+  });
+
+  it('ninguna Premium está en la lista de plantillas aceptadas', () => {
+    const accepted: readonly string[] = PORTAL_TEMPLATE_IDS;
+    expect(PORTAL_PREMIUM_TEMPLATE_IDS.filter((id) => accepted.includes(id))).toEqual([]);
   });
 });

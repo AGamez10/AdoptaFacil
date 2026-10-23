@@ -1,4 +1,4 @@
-import type { PortalTemplateId } from '@adoptafacil/contracts';
+import type { PortalPremiumTemplateId, PortalTemplateId } from '@adoptafacil/contracts';
 import type { TemplateDesign } from './engine/types';
 
 /**
@@ -129,10 +129,66 @@ export const TEMPLATE_CATALOG: readonly TemplateInfo[] = [
   },
 ];
 
-type DesignId = Exclude<PortalTemplateId, 'clasico'>;
+/**
+ * Plantillas Premium (dos experiencias cada una: modo claro y modo oscuro).
+ * APAGADAS mientras no exista un plan de pago activo: no aparecen en el
+ * selector, la API no deja guardarlas y, si llegaran del endpoint público, el
+ * portal pinta el clásico. Para encenderlas: esta bandera + el enum de la API.
+ */
+export const PREMIUM_TEMPLATES_ENABLED = false;
+
+export interface PremiumTemplateInfo {
+  id: PortalPremiumTemplateId;
+  name: string;
+  description: string;
+  /** Nombre de cada experiencia. */
+  modes: { light: string; dark: string };
+  swatch: [string, string];
+}
+
+export const PREMIUM_CATALOG: readonly PremiumTemplateInfo[] = [
+  {
+    id: 'album',
+    name: 'Álbum',
+    modes: { light: 'Láminas', dark: 'Holográfica' },
+    description: 'Álbum de láminas con sobres para abrir, y cartas holográficas en modo oscuro.',
+    swatch: ['#EEF3FA', '#FFD23F'],
+  },
+  {
+    id: 'linterna',
+    name: 'Linterna',
+    modes: { light: 'Mañana', dark: 'Noche' },
+    description: 'Amanece en el refugio; de noche, una linterna descubre quién espera.',
+    swatch: ['#FFF4E0', '#05070D'],
+  },
+  {
+    id: 'revelado',
+    name: 'Revelado',
+    modes: { light: 'Mesa de luz', dark: 'Cuarto oscuro' },
+    description: 'Negativos con lupa y, en modo oscuro, copias que se revelan bajo luz roja.',
+    swatch: ['#F4F1EA', '#B3261E'],
+  },
+  {
+    id: 'velitas',
+    name: 'Velitas',
+    modes: { light: 'Papel', dark: 'Velitas' },
+    description: 'Cerros de papel recortado y banderines; de noche, faroles y una vela por animal.',
+    swatch: ['#EEF4EE', '#F2A541'],
+  },
+  {
+    id: 'terminal',
+    name: 'Terminal',
+    modes: { light: 'Pases', dark: 'Tablero' },
+    description: 'Pases de abordar hacia un hogar y un tablero de salidas con letras que giran.',
+    swatch: ['#F3F4F6', '#FFC72C'],
+  },
+];
+
+type FreeDesignId = Exclude<PortalTemplateId, 'clasico'>;
+type DesignId = FreeDesignId | PortalPremiumTemplateId;
 
 /** Cada plantilla se descarga solo cuando un portal la usa (code-splitting). */
-const LOADERS: Record<DesignId, () => Promise<TemplateDesign>> = {
+const LOADERS: Record<FreeDesignId, () => Promise<TemplateDesign>> = {
   hogar: () => import('./designs/hogar').then((x) => x.hogar),
   revista: () => import('./designs/revista').then((x) => x.revista),
   expediente: () => import('./designs/expediente').then((x) => x.expediente),
@@ -149,12 +205,30 @@ const LOADERS: Record<DesignId, () => Promise<TemplateDesign>> = {
   hilo: () => import('./designs/hilo').then((x) => x.hilo),
 };
 
-export function isDesignId(id: PortalTemplateId): id is DesignId {
+const PREMIUM_LOADERS: Record<PortalPremiumTemplateId, () => Promise<TemplateDesign>> = {
+  album: () => import('./designs/album').then((x) => x.album),
+  linterna: () => import('./designs/linterna').then((x) => x.linterna),
+  revelado: () => import('./designs/revelado').then((x) => x.revelado),
+  velitas: () => import('./designs/velitas').then((x) => x.velitas),
+  terminal: () => import('./designs/terminal').then((x) => x.terminal),
+};
+
+/** Premium sin la puerta (solo para pruebas y vistas previas internas). */
+export function loadPremiumDesign(id: PortalPremiumTemplateId): Promise<TemplateDesign> {
+  return PREMIUM_LOADERS[id]();
+}
+
+export function isDesignId(id: PortalTemplateId): id is FreeDesignId {
   return id !== 'clasico' && id in LOADERS;
 }
 
 export function loadDesign(id: DesignId): Promise<TemplateDesign> {
-  return LOADERS[id]();
+  if (id in PREMIUM_LOADERS) {
+    // Puerta apagada: sin plan activo una Premium nunca se descarga ni se pinta.
+    if (!PREMIUM_TEMPLATES_ENABLED) return Promise.reject(new Error('premium-disabled'));
+    return PREMIUM_LOADERS[id as PortalPremiumTemplateId]();
+  }
+  return LOADERS[id as FreeDesignId]();
 }
 
 /** Normaliza lo que venga del endpoint público: desconocido ⇒ 'clasico'. */

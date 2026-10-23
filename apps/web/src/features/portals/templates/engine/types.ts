@@ -1,4 +1,4 @@
-import type { PortalTemplateId } from '@adoptafacil/contracts';
+import type { PortalPremiumTemplateId, PortalTemplateId } from '@adoptafacil/contracts';
 import type { Kit } from './kit';
 import type { TplModel } from './model';
 import type { Motion, createCatalog } from './runtime';
@@ -21,7 +21,7 @@ export interface TemplateEnv {
 
 /** Una plantilla visual del portal público. */
 export interface TemplateDesign {
-  id: Exclude<PortalTemplateId, 'clasico'>;
+  id: Exclude<PortalTemplateId, 'clasico'> | PortalPremiumTemplateId;
   /** CSS de la plantilla, acotado a `.tpl-<id>`. */
   css: string;
   /** Familias de Google Fonts (parámetro `family=` ya armado). */
@@ -30,6 +30,8 @@ export interface TemplateDesign {
   kit?: boolean;
   /** Necesita WebGL/Three.js (tiene respaldo sin WebGL). */
   webgl?: boolean;
+  /** Plantilla de pago (dos experiencias, claro y oscuro). Ver `PREMIUM_TEMPLATES_ENABLED`. */
+  premium?: boolean;
   html: (m: TplModel, kit: Kit) => string;
   init?: (app: HTMLElement, env: TemplateEnv) => void;
 }

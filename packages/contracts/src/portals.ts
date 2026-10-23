@@ -162,6 +162,18 @@ export type PortalTemplateId =
   | 'portada'
   | 'hilo';
 
+/**
+ * Plantillas Premium del portal público (pensadas para los planes de pago).
+ * Cada una trae dos experiencias, modo claro y modo oscuro, con el mismo
+ * contenido y las mismas reglas de visibilidad que el clásico.
+ *
+ * Hoy están APAGADAS: no existe un plan de pago activo, así que NO forman parte
+ * de `PortalTemplateId` (lo que una organización puede guardar). La API las
+ * rechaza y normaliza a `'clasico'`; la web no las ofrece ni las pinta. Se
+ * encienden juntas (API + web) cuando exista el plan que las habilita.
+ */
+export type PortalPremiumTemplateId = 'album' | 'linterna' | 'revelado' | 'velitas' | 'terminal';
+
 /** Respuesta de lectura del tema (propio o público). */
 export interface PortalThemeConfig {
   tokens: PortalTheme;

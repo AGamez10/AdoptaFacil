@@ -1,11 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { PROFILES, FIXTURE_NOW } from './__fixtures__/profiles';
+import type { PortalPremiumTemplateId } from '@adoptafacil/contracts';
 import { createKit } from './engine/kit';
 import { buildTemplateModel } from './engine/model';
+import { createCatalog, createMotion } from './engine/runtime';
 import { esc, safeHref, safeImgSrc, unesc } from './engine/safe';
-import { isDesignId, loadDesign, safeTemplateId, TEMPLATE_CATALOG } from './registry';
+import type { TemplateDesign } from './engine/types';
+import {
+  isDesignId,
+  loadDesign,
+  loadPremiumDesign,
+  PREMIUM_CATALOG,
+  PREMIUM_TEMPLATES_ENABLED,
+  safeTemplateId,
+  TEMPLATE_CATALOG,
+} from './registry';
 
 /**
  * Contrato de las plantillas del portal (M14): cada diseño pinta las 12
@@ -28,13 +39,61 @@ const SECTIONS = [
   'libro',
 ] as const;
 
-const DESIGN_IDS = TEMPLATE_CATALOG.map((t) => t.id).filter(isDesignId);
+// jsdom no tiene lienzo: las plantillas ya toleran un `getContext` nulo (sin animación).
+beforeAll(() => {
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+});
 
-async function render(id: (typeof DESIGN_IDS)[number], profile: keyof typeof PROFILES) {
-  const design = await loadDesign(id);
+const DESIGN_IDS = TEMPLATE_CATALOG.map((t) => t.id).filter(isDesignId);
+const PREMIUM_IDS = PREMIUM_CATALOG.map((t) => t.id);
+
+type Profile = keyof typeof PROFILES;
+/** Las gratuitas se pintan una vez; cada Premium en sus dos experiencias. */
+type Case = [name: string, load: () => Promise<TemplateDesign>, mode: 'light' | 'dark' | null];
+const CASES: Case[] = [
+  ...DESIGN_IDS.map((id): Case => [id, () => loadDesign(id), null]),
+  ...PREMIUM_IDS.flatMap((id) =>
+    (['light', 'dark'] as const).map((mode): Case => [
+      `${id} (${mode})`,
+      () => loadPremiumDesign(id),
+      mode,
+    ]),
+  ),
+];
+
+async function renderWith(
+  load: () => Promise<TemplateDesign>,
+  mode: 'light' | 'dark' | null,
+  profile: Profile,
+) {
+  const design = await load();
   const model = buildTemplateModel(PROFILES[profile], FIXTURE_NOW);
   const root = document.createElement('div');
-  root.innerHTML = design.html(model, createKit(model));
+  const kit = createKit(model);
+  root.innerHTML = design.html(model, kit);
+  if (mode) {
+    // El modo se pinta montando la plantilla como en el portal (init con la preferencia guardada).
+    localStorage.setItem(`af-tpl-mode:${design.id}`, mode);
+    const ctl = new AbortController();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    document.body.appendChild(root);
+    design.init?.(root, {
+      m: model,
+      kit,
+      motion: createMotion(ctl.signal),
+      catalog: createCatalog(model.ANIMALS),
+      THREE: null,
+      brand: () => '#1F7A6D',
+      go: () => undefined,
+    });
+    // Una animación que falla no debe pasar desapercibida en las pruebas.
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+    ctl.abort();
+    root.remove();
+    localStorage.removeItem(`af-tpl-mode:${design.id}`);
+    expect(root.dataset.mode).toBe(mode);
+  }
   return { root, model };
 }
 
@@ -58,6 +117,17 @@ describe('registro de plantillas', () => {
 
   it('expone 14 diseños además del clásico', () => {
     expect(DESIGN_IDS).toHaveLength(14);
+  });
+
+  it('las Premium están apagadas: no se ofrecen, no se cargan y se leen como clásico', async () => {
+    expect(PREMIUM_TEMPLATES_ENABLED).toBe(false);
+    expect(PREMIUM_IDS).toHaveLength(5);
+    const free: readonly string[] = TEMPLATE_CATALOG.map((t) => t.id);
+    for (const id of PREMIUM_IDS) {
+      expect(free).not.toContain(id);
+      expect(safeTemplateId(id)).toBe('clasico');
+      await expect(loadDesign(id as PortalPremiumTemplateId)).rejects.toThrow('premium-disabled');
+    }
   });
 
   it('normaliza un id desconocido a clásico', () => {
@@ -94,9 +164,11 @@ describe('saneo de enlaces e imágenes', () => {
   });
 });
 
-describe.each(DESIGN_IDS)('plantilla %s', (id) => {
+describe.each(CASES)('plantilla %s', (_name, load, mode) => {
+  const render = (profile: Profile) => renderWith(load, mode, profile);
+
   it('completa: pinta las 12 secciones', async () => {
-    const { root } = await render(id, 'completa');
+    const { root } = await render('completa');
     expect([...sectionsOf(root)].sort()).toEqual([...SECTIONS].sort());
     expect(root.querySelector('#portal-help-cta')).not.toBeNull();
   });
@@ -104,7 +176,7 @@ describe.each(DESIGN_IDS)('plantilla %s', (id) => {
   it.each(['nueva', 'vacia'] as const)(
     '%s: oculta exactamente lo que el clásico oculta',
     async (profile) => {
-      const { root, model } = await render(id, profile);
+      const { root, model } = await render(profile);
       const hidden = (['transparencia', 'nosotros', 'contacto', 'redes'] as const).filter(
         (s) => !model.SHOW[s],
       );
@@ -114,7 +186,7 @@ describe.each(DESIGN_IDS)('plantilla %s', (id) => {
   );
 
   it('vacia: no inventa sellos, cifras ni reseñas', async () => {
-    const { root, model } = await render(id, 'vacia');
+    const { root, model } = await render('vacia');
     expect(model.BADGES).toHaveLength(0);
     const text = root.textContent ?? '';
     for (const claim of [
@@ -131,7 +203,7 @@ describe.each(DESIGN_IDS)('plantilla %s', (id) => {
   });
 
   it('hostil: ningún dato de la organización inyecta marcado ni enlaces peligrosos', async () => {
-    const { root } = await render(id, 'hostil');
+    const { root } = await render('hostil');
     expect(root.querySelectorAll('script, object, embed, base, meta, form')).toHaveLength(0);
     for (const el of root.querySelectorAll('*')) {
       for (const attr of el.attributes) {

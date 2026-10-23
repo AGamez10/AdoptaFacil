@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type {
   PortalColorToken,
+  PortalPremiumTemplateId,
   PortalTemplateId,
   PortalTheme,
   PortalThemeToken,
@@ -126,6 +127,20 @@ export const PORTAL_TEMPLATE_IDS = [
   'portada',
   'hilo',
 ] as const satisfies readonly PortalTemplateId[];
+
+/**
+ * Plantillas Premium (contrato `PortalPremiumTemplateId`). APAGADAS: no hay un
+ * plan de pago activo, así que quedan FUERA de `PORTAL_TEMPLATE_IDS` a propósito
+ * (no se pueden guardar y una fila con alguna de ellas se lee como el default).
+ * Para encenderlas se agregan al enum junto con la validación del plan.
+ */
+export const PORTAL_PREMIUM_TEMPLATE_IDS = [
+  'album',
+  'linterna',
+  'revelado',
+  'velitas',
+  'terminal',
+] as const satisfies readonly PortalPremiumTemplateId[];
 
 /** Default de una organización que nunca eligió plantilla (el diseño original). */
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasico';
