@@ -10,6 +10,7 @@ const CSS = `
 .tpl-revista .r-top .w{display:flex;justify-content:space-between;gap:16px;padding-block:10px;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
 .tpl-revista .r-mast{padding-block:18px 0}
 .tpl-revista .r-mast h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;line-height:.82;letter-spacing:-.035em;white-space:nowrap;font-size:clamp(40px,9vw,150px);overflow:hidden}
+@media (max-width:600px){.tpl-revista .r-mast h1{white-space:normal;font-size:clamp(34px,10.5vw,52px)}}
 .tpl-revista .r-mast h1 span{display:inline-block;animation:rUp 1.1s cubic-bezier(.2,.8,.2,1) both}
 .tpl-revista .r-mast h1 em{font-style:italic;color:var(--brand)}
 @keyframes rUp{from{transform:translateY(100%)}}
