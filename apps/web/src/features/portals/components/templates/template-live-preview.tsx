@@ -212,6 +212,7 @@ export function TemplateLivePreview({
               source={engineSource}
               themeStyle={style}
               width={width}
+              device={device}
             />
           ) : (
             <div
@@ -294,16 +295,35 @@ function buildPreviewDoc(
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${fonts}<style>html,body{margin:0}${BASE_CSS}${design.css}${PREVIEW_STATIC_CSS}</style></head><body><div class="af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}" style="${vars}">${body}</div></body></html>`;
 }
 
+/**
+ * Plantillas cuya animación depende de JS o WebGL: en la vista previa (sin scripts)
+ * se quedarían en blanco. Se muestra una captura real del portal con sus scripts,
+ * generada por plantilla (public/template-previews). Son datos de demostración.
+ */
+const REFERENCE_PREVIEWS = new Set<PortalTemplateId>([
+  'solar',
+  'galeria',
+  'cine',
+  'aurora',
+  'constelacion',
+  'match',
+  'estudio',
+  'portada',
+  'hilo',
+]);
+
 function EnginePreview({
   template,
   source,
   themeStyle,
   width,
+  device,
 }: {
   template: PortalTemplateId;
   source: TemplateSourceData;
   themeStyle: CSSProperties;
   width: number;
+  device: Device;
 }) {
   const [design, setDesign] = useState<TemplateDesign | null>(null);
   const [height, setHeight] = useState(600);
@@ -326,6 +346,18 @@ function EnginePreview({
     () => (design ? buildPreviewDoc(design, source, themeStyle) : ''),
     [design, source, themeStyle],
   );
+  if (REFERENCE_PREVIEWS.has(template)) {
+    return (
+      <img
+        src={`/template-previews/${template}-${device === 'mobile' ? '390' : '1440'}.jpg`}
+        alt={`Vista previa de la plantilla ${template}`}
+        width={width}
+        decoding="async"
+        style={{ width, height: 'auto', display: 'block' }}
+        onLoad={(event) => setHeight(event.currentTarget.getBoundingClientRect().height)}
+      />
+    );
+  }
   if (!design) return null;
   return (
     <iframe

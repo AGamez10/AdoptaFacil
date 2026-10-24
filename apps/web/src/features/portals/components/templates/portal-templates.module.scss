@@ -20,7 +20,7 @@ $ink: #1d1a16;
 
   &[data-template='editorial'] {
     --tpl-heading-font: var(--font-display);
-    --tpl-heading-size: clamp(1.75rem, 3vw, 2.4rem);
+    --tpl-heading-size: clamp(1.75rem, 3cqi, 2.4rem);
     --tpl-heading-weight: 500;
     --tpl-heading-tracking: -0.02em;
     --tpl-card-bg: transparent;
@@ -85,7 +85,7 @@ $ink: #1d1a16;
 
   &[data-template='impacto'] {
     --tpl-heading-font: var(--font-sans, inherit);
-    --tpl-heading-size: clamp(1.6rem, 3vw, 2.25rem);
+    --tpl-heading-size: clamp(1.6rem, 3cqi, 2.25rem);
     --tpl-heading-weight: 800;
     --tpl-heading-tracking: -0.01em;
     --tpl-heading-transform: uppercase;
@@ -138,6 +138,7 @@ $ink: #1d1a16;
    Editorial: portada de revista
    ======================================================================== */
 .editorial {
+  grid-template-columns: minmax(0, 1fr);
   --tpl-glass-fg: #{$ink};
   --tpl-glass-bg: transparent;
   --tpl-glass-border: #{rgba($ink, 0.35)};
@@ -189,7 +190,9 @@ $ink: #1d1a16;
 
 .editorial__name {
   font-family: var(--font-display);
-  font-size: clamp(2.75rem, 7vw, 5.75rem);
+  font-size: clamp(2.75rem, 7cqi, 5.75rem);
+  // En la vista previa el tamaño sigue al ancho de la tarjeta, no al de la ventana.
+  font-size: clamp(2.75rem, 8cqi, 5.75rem);
   font-weight: 500;
   font-style: italic;
   line-height: 0.95;
@@ -408,7 +411,7 @@ $ink: #1d1a16;
 
 .carnet__name {
   font-family: var(--font-display);
-  font-size: clamp(1.6rem, 3.4vw, 2.5rem);
+  font-size: clamp(1.6rem, 3.4cqi, 2.5rem);
   font-weight: 600;
   line-height: 1.1;
 }
@@ -641,7 +644,7 @@ $ink: #1d1a16;
 }
 
 .impacto__number {
-  font-size: clamp(5rem, 16vw, 11rem);
+  font-size: clamp(5rem, 16cqi, 11rem);
   font-weight: 900;
   line-height: 0.85;
   letter-spacing: -0.06em;
@@ -653,7 +656,7 @@ $ink: #1d1a16;
 
 .impacto__label {
   max-width: 14rem;
-  font-size: clamp(1.25rem, 2.6vw, 2rem);
+  font-size: clamp(1.25rem, 2.6cqi, 2rem);
   font-weight: 800;
   line-height: 1.05;
   text-transform: uppercase;
@@ -661,7 +664,7 @@ $ink: #1d1a16;
 
 .impacto__name {
   font-family: var(--font-sans);
-  font-size: clamp(1.4rem, 3vw, 2.25rem);
+  font-size: clamp(1.4rem, 3cqi, 2.25rem);
   font-weight: 800;
   line-height: 1.1;
   text-transform: uppercase;
@@ -669,7 +672,7 @@ $ink: #1d1a16;
   filter: brightness(1.35);
 
   &[data-big='true'] {
-    font-size: clamp(2.5rem, 7vw, 5rem);
+    font-size: clamp(2.5rem, 7cqi, 5rem);
     color: #fff;
     filter: none;
   }
@@ -901,7 +904,7 @@ $ink: #1d1a16;
 
 .orbita__name {
   font-family: var(--font-display);
-  font-size: clamp(2.6rem, 6vw, 4.75rem);
+  font-size: clamp(2.6rem, 6cqi, 4.75rem);
   font-weight: 600;
   line-height: 0.98;
   letter-spacing: -0.03em;
