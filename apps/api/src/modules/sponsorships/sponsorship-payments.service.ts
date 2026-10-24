@@ -7,7 +7,6 @@ import type {
 } from '@prisma/client';
 import {
   BILLING_FAILURE_SUSPENSION_REASON,
-  type PaySponsorshipPaymentInput,
   type PaymentPort,
   type SponsorshipPayment,
   type SponsorshipPaymentAttempt,
@@ -147,11 +146,7 @@ export class SponsorshipPaymentsService {
    * sponsorship — but ONLY because it was suspended for billing failure, not
    * a manual suspension by the organization.
    */
-  async retryPayment(
-    actor: RequestUser,
-    sponsorshipId: string,
-    card: PaySponsorshipPaymentInput = {},
-  ): Promise<SponsorshipPayment> {
+  async retryPayment(actor: RequestUser, sponsorshipId: string): Promise<SponsorshipPayment> {
     const rows = await this.prisma.$queryRaw<RecoveryContextRow[]>(
       Prisma.sql`SELECT * FROM sponsorship_billing_recovery_context(${sponsorshipId}::uuid, ${actor.id}::uuid)`,
     );
@@ -184,10 +179,6 @@ export class SponsorshipPaymentsService {
       concept: { kind: 'sponsorship', id: sponsorshipId },
       commissionPayer: 'organization',
       idempotencyKey,
-      cardToken: card.cardToken,
-      paymentMethodId: card.paymentMethodId,
-      paymentMethodType: card.paymentMethodType,
-      installments: card.installments,
     });
 
     // Reuses the SAME expiry window as attempt 1 — this is a one-off,

@@ -194,9 +194,8 @@ export class SponsorshipsService {
    *
    * Requerimiento #17: immediately after creating the row, charges a
    * collection for the plan's amount — same mechanism
-   * `SponsorshipPaymentsService.retryPayment` already uses (card tokenized
-   * client-side by `CardPaymentBrick`, `createCollection` called OUTSIDE any
-   * DB transaction). A synchronous `declined` CANCELS the just-created
+   * `SponsorshipPaymentsService.retryPayment` already uses (`createCollection`
+   * called OUTSIDE any DB transaction). A synchronous `declined` CANCELS the just-created
    * sponsorship (never leaves an "active" subscription with no real charge
    * behind it) and rejects; any other result (`approved`/`pending`/…) opens
    * the first billing period for it, exactly like `SponsorshipBillingService`
@@ -233,10 +232,6 @@ export class SponsorshipsService {
       concept: { kind: 'sponsorship', id: row.id },
       commissionPayer: 'organization',
       idempotencyKey,
-      cardToken: input.cardToken,
-      paymentMethodId: input.paymentMethodId,
-      paymentMethodType: input.paymentMethodType,
-      installments: input.installments,
     });
 
     if (collection.status === 'declined') {

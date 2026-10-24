@@ -98,9 +98,8 @@ export function getSponsorshipPayments(
  * `POST /sponsorships/:id/retry-payment`). The backend rejects it (400/404)
  * if the caller is not the sponsor or the suspension was not billing-related.
  *
- * `card` is optional/defaulted to `{}` (contract kept additive). The web no
- * longer calls this since Mercado Pago's Card Payment Brick was retired
- * (2026-10-17); it stays for the upcoming ePayco sponsorship payment.
+ * The body is empty. The web does not call this yet; it stays for the
+ * upcoming ePayco sponsorship payment.
  */
 export function retrySponsorshipPayment(
   client: ApiClient,

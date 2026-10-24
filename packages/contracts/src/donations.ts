@@ -192,24 +192,6 @@ export interface CreateDonationInput {
    * autenticada ya los aceptó al registrarse y no los envía.
    */
   legalAcceptances?: LegalAcceptanceItem[];
-  /**
-   * Checkout API (Orders) — T-OrdersAPI. Tokenized card data from MercadoPago's
-   * Card Payment Brick (card number never reaches this backend). Optional on
-   * this contract/DTO (additive — existing callers/tests that build this
-   * object without a card keep compiling, and the fake driver still approves
-   * without one); the REAL gateway adapter requires it and throws a clear
-   * error otherwise. See `CreateCollectionInput` (payments.ts) for the full
-   * field-by-field rationale — these four mirror it verbatim.
-   * @deprecated Mercado Pago retirado 2026-10-17: the web no longer sends a card (ePayco collects in its
-   * own checkout). Kept because contracts are additive-only.
-   */
-  cardToken?: string;
-  /** @deprecated Mercado Pago retirado 2026-10-17. */
-  paymentMethodId?: string;
-  /** @deprecated Mercado Pago retirado 2026-10-17. */
-  paymentMethodType?: 'credit_card' | 'debit_card';
-  /** @deprecated Mercado Pago retirado 2026-10-17. */
-  installments?: number;
 }
 
 /**

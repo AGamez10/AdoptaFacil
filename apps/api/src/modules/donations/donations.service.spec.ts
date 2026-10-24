@@ -407,7 +407,7 @@ describe('DonationsService.create — direct collection + card passthrough', () 
     };
   }
 
-  it('fake driver: passes the card fields through and never resolves a Mercado Pago collector', async () => {
+  it('fake driver: never resolves a Mercado Pago collector', async () => {
     const h = makeService();
     h.withOrgContext.mockImplementation(async (_orgId, fn) =>
       // Prueba de la aceptación del invitado (Ley 1581), en la misma org.
@@ -419,18 +419,10 @@ describe('DonationsService.create — direct collection + card passthrough', () 
     await h.service.create(undefined, {
       ...BASE_INPUT,
       payer: { fullName: 'Invitado Test', email: 'guest@test.dev' },
-      cardToken: 'tok-abc',
-      paymentMethodId: 'visa',
-      installments: 1,
     });
 
     const input = h.createCollection.mock.calls[0][0];
-    expect(input).toEqual(
-      expect.objectContaining({ cardToken: 'tok-abc', paymentMethodId: 'visa', installments: 1 }),
-    );
-    expect(input.collector).toBeUndefined();
     expect(input.epaycoCollector).toBeUndefined();
-    expect(input.sponsorMpUserId).toBeUndefined();
     const sql = h.queryRaw.mock.calls
       .map((call) => (call[0] as { strings: string[] }).strings.join('?'))
       .join('\n');
@@ -891,7 +883,6 @@ describe('DonationsService.applyWebhook — PAY-003 (fake driver)', () => {
     expect(sql).toContain('apply_donation_webhook');
     expect(h.withOrgContext).not.toHaveBeenCalled();
     const context = verifyAndNormalizeWebhookRef.mock.calls[0][2];
-    expect(context.collector).toBeUndefined();
     expect(context.epaycoCollector).toBeUndefined();
   });
 });
@@ -962,7 +953,6 @@ describe('DonationsService — ePayco driver (ADR-PAG-002)', () => {
 
     const input = h.createCollection.mock.calls[0][0];
     expect(input.epaycoCollector).toEqual(ORG_KEYS);
-    expect(input.collector).toBeUndefined();
     expect(donation.checkoutSessionId).toBe('sess-9');
     expect(donation.checkoutTest).toBe(true);
     // Persisted breakdown is the one the adapter charged; never a secret in audit.
@@ -1022,7 +1012,6 @@ describe('DonationsService — ePayco driver (ADR-PAG-002)', () => {
     expect(out.applied).toBe(true);
     const context = verifyAndNormalizeWebhookRef.mock.calls[0][2];
     expect(context.epaycoCollector).toEqual(ORG_KEYS);
-    expect(context.collector).toBeUndefined();
   });
 
   it('webhook: falls back to the merchant id only when the invoice is unknown', async () => {

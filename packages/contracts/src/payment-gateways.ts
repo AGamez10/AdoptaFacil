@@ -29,17 +29,10 @@ import type { PaymentCurrency } from './payments';
 /**
  * Gateways an organization can connect. Since 2026-10-15 ePayco is the main
  * gateway (owner's decision, ADR-PAG-002); the order here is historical and
- * carries no meaning. `mercadopago` stays in the list (contracts are
- * additive-only) but was retired from the product on 2026-10-17: no flow
- * offers it any more, and its catalog entries below are a historical record.
+ * carries no meaning. Mercado Pago was retired from the product on 2026-10-17
+ * and removed from this list by the owner's decision.
  */
-export const GATEWAY_PROVIDERS = [
-  'mercadopago',
-  'wompi',
-  'epayco',
-  'bold',
-  'external_link',
-] as const;
+export const GATEWAY_PROVIDERS = ['wompi', 'epayco', 'bold', 'external_link'] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 /**
@@ -97,34 +90,6 @@ export interface GatewayCapability {
  * `planCollection`).
  */
 export const GATEWAY_CATALOG: readonly GatewayCapability[] = [
-  {
-    provider: 'mercadopago',
-    mode: 'direct_to_org',
-    credentialKind: 'oauth',
-    verifiable: true,
-    platformFeeAtSource: false,
-    status: 'documented',
-    checkedAt: '2026-10-08',
-    sources: [
-      'https://www.mercadopago.com.co/developers/es/docs/split-payments/split-1-1/integration-configuration/integrate-marketplace',
-    ],
-  },
-  {
-    provider: 'mercadopago',
-    mode: 'platform_split',
-    credentialKind: 'oauth',
-    verifiable: true,
-    platformFeeAtSource: true,
-    // Public page lists Colombia; MP support replied in writing (2026-10-01)
-    // that Split 1:1 is not active for MCO. Written reply wins until MP says
-    // otherwise in writing.
-    status: 'not_available',
-    checkedAt: '2026-10-08',
-    sources: [
-      'https://www.mercadopago.com.co/developers/es/docs/split-payments/landing',
-      'ticket de soporte Mercado Pago, respuesta del 2026-10-01 (App ID 1063908913630070)',
-    ],
-  },
   {
     provider: 'wompi',
     mode: 'direct_to_org',

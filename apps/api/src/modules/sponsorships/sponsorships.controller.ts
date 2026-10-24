@@ -71,18 +71,16 @@ export class SponsorshipsController {
    * Recovery after auto-suspension by billing failure (Objetivo 6) — any
    * authenticated Person may retry ONLY their own suspended sponsorship (no
    * @Roles gate, ownership checked cross-tenant inside the service).
-   * The body may carry a tokenized card (contract kept; the web stopped
-   * sending one when Mercado Pago was retired, 2026-10-17); optional so an
-   * old/no-body caller doesn't 400.
+   * The body is empty; an old caller that posts no body doesn't 400.
    */
   @Post(':id/retry-payment')
   @HttpCode(200)
   retryPayment(
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(paySponsorshipPaymentSchema)) dto: PaySponsorshipPaymentInput,
+    @Body(new ZodValidationPipe(paySponsorshipPaymentSchema)) _dto: PaySponsorshipPaymentInput,
   ): Promise<SponsorshipPayment> {
-    return this.payments.retryPayment(actor, id, dto);
+    return this.payments.retryPayment(actor, id);
   }
 
   /** The sponsor's own sponsorships (cross-tenant, by identity) — "mis

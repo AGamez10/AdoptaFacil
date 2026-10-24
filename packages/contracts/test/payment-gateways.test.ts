@@ -24,7 +24,7 @@ const LAUNCH: CollectionPolicy = {
 function conn(over: Partial<OrgGatewayConnection> = {}): OrgGatewayConnection {
   return {
     organizationId: ORG_A,
-    provider: 'mercadopago',
+    provider: 'epayco',
     mode: 'direct_to_org',
     status: 'active',
     gatewayAccountId: '292020059',
@@ -38,7 +38,7 @@ describe('planCollection — sin custodia (D1)', () => {
     expect(d).toEqual({
       ok: true,
       plan: {
-        provider: 'mercadopago',
+        provider: 'epayco',
         mode: 'direct_to_org',
         collector: 'organization',
         platformFeeRate: 0,
@@ -110,8 +110,8 @@ describe('planCollection — split con comisión', () => {
     splitApprovalRef: null,
   };
 
-  it('Mercado Pago split stays refused in Colombia (written support reply)', () => {
-    const d = planCollection(ORG_A, conn({ mode: 'platform_split' }), {
+  it('a provider without split in the catalog stays refused', () => {
+    const d = planCollection(ORG_A, conn({ provider: 'wompi', mode: 'platform_split' }), {
       ...SPLIT_ON,
       splitApprovalRef: 'TICKET-123',
     });
