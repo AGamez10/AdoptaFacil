@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import type {
   AnimalSummary,
@@ -9,6 +9,7 @@ import { buttonVariants, cn, EmptyState, Skeleton } from '@adoptafacil/ui';
 import { animalDescription, animalTitle, SPECIES_PLURAL } from '../../../seo/page-meta.js';
 import { breadcrumbLd, useSeo } from '../../../seo/seo';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
+import { brandTokensToStyle } from '../../../shell/theme';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
 import { fetchPublicAnimals } from '../api/public-animals';
@@ -23,6 +24,10 @@ import {
   STATUS_LABELS,
 } from '../model/animals-catalog';
 import { resolveOrgSubdomain } from '../model/subdomain';
+import { isEngineTemplate, loadDesign } from '../templates/registry';
+import type { TemplateDesign } from '../templates/engine/types';
+import { usePublicTheme } from '../templates/use-public-theme';
+import { useTemplateAssets } from '../templates/use-template-assets';
 import styles from './public-animal-detail-page.module.scss';
 
 // Cap del endpoint público (§RF07). En deep-link buscamos el animal dentro del
@@ -83,6 +88,33 @@ export function PublicAnimalDetailPage() {
   const [state, setState] = useState<DetailState>(preloaded ? 'ready' : 'loading');
   const [org, setOrg] = useState<PublicOrgProfile | null>(null);
   const [others, setOthers] = useState<AnimalSummary[]>([]);
+
+  // La ficha toma la temática de la plantilla de la organización (colores,
+  // tipografía y decoración de su diseño). Sin plantilla de motor, se queda
+  // con el diseño de la aplicación.
+  const publicTheme = usePublicTheme(slug);
+  const engine = isEngineTemplate(publicTheme.template) ? publicTheme.template : null;
+  const [design, setDesign] = useState<TemplateDesign | null>(null);
+  const themeStyle = useMemo(() => brandTokensToStyle(publicTheme.tokens), [publicTheme.tokens]);
+
+  useEffect(() => {
+    if (!engine) {
+      setDesign(null);
+      return;
+    }
+    let active = true;
+    loadDesign(engine)
+      .then((loaded) => {
+        if (active) setDesign(loaded);
+      })
+      .catch(() => {
+        if (active) setDesign(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [engine]);
+  useTemplateAssets(design);
 
   useEffect(() => {
     if (!slug || !animalId) {
@@ -343,11 +375,37 @@ export function PublicAnimalDetailPage() {
     </main>
   );
 
-  if (onOrgSubdomain) return page;
+  const themed = design ? (
+    <div
+      className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}`}
+      style={themeStyle}
+      data-testid="animal-detail-template"
+      data-template={design.id}
+    >
+      {/* La ficha se lee sobre su hoja clara (textos e iconos de la app). La
+          plantilla pone el fondo, la tipografía y el acento alrededor. */}
+      <div
+        style={{
+          background: 'var(--af-cream)',
+          color: 'var(--af-ink)',
+          borderRadius: 'clamp(16px, 2.4vw, 32px)',
+          margin: 'clamp(8px, 2vw, 24px)',
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px -30px rgb(0 0 0 / 0.5)',
+        }}
+      >
+        {page}
+      </div>
+    </div>
+  ) : (
+    page
+  );
+
+  if (onOrgSubdomain) return themed;
   return (
     <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-[var(--af-ink)]">
       <PublicNavbar />
-      <div className="flex-1">{page}</div>
+      <div className="flex-1">{themed}</div>
       <PublicFooter />
     </div>
   );

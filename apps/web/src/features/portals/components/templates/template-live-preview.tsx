@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
   AnimalSummary,
   OrganizationPublic,
@@ -12,6 +12,10 @@ import { brandTokensToStyle } from '../../../../shell/theme';
 import { useApiClient } from '../../../../shell/api';
 import { fetchPublicAnimals } from '../../api/public-animals';
 import { buildPortalView } from '../../model/portal-view';
+import { isEngineTemplate, loadDesign } from '../../templates/registry';
+import type { TemplateDesign } from '../../templates/engine/types';
+import type { TemplateSourceData } from '../../templates/engine/model';
+import { PortalTemplateView } from '../../templates/portal-template-view';
 import { AnimalCard } from '../animal-card';
 import { PortalProfileSection } from '../portal-profile-section';
 import {
@@ -144,6 +148,22 @@ export function TemplateLivePreview({
     actions,
     options,
   };
+  // Plantillas del motor: se pintan con el mismo componente que el portal público,
+  // con los datos reales de la organización (sin reseñas ni campañas en la vista previa).
+  const engine = isEngineTemplate(template) ? template : null;
+  const engineSource = useMemo<TemplateSourceData>(
+    () => ({
+      slug: previewSlug,
+      organization: (organization ?? sampleOrganization(orgName)) as OrganizationPublic,
+      animals,
+      animalTotal: total ?? animals.length,
+      campaigns: [],
+      needs: [],
+      products: [],
+      reviews: [],
+    }),
+    [previewSlug, organization, orgName, animals, total],
+  );
 
   return (
     <div className={styles.preview} data-testid="template-live-preview">
@@ -181,53 +201,93 @@ export function TemplateLivePreview({
           // Solo para mirar: sin foco ni clics dentro de la vista previa.
           {...{ inert: '' }}
         >
-          <div
-            className={templateStyles.page}
-            data-template={template}
-            data-pattern={typeof options.pattern === 'string' ? options.pattern : undefined}
-            style={style}
-          >
-            <div className={styles.inner}>
-              {template === 'editorial' ? (
-                <EditorialHero {...heroProps} />
-              ) : template === 'carnet' ? (
-                <CarnetHero {...heroProps} />
-              ) : template === 'impacto' ? (
-                <ImpactoHero {...heroProps} />
-              ) : template === 'orbita' ? (
-                <OrbitaHero {...heroProps} />
-              ) : template === 'historias' ? (
-                <HistoriasHero {...heroProps} coverVideoUrl={coverVideoUrl} />
-              ) : (
-                <PortalProfileSection
-                  profile={profile}
-                  animalCount={total}
-                  logoPosition={logoPosition}
-                  actions={actions}
-                />
-              )}
-
-              <section className={styles.catalog}>
-                <h2 className={catalogStyles.heading}>Mascotas en adopción</h2>
-                {animals.length > 0 ? (
-                  <div className={styles.grid}>
-                    {animals.slice(0, 3).map((animal) => (
-                      <AnimalCard key={animal.id} slug={previewSlug} animal={animal} />
-                    ))}
-                  </div>
+          {engine ? (
+            <EnginePreview template={engine} source={engineSource} themeStyle={style} />
+          ) : (
+            <div
+              className={templateStyles.page}
+              data-template={template}
+              data-pattern={typeof options.pattern === 'string' ? options.pattern : undefined}
+              style={style}
+            >
+              <div className={styles.inner}>
+                {template === 'editorial' ? (
+                  <EditorialHero {...heroProps} />
+                ) : template === 'carnet' ? (
+                  <CarnetHero {...heroProps} />
+                ) : template === 'impacto' ? (
+                  <ImpactoHero {...heroProps} />
+                ) : template === 'orbita' ? (
+                  <OrbitaHero {...heroProps} />
+                ) : template === 'historias' ? (
+                  <HistoriasHero {...heroProps} coverVideoUrl={coverVideoUrl} />
                 ) : (
-                  <div className={styles.grid}>
-                    {[0, 1, 2].map((key) => (
-                      <div key={key} className={cn(catalogStyles.card, styles.placeholder)} />
-                    ))}
-                  </div>
+                  <PortalProfileSection
+                    profile={profile}
+                    animalCount={total}
+                    logoPosition={logoPosition}
+                    actions={actions}
+                  />
                 )}
-              </section>
+
+                <section className={styles.catalog}>
+                  <h2 className={catalogStyles.heading}>Mascotas en adopción</h2>
+                  {animals.length > 0 ? (
+                    <div className={styles.grid}>
+                      {animals.slice(0, 3).map((animal) => (
+                        <AnimalCard key={animal.id} slug={previewSlug} animal={animal} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={styles.grid}>
+                      {[0, 1, 2].map((key) => (
+                        <div key={key} className={cn(catalogStyles.card, styles.placeholder)} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       <p className={styles.note}>Vista previa con tus datos públicos y los cambios sin guardar.</p>
     </div>
+  );
+}
+
+function EnginePreview({
+  template,
+  source,
+  themeStyle,
+}: {
+  template: PortalTemplateId;
+  source: TemplateSourceData;
+  themeStyle: CSSProperties;
+}) {
+  const [design, setDesign] = useState<TemplateDesign | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setDesign(null);
+    if (!isEngineTemplate(template)) return;
+    loadDesign(template)
+      .then((loaded) => {
+        if (active) setDesign(loaded);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [template]);
+
+  if (!design) return null;
+  return (
+    <PortalTemplateView
+      design={design}
+      source={source}
+      themeStyle={themeStyle}
+      onReviewCreated={() => undefined}
+    />
   );
 }

@@ -4,11 +4,11 @@ import type { Review } from '@adoptafacil/contracts';
 import { ComingSoon, Dialog, DialogContent, DialogHeader, DialogTitle } from '@adoptafacil/ui';
 import { RegisterReviewDialog } from '../components/register-review-dialog';
 import { hslStringToHex } from '../model/color-conversion';
-import { BASE_CSS } from './engine/base-css';
 import { createKit } from './engine/kit';
 import { COPY, buildTemplateModel, type TemplateSourceData } from './engine/model';
 import { createCatalog, createMotion } from './engine/runtime';
 import type { TemplateDesign, ThreeModule } from './engine/types';
+import { useTemplateAssets } from './use-template-assets';
 
 export interface PortalTemplateViewProps {
   design: TemplateDesign;
@@ -18,9 +18,6 @@ export interface PortalTemplateViewProps {
   /** Una reseña recién creada (para mostrarla sin recargar, como el clásico). */
   onReviewCreated: (review: Review) => void;
 }
-
-const STYLE_ID = 'af-tpl-style';
-const FONT_ID = 'af-tpl-fonts';
 
 function hasWebGL(): boolean {
   try {
@@ -56,25 +53,7 @@ export function PortalTemplateView({
   const model = useMemo(() => buildTemplateModel(source), [source]);
 
   // Hoja de estilos de la plantilla (acotada a .af-tpl / .tpl-<id>) + fuentes.
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = BASE_CSS + design.css;
-    document.head.appendChild(style);
-    let link: HTMLLinkElement | null = null;
-    if (design.fonts) {
-      link = document.createElement('link');
-      link.id = FONT_ID;
-      link.rel = 'stylesheet';
-      link.href = `https://fonts.googleapis.com/css2?${design.fonts}&display=swap`;
-      link.referrerPolicy = 'no-referrer';
-      document.head.appendChild(link);
-    }
-    return () => {
-      style.remove();
-      link?.remove();
-    };
-  }, [design]);
+  useTemplateAssets(design);
 
   // Three.js solo se descarga para plantillas WebGL y si el navegador lo soporta.
   useEffect(() => {
