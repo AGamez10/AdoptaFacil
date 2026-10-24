@@ -5,12 +5,12 @@ import { ADOPTION_DELIVERY_ITEMS } from '@adoptafacil/contracts';
 
 export const startDeliverySchema = z
   .object({
-    contractId: z.string().uuid(),
+    contractId: z.guid(),
     healthStatus: z.string().trim().min(3).max(1000),
     weightKg: z.number().positive().max(150),
     /** El contrato exige confirmar la identidad con el documento original. */
     identityVerified: z.literal(true, {
-      errorMap: () => ({ message: 'Confirma la identidad del adoptante con su documento.' }),
+      error: 'Confirma la identidad del adoptante con su documento.',
     }),
     identificationChecked: z.boolean(),
     items: z

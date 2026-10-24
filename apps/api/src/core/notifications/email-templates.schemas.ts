@@ -43,6 +43,6 @@ export const emailUnsubscribeSchema = z
   .object({
     h: z.string().regex(/^[0-9a-f]{64}$/),
     t: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-    o: z.string().uuid().optional(),
+    o: z.guid().optional(),
   })
   .passthrough();
