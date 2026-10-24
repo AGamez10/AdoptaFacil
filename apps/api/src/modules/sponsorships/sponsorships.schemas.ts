@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { SponsorshipPeriodicity } from '@adoptafacil/contracts';
 
-const uuid = z.string().uuid();
+const uuid = z.guid();
 
 /** Create a sponsorship plan. `.strict()` rejects unknown keys. Money is
  *  integer COP > 0 (never float), coherent with the money engine. */

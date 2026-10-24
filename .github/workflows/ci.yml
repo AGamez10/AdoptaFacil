@@ -12,7 +12,7 @@ concurrency:
 jobs:
   quality:
     name: Lint · Typecheck · Build · Unit tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +44,7 @@ jobs:
 
   rls-no-leak:
     name: rls-no-leak (RNF03 gate)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     services:
       postgres:
         image: postgres:16
@@ -53,7 +53,7 @@ jobs:
           POSTGRES_PASSWORD: adoptafacil
           POSTGRES_DB: adoptafacil
         ports:
-          - 5432:5432
+          - 55432:5432
         options: >-
           --health-cmd "pg_isready -U adoptafacil -d adoptafacil"
           --health-interval 5s
@@ -62,7 +62,7 @@ jobs:
       redis:
         image: redis:7
         ports:
-          - 6379:6379
+          - 56379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
@@ -70,9 +70,9 @@ jobs:
           --health-retries 10
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil?schema=public
-      DATABASE_URL_APP: postgresql://adoptafacil_app:adoptafacil_app@localhost:5432/adoptafacil?schema=public
-      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:55432/adoptafacil?schema=public
+      DATABASE_URL_APP: postgresql://adoptafacil_app:adoptafacil_app@localhost:55432/adoptafacil?schema=public
+      REDIS_URL: redis://localhost:56379
     steps:
       - uses: actions/checkout@v4
 

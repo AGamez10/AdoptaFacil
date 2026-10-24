@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** Runtime validation for M04 post-adoption follow-up (T-028c). `.strict()` rejects
  *  unknown keys so no extra field can be smuggled in. */
 
-const uuid = z.string().uuid();
+const uuid = z.guid();
 
 const questionSchema = z
   .object({

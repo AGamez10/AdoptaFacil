@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** Runtime validation for M04 adoption CONTRACTS (T-028b). `.strict()` rejects
  *  unknown keys so no extra field can be smuggled in. */
 
-const uuid = z.string().uuid();
+const uuid = z.guid();
 
 const signerInputSchema = z
   .object({
