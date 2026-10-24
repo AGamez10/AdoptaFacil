@@ -93,7 +93,6 @@ services:
       REDIS_URL: redis://redis:6379
       API_CORS_ORIGIN: https://${APP_DOMAIN:?APP_DOMAIN}
       WEB_BASE_URL: https://${APP_DOMAIN}
-      STORAGE_DRIVER: disk
       STORAGE_DISK_ROOT: /var/lib/adoptafacil/storage
       STORAGE_MAX_FILE_MB: ${STORAGE_MAX_FILE_MB:-15}
       STORAGE_PUBLIC_BASE_URL: https://${APP_DOMAIN}/api

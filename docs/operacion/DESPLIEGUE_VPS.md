@@ -62,9 +62,9 @@ que ofrezca Hostinger al comprar (Sudamérica o EE. UU.).
   migración inicial la deja fija, AF-016) y ejecuta el chequeo de postura RLS.
   Si la postura falla, **la API no arranca**.
 - Los procesadores de colas (BullMQ) corren dentro del proceso de la API.
-- Archivos subidos: driver `disk` sobre el volumen `api_storage` (incluido en
-  los respaldos). El paso a S3 compatible (F28) depende del adaptador S3, que no
-  existe aún.
+- Archivos subidos: por defecto driver `disk` sobre el volumen `api_storage`
+  (incluido en los respaldos). Para usar Cloudflare R2 (driver `s3`), ver la
+  sección "Almacenamiento en Cloudflare R2" más abajo.
 
 ## Antes de poner datos reales (condiciones)
 
@@ -211,8 +211,63 @@ sudo deploy/scripts/backup.sh && sudo deploy/scripts/restore-test.sh
 # 8. Tareas programadas (sección siguiente) y monitor externo en UptimeRobot.
 
 # 9. PlatformAdmin inicial: contraseña fuerte, nunca la de por defecto (AF-037)
-#    (procedimiento del hilo "RBAC y organizaciones", R1-5).
+#    (procedimiento del hilo "RBAC y organizaciones", R1-5). Ver comando abajo.
 ```
+
+### PlatformAdmin inicial [VPS]
+
+La contraseña se pide en el servidor y no queda en el historial de la shell ni
+en `argv`. El servicio `migrate` ya tiene la `DATABASE_URL` del owner, que el
+script necesita para saltarse RLS al crear el primer usuario.
+
+```bash
+read -rp "Correo del PlatformAdmin: " PLATFORM_ADMIN_EMAIL
+read -rp "Nombre: " PLATFORM_ADMIN_NAME
+read -rs  -p "Contraseña (no se muestra): " PLATFORM_ADMIN_PASSWORD; echo
+export PLATFORM_ADMIN_EMAIL PLATFORM_ADMIN_NAME PLATFORM_ADMIN_PASSWORD
+sudo -E docker compose -f deploy/compose.yaml --env-file deploy/.env run --rm --no-deps \
+  --entrypoint "" \
+  -e PLATFORM_ADMIN_EMAIL -e PLATFORM_ADMIN_NAME -e PLATFORM_ADMIN_PASSWORD \
+  migrate sh -c 'cd /repo/apps/api && /repo/node_modules/.bin/ts-node --transpile-only scripts/seed-platform-admin.ts'
+unset PLATFORM_ADMIN_PASSWORD
+```
+
+Si el script se niega por la contraseña, usa una más larga (el mínimo lo marca
+`MIN_PASSWORD_LENGTH` en `apps/api/scripts/seed-platform-admin.ts`) y que no sea de ejemplo. Si falla por una dependencia, es señal de que el servicio
+`migrate` no trae `ts-node` en `/repo/node_modules`; en ese caso revisa la imagen.
+
+### Almacenamiento en Cloudflare R2 [VPS]
+
+R2 habla el protocolo S3. La API firma las peticiones y sirve los archivos por
+sus propias rutas (`/api/storage/...`), así que **el bucket puede ser privado**:
+no hace falta acceso público ni CORS.
+
+1. En el panel de Cloudflare: R2 → crear el bucket (p. ej. `adoptafacil-media`),
+   sin acceso público.
+2. R2 → Manage API tokens → crear un token con permiso **Object Read & Write**
+   limitado solo a ese bucket. Guarda la clave de acceso y la clave secreta.
+3. En el servidor, activa el driver en `deploy/api.env` (no en el repo):
+
+   ```bash
+   sudo nano deploy/api.env        # chmod 600 ya aplicado en el paso 5
+   # STORAGE_DRIVER=s3
+   # S3_ENDPOINT=https://<id-de-cuenta>.r2.cloudflarestorage.com
+   # S3_REGION=auto
+   # S3_BUCKET=<nombre-del-bucket>
+   # S3_ACCESS_KEY_ID=<clave de acceso>
+   # S3_SECRET_ACCESS_KEY=<clave secreta>
+   ```
+
+4. Vuelve a levantar la API: `sudo docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --wait api`.
+   Si falta alguna de las variables `S3_*`, la API no arranca: la validación lo exige.
+
+**Importante:** cambiar el driver no copia los archivos que ya están en el disco.
+Los archivos subidos antes siguen en el volumen `api_storage` y no se verán con
+`s3`. Si hay datos reales que migrar, hay que copiarlos al bucket antes del cambio;
+ese paso no está automatizado en el repo.
+
+Verificación: sube una foto desde el panel y revisa que aparezca un objeto nuevo
+en el bucket, y que `curl -fsS https://<dominio>/api/health` siga respondiendo `ok`.
 
 ### Verificación posterior [VPS]
 
