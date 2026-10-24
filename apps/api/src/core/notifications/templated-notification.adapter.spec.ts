@@ -50,6 +50,7 @@ describe('TemplatedNotificationAdapter', () => {
       { monto: 1 },
       'Huellitas',
       undefined,
+      undefined,
     );
     const sent = inner.send.mock.calls[0][0];
     expect(sent).toMatchObject({

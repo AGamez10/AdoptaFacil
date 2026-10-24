@@ -20,7 +20,12 @@ export function EmailUnsubscribePage() {
   const [params] = useSearchParams();
   const h = params.get('h') ?? '';
   const t = params.get('t') ?? '';
-  const malformed = !/^[0-9a-f]{64}$/.test(h) || !/^[A-Za-z0-9_-]{43}$/.test(t);
+  // Present on an organization's emails: the opt-out covers only that organization.
+  const o = params.get('o') ?? '';
+  const malformed =
+    !/^[0-9a-f]{64}$/.test(h) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(t) ||
+    (o !== '' && !/^[0-9a-f-]{36}$/i.test(o));
   const [state, setState] = useState<State>(malformed ? 'invalid' : 'idle');
 
   const confirm = async () => {
@@ -29,7 +34,7 @@ export function EmailUnsubscribePage() {
       const res = await fetch(`${API_BASE}/public/email/unsubscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ h, t }),
+        body: JSON.stringify(o ? { h, t, o } : { h, t }),
       });
       setState(res.ok ? 'done' : res.status === 400 ? 'invalid' : 'error');
     } catch {
@@ -51,7 +56,9 @@ export function EmailUnsubscribePage() {
                 <>
                   <h1 className="text-2xl font-bold">Listo, no te escribiremos más novedades</h1>
                   <p className="text-muted-foreground">
-                    Ya no recibirás correos masivos de AdoptaFácil ni de las organizaciones.
+                    {o
+                      ? 'Ya no recibirás anuncios ni novedades de esta organización. Las demás organizaciones y AdoptaFácil podrán seguir escribiéndote.'
+                      : 'Ya no recibirás correos masivos de AdoptaFácil ni de las organizaciones.'}{' '}
                     Seguirás recibiendo solo lo que tú mismo pidas: comprobantes de donación,
                     contratos y avisos de seguridad de tu cuenta.
                   </p>
@@ -66,10 +73,17 @@ export function EmailUnsubscribePage() {
                 </>
               ) : (
                 <>
-                  <h1 className="text-2xl font-bold">¿Dejar de recibir novedades por correo?</h1>
+                  <h1 className="text-2xl font-bold">
+                    {o
+                      ? '¿Dejar de recibir correos de esta organización?'
+                      : '¿Dejar de recibir novedades por correo?'}
+                  </h1>
                   <p className="text-muted-foreground">
-                    Dejarás de recibir campañas, anuncios y noticias de las organizaciones. Los
-                    correos de tus donaciones, contratos y seguridad de tu cuenta seguirán llegando.
+                    {o
+                      ? 'Dejarás de recibir sus anuncios y novedades.'
+                      : 'Dejarás de recibir campañas, anuncios y noticias de las organizaciones.'}{' '}
+                    Los correos de tus donaciones, contratos y seguridad de tu cuenta seguirán
+                    llegando.
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Ejerces tu derecho a revocar la autorización (Ley 1581 de 2012).

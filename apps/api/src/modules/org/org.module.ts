@@ -21,6 +21,8 @@ import {
 } from '../../core/crypto/signature-crypto';
 import { LegalRepresentativeController } from './legal-representative.controller';
 import { LegalRepresentativeService } from './legal-representative.service';
+import { AnnouncementsController } from './announcements/announcements.controller';
+import { AnnouncementsService } from './announcements/announcements.service';
 import { OrgController } from './org.controller';
 import { OrgProfileService } from './org-profile.service';
 import { OrganizationSummaryController } from './organization-summary.controller';
@@ -51,6 +53,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
   imports: [AuthModule, BullModule.registerQueue({ name: DIAN_VERIFICATION_QUEUE })],
   controllers: [
     OrgController,
+    AnnouncementsController,
     FormalizationController,
     DocumentsController,
     LegalRepresentativeController,
@@ -64,6 +67,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
   ],
   providers: [
     OrgProfileService,
+    AnnouncementsService,
     FormalizationService,
     DocumentsService,
     DuplicateDetectionService,

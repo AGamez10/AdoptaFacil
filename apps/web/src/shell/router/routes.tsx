@@ -65,6 +65,7 @@ const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
 const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
 const OrgPlanPage = lazyPage(loadOrg, 'OrgPlanPage');
+const OrgAnnouncementsPage = lazyPage(loadOrg, 'OrgAnnouncementsPage');
 const OrgFormalizationPage = lazyPage(loadOrg, 'OrgFormalizationPage');
 const OrgLegalRepresentativePage = lazyPage(loadOrg, 'OrgLegalRepresentativePage');
 const OrgProfilePage = lazyPage(loadOrg, 'OrgProfilePage');
@@ -499,6 +500,15 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
                       <OrgDocumentsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Anuncios urgentes (ajuste 13) · mismo gate que /org/announcements. */}
+                <Route
+                  path="organizacion/anuncios"
+                  element={
+                    <RequireRoles roles={ORG_PLAN_ROLES}>
+                      <OrgAnnouncementsPage />
                     </RequireRoles>
                   }
                 />

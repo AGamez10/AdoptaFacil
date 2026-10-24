@@ -515,6 +515,32 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'org.urgent_announcement',
+    label: 'Anuncio urgente de una organización',
+    description:
+      'Lo envía la organización a sus propios donantes, adoptantes o voluntarios (por ejemplo, un rescate que necesita hogar temporal hoy).',
+    audience: 'Contactos de la organización que no se han dado de baja de ella',
+    category: 'bulk',
+    theme: 'alert',
+    required: false,
+    variables: [
+      ORG,
+      v('nombre', 'Nombre de la persona (o "amigo(a)")', 'Laura'),
+      v('titulo', 'Título del anuncio', 'Necesitamos hogar temporal para 5 cachorros'),
+      v(
+        'mensaje',
+        'Mensaje',
+        'Hoy rescatamos una camada en Suba. Si puedes recibir uno por dos semanas, escríbenos.',
+      ),
+    ],
+    defaults: {
+      subject: 'Urgente: {{titulo}}',
+      preheader: '{{organizacion}} necesita tu ayuda',
+      heading: '{{titulo}}',
+      body: 'Hola {{nombre}},\n\n**{{organizacion}}** te escribe porque has apoyado su trabajo:\n\n{{mensaje}}',
+    },
+  },
+  {
     event: 'platform.announcement',
     label: 'Anuncio general de la plataforma',
     description: 'Plantilla para comunicados masivos de AdoptaFácil.',

@@ -32,7 +32,9 @@ export interface NotificationTemplateRequest {
   /**
    * Additive: the organization the email is about. When its plan includes
    * `brandedEmails` (and the month's cap isn't reached) the email goes out
-   * with that organization's brand; otherwise with AdoptaFácil's.
+   * with that organization's brand; otherwise with AdoptaFácil's. On a bulk
+   * email, its unsubscribe link opts the recipient out of THAT
+   * organization's emails only.
    */
   organizationId?: string;
 }

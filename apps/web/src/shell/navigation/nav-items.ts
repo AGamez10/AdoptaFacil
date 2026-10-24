@@ -457,6 +457,13 @@ export const navItems: NavItem[] = [
       },
     ],
   },
+  // Ajuste 13 · anuncio urgente a los contactos propios (Owner/Administrator).
+  {
+    path: '/organizacion/anuncios',
+    label: 'Anuncios urgentes',
+    icon: AlertTriangleIcon,
+    roles: ORG_PLAN_ROLES,
+  },
   // Planes y suscripciones · plan en efecto, uso de límites y los tres planes.
   {
     path: '/organizacion/plan',
