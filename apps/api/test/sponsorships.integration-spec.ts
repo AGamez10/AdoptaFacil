@@ -341,7 +341,7 @@ describe('Sponsorships base (RF17 · T-056)', () => {
       const res = await request(server)
         .post('/sponsorships')
         .set('Authorization', `Bearer ${personToken}`)
-        .send({ planId: plan.body.id, cardToken: 'tok_test_1234567890', paymentMethodId: 'visa' })
+        .send({ planId: plan.body.id })
         .expect(201);
       expect(res.body.status).toBe('active');
       expect(res.body.firstPaymentStatus).toBe('approved');

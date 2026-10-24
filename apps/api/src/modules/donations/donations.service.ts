@@ -272,10 +272,6 @@ export class DonationsService {
       commissionPayer: input.commissionPayer,
       payer: input.payer,
       idempotencyKey: input.idempotencyKey,
-      cardToken: input.cardToken,
-      paymentMethodId: input.paymentMethodId,
-      paymentMethodType: input.paymentMethodType,
-      installments: input.installments,
       epaycoCollector,
     });
     // ePayco: the adapter is the one that knows the collection mode (a

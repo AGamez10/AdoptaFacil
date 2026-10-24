@@ -6,10 +6,9 @@
 // the real gateway adapter (that is M15 implementation, a later task).
 //
 // CLOSED decisions reflected here (do NOT reopen):
-//   - Gateway: MercadoPago (reemplazó a Wompi por completo). Consolidated
-//     collection + T+1 payout, dispersión MANUAL (NOT MercadoPago's Marketplace
-//     split). NO split at checkout — the port never models a split; `breakdown`
-//     is informational/accounting only.
+//   - Gateway: ePayco, cobro directo a la organización (ADR-PAG-002; Mercado
+//     Pago se retiró el 2026-10-17). NO split at checkout — the port never
+//     models a split; `breakdown` is informational/accounting only.
 //   - Platform commission 4% on gross; gateway commission 2.65% + 700 (fixed);
 //     IVA 19% ONLY over commissions; no custody of third-party balances; COP.
 //   - SARLAFT/KYC (RF28) is validated in M15 BEFORE createPayout — NOT by the port.
@@ -76,66 +75,10 @@ export interface CreateCollectionInput {
   /** Caller-supplied key: a retry with the same key must NOT double-charge. */
   idempotencyKey: string;
   /**
-   * Checkout API (Orders) — T-OrdersAPI. Client-side tokenized card data from
-   * MercadoPago's Card Payment Brick (the card number never reaches our
-   * backend; only this opaque, single-use token does). REQUIRED by the real
-   * `MercadoPagoPaymentAdapter` (it throws a clear error without one) — kept
-   * OPTIONAL on this shared contract so it stays additive (invariant #6):
-   * `FakePaymentAdapter`, existing tests, and callers with no user present to
-   * tokenize a card (`SponsorshipBillingService`'s automated daily cron — see
-   * its header comment for why) keep compiling/working unchanged.
-   * @deprecated Mercado Pago retirado 2026-10-17: no adapter reads it (ePayco collects in its own checkout).
-   */
-  cardToken?: string;
-  /**
-   * MercadoPago's own payment method id from the Brick (e.g. 'visa', 'master').
-   * @deprecated Mercado Pago retirado 2026-10-17.
-   */
-  paymentMethodId?: string;
-  /**
-   * 'credit_card' | 'debit_card' — MercadoPago Orders requires this alongside
-   * `paymentMethodId`. The Card Payment Brick's `onSubmit` callback does not
-   * reliably surface it in every integration; callers default to
-   * 'credit_card' when unknown.
-   * TODO(client): confirm against the live Brick (real test cards) whether
-   * debit needs explicit handling once MercadoPago hands over sandbox access.
-   * @deprecated Mercado Pago retirado 2026-10-17.
-   */
-  paymentMethodType?: 'credit_card' | 'debit_card';
-  /**
-   * Installments chosen in the Brick (MercadoPago requires it even for 1).
-   * @deprecated Mercado Pago retirado 2026-10-17.
-   */
-  installments?: number;
-  /**
-   * Split de Pagos 1:1 (T-OAuth-Connect) — the BENEFICIARY organization's own
-   * connected MercadoPago account id (`OrganizationMercadoPagoAccount.mpUserId`),
-   * resolved by the CALLING service (donations/sponsorships), never by the
-   * adapter itself. When present, the real adapter includes
-   * `integration_data.sponsor.id` in the Orders request so 100% of
-   * `amountCharged` routes directly to that account — commission deduction on
-   * a split payment is TODO(client) (no fee field exists in the Orders API as
-   * of this task; see `MercadoPagoPaymentAdapter.createCollection`). Absent
-   * ⇒ the old single-account behavior (everything settles to AdoptaFácil's
-   * own account).
-   * @deprecated Mercado Pago retirado 2026-10-17: no service sets it and no adapter reads it.
-   */
-  sponsorMpUserId?: string;
-  /**
-   * ADR-PAG-001 (cobro directo, sin custodia): the BENEFICIARY organization's
-   * own gateway credentials, resolved SERVER-SIDE by the calling service from
-   * the org's connected account. The real adapter creates the charge WITH
-   * these credentials, so the organization is the collector and the money
-   * lands in its account. SERVER-ONLY: never serialized to a client, never
-   * logged, never audited. The real driver refuses to charge without it.
-   * @deprecated Mercado Pago retirado 2026-10-17: Mercado Pago-only (OAuth token); use `epaycoCollector`.
-   */
-  collector?: CollectorCredentials;
-  /**
    * ADR-PAG-002 (ePayco): the BENEFICIARY organization's own ePayco merchant
-   * keys, resolved SERVER-SIDE from its connected account. Same rules as
-   * `collector`: server-only, never serialized, logged or audited. The ePayco
-   * driver refuses to charge without it.
+   * keys, resolved SERVER-SIDE from its connected account. Server-only:
+   * never serialized, logged or audited. The ePayco driver refuses to charge
+   * without it.
    */
   epaycoCollector?: EpaycoCollectorCredentials;
 }
@@ -154,17 +97,6 @@ export interface EpaycoCollectorCredentials {
   publicKey: string;
   /** `PRIVATE_KEY` for the Apify login. Secret. */
   privateKey: string;
-}
-
-/**
- * Server-only credentials of the organization that receives the money.
- * @deprecated Mercado Pago retirado 2026-10-17: Mercado Pago OAuth credentials; see `EpaycoCollectorCredentials`.
- */
-export interface CollectorCredentials {
-  /** The org's OAuth access token at the gateway. Secret. */
-  accessToken: string;
-  /** The org's account id at the gateway (MP `user_id`). Not a secret. */
-  accountId: string;
 }
 
 export interface CollectionResult {
@@ -217,13 +149,6 @@ export interface NormalizedWebhookEvent {
 export interface WebhookVerificationContext {
   headers?: Record<string, string | undefined>;
   query?: Record<string, string | undefined>;
-  /**
-   * ADR-PAG-001: credentials of the organization that owns the notified
-   * payment (resolved server-side from the notification's account id). The
-   * real adapter reads the payment back WITH them. Server-only.
-   * @deprecated Mercado Pago retirado 2026-10-17: use `epaycoCollector`.
-   */
-  collector?: CollectorCredentials;
   /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
   epaycoCollector?: EpaycoCollectorCredentials;
 }
@@ -311,34 +236,6 @@ export interface PayoutView {
   lastError?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-// ============================================================================
-// DEPRECATED — Mercado Pago retirado del producto el 2026-10-17 (decisión del
-// dueño): los endpoints `/org/mercadopago/*` ya no existen y la tabla con los
-// tokens se eliminó (migración 20261017110000). Los tipos se conservan solo
-// porque los contratos son aditivos (invariante #6).
-// Split de Pagos 1:1 (T-OAuth-Connect) — "conectar tu cuenta de Mercado Pago"
-// per organization via OAuth. This is ONLY the connect infra (these DTOs never
-// carry the access/refresh tokens); using the connected `mpUserId` to create an
-// actual split payment at checkout is a separate follow-up, not modeled here.
-// ============================================================================
-
-/** Returned by `GET /org/mercadopago/connect` — the frontend does the actual
- *  full-page navigation (`window.location.href = authorizeUrl`), same
- *  pattern as a donation's `paymentLinkUrl`.
- *  @deprecated Mercado Pago retirado 2026-10-17: the endpoint no longer exists. */
-export interface MercadoPagoConnectUrlView {
-  authorizeUrl: string;
-}
-
-/** Returned by `GET /org/mercadopago/status` — NEVER the tokens, only enough
- *  to render "Cuenta conectada" vs. the connect button.
- *  @deprecated Mercado Pago retirado 2026-10-17: the endpoint no longer exists; see `EpaycoConnectStatusView`. */
-export interface MercadoPagoConnectStatusView {
-  connected: boolean;
-  connectedAt?: string;
-  mpUserId?: string;
 }
 
 /**
@@ -517,12 +414,7 @@ export class FakePaymentAdapter implements PaymentPort {
   static readonly PROVIDER = 'fake-local';
 
   async createCollection(input: CreateCollectionInput): Promise<CollectionResult> {
-    // `cardToken`/`paymentMethodId`/`paymentMethodType`/`installments`/
-    // `sponsorMpUserId` (T-OrdersAPI, Split 1:1) are accepted — same shape the
-    // real adapter now requires — but deliberately IGNORED here: this double
-    // stays network-free/deterministic, it never calls a real gateway either
-    // way. Keeps every existing caller/test that never supplies them (e.g. the
-    // sponsorship billing cron) compiling and behaving exactly as before.
+    // Network-free and deterministic: this double never calls a gateway.
     const collectionId = `fake-col-${stableHash(input.idempotencyKey)}`;
     return {
       collectionId,

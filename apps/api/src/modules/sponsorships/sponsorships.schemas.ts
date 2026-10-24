@@ -28,29 +28,12 @@ export const updateSponsorshipPlanSchema = z
   });
 
 /**
- * Optional tokenized-card fields (kept for contract compatibility; no web
- * client sends them since Mercado Pago was retired on 2026-10-17) — shared shape between
- * subscribing (requerimiento #17, charges immediately) and `retry-payment`.
- * All optional on purpose (same reasoning as `createDonationSchema`'s card
- * fields): the real gateway adapter is the one place that hard-requires a
- * token, so existing callers/tests that post no card at all keep working.
- */
-const cardFieldsShape = {
-  cardToken: z.string().trim().min(10).max(2000).optional(),
-  paymentMethodId: z.string().trim().min(1).max(50).optional(),
-  paymentMethodType: z.enum(['credit_card', 'debit_card']).optional(),
-  installments: z.coerce.number().int().min(1).max(36).optional(),
-};
-
-/**
  * Subscribe to a plan (authenticated Person = the padrino). Requerimiento
- * #17: charges a collection immediately through the PaymentPort, hence the card
- * fields (see {@link cardFieldsShape}).
+ * #17: charges a collection immediately through the PaymentPort.
  */
 export const createSponsorshipSchema = z
   .object({
     planId: uuid,
-    ...cardFieldsShape,
   })
   .strict();
 
@@ -72,10 +55,5 @@ export const cancelSponsorshipSchema = z
   })
   .strict();
 
-/**
- * Body of `POST /sponsorships/:id/retry-payment` (T-OrdersAPI). All optional
- * on purpose (same reasoning as `createDonationSchema`'s card fields): the
- * real gateway adapter is the one place that hard-requires a token, so
- * existing callers/tests that post no body at all keep working unchanged.
- */
-export const paySponsorshipPaymentSchema = z.object(cardFieldsShape).strict();
+/** Body of `POST /sponsorships/:id/retry-payment`: empty (or no body). */
+export const paySponsorshipPaymentSchema = z.object({}).strict();

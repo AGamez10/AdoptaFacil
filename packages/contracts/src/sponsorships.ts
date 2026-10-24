@@ -161,14 +161,11 @@ export interface Sponsorship {
 
 /**
  * Subscribe to a plan (authenticated Person = the padrino). Requerimiento
- * #17: this now charges a real MercadoPago collection IMMEDIATELY — the
- * card fields mirror {@link PaySponsorshipPaymentInput} verbatim (same
- * rationale: optional/additive so the fake driver and old callers keep
- * working; the REAL gateway adapter is the one place that hard-requires a
- * token). A `declined` result cancels the just-created sponsorship instead of
- * leaving an "active" subscription with no real charge behind it.
+ * #17: this charges a collection IMMEDIATELY through the PaymentPort. A
+ * `declined` result cancels the just-created sponsorship instead of leaving
+ * an "active" subscription with no real charge behind it.
  */
-export interface CreateSponsorshipInput extends PaySponsorshipPaymentInput {
+export interface CreateSponsorshipInput {
   planId: string;
 }
 
@@ -206,22 +203,10 @@ export interface CancelSponsorshipInput {
 }
 
 /**
- * Body of `POST /sponsorships/:id/retry-payment` (T-OrdersAPI). The sponsor's
- * Card Payment Brick tokenizes a card client-side and submits it here so the
- * recovery attempt can actually charge it via Checkout API/Orders — mirrors
- * `CreateCollectionInput`'s own card fields (payments.ts) verbatim; see that
- * type's doc comments for the full rationale. All optional/additive so a
- * caller that still posts no body (existing tests, the fake driver) keeps
- * working — the REAL gateway adapter is the one place that hard-requires a
- * token.
+ * Body of `POST /sponsorships/:id/retry-payment`: empty. The card fields of
+ * Mercado Pago's Card Payment Brick were removed with the gateway.
  */
-export interface PaySponsorshipPaymentInput {
-  /** @deprecated Mercado Pago retirado 2026-10-17: the web no longer tokenizes cards (no Card Payment Brick). */
-  cardToken?: string;
-  paymentMethodId?: string;
-  paymentMethodType?: 'credit_card' | 'debit_card';
-  installments?: number;
-}
+export type PaySponsorshipPaymentInput = Record<string, never>;
 
 // ============================================================================
 // S-5-REDISEÑO (M07, RF17, incluye T-057) — recurring billing ledger. One
