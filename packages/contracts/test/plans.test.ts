@@ -94,6 +94,8 @@ describe('planHighlights (landing and plans screen share the catalog)', () => {
     expect(PLAN_CAPABILITY_INFO.brandedEmails.available).toBe(true);
     expect(BRANDED_EMAIL_MONTHLY_LIMIT.free).toBe(0);
     expect(BRANDED_EMAIL_MONTHLY_LIMIT.crece).toBeLessThan(BRANDED_EMAIL_MONTHLY_LIMIT.pro);
+    // Quitar el sello del portal (PortalThemeConfig.hideSeal).
+    expect(PLAN_CAPABILITY_INFO.portalRemoveSeal.available).toBe(true);
   });
 });
 

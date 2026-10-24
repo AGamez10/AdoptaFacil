@@ -43,6 +43,7 @@ import { TemplatePicker, TemplateUpsell } from '../components/templates/template
 import { TemplateOptionsForm } from '../components/templates/template-options-form';
 import { TemplateLivePreview } from '../components/templates/template-live-preview';
 import { CoverVideoField } from '../components/templates/cover-video-field';
+import { SealToggle } from '../components/templates/seal-toggle';
 import { OrgStatusCard } from '../../org/components/org-status-card';
 
 /** Empty string ⇒ "use the default token" (the field is omitted from the payload). */
@@ -244,6 +245,11 @@ export function PortalThemePage() {
   // Historias: video de portada. `coverVideoKey` undefined = sin cambios.
   const [coverVideoUrl, setCoverVideoUrl] = useState<string | undefined>(undefined);
   const [coverVideoKey, setCoverVideoKey] = useState<string | null | undefined>(undefined);
+  // Sello del pie (`portalRemoveSeal`). Solo se envía si la organización lo
+  // tocó: así guardar colores con el plan vencido no choca con el 403.
+  const [hideSeal, setHideSeal] = useState(false);
+  const [sealTouched, setSealTouched] = useState(false);
+  const [removeSealAvailable, setRemoveSealAvailable] = useState(true);
   const [slug, setSlug] = useState<string | undefined>(undefined);
   const [orgName, setOrgName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -275,6 +281,8 @@ export function PortalThemePage() {
         setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
         setPremiumAvailable(config.premiumDesignsAvailable !== false);
         setLockedTemplate(config.lockedTemplate);
+        setHideSeal(config.hideSeal === true);
+        setRemoveSealAvailable(config.removeSealAvailable !== false);
         setSlug(org?.slug ?? undefined);
         setOrgName(org?.name ?? undefined);
       })
@@ -348,6 +356,7 @@ export function PortalThemePage() {
           // por la gratuita que se está mostrando: se omite la plantilla.
           ...(lockedTemplate && !templateTouched ? {} : { template, templateOptions }),
           ...(coverVideoKey !== undefined ? { coverVideoKey } : {}),
+          ...(sealTouched ? { hideSeal } : {}),
         },
       });
       setForm(safePortalTheme(themeConfig.tokens) as FormState);
@@ -360,6 +369,9 @@ export function PortalThemePage() {
       setPremiumAvailable(themeConfig.premiumDesignsAvailable !== false);
       setLockedTemplate(themeConfig.lockedTemplate);
       setTemplateTouched(false);
+      setHideSeal(themeConfig.hideSeal === true);
+      setRemoveSealAvailable(themeConfig.removeSealAvailable !== false);
+      setSealTouched(false);
       if (coverVideoKey !== undefined) {
         setCoverVideoUrl(safeMediaUrl(themeConfig.coverVideoUrl));
         setCoverVideoKey(undefined);
@@ -499,6 +511,14 @@ export function PortalThemePage() {
                   options={SOCIAL_NAV_POSITION_OPTIONS}
                   value={socialNavPosition}
                   onChange={setSocialNavPosition}
+                />
+                <SealToggle
+                  hideSeal={hideSeal}
+                  available={removeSealAvailable}
+                  onChange={(next) => {
+                    setSealTouched(true);
+                    setHideSeal(next);
+                  }}
                 />
               </CardContent>
             </Card>

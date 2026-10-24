@@ -121,6 +121,8 @@ export const updatePortalThemeSchema = z
     templateOptions: templateOptionsSchema.optional(),
     /** Llave del video de portada; el servicio exige que sea pública y propia. */
     coverVideoKey: z.string().trim().min(1).max(512).nullable().optional(),
+    /** Ocultar el sello "Hecho con AdoptaFácil"; el servicio exige el plan. */
+    hideSeal: z.boolean().optional(),
   })
   .strict();
 
