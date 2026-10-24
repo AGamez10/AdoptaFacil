@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** Runtime validation for M04 adoption CONTRACTS (T-028b). `.strict()` rejects
  *  unknown keys so no extra field can be smuggled in. */
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 
 /** Texto libre sin caracteres de control (salvo salto de línea y tabulador):
  *  todo esto termina en un PDF, en un correo y en pantalla. */
