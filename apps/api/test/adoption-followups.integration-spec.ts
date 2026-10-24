@@ -85,7 +85,13 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const animal = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${refugeToken}`)
-      .send({ name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Firulais',
+        species: 'dog',
+        sex: 'male',
+        size: 'medium',
+      })
       .expect(201);
     animalId = animal.body.id;
 

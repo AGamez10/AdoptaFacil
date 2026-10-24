@@ -161,6 +161,9 @@ describe('AnimalsPage — lista + detalle maestro-detalle', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Registrar animal/ }));
     fireEvent.change(await screen.findByLabelText('Nombre *'), { target: { value: 'Firulais' } });
+    fireEvent.change(screen.getByLabelText(/Fecha de nacimiento/), {
+      target: { value: '2024-07-23' },
+    });
 
     const tagInput = screen.getByLabelText('Etiquetas de personalidad');
     fireEvent.change(tagInput, { target: { value: 'Juguetón' } });
@@ -173,9 +176,66 @@ describe('AnimalsPage — lista + detalle maestro-detalle', () => {
       const post = calls.find((c) => c.init?.method === 'POST' && c.url.endsWith('/animals'));
       expect(post).toBeDefined();
       const body = JSON.parse(String(post?.init?.body));
-      expect(body).toMatchObject({ name: 'Firulais', tags: ['Juguetón'] });
+      expect(body).toMatchObject({
+        name: 'Firulais',
+        tags: ['Juguetón'],
+        birthDate: '2024-07-23T00:00:00.000Z',
+      });
     });
     expect(await screen.findByText('Expediente creado')).toBeInTheDocument();
+  });
+
+  it('blocks creating an animal with no age or a future birth date', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      return [];
+    });
+    renderShell({ route: '/animales', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Registrar animal/ }));
+    fireEvent.change(await screen.findByLabelText('Nombre *'), { target: { value: 'Firulais' } });
+    const dialog = screen.getByRole('dialog');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Registrar animal' }));
+    expect(await screen.findByText('Edad requerida')).toBeInTheDocument();
+
+    const future = new Date(Date.now() + 6 * 86_400_000).toISOString().slice(0, 10);
+    fireEvent.change(within(dialog).getByLabelText(/Fecha de nacimiento/), {
+      target: { value: future },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Registrar animal' }));
+    expect(
+      await screen.findByText('La fecha de nacimiento no puede ser futura.'),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.init?.method === 'POST')).toBe(false);
+  });
+
+  it('creates an animal with an approximate age when the birth date is unknown', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method === 'POST' && url.endsWith('/animals')) return animal('a1', 'Firulais');
+      return [];
+    });
+    renderShell({ route: '/animales', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Registrar animal/ }));
+    fireEvent.change(await screen.findByLabelText('Nombre *'), { target: { value: 'Firulais' } });
+    fireEvent.click(screen.getByLabelText('No conozco la fecha exacta'));
+    fireEvent.change(screen.getByLabelText('Años'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Meses'), { target: { value: '3' } });
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Registrar animal' }),
+    );
+
+    await waitFor(() => {
+      const post = calls.find((c) => c.init?.method === 'POST' && c.url.endsWith('/animals'));
+      expect(post).toBeDefined();
+      const body = JSON.parse(String(post?.init?.body));
+      expect(body.approximateAgeMonths).toBe(27);
+      expect(body).not.toHaveProperty('birthDate');
+    });
   });
 
   it('opens the edit modal prefilled (from the detail panel) and PATCHes the update', async () => {
@@ -184,7 +244,10 @@ describe('AnimalsPage — lista + detalle maestro-detalle', () => {
       calls.push({ url, init });
       if (url.includes('/animals/breeds')) return [];
       if (init?.method === 'PATCH') return animal('a1', 'Firulais 2');
-      if (url.includes('/animals')) return [animal('a1', 'Firulais', { tags: ['Tímido'] })];
+      if (url.includes('/animals'))
+        return [
+          animal('a1', 'Firulais', { tags: ['Tímido'], birthDate: '2024-07-23T00:00:00.000Z' }),
+        ];
       return [];
     });
     renderShell({ route: '/animales', ...sessionWith([Role.Owner]) });
