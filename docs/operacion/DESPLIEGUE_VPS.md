@@ -8,17 +8,17 @@
 
 ## Lo que necesitas antes de empezar
 
-| Qué                                    | Recomendación                                                                                     | Para qué                                                   |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| VPS                                    | Hostinger **KVM 2** (2 vCPU, 8 GB RAM, 100 GB NVMe), plantilla **Ubuntu 24.04 LTS** sin panel     | todo el stack; ver §Tamaño                                 |
-| Dominio `adoptafacil.org`              | ya registrado en **Namecheap** (un año); renovación automática activada, ver §Renovación          | —                                                          |
-| DNS con API                            | **Cloudflare** (plan Free), decidido; ver §DNS                                                    | certificado comodín de los portales por DNS-01             |
-| Cuenta de **Backblaze B2**             | un bucket privado `adoptafacil-backups` y una clave de aplicación limitada a ese bucket           | copia off-site de los respaldos cifrados                   |
-| App **ntfy** en el celular             | un tema con nombre largo y aleatorio (`openssl rand -hex 12`)                                     | alertas del servidor (`ALERT_WEBHOOK_URL`)                 |
-| Cuenta gratuita de **UptimeRobot**     | monitor HTTPS cada 5 min a `https://adoptafacil.org/api/health` con palabra clave `"status":"ok"` | aviso si el VPS entero cae (lo que el VPS no puede avisar) |
-| Cuenta gratuita de **healthchecks.io** | un check diario con 2 h de gracia                                                                 | aviso si el respaldo diario no corre                       |
-| Clave SSH                              | la tuya, cargada al crear el VPS                                                                  | entrar al servidor sin contraseña                          |
-| Par de claves **age**                  | generado en tu computador (`age-keygen -o adoptafacil-backup.key`); la privada nunca va al VPS    | cifrar los respaldos; ver `BACKUPS.md`                     |
+| Qué                                    | Recomendación                                                                                                                             | Para qué                                                                                           |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| VPS                                    | Hostinger **KVM 1** (1 vCPU, 4 GB RAM, 50 GB NVMe, el plan más pequeño que hoy lista Hostinger), plantilla **Ubuntu 24.04 LTS** sin panel | todo el stack; ver §Tamaño y §Costos                                                               |
+| Dominio `adoptafacil.org`              | ya registrado en **Namecheap** (un año); renovación automática activada, ver §Renovación                                                  | —                                                                                                  |
+| DNS con API                            | **Cloudflare** (plan Free), decidido; ver §DNS                                                                                            | certificado comodín de los portales por DNS-01                                                     |
+| Cuenta de **Backblaze B2**             | un bucket privado `adoptafacil-backups` y una clave de aplicación limitada a ese bucket                                                   | copia off-site de los respaldos cifrados (opcional en una demo; obligatoria antes de datos reales) |
+| App **ntfy** en el celular             | un tema con nombre largo y aleatorio (`openssl rand -hex 12`)                                                                             | alertas del servidor (`ALERT_WEBHOOK_URL`)                                                         |
+| Cuenta gratuita de **UptimeRobot**     | monitor HTTPS cada 5 min a `https://adoptafacil.org/api/health` con palabra clave `"status":"ok"`                                         | aviso si el VPS entero cae (lo que el VPS no puede avisar)                                         |
+| Cuenta gratuita de **healthchecks.io** | un check diario con 2 h de gracia                                                                                                         | aviso si el respaldo diario no corre                                                               |
+| Clave SSH                              | la tuya, cargada al crear el VPS                                                                                                          | entrar al servidor sin contraseña                                                                  |
+| Par de claves **age**                  | generado en tu computador (`age-keygen -o adoptafacil-backup.key`); la privada nunca va al VPS                                            | cifrar los respaldos; ver `BACKUPS.md`                                                             |
 
 **Secretos: solo en el servidor.** Contraseñas, `JWT_SECRET`, las credenciales
 del DNS (Cloudflare o Namecheap), la clave de B2, el SMTP y, cuando se enciendan los pagos, el access
@@ -32,10 +32,35 @@ públicas que el navegador ve de todas formas).
 Medido con este compose: en reposo la API usa ~111 MB, Postgres ~25 MB, Caddy
 ~13 MB y Redis ~5 MB. Lo que pesa es **construir** las imágenes en el propio VPS
 (`pnpm install` + build de API y web), que pide 2–3 GB de RAM durante unos
-minutos. Por eso KVM 2: deja margen para construir sin detener el servicio y
-para que Postgres crezca. KVM 1 (1 vCPU, 4 GB) arranca, pero cada despliegue
-compite con la API por la única CPU. Centro de datos: el más cercano a Colombia
+minutos. Por eso el mínimo recomendado son 4 GB. KVM 1 (1 vCPU, 4 GB) es el plan
+más pequeño que hoy lista Hostinger; cada despliegue compite con la API por la
+única CPU, así que conviene construir fuera de horas de uso. Un plan de 2 GB no
+aparece en la lista pública consultada: si Hostinger lo ofrece al comprar, no lo
+uses para construir en el mismo VPS. Centro de datos: el más cercano a Colombia
 que ofrezca Hostinger al comprar (Sudamérica o EE. UU.).
+
+## Costos (inicio de bajo costo)
+
+Pensado para una demo o un primer lanzamiento. Los números se revisaron en las
+páginas oficiales el 24 de octubre de 2026; los precios cambian, así que
+confírmalos antes de comprar.
+
+- **Almacenamiento (Cloudflare R2), plan gratuito:** 10 GB-mes de almacenamiento
+  Standard, 1 millón de operaciones Clase A y 10 millones de Clase B al mes, y
+  salida de datos (egress) gratis. Fuente: [precios de R2](https://developers.cloudflare.com/r2/pricing/).
+  Para una demo, las fotos caben de sobra en el plan gratuito. Si se supera:
+  $0.015 por GB-mes, $4.50 por millón de operaciones Clase A y $0.36 por millón
+  de Clase B.
+- **VPS (Hostinger KVM 1):** precio de renovación de $11.99/mes en la página
+  pública consultada, con renovación a 2 años. Hostinger muestra un precio de
+  promoción al comprar que solo aplica al primer periodo: revisa el precio de
+  renovación antes de pagar, porque es el que se cobra después.
+- **Dominio:** se paga por año en Namecheap.
+- **Sin MinIO en el mismo VPS:** consumiría la misma RAM, CPU y disco del
+  servidor, y sus respaldos. R2 cumple el mismo papel sin esa carga.
+- **Servicios gratuitos de la guía:** Cloudflare DNS (plan Free), ntfy,
+  UptimeRobot y healthchecks.io. Revisa sus límites en cada página antes de
+  depender de ellos.
 
 ## Qué se despliega
 
@@ -159,7 +184,7 @@ los portales, los correos con enlaces y la renovación de certificados.
 ## Primer despliegue [VPS]
 
 ```bash
-# 1. Crear el VPS en hPanel: KVM 2, Ubuntu 24.04 LTS, tu clave SSH.
+# 1. Crear el VPS en hPanel: KVM 1 (mínimo recomendado 4 GB), Ubuntu 24.04 LTS, tu clave SSH.
 #    hPanel → VPS → Firewall: permitir solo 22/tcp, 80/tcp, 443/tcp y 443/udp.
 #    (El firewall de Hostinger filtra antes de llegar al VPS, así que también
 #    cubre lo que Docker publique saltándose ufw.)
