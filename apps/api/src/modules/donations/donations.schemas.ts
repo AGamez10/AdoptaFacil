@@ -6,7 +6,7 @@ import { legalAcceptancesSchema } from '../../core/legal/legal.schemas';
  *  so no extra field (e.g. a client-supplied breakdown) can be smuggled in — the
  *  API is the sole authority on the money math (computeBreakdown). */
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 
 /** Pesos enteros COP, positivos, por encima del mínimo (P1). */
 const pesos = z

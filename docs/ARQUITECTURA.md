@@ -18,7 +18,7 @@ flowchart LR
     WEB["apps/web<br/>React 18 + Vite"]
   end
   subgraph Servidor
-    API["apps/api<br/>NestJS (Node 20)"]
+    API["apps/api<br/>NestJS (Node 24)"]
     WORKERS["Workers BullMQ<br/>(mismo proceso)"]
   end
   subgraph Datos

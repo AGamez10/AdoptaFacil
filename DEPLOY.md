@@ -326,7 +326,7 @@ not found` durante el build (T-D07):** pnpm salta TODAS las devDependencies
 | `THROTTLER_STORAGE`                 | api      | Dónde viven los contadores del rate limit                  | Fijo: `redis`                                           |
 | `VITE_API_URL`                      | web      | URL pública de la API                                      | Manual — ver paso 3                                     |
 | `VITE_SITE_URL`                     | web      | Dominio público del sitio (SEO: canónicas y sitemap)       | Manual — ver paso 3                                     |
-| `NODE_VERSION`                      | ambos    | Versión de Node                                            | Fijo: `20`                                              |
+| `NODE_VERSION`                      | ambos    | Versión de Node                                            | Fijo: `24`                                              |
 
 ## 7. Fuera de alcance de este Blueprint
 

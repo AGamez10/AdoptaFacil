@@ -7,7 +7,7 @@ export const reconciliationQuerySchema = z
   .object({
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
-    organizationId: z.string().uuid().optional(),
+    organizationId: z.string().guid().optional(),
   })
   .strict();
 

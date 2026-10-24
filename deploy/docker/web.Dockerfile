@@ -11,7 +11,7 @@
 # `internal` usan la imagen oficial sin módulos extra. BuildKit solo construye la
 # etapa elegida.
 
-ARG NODE_IMAGE=node:20-bookworm-slim
+ARG NODE_IMAGE=node:24-bookworm-slim
 ARG CADDY_IMAGE=caddy:2.10-alpine
 ARG CADDY_BUILDER_IMAGE=caddy:2.10-builder-alpine
 ARG CADDY_DNS_CLOUDFLARE=github.com/caddy-dns/cloudflare@v0.2.4

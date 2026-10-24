@@ -8,7 +8,7 @@
 
 ## 1. Requisitos previos
 
-- **Node 20** (fijado; versiones más nuevas dieron problemas en CI).
+- **Node 24 LTS** (fijado). Node 20 dejó de recibir parches de seguridad el 30 de abril de 2026.
 - **pnpm 9.15.9** (fijado; pnpm 11 rompía CI). Instalar la versión exacta: `npm i -g pnpm@9.15.9`.
 - **Docker** (para Postgres 16 y Redis 7).
 - **Git**.
@@ -97,7 +97,7 @@ Esto muestra lo construido de forma narrativa. Lo **funcional real** y las **maq
 | CI falla en "Initialize containers" (`docker pull` timeout) | Rate limit de Docker Hub           | Reintentar el job; si persiste, ver hardening T-CI-01          |
 | Postgres no levanta en 5432                                 | Postgres nativo ocupando el puerto | Usar 5433 en dev (ya configurado)                              |
 | `.env` con caracteres raros                                 | Encoding UTF-16/BOM                | Guardar el `.env` como UTF-8 sin BOM                           |
-| CI roto tras subir pnpm/Node                                | Versiones no fijadas               | Usar pnpm 9.15.9 + Node 20                                     |
+| CI roto tras subir pnpm/Node                                | Versiones no fijadas               | Usar pnpm 9.15.9 + Node 24                                     |
 | commit rechazado (`subject/type empty`)                     | commitlint (Conventional Commits)  | `git commit -m "docs: ..."` (tipo válido: feat/fix/docs/chore) |
 
 ---

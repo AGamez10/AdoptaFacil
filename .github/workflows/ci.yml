@@ -9,10 +9,15 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Máquina donde corren los jobs: variable de repositorio CI_RUNS_ON (JSON).
+#   - sin definir            -> "ubuntu-latest" (máquinas de GitHub, consumen minutos)
+#   - ["self-hosted","linux"] -> runner propio en WSL2 (docs/operacion/runner-propio.md)
+# Los puertos de los servicios no chocan con el Postgres (5433) ni el Redis
+# (6379) de desarrollo, porque en un runner propio se publican en el equipo.
 jobs:
   quality:
     name: Lint · Typecheck · Build · Unit tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,10 +26,10 @@ jobs:
         with:
           version: 9.15.9
 
-      - name: Setup Node 20 LTS
+      - name: Setup Node 24 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -39,12 +44,25 @@ jobs:
       - name: Build (api + web)
         run: pnpm turbo run build
 
+      # En un runner propio más lento (ver docs/operacion/runner-propio.md),
+      # jest y vitest abren un proceso por núcleo: compiten por la CPU (pruebas
+      # de UI que pasan de los 5 s) y pueden dejar sin memoria la VM de WSL,
+      # que se lleva el runner. Se corren de a un paquete, con pocos procesos y
+      # más margen. A vitest se le limita por variables de entorno porque
+      # `--maxWorkers` rompe su validación de hilos.
       - name: Unit tests (jest + vitest)
-        run: pnpm turbo run test
+        env:
+          VITEST_MAX_FORKS: '2'
+          VITEST_MIN_FORKS: '1'
+          VITEST_MAX_THREADS: '2'
+          VITEST_MIN_THREADS: '1'
+        run: |
+          pnpm turbo run test --concurrency=1 --filter='!@adoptafacil/api' -- --testTimeout=30000
+          pnpm --filter @adoptafacil/api run test --testTimeout=30000 --maxWorkers=2
 
   rls-no-leak:
     name: rls-no-leak · postura RLS · deriva de esquema (RNF03 gate)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     services:
       postgres:
         image: postgres:16
@@ -53,7 +71,7 @@ jobs:
           POSTGRES_PASSWORD: adoptafacil
           POSTGRES_DB: adoptafacil
         ports:
-          - 5432:5432
+          - 55432:5432
         options: >-
           --health-cmd "pg_isready -U adoptafacil -d adoptafacil"
           --health-interval 5s
@@ -62,7 +80,7 @@ jobs:
       redis:
         image: redis:7
         ports:
-          - 6379:6379
+          - 56379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
@@ -70,11 +88,11 @@ jobs:
           --health-retries 10
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil?schema=public
+      DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:55432/adoptafacil?schema=public
       # Misma base sin el parámetro ?schema= de Prisma (psql lo rechaza).
-      PG_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil
-      DATABASE_URL_APP: postgresql://adoptafacil_app:adoptafacil_app@localhost:5432/adoptafacil?schema=public
-      REDIS_URL: redis://localhost:6379
+      PG_URL: postgresql://adoptafacil:adoptafacil@localhost:55432/adoptafacil
+      DATABASE_URL_APP: postgresql://adoptafacil_app:adoptafacil_app@localhost:55432/adoptafacil?schema=public
+      REDIS_URL: redis://localhost:56379
     steps:
       - uses: actions/checkout@v4
 
@@ -83,10 +101,10 @@ jobs:
         with:
           version: 9.15.9
 
-      - name: Setup Node 20 LTS
+      - name: Setup Node 24 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -105,17 +123,23 @@ jobs:
       # (trinquete sobre la deriva heredada; ver el script).
       - name: Schema drift
         env:
-          SHADOW_DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:5432/adoptafacil_shadow
+          SHADOW_DATABASE_URL: postgresql://adoptafacil:adoptafacil@localhost:55432/adoptafacil_shadow
         run: |
           psql "$PG_URL" -c 'CREATE DATABASE adoptafacil_shadow'
           scripts/ci/schema-drift.sh
 
+      # En partes (cada una en su propio proceso): en una sola corrida la
+      # memoria de jest crece suite a suite y, en un runner propio con poca
+      # RAM, termina sin memoria y vuelve lentas las colas de correo.
       - name: Integration + RLS no-leak (smoke /health + cross-org isolation)
-        run: pnpm --filter @adoptafacil/api run test:integration
+        run: |
+          for shard in 1/4 2/4 3/4 4/4; do
+            pnpm --filter @adoptafacil/api run test:integration --shard=$shard --testTimeout=120000
+          done
 
   docker:
     name: Imágenes Docker + compose de producción (arranque de punta a punta)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -147,15 +171,18 @@ jobs:
             echo "SMTP_FROM=ci@example.com"
           } > deploy/api.env
 
+      # Proyecto propio de compose (`-p adoptafacil-ci`): en un runner propio,
+      # el nombre por defecto `adoptafacil` coincide con la pila de desarrollo
+      # local (docker-compose.yml) y `down -v` borraría sus volúmenes.
       - name: docker compose config
-        run: docker compose -f deploy/compose.yaml --env-file deploy/.env config --quiet
+        run: docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env config --quiet
 
       - name: Build images (api, migrate, edge)
-        run: docker compose -f deploy/compose.yaml --env-file deploy/.env build
+        run: docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env build
 
       # migrate (migraciones + rotación del rol + postura RLS) -> api sana -> Caddy.
       - name: Start stack
-        run: docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --wait --wait-timeout 300
+        run: docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env up -d --wait --wait-timeout 300
 
       - name: Smoke test through Caddy (HTTPS)
         run: |
@@ -168,7 +195,7 @@ jobs:
           # www redirige al dominio principal.
           test "$(curl -sk --resolve www.localhost:443:127.0.0.1 -o /dev/null -w '%{http_code} %{redirect_url}' https://www.localhost/x)" = "301 https://localhost/x"
           # Solo Caddy publica puertos: Postgres, Redis y la API quedan en redes internas.
-          test -z "$(docker compose -f deploy/compose.yaml --env-file deploy/.env ps --format '{{.Service}} {{.Publishers}}' | grep -v '^caddy' | grep -E '0\.0\.0\.0|::' || true)"
+          test -z "$(docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env ps --format '{{.Service}} {{.Publishers}}' | grep -v '^caddy' | grep -E '0\.0\.0\.0|::' || true)"
 
       # Producción usa PORTALS_TLS=cloudflare o namecheap: compila Caddy con cada
       # módulo DNS y valida el Caddyfile con ese bloque (sin emitir certificados).
@@ -184,4 +211,9 @@ jobs:
 
       - name: Logs on failure
         if: failure()
-        run: docker compose -f deploy/compose.yaml --env-file deploy/.env logs --no-color --tail 200
+        run: docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env logs --no-color --tail 200
+
+      # En un runner propio la pila quedaría corriendo en el equipo: se baja siempre.
+      - name: Stop stack
+        if: always()
+        run: docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env down -v --remove-orphans || true
