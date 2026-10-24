@@ -326,7 +326,8 @@ function EnginePreview({
   device: Device;
 }) {
   const [design, setDesign] = useState<TemplateDesign | null>(null);
-  const [height, setHeight] = useState(600);
+  // Alto de pantalla del dispositivo: las medidas en vh de las plantillas dependen de él.
+  const height = device === 'mobile' ? 844 : 900;
 
   useEffect(() => {
     let active = true;
@@ -354,7 +355,6 @@ function EnginePreview({
         width={width}
         decoding="async"
         style={{ width, height: 'auto', display: 'block' }}
-        onLoad={(event) => setHeight(event.currentTarget.getBoundingClientRect().height)}
       />
     );
   }
@@ -366,10 +366,6 @@ function EnginePreview({
       // Sin scripts ni navegación: solo se mira. allow-same-origin deja medir la altura.
       sandbox="allow-same-origin"
       style={{ width, height, border: 0, display: 'block' }}
-      onLoad={(event) => {
-        const doc = event.currentTarget.contentDocument;
-        if (doc) setHeight(doc.documentElement.scrollHeight);
-      }}
     />
   );
 }
