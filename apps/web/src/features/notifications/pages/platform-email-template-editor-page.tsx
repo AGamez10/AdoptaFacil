@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
+  EMAIL_ACCENT_COLORS,
+  EMAIL_ICONS,
   Role,
   type EmailPreview,
   type EmailTemplateContent,
@@ -21,9 +23,14 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { ApiError, useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
-import { CATEGORY_LABELS, FIELD_HELP, THEME_ICONS } from '../lib/email-template-labels';
+import {
+  ACCENT_COLOR_LABELS,
+  CATEGORY_LABELS,
+  FIELD_HELP,
+  THEME_ICONS,
+} from '../lib/email-template-labels';
 
-type Field = keyof EmailTemplateContent;
+type Field = Exclude<keyof EmailTemplateContent, 'accentColor' | 'icon'>;
 
 const FIELDS: Array<{ key: Field; label: string; multiline?: boolean; max: number }> = [
   { key: 'subject', label: 'Asunto', max: 150 },
@@ -285,8 +292,8 @@ export function PlatformEmailTemplateEditorPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Haz clic para insertarlo donde está el cursor. Escribe solo texto: el diseño, los
-                colores y los enlaces los pone AdoptaFácil.
+                Haz clic para insertarlo donde está el cursor. Los enlaces los pone AdoptaFácil; el
+                color y el ícono los eliges abajo.
               </p>
             </div>
 
@@ -327,6 +334,62 @@ export function PlatformEmailTemplateEditorPage() {
                 </div>
               );
             })}
+
+            <fieldset>
+              <legend className="mb-1 text-sm font-medium">Color del correo</legend>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-pressed={!draft.accentColor}
+                  onClick={() => setDraft({ ...draft, accentColor: undefined })}
+                  className="rounded-full border border-border px-3 py-1 text-xs aria-pressed:border-primary aria-pressed:font-semibold"
+                >
+                  Del tema
+                </button>
+                {EMAIL_ACCENT_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={draft.accentColor === c}
+                    onClick={() => setDraft({ ...draft, accentColor: c })}
+                    className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs aria-pressed:border-primary aria-pressed:font-semibold"
+                  >
+                    <span
+                      aria-hidden
+                      className="inline-block h-3 w-3 rounded-full"
+                      style={{ background: ACCENT_COLOR_LABELS[c].hex }}
+                    />
+                    {ACCENT_COLOR_LABELS[c].label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="mb-1 text-sm font-medium">Ícono</legend>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-pressed={!draft.icon}
+                  onClick={() => setDraft({ ...draft, icon: undefined })}
+                  className="rounded-full border border-border px-3 py-1 text-xs aria-pressed:border-primary aria-pressed:font-semibold"
+                >
+                  Del tema ({THEME_ICONS[detail.theme]})
+                </button>
+                {EMAIL_ICONS.map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    aria-label={`Ícono ${icon}`}
+                    aria-pressed={draft.icon === icon}
+                    onClick={() => setDraft({ ...draft, icon })}
+                    className="rounded-full border border-border px-2 py-1 text-base aria-pressed:border-primary"
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
 
             <div>
               <label htmlFor="email-change-note" className="mb-1 block text-sm font-medium">
@@ -492,6 +555,8 @@ export function PlatformEmailTemplateEditorPage() {
                           body: v.body,
                           ...(v.ctaLabel ? { ctaLabel: v.ctaLabel } : {}),
                           ...(v.footerNote ? { footerNote: v.footerNote } : {}),
+                          ...(v.accentColor ? { accentColor: v.accentColor } : {}),
+                          ...(v.icon ? { icon: v.icon } : {}),
                         })
                       }
                     >

@@ -49,6 +49,28 @@ describe('SmtpNotificationAdapter (T-109)', () => {
     });
   });
 
+  it('branded email: keeps the SMTP_FROM address, changes only the name, adds Reply-To', async () => {
+    const sendMail = jest.fn().mockResolvedValue({});
+    const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;
+    const adapter = new SmtpNotificationAdapter(makeConfig(), createTransport);
+
+    await adapter.send({
+      to: 'user@dest.test',
+      subject: 'Hola',
+      body: 'contenido',
+      fromName: 'Huellitas vía AdoptaFácil',
+      replyTo: 'contacto@huellitas.org',
+    });
+
+    expect(sendMail).toHaveBeenCalledWith({
+      from: { name: 'Huellitas vía AdoptaFácil', address: 'no-reply@example.test' },
+      replyTo: 'contacto@huellitas.org',
+      to: 'user@dest.test',
+      subject: 'Hola',
+      text: 'contenido',
+    });
+  });
+
   it('adds html, headers and attachments only when present (additive)', async () => {
     const sendMail = jest.fn().mockResolvedValue({});
     const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;

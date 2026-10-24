@@ -7,15 +7,14 @@ import { DonationsService } from './donations.service';
 import { RequireFeature } from '../../core/features';
 
 /**
- * PUBLIC post-checkout status read (MercadoPago redirect-back "gracias"
+ * PUBLIC post-checkout status read (gateway redirect-back "gracias"
  * page) — no auth. Same minimal-controller convention as
  * {@link DonationCertificatePublicController}/{@link DonationAccessPublicController}:
  * no `donations/` prefix, one route, a single generic 404 on an unknown
  * reference (never distinguishable from "not yet settled").
  *
- * `:reference` is MercadoPago's `external_reference` query param, which the
- * frontend forwards verbatim — it IS our own `donations.collection_id`
- * (`af-<idempotencyKey>`, see `MercadoPagoPaymentAdapter.createCollection`).
+ * `:reference` is our own reference, which the frontend forwards verbatim
+ * from the gateway's redirect — it IS `donations.collection_id`.
  */
 @RequireFeature('payments')
 @Controller()
@@ -27,7 +26,7 @@ export class DonationStatusPublicController {
     return this.service.getPublicStatusByCollectionId(reference);
   }
 
-  /** Whether the org has a connected MercadoPago account (boolean only). */
+  /** Whether the org has a connected ePayco account (boolean only). */
   @Get('public/donations/organizations/:organizationId/availability')
   getOrganizationAvailability(
     @Param('organizationId', ParseUUIDPipe) organizationId: string,

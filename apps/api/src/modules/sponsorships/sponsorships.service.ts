@@ -159,7 +159,7 @@ function toHistoryEntry(row: HistoryRow): SponsorshipStatusHistoryEntry {
  * Sponsorships (RF17 · T-056) — a Person (padrino) SUBSCRIBES to another org's
  * plan (cross-tenant creation, same technique as M05 donations); the org then
  * suspends/reactivates/cancels WITHIN its own tenant context (regular RLS write).
- * Requerimiento #17: subscribing charges a REAL MercadoPago collection
+ * Requerimiento #17: subscribing charges a collection through the PaymentPort
  * immediately (see `subscribe()`'s own doc comment) — the recurring cron/
  * poller/"Pagar de nuevo" machinery (`SponsorshipBillingService`,
  * `SponsorshipPaymentPollerService`, `SponsorshipPaymentsService.retryPayment`)
@@ -178,18 +178,6 @@ export class SponsorshipsService {
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
   ) {}
 
-  /**
-   * Split de Pagos 1:1 (T-OAuth-Connect) — same narrow, token-free lookup
-   * `SponsorshipPaymentsService`/`DonationsService` each already duplicate
-   * (this codebase does not share service-level logic across files).
-   */
-  private async resolveSponsorMpUserId(organizationId: string): Promise<string | undefined> {
-    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
-      SELECT * FROM mercadopago_account_mp_user_id(${organizationId}::uuid)
-    `);
-    return rows[0]?.mp_user_id;
-  }
-
   private requireOrgId(): string {
     const organizationId = this.tenant.getOrganizationId();
     if (!organizationId) {
@@ -204,8 +192,8 @@ export class SponsorshipsService {
    * SECURITY DEFINER `create_sponsorship` (validates the plan exists and is
    * active, inserts the sponsorship + its initial history entry atomically).
    *
-   * Requerimiento #17: immediately after creating the row, charges a REAL
-   * MercadoPago collection for the plan's amount — same mechanism
+   * Requerimiento #17: immediately after creating the row, charges a
+   * collection for the plan's amount — same mechanism
    * `SponsorshipPaymentsService.retryPayment` already uses (card tokenized
    * client-side by `CardPaymentBrick`, `createCollection` called OUTSIDE any
    * DB transaction). A synchronous `declined` CANCELS the just-created
@@ -236,7 +224,6 @@ export class SponsorshipsService {
     const plan = await this.prisma.withOrgContext(row.organization_id, (tx) =>
       tx.sponsorshipPlan.findUniqueOrThrow({ where: { id: row.plan_id } }),
     );
-    const sponsorMpUserId = await this.resolveSponsorMpUserId(row.organization_id);
     const now = new Date();
     const period = billingPeriod(now);
     const idempotencyKey = buildAttemptIdempotencyKey(row.id, period, 1);
@@ -250,7 +237,6 @@ export class SponsorshipsService {
       paymentMethodId: input.paymentMethodId,
       paymentMethodType: input.paymentMethodType,
       installments: input.installments,
-      sponsorMpUserId,
     });
 
     if (collection.status === 'declined') {
@@ -354,6 +340,7 @@ export class SponsorshipsService {
         template: {
           event: 'sponsorship.welcome',
           organizationName,
+          organizationId,
           data: { animal: animalName, organizacion: organizationName, monto: amount, enlace: link },
         },
       });

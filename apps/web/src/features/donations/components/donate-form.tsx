@@ -5,7 +5,6 @@ import {
   type LegalAcceptanceItem,
 } from '@adoptafacil/contracts';
 import { Button, Input, cn } from '@adoptafacil/ui';
-import { CardPaymentBrick } from '../../payments';
 import {
   acceptancesFrom,
   type ConsentState,
@@ -33,17 +32,6 @@ export interface DonateFormValues {
   /** Solo sin sesión: términos y autorización de datos aceptados en el
    *  formulario (con sesión ya se aceptaron al registrarse). */
   legalAcceptances?: LegalAcceptanceItem[];
-  /**
-   * Checkout API (Orders) — T-OrdersAPI. Tokenized card data from MercadoPago's
-   * Card Payment Brick (step 2 of this form, below). The card number never
-   * reaches this codebase — only this opaque, single-use token does. Absent
-   * with `gateway="epayco"`: ePayco's own checkout collects the payment AFTER
-   * the donation is created (ADR-PAG-002).
-   */
-  cardToken?: string;
-  paymentMethodId?: string;
-  paymentMethodType?: 'credit_card' | 'debit_card';
-  installments?: number;
 }
 
 export interface DonateFormProps {
@@ -54,43 +42,24 @@ export interface DonateFormProps {
    *  el formulario pide nombre + correo y los exige antes de habilitar
    *  "Continuar". Con sesión, esos campos ni se muestran (se prellenan aparte). */
   hasSession: boolean;
-  /** Email del donante autenticado, solo para prellenar el Brick (T-OrdersAPI)
-   *  — presentacional, nunca se valida aquí (lo hace el backend). */
-  sessionEmailHint?: string;
   /**
-   * Llamado SOLO una vez el Card Payment Brick tokenizó una tarjeta real
-   * (paso 2). Debe devolver una Promise: el Brick espera a que resuelva/
-   * rechace para mostrar su propio estado de éxito/error — ver
-   * `CardPaymentBrick`'s doc comment.
+   * ADR-PAG-002: "Donar" llama a `onDonate` directo (sin datos de tarjeta) y
+   * la página abre el checkout de ePayco, que ofrece los medios que la
+   * organización tenga habilitados. Un rechazo lo comunica la página (toast).
    */
   onDonate: (values: DonateFormValues) => Promise<void>;
-  /**
-   * ADR-PAG-002: con `'epayco'` NO hay paso de tarjeta — "Donar" llama a
-   * `onDonate` directo (sin datos de tarjeta) y la página abre el checkout de
-   * ePayco, que ofrece los medios que la organización tenga habilitados.
-   * Por defecto `'mercadopago'` (Card Payment Brick, sin cambios).
-   */
-  gateway?: 'mercadopago' | 'epayco';
 }
 
-type FormStep = 'details' | 'card';
-
 /**
- * Formulario de donación (§M05, P1 + checkout de invitado + T-OrdersAPI). PRESENTACIONAL
+ * Formulario de donación (§M05, P1 + checkout de invitado + ADR-PAG-002). PRESENTACIONAL
  * (sin api/sesión real, recibe `hasSession` como prop) para poder testearlo directo.
- * DOS PASOS desde T-OrdersAPI (antes era un solo submit que confiaba en el redirect de
- * MercadoPago Checkout Pro, ya retirado):
- *   1. "details": monto + casillas + desglose transparente EN VIVO (misma cuenta que
- *      el backend, vía `computeBreakdown`) + identidad de invitado si no hay sesión.
- *      "Continuar" solo AVANZA de paso — no cobra nada todavía.
- *   2. "card": el monto YA ESTÁ DECIDIDO (se muestra, no editable); se embebe el Card
- *      Payment Brick (MercadoPago) para tokenizar una tarjeta real. Solo al enviar ESE
- *      formulario (botón propio del Brick) se llama a `onDonate` — con el token incluido.
+ * Un solo paso: monto + casillas + desglose transparente EN VIVO (misma cuenta que el
+ * backend, vía `computeBreakdown`) + identidad de invitado si no hay sesión. "Donar"
+ * crea la donación y la página abre la pasarela segura de ePayco (la única desde que
+ * Mercado Pago se retiró, 2026-10-17): nunca se piden datos de tarjeta en AdoptaFácil.
  * Ofrece la casilla "cubro la comisión de la pasarela"
- * (commissionPayer = 'donor'; F-NOMENCLATURA-CHECKBOX: extiende #100 al checkbox — el
- * donante cubre AMBOS componentes, el % que retiene AdoptaFácil (apoyo, no "comisión"
- * propia por indicación fiscal) y la comisión real de la pasarela de pago (tercero,
- * mantiene su nombre — MercadoPago).
+ * (commissionPayer = 'donor'; F-NOMENCLATURA-CHECKBOX: el donante cubre la comisión
+ * real de la pasarela de pago, un tercero).
  * Lo PRIMERO que se pregunta es si la donación es con datos o anónima FRENTE A LA
  * ORGANIZACIÓN (con o sin sesión). Sin sesión y con datos, se exige nombre + correo
  * (checkout de invitado); si elige anónima, esos campos se omiten por completo.
@@ -99,11 +68,8 @@ export function DonateForm({
   organizationName,
   submitting = false,
   hasSession,
-  sessionEmailHint,
   onDonate,
-  gateway = 'mercadopago',
 }: DonateFormProps) {
-  const [step, setStep] = useState<FormStep>('details');
   const [amountText, setAmountText] = useState('');
   const [coverFee, setCoverFee] = useState(false);
   const [anonymous, setAnonymous] = useState(false);
@@ -125,44 +91,6 @@ export function DonateForm({
   const guestPayer = askGuestIdentity
     ? { fullName: guestName.trim(), email: guestEmail.trim() }
     : undefined;
-  const payerEmailForBrick = hasSession ? sessionEmailHint : guestPayer?.email;
-
-  if (step === 'card' && preview) {
-    return (
-      <div className={styles.form}>
-        <p className={styles.hint}>
-          Donando <strong>{formatCop(preview.breakdown.amountCharged)}</strong> a {organizationName}
-          .
-        </p>
-        <CardPaymentBrick
-          amount={preview.breakdown.amountCharged}
-          payerEmail={payerEmailForBrick}
-          onResult={(card) =>
-            onDonate({
-              intendedAmount: amount,
-              commissionPayer,
-              anonymous,
-              guestPayer,
-              legalAcceptances: hasSession ? undefined : acceptancesFrom('guest', consents),
-              cardToken: card.cardToken,
-              paymentMethodId: card.paymentMethodId,
-              paymentMethodType: card.paymentMethodType,
-              installments: card.installments,
-            })
-          }
-        />
-        <Button
-          variant="outline"
-          disabled={submitting}
-          onClick={() => setStep('details')}
-          data-testid="donate-back-to-details"
-        >
-          Volver
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.form}>
       <fieldset className={styles.choice}>
@@ -276,21 +204,15 @@ export function DonateForm({
         />
       )}
 
-      {gateway === 'epayco' && (
-        <p className={styles.hint}>
-          Pagarás en la pasarela segura de ePayco con los medios que tenga habilitados{' '}
-          {organizationName} (tarjeta, PSE, Nequi, Daviplata, efectivo…). El dinero llega directo a
-          su cuenta.
-        </p>
-      )}
+      <p className={styles.hint}>
+        Pagarás en la pasarela segura de ePayco con los medios que tenga habilitados{' '}
+        {organizationName} (tarjeta, PSE, Nequi, Daviplata, efectivo…). El dinero llega directo a su
+        cuenta.
+      </p>
 
       <Button
         disabled={!canContinue}
         onClick={() => {
-          if (gateway !== 'epayco') {
-            setStep('card');
-            return;
-          }
           // Sin paso de tarjeta: la página crea la donación y abre ePayco. Un
           // rechazo ya lo comunica la página (toast); aquí solo se evita el
           // "unhandled rejection".

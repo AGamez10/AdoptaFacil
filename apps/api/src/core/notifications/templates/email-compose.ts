@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { EmailPreview, EmailTemplateContent } from '@adoptafacil/contracts';
+import type { EmailBrand } from '../branding/org-email-branding';
 import type { EmailEventDefinition } from './email-catalog';
 import { renderLayout, renderTextFooter } from './email-layout';
 import {
@@ -16,6 +17,8 @@ export interface ComposeOptions {
   webBaseUrl: string;
   /** Bulk emails only. */
   unsubscribeUrl?: string;
+  /** Organization brand (plan Crece/Pro): its name heads the email and its colors paint it. */
+  brand?: EmailBrand;
 }
 
 /** Pure: event + copy + data → subject, preheader, html and text parts. */
@@ -40,6 +43,8 @@ export function composeEmail(
 
   const html = renderLayout({
     theme: def.theme,
+    accentColor: content.accentColor,
+    icon: content.icon,
     category: def.category,
     preheaderHtml: renderInlineHtml(content.preheader, values, true),
     headingHtml: renderInlineHtml(content.heading, values, true),
@@ -50,6 +55,7 @@ export function composeEmail(
     organizationName: options.organizationName,
     unsubscribeUrl: def.category === 'bulk' ? options.unsubscribeUrl : undefined,
     webBaseUrl: options.webBaseUrl,
+    ...(options.brand && options.organizationName ? { brand: options.brand } : {}),
   });
 
   const textParts = [stripMarks(heading), '', stripMarks(renderPlain(content.body, values)).trim()];
@@ -82,29 +88,51 @@ function unsubscribeKey(secret: string): Buffer {
   return createHmac('sha256', secret).update('adoptafacil:email-unsubscribe:v1').digest();
 }
 
-export function signUnsubscribe(secret: string, emailHash: string): string {
-  return createHmac('sha256', unsubscribeKey(secret)).update(emailHash).digest('base64url');
+/** With `organizationId` the token covers `hash:orgId`, so an organization's
+ *  link cannot be replayed as a platform-wide opt-out (or for another org). */
+export function signUnsubscribe(
+  secret: string,
+  emailHash: string,
+  organizationId?: string,
+): string {
+  const payload = organizationId ? `${emailHash}:${organizationId}` : emailHash;
+  return createHmac('sha256', unsubscribeKey(secret)).update(payload).digest('base64url');
 }
 
-export function verifyUnsubscribe(secret: string, emailHash: string, token: string): boolean {
+export function verifyUnsubscribe(
+  secret: string,
+  emailHash: string,
+  token: string,
+  organizationId?: string,
+): boolean {
   if (!/^[0-9a-f]{64}$/.test(emailHash) || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
-  const expected = Buffer.from(signUnsubscribe(secret, emailHash));
+  const expected = Buffer.from(signUnsubscribe(secret, emailHash, organizationId));
   const given = Buffer.from(token);
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
-export function buildUnsubscribeUrl(webBaseUrl: string, secret: string, email: string): string {
+function orgParam(organizationId?: string): string {
+  return organizationId ? `&o=${organizationId}` : '';
+}
+
+export function buildUnsubscribeUrl(
+  webBaseUrl: string,
+  secret: string,
+  email: string,
+  organizationId?: string,
+): string {
   const h = hashEmail(email);
-  const t = signUnsubscribe(secret, h);
-  return `${webBaseUrl.replace(/\/+$/, '')}/correo/baja?h=${h}&t=${t}`;
+  const t = signUnsubscribe(secret, h, organizationId);
+  return `${webBaseUrl.replace(/\/+$/, '')}/correo/baja?h=${h}&t=${t}${orgParam(organizationId)}`;
 }
 
 export function buildOneClickUnsubscribeUrl(
   apiBaseUrl: string,
   secret: string,
   email: string,
+  organizationId?: string,
 ): string {
   const h = hashEmail(email);
-  const t = signUnsubscribe(secret, h);
-  return `${apiBaseUrl.replace(/\/+$/, '')}/public/email/unsubscribe?h=${h}&t=${t}`;
+  const t = signUnsubscribe(secret, h, organizationId);
+  return `${apiBaseUrl.replace(/\/+$/, '')}/public/email/unsubscribe?h=${h}&t=${t}${orgParam(organizationId)}`;
 }

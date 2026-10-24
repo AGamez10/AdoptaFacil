@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AdoptionFollowUpMilestone } from '@adoptafacil/contracts';
+import type { AdoptionFollowUpEvidence, AdoptionFollowUpMilestone } from '@adoptafacil/contracts';
 import { Badge, Button, Input, Skeleton, useToast } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
 import {
@@ -8,7 +8,12 @@ import {
   scheduleFollowUpMilestone,
 } from '../api/adoptions-api';
 import { formatBogota } from '../model/adoptions-view';
-import { FOLLOWUP_STATUS_LABELS, followUpStatusVariant } from '../model/adoptions-followup-view';
+import {
+  FOLLOWUP_STATUS_LABELS,
+  followUpStatusVariant,
+  formatFollowUpAnswer,
+  mergedFollowUpAnswers,
+} from '../model/adoptions-followup-view';
 
 export interface AdoptionFollowUpPanelProps {
   contractId: string;
@@ -30,6 +35,23 @@ export function AdoptionFollowUpPanel({ contractId, canManage }: AdoptionFollowU
   const [title, setTitle] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [busy, setBusy] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  /** Las fotos y videos son privados: se descargan con la sesión y se abren aparte. */
+  const openMedia = useCallback(
+    async (evidence: AdoptionFollowUpEvidence) => {
+      if (!evidence.storageRef) return;
+      try {
+        const blob = await client.requestBlob(
+          `/storage/private?key=${encodeURIComponent(evidence.storageRef)}`,
+        );
+        window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+      } catch {
+        toast({ title: 'No se pudo abrir el archivo', variant: 'destructive' });
+      }
+    },
+    [client, toast],
+  );
 
   const load = useCallback(() => {
     listFollowUpsForContract(client, contractId)
@@ -90,25 +112,67 @@ export function AdoptionFollowUpPanel({ contractId, canManage }: AdoptionFollowU
         <p className="text-muted-foreground">Sin hitos programados.</p>
       ) : (
         <ul className="space-y-1">
-          {milestones.map((m) => (
-            <li key={m.id} className="flex items-center justify-between gap-2">
-              <span className="min-w-0 flex-1 truncate">{m.title}</span>
-              <span className="text-muted-foreground">{formatBogota(m.dueAt)}</span>
-              <Badge variant={followUpStatusVariant(m.status)}>
-                {FOLLOWUP_STATUS_LABELS[m.status]}
-              </Badge>
-              {canManage && m.status !== 'completed' && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void close(m.id)}
-                >
-                  Completar
-                </Button>
-              )}
-            </li>
-          ))}
+          {milestones.map((m) => {
+            const evidence = m.evidence ?? [];
+            const media = evidence.filter((e) => e.storageRef);
+            const answers = Object.entries(mergedFollowUpAnswers(m));
+            const prompts = new Map(m.questionnaire.map((q) => [q.id, q.prompt]));
+            return (
+              <li key={m.id} className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex-1 truncate">{m.title}</span>
+                  <span className="text-muted-foreground">{formatBogota(m.dueAt)}</span>
+                  <Badge variant={followUpStatusVariant(m.status)}>
+                    {FOLLOWUP_STATUS_LABELS[m.status]}
+                  </Badge>
+                  {evidence.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-expanded={openId === m.id}
+                      onClick={() => setOpenId(openId === m.id ? null : m.id)}
+                    >
+                      {openId === m.id ? 'Ocultar respuesta' : 'Ver respuesta'}
+                    </Button>
+                  )}
+                  {canManage && m.status !== 'completed' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void close(m.id)}
+                    >
+                      Completar
+                    </Button>
+                  )}
+                </div>
+                {openId === m.id && (
+                  <div
+                    className="space-y-1 rounded bg-muted/50 p-2"
+                    data-testid={`evidence-${m.id}`}
+                  >
+                    {answers.map(([key, value]) => (
+                      <p key={key}>
+                        <span className="font-medium">{prompts.get(key) ?? 'Respuesta'}:</span>{' '}
+                        {formatFollowUpAnswer(value)}
+                      </p>
+                    ))}
+                    {media.map((e) => (
+                      <Button
+                        key={e.id}
+                        size="sm"
+                        variant="outline"
+                        className="mr-2"
+                        onClick={() => void openMedia(e)}
+                      >
+                        {e.kind === 'video' ? 'Ver video' : 'Ver foto'}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

@@ -352,6 +352,44 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     expect(screen.getByRole('radio', { name: /Carnet/ })).toBeChecked();
   });
 
+  it('planes: sin plan que incluya Historias la bloquea, explica la vuelta a Clásica y no la borra al guardar', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const locked = {
+      tokens: {},
+      template: 'clasica',
+      lockedTemplate: 'historias',
+      premiumDesignsAvailable: false,
+    };
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/org/profile')) return { id: 'org-1', name: 'Org' };
+      if (url.includes('/org/status')) return { organizationId: 'org-1', status: 'approved' };
+      return locked;
+    });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByRole('radio', { name: /Clásica/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Historias/ })).toBeDisabled();
+    expect(screen.getByTestId('template-option-historias')).toHaveAttribute('data-locked', 'true');
+    expect(screen.getByTestId('template-upsell')).toHaveTextContent(
+      /volvió a la plantilla Clásica/,
+    );
+    expect(screen.getByRole('link', { name: 'Ver planes' })).toHaveAttribute(
+      'href',
+      '/organizacion/plan',
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => {
+      const put = calls.find((c) => c.init?.method === 'PUT');
+      expect(put).toBeDefined();
+      const body = JSON.parse(String(put?.init?.body));
+      // Guardar colores no reemplaza la plantilla elegida por la gratuita que se muestra.
+      expect(body.template).toBeUndefined();
+      expect(body.templateOptions).toBeUndefined();
+    });
+  });
+
   it('muestra los ajustes de la plantilla, los refleja en la vista previa y los envía al guardar', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     stubFetch((url, init) => {
@@ -462,5 +500,60 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     fireEvent.change(input, { target: { files: [file] } });
     expect(await screen.findByText('El video debe ser MP4 o WebM.')).toBeInTheDocument();
     expect(calls.some((url) => url.includes('/org/profile/uploads'))).toBe(false);
+  });
+});
+
+describe('PortalThemePage — sello "Hecho con AdoptaFácil" (planes)', () => {
+  function stubSeal(theme: Record<string, unknown>) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/org/profile')) return { id: 'org-1', name: 'Org' };
+      if (url.includes('/org/status')) return { organizationId: 'org-1', status: 'approved' };
+      if (init?.method === 'PUT') return { ...theme, ...JSON.parse(String(init.body)) };
+      return theme;
+    });
+    return calls;
+  }
+  const lastPut = (calls: Array<{ url: string; init?: RequestInit }>) =>
+    JSON.parse(String(calls.filter((c) => c.init?.method === 'PUT').at(-1)?.init?.body));
+
+  it('con el plan, el interruptor quita el sello y lo envía al guardar', async () => {
+    const calls = stubSeal({ tokens: {}, hideSeal: false, removeSealAvailable: true });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    const toggle = await screen.findByRole('switch', { name: /Quitar el sello/ });
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByTestId('seal-toggle')).toHaveTextContent('siempre se muestran');
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => expect(lastPut(calls).hideSeal).toBe(true));
+  });
+
+  it('sin tocar el interruptor, guardar no envía hideSeal', async () => {
+    const calls = stubSeal({ tokens: {}, hideSeal: true, removeSealAvailable: true });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByRole('switch', { name: /Quitar el sello/ })).toBeChecked();
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'PUT')).toBe(true));
+    expect(lastPut(calls)).not.toHaveProperty('hideSeal');
+  });
+
+  it('sin el plan, el interruptor está apagado y bloqueado, y explica que la elección quedó guardada', async () => {
+    stubSeal({ tokens: {}, hideSeal: true, removeSealAvailable: false });
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    const toggle = await screen.findByRole('switch', { name: /Quitar el sello/ });
+    expect(toggle).toBeDisabled();
+    expect(toggle).not.toBeChecked();
+    const card = within(screen.getByTestId('seal-toggle'));
+    expect(card.getByText(/Tu elección quedó guardada/)).toBeInTheDocument();
+    expect(card.getByRole('link', { name: 'Ver planes' })).toHaveAttribute(
+      'href',
+      '/organizacion/plan',
+    );
   });
 });

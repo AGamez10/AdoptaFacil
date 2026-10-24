@@ -17,5 +17,6 @@ export { OrgReportsPage } from './pages/org-reports-page';
 export { OrgSignersPage } from './pages/org-signers-page';
 export { OrgSigningInboxPage } from './pages/org-signing-inbox-page';
 export { OrgPlanPage } from './pages/org-plan-page';
+export { OrgAnnouncementsPage } from './pages/org-announcements-page';
 export { OrgProfileForm, type OrgProfileFormProps } from './components/org-profile-form';
 export * from './validation';

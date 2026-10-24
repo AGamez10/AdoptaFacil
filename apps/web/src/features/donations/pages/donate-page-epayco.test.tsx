@@ -4,18 +4,13 @@ import { renderShell } from '../../../test-utils';
 import { loadEpaycoCheckout } from '../../payments/lib/load-epayco-checkout';
 
 /**
- * ADR-PAG-002 — `/donaciones` con `VITE_PAYMENT_PROVIDER=epayco`: sin Card
- * Payment Brick; se crea la donación y se abre el checkout de ePayco con la
- * sesión que devuelve la API. El cargador del script se MOCKEA: ningún test
+ * ADR-PAG-002 — `/donaciones` con ePayco, la única pasarela (Mercado Pago se
+ * retiró el 2026-10-17): se crea la donación y se abre el checkout de ePayco
+ * con la sesión que devuelve la API. El cargador del script se MOCKEA: ningún test
  * descarga el script real de ePayco.
  */
 vi.mock('../../payments/lib/load-epayco-checkout', () => ({
   loadEpaycoCheckout: vi.fn(),
-}));
-// El Brick de Mercado Pago no debe montarse en este modo; si lo hiciera, el
-// mock lo delata sin cargar el SDK real.
-vi.mock('../../payments', () => ({
-  CardPaymentBrick: () => <div data-testid="mp-card-brick" />,
 }));
 
 const ROUTE = '/donaciones?organizationId=org-1&organizationName=Refugio%20Patitas';
@@ -103,7 +98,7 @@ describe('DonatePage — checkout de ePayco (VITE_PAYMENT_PROVIDER=epayco)', () 
       }),
     );
     expect(open).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('mp-card-brick')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
     expect(await screen.findByText('Completa tu pago en ePayco')).toBeInTheDocument();
 
     const post = calls.find((c) => c.url.endsWith('/donations') && c.init?.method === 'POST');
@@ -145,14 +140,37 @@ describe('DonatePage — checkout de ePayco (VITE_PAYMENT_PROVIDER=epayco)', () 
     await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
   });
 
-  it('keeps the Mercado Pago Brick step when VITE_PAYMENT_PROVIDER is not epayco', async () => {
-    vi.stubEnv('VITE_PAYMENT_PROVIDER', '');
-    stubFetch();
+  it('uses ePayco when VITE_PAYMENT_PROVIDER is empty (the default) or a stale "mercadopago"', async () => {
+    for (const value of ['', 'mercadopago']) {
+      vi.stubEnv('VITE_PAYMENT_PROVIDER', value);
+      const configure = vi.fn(() => ({ open: vi.fn() }));
+      vi.mocked(loadEpaycoCheckout).mockResolvedValue({ checkout: { configure } });
+      stubFetch();
+      const { unmount } = renderShell({ route: ROUTE, ...personSession() });
+
+      await fillAndDonate();
+
+      await waitFor(() =>
+        expect(configure).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionId: 'sess-epayco-123' }),
+        ),
+      );
+      expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
+      unmount();
+      vi.mocked(loadEpaycoCheckout).mockReset();
+    }
+  });
+
+  it('kill switch (VITE_PAYMENT_PROVIDER=off): a calm notice, no form, no checkout, no API call', async () => {
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', 'off');
+    const calls = stubFetch();
     renderShell({ route: ROUTE, ...personSession() });
 
-    await fillAndDonate();
-
-    expect(await screen.findByTestId('mp-card-brick')).toBeInTheDocument();
+    expect(await screen.findByTestId('donation-online-off')).toHaveTextContent(
+      'Pronto podrás donar en línea',
+    );
+    expect(screen.queryByPlaceholderText('50000')).not.toBeInTheDocument();
+    expect(calls.some((c) => c.url.includes('/availability'))).toBe(false);
     expect(loadEpaycoCheckout).not.toHaveBeenCalled();
   });
 });

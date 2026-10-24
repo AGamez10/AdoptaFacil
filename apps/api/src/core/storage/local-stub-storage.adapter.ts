@@ -5,7 +5,7 @@ import type {
   StoredObject,
   StoredObjectData,
 } from './storage.port';
-import { buildStorageKey, contentTypeFromKey } from './storage-keys';
+import { buildStorageKey, contentTypeFromKey, parseStorageKey } from './storage-keys';
 
 /**
  * Simulable storage adapter (local-dev / tests). No real filesystem: bytes live
@@ -38,5 +38,13 @@ export class LocalStubStorageAdapter implements StoragePort {
 
   async readObject(key: string): Promise<StoredObjectData | null> {
     return this.objects.get(key) ?? null;
+  }
+
+  async measureOrganizationUsage(organizationId: string): Promise<number> {
+    let bytes = 0;
+    for (const [key, object] of this.objects) {
+      if (parseStorageKey(key)?.organizationId === organizationId) bytes += object.data.length;
+    }
+    return bytes;
   }
 }

@@ -65,6 +65,7 @@ const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
 const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
 const OrgPlanPage = lazyPage(loadOrg, 'OrgPlanPage');
+const OrgAnnouncementsPage = lazyPage(loadOrg, 'OrgAnnouncementsPage');
 const OrgFormalizationPage = lazyPage(loadOrg, 'OrgFormalizationPage');
 const OrgLegalRepresentativePage = lazyPage(loadOrg, 'OrgLegalRepresentativePage');
 const OrgProfilePage = lazyPage(loadOrg, 'OrgProfilePage');
@@ -116,6 +117,8 @@ const AdoptionRequestPage = lazyPage(loadAdoptions, 'AdoptionRequestPage');
 const AdoptionsKanbanPage = lazyPage(loadAdoptions, 'AdoptionsKanbanPage');
 const MyAdoptionRequestsPage = lazyPage(loadAdoptions, 'MyAdoptionRequestsPage');
 const MyFollowUpsPage = lazyPage(loadAdoptions, 'MyFollowUpsPage');
+const MyAnimalsPage = lazyPage(loadAdoptions, 'MyAnimalsPage');
+const DeliveryConfirmPage = lazyPage(loadAdoptions, 'DeliveryConfirmPage');
 const loadConsents = () => import('../../features/consents');
 const ThirdPartyConsentsPage = lazyPage(loadConsents, 'ThirdPartyConsentsPage');
 const loadDonations = () => import('../../features/donations');
@@ -288,8 +291,7 @@ export function AppRoutes() {
           review" form here instead of on a separate route. */}
           <Route path="/organizaciones/:slug/resenas" element={<OrganizationReputationPage />} />
           {/* M05 · donación (§M05, requisito FINAL del cliente: donar NUNCA exige
-          cuenta ni login — checkout de invitado, MercadoPago Checkout Pro ya
-          lo soporta). Movida FUERA de <RequireAuth>/<AppLayout> (antes vivía
+          cuenta ni login — checkout de invitado; ePayco lo soporta). Movida FUERA de <RequireAuth>/<AppLayout> (antes vivía
           bajo el gate de sesión padre — ver el SEAM que dejó esta nota en la
           sección protegida de abajo). `POST /donations` usa
           `OptionalJwtAuthGuard`: si llega un bearer token válido la donación
@@ -317,8 +319,9 @@ export function AppRoutes() {
           site (no external redirect, so no return URL to resolve). Both
           `DonationThanksPage`/`SponsorshipThanksPage` and the public status
           fetch helpers they used are DELETED (unreachable otherwise); the
-          equivalent "thank you" state is now shown IN-PAGE, right after the
-          Card Payment Brick submits (`DonatePage`, `MySponsorshipsList`). */}
+          equivalent "thank you" state is shown IN-PAGE (`DonatePage`); ePayco's
+          return lands on `/donaciones/resultado` above. Mercado Pago (and its
+          Card Payment Brick) was retired on 2026-10-17. */}
 
           {/* Protected — guard first, then the shell layout */}
           <Route element={<RequireAuth />}>
@@ -373,6 +376,10 @@ export function AppRoutes() {
                 {/* T-028c: "Mis seguimientos" del adoptante — GET /adoptions/followups/mine
               autoriza por identidad (sin @Roles), igual que "Mis solicitudes". */}
                 <Route path="mis-seguimientos" element={<MyFollowUpsPage />} />
+                {/* Ajuste 6: el adoptante confirma la entrega (QR/código) y ve la
+              ficha de sus animales; autorizan por identidad en la API, sin @Roles. */}
+                <Route path="mis-adopciones/entrega/:id" element={<DeliveryConfirmPage />} />
+                <Route path="mis-animales" element={<MyAnimalsPage />} />
                 {/* M03 · animales + expediente clínico + recordatorios (T-031, wires
               T-104/T-105/T-106). Cada ruta exige los MISMOS @Roles que su endpoint
               (deny-by-default). El panel clínico es EMBEBIBLE por animalId → vive
@@ -493,6 +500,15 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
                       <OrgDocumentsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Anuncios urgentes (ajuste 13) · mismo gate que /org/announcements. */}
+                <Route
+                  path="organizacion/anuncios"
+                  element={
+                    <RequireRoles roles={ORG_PLAN_ROLES}>
+                      <OrgAnnouncementsPage />
                     </RequireRoles>
                   }
                 />

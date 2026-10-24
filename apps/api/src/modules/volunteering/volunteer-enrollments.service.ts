@@ -232,6 +232,7 @@ export class VolunteerEnrollmentsService {
         template: {
           event: 'volunteering.enrollment_received',
           organizationName: emailInput.organizationName || undefined,
+          organizationId: row.organization_id,
           data: {
             nombre: emailInput.volunteerName,
             oportunidad: emailInput.opportunityTitle,
@@ -361,6 +362,7 @@ export class VolunteerEnrollmentsService {
             ? 'volunteering.enrollment_accepted'
             : 'volunteering.enrollment_rejected',
           organizationName: emailInput.organizationName || undefined,
+          organizationId,
           data: {
             nombre: emailInput.volunteerName,
             oportunidad: emailInput.opportunityTitle,

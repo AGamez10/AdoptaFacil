@@ -1,15 +1,24 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.validation';
 import type {
   CreateUploadInput,
+  SaveObjectOptions,
   StoragePort,
   StoredObject,
   StoredObjectData,
 } from './storage.port';
-import { assertSafeRelativeKey, buildStorageKey, contentTypeFromKey } from './storage-keys';
+import {
+  assertSafeRelativeKey,
+  buildStorageKey,
+  contentTypeFromKey,
+  parseStorageKey,
+} from './storage-keys';
+
+/** How long a measured org total is reused before walking the folders again. */
+const USAGE_CACHE_MS = 5 * 60 * 1000;
 
 /**
  * Real filesystem StoragePort for the VPS (T-108). Persists bytes under
@@ -27,6 +36,7 @@ export class DiskStorageAdapter implements StoragePort {
   private readonly root: string;
   private readonly maxBytes: number;
   private readonly publicBaseUrl: string;
+  private readonly usageCache = new Map<string, { bytes: number; at: number }>();
 
   constructor(config: ConfigService<Env, true>) {
     this.root = resolve(config.get('STORAGE_DISK_ROOT', { infer: true }));
@@ -50,14 +60,54 @@ export class DiskStorageAdapter implements StoragePort {
     return `${this.publicBaseUrl}/storage/${route}?key=${encodeURIComponent(key)}`;
   }
 
-  async saveObject(key: string, data: Buffer, contentType?: string): Promise<void> {
-    if (data.length > this.maxBytes) {
-      throw new Error(`File exceeds the maximum size of ${this.maxBytes} bytes`);
+  async saveObject(
+    key: string,
+    data: Buffer,
+    contentType?: string,
+    options?: SaveObjectOptions,
+  ): Promise<void> {
+    const maxBytes = options?.maxBytes ?? this.maxBytes;
+    if (data.length > maxBytes) {
+      throw new Error(`File exceeds the maximum size of ${maxBytes} bytes`);
     }
     void contentType; // content type is inferred from the key extension on read
     const full = this.resolvePath(key);
     await mkdir(dirname(full), { recursive: true });
     await writeFile(full, data);
+    // Keep a cached total current (an overwrite may count twice until it expires).
+    const org = parseStorageKey(key)?.organizationId;
+    const cached = org ? this.usageCache.get(org) : undefined;
+    if (cached) cached.bytes += data.length;
+  }
+
+  async measureOrganizationUsage(organizationId: string): Promise<number> {
+    const cached = this.usageCache.get(organizationId);
+    if (cached && Date.now() - cached.at < USAGE_CACHE_MS) {
+      return cached.bytes;
+    }
+    let bytes = 0;
+    for (const visibility of ['public', 'private']) {
+      bytes += await this.folderBytes(this.resolvePath(`${visibility}/${organizationId}`));
+    }
+    this.usageCache.set(organizationId, { bytes, at: Date.now() });
+    return bytes;
+  }
+
+  private async folderBytes(dir: string): Promise<number> {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0;
+      throw error;
+    }
+    let total = 0;
+    for (const entry of entries) {
+      const full = resolve(dir, entry.name);
+      if (entry.isDirectory()) total += await this.folderBytes(full);
+      else if (entry.isFile()) total += (await stat(full)).size;
+    }
+    return total;
   }
 
   async readObject(key: string): Promise<StoredObjectData | null> {

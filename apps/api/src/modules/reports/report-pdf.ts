@@ -46,16 +46,16 @@ export interface RenderReportInput {
   draft?: 'pending_signatures' | 'rejected';
 }
 
-const PAGE_W = 841.89;
-const PAGE_H = 595.28;
-const MARGIN = 36;
-const FOOTER_H = 34;
+export const PAGE_W = 841.89;
+export const PAGE_H = 595.28;
+export const MARGIN = 36;
+export const FOOTER_H = 34;
 
-const NAVY = rgb(0.08, 0.16, 0.3);
-const TEAL = rgb(0.05, 0.45, 0.42);
-const INK = rgb(0.13, 0.13, 0.15);
-const MUTED = rgb(0.42, 0.42, 0.45);
-const LINE = rgb(0.85, 0.86, 0.88);
+export const NAVY = rgb(0.08, 0.16, 0.3);
+export const TEAL = rgb(0.05, 0.45, 0.42);
+export const INK = rgb(0.13, 0.13, 0.15);
+export const MUTED = rgb(0.42, 0.42, 0.45);
+export const LINE = rgb(0.85, 0.86, 0.88);
 const ZEBRA = rgb(0.965, 0.97, 0.975);
 const WHITE = rgb(1, 1, 1);
 
@@ -139,13 +139,13 @@ function formatMonth(ym: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-interface Fonts {
+export interface Fonts {
   regular: PDFFont;
   bold: PDFFont;
   italic: PDFFont;
 }
 
-interface Column {
+export interface Column {
   header: string;
   width: number;
   align?: 'left' | 'right';
@@ -179,7 +179,7 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
   return lines;
 }
 
-class ReportCanvas {
+export class ReportCanvas {
   page!: PDFPage;
   y = 0;
   readonly pages: PDFPage[] = [];
@@ -357,7 +357,7 @@ class ReportCanvas {
   }
 }
 
-function drawQr(page: PDFPage, text: string, x: number, y: number, size: number): void {
+export function drawQr(page: PDFPage, text: string, x: number, y: number, size: number): void {
   const qr = QRCode.create(text, { errorCorrectionLevel: 'M' });
   const n = qr.modules.size;
   const cell = size / n;

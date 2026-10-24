@@ -321,6 +321,70 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .expect(409);
   });
 
+  it('accepts a phone video of up to 30 seconds as evidence and refuses a longer one', async () => {
+    const scheduled = await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Video del segundo mes', dueAt: '2030-08-01T00:00:00.000Z' })
+      .expect(201);
+    const milestoneId: string = scheduled.body.id;
+
+    // MP4 mínimo: ftyp + moov/mvhd (versión 0) con la duración en segundos.
+    const box = (type: string, payload: Buffer) => {
+      const header = Buffer.alloc(8);
+      header.writeUInt32BE(payload.length + 8, 0);
+      header.write(type, 4, 'latin1');
+      return Buffer.concat([header, payload]);
+    };
+    const mp4 = (seconds: number) => {
+      const mvhd = Buffer.alloc(100);
+      mvhd.writeUInt32BE(1000, 12);
+      mvhd.writeUInt32BE(seconds * 1000, 16);
+      return Buffer.concat([
+        box('ftyp', Buffer.from('isom0000isommp41', 'latin1')),
+        box('moov', box('mvhd', mvhd)),
+        box('mdat', Buffer.alloc(256)),
+      ]);
+    };
+
+    const tooLong = await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', mp4(45), { filename: 'paseo.mp4', contentType: 'video/mp4' })
+      .expect(400);
+    expect(tooLong.body.message).toMatch(/30 s/);
+
+    // Un archivo que dice ser video pero no lo es no pasa.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', Buffer.from('no soy un video'), {
+        filename: 'falso.mov',
+        contentType: 'video/quicktime',
+      })
+      .expect(400);
+
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .field('complete', 'true')
+      .attach('file', mp4(28), { filename: 'paseo.mov', contentType: 'video/quicktime' })
+      .expect(201);
+
+    const listed = await request(server)
+      .get(`/adoptions/followups/by-contract/${contractId}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    const milestone = listed.body.find((m: { id: string }) => m.id === milestoneId);
+    const video = milestone.evidence.find((e: { kind: string }) => e.kind === 'video');
+    expect(video.storageRef.startsWith(`private/${refugeOrgId}/`)).toBe(true);
+    const downloaded = await request(server)
+      .get(`/storage/private?key=${encodeURIComponent(video.storageRef)}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    expect(downloaded.headers['content-type']).toMatch(/video\/quicktime/);
+  });
+
   it('marks a past-due milestone overdue and alerts via the worker scan (audited, UTC)', async () => {
     const service = app.get(FollowUpService);
     const overdue = await service.runOverdueScan();

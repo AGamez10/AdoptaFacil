@@ -29,6 +29,14 @@ export interface NotificationTemplateRequest {
   data: Record<string, string | number | null | undefined>;
   /** Shown in the email header and as `{{organizacion}}`. */
   organizationName?: string;
+  /**
+   * Additive: the organization the email is about. When its plan includes
+   * `brandedEmails` (and the month's cap isn't reached) the email goes out
+   * with that organization's brand; otherwise with AdoptaFácil's. On a bulk
+   * email, its unsubscribe link opts the recipient out of THAT
+   * organization's emails only.
+   */
+  organizationId?: string;
 }
 
 export interface NotificationMessage {
@@ -50,6 +58,10 @@ export interface NotificationMessage {
    * so a repeated webhook or a retried request never emails twice.
    */
   idempotencyKey?: string;
+  /** Additive: display name of the sender (the address stays SMTP_FROM). Set by the template layer. */
+  fromName?: string;
+  /** Additive: Reply-To address (the organization's contact email). Set by the template layer. */
+  replyTo?: string;
 }
 
 export interface NotificationPort {

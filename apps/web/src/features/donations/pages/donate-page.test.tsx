@@ -1,27 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CardPaymentBrickProps } from '../../payments';
 import { renderShell } from '../../../test-utils';
-
-/**
- * T-OrdersAPI: the real `CardPaymentBrick` loads MercadoPago's external SDK
- * script (jsdom can't execute it) — mocked here with a fake "submit" button
- * that calls `onResult` with fixed, deterministic card data, same technique
- * as `donate-form.test.tsx`.
- */
-vi.mock('../../payments', () => ({
-  CardPaymentBrick: ({ onResult }: CardPaymentBrickProps) => (
-    <button
-      type="button"
-      data-testid="fake-card-brick-submit"
-      onClick={() =>
-        void onResult({ cardToken: 'tok-test-123', paymentMethodId: 'visa', installments: 1 })
-      }
-    >
-      Simular pago con tarjeta
-    </button>
-  ),
-}));
 
 /**
  * T-064 — completes the "no target" branch of `/donaciones` (reached from the
@@ -51,7 +30,7 @@ function stubFetch(handler: (url: string) => unknown) {
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      // Org availability (MercadoPago conectado) — por defecto SÍ, salvo que el test lo sobreescriba.
+      // Org availability (cuenta ePayco conectada) — por defecto SÍ, salvo que el test lo sobreescriba.
       const body = url.includes('/availability') ? { canReceiveDonations: true } : handler(url);
       return Promise.resolve({
         ok: true,
@@ -457,17 +436,16 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     });
     fireEvent.click(screen.getByTestId('donation-legal-terms'));
     fireEvent.click(screen.getByTestId('donation-legal-data'));
-    // Step 1 → step 2 (Card Payment Brick, mocked above) → the Brick's own
-    // submit is what actually triggers the charge (T-OrdersAPI).
+    // Single step (ePayco): "Donar" creates the donation; with no checkout
+    // session in the response (fake driver) the page shows the result.
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();
     const cta = screen.getByTestId('create-account-cta');
     expect(cta).toHaveAttribute('href', '/register');
   });
 
-  it('T-OrdersAPI: shows an honest "pago rechazado" state (declined), with a retry that reopens the form', async () => {
+  it('shows an honest "pago rechazado" state (declined), with a retry that reopens the form', async () => {
     stubFetch((url) => {
       if (url.includes('/donations')) {
         return {
@@ -513,10 +491,14 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     fireEvent.click(screen.getByTestId('donation-legal-terms'));
     fireEvent.click(screen.getByTestId('donation-legal-data'));
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
 
     expect(await screen.findByTestId('donation-declined')).toBeInTheDocument();
     expect(screen.queryByText(/¡Gracias por tu donación!/)).not.toBeInTheDocument();
+    // Neutral copy: Mercado Pago was retired (2026-10-17).
+    expect(screen.getByTestId('donation-declined')).toHaveTextContent(
+      'Tu banco o la pasarela de pagos rechazaron el pago',
+    );
+    expect(screen.getByTestId('donation-declined')).not.toHaveTextContent(/Mercado ?Pago/i);
 
     fireEvent.click(screen.getByTestId('donation-retry-card'));
     expect(await screen.findByTestId('donation-guest-name')).toBeInTheDocument();
@@ -561,7 +543,6 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     await screen.findByRole('heading', { name: 'Donar' });
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();
     expect(screen.queryByTestId('create-account-cta')).not.toBeInTheDocument();

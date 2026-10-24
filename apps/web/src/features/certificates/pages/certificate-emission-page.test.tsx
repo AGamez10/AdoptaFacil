@@ -1,26 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CardPaymentBrickProps } from '../../payments';
 import { renderShell } from '../../../test-utils';
-
-/**
- * T-OrdersAPI: `DonateForm` now has a 2nd step (the Card Payment Brick) before
- * `POST /donations` actually fires — mocked here with a fake "submit" button,
- * same technique as `donate-form.test.tsx`/`donate-page.test.tsx`.
- */
-vi.mock('../../payments', () => ({
-  CardPaymentBrick: ({ onResult }: CardPaymentBrickProps) => (
-    <button
-      type="button"
-      data-testid="fake-card-brick-submit"
-      onClick={() =>
-        void onResult({ cardToken: 'tok-test-123', paymentMethodId: 'visa', installments: 1 })
-      }
-    >
-      Simular pago con tarjeta
-    </button>
-  ),
-}));
 
 /**
  * §M05/RF14 (F-3) — CertificateEmissionPage against the REAL backend
@@ -88,7 +68,7 @@ describe('CertificateEmissionPage (RF14, F-3 — real backend)', () => {
             ),
           );
         }
-        // La página de donar consulta si la organización tiene MercadoPago conectado.
+        // La página de donar consulta si la organización tiene ePayco conectado.
         if (url.includes('/availability')) {
           return Promise.resolve(jsonResponse({ canReceiveDonations: true }, 200));
         }
@@ -103,7 +83,6 @@ describe('CertificateEmissionPage (RF14, F-3 — real backend)', () => {
 
     fireEvent.change(await screen.findByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
     fireEvent.click(await screen.findByTestId('view-certificate-cta'));
 
     const doc = await screen.findByTestId('certificate-document');
@@ -142,7 +121,7 @@ describe('CertificateEmissionPage (RF14, F-3 — real backend)', () => {
         if (url.includes('/donations/don-2/certificate')) {
           return Promise.resolve(jsonResponse({ message: 'not found' }, 404));
         }
-        // La página de donar consulta si la organización tiene MercadoPago conectado.
+        // La página de donar consulta si la organización tiene ePayco conectado.
         if (url.includes('/availability')) {
           return Promise.resolve(jsonResponse({ canReceiveDonations: true }, 200));
         }
@@ -156,7 +135,6 @@ describe('CertificateEmissionPage (RF14, F-3 — real backend)', () => {
     });
     fireEvent.change(await screen.findByPlaceholderText('50000'), { target: { value: '20000' } });
     fireEvent.click(screen.getByRole('button', { name: /Donar a Otro Refugio/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
     fireEvent.click(await screen.findByTestId('view-certificate-cta'));
 
     expect(await screen.findByText('Certificado no disponible aún')).toBeInTheDocument();

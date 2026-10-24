@@ -52,6 +52,7 @@ model Organization {
   serviceListings          ServiceListing[]
   serviceListingReviews    ServiceListingReview[]
   petProfiles              PetProfile[]
+  emailUsage               OrganizationEmailUsage[]
 
   @@index([status])
   @@map("organizations")

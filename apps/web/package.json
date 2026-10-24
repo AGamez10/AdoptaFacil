@@ -15,7 +15,6 @@
   "dependencies": {
     "@adoptafacil/contracts": "workspace:*",
     "@adoptafacil/ui": "workspace:*",
-    "@mercadopago/sdk-react": "^0.0.22",
     "jsbarcode": "^3.12.3",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

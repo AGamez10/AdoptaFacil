@@ -2,7 +2,13 @@ import { BadRequestException, ForbiddenException, Inject, Injectable } from '@ne
 import { Prisma } from '@prisma/client';
 import {
   DEFAULT_PORTAL_TEMPLATE,
+  PLAN_CATALOG,
+  PLAN_REQUIRED_CODE,
   PORTAL_TEMPLATE_IDS,
+  isPremiumTemplate,
+  minimumPlanFor,
+  type PlanCapability,
+  type PlanRequiredError,
   PORTAL_TEMPLATE_OPTIONS,
   resolveTemplateOptions,
   type PortalLogoPosition,
@@ -14,6 +20,7 @@ import {
   type UpdatePortalThemeInput,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { PlansService } from '../../core/plans/plans.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
@@ -87,22 +94,47 @@ function assertOptions(template: PortalTemplateId, options: PortalTemplateOption
 }
 
 /** Respuesta pública/propia: tokens limpios + plantilla + ajustes resueltos
- *  + la URL pública del video de portada (nunca la llave cruda). */
+ *  + la URL pública del video de portada (nunca la llave cruda).
+ *
+ *  Con `premiumAllowed` en false, una plantilla de pago guardada se reemplaza
+ *  por la gratuita por defecto (y sus ajustes y el video, que son de ella, no
+ *  se aplican); la elección guardada viaja en `lockedTemplate` para la lectura
+ *  propia y vuelve sola cuando la organización paga un plan. */
 function present(
   stored: ReturnType<typeof splitStored>,
   storage: StoragePort,
   fallback?: PortalTemplateId,
+  premiumAllowed = true,
 ) {
-  const template = stored.template ?? fallback;
+  const chosen = stored.template ?? fallback;
+  const locked = chosen !== undefined && !premiumAllowed && isPremiumTemplate(chosen);
+  const template = locked ? DEFAULT_PORTAL_TEMPLATE : chosen;
   return {
     tokens: stored.tokens,
     ...(template
-      ? { template, templateOptions: resolveTemplateOptions(template, stored.options) }
+      ? {
+          template,
+          templateOptions: resolveTemplateOptions(template, locked ? undefined : stored.options),
+        }
       : {}),
-    ...(stored.coverVideoKey
+    ...(stored.coverVideoKey && !locked
       ? { coverVideoUrl: storage.resolvePublicUrl(stored.coverVideoKey) }
       : {}),
+    ...(locked ? { lockedTemplate: chosen } : {}),
   };
+}
+
+/** 403 `PLAN_REQUIRED` al pedir algo del portal que el plan no incluye: una
+ *  plantilla de pago o quitar el sello "Hecho con AdoptaFácil". */
+function planRequired(capability: PlanCapability, what: string): ForbiddenException {
+  const requiredPlan = minimumPlanFor(capability);
+  const body: PlanRequiredError = {
+    code: PLAN_REQUIRED_CODE,
+    capability,
+    requiredPlan,
+    message: `${what} está disponible desde el plan ${PLAN_CATALOG[requiredPlan].name}.`,
+  };
+  return new ForbiddenException(body);
 }
 
 /**
@@ -119,6 +151,7 @@ export class PortalThemeService {
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    private readonly plans: PlansService,
   ) {}
 
   private requireOrgId(): string {
@@ -132,11 +165,16 @@ export class PortalThemeService {
   /** The caller's own theme (empty tokens when none saved yet). */
   async getOwnTheme(): Promise<PortalThemeConfig> {
     const organizationId = this.requireOrgId();
+    const premiumAllowed = await this.plans.hasCapability(organizationId, 'portalPremiumDesigns');
+    const removeSealAllowed = await this.plans.hasCapability(organizationId, 'portalRemoveSeal');
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const row = await tx.portalTheme.findUnique({ where: { organizationId } });
       const stored = splitStored(row?.tokens);
       return {
-        ...present(stored, this.storage),
+        ...present(stored, this.storage, undefined, premiumAllowed),
+        premiumDesignsAvailable: premiumAllowed,
+        hideSeal: row?.hideSeal ?? false,
+        removeSealAvailable: removeSealAllowed,
         logoPosition: (row?.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row?.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
       };
@@ -152,6 +190,18 @@ export class PortalThemeService {
     input: UpdatePortalThemeInput,
   ): Promise<PortalThemeConfig> {
     const organizationId = this.requireOrgId();
+    const premiumAllowed = await this.plans.hasCapability(organizationId, 'portalPremiumDesigns');
+    // Elegir una plantilla de pago exige un plan que la incluya. Conservar la
+    // ya guardada (petición sin `template`) no se bloquea: se muestra la
+    // gratuita hasta que la organización pague, sin perder su elección.
+    if (input.template !== undefined && isPremiumTemplate(input.template) && !premiumAllowed) {
+      throw planRequired('portalPremiumDesigns', 'Esta plantilla');
+    }
+    // Quitar el sello exige el plan; volver a mostrarlo, nunca.
+    const removeSealAllowed = await this.plans.hasCapability(organizationId, 'portalRemoveSeal');
+    if (input.hideSeal === true && !removeSealAllowed) {
+      throw planRequired('portalRemoveSeal', 'Quitar el sello "Hecho con AdoptaFácil"');
+    }
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       // `tokens` se reemplaza entero; la plantilla guardada se conserva si
@@ -190,6 +240,7 @@ export class PortalThemeService {
           ...(input.socialNavPosition !== undefined
             ? { socialNavPosition: input.socialNavPosition }
             : {}),
+          ...(input.hideSeal !== undefined ? { hideSeal: input.hideSeal } : {}),
         },
         update: {
           tokens,
@@ -197,6 +248,7 @@ export class PortalThemeService {
           ...(input.socialNavPosition !== undefined
             ? { socialNavPosition: input.socialNavPosition }
             : {}),
+          ...(input.hideSeal !== undefined ? { hideSeal: input.hideSeal } : {}),
         },
       });
       await this.audit.recordWithTx(tx, {
@@ -215,12 +267,16 @@ export class PortalThemeService {
             ...(input.template !== undefined ? ['template'] : []),
             ...(input.templateOptions !== undefined ? ['templateOptions'] : []),
             ...(input.coverVideoKey !== undefined ? ['coverVideo'] : []),
+            ...(input.hideSeal !== undefined ? ['hideSeal'] : []),
           ],
         },
       });
       const stored = splitStored(row.tokens);
       return {
-        ...present(stored, this.storage),
+        ...present(stored, this.storage, undefined, premiumAllowed),
+        premiumDesignsAvailable: premiumAllowed,
+        hideSeal: row.hideSeal,
+        removeSealAvailable: removeSealAllowed,
         logoPosition: (row.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
       };
@@ -240,15 +296,44 @@ export class PortalThemeService {
           tokens: PortalTheme;
           logoPosition: PortalLogoPosition;
           socialNavPosition: PortalSocialNavPosition;
+          hideSeal?: boolean;
         } | null;
       }>
     >(Prisma.sql`SELECT organization_portal_theme(${slug}) AS data`);
     const data = rows[0]?.data;
     const stored = splitStored(data?.tokens);
+    const premiumAllowed =
+      stored.template && isPremiumTemplate(stored.template)
+        ? await this.capabilityForSlug(slug, 'portalPremiumDesigns')
+        : true;
+    // El sello se oculta solo si la organización lo pidió Y su plan lo incluye.
+    const hideSeal =
+      data?.hideSeal === true && (await this.capabilityForSlug(slug, 'portalRemoveSeal'));
+    const { lockedTemplate: _hidden, ...shown } = present(
+      stored,
+      this.storage,
+      DEFAULT_PORTAL_TEMPLATE,
+      premiumAllowed,
+    );
     return {
-      ...present(stored, this.storage, DEFAULT_PORTAL_TEMPLATE),
+      ...shown,
       logoPosition: data?.logoPosition ?? 'left',
       socialNavPosition: data?.socialNavPosition ?? 'right',
+      hideSeal,
     };
+  }
+
+  /** Si el plan de la organización dueña del portal público incluye la
+   *  capacidad. Lee el id por la función SECURITY DEFINER `organization_public`
+   *  (sin contexto de tenant) y el plan bajo el contexto de ESA organización
+   *  (RLS). Slug desconocido: no hay nada que bloquear. */
+  private async capabilityForSlug(slug: string, capability: PlanCapability): Promise<boolean> {
+    if (!this.plans.enforced) return true;
+    const rows = await this.prisma.$queryRaw<Array<{ data: { id?: string } | null }>>(
+      Prisma.sql`SELECT organization_public(${slug}) AS data`,
+    );
+    const organizationId = rows[0]?.data?.id;
+    if (!organizationId) return true;
+    return this.plans.hasCapability(organizationId, capability);
   }
 }

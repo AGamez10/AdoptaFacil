@@ -24,6 +24,7 @@ export const EMAIL_EVENT_KEYS = [
   'adoption.status_changed',
   'adoption.followup_overdue',
   'adoption.contract_signed',
+  'adoption.delivery_code',
   'volunteering.enrollment_received',
   'volunteering.enrollment_accepted',
   'volunteering.enrollment_rejected',
@@ -32,6 +33,7 @@ export const EMAIL_EVENT_KEYS = [
   'volunteering.certificate_issued',
   'community.campaign_update',
   'platform.announcement',
+  'org.urgent_announcement',
 ] as const;
 
 export type EmailEventKey = (typeof EMAIL_EVENT_KEYS)[number];
@@ -61,6 +63,40 @@ export interface EmailVariableDescriptor {
   example: string;
 }
 
+/**
+ * Accent colors the editor offers for an email (bar, icon bubble and note
+ * box). A closed palette from the brand so text and button keep AA contrast;
+ * absent = the event's own theme color.
+ */
+export const EMAIL_ACCENT_COLORS = [
+  'teal',
+  'navy',
+  'coral',
+  'gold',
+  'blue',
+  'red',
+  'purple',
+  'green',
+] as const;
+export type EmailAccentColor = (typeof EMAIL_ACCENT_COLORS)[number];
+
+/** Header icons the editor offers; absent = the event's own theme icon. */
+export const EMAIL_ICONS = [
+  '🐾',
+  '🏡',
+  '💛',
+  '🤝',
+  '📣',
+  '⏰',
+  '🔒',
+  '🎉',
+  '🩺',
+  '📅',
+  '⭐',
+  '🚨',
+] as const;
+export type EmailIcon = (typeof EMAIL_ICONS)[number];
+
 /** The editable copy of an email. */
 export interface EmailTemplateContent {
   subject: string;
@@ -70,6 +106,9 @@ export interface EmailTemplateContent {
   /** Button label; empty/absent = no button. The button's URL is fixed by the catalog. */
   ctaLabel?: string;
   footerNote?: string;
+  /** Optional design (additive): accent color and header icon. */
+  accentColor?: EmailAccentColor;
+  icon?: EmailIcon;
 }
 
 export interface EmailTemplateVersion extends EmailTemplateContent {
@@ -145,6 +184,42 @@ export interface SendTestEmailResult {
 export interface EmailUnsubscribeInput {
   h: string;
   t: string;
+  /** Additive: present on links of an organization's emails — the opt-out
+   *  then applies only to that organization. */
+  o?: string;
+}
+
+/** Who an organization's urgent announcement goes to (its own contacts). */
+export const ANNOUNCEMENT_AUDIENCES = ['donors', 'adopters', 'volunteers'] as const;
+export type AnnouncementAudience = (typeof ANNOUNCEMENT_AUDIENCES)[number];
+
+/**
+ * Announcements an organization may send per rolling 24 h.
+ * TODO(client): confirmar el tope; 3 al día evita el abuso sin frenar urgencias.
+ */
+export const ORG_ANNOUNCEMENT_DAILY_LIMIT = 3;
+
+/** `GET /org/announcements/audience`: distinct reachable addresses per audience
+ *  (after opt-outs). `total` counts each address once across audiences. */
+export interface OrgAnnouncementAudience {
+  donors: number;
+  adopters: number;
+  volunteers: number;
+  total: number;
+  /** Announcements still allowed in the current 24 h window. */
+  remainingToday: number;
+}
+
+/** `POST /org/announcements` (Owner, Administrator). */
+export interface SendOrgAnnouncementInput {
+  audiences: AnnouncementAudience[];
+  title: string;
+  message: string;
+}
+
+export interface SendOrgAnnouncementResult {
+  /** Emails enqueued (opted-out addresses are skipped at delivery). */
+  recipients: number;
 }
 
 export interface EmailUnsubscribeResult {

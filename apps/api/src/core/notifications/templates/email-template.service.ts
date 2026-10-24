@@ -6,14 +6,18 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, type EmailTemplateVersion as VersionRow } from '@prisma/client';
-import type {
-  CreateEmailTemplateVersionInput,
-  EmailEventKey,
-  EmailPreview,
-  EmailTemplateContent,
-  EmailTemplateDetail,
-  EmailTemplateSummary,
-  EmailTemplateVersion,
+import {
+  EMAIL_ACCENT_COLORS,
+  EMAIL_ICONS,
+  type CreateEmailTemplateVersionInput,
+  type EmailAccentColor,
+  type EmailEventKey,
+  type EmailIcon,
+  type EmailPreview,
+  type EmailTemplateContent,
+  type EmailTemplateDetail,
+  type EmailTemplateSummary,
+  type EmailTemplateVersion,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../../config/env.validation';
 import { AuditService } from '../../audit/audit.service';
@@ -29,8 +33,14 @@ import {
   verifyUnsubscribe,
 } from './email-compose';
 import { exampleValues, validateContent, type RenderValues } from './email-render';
+import type { EmailBrand } from '../branding/org-email-branding';
 
 export const BULK_CATEGORY = 'bulk';
+
+/** Opt-out of one organization's bulk emails only (item 13). */
+export function orgCategory(organizationId: string): string {
+  return `org:${organizationId}`;
+}
 const STATE_CACHE_TTL_MS = 30_000;
 
 interface ResolvedState {
@@ -97,9 +107,13 @@ export class EmailTemplateService {
     return state;
   }
 
-  async isSuppressed(email: string): Promise<boolean> {
-    const row = await this.prisma.emailSuppression.findUnique({
-      where: { emailHash_category: { emailHash: hashEmail(email), category: BULK_CATEGORY } },
+  /** Opted out of all bulk email, or (with `organizationId`) of that org's. */
+  async isSuppressed(email: string, organizationId?: string): Promise<boolean> {
+    const categories = organizationId
+      ? [BULK_CATEGORY, orgCategory(organizationId)]
+      : [BULK_CATEGORY];
+    const row = await this.prisma.emailSuppression.findFirst({
+      where: { emailHash: hashEmail(email), category: { in: categories } },
     });
     return Boolean(row);
   }
@@ -111,11 +125,16 @@ export class EmailTemplateService {
     to: string,
     data: RenderValues,
     organizationName?: string,
+    brand?: EmailBrand,
+    organizationId?: string,
   ): RenderedEmail {
     const bulk = def.category === 'bulk';
-    const unsubscribeUrl = bulk ? buildUnsubscribeUrl(this.webBaseUrl, this.secret, to) : undefined;
+    const unsubscribeUrl = bulk
+      ? buildUnsubscribeUrl(this.webBaseUrl, this.secret, to, organizationId)
+      : undefined;
     const email = composeEmail(def, content, data, {
       organizationName,
+      ...(brand ? { brand } : {}),
       webBaseUrl: this.webBaseUrl,
       unsubscribeUrl,
     });
@@ -124,7 +143,7 @@ export class EmailTemplateService {
     return {
       ...email,
       headers: {
-        'List-Unsubscribe': `<${buildOneClickUnsubscribeUrl(this.apiBaseUrl, this.secret, to)}>`,
+        'List-Unsubscribe': `<${buildOneClickUnsubscribeUrl(this.apiBaseUrl, this.secret, to, organizationId)}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
     };
@@ -133,13 +152,19 @@ export class EmailTemplateService {
   // --- Public unsubscribe -------------------------------------------------
 
   /** Idempotent: a repeated click (or the inbox's one-click POST) is a no-op. */
-  async unsubscribe(emailHash: string, token: string, source: 'link' | 'one_click'): Promise<void> {
-    if (!verifyUnsubscribe(this.secret, emailHash, token)) {
+  async unsubscribe(
+    emailHash: string,
+    token: string,
+    source: 'link' | 'one_click',
+    organizationId?: string,
+  ): Promise<void> {
+    if (!verifyUnsubscribe(this.secret, emailHash, token, organizationId)) {
       throw new BadRequestException('El enlace para darte de baja no es válido.');
     }
+    const category = organizationId ? orgCategory(organizationId) : BULK_CATEGORY;
     await this.prisma.$executeRaw(Prisma.sql`
       INSERT INTO email_suppressions (email_hash, category, source)
-      VALUES (${emailHash}, ${BULK_CATEGORY}, ${source})
+      VALUES (${emailHash}, ${category}, ${source})
       ON CONFLICT (email_hash, category) DO NOTHING
     `);
   }
@@ -210,6 +235,8 @@ export class EmailTemplateService {
           ...content,
           ctaLabel: content.ctaLabel ?? null,
           footerNote: content.footerNote ?? null,
+          accentColor: content.accentColor ?? null,
+          icon: content.icon ?? null,
           changeNote: input.changeNote?.trim() || null,
           createdByUserId: actorUserId,
         },
@@ -360,6 +387,8 @@ function pickContent(input: EmailTemplateContent): EmailTemplateContent {
     body: input.body,
     ...(input.ctaLabel?.trim() ? { ctaLabel: input.ctaLabel } : {}),
     ...(input.footerNote?.trim() ? { footerNote: input.footerNote } : {}),
+    ...(input.accentColor ? { accentColor: input.accentColor } : {}),
+    ...(input.icon ? { icon: input.icon } : {}),
   };
 }
 
@@ -371,7 +400,17 @@ function toContent(row: VersionRow): EmailTemplateContent {
     body: row.body,
     ...(row.ctaLabel ? { ctaLabel: row.ctaLabel } : {}),
     ...(row.footerNote ? { footerNote: row.footerNote } : {}),
+    ...(isAccentColor(row.accentColor) ? { accentColor: row.accentColor } : {}),
+    ...(isIcon(row.icon) ? { icon: row.icon } : {}),
   };
+}
+
+function isAccentColor(value: string | null): value is EmailAccentColor {
+  return (EMAIL_ACCENT_COLORS as readonly string[]).includes(value ?? '');
+}
+
+function isIcon(value: string | null): value is EmailIcon {
+  return (EMAIL_ICONS as readonly string[]).includes(value ?? '');
 }
 
 function toVersion(row: VersionRow): EmailTemplateVersion {

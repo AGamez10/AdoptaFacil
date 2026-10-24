@@ -103,7 +103,7 @@ describe('PaymentsConnectionBanner', () => {
     expect(screen.queryByText('Cobros pendientes de conexión')).not.toBeInTheDocument();
   });
 
-  it('is never shown to an Operator (not even fetched), nor with Mercado Pago', async () => {
+  it('is never shown to an Operator (not even fetched), nor with the kill switch on', async () => {
     vi.stubEnv('VITE_PAYMENT_PROVIDER', 'epayco');
     const calls = stubFetch({ body: { connected: false } });
     const { unmount } = renderShell({
@@ -117,7 +117,7 @@ describe('PaymentsConnectionBanner', () => {
     expect(calls.some((u) => u.includes('/org/epayco/status'))).toBe(false);
     unmount();
 
-    vi.unstubAllEnvs();
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', 'off');
     const mpCalls = stubFetch({ body: { connected: false } });
     renderShell({ route: '/donaciones-recibidas', ...sessionWith([Role.Owner]) });
     expect(

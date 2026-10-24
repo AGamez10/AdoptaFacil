@@ -11,15 +11,15 @@ transacciones, con desglose transparente (IVA solo sobre la comisión).
 
 ## Stack
 
-| Capa       | Tecnología                                                                       |
-| ---------- | -------------------------------------------------------------------------------- |
-| Monorepo   | pnpm 9.15.9 (workspaces) + Turborepo                                             |
-| Backend    | NestJS sobre Node 24 LTS                                                         |
-| Base       | PostgreSQL 16 + Prisma 5 (esquema dividido por módulo), Row-Level Security       |
-| Colas      | Redis 7 + BullMQ (recordatorios, seguimientos, DIAN, facturación, payouts)       |
-| Frontend   | React 18 + Vite 5 + Tailwind + Radix (`packages/ui`)                             |
-| Pagos      | MercadoPago (Checkout API / Orders + Card Payment Brick) detrás de `PaymentPort` |
-| Despliegue | Render (Blueprint `render.yaml`)                                                 |
+| Capa       | Tecnología                                                                    |
+| ---------- | ----------------------------------------------------------------------------- |
+| Monorepo   | pnpm 9.15.9 (workspaces) + Turborepo                                          |
+| Backend    | NestJS sobre Node 24 LTS                                                      |
+| Base       | PostgreSQL 16 + Prisma 5 (esquema dividido por módulo), Row-Level Security    |
+| Colas      | Redis 7 + BullMQ (recordatorios, seguimientos, DIAN, facturación, payouts)    |
+| Frontend   | React 18 + Vite 5 + Tailwind + Radix (`packages/ui`)                          |
+| Pagos      | ePayco (checkout v2, cobro directo a la organización) detrás de `PaymentPort` |
+| Despliegue | Render (Blueprint `render.yaml`)                                              |
 
 ## Requisitos
 
@@ -51,6 +51,7 @@ pnpm prisma migrate dev
 # 5. Datos iniciales (opcional)
 pnpm seed:admin    # PlatformAdmin / PlatformSuperAdmin
 pnpm seed:demo     # organizaciones y datos de demostración (idempotente)
+pnpm seed:trafico --yes-demo  # tráfico ficticio: donaciones, adopciones, campañas y voluntariado (solo base local)
 
 # 6. API y web
 pnpm dev                                # api + web con Turborepo
@@ -71,32 +72,33 @@ Al abrir `http://localhost:5173` deberías ver la aplicación; `GET /health` res
 
 La plantilla es `.env.example`. Por defecto todo funciona sin proveedores externos:
 
-| Variable               | Valores               | Por defecto |
-| ---------------------- | --------------------- | ----------- |
-| `PAYMENT_DRIVER`       | `fake`, `mercadopago` | `fake`      |
-| `NOTIFICATION_DRIVER`  | `log`, `smtp`         | `log`       |
-| `STORAGE_DRIVER`       | `disk`, `stub`        | `disk`      |
-| `AUTH_IDENTITY_DRIVER` | `fake`, `google`      | `fake`      |
+| Variable               | Valores          | Por defecto |
+| ---------------------- | ---------------- | ----------- |
+| `PAYMENT_DRIVER`       | `fake`, `epayco` | `fake`      |
+| `NOTIFICATION_DRIVER`  | `log`, `smtp`    | `log`       |
+| `STORAGE_DRIVER`       | `disk`, `stub`   | `disk`      |
+| `AUTH_IDENTITY_DRIVER` | `fake`, `google` | `fake`      |
 
-Con `PAYMENT_DRIVER=mercadopago` son obligatorias las `MERCADOPAGO_*`; con `smtp`, las `SMTP_*`. La
+Con `PAYMENT_DRIVER=epayco` en modo `platform_split` son obligatorias las `EPAYCO_*` de plataforma; con `smtp`, las `SMTP_*`. La
 configuración se valida al arrancar y la API falla rápido si falta algo. En producción debe definirse
 `JWT_SECRET`.
 
 ## Scripts (raíz, orquestados por Turborepo)
 
-| Comando                                           | Qué hace                                                       |
-| ------------------------------------------------- | -------------------------------------------------------------- |
-| `pnpm dev`                                        | Levanta api + web en modo watch                                |
-| `pnpm build`                                      | Compila todos los paquetes y apps                              |
-| `pnpm lint` / `pnpm typecheck`                    | ESLint y `tsc --noEmit` en todo el monorepo                    |
-| `pnpm test`                                       | Pruebas unitarias (jest + vitest)                              |
-| `pnpm --filter @adoptafacil/api test:integration` | Suite de integración (requiere Postgres y Redis)               |
-| `pnpm --filter @adoptafacil/api test:rls`         | Solo las pruebas `no-leak` de aislamiento entre organizaciones |
-| `pnpm format` / `pnpm format:check`               | Prettier                                                       |
-| `pnpm setup:env`                                  | Crea el `.env` desde `.env.example`                            |
-| `pnpm seed:admin` / `seed:demo` / `seed:breeds`   | Semillas (administradores, demo, catálogo de razas)            |
-| `pnpm db:deploy`                                  | `prisma migrate deploy` (producción)                           |
-| `pnpm docs:manuals`                               | Genera los manuales Word desde `docs/manual/*.md`              |
+| Comando                                           | Qué hace                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `pnpm dev`                                        | Levanta api + web en modo watch                                                      |
+| `pnpm build`                                      | Compila todos los paquetes y apps                                                    |
+| `pnpm lint` / `pnpm typecheck`                    | ESLint y `tsc --noEmit` en todo el monorepo                                          |
+| `pnpm test`                                       | Pruebas unitarias (jest + vitest)                                                    |
+| `pnpm --filter @adoptafacil/api test:integration` | Suite de integración (requiere Postgres y Redis)                                     |
+| `pnpm --filter @adoptafacil/api test:rls`         | Solo las pruebas `no-leak` de aislamiento entre organizaciones                       |
+| `pnpm format` / `pnpm format:check`               | Prettier                                                                             |
+| `pnpm setup:env`                                  | Crea el `.env` desde `.env.example`                                                  |
+| `pnpm seed:admin` / `seed:demo` / `seed:breeds`   | Semillas (administradores, demo, catálogo de razas)                                  |
+| `pnpm seed:trafico --yes-demo`                    | Tráfico ficticio para ver cifras en local (se niega en producción, CI o base remota) |
+| `pnpm db:deploy`                                  | `prisma migrate deploy` (producción)                                                 |
+| `pnpm docs:manuals`                               | Genera los manuales Word desde `docs/manual/*.md`                                    |
 
 ## Estructura
 

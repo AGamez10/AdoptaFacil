@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  BRANDED_EMAIL_MONTHLY_LIMIT,
+  PLAN_ALWAYS_INCLUDED,
   PLAN_CAPABILITIES,
+  PLAN_CAPABILITY_INFO,
+  PLAN_LIMIT_LABELS,
+  formatPlanLimit,
   priceWithIva,
   type OrganizationPlanView,
-  type PlanCapability,
   type PlanDefinition,
   type PlanKey,
   type PlanLimit,
@@ -23,35 +27,12 @@ import {
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
+import { officialWhatsappUrl } from '../../../lib/contact';
 
-/** What each paid capability means for a shelter, in its own words. */
-const CAPABILITY_LABELS: Record<PlanCapability, string> = {
-  portalAllDesigns: 'Todos los diseños de portal público',
-  portalAdvancedCustomization: 'Personalización avanzada del portal',
-  portalRemoveSeal: 'Portal sin el sello "Hecho con AdoptaFácil"',
-  customDomain: 'Dominio propio (www.turefugio.org)',
-  brandedEmails: 'Correos a adoptantes y donantes con tu marca',
-  dataExport: 'Exportar tus datos a Excel',
-  impactReport: 'Reporte de impacto en PDF para donantes',
-  corporateSponsorship: 'Patrocinio de empresas',
-  prioritySupport: 'Soporte prioritario por WhatsApp',
-};
-
-/** Included in every plan, free too: what protects the animal, the adopter and
- *  transparency is never sold. */
-const ALWAYS_INCLUDED = [
-  'Animales ilimitados con ficha clínica',
-  'Adopciones con contrato y seguimiento',
-  'Recaudo de donaciones, también si aún no estás formalizado',
-  'Comprobantes de donación y documentos de la organización',
-  'Portal público en tu subdominio',
-];
-
-const LIMIT_LABELS: Record<PlanLimit, string> = {
-  members: 'Miembros del equipo',
-  storageMb: 'Almacenamiento',
-  portalDesigns: 'Diseños de portal',
-};
+/** Labels, limits and the always-free list come from the plan catalog in
+ *  `@adoptafacil/contracts`, the same one the landing uses. */
+const LIMIT_LABELS = PLAN_LIMIT_LABELS;
+const formatLimit = formatPlanLimit;
 
 const cop = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -59,21 +40,27 @@ const cop = new Intl.NumberFormat('es-CO', {
   maximumFractionDigits: 0,
 });
 
+const count = new Intl.NumberFormat('es-CO');
+
 /** Dates are stored in UTC; Colombia time is for display only. */
 const colombiaDate = new Intl.DateTimeFormat('es-CO', {
   dateStyle: 'long',
   timeZone: 'America/Bogota',
 });
 
-function formatLimit(limit: PlanLimit, value: number | null): string {
-  if (value === null) return 'Sin límite';
-  if (limit === 'storageMb') return value >= 1024 ? `${value / 1024} GB` : `${value} MB`;
-  return String(value);
-}
-
 /** Where a shelter asks for a paid plan while billing is manual (payment link
- *  or transfer to AdoptaFácil + electronic invoice). TODO(client): canal real. */
-const BILLING_CONTACT_URL = import.meta.env.VITE_BILLING_CONTACT_URL;
+ *  or transfer to AdoptaFácil + electronic invoice). `VITE_BILLING_CONTACT_URL`
+ *  overrides it; by default the official WhatsApp opens with the plan written. */
+const BILLING_CONTACT_URL = import.meta.env.VITE_BILLING_CONTACT_URL as string | undefined;
+
+function planRequestUrl(plan: PlanDefinition): string {
+  if (BILLING_CONTACT_URL) {
+    return `${BILLING_CONTACT_URL}${BILLING_CONTACT_URL.includes('?') ? '&' : '?'}plan=${plan.key}`;
+  }
+  return officialWhatsappUrl(
+    `Hola, quiero el plan ${plan.name} de AdoptaFácil para mi organización.`,
+  );
+}
 
 function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean }) {
   const paid = plan.monthlyPriceCop > 0;
@@ -83,11 +70,15 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle>{plan.name}</CardTitle>
-          {current && <Badge variant="success">Tu plan</Badge>}
+          {current ? (
+            <Badge variant="success">Tu plan</Badge>
+          ) : (
+            paid && <Badge variant="outline">Opcional</Badge>
+          )}
         </div>
         <CardDescription>{plan.tagline}</CardDescription>
         <p className="pt-2 text-2xl font-semibold">
-          {paid ? cop.format(plan.monthlyPriceCop) : 'Gratis'}
+          {paid ? cop.format(plan.monthlyPriceCop) : 'Gratis, siempre'}
           {paid && <span className="text-sm font-normal text-muted-foreground"> /mes + IVA</span>}
         </p>
         {paid && (
@@ -109,27 +100,31 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
         {included.length > 0 && (
           <ul className="list-inside list-disc space-y-1">
             {included.map((capability) => (
-              <li key={capability}>{CAPABILITY_LABELS[capability]}</li>
+              <li key={capability}>
+                {PLAN_CAPABILITY_INFO[capability].label}
+                {capability === 'brandedEmails' &&
+                  ` (hasta ${count.format(BRANDED_EMAIL_MONTHLY_LIMIT[plan.key])} al mes)`}
+                {!PLAN_CAPABILITY_INFO[capability].available && (
+                  <Badge variant="secondary" className="ml-2">
+                    Próximamente
+                  </Badge>
+                )}
+              </li>
             ))}
           </ul>
         )}
       </CardContent>
       {paid && !current && (
         <CardFooter>
-          {BILLING_CONTACT_URL ? (
-            <a
-              className={cn(buttonVariants(), 'w-full')}
-              href={`${BILLING_CONTACT_URL}${BILLING_CONTACT_URL.includes('?') ? '&' : '?'}plan=${plan.key}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Quiero el plan {plan.name}
-            </a>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Muy pronto podrás pasarte a {plan.name} desde aquí.
-            </p>
-          )}
+          <a
+            className={cn(buttonVariants(), 'w-full')}
+            href={planRequestUrl(plan)}
+            target="_blank"
+            rel="noreferrer"
+            data-testid={`plan-request-${plan.key}`}
+          >
+            Quiero el plan {plan.name}
+          </a>
         </CardFooter>
       )}
     </Card>
@@ -184,7 +179,7 @@ export function OrgPlanPage() {
     <PageContainer>
       <PageHeader
         title="Plan y facturación"
-        description="Lo que protege a los animales y la transparencia es gratis siempre. Los planes suman marca, alcance y comodidad."
+        description="Lo que protege a los animales y la transparencia es gratis siempre. Los planes de pago son opcionales: suman marca, alcance y comodidad."
       />
 
       <Card>
@@ -200,11 +195,13 @@ export function OrgPlanPage() {
           <CardDescription>
             {!view.enforced
               ? 'Durante el piloto tienes todas las funciones sin costo.'
-              : periodEnd
-                ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
-                : current === 'free'
-                  ? 'Sin costo y sin fecha de vencimiento.'
-                  : 'Sin fecha de vencimiento.'}
+              : view.launchPromoEndsAt
+                ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
+                : periodEnd
+                  ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
+                  : current === 'free'
+                    ? 'Sin costo y sin fecha de vencimiento.'
+                    : 'Sin fecha de vencimiento.'}
             {view.graceEndsAt && view.subscription?.status === 'past_due' && (
               <>
                 {' '}
@@ -220,6 +217,22 @@ export function OrgPlanPage() {
             {LIMIT_LABELS.members}: <strong>{view.usage.members}</strong>
             {membersMax !== null && ` de ${membersMax}`}
           </p>
+          {view.usage.storageMb !== undefined && (
+            <p className="text-sm">
+              {LIMIT_LABELS.storageMb}:{' '}
+              <strong>{formatLimit('storageMb', view.usage.storageMb)}</strong>
+              {view.limits.storageMb !== null &&
+                ` de ${formatLimit('storageMb', view.limits.storageMb)}`}
+            </p>
+          )}
+          {view.usage.brandedEmails && (
+            <p className="text-sm">
+              Correos con tu marca este mes:{' '}
+              <strong>{count.format(view.usage.brandedEmails.sent)}</strong> de{' '}
+              {count.format(view.usage.brandedEmails.limit)}. Pasado el tope, tus correos siguen
+              saliendo con la marca de AdoptaFácil.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -228,7 +241,7 @@ export function OrgPlanPage() {
           Incluido en todos los planes
         </h2>
         <ul className="grid gap-1 text-sm sm:grid-cols-2">
-          {ALWAYS_INCLUDED.map((item) => (
+          {PLAN_ALWAYS_INCLUDED.map((item) => (
             <li key={item}>✓ {item}</li>
           ))}
         </ul>

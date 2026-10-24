@@ -23,6 +23,11 @@ export const PLAN_CAPABILITIES = [
   /** All public-portal designs. Client decision (2026-10-16): every current
    *  design is free on every plan; future "super Pro" designs will be paid. */
   'portalAllDesigns',
+  /** Premium ("super Pro") portal designs, the ones with `tier: 'paid'` in
+   *  `PORTAL_TEMPLATES`. Client decision (2026-10-17): free for everyone during
+   *  the launch promotion; afterwards they need a paid plan, and an org that
+   *  stops paying falls back to a free design (its choice is kept, not erased). */
+  'portalPremiumDesigns',
   /** Section order, typography, cover gallery or video on the portal. */
   'portalAdvancedCustomization',
   /** Hide the "Hecho con AdoptaFácil" seal on the portal. */
@@ -55,10 +60,10 @@ export interface PlanDefinition {
   name: string;
   /** One-line pitch for the plans screen. */
   tagline: string;
-  /** Price in COP per month BEFORE IVA. TODO(client): por validar con los
-   *  refugios del piloto (propuesta 39.000 / 79.000). */
+  /** Price in COP per month BEFORE IVA. Client decision (2026-10-22): these
+   *  prices are published as OPTIONAL plans; the free plan stays free. */
   monthlyPriceCop: number;
-  /** Price in COP per year BEFORE IVA (2 months free). TODO(client). */
+  /** Price in COP per year BEFORE IVA (2 months free). */
   annualPriceCop: number;
   limits: PlanLimits;
   capabilities: Record<PlanCapability, boolean>;
@@ -66,6 +71,7 @@ export interface PlanDefinition {
 
 const NONE: Record<PlanCapability, boolean> = {
   portalAllDesigns: false,
+  portalPremiumDesigns: false,
   portalAdvancedCustomization: false,
   portalRemoveSeal: false,
   customDomain: false,
@@ -76,9 +82,10 @@ const NONE: Record<PlanCapability, boolean> = {
   prioritySupport: false,
 };
 
-/** The plan catalog. Prices are a proposal pending validation with the pilot
- *  shelters (TODO(client)); the API reads them from here so the plans screen and
- *  the enforcement never disagree. */
+/** The plan catalog: the single source of truth for the landing, the plans
+ *  screen and the enforcement, so they never disagree. Paid plans are optional
+ *  (client decision 2026-10-22); publishing a price never turns charging on —
+ *  that is `PLAN_ENFORCEMENT` plus a manual or ePayco subscription. */
 export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
   free: {
     key: 'free',
@@ -99,6 +106,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     capabilities: {
       ...NONE,
       portalAllDesigns: true,
+      portalPremiumDesigns: true,
       portalAdvancedCustomization: true,
       portalRemoveSeal: true,
       brandedEmails: true,
@@ -115,6 +123,7 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     limits: { members: null, storageMb: 50 * 1024, portalDesigns: 5 },
     capabilities: {
       portalAllDesigns: true,
+      portalPremiumDesigns: true,
       portalAdvancedCustomization: true,
       portalRemoveSeal: true,
       customDomain: true,
@@ -128,6 +137,114 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
 };
 
 /**
+ * How each capability is described to organizations, and whether it already
+ * works today. `available: false` = sold in the plan but still being built: the
+ * landing and the plans screen show it as "próximamente", so no page promises
+ * something the product does not do yet (Estatuto del Consumidor, publicidad).
+ */
+export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; available: boolean }> = {
+  portalAllDesigns: { label: 'Todos los diseños de portal público', available: true },
+  portalPremiumDesigns: {
+    label: 'Plantillas Pro del portal (como Historias, con video)',
+    available: true,
+  },
+  portalAdvancedCustomization: {
+    label: 'Personalización avanzada del portal',
+    available: true,
+  },
+  portalRemoveSeal: {
+    label: 'Portal sin el sello "Hecho con AdoptaFácil"',
+    available: true,
+  },
+  customDomain: { label: 'Dominio propio (www.turefugio.org)', available: false },
+  brandedEmails: { label: 'Correos a adoptantes y donantes con tu marca', available: true },
+  dataExport: { label: 'Exportar tus datos a Excel', available: true },
+  impactReport: { label: 'Reporte de impacto en PDF para donantes', available: true },
+  corporateSponsorship: { label: 'Patrocinio de empresas', available: false },
+  prioritySupport: { label: 'Soporte prioritario por WhatsApp', available: true },
+};
+
+/**
+ * Correos con la marca de la organización por mes calendario (UTC), por plan.
+ * Pasado el tope el correo SIGUE saliendo, con la marca de AdoptaFácil: un
+ * límite comercial nunca detiene un recibo, un contrato o un seguimiento.
+ * Propuesta del 2026-10-23 (Crece 5.000 y Pro 20.000), ajustable aquí.
+ * TODO(client): confirmar los topes.
+ */
+export const BRANDED_EMAIL_MONTHLY_LIMIT: Record<PlanKey, number> = {
+  free: 0,
+  crece: 5_000,
+  pro: 20_000,
+};
+
+/** Included in every plan, free too: what protects the animal, the adopter and
+ *  transparency is never sold. */
+export const PLAN_ALWAYS_INCLUDED = [
+  'Portal público en tu subdominio, con tu logo',
+  'Animales ilimitados con ficha clínica',
+  'Adopciones con contrato y seguimiento',
+  'Recaudo de donaciones, también si aún no estás formalizado',
+  'Comprobantes de donación y documentos de la organización',
+] as const;
+
+export const PLAN_LIMIT_LABELS: Record<PlanLimit, string> = {
+  members: 'Miembros del equipo',
+  storageMb: 'Almacenamiento',
+  portalDesigns: 'Diseños de portal',
+};
+
+/** "Sin límite", "1 GB", "512 MB" or the plain number. */
+export function formatPlanLimit(limit: PlanLimit, value: number | null): string {
+  if (value === null) return 'Sin límite';
+  if (limit === 'storageMb') {
+    return value >= 1024 ? `${Math.round((value / 1024) * 10) / 10} GB` : `${value} MB`;
+  }
+  return String(value);
+}
+
+export interface PlanHighlight {
+  text: string;
+  /** False while the feature is still being built ("próximamente"). */
+  available: boolean;
+}
+
+/**
+ * Short list of what a plan adds, derived from {@link PLAN_CATALOG} so the
+ * landing cannot drift from the plans screen: the free plan lists what is
+ * always included plus its limits; a paid plan lists "todo lo del plan
+ * anterior", what it adds over that plan, and its limits.
+ */
+export function planHighlights(key: PlanKey): PlanHighlight[] {
+  const plan = PLAN_CATALOG[key];
+  const index = PLAN_KEYS.indexOf(key);
+  const previous = index > 0 ? PLAN_CATALOG[PLAN_KEYS[index - 1]] : null;
+  const members =
+    plan.limits.members === null
+      ? 'Equipo sin límite de personas'
+      : `Hasta ${plan.limits.members} personas del equipo`;
+  const storage = `${formatPlanLimit('storageMb', plan.limits.storageMb)} para fotos y documentos`;
+  if (!previous) {
+    return [
+      ...PLAN_ALWAYS_INCLUDED.slice(0, 4).map((text) => ({ text, available: true })),
+      { text: members, available: true },
+      { text: storage, available: true },
+    ];
+  }
+  const added = PLAN_CAPABILITIES.filter(
+    (capability) => plan.capabilities[capability] && !previous.capabilities[capability],
+  ).map((capability) => ({
+    text: PLAN_CAPABILITY_INFO[capability].label,
+    available: PLAN_CAPABILITY_INFO[capability].available,
+  }));
+  return [
+    { text: `Todo lo del plan ${previous.name}`, available: true },
+    ...added,
+    { text: members, available: true },
+    { text: storage, available: true },
+  ];
+}
+
+/**
  * Promoción de lanzamiento (decisión del cliente, 2026-10-16): toda organización
  * tiene Pro gratis durante estos meses desde el lanzamiento. Mientras
  * `PLAN_ENFORCEMENT` esté apagado todas tienen Pro sin vencimiento; al
@@ -135,6 +252,16 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
  * `currentPeriodEnd` = fecha de lanzamiento + estos meses.
  */
 export const LAUNCH_PRO_PROMO_MONTHS = 3;
+
+/**
+ * Last instant of the launch promotion: `launchDate` + {@link LAUNCH_PRO_PROMO_MONTHS}
+ * calendar months (UTC). The launch date is the server setting `PLAN_LAUNCH_DATE`.
+ */
+export function launchPromoEnd(launchDate: Date): Date {
+  const end = new Date(launchDate.getTime());
+  end.setUTCMonth(end.getUTCMonth() + LAUNCH_PRO_PROMO_MONTHS);
+  return end;
+}
 
 /** IVA rate applied on top of the plan price (the subscription is a taxed
  *  service of AdoptaFácil). TODO(client): confirmar con el contador. */
@@ -180,9 +307,20 @@ export interface OrganizationPlanView {
   subscription: OrganizationSubscription | null;
   /** When the effective paid plan falls back to free if not renewed (ISO). */
   graceEndsAt: string | null;
+  /** End of the launch promotion (Pro for free) while it applies to this org
+   *  (no paid subscription yet), ISO-8601 UTC; absent/null otherwise. */
+  launchPromoEndsAt?: string | null;
   limits: PlanLimits;
   capabilities: Record<PlanCapability, boolean>;
-  usage: { members: number };
+  /** `storageMb`: espacio usado en MB (redondeado hacia arriba), cuando el
+   *  almacenamiento sabe medirlo. */
+  usage: {
+    members: number;
+    storageMb?: number;
+    /** Correos con la marca enviados este mes (UTC) y el tope del plan
+     *  ({@link BRANDED_EMAIL_MONTHLY_LIMIT}); ausente si el plan no los incluye. */
+    brandedEmails?: { sent: number; limit: number };
+  };
   catalog: PlanDefinition[];
 }
 
@@ -240,6 +378,7 @@ export function graceEnd(currentPeriodEnd: Date): Date {
 /**
  * The plan in effect for an organization at `now`:
  * - enforcement off → `pro` (nothing is gated);
+ * - no subscription and the launch promotion still running (`promoEndsAt`) → `pro`;
  * - no subscription or `canceled` → `free`;
  * - otherwise the subscribed plan until `currentPeriodEnd` + grace days, then
  *   `free`. An open-ended period (`null`) never lapses.
@@ -248,8 +387,10 @@ export function resolveEffectivePlan(
   subscription: Pick<OrganizationSubscription, 'plan' | 'status' | 'currentPeriodEnd'> | null,
   now: Date,
   enforced: boolean,
+  promoEndsAt?: Date | null,
 ): PlanKey {
   if (!enforced) return 'pro';
+  if (!subscription && promoEndsAt && now.getTime() <= promoEndsAt.getTime()) return 'pro';
   if (!subscription || subscription.status === 'canceled') return 'free';
   if (subscription.currentPeriodEnd === null) return subscription.plan;
   const end = new Date(subscription.currentPeriodEnd);

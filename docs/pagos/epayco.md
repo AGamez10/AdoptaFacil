@@ -13,7 +13,13 @@ El 2026-10-15 el dueño decidió:
 - Dar a cada refugio un **QR propio** que lleve a su comunidad a la página de donación, con los medios de
   pago que ofrezca la pasarela.
 
-Mercado Pago queda como segunda opción, con el mismo cobro directo de ADR-PAG-001.
+~~Mercado Pago queda como segunda opción, con el mismo cobro directo de ADR-PAG-001.~~
+
+**2026-10-17:** Mercado Pago retirado del producto por decisión del dueño; la tabla y los tokens se eliminan
+con la migración 20261017110000 por decisión del dueño. ePayco es la única pasarela: la web nunca muestra
+Mercado Pago y `PAYMENT_DRIVER` ya no acepta `mercadopago`. Los apadrinamientos (que cobraban con el Brick de
+Mercado Pago) muestran "Pronto podrás apadrinar con pago en línea" hasta que exista el cobro recurrente con
+ePayco.
 
 ## 2. Qué dice ePayco (consultado el 2026-10-15)
 
@@ -114,8 +120,8 @@ ePayco ─► POST /donations/webhook (confirmación)
 - `EPAYCO_TEST=true` usa el sandbox.
 - `EPAYCO_COLLECTION_MODE` vale `direct_to_org` por defecto. El valor `platform_split` solo funciona con
   `EPAYCO_SPLIT_APPROVAL_REF`, `EPAYCO_SPLIT_FEE_RATE` y las llaves `EPAYCO_PLATFORM_*`.
-- En la web, `VITE_PAYMENT_PROVIDER=epayco` muestra "Conectar ePayco" y abre el checkout de ePayco en vez del
-  Brick de Mercado Pago.
+- En la web, ePayco es la opción por defecto: muestra "Conectar ePayco" y abre su checkout al donar.
+  `VITE_PAYMENT_PROVIDER=off` (o `none`/`disabled`) es el interruptor de apagado: oculta el pago en línea.
 
 Reversión: revertir el PR. La migración crea una tabla y una función. Para deshacerla:
 

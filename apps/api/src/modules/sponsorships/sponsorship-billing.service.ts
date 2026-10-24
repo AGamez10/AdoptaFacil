@@ -108,8 +108,7 @@ export class SponsorshipBillingService {
     );
     for (const row of rows) {
       // Per-row isolation: one sponsorship's failure (e.g. a DB error) must
-      // never abort the scan for every other one (same posture as
-      // `MercadoPagoConnectService.refreshDueAccounts`).
+      // never abort the scan for every other one.
       try {
         await this.openPeriodFor(row);
       } catch (error) {
@@ -400,8 +399,9 @@ export class SponsorshipBillingService {
    *
    * Net effect: every period still needs 30 days (the existing ladder) to
    * reach the one moment a sponsor can really pay. TODO(client): recommend
-   * deciding, as a fast-follow, between (a) MercadoPago Customer+Card
-   * vaulting for real off-session recurring charges, or (b) converting EVERY
+   * deciding, as a fast-follow, between (a) gateway-side recurring charges
+   * (Mercado Pago was retired 2026-10-17; ePayco subscriptions are the
+   * candidate), or (b) converting EVERY
    * period (not only post-suspension recovery) into an immediate in-app
    * "pay now" prompt the moment it opens.
    */

@@ -325,6 +325,41 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'adoption.delivery_code',
+    label: 'Código para confirmar la entrega',
+    description:
+      'Se envía al adoptante cuando la organización registra la entrega del animal, con el código para confirmarla.',
+    audience: 'La familia adoptante',
+    category: 'transactional',
+    theme: 'adoption',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre de quien recibe', 'Ana María'),
+      ANIMAL,
+      ORG,
+      v('codigo', 'Código de confirmación', '482913'),
+      v('minutos', 'Minutos de vigencia del código', '30'),
+      v(
+        'enlace',
+        'Enlace para confirmar la entrega',
+        'https://adoptafacil.co/mis-adopciones/entrega/abc?codigo=482913',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Confirma que recibiste a {{animal}}',
+      preheader: 'Tu código para confirmar la entrega es {{codigo}}.',
+      heading: '¡Llegó el día! 🐾',
+      body:
+        'Hola {{nombre}},\n\n**{{organizacion}}** registró la entrega de **{{animal}}**. ' +
+        'Para confirmarla, abre el enlace con tu sesión iniciada o escribe este código:\n\n**{{codigo}}**\n\n' +
+        'El código vence en {{minutos}} minutos. Al confirmar recibes la ficha de {{animal}} con sus vacunas y cuidados.',
+      ctaLabel: 'Confirmar la entrega',
+      footerNote: 'Si no estás recibiendo a {{animal}} en este momento, ignora este correo.',
+    },
+  },
+  {
     event: 'volunteering.enrollment_received',
     label: 'Inscripción de voluntariado recibida',
     description: 'Se envía al voluntario cuando se inscribe a una oportunidad.',
@@ -477,6 +512,32 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       preheader: '{{titulo}}',
       heading: '{{titulo}}',
       body: 'Hola {{nombre}},\n\nComo apoyaste a **{{organizacion}}**, queremos contarte cómo va:\n\n{{mensaje}}',
+    },
+  },
+  {
+    event: 'org.urgent_announcement',
+    label: 'Anuncio urgente de una organización',
+    description:
+      'Lo envía la organización a sus propios donantes, adoptantes o voluntarios (por ejemplo, un rescate que necesita hogar temporal hoy).',
+    audience: 'Contactos de la organización que no se han dado de baja de ella',
+    category: 'bulk',
+    theme: 'alert',
+    required: false,
+    variables: [
+      ORG,
+      v('nombre', 'Nombre de la persona (o "amigo(a)")', 'Laura'),
+      v('titulo', 'Título del anuncio', 'Necesitamos hogar temporal para 5 cachorros'),
+      v(
+        'mensaje',
+        'Mensaje',
+        'Hoy rescatamos una camada en Suba. Si puedes recibir uno por dos semanas, escríbenos.',
+      ),
+    ],
+    defaults: {
+      subject: 'Urgente: {{titulo}}',
+      preheader: '{{organizacion}} necesita tu ayuda',
+      heading: '{{titulo}}',
+      body: 'Hola {{nombre}},\n\n**{{organizacion}}** te escribe porque has apoyado su trabajo:\n\n{{mensaje}}',
     },
   },
   {

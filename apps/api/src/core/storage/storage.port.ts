@@ -34,6 +34,12 @@ export interface CreateUploadInput {
   visibility?: StorageVisibility;
 }
 
+/** Per-call options for {@link StoragePort.saveObject}. */
+export interface SaveObjectOptions {
+  /** Size limit for THIS object, replacing the global one. */
+  maxBytes?: number;
+}
+
 /** Bytes + content type read back from storage. */
 export interface StoredObjectData {
   data: Buffer;
@@ -52,10 +58,24 @@ export interface StoragePort {
 
   /**
    * T-108 (additive): persist real bytes for a reserved key. Adapters enforce
-   * path safety and the size limit. The stub keeps bytes in memory.
+   * path safety and the size limit (`STORAGE_MAX_FILE_MB`, or `options.maxBytes`
+   * when a caller with its own validated limit passes one, e.g. follow-up
+   * videos). The stub keeps bytes in memory.
    */
-  saveObject(key: string, data: Buffer, contentType?: string): Promise<void>;
+  saveObject(
+    key: string,
+    data: Buffer,
+    contentType?: string,
+    options?: SaveObjectOptions,
+  ): Promise<void>;
 
   /** T-108 (additive): read the bytes for a key, or null when it does not exist. */
   readObject(key: string): Promise<StoredObjectData | null>;
+
+  /**
+   * Optional: bytes an organization holds (public + private). Used for the
+   * storage quota of its plan; an adapter that cannot measure omits it and the
+   * quota is not applied.
+   */
+  measureOrganizationUsage?(organizationId: string): Promise<number>;
 }
