@@ -63,7 +63,11 @@ const REPORT = {
 type Call = { url: string; init?: RequestInit };
 let calls: Call[] = [];
 
-function stubApi(readiness = READINESS, history: unknown[] = []) {
+function stubApi(
+  readiness = READINESS,
+  history: unknown[] = [],
+  exportError?: { status: number; body: unknown },
+) {
   calls = [];
   vi.stubGlobal(
     'fetch',
@@ -71,6 +75,23 @@ function stubApi(readiness = READINESS, history: unknown[] = []) {
       const url = String(input);
       calls.push({ url, init });
       let body: unknown = [];
+      if (url.includes('/org/exports/data.xlsx')) {
+        if (exportError) {
+          return Promise.resolve({
+            ok: false,
+            status: exportError.status,
+            statusText: 'Forbidden',
+            headers: { get: () => null },
+            json: async () => exportError.body,
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          blob: async () => new Blob(['xlsx']),
+        });
+      }
       if (url.includes('/org/reports/readiness')) body = readiness;
       else if (url.includes('/org/reports/') && /\/(pdf|xlsx)$/.test(url)) {
         return Promise.resolve({
@@ -185,5 +206,46 @@ describe('OrgReportsPage (M13)', () => {
     expect(await screen.findByText('ADF-REP-2026-ABCDEFGH')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Generar PDF' })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Solo el propietario o un administrador/)).toHaveLength(2);
+  });
+
+  it('the owner downloads the data export from its own card', async () => {
+    stubApi();
+    renderShell({ route: '/organizacion/reportes', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Exportar mis datos' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/org/exports/data.xlsx'))).toBe(true),
+    );
+    expect(screen.getByTestId('data-export-card')).toHaveTextContent(
+      'No incluye correos, teléfonos ni documentos',
+    );
+  });
+
+  it('without the plan, the export explains which plan includes it and links to the plans', async () => {
+    stubApi(READINESS, [], {
+      status: 403,
+      body: {
+        code: 'PLAN_REQUIRED',
+        capability: 'dataExport',
+        requiredPlan: 'crece',
+        message: 'Esta función está disponible desde el plan Crece.',
+      },
+    });
+    renderShell({ route: '/organizacion/reportes', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Exportar mis datos' }));
+    expect(await screen.findByText(/disponible desde el plan Crece/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver planes' })).toHaveAttribute(
+      'href',
+      '/organizacion/plan',
+    );
+  });
+
+  it('the read-only auditor does not see the data export', async () => {
+    stubApi(READINESS, [REPORT]);
+    renderShell({ route: '/organizacion/reportes', ...sessionWith([Role.ReadOnlyAuditor]) });
+
+    expect(await screen.findByText('ADF-REP-2026-ABCDEFGH')).toBeInTheDocument();
+    expect(screen.queryByTestId('data-export-card')).not.toBeInTheDocument();
   });
 });

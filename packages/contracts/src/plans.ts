@@ -158,7 +158,7 @@ export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; avail
   },
   customDomain: { label: 'Dominio propio (www.turefugio.org)', available: false },
   brandedEmails: { label: 'Correos a adoptantes y donantes con tu marca', available: false },
-  dataExport: { label: 'Exportar tus datos a Excel', available: false },
+  dataExport: { label: 'Exportar tus datos a Excel', available: true },
   impactReport: { label: 'Reporte de impacto en PDF para donantes', available: false },
   corporateSponsorship: { label: 'Patrocinio de empresas', available: false },
   prioritySupport: { label: 'Soporte prioritario por WhatsApp', available: true },

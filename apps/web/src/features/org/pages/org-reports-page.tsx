@@ -33,6 +33,7 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient, type ApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { DataExportCard } from '../components/data-export-card';
 
 /**
  * `/organizacion/reportes` (M13) — el dueño del refugio genera en un clic el
@@ -591,6 +592,8 @@ export function OrgReportsPage() {
               />
             ))}
           </div>
+
+          {canGenerate && <DataExportCard />}
 
           <Card className="mt-6">
             <CardHeader>
