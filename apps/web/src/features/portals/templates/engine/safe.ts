@@ -76,8 +76,12 @@ export function safeHref(raw: string | null | undefined): string | null {
 export function safeImgSrc(raw: string | null | undefined): string | null {
   // Nunca contenido mixto: una imagen http:// se pide por https:// (si el host
   // no tiene HTTPS, la imagen falla y la plantilla muestra la ilustración).
-  const v = typeof raw === 'string' ? raw.trim().replace(/^http:\/\//i, 'https://') : raw;
-  return safeHref(v);
+  if (typeof raw !== 'string') return safeHref(raw);
+  const trimmed = raw.trim();
+  // Excepción solo para desarrollo local: la API de la máquina (localhost) no tiene
+  // HTTPS, y sin esto las fotos no cargan en localhost aunque el portal clásico sí.
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(trimmed)) return safeHref(trimmed);
+  return safeHref(trimmed.replace(/^http:\/\//i, 'https://'));
 }
 
 /** `tel:` construido solo con dígitos y "+" inicial; `null` si no hay dígitos. */

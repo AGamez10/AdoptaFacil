@@ -116,4 +116,9 @@ export const BASE_CSS = `
 :where(.af-tpl.kit) .k-soc a:hover{transform:translateY(-3px);color:var(--k-acc)}
 :where(.af-tpl.kit) .k-soc svg{width:18px}
 @media (prefers-reduced-motion:reduce){.af-tpl *,.af-tpl *::before,.af-tpl *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+/* Logo del encabezado: su caja siempre reserva el mismo espacio (con o sin logo) y la
+   imagen nunca se sale de ella; el nombre de la organización se parte en líneas. */
+.af-tpl :is(.o-brand,.h-logo) i{flex:none;overflow:hidden;position:relative}
+.af-tpl :is(.o-brand,.h-logo) b{min-width:0;overflow-wrap:anywhere}
+.af-tpl .tpl-logo-img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 `;
