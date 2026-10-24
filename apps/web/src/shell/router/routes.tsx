@@ -94,6 +94,7 @@ import { SponsorPage, SponsorshipsPage } from '../../features/sponsorships';
 import { CertificateEmissionPage, CertificateVerificationPage } from '../../features/certificates';
 import {
   MyVolunteeringPage,
+  PublicVolunteeringPage,
   VolunteerOpportunitiesPage,
   VolunteerOpportunityDetailPage,
 } from '../../features/volunteering';
@@ -201,6 +202,10 @@ export function AppRoutes() {
           /organizacion/marketplace below. */}
       <Route path="/marketplace" element={<PublicMarketplacePage />} />
       <Route path="/marketplace/:id" element={<PublicProductDetailPage />} />
+      {/* Public volunteering portal (M08, RF18) — no auth, active opportunities
+          of every organization from /public/volunteer-opportunities. Enrolling
+          requires auth: the cards link to /voluntariado below (RequireAuth). */}
+      <Route path="/voluntariados" element={<PublicVolunteeringPage />} />
       {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
           no auth required to read; an authenticated visitor sees a "leave a
           review" form here instead of on a separate route. */}

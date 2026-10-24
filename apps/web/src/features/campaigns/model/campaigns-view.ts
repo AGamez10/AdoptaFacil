@@ -9,6 +9,8 @@ export const CATEGORY_LABELS: Record<CampaignCategory, string> = {
   [CampaignCategory.Sterilizations]: 'Esterilizaciones',
   [CampaignCategory.Infrastructure]: 'Infraestructura',
   [CampaignCategory.Emergencies]: 'Emergencias',
+  [CampaignCategory.Conservation]: 'Conservación',
+  [CampaignCategory.Education]: 'Educación y concientización',
 };
 
 /** Etiquetas legibles (es-CO) del estado de la campaña. */
