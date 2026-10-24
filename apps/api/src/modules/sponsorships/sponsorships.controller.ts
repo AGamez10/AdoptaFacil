@@ -35,6 +35,7 @@ import {
   paySponsorshipPaymentSchema,
   sponsorshipStatusChangeSchema,
 } from './sponsorships.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that may suspend/reactivate/cancel a sponsorship (§13 M07). */
 const MANAGE_ROLES = [Role.Owner, Role.Administrator] as const;
@@ -48,6 +49,7 @@ const VIEW_ROLES = [...MANAGE_ROLES, Role.ReadOnlyAuditor] as const;
  * Owner/Administrator (+ ReadOnlyAuditor for viewing) — deny-by-default for
  * everyone else. This slice does NOT process any payment (TODO T-057).
  */
+@RequireFeature('sponsorships')
 @Controller('sponsorships')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SponsorshipsController {
@@ -69,9 +71,9 @@ export class SponsorshipsController {
    * Recovery after auto-suspension by billing failure (Objetivo 6) — any
    * authenticated Person may retry ONLY their own suspended sponsorship (no
    * @Roles gate, ownership checked cross-tenant inside the service).
-   * T-OrdersAPI: the body now carries the sponsor's tokenized card (Checkout
-   * API/Orders — the frontend's Card Payment Brick replaces the retired
-   * MercadoPago redirect); optional so an old/no-body caller doesn't 400.
+   * The body may carry a tokenized card (contract kept; the web stopped
+   * sending one when Mercado Pago was retired, 2026-10-17); optional so an
+   * old/no-body caller doesn't 400.
    */
   @Post(':id/retry-payment')
   @HttpCode(200)

@@ -18,12 +18,14 @@ import {
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { PublicReputationService } from './public-reputation.service';
 import { createPublicReviewSchema } from './reviews.schemas';
+import { RequireFeature } from '../../core/features';
 
 /**
  * Public reputation indicators (RF23 · M12) — NO auth, mirrors
  * `PublicOrgCampaignsController`/M08's `public-volunteering.controller.ts`
  * (empty controller prefix, explicit `public/...` path per route).
  */
+@RequireFeature('reputation')
 @Controller()
 export class PublicReputationController {
   constructor(private readonly service: PublicReputationService) {}

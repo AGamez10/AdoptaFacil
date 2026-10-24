@@ -4,6 +4,10 @@ import { JwtService } from '@nestjs/jwt';
 import type { AccessTokenClaims, AccountType, AuthTokens } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AUTH_CONFIG, type AuthConfig } from './auth.config';
+import {
+  loadPlatformSecurityConfig,
+  type PlatformSecurityConfig,
+} from './mfa/platform-security.config';
 
 /** Everything needed to mint a token pair for a user. */
 export interface TokenPrincipal {
@@ -11,6 +15,12 @@ export interface TokenPrincipal {
   organizationId: string;
   accountType: AccountType;
   email: string;
+}
+
+/** Options of {@link TokenService.issueTokens}. */
+export interface IssueTokensOptions {
+  /** The session just passed the second factor (platform staff, TOTP). */
+  mfaVerifiedAt?: Date;
 }
 
 /**
@@ -23,9 +33,17 @@ export interface TokenPrincipal {
  *
  * The refresh/credential tables are NOT tenant-scoped, so these queries run on
  * the base client (no org context needed).
+ *
+ * Platform staff sessions that passed the second factor carry `mfa_at` in the
+ * access token and `mfa_verified_at` on the refresh row. Such a session gets a
+ * SHORTER access token, keeps its second factor across rotations only within
+ * the work-day window, and loses it when the refresh comes after the idle
+ * timeout — then the staff member types a code again (platform-security.config).
  */
 @Injectable()
 export class TokenService {
+  private readonly platform: PlatformSecurityConfig = loadPlatformSecurityConfig();
+
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
@@ -36,23 +54,52 @@ export class TokenService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  private signAccessToken(principal: TokenPrincipal): string {
+  /** Access-token lifetime: the platform staff one when the session carries a
+   *  second factor (never longer than the general one). */
+  private accessTtl(mfaVerifiedAt: Date | null | undefined): number {
+    return mfaVerifiedAt
+      ? Math.min(this.platform.accessTtlSeconds, this.config.accessTtlSeconds)
+      : this.config.accessTtlSeconds;
+  }
+
+  private signAccessToken(principal: TokenPrincipal, mfaVerifiedAt?: Date | null): string {
     const claims: AccessTokenClaims = {
       sub: principal.userId,
       org: principal.organizationId,
       typ: principal.accountType,
       email: principal.email,
     };
-    return this.jwt.sign(claims, { expiresIn: this.config.accessTtlSeconds });
+    if (mfaVerifiedAt) {
+      claims.mfa_at = Math.floor(mfaVerifiedAt.getTime() / 1000);
+    }
+    return this.jwt.sign(claims, { expiresIn: this.accessTtl(mfaVerifiedAt) });
   }
 
-  private async persistRefreshToken(userId: string): Promise<string> {
+  private async persistRefreshToken(userId: string, mfaVerifiedAt?: Date): Promise<string> {
     const refreshToken = randomBytes(48).toString('base64url');
     const expiresAt = new Date(Date.now() + this.config.refreshTtlSeconds * 1000);
     await this.prisma.refreshToken.create({
-      data: { userId, tokenHash: this.hashToken(refreshToken), expiresAt },
+      data: {
+        userId,
+        tokenHash: this.hashToken(refreshToken),
+        expiresAt,
+        mfaVerifiedAt: mfaVerifiedAt ?? null,
+      },
     });
     return refreshToken;
+  }
+
+  /** The second factor a rotating session keeps: only inside the work-day
+   *  window and only if the previous refresh is not older than the idle
+   *  timeout. Otherwise the new pair carries none. */
+  private carriedMfa(existing: { mfaVerifiedAt: Date | null; createdAt: Date }): Date | null {
+    if (!existing.mfaVerifiedAt) return null;
+    const now = Date.now();
+    const age = now - existing.mfaVerifiedAt.getTime();
+    const idle = now - existing.createdAt.getTime();
+    if (age >= this.platform.mfaSessionMaxSeconds * 1000) return null;
+    if (idle >= this.platform.idleTimeoutSeconds * 1000) return null;
+    return existing.mfaVerifiedAt;
   }
 
   /**
@@ -75,15 +122,23 @@ export class TokenService {
 
   /** Mint a fresh access + refresh pair for a principal (login / register /
    *  Google sign-in) — revokes any other session this user already had. */
-  async issueTokens(principal: TokenPrincipal): Promise<AuthTokens> {
+  async issueTokens(
+    principal: TokenPrincipal,
+    options: IssueTokensOptions = {},
+  ): Promise<AuthTokens> {
     await this.revokeOtherSessions(principal.userId);
-    const refreshToken = await this.persistRefreshToken(principal.userId);
+    const refreshToken = await this.persistRefreshToken(principal.userId, options.mfaVerifiedAt);
     return {
-      accessToken: this.signAccessToken(principal),
+      accessToken: this.signAccessToken(principal, options.mfaVerifiedAt),
       refreshToken,
       tokenType: 'Bearer',
-      expiresIn: this.config.accessTtlSeconds,
+      expiresIn: this.accessTtl(options.mfaVerifiedAt),
     };
+  }
+
+  /** End every session of a user (role revoked, second factor reset…). */
+  async revokeAllSessions(userId: string): Promise<void> {
+    await this.revokeOtherSessions(userId);
   }
 
   /** Validate a refresh token and rotate it, returning a new token pair. */
@@ -108,10 +163,16 @@ export class TokenService {
       email: credential.email,
     };
 
+    const mfaVerifiedAt = this.carriedMfa(existing);
     const newRefreshToken = randomBytes(48).toString('base64url');
     const expiresAt = new Date(Date.now() + this.config.refreshTtlSeconds * 1000);
     const replacement = await this.prisma.refreshToken.create({
-      data: { userId: principal.userId, tokenHash: this.hashToken(newRefreshToken), expiresAt },
+      data: {
+        userId: principal.userId,
+        tokenHash: this.hashToken(newRefreshToken),
+        expiresAt,
+        mfaVerifiedAt,
+      },
     });
     // Revoke the presented token and link it to its replacement (reuse trail).
     await this.prisma.refreshToken.update({
@@ -120,10 +181,10 @@ export class TokenService {
     });
 
     return {
-      accessToken: this.signAccessToken(principal),
+      accessToken: this.signAccessToken(principal, mfaVerifiedAt),
       refreshToken: newRefreshToken,
       tokenType: 'Bearer',
-      expiresIn: this.config.accessTtlSeconds,
+      expiresIn: this.accessTtl(mfaVerifiedAt),
     };
   }
 

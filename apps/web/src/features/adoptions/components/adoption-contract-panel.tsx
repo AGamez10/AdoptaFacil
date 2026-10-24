@@ -99,6 +99,15 @@ export function AdoptionContractPanel({ requestId, canManage }: AdoptionContract
         Ver contrato →
       </Link>
 
+      {contract.status === 'signed' && canManage && (
+        <Link
+          to={`/adopciones/contratos/${contract.id}`}
+          className="block font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Entregar el animal →
+        </Link>
+      )}
+
       {/* T-028c · seguimiento post-adopción (disponible una vez firmado). */}
       {contract.status === 'signed' && (
         <AdoptionFollowUpPanel contractId={contract.id} canManage={canManage} />

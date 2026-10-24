@@ -5,155 +5,52 @@ import {
   type PDFPage,
   PDFDocument,
   StandardFonts,
+  degrees,
   rgb,
 } from 'pdf-lib';
-import type {
-  AdoptionContractData,
-  AdoptionContractPayload,
-  AdoptionContractSigner,
+import {
+  buildAdoptionContractDocument,
+  type AdoptionContractBlock,
+  type AdoptionContractPayload,
+  type AdoptionContractSigner,
+  type AdoptionContractStatus,
 } from '@adoptafacil/contracts';
+import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
 
 /**
- * Texto legal FIJO del "Contrato de Adopción de Animal" (docs/Contrato de
- * Adopción.pdf, transcrito íntegro — incluidos los puntos 1-2 de
- * "Obligaciones del Adoptante", que el PDF origen perdía en un salto de
- * página y el cliente proporcionó por texto). Las cláusulas NO son
- * editables por la organización; solo los DATOS variables lo son (ver
- * {@link AdoptionContractData}). Mantener este archivo como la ÚNICA fuente
- * de verdad del texto — cualquier cambio de redacción legal se hace aquí.
+ * PDF del Contrato de Adopción. El TEXTO legal no vive aquí: sale de
+ * `buildAdoptionContractDocument` (packages/contracts), la misma fuente que usa
+ * la vista previa de la web, en la versión de plantilla con que se generó el
+ * contrato (`payload.templateVersion`). Este archivo solo maqueta: párrafos,
+ * cajas de datos, bloque de firmas de TODOS los firmantes y un pie con la
+ * huella SHA-256 en cada página.
  */
 
-const FUNDAMENTO_LEGAL =
-  'Este contrato se celebra en cumplimiento del Estatuto Nacional de Protección de los ' +
-  'Animales (Ley 84 de 1989) y sus modificaciones posteriores. La Ley 84/1989 dispone que ' +
-  '"los animales tendrán en todo el territorio nacional especial protección contra el ' +
-  'sufrimiento y el dolor, causados directa o indirectamente por el hombre". Su artículo 5 ' +
-  'enumera los deberes del propietario (ahora adoptante): suministrar alimento, agua, ' +
-  'condiciones de habitabilidad (espacio, ventilación, abrigo) y atención médica al animal ' +
-  'para asegurar su salud y bienestar. La Ley 1774 de 2016 incorporó a los animales como ' +
-  '"seres sintientes" y reforzó estas protecciones. Más recientemente, la Ley 2455 de 2025 ' +
-  '("Ley Ángel") actualizó las sanciones por maltrato y prohibió que personas condenadas por ' +
-  'crueldad animal puedan adoptar o tener animales por el doble de su pena. Con este marco, ' +
-  'las partes acuerdan el presente contrato de adopción con efectos jurídicos.';
+// Las fuentes estándar de PDF solo codifican WinAnsi (Latin-1 + algunos signos).
+// Cualquier otro carácter (emoji, otros alfabetos, controles) haría que pdf-lib
+// lance al dibujar, así que todo texto variable pasa por `pdfSafe`.
+const WIN_ANSI_EXTRA = new Set(
+  Array.from('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ').map((c) => c.codePointAt(0) as number),
+);
 
-const OBJETO_INTRO =
-  'El cedente entrega en adopción responsable al adoptante la mascota descrita a ' +
-  'continuación, a título gratuito (no es un contrato de compraventa):';
-
-const OBJETO_NOTA =
-  'El adoptante manifiesta conocer la salud y comportamiento de la mascota según la ' +
-  'información proporcionada por el cedente, y acepta cuidarla como miembro de su hogar. ' +
-  'Ambas partes reconocen que la adopción es gratuita y que el cedente actuó sin ánimo de ' +
-  'lucro; solo se puede pactar una cuota de recuperación de gastos veterinarios (no precio ' +
-  'de venta).';
-
-const OBLIGACIONES_INTRO =
-  'Las partes acuerdan que el adoptante asumirá todas las obligaciones inherentes al ' +
-  'cuidado y bienestar de la mascota, de conformidad con la Ley 84 de 1989 y normas ' +
-  'complementarias:';
-
-const OBLIGACIONES: Array<{ title: string; body: string }> = [
-  {
-    title: 'Cuidados básicos',
-    body:
-      'Proporcionar diariamente alimento de calidad, agua limpia, atención veterinaria ' +
-      '(vacunaciones, desparasitaciones, medicamentos) y un refugio apropiado contra el ' +
-      'clima. Todo ello debe hacerse con el fin de "asegurar su salud, bienestar y para ' +
-      'evitarle daño, enfermedad o muerte".',
-  },
-  {
-    title: 'Condiciones de alojamiento',
-    body:
-      'Mantener al animal en un entorno higiénico y seguro, con espacio suficiente. En caso ' +
-      'de animales domésticos, debe evitarse mantenerlos confinados de forma extrema que los ' +
-      'exponga a sufrimiento.',
-  },
-  {
-    title: 'Identificación y control',
-    body:
-      'Pasear al animal con correa cuando esté fuera del hogar, colocarle placa de ' +
-      'identificación o microchip y no permitir que se pierda o escape. El adoptante debe ' +
-      'notificar de inmediato al cedente si la mascota se extravía, se enferma gravemente o ' +
-      'fallece.',
-  },
-  {
-    title: 'Prohibición de usos indebidos',
-    body:
-      'Queda expresamente prohibido vender, regalar, alquilar, intercambiar, donar o ceder ' +
-      'el animal a terceros sin autorización del cedente. Tampoco podrá usarse para ' +
-      'reproducción comercial, peleas, ejercicios de maltrato o espectáculos que impliquen ' +
-      'violencia. Cualquier forma de maltrato o explotación es ilícita; las leyes (C.P. arts. ' +
-      '339A–339C, Ley 2455/2025) sancionan penalmente infligir "lesiones que menoscaben ' +
-      'gravemente la salud o integridad del animal" o causarle la muerte. El adoptante acepta ' +
-      'actuar con el respeto que exige la dignidad del ser vivo.',
-  },
-  {
-    title: 'Seguimiento post-adopción',
-    // `{months}` se sustituye por `data.followUpMonths` al renderizar.
-    body:
-      'Durante los primeros {months} meses (plazo pactado), el adoptante permitirá visitas ' +
-      'de seguimiento por parte del cedente o sus delegados, previa coordinación. El ' +
-      'adoptante enviará fotos e información sobre la adaptación del animal cuando lo ' +
-      'requiera el cedente.',
-  },
-];
-
-const SANCIONES_INTRO =
-  'Las partes acuerdan que el incumplimiento de estas obligaciones será causa de ' +
-  'resolución inmediata del contrato. En particular:';
-
-const SANCIONES: Array<{ title: string; body: string }> = [
-  {
-    title: 'Maltrato o abandono',
-    body:
-      'Se considera abandono y maltrato cualquier acto prohibido por la ley (por ejemplo, ' +
-      'dejar al animal desamparado en estado de vejez o enfermedad, o simplemente ' +
-      'abandonarlo bajo su custodia). Estos actos constituyen contravención o delito penal. ' +
-      'En tal caso, el cedente podrá rescindir el contrato y recuperar la mascota sin ' +
-      'responsabilidad alguna, enviándola de inmediato a un refugio o a otro hogar aprobado.',
-  },
-  {
-    title: 'Ruptura de compromiso',
-    body:
-      'Si el adoptante decide que no puede continuar con la adopción (p. ej. por ' +
-      'dificultades económicas o de salud), deberá notificar al cedente y devolver la ' +
-      'mascota. El cedente acepta recibirla de regreso para reubicarla adecuadamente.',
-  },
-  {
-    title: 'Responsabilidad civil y penal',
-    body:
-      'El adoptante asume cualquier responsabilidad legal derivada de sus acciones u ' +
-      'omisiones en relación con la mascota. Por ejemplo, acepta que infringir las ' +
-      'obligaciones aquí pactadas o las normas legales (como la Ley 84/1989 o el Código ' +
-      'Penal modificado) puede implicar sanciones de multa, arresto o inhabilitación.',
-  },
-];
-
-const VIGENCIA =
-  'Este contrato entra en vigencia en la fecha de su firma y permanecerá vigente mientras ' +
-  'dure la tenencia de la mascota por parte del adoptante.';
-
-// "{city}" se sustituye por `data.signatureCity` al renderizar.
-const JURISDICCION =
-  'Para efectos legales, las partes fijan como domicilio la ciudad de {city}. Cualquier ' +
-  'controversia se resolverá ante los jueces civiles de esta jurisdicción, renunciando a ' +
-  'otro fuero.';
-
-const COMPROMISO =
-  'Ambas partes declaran haber leído íntegramente este documento y haber sido informadas ' +
-  'de la normativa vigente aplicable (Leyes 84/1989, 1774/2016, 2455/2025, Código Penal, ' +
-  'etc.), aceptando su contenido en todas sus partes.';
-
-const SEX_LABELS: Record<string, string> = {
-  male: 'Macho',
-  female: 'Hembra',
-  unknown: 'Sin especificar',
-};
-const SPECIES_LABELS: Record<string, string> = { dog: 'Perro', cat: 'Gato', other: 'Otro' };
-
-function blank(value: string | number | undefined | null): string {
-  if (value === undefined || value === null || value === '') return '______';
-  return String(value);
+/** Normaliza y deja solo caracteres que las fuentes estándar pueden dibujar. */
+export function pdfSafe(text: string): string {
+  let out = '';
+  for (const ch of text.normalize('NFC')) {
+    const code = ch.codePointAt(0) as number;
+    if (code === 0x09 || code === 0x0a || code === 0x0d) {
+      out += ' ';
+    } else if ((code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)) {
+      out += ch;
+    } else if (WIN_ANSI_EXTRA.has(code)) {
+      out += ch;
+    } else if (code < 0x20 || (code >= 0x7f && code < 0xa0)) {
+      // controles: se eliminan
+    } else {
+      out += '?';
+    }
+  }
+  return out;
 }
 
 function formatCO(isoUtc: string): string {
@@ -170,6 +67,7 @@ const MUTED = rgb(0.4, 0.4, 0.4);
 const NAVY = rgb(0.08, 0.16, 0.3);
 const PAGE_SIZE: [number, number] = [595.28, 841.89]; // A4 vertical
 const MARGIN = 54;
+const FOOTER_SPACE = 28;
 const CONTENT_WIDTH = PAGE_SIZE[0] - MARGIN * 2;
 const BODY_SIZE = 10.5;
 const BODY_LEADING = 14.5;
@@ -181,27 +79,37 @@ interface ContractFonts {
   sansBold: PDFFont;
 }
 
-/** Word-wraps `text` to fit within `maxWidth` at `size` — pdf-lib never wraps on its own. */
+/** Word-wraps `text` to fit within `maxWidth` at `size` — pdf-lib never wraps
+ *  on its own. A single word longer than the line (a hash, an email) is cut. */
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = '';
+  const push = (word: string): void => {
+    let rest = word;
+    while (font.widthOfTextAtSize(rest, size) > maxWidth && rest.length > 1) {
+      let cut = rest.length - 1;
+      while (cut > 1 && font.widthOfTextAtSize(rest.slice(0, cut), size) > maxWidth) cut -= 1;
+      lines.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    current = rest;
+  };
   for (const word of words) {
     const attempt = current ? `${current} ${word}` : word;
-    if (current && font.widthOfTextAtSize(attempt, size) > maxWidth) {
-      lines.push(current);
-      current = word;
-    } else {
+    if (font.widthOfTextAtSize(attempt, size) <= maxWidth) {
       current = attempt;
+      continue;
     }
+    if (current) lines.push(current);
+    push(word);
   }
   if (current) lines.push(current);
   return lines;
 }
 
-/** Cursor de escritura: dibuja un párrafo izquierda-alineado, abriendo página
- *  nueva automáticamente si no cabe — así el contrato nunca se corta a medias
- *  como le pasó al PDF original (puntos 1-2 perdidos en un salto de página). */
+/** Cursor de escritura: abre página nueva automáticamente si el contenido no
+ *  cabe, así el contrato nunca se corta a medias. */
 class Cursor {
   page: PDFPage;
   y: number;
@@ -214,22 +122,26 @@ class Cursor {
   }
 
   ensureSpace(height: number): void {
-    if (this.y - height < MARGIN) {
+    if (this.y - height < MARGIN + FOOTER_SPACE) {
       this.page = this.pdf.addPage(PAGE_SIZE);
       this.y = PAGE_SIZE[1] - MARGIN;
     }
   }
 
   title(text: string): void {
-    this.ensureSpace(30);
-    this.page.drawText(text, {
-      x: MARGIN,
-      y: this.y,
-      size: 18,
-      font: this.font.serifBold,
-      color: NAVY,
-    });
-    this.y -= 14;
+    const lines = wrapText(pdfSafe(text), this.font.serifBold, 16, CONTENT_WIDTH);
+    this.ensureSpace(lines.length * 20 + 24);
+    for (const line of lines) {
+      this.page.drawText(line, {
+        x: MARGIN,
+        y: this.y,
+        size: 16,
+        font: this.font.serifBold,
+        color: NAVY,
+      });
+      this.y -= 20;
+    }
+    this.y += 6;
     this.page.drawLine({
       start: { x: MARGIN, y: this.y },
       end: { x: MARGIN + CONTENT_WIDTH, y: this.y },
@@ -240,66 +152,136 @@ class Cursor {
   }
 
   heading(text: string): void {
-    this.ensureSpace(24);
-    this.page.drawText(text, {
-      x: MARGIN,
-      y: this.y,
-      size: 12.5,
-      font: this.font.sansBold,
-      color: NAVY,
-    });
-    this.y -= 18;
+    const lines = wrapText(pdfSafe(text), this.font.sansBold, 11.5, CONTENT_WIDTH);
+    this.ensureSpace(lines.length * 16 + BODY_LEADING * 2);
+    for (const line of lines) {
+      this.page.drawText(line, {
+        x: MARGIN,
+        y: this.y,
+        size: 11.5,
+        font: this.font.sansBold,
+        color: NAVY,
+      });
+      this.y -= 16;
+    }
+    this.y -= 2;
   }
 
   paragraph(
     text: string,
-    opts?: { indent?: number; bold?: boolean; color?: ReturnType<typeof rgb> },
+    opts?: { indent?: number; size?: number; color?: ReturnType<typeof rgb> },
   ): void {
     const indent = opts?.indent ?? 0;
-    const font = opts?.bold ? this.font.sansBold : this.font.serif;
-    const color = opts?.color ?? INK;
-    const lines = wrapText(text, font, BODY_SIZE, CONTENT_WIDTH - indent);
+    const size = opts?.size ?? BODY_SIZE;
+    const lines = wrapText(pdfSafe(text), this.font.serif, size, CONTENT_WIDTH - indent);
     for (const line of lines) {
       this.ensureSpace(BODY_LEADING);
-      this.page.drawText(line, { x: MARGIN + indent, y: this.y, size: BODY_SIZE, font, color });
+      this.page.drawText(line, {
+        x: MARGIN + indent,
+        y: this.y,
+        size,
+        font: this.font.serif,
+        color: opts?.color ?? INK,
+      });
       this.y -= BODY_LEADING;
     }
   }
 
-  /** Un ítem "**Título:** cuerpo" — título en negrita seguido del cuerpo en la misma fila de inicio. */
-  numberedItem(title: string, body: string): void {
-    this.ensureSpace(BODY_LEADING);
-    const label = `${title}: `;
+  /** Un ítem "Título: cuerpo" — título en negrita y el cuerpo a continuación. */
+  clause(title: string, body: string): void {
+    const label = `${pdfSafe(title)}: `;
     const labelWidth = this.font.sansBold.widthOfTextAtSize(label, BODY_SIZE);
+    const indent = 12;
+    const words = pdfSafe(body).split(/\s+/).filter(Boolean);
+    let firstLine = '';
+    let i = 0;
+    const firstMax = CONTENT_WIDTH - indent - labelWidth;
+    for (; i < words.length; i++) {
+      const attempt = firstLine ? `${firstLine} ${words[i]}` : words[i];
+      if (this.font.serif.widthOfTextAtSize(attempt, BODY_SIZE) > firstMax) break;
+      firstLine = attempt;
+    }
+    this.ensureSpace(BODY_LEADING * 2);
     this.page.drawText(label, {
-      x: MARGIN,
+      x: MARGIN + indent,
       y: this.y,
       size: BODY_SIZE,
       font: this.font.sansBold,
       color: INK,
     });
-    const firstLineMaxWidth = CONTENT_WIDTH - labelWidth;
-    const words = body.split(/\s+/).filter(Boolean);
-    let firstLine = '';
-    let rest = '';
-    for (let i = 0; i < words.length; i++) {
-      const attempt = firstLine ? `${firstLine} ${words[i]}` : words[i];
-      if (firstLine && this.font.serif.widthOfTextAtSize(attempt, BODY_SIZE) > firstLineMaxWidth) {
-        rest = words.slice(i).join(' ');
-        break;
-      }
-      firstLine = attempt;
+    if (firstLine) {
+      this.page.drawText(firstLine, {
+        x: MARGIN + indent + labelWidth,
+        y: this.y,
+        size: BODY_SIZE,
+        font: this.font.serif,
+        color: INK,
+      });
     }
-    this.page.drawText(firstLine, {
-      x: MARGIN + labelWidth,
-      y: this.y,
-      size: BODY_SIZE,
-      font: this.font.serif,
-      color: INK,
-    });
     this.y -= BODY_LEADING;
-    if (rest) this.paragraph(rest);
-    this.y -= 4;
+    const rest = words.slice(i).join(' ');
+    if (rest) this.paragraph(rest, { indent });
+    this.y -= 3;
+  }
+
+  /** Caja gris de "Etiqueta: valor" con los valores envueltos (un estado de
+   *  salud largo nunca se sale de la página). */
+  fields(fields: Array<{ label: string; value: string }>): void {
+    const labelWidth = 170;
+    const valueWidth = CONTENT_WIDTH - labelWidth - 20;
+    const rows = fields.map((f) => ({
+      label: pdfSafe(`${f.label}:`),
+      lines: wrapText(pdfSafe(f.value), this.font.serif, BODY_SIZE, valueWidth),
+      labelLines: wrapText(pdfSafe(`${f.label}:`), this.font.sansBold, BODY_SIZE, labelWidth - 8),
+    }));
+    for (const row of rows) {
+      const height = Math.max(row.lines.length, row.labelLines.length, 1) * BODY_LEADING + 6;
+      this.ensureSpace(height);
+      this.page.drawRectangle({
+        x: MARGIN,
+        y: this.y - height + BODY_LEADING - 2,
+        width: CONTENT_WIDTH,
+        height,
+        color: rgb(0.97, 0.97, 0.98),
+        borderColor: rgb(0.85, 0.85, 0.88),
+        borderWidth: 0.5,
+      });
+      let y = this.y;
+      for (const l of row.labelLines) {
+        this.page.drawText(l, {
+          x: MARGIN + 8,
+          y,
+          size: BODY_SIZE,
+          font: this.font.sansBold,
+          color: INK,
+        });
+        y -= BODY_LEADING;
+      }
+      y = this.y;
+      for (const l of row.lines) {
+        this.page.drawText(l, {
+          x: MARGIN + labelWidth,
+          y,
+          size: BODY_SIZE,
+          font: this.font.serif,
+          color: INK,
+        });
+        y -= BODY_LEADING;
+      }
+      this.y -= height;
+    }
+    this.y -= 6;
+  }
+
+  block(block: AdoptionContractBlock): void {
+    if (block.kind === 'paragraph') {
+      this.paragraph(block.text);
+      this.y -= 4;
+    } else if (block.kind === 'clause') {
+      this.clause(block.title, block.text);
+    } else {
+      this.fields(block.fields);
+    }
   }
 
   gap(amount = 10): void {
@@ -307,207 +289,168 @@ class Cursor {
   }
 }
 
-function drawFieldBox(cursor: Cursor, fields: Array<{ label: string; value: string }>): void {
-  const rowHeight = 18;
-  const boxHeight = fields.length * rowHeight + 12;
-  cursor.ensureSpace(boxHeight);
-  const page = cursor.page;
-  const top = cursor.y;
-  page.drawRectangle({
-    x: MARGIN,
-    y: top - boxHeight,
-    width: CONTENT_WIDTH,
-    height: boxHeight,
-    borderColor: MUTED,
-    borderWidth: 0.75,
-    color: rgb(0.97, 0.97, 0.98),
-  });
-  let y = top - 16;
-  for (const field of fields) {
-    page.drawText(`${field.label}:`, {
-      x: MARGIN + 10,
-      y,
-      size: BODY_SIZE,
-      font: cursor.font.sansBold,
-      color: INK,
-    });
-    page.drawText(field.value, {
-      x: MARGIN + 170,
-      y,
-      size: BODY_SIZE,
-      font: cursor.font.serif,
-      color: INK,
-    });
-    y -= rowHeight;
+/** Incrusta una firma PNG o JPEG; `null` si los bytes no son una imagen válida
+ *  (una firma rota nunca impide generar el documento). */
+async function embedSignature(
+  pdf: PDFDocumentType,
+  bytes: Buffer | null,
+): Promise<PDFImage | null> {
+  if (!bytes || bytes.length < 4) return null;
+  try {
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+      return await pdf.embedPng(bytes);
+    }
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+      return await pdf.embedJpg(bytes);
+    }
+  } catch {
+    return null;
   }
-  cursor.y = top - boxHeight - 14;
+  return null;
 }
 
-interface SignatureRender {
-  signer: AdoptionContractSigner;
-  label: string;
-  image: PDFImage | null;
+export interface RenderAdoptionContractPdfInput {
+  payload: AdoptionContractPayload;
+  signers: AdoptionContractSigner[];
+  /** Bytes de la imagen de firma por id de firmante (`null` = sin firma aún). */
+  signatureImages: Record<string, Buffer | null>;
+  /** Para el pie de página. */
+  contractId?: string;
+  status?: AdoptionContractStatus;
+  contentHash?: string;
 }
 
 /**
- * Renderiza el contrato COMPLETO (texto legal fijo + datos del payload +
- * bloque de firmas) como un PDF multi-página. `representativeSignaturePng`/
- * `adopterSignaturePng` son los bytes PNG YA decodificados (o `null` si esa
- * parte todavía no ha firmado — se dibuja una línea en blanco). Una imagen
- * que falla al embeberse (PNG corrupto) nunca rompe la generación del
- * documento — se sigue sin ella, mismo criterio que
- * `VolunteerCertificatesService.generatePdf`.
+ * Renderiza el contrato COMPLETO como PDF multipágina: texto legal de la
+ * versión de plantilla del contrato, firmas de todos los firmantes (líneas en
+ * blanco para los pendientes) y, en cada página, un pie con el id del
+ * contrato, la versión del texto y la huella SHA-256 (o "BORRADOR" mientras no
+ * está sellado, con marca de agua).
  */
-export async function renderAdoptionContractPdf(input: {
-  payload: AdoptionContractPayload;
-  signers: AdoptionContractSigner[];
-  representativeSignaturePng: Buffer | null;
-  adopterSignaturePng: Buffer | null;
-}): Promise<Buffer> {
+export async function renderAdoptionContractPdf(
+  input: RenderAdoptionContractPdfInput,
+): Promise<Buffer> {
   const { payload, signers } = input;
-  const data: AdoptionContractData = payload.data;
+  const doc = buildAdoptionContractDocument(payload, signers);
   const pdf = await PDFDocument.create();
+  pdf.setTitle(pdfSafe(`${doc.title} — ${payload.animal.name}`));
+  pdf.setSubject('Contrato de adopción');
+  pdf.setProducer('AdoptaFácil');
+  pdf.setCreator('AdoptaFácil');
   const font: ContractFonts = {
     serif: await pdf.embedFont(StandardFonts.TimesRoman),
     serifBold: await pdf.embedFont(StandardFonts.TimesRomanBold),
     sans: await pdf.embedFont(StandardFonts.Helvetica),
     sansBold: await pdf.embedFont(StandardFonts.HelveticaBold),
   };
-  // Embebido ANTES de dibujar (pdf-lib es async aquí) — nunca dentro del
-  // dibujo del bloque de firmas, que debe quedar síncrono.
-  const representativeImage = input.representativeSignaturePng
-    ? await pdf.embedPng(input.representativeSignaturePng).catch(() => null)
-    : null;
-  const adopterImage = input.adopterSignaturePng
-    ? await pdf.embedPng(input.adopterSignaturePng).catch(() => null)
-    : null;
+  // Incrustadas ANTES de dibujar (pdf-lib es async aquí).
+  const images = new Map<string, PDFImage | null>();
+  for (const signer of signers) {
+    images.set(signer.id, await embedSignature(pdf, input.signatureImages[signer.id] ?? null));
+  }
 
   const cursor = new Cursor(pdf, font);
-  cursor.title('CONTRATO DE ADOPCIÓN DE ANIMAL');
+  cursor.title(doc.title);
 
-  cursor.heading('FUNDAMENTO LEGAL');
-  cursor.paragraph(FUNDAMENTO_LEGAL);
-  cursor.gap();
-
-  cursor.heading('PARTES');
-  cursor.paragraph(
-    `Cedente/Entregante: Adopta Fácil (organización protectora de animales), con domicilio ` +
-      `en ${blank(data.organizationAddress)} y NIT ${blank(data.organizationNit)}.`,
-  );
-  cursor.paragraph(
-    `Adoptante: Sr./Sra. ${blank(payload.applicant.fullName)}, identificado/a con cédula de ` +
-      `ciudadanía nº ${blank(data.adopterDocumentNumber)}, con domicilio en ` +
-      `${blank(data.adopterAddress)}.`,
-  );
-  cursor.gap();
-
-  cursor.heading('OBJETO');
-  cursor.paragraph(OBJETO_INTRO);
-  cursor.gap(4);
-  drawFieldBox(cursor, [
-    {
-      label: 'Especie y raza',
-      value: `${SPECIES_LABELS[payload.animal.species] ?? payload.animal.species} — ${blank(data.animalBreed)}`,
-    },
-    { label: 'Nombre', value: blank(payload.animal.name) },
-    {
-      label: 'Sexo',
-      value: data.animalSex ? (SEX_LABELS[data.animalSex] ?? data.animalSex) : '______',
-    },
-    {
-      label: 'Edad aproximada',
-      value: data.animalAgeYears !== undefined ? `${data.animalAgeYears} años` : '______',
-    },
-    { label: 'Peso', value: data.weightKg !== undefined ? `${data.weightKg} kg` : '______' },
-    {
-      label: 'Estado de salud al momento de la entrega',
-      value: blank(data.healthStatusAtDelivery),
-    },
-  ]);
-  cursor.paragraph(OBJETO_NOTA);
-  cursor.gap();
-
-  cursor.heading('OBLIGACIONES DEL ADOPTANTE');
-  cursor.paragraph(OBLIGACIONES_INTRO);
-  cursor.gap(4);
-  for (const item of OBLIGACIONES) {
-    const body = item.body.replace('{months}', blank(data.followUpMonths));
-    cursor.numberedItem(item.title, body);
+  for (const section of doc.sections) {
+    cursor.heading(section.heading);
+    for (const block of section.blocks) cursor.block(block);
+    cursor.gap(6);
   }
-  cursor.gap();
 
-  cursor.heading('SANCIONES POR INCUMPLIMIENTO Y DEVOLUCIÓN');
-  cursor.paragraph(SANCIONES_INTRO);
-  cursor.gap(4);
-  for (const item of SANCIONES) {
-    cursor.numberedItem(item.title, item.body);
-  }
-  cursor.gap();
-
-  cursor.heading('DISPOSICIONES FINALES');
-  cursor.numberedItem('Vigencia', VIGENCIA);
-  cursor.numberedItem('Jurisdicción', JURISDICCION.replace('{city}', blank(data.signatureCity)));
-  cursor.numberedItem('Compromiso', COMPROMISO);
-  if (payload.terms.trim()) {
-    cursor.numberedItem('Notas adicionales', payload.terms.trim());
-  }
-  cursor.gap(6);
-
-  const signedDate = signers.find((s) => s.signedAt)?.signedAt;
+  const signedDate = signers
+    .map((s) => s.signedAt)
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .at(-1);
   cursor.paragraph(
-    `Firmado en ${blank(data.signatureCity)}, el ${signedDate ? formatCO(signedDate) : '______'}.`,
+    `Firmado en ${doc.signatureCity}, el ${signedDate ? formatCO(signedDate) : '______'}.`,
   );
-  cursor.gap(20);
+  cursor.gap(16);
 
-  const signatures: SignatureRender[] = [
-    {
-      signer: signers.find(
-        (s) => s.role === 'organization_representative',
-      ) as AdoptionContractSigner,
-      label: 'Por el Cedente (Adopta Fácil)',
-      image: representativeImage,
-    },
-    {
-      signer: signers.find((s) => s.role === 'adopter') as AdoptionContractSigner,
-      label: 'Por el Adoptante',
-      image: adopterImage,
-    },
-  ];
-
-  const blockWidth = (CONTENT_WIDTH - 30) / 2;
-  for (let i = 0; i < signatures.length; i++) {
-    const { signer, label, image } = signatures[i];
-    if (!signer) continue;
-    const x = MARGIN + i * (blockWidth + 30);
-    cursor.ensureSpace(90);
-    const page = cursor.page;
+  // Bloque de firmas: dos columnas, todas las partes (incluidos testigos y
+  // responsables firmantes, que la versión anterior omitía).
+  const columnGap = 30;
+  const blockWidth = (CONTENT_WIDTH - columnGap) / 2;
+  const rowHeight = 104;
+  for (let i = 0; i < signers.length; i += 2) {
+    cursor.ensureSpace(rowHeight);
     const topY = cursor.y;
-    if (image) {
-      const naturalWidth = image.width || 300;
-      const naturalHeight = image.height || 120;
-      const drawWidth = Math.min(140, naturalWidth);
-      const drawHeight = (drawWidth / naturalWidth) * naturalHeight;
-      page.drawImage(image, { x, y: topY - drawHeight, width: drawWidth, height: drawHeight });
-    }
-    page.drawLine({
-      start: { x, y: topY - 46 },
-      end: { x: x + blockWidth, y: topY - 46 },
-      thickness: 0.75,
-      color: INK,
-    });
-    page.drawText(label, { x, y: topY - 60, size: 9.5, font: font.sans, color: MUTED });
-    page.drawText(signer.fullName, { x, y: topY - 74, size: 10, font: font.sansBold, color: INK });
-    if (signer.signedAt) {
-      page.drawText(`Firmado el ${formatCO(signer.signedAt)}`, {
+    for (let j = 0; j < 2 && i + j < signers.length; j++) {
+      const signer = signers[i + j];
+      const page = cursor.page;
+      const x = MARGIN + j * (blockWidth + columnGap);
+      const image = images.get(signer.id) ?? null;
+      if (image && signer.signedAt) {
+        const drawWidth = Math.min(140, image.width || 140);
+        const drawHeight = Math.min(42, (drawWidth / (image.width || 1)) * (image.height || 42));
+        page.drawImage(image, { x, y: topY - 44, width: drawWidth, height: drawHeight });
+      }
+      page.drawLine({
+        start: { x, y: topY - 48 },
+        end: { x: x + blockWidth, y: topY - 48 },
+        thickness: 0.75,
+        color: INK,
+      });
+      page.drawText(pdfSafe(doc.signerLabels[signer.role] ?? signer.role), {
         x,
-        y: topY - 88,
-        size: 8.5,
+        y: topY - 61,
+        size: 9,
         font: font.sans,
         color: MUTED,
       });
+      const nameLines = wrapText(pdfSafe(signer.fullName), font.sansBold, 10, blockWidth);
+      page.drawText(nameLines[0] ?? '', {
+        x,
+        y: topY - 75,
+        size: 10,
+        font: font.sansBold,
+        color: INK,
+      });
+      page.drawText(
+        pdfSafe(
+          signer.signedAt
+            ? `Firma electrónica · ${formatCO(signer.signedAt)}`
+            : 'Pendiente de firma',
+        ),
+        { x, y: topY - 88, size: 8.5, font: font.sans, color: MUTED },
+      );
     }
+    cursor.y = topY - rowHeight;
   }
 
+  // Pie y marca de agua en cada página.
+  const sealed = input.status === 'signed' && Boolean(input.contentHash);
+  const pages = pdf.getPages();
+  const idText = input.contractId ? `Contrato ${input.contractId.slice(0, 8)}` : 'Contrato';
+  const versionText = `texto ${doc.templateVersion}`;
+  const hashText = sealed
+    ? `Huella SHA-256: ${input.contentHash}`
+    : 'BORRADOR — sin sello, sin valor como contrato firmado';
+  pages.forEach((page, index) => {
+    const footer = pdfSafe(`${idText} · ${versionText} · página ${index + 1} de ${pages.length}`);
+    page.drawText(footer, { x: MARGIN, y: 30, size: 7.5, font: font.sans, color: MUTED });
+    page.drawText(pdfSafe(hashText), {
+      x: MARGIN,
+      y: 20,
+      size: 6.5,
+      font: font.sans,
+      color: MUTED,
+    });
+    if (!sealed) {
+      page.drawText('BORRADOR', {
+        x: 115,
+        y: 240,
+        size: 80,
+        font: font.sansBold,
+        color: rgb(0.85, 0.85, 0.85),
+        opacity: 0.35,
+        rotate: degrees(40),
+      });
+    }
+  });
+
+  await stampPlatformDocumentNotice(pdf);
   const bytes = await pdf.save();
   return Buffer.from(bytes);
 }

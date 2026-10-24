@@ -20,7 +20,10 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { FormAlert } from '../../auth/components/form-alert';
 import { createDonation, fetchOrganizationDonationAvailability } from '../api/donations-api';
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
+import { DonationsActivatingNotice } from '../components/donations-activating-notice';
 import { formatCop } from '../model/donation-breakdown-view';
+import { isEpaycoProvider } from '../../payments/lib/payment-provider';
+import { openEpaycoCheckout } from '../../payments/lib/epayco-checkout';
 import styles from './donate-page.module.scss';
 
 interface DonationTarget {
@@ -31,6 +34,9 @@ interface DonationTarget {
   organizationLogoUrl?: string;
   organizationCity?: string;
   organizationNit?: string;
+  /** Slug del portal público (`/o/<slug>`), para ofrecer alternativas si la
+   *  organización aún no recibe donaciones en línea. Solo navegación. */
+  organizationSlug?: string;
 }
 
 /**
@@ -54,6 +60,7 @@ function useDonationTarget(): DonationTarget | null {
         organizationLogoUrl: params.get('organizationLogoUrl') ?? undefined,
         organizationCity: params.get('organizationCity') ?? undefined,
         organizationNit: params.get('organizationNit') ?? undefined,
+        organizationSlug: params.get('organizationSlug') ?? undefined,
       };
     }
     return null;
@@ -85,18 +92,30 @@ export function DonatePage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<Donation | null>(null);
-  // Remounts <DonateForm> with fresh internal state ("Intentar con otra
-  // tarjeta" after a declined charge, T-OrdersAPI) — the form owns its own
-  // amount/step state, so a plain re-render alone wouldn't reset it.
+  // Remounts <DonateForm> with fresh internal state ("Intentar de nuevo"
+  // after a declined charge) — the form owns its own amount state, so a plain
+  // re-render alone wouldn't reset it.
   const [formInstanceKey, setFormInstanceKey] = useState(0);
-  // Solo se puede donar a una organización con su cuenta de MercadoPago conectada.
+  // ADR-PAG-002: ePayco es la única pasarela — tras crear la donación se abre
+  // su checkout con la sesión que devolvió la API. `false` solo con el
+  // interruptor de apagado (VITE_PAYMENT_PROVIDER=off): aviso tranquilo.
+  const epayco = isEpaycoProvider();
+  const [epaycoCheckout, setEpaycoCheckout] = useState<{
+    donation: Donation;
+    sessionId: string;
+    test: boolean;
+    status: 'opening' | 'open' | 'error';
+  } | null>(null);
+  // Solo se puede donar a una organización con su cuenta ePayco conectada.
   const [availability, setAvailability] = useState<
     'loading' | 'connected' | 'not-connected' | 'error'
   >('loading');
   const targetOrganizationId = target?.organizationId;
+  // "Intentar de nuevo" tras una falla al verificar (sin recargar la página).
+  const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
 
   useEffect(() => {
-    if (!targetOrganizationId) return;
+    if (!targetOrganizationId || !epayco) return;
     let active = true;
     setAvailability('loading');
     fetchOrganizationDonationAvailability(targetOrganizationId)
@@ -109,7 +128,7 @@ export function DonatePage() {
     return () => {
       active = false;
     };
-  }, [targetOrganizationId]);
+  }, [targetOrganizationId, availabilityAttempt, epayco]);
 
   if (!target) {
     // Sin organización objetivo y CON sesión: el historial vive en `/mis-donaciones`
@@ -145,15 +164,27 @@ export function DonatePage() {
     );
   }
 
+  const launchEpaycoCheckout = async (donation: Donation, sessionId: string, test: boolean) => {
+    setEpaycoCheckout({ donation, sessionId, test, status: 'opening' });
+    try {
+      await openEpaycoCheckout({ sessionId, test });
+      setEpaycoCheckout({ donation, sessionId, test, status: 'open' });
+    } catch {
+      setEpaycoCheckout({ donation, sessionId, test, status: 'error' });
+      toast({
+        title: 'No se pudo abrir la pasarela de ePayco',
+        description: 'Revisa tu conexión e inténtalo de nuevo. No se te ha cobrado nada.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const donate = async ({
     intendedAmount,
     commissionPayer,
     anonymous,
     guestPayer,
-    cardToken,
-    paymentMethodId,
-    paymentMethodType,
-    installments,
+    legalAcceptances,
   }: DonateFormValues): Promise<void> => {
     setSubmitting(true);
     try {
@@ -169,16 +200,19 @@ export function DonatePage() {
             ? { fullName: user.name, email: user.email }
             : undefined
           : guestPayer,
+        // Invitado: prueba de su aceptación de términos y datos (Ley 1581).
+        legalAcceptances,
         // Idempotencia: el servidor deduplica por (org, key); una clave por intento.
         idempotencyKey: crypto.randomUUID(),
-        // T-OrdersAPI (Checkout API/Orders): reemplaza el antiguo redirect de
-        // Checkout Pro — la tarjeta ya fue tokenizada por el Card Payment
-        // Brick (paso 2 de DonateForm) ANTES de llegar aquí.
-        cardToken,
-        paymentMethodId,
-        paymentMethodType,
-        installments,
       });
+      if (epayco && donation.checkoutSessionId) {
+        await launchEpaycoCheckout(
+          donation,
+          donation.checkoutSessionId,
+          donation.checkoutTest === true,
+        );
+        return;
+      }
       setDone(donation);
       toast(
         donation.status === 'approved'
@@ -190,7 +224,7 @@ export function DonatePage() {
             ? {
                 title: 'Pago rechazado',
                 description:
-                  'Tu banco o MercadoPago rechazaron el pago. Puedes intentarlo de nuevo.',
+                  'Tu banco o la pasarela de pagos rechazaron el pago. Puedes intentarlo de nuevo.',
                 variant: 'destructive',
               }
             : {
@@ -217,16 +251,15 @@ export function DonatePage() {
         description: 'Inténtalo de nuevo en un momento.',
         variant: 'destructive',
       });
-      // Re-throw: the Card Payment Brick awaits this promise and shows its
-      // OWN error state when it rejects (see CardPaymentBrick's doc comment)
-      // — swallowing it here would leave the Brick stuck "processing".
+      // Re-throw so the caller knows the donation failed (DonateForm swallows
+      // it after this toast; nothing else retries automatically).
       throw error;
     } finally {
       setSubmitting(false);
     }
   };
 
-  const retryWithAnotherCard = () => {
+  const retryDonation = () => {
     setDone(null);
     setFormInstanceKey((k) => k + 1);
   };
@@ -273,19 +306,57 @@ export function DonatePage() {
                   {user.email && ` (${user.email})`}
                 </p>
               )}
-              {done ? (
+              {epaycoCheckout ? (
+                <div className={styles.done} data-testid="epayco-checkout-panel">
+                  {epaycoCheckout.status === 'opening' ? (
+                    <p className={styles['done__hint']} data-testid="epayco-checkout-opening">
+                      Abriendo la pasarela segura de ePayco…
+                    </p>
+                  ) : epaycoCheckout.status === 'error' ? (
+                    <FormAlert variant="error">
+                      <span data-testid="epayco-checkout-error">
+                        No pudimos cargar la pasarela de pagos de ePayco. Revisa tu conexión (o
+                        desactiva el bloqueador de anuncios) e inténtalo de nuevo. Tu donación quedó
+                        registrada como pendiente: no se te ha cobrado nada.
+                      </span>
+                    </FormAlert>
+                  ) : (
+                    <EmptyState
+                      title="Completa tu pago en ePayco"
+                      description={`Abrimos la ventana segura de ePayco para pagar ${formatCop(epaycoCheckout.donation.amountCharged)} con los medios que tenga habilitados ${target.organizationName}. Cuando ePayco confirme el pago te enviaremos el recibo automático.`}
+                    />
+                  )}
+                  {epaycoCheckout.status !== 'opening' && (
+                    <Button
+                      variant={epaycoCheckout.status === 'error' ? 'default' : 'outline'}
+                      onClick={() =>
+                        void launchEpaycoCheckout(
+                          epaycoCheckout.donation,
+                          epaycoCheckout.sessionId,
+                          epaycoCheckout.test,
+                        )
+                      }
+                      data-testid="epayco-checkout-reopen"
+                    >
+                      {epaycoCheckout.status === 'error'
+                        ? 'Reintentar abrir el pago'
+                        : 'Abrir de nuevo la ventana de pago'}
+                    </Button>
+                  )}
+                </div>
+              ) : done ? (
                 done.status === 'declined' ? (
-                  // T-OrdersAPI: a declined charge is a SUCCESSFUL API call
-                  // (the request itself succeeded; the gateway rejected the
-                  // card) — no certificate/account CTA, just an honest
-                  // message + a way to try a different card.
+                  // A declined charge is a SUCCESSFUL API call (the request
+                  // itself succeeded; the gateway rejected the payment) — no
+                  // certificate/account CTA, just an honest message + a way
+                  // to try again.
                   <div className={styles.done} data-testid="donation-declined">
                     <EmptyState
                       title="Tu pago no fue aprobado"
-                      description="MercadoPago o tu banco rechazaron el pago. Puedes intentarlo de nuevo con otra tarjeta."
+                      description="Tu banco o la pasarela de pagos rechazaron el pago. Puedes intentarlo de nuevo con otro medio de pago."
                     />
-                    <Button onClick={retryWithAnotherCard} data-testid="donation-retry-card">
-                      Intentar con otra tarjeta
+                    <Button onClick={retryDonation} data-testid="donation-retry-card">
+                      Intentar de nuevo
                     </Button>
                   </div>
                 ) : (
@@ -336,30 +407,53 @@ export function DonatePage() {
                     )}
                   </div>
                 )
+              ) : !epayco ? (
+                // Interruptor de apagado (VITE_PAYMENT_PROVIDER=off): nunca un
+                // flujo roto, un aviso tranquilo y otras formas de ayudar.
+                <div className={styles.done} data-testid="donation-online-off">
+                  <EmptyState
+                    title="Pronto podrás donar en línea"
+                    description={`Las donaciones en línea están pausadas por ahora. Mientras tanto puedes apoyar a ${target.organizationName} desde su portal.`}
+                  />
+                  {target.organizationSlug && (
+                    <Link
+                      to={`/o/${encodeURIComponent(target.organizationSlug)}`}
+                      className={cn(buttonVariants({ variant: 'outline' }))}
+                    >
+                      Ver el portal de {target.organizationName}
+                    </Link>
+                  )}
+                </div>
               ) : availability === 'loading' ? (
                 <Skeleton className="h-48 w-full" data-testid="donation-availability-loading" />
               ) : availability === 'not-connected' ? (
-                <FormAlert variant="error">
-                  <span data-testid="donation-org-not-connected">
-                    <strong>{target.organizationName}</strong> aún no puede recibir donaciones: no
-                    ha conectado su cuenta de MercadoPago. Intenta más tarde o explora otras
-                    organizaciones.
-                  </span>
-                </FormAlert>
+                // Nunca un error para el donante: un mensaje cálido y otras
+                // formas reales de ayudar (aplica con cualquier pasarela).
+                <DonationsActivatingNotice
+                  data-testid="donation-org-not-connected"
+                  organizationName={target.organizationName}
+                  portalPath={
+                    target.organizationSlug
+                      ? `/o/${encodeURIComponent(target.organizationSlug)}`
+                      : undefined
+                  }
+                />
               ) : availability === 'error' ? (
-                <FormAlert variant="error">
-                  <span data-testid="donation-availability-error">
-                    No pudimos verificar si {target.organizationName} puede recibir donaciones.
-                    Recarga la página e inténtalo de nuevo.
-                  </span>
-                </FormAlert>
+                <div className={styles.done} data-testid="donation-availability-error">
+                  <EmptyState
+                    title="Estamos teniendo problemas para cargar la donación"
+                    description={`No pudimos confirmar en este momento si ${target.organizationName} ya recibe donaciones en línea. Revisa tu conexión e inténtalo de nuevo; no se te ha cobrado nada.`}
+                  />
+                  <Button onClick={() => setAvailabilityAttempt((n) => n + 1)}>
+                    Intentar de nuevo
+                  </Button>
+                </div>
               ) : (
                 <DonateForm
                   key={formInstanceKey}
                   organizationName={target.organizationName}
                   submitting={submitting}
                   hasSession={hasSession}
-                  sessionEmailHint={hasSession ? user?.email : undefined}
                   onDonate={donate}
                 />
               )}

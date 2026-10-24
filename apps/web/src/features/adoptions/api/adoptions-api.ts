@@ -1,5 +1,9 @@
 import type {
   AdoptionContract,
+  AdoptionDelivery,
+  AdoptionDeliveryCodeIssued,
+  AdoptionDeliveryPhotoTarget,
+  StartAdoptionDeliveryInput,
   AdoptionFollowUpMilestone,
   AdoptionRequest,
   CreateAdoptionRequestInput,
@@ -218,6 +222,29 @@ export function submitFollowUp(
   });
 }
 
+/**
+ * The adopter responds a milestone WITH a photo in the same request (multipart:
+ * `file`, plus optional `answers` as a JSON string and `complete` as
+ * "true"/"false"). The generic storage upload only accepts keys of the caller's
+ * own organization, so the adopter's photo travels through this endpoint.
+ */
+export function submitFollowUpWithPhoto(
+  client: ApiClient,
+  milestoneId: string,
+  file: File,
+  answers?: Record<string, unknown>,
+  options: { complete?: boolean } = {},
+): Promise<AdoptionFollowUpMilestone> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  if (answers !== undefined) form.append('answers', JSON.stringify(answers));
+  if (options.complete !== undefined) form.append('complete', String(options.complete));
+  return client.request<AdoptionFollowUpMilestone>(`/adoptions/followups/${milestoneId}/photo`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
 /** The org closes (completes) a milestone. */
 export function completeFollowUp(
   client: ApiClient,
@@ -225,5 +252,96 @@ export function completeFollowUp(
 ): Promise<AdoptionFollowUpMilestone> {
   return client.request<AdoptionFollowUpMilestone>(`/adoptions/followups/${milestoneId}/complete`, {
     method: 'POST',
+  });
+}
+
+// --- Ajuste 6 · acta de entrega -------------------------------------------
+
+/** Org reserves where to upload the mandatory delivery photo (private). */
+export function createDeliveryPhotoTarget(
+  client: ApiClient,
+  filename: string,
+): Promise<AdoptionDeliveryPhotoTarget> {
+  return client.request<AdoptionDeliveryPhotoTarget>('/adoptions/deliveries/photo-target', {
+    method: 'POST',
+    json: { filename },
+  });
+}
+
+/** PUT the photo bytes to the reserved key (auth handled by the client). */
+export async function uploadDeliveryPhoto(
+  client: ApiClient,
+  storageRef: string,
+  file: File,
+): Promise<void> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  await client.request(`/storage/upload?key=${encodeURIComponent(storageRef)}`, {
+    method: 'PUT',
+    body: form,
+  });
+}
+
+/** Org registers the delivery; returns the one-time code and the QR link. */
+export function startAdoptionDelivery(
+  client: ApiClient,
+  input: StartAdoptionDeliveryInput,
+): Promise<AdoptionDeliveryCodeIssued> {
+  return client.request<AdoptionDeliveryCodeIssued>('/adoptions/deliveries', {
+    method: 'POST',
+    json: input,
+  });
+}
+
+/** Org: the current (pending or confirmed) delivery of a contract, or null. */
+export async function getDeliveryForContract(
+  client: ApiClient,
+  contractId: string,
+): Promise<AdoptionDelivery | null> {
+  const body = await client.request<AdoptionDelivery | null | Record<string, never>>(
+    `/adoptions/deliveries/by-contract/${contractId}`,
+  );
+  return body && 'id' in body ? (body as AdoptionDelivery) : null;
+}
+
+/** Org issues a new code (expired, locked, or the email did not arrive). */
+export function regenerateDeliveryCode(
+  client: ApiClient,
+  deliveryId: string,
+): Promise<AdoptionDeliveryCodeIssued> {
+  return client.request<AdoptionDeliveryCodeIssued>(`/adoptions/deliveries/${deliveryId}/code`, {
+    method: 'POST',
+  });
+}
+
+/** Org cancels a pending delivery. */
+export function cancelAdoptionDelivery(
+  client: ApiClient,
+  deliveryId: string,
+): Promise<AdoptionDelivery> {
+  return client.request<AdoptionDelivery>(`/adoptions/deliveries/${deliveryId}/cancel`, {
+    method: 'POST',
+  });
+}
+
+/** The adopter's deliveries ("Mis animales"). */
+export function listMyDeliveries(client: ApiClient): Promise<AdoptionDelivery[]> {
+  return client.request<AdoptionDelivery[]>('/adoptions/deliveries/mine');
+}
+
+/** One delivery of the adopter (404 if it is not theirs). */
+export function getMyDelivery(client: ApiClient, deliveryId: string): Promise<AdoptionDelivery> {
+  return client.request<AdoptionDelivery>(`/adoptions/deliveries/mine/${deliveryId}`);
+}
+
+/** The adopter confirms the delivery with the 6-digit code. */
+export function confirmAdoptionDelivery(
+  client: ApiClient,
+  deliveryId: string,
+  code: string,
+): Promise<AdoptionDelivery> {
+  return client.request<AdoptionDelivery>(`/adoptions/deliveries/${deliveryId}/confirm`, {
+    method: 'POST',
+    json: { code },
   });
 }

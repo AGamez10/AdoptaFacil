@@ -2,6 +2,8 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ReminderStatus, Role } from '@adoptafacil/contracts';
 import { renderShell } from '../../test-utils';
+import { DATA_CHANGED_EVENT } from '../api';
+import { kudosMessage } from './pending-bell';
 
 /**
  * Campana de pendientes del encabezado: recordatorios clínicos abiertos + acciones
@@ -130,5 +132,50 @@ describe('PendingBell (encabezado)', () => {
     expect(screen.queryByTestId('pending-bell')).not.toBeInTheDocument();
     const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]));
     expect(urls.some((url) => url.includes('/clinical-reminders'))).toBe(false);
+  });
+});
+
+describe('PendingBell — lo atendido desaparece (Ola 3)', () => {
+  it('recuenta tras una escritura, quita el pendiente y agradece al usuario', async () => {
+    let summary = { ...SUMMARY, adoptionRequestsPending: 1, adoptionRequestsNew: 1 };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const body = url.includes('/clinical-reminders')
+          ? []
+          : url.includes('/org/summary')
+            ? summary
+            : {};
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => body,
+        });
+      }),
+    );
+    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    expect(await screen.findByTestId('pending-bell-count')).toHaveTextContent('1');
+
+    // La organización abre la solicitud: pasa a "En evaluación" en el servidor.
+    summary = { ...summary, adoptionRequestsNew: 0 };
+    window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT));
+
+    await waitFor(() => expect(screen.queryByTestId('pending-bell-count')).not.toBeInTheDocument());
+    expect(await screen.findByTestId('pending-bell-kudos')).toHaveTextContent(/Todo al día/);
+  });
+
+  it('no felicita en la primera carga', async () => {
+    stubFetch([]);
+    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    await screen.findByTestId('pending-bell-count');
+    expect(screen.queryByTestId('pending-bell-kudos')).not.toBeInTheDocument();
+  });
+
+  it('el mensaje de reconocimiento es fijo y cuenta lo atendido', () => {
+    expect(kudosMessage(1, 2)).toMatch(/Atendiste un pendiente/);
+    expect(kudosMessage(3, 1)).toMatch(/Atendiste 3 pendientes/);
+    expect(kudosMessage(2, 0)).toMatch(/Todo al día/);
   });
 });

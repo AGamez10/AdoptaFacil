@@ -1,0 +1,127 @@
+# ==============================================================================
+# AdoptaFacil - example environment. Create your .env with:  pnpm setup:env
+# (that guarantees UTF-8 without BOM; do NOT use PowerShell `>` / Out-File, which
+#  write UTF-16 and make Prisma resolve every variable as "(not available)").
+# NEVER commit a real .env; it is git-ignored. These are non-secret dev values.
+# The API validates these at startup and refuses to boot if a required var is
+# missing or malformed (see apps/api config validation).
+# ==============================================================================
+
+# --- Runtime ---------------------------------------------------------------
+NODE_ENV=development
+
+# --- API (apps/api) --------------------------------------------------------
+API_PORT=3000
+# Comma-separated origins allowed by CORS (the web dev server by default).
+API_CORS_ORIGIN=http://localhost:5173
+
+# --- PostgreSQL (consumed by docker-compose AND Prisma) --------------------
+POSTGRES_USER=adoptafacil
+POSTGRES_PASSWORD=adoptafacil
+POSTGRES_DB=adoptafacil
+# Host port for the docker container. Defaults to 5433 (not 5432) so it does NOT
+# collide with a native PostgreSQL install commonly listening on 5432. The
+# container still listens on 5432 internally; docker-compose maps host->5432.
+POSTGRES_PORT=5433
+# Prisma connection string. Host port must match POSTGRES_PORT above.
+# Superuser role from docker-compose; used for migrations and the API.
+DATABASE_URL=postgresql://adoptafacil:adoptafacil@localhost:5433/adoptafacil?schema=public
+# Non-superuser application role created by the initial migration. Used by the
+# RLS no-leak test, because superusers bypass Row-Level Security.
+DATABASE_URL_APP=postgresql://adoptafacil_app:adoptafacil_app@localhost:5433/adoptafacil?schema=public
+
+# --- Redis / BullMQ --------------------------------------------------------
+REDIS_PORT=6379
+REDIS_URL=redis://localhost:6379
+
+# --- Integration ports (simulable stubs only in Sprint 0) ------------------
+# NotificationPort adapter: `log` writes to stdout (default); `smtp` sends real
+# email. When NOTIFICATION_DRIVER=smtp the SMTP_* vars below are REQUIRED.
+NOTIFICATION_DRIVER=log
+# SMTP credentials (T-109) — fill these ONLY in your local, uncommitted .env.
+# Names only here; NEVER commit real values/secrets. For Gmail use an App
+# Password (SMTP_HOST=smtp.gmail.com, SMTP_PORT=465).
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+
+# Base URL of the web app (T-110) — used to build the clickable password-reset
+# link emailed to users ({WEB_BASE_URL}/reset-password?token=…). Dev default is
+# the Vite server; set the real public origin in production.
+WEB_BASE_URL=http://localhost:5173
+
+# PaymentPort adapter (T-052): `fake` = deterministic dev/test double
+# (default); `mercadopago` = real gateway (recaudo via Checkout API/Orders —
+# T-OrdersAPI, an embedded card form tokenized by the frontend's Card Payment
+# Brick; replaced the old Checkout Pro hosted-redirect preferences). When
+# PAYMENT_DRIVER=mercadopago the MERCADOPAGO_* vars below are REQUIRED.
+# MercadoPago fully replaced Wompi (client decision) — the two gateways never
+# coexist.
+PAYMENT_DRIVER=fake
+# MercadoPago credentials — fill these ONLY in your local, uncommitted .env,
+# with the SANDBOX/TEST keys (from your MercadoPago test application, e.g.
+# TEST-... access token). NEVER commit real/production values.
+MERCADOPAGO_BASE_URL=https://api.mercadopago.com
+MERCADOPAGO_PUBLIC_KEY=
+MERCADOPAGO_ACCESS_TOKEN=
+MERCADOPAGO_WEBHOOK_SECRET=
+# T-OAuth-Connect (Split de Pagos 1:1): platform-level app id/secret for the
+# "Conectar Mercado Pago" OAuth flow (an org authorizing AdoptaFácil), NOT the
+# collection/payout credentials above. Also REQUIRED when
+# PAYMENT_DRIVER=mercadopago.
+MERCADOPAGO_APP_ID=
+MERCADOPAGO_CLIENT_SECRET=
+# Optional — defaults to ${STORAGE_PUBLIC_BASE_URL}/org/mercadopago/callback
+# when unset. Uncomment to override.
+# MERCADOPAGO_OAUTH_REDIRECT_URI=
+
+# IdentityPort adapter (T-Google-SignIn): `fake` = deterministic dev/test
+# double (default) — accepts a documented fake token, e.g.
+# "fake:jane@example.com:Jane Doe" (see @adoptafacil/contracts/identity.ts),
+# so the whole Google Sign-In flow can be exercised end-to-end with NO real
+# Google account. `google` verifies real Google ID tokens via
+# google-auth-library. When AUTH_IDENTITY_DRIVER=google the
+# GOOGLE_OAUTH_CLIENT_ID var below is REQUIRED. The client has not handed over
+# real Google OAuth credentials yet, so `google` cannot be exercised
+# end-to-end until then (same shape MERCADOPAGO_* had before T-052).
+AUTH_IDENTITY_DRIVER=fake
+# Google OAuth 2.0 Client ID (web application type) — LEFT UNSET (not
+# empty-string) on purpose, same reason as the SMTP_*/MERCADOPAGO_* vars above:
+# the schema's z.string().min(1).optional() accepts a MISSING key but rejects
+# "". Uncomment + fill ONLY in your local, uncommitted .env once the client
+# provides one; NEVER commit a real value.
+# GOOGLE_OAUTH_CLIENT_ID=
+
+# --- Web (apps/web, Vite) --------------------------------------------------
+# Vite only exposes vars prefixed with VITE_ to the browser bundle.
+VITE_API_URL=http://localhost:3000
+# Real portal subdomains (F-1, M14): base domain organizations are hosted
+# under, e.g. `adoptafacil.com` so `patitaspeludas.adoptafacil.com` resolves
+# to that org's rich portal at "/". Left UNSET in dev/staging on purpose —
+# without it, subdomain detection never triggers and "/" always shows the
+# general portal; `/o/<slug>` keeps working as the path-based fallback either
+# way. Set this ONLY in the production environment once the wildcard DNS
+# record and SSL certificate exist.
+# VITE_PORTAL_BASE_DOMAIN=adoptafacil.com
+# Google OAuth 2.0 Client ID (T-Google-SignIn), same value as the API's
+# GOOGLE_OAUTH_CLIENT_ID above — Vite only exposes VITE_-prefixed vars to the
+# browser bundle, so it is repeated here under that prefix. Left EMPTY in
+# dev/test on purpose: with no real Client ID, the login/register screens
+# render a "Continuar con Google (prueba)" button that calls `POST
+# /auth/google` with a fake token instead of loading the real Google Identity
+# Services script — so the full flow still works locally against
+# AUTH_IDENTITY_DRIVER=fake. Set this ONLY once the client provides a real
+# Client ID (matching GOOGLE_OAUTH_CLIENT_ID / AUTH_IDENTITY_DRIVER=google).
+VITE_GOOGLE_CLIENT_ID=
+# MercadoPago PUBLIC key (T-OrdersAPI), same value as the API's
+# MERCADOPAGO_PUBLIC_KEY above — NOT secret, safe to expose in the browser
+# bundle (same VITE_-prefix duplication pattern as VITE_GOOGLE_CLIENT_ID).
+# Loads MercadoPago's Card Payment Brick SDK to tokenize a card client-side;
+# left EMPTY in dev/test on purpose — without it, the donation/sponsorship
+# payment forms render a "pago con tarjeta no disponible" message instead of
+# the Brick (PAYMENT_DRIVER=fake needs no real card either way). Set this ONLY
+# once the client provides a real MercadoPago public key (matching
+# MERCADOPAGO_PUBLIC_KEY / PAYMENT_DRIVER=mercadopago).
+VITE_MERCADOPAGO_PUBLIC_KEY=

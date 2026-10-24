@@ -3,6 +3,7 @@ import {
   DocumentStatus,
   DocumentType,
   Role,
+  type DocumentPrefill,
   type OrganizationDocument,
   type UploadOrganizationDocumentResult,
   type VerificationLevel,
@@ -28,6 +29,8 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { MissingDocumentHelp } from '../../guide/components/missing-document-help';
+import { OnboardingHelpCard } from '../../guide/components/onboarding-help-card';
 import { DocumentTypeIcon, UploadCloudIcon } from '../components/document-icons';
 import { TextField } from '../components/profile-fields';
 import {
@@ -39,6 +42,12 @@ import {
 import styles from './org-documents-page.module.scss';
 
 const DOC_TYPES = Object.values(DocumentType) as DocumentType[];
+
+/** Documentos de los que se pueden leer NIT y razón social para el perfil. */
+const PREFILL_TYPES: readonly DocumentType[] = [
+  DocumentType.Rut,
+  DocumentType.ExistenceRepresentationCertificate,
+];
 
 const TYPE_LABELS: Record<DocumentType, string> = {
   [DocumentType.ExistenceRepresentationCertificate]:
@@ -155,6 +164,8 @@ export function OrgDocumentsPage() {
   const [expiresAt, setExpiresAt] = useState('');
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [prefill, setPrefill] = useState<DocumentPrefill | null>(null);
+  const [reading, setReading] = useState<string | null>(null);
 
   const load = async (): Promise<void> => {
     const [docs, level] = await Promise.all([
@@ -226,8 +237,12 @@ export function OrgDocumentsPage() {
       });
       // 2) Send the real bytes to the reserved key (T-108).
       await uploadFileBytes(client, reserved.upload.key, file);
+      const uploadedType = uploadType;
       closeUpload();
       await load();
+      if (PREFILL_TYPES.includes(uploadedType)) {
+        void readForProfile(reserved.document.id, true);
+      }
       toast({
         title: 'Documento subido',
         description: 'Nueva versión enviada a revisión.',
@@ -236,6 +251,62 @@ export function OrgDocumentsPage() {
     } catch (error) {
       toast({
         title: 'No se pudo subir el documento',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Lee el RUT o el certificado de Cámara en el servidor y ofrece llenar el
+   *  perfil. Nada se guarda sin que la persona lo confirme. */
+  const readForProfile = async (documentId: string, quiet = false): Promise<void> => {
+    setReading(documentId);
+    try {
+      const result = await client.request<DocumentPrefill>(`/org/documents/${documentId}/prefill`);
+      if (result.nit || result.legalName) {
+        setPrefill(result);
+      } else if (!quiet) {
+        toast({
+          title: result.readable
+            ? 'No encontramos el NIT ni la razón social'
+            : 'No pudimos leer el archivo',
+          description: result.readable
+            ? 'El equipo lo revisa a mano. Puedes escribir los datos en tu perfil.'
+            : 'Parece una foto o un escaneo. Sube el PDF que descargas de la DIAN o la Cámara y lo leemos solos.',
+          variant: 'warning',
+        });
+      }
+    } catch {
+      if (!quiet) {
+        toast({ title: 'No pudimos leer el documento', variant: 'warning' });
+      }
+    } finally {
+      setReading(null);
+    }
+  };
+
+  const applyPrefill = async (): Promise<void> => {
+    if (!prefill) return;
+    setSaving(true);
+    try {
+      await client.request('/org/profile', {
+        method: 'PUT',
+        json: {
+          ...(prefill.nit ? { nit: prefill.nit } : {}),
+          ...(prefill.legalName ? { legalName: prefill.legalName } : {}),
+        },
+      });
+      setPrefill(null);
+      toast({
+        title: 'Perfil actualizado',
+        description: 'Usamos los datos de tu documento.',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'No se pudo actualizar el perfil',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -282,9 +353,12 @@ export function OrgDocumentsPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {showFriendlyVerificationHint ? (
-                  <p className={styles['verification-hint']}>
-                    Sube tus documentos para iniciar la verificación. 0% completado.
-                  </p>
+                  <>
+                    <p className={styles['verification-hint']}>
+                      Sube tus documentos para iniciar la verificación. 0% completado.
+                    </p>
+                    {canManage && <OnboardingHelpCard />}
+                  </>
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
@@ -389,17 +463,31 @@ export function OrgDocumentsPage() {
                               {UPDATE_BUTTON_LABEL[doc.status]}
                             </Button>
                           )}
+                          {canManage && PREFILL_TYPES.includes(type) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={reading === doc.id}
+                              onClick={() => void readForProfile(doc.id)}
+                            >
+                              {reading === doc.id ? 'Leyendo…' : 'Llenar mi perfil'}
+                            </Button>
+                          )}
                         </div>
                       </>
                     ) : canManage ? (
-                      <button
-                        type="button"
-                        onClick={() => openUpload(type)}
-                        className={styles['doc-card__upload-btn']}
-                      >
-                        <UploadCloudIcon className="h-6 w-6" />
-                        Sin subir
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openUpload(type)}
+                          className={styles['doc-card__upload-btn']}
+                        >
+                          <UploadCloudIcon className="h-6 w-6" />
+                          Sin subir
+                        </button>
+                        {/* Ola 3 (F20, anexo #4): ayuda proactiva si aún no lo tiene. */}
+                        <MissingDocumentHelp type={type} />
+                      </>
                     ) : (
                       <p className={styles['doc-card__empty-text']}>Sin subir</p>
                     )}
@@ -452,6 +540,38 @@ export function OrgDocumentsPage() {
             </Button>
             <Button disabled={saving} onClick={() => void submit()}>
               {saving ? 'Subiendo…' : 'Subir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={prefill !== null} onOpenChange={(open) => !open && setPrefill(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leímos tu documento</DialogTitle>
+            <DialogDescription>
+              ¿Usamos estos datos en tu perfil? Así coinciden con lo que revisa el equipo.
+            </DialogDescription>
+          </DialogHeader>
+          <dl className={styles['prefill']}>
+            {prefill?.nit && (
+              <>
+                <dt>NIT</dt>
+                <dd>{prefill.nit}</dd>
+              </>
+            )}
+            {prefill?.legalName && (
+              <>
+                <dt>Razón social</dt>
+                <dd>{prefill.legalName}</dd>
+              </>
+            )}
+          </dl>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrefill(null)}>
+              Ahora no
+            </Button>
+            <Button disabled={saving} onClick={() => void applyPrefill()}>
+              {saving ? 'Guardando…' : 'Usar en mi perfil'}
             </Button>
           </DialogFooter>
         </DialogContent>

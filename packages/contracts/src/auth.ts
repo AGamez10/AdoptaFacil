@@ -5,6 +5,8 @@
 // exercises capabilities (adopt, donate, …) without changing account type.
 // All timestamps are ISO-8601 UTC.
 
+import type { LegalAcceptanceItem } from './legal';
+
 /** The two kinds of account. */
 export type AccountType = 'organization' | 'person';
 
@@ -15,7 +17,19 @@ export interface RegisterOrganizationDto {
   displayName: string;
   email: string;
   password: string;
+  /** ADDITIVE: documentos legales aceptados en el formulario (versión vista).
+   *  La API exige los obligatorios del tipo de cuenta en su versión vigente
+   *  (`requiredLegalDocuments`) y responde 400 si faltan. */
+  legalAcceptances?: LegalAcceptanceItem[];
 }
+
+/**
+ * Minimum length of a NEW password (registration, reset, invitation). AF-026:
+ * raised from 8 to 12 following NIST SP 800-63B / OWASP ASVS V2.1 — length is
+ * the rule that actually matters; no composition rules are imposed. Existing
+ * passwords keep working: the policy applies only when a password is set.
+ */
+export const MIN_PASSWORD_LENGTH = 12;
 
 /** Registration for a Person account. The person gets their own personal
  *  organization (tenant) so multi-tenant RLS applies uniformly. */
@@ -23,6 +37,10 @@ export interface RegisterPersonDto {
   displayName: string;
   email: string;
   password: string;
+  /** ADDITIVE: documentos legales aceptados en el formulario (versión vista).
+   *  La API exige los obligatorios del tipo de cuenta en su versión vigente
+   *  (`requiredLegalDocuments`) y responde 400 si faltan. */
+  legalAcceptances?: LegalAcceptanceItem[];
 }
 
 /** Credentials for login. */
@@ -142,6 +160,10 @@ export interface AccessTokenClaims {
   /** Account type. */
   typ: AccountType;
   email: string;
+  /** When the session passed the second factor (TOTP), as epoch SECONDS.
+   *  ADDITIVE, optional: only present on a platform-staff session that
+   *  verified its code (see `platform-workspace.ts`). Absent = no MFA yet. */
+  mfa_at?: number;
 }
 
 // ============================================================================
@@ -197,6 +219,56 @@ export interface RoleAssignment {
   organizationId: string;
   /** ISO-8601 UTC. */
   createdAt: string;
+}
+
+// ============================================================================
+// Member invitations (Ola 1 · R2-3, AF-017, condition C9)
+// ============================================================================
+
+/** An invitation as the inviting organization sees it (never the token). */
+export interface OrganizationInvitation {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: Role;
+  /** Cargo de firmante adicional si la invitación es para firmar (aditivo). */
+  signerRole?: 'accountant' | 'fiscal_reviewer';
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  invitedByUserId: string;
+  /** ISO-8601 UTC. */
+  expiresAt: string;
+  /** ISO-8601 UTC. */
+  createdAt: string;
+}
+
+/** `POST /org/invitations` (Owner, Administrator; only an Owner invites an
+ *  Owner). The raw token is only ever emailed, never returned. */
+export interface CreateInvitationInput {
+  email: string;
+  role: Role;
+  /**
+   * Invita a un firmante adicional (contador / revisor fiscal): solo la puede
+   * enviar un Owner, el rol debe ser `read_only_auditor` y al aceptar se crea la
+   * designación de firmante (aditivo).
+   */
+  signerRole?: 'accountant' | 'fiscal_reviewer';
+}
+
+/** `POST /auth/invitations/preview` — what the invitee sees before accepting. */
+export interface InvitationPreview {
+  organizationName: string;
+  email: string;
+  role: Role;
+  /** ISO-8601 UTC. */
+  expiresAt: string;
+}
+
+/** `POST /auth/invitations/accept` — creates the invitee's account inside the
+ *  inviting organization with the invited role and returns a session. */
+export interface AcceptInvitationInput {
+  token: string;
+  displayName: string;
+  password: string;
 }
 
 /** Assign a role to a user in the caller's organization. */

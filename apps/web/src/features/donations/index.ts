@@ -2,6 +2,7 @@
 export { DonatePage } from './pages/donate-page';
 export { MyDonationsPage } from './pages/my-donations-page';
 export { DonationAccessPage } from './pages/donation-access-page';
+export { DonationResultPage } from './pages/donation-result-page';
 export { ReceivedDonationsPage } from './pages/received-donations-page';
 export { DonateForm, type DonateFormValues } from './components/donate-form';
 export { DonationBreakdown } from './components/donation-breakdown';
@@ -32,3 +33,8 @@ export {
   getMyDonationReceipt,
   fetchGuestDonationAccess,
 } from './api/donations-api';
+export {
+  DonationQrCard,
+  organizationDonateUrl,
+  type DonationQrCardProps,
+} from './components/donation-qr-card';

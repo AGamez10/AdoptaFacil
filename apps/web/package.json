@@ -6,7 +6,7 @@
   "description": "AdoptaFácil web shell (React + Vite) — walking skeleton",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender-seo.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -15,12 +15,12 @@
   "dependencies": {
     "@adoptafacil/contracts": "workspace:*",
     "@adoptafacil/ui": "workspace:*",
-    "@mercadopago/sdk-react": "^0.0.22",
     "jsbarcode": "^3.12.3",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "react-router-dom": "^6.30.6",
+    "three": "0.185.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
@@ -29,6 +29,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/three": "0.185.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "jsdom": "^25.0.1",

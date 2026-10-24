@@ -2,8 +2,9 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FakePaymentAdapter } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
+import { DisabledPaymentAdapter } from './disabled-payment.adapter';
 import { PAYMENT_PORT } from './payment.port';
-import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
+import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
 
 /**
  * Shared PaymentPort provider (T-052). Global so any module injects PAYMENT_PORT
@@ -12,9 +13,10 @@ import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
  * The adapter is chosen by PAYMENT_DRIVER ('fake' by default). The Fake adapter
  * is IMPORTED from @adoptafacil/contracts (dependency-free, deterministic) — NOT
  * copied here, so Fabián's `computeBreakdown` stays the single source of the
- * commission math. `mercadopago` binds the real gateway (recaudo, Fase 1) —
- * MercadoPago fully replaced Wompi; the dispersión T+1 side (Fase 2) is not
- * implemented yet (blocked on MercadoPago's Disbursements approval).
+ * commission math. `epayco` (ADR-PAG-002, the only real gateway) binds the
+ * ePayco checkout v2 adapter: each session is created with the organization's
+ * own keys. Mercado Pago was retired from the product on 2026-10-17 (owner
+ * decision) and Wompi before it; `disabled` refuses every call.
  */
 @Global()
 @Module({
@@ -24,9 +26,13 @@ import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => {
         const driver = config.get('PAYMENT_DRIVER', { infer: true }) ?? 'fake';
-        if (driver === 'mercadopago') {
-          return new MercadoPagoPaymentAdapter(config);
+        if (driver === 'epayco') {
+          return new EpaycoPaymentAdapter(config);
         }
+        if (driver === 'disabled') {
+          return new DisabledPaymentAdapter();
+        }
+        // Dev/test only: env validation refuses 'fake' in production (R0-1).
         return new FakePaymentAdapter();
       },
     },

@@ -1,0 +1,315 @@
+Unused files (99)
+apps/api/scripts/seed-assets.ts
+apps/api/scripts/seed-breeds.ts
+apps/api/scripts/seed-demo.ts
+apps/api/scripts/seed-platform-admin.ts
+apps/api/src/core/audit/index.ts
+apps/api/src/core/auth/index.ts
+apps/api/src/core/rbac/index.ts
+apps/api/src/core/tenant/index.ts
+apps/api/test/adoption-contracts.integration-spec.ts
+apps/api/test/adoption-followups.integration-spec.ts
+apps/api/test/adoptions.integration-spec.ts
+apps/api/test/animal-behavior-disclosure.integration-spec.ts
+apps/api/test/animals-bulk-import.integration-spec.ts
+apps/api/test/animals-clinical-carnet.integration-spec.ts
+apps/api/test/animals-register-death.integration-spec.ts
+apps/api/test/animals.integration-spec.ts
+apps/api/test/audit-immutability.integration-spec.ts
+apps/api/test/audit.integration-spec.ts
+apps/api/test/auth-owner-on-register.integration-spec.ts
+apps/api/test/auth-password-reset.integration-spec.ts
+apps/api/test/auth-rate-limit.integration-spec.ts
+apps/api/test/auth.integration-spec.ts
+apps/api/test/campaign-accountability.integration-spec.ts
+apps/api/test/campaign-funding.integration-spec.ts
+apps/api/test/campaigns.integration-spec.ts
+apps/api/test/clinical.integration-spec.ts
+apps/api/test/community.integration-spec.ts
+apps/api/test/documents.integration-spec.ts
+apps/api/test/donation-certificates.integration-spec.ts
+apps/api/test/donations-campaign-funding-webhook.integration-spec.ts
+apps/api/test/donations-guest-access-link.integration-spec.ts
+apps/api/test/donations.integration-spec.ts
+apps/api/test/duplicate-detection.integration-spec.ts
+apps/api/test/formalization.integration-spec.ts
+apps/api/test/health.integration-spec.ts
+apps/api/test/legal-representative.integration-spec.ts
+apps/api/test/marketplace.integration-spec.ts
+apps/api/test/org-donations-dashboard.integration-spec.ts
+apps/api/test/org.integration-spec.ts
+apps/api/test/organization-duplicates.integration-spec.ts
+apps/api/test/organization-summary.integration-spec.ts
+apps/api/test/organization-type.integration-spec.ts
+apps/api/test/payouts.integration-spec.ts
+apps/api/test/platform-dashboards.integration-spec.ts
+apps/api/test/platform-hero-banner.integration-spec.ts
+apps/api/test/portal-subdomain.integration-spec.ts
+apps/api/test/portals-theme.integration-spec.ts
+apps/api/test/public-animals-global.integration-spec.ts
+apps/api/test/public-animals.integration-spec.ts
+apps/api/test/public-org-campaigns.integration-spec.ts
+apps/api/test/rbac.integration-spec.ts
+apps/api/test/reconciliation.integration-spec.ts
+apps/api/test/reminders.integration-spec.ts
+apps/api/test/resources.integration-spec.ts
+apps/api/test/reviews-public.integration-spec.ts
+apps/api/test/reviews.integration-spec.ts
+apps/api/test/rls-no-leak-adoption-contracts.integration-spec.ts
+apps/api/test/rls-no-leak-adoption-followups.integration-spec.ts
+apps/api/test/rls-no-leak-adoptions-mine.integration-spec.ts
+apps/api/test/rls-no-leak-adoptions.integration-spec.ts
+apps/api/test/rls-no-leak-animal-behavior-disclosures.integration-spec.ts
+apps/api/test/rls-no-leak-animals.integration-spec.ts
+apps/api/test/rls-no-leak-audit.integration-spec.ts
+apps/api/test/rls-no-leak-campaign-evidences.integration-spec.ts
+apps/api/test/rls-no-leak-campaign-funding.integration-spec.ts
+apps/api/test/rls-no-leak-campaigns.integration-spec.ts
+apps/api/test/rls-no-leak-clinical-reminders.integration-spec.ts
+apps/api/test/rls-no-leak-clinical.integration-spec.ts
+apps/api/test/rls-no-leak-community.integration-spec.ts
+apps/api/test/rls-no-leak-dian-verification-attempts.integration-spec.ts
+apps/api/test/rls-no-leak-documents.integration-spec.ts
+apps/api/test/rls-no-leak-donations.integration-spec.ts
+apps/api/test/rls-no-leak-formalization-transitions.integration-spec.ts
+apps/api/test/rls-no-leak-legal-representatives.integration-spec.ts
+apps/api/test/rls-no-leak-marketplace.integration-spec.ts
+apps/api/test/rls-no-leak-mercadopago-accounts.integration-spec.ts
+apps/api/test/rls-no-leak-org-members.integration-spec.ts
+apps/api/test/rls-no-leak-organization-duplicate-flags.integration-spec.ts
+apps/api/test/rls-no-leak-organization-profiles.integration-spec.ts
+apps/api/test/rls-no-leak-payouts.integration-spec.ts
+apps/api/test/rls-no-leak-portal-themes.integration-spec.ts
+apps/api/test/rls-no-leak-resources.integration-spec.ts
+apps/api/test/rls-no-leak-reviews.integration-spec.ts
+apps/api/test/rls-no-leak-service-hours.integration-spec.ts
+apps/api/test/rls-no-leak-sponsorship-payments.integration-spec.ts
+apps/api/test/rls-no-leak-sponsorships.integration-spec.ts
+apps/api/test/rls-no-leak-user-roles.integration-spec.ts
+apps/api/test/rls-no-leak-users.integration-spec.ts
+apps/api/test/rls-no-leak-volunteer-certificates.integration-spec.ts
+apps/api/test/rls-no-leak-volunteer-enrollments.integration-spec.ts
+apps/api/test/rls-no-leak-volunteer-opportunities.integration-spec.ts
+apps/api/test/rls-no-leak.integration-spec.ts
+apps/api/test/sponsorship-billing.integration-spec.ts
+apps/api/test/sponsorships.integration-spec.ts
+apps/api/test/storage.integration-spec.ts
+apps/api/test/support/cleanup.ts
+apps/api/test/support/profile.ts
+apps/api/test/tenant-context.integration-spec.ts
+apps/api/test/volunteering.integration-spec.ts
+Unused dependencies (2)
+package.json: @prisma/client
+packages/ui/package.json: @fontsource/fraunces, @fontsource/ibm-plex-mono, @fontsource/plus-jakarta-sans, @fontsource/poppins, @radix-ui/react-slot
+Unused devDependencies (3)
+apps/api/package.json: @types/bcryptjs, @types/supertest, source-map-support, supertest, tsconfig-paths
+package.json: playwright
+packages/ui/package.json: autoprefixer, postcss, sass
+Unused exports (55)
+apps/api/src/config/env.validation.ts: validatedEnvSchema
+apps/api/src/core/errors/prisma-conflict.util.ts: isUniqueConstraintViolationOn
+apps/api/src/core/tenant/tenant-context.middleware.ts: ORG_ID_HEADER
+apps/api/src/modules/adoptions/adoption-contract-status.ts: ADOPTION_CONTRACT_TRANSITIONS
+apps/api/src/modules/adoptions/adoption-status.ts: ADOPTION_TRANSITIONS
+apps/api/src/modules/adoptions/followup-status.ts: FOLLOWUP_TRANSITIONS
+apps/api/src/modules/animals/animal-id-card.renderer.ts: CARD_PAGE_SIZE
+apps/api/src/modules/marketplace/marketplace-products.controller.ts: MARKETPLACE_WRITE_ROLES, MARKETPLACE_VIEW_ROLES
+apps/api/src/modules/marketplace/marketplace-products.schemas.ts: productImageInputSchema
+apps/api/src/modules/org/formalization.machine.ts: TRANSITION_REQUIREMENTS
+apps/api/src/modules/org/legal-representative.schemas.ts: LEGAL_REPRESENTATIVE_DOCUMENT_TYPES, LEGAL_REPRESENTATIVE_ROLES
+apps/api/src/modules/portals/portals.schemas.ts: PORTAL_COLOR_PAIRS, portalThemeTokensSchema
+apps/api/src/modules/reputation/review-status.ts: REVIEW_TRANSITIONS
+apps/api/src/modules/resources/resource-needs.service.ts: toNeed
+apps/api/src/modules/sponsorships/sponsorship-status.ts: SPONSORSHIP_TRANSITIONS
+apps/api/src/modules/volunteering/volunteer-enrollment-status.ts: ENROLLMENT_TRANSITIONS
+apps/api/src/queues/queue.module.ts: EXAMPLE_QUEUE
+apps/web/src/features/_layout/index.ts: PlaceholderPage
+apps/web/src/features/_layout/placeholder-page.tsx: PlaceholderPage
+apps/web/src/features/adoptions/api/adoptions-api.ts: listMyFollowUps, submitFollowUp
+apps/web/src/features/animals/components/tag-input.tsx: SUGGESTED_TAGS, MAX_TAGS
+apps/web/src/features/auth/index.ts: AuthLayout, Field, FormAlert, GoogleSignInButton
+apps/web/src/features/campaigns/lib/storage.ts: MAX_UPLOAD_MB
+apps/web/src/features/certificates/index.ts: CertificateDocument
+apps/web/src/features/community/components/community-form-fields.tsx: SelectField
+apps/web/src/features/community/lib/storage.ts: MAX_UPLOAD_MB
+apps/web/src/features/donations/index.ts: DonateForm, DonationBreakdown, MyDonationsList, buildDonationBreakdown, breakdownLines, safeBuildDonationBreakdown, formatBogota, DONATION_STATUS_LABELS, DONATION_STATUS_BADGE_VARIANT, normalizeDonations, organizationLabel, donationConceptLabel, normalizeReceivedDonations, receivedDonorLabel, createDonation, listReceivedDonations, listMyDonations, getMyDonationReceipt, fetchGuestDonationAccess
+apps/web/src/features/marketplace/lib/storage.ts: MAX_UPLOAD_MB
+apps/web/src/features/marketplace/model/marketplace-view.ts: formatBogota
+apps/web/src/features/org/components/profile-fields.tsx: TextAreaField
+apps/web/src/features/org/index.ts: OrgDonationsDashboardSection, OrgVolunteeringPage, OrgProfileForm
+apps/web/src/features/org/lib/storage.ts: MAX_UPLOAD_MB
+apps/web/src/features/org/pages/org-volunteering-page.tsx: OrgVolunteeringPage
+apps/web/src/features/org/validation.ts: parseUrlLines
+apps/web/src/features/portals/components/portal-donate-cta.tsx: PortalDonateCta
+apps/web/src/features/portals/components/portal-icons.tsx: IconHome, IconGrid, IconList, IconBowl, IconCross, IconBox, IconYoutube
+apps/web/src/features/portals/model/color-conversion.ts: hexToHsl
+apps/web/src/features/reputation/model/reputation-view.ts: parseRating
+apps/web/src/features/resources/lib/storage.ts: MAX_UPLOAD_MB
+apps/web/src/features/sponsorships/api/sponsorships-api.ts: getSponsorshipPayments
+apps/web/src/features/sponsorships/index.ts: MySponsorshipsList, formatCop, formatBogota, normalizeSponsorships, shortId, SPONSORSHIP_PERIODICITY_LABELS, SPONSORSHIP_STATUS_LABELS, sponsorshipStatusVariant, subscribeToPlan, listMySponsorships, listOrgSponsorships, listOrgPlans, suspendSponsorship, reactivateSponsorship, fetchAnimalSponsorshipSummary
+apps/web/src/features/sponsorships/model/sponsorships-view.ts: SPONSORSHIP_PAYMENT_STATUS_LABELS, sponsorshipPaymentStatusVariant
+apps/web/src/shell/api/api-error.ts: missingProfileFields
+apps/web/src/shell/api/auth-contract.ts: PROFILE_REQUIRED_FIELDS
+apps/web/src/shell/api/create-shell-api.ts: DEFAULT_BASE_URL
+apps/web/src/shell/api/index.ts: toApiError, missingProfileFields, InMemoryTokenStore, HttpAuthApi, requestRefresh, DEFAULT_BASE_URL, PROFILE_REQUIRED_FIELDS
+apps/web/src/shell/index.ts: AppProviders, AppRoutes
+apps/web/src/shell/layout/index.ts: Header, Sidebar, MobileNavDrawer, Brand, LayoutErrorBoundary, FullPageError, ContentError
+apps/web/src/shell/layout/layout-states.tsx: FullPageError
+apps/web/src/shell/navigation/breakpoints.ts: BREAKPOINTS, DESKTOP_QUERY
+apps/web/src/shell/navigation/index.ts: ORG_DONATIONS_DASHBOARD_ROLES, useNav, BREAKPOINTS, DESKTOP_QUERY
+apps/web/src/shell/navigation/nav-items.ts: ORG_DONATIONS_DASHBOARD_ROLES
+apps/web/src/shell/theme/index.ts: applyBrandTokens
+apps/web/src/shell/theme/tokens.ts: applyBrandTokens
+apps/web/src/shell/transparency/index.ts: useTransparency, ACCOUNTABILITY_LABELS, deriveFormalizationPct, deriveTransparencyStatus
+Unused exported types (149)
+apps/api/src/core/auth/token.service.ts: TokenPrincipal
+apps/api/src/core/payments/mercadopago-oauth.client.ts: MercadoPagoOAuthTokenResponse
+apps/api/src/modules/adoptions/adoption-contract-status.ts: ContractTransitionCheck
+apps/api/src/modules/adoptions/adoption-request-email.ts: AdoptionStatusEmailInput
+apps/api/src/modules/adoptions/adoption-status.ts: AdoptionTransitionCheck
+apps/api/src/modules/adoptions/followup-status.ts: FollowUpTransitionCheck
+apps/api/src/modules/adoptions/followup.service.ts: OverdueMilestone
+apps/api/src/modules/adoptions/signature/signature.port.ts: SignaturePort, AdoptionSignatureRequest, AdoptionSignatureResult
+apps/api/src/modules/animals/animal-breeds.catalog.ts: AnimalBreedSeed
+apps/api/src/modules/animals/animal-id-card.renderer.ts: AnimalIdCardData
+apps/api/src/modules/animals/bulk-import.schemas.ts: BulkImportRowInput
+apps/api/src/modules/animals/clinical-version.ts: ClinicalVersionPatch
+apps/api/src/modules/animals/reminders.service.ts: CreatedReminder
+apps/api/src/modules/animals/reminders.window.ts: DueClassification
+apps/api/src/modules/donations/donation-status.ts: DonationTransitionCheck
+apps/api/src/modules/org/dian-verification.window.ts: DianAttemptOutcome
+apps/api/src/modules/org/duplicate-detection.service.ts: OrganizationNitConflict
+apps/api/src/modules/org/fake-dian.adapter.ts: FakeDianAdapterOptions
+apps/api/src/modules/org/formalization.machine.ts: TransitionKind, TransitionCheck, TransitionContext
+apps/api/src/modules/org/legal-representative.service.ts: LegalRepresentativeSigner
+apps/api/src/modules/portals/portals.schemas.ts: ValidatedPortalTheme
+apps/api/src/modules/sponsorships/sponsorship-billing.ts: LadderState, LadderActionType
+apps/api/src/modules/sponsorships/sponsorship-status.ts: SponsorshipTransitionCheck
+apps/api/src/modules/volunteering/volunteer-certificate-eligibility.ts: CertificateEligibility
+apps/api/src/modules/volunteering/volunteer-enrollment-status.ts: EnrollmentTransitionCheck
+apps/api/src/modules/volunteering/volunteer-notifications.ts: EnrollmentConfirmationInput, EnrollmentDecisionInput, ServiceHoursDecisionInput, CertificateIssuedInput
+apps/web/src/features/_layout/index.ts: PageContainerProps, PageHeaderProps, PlaceholderPageProps
+apps/web/src/features/_layout/model/action-items.ts: ActionItem
+apps/web/src/features/_layout/page.tsx: PageContainerProps, PageHeaderProps
+apps/web/src/features/_layout/placeholder-page.tsx: PlaceholderPageProps
+apps/web/src/features/adoptions/components/adoption-contract-panel.tsx: AdoptionContractPanelProps
+apps/web/src/features/adoptions/components/adoption-followup-panel.tsx: AdoptionFollowUpPanelProps
+apps/web/src/features/adoptions/components/applicant-detail-modal.tsx: ApplicantDetailModalProps
+apps/web/src/features/adoptions/components/my-request-detail-modal.tsx: MyRequestDetailModalProps
+apps/web/src/features/adoptions/model/adoption-contract-template.ts: ContractClause, ObjetoField
+apps/web/src/features/animals/components/animal-behavior-disclosure-modal.tsx: AnimalBehaviorDisclosureModalProps
+apps/web/src/features/animals/components/animal-clinical-panel.tsx: AnimalClinicalPanelProps
+apps/web/src/features/animals/components/animal-detail-panel.tsx: AnimalDetailPanelProps
+apps/web/src/features/animals/components/animal-form-fields.tsx: TextAreaFieldProps
+apps/web/src/features/animals/components/animal-form-modal.tsx: AnimalFormModalProps
+apps/web/src/features/animals/components/animal-id-card.tsx: AnimalIdCardProps
+apps/web/src/features/animals/components/animal-photo-field.tsx: AnimalPhotoFieldProps
+apps/web/src/features/animals/components/animal-sponsorship-plan-modal.tsx: AnimalSponsorshipPlanModalProps
+apps/web/src/features/animals/components/breed-combobox.tsx: BreedComboboxProps
+apps/web/src/features/animals/components/bulk-import-dialog.tsx: BulkImportDialogProps
+apps/web/src/features/animals/components/clinical-attachments-field.tsx: ClinicalAttachmentsFieldProps
+apps/web/src/features/animals/components/icon-button.tsx: IconButtonProps
+apps/web/src/features/animals/components/icons.tsx: IconProps
+apps/web/src/features/animals/components/tag-input.tsx: TagInputProps
+apps/web/src/features/animals/components/tooltip.tsx: TooltipProps
+apps/web/src/features/animals/index.ts: AnimalClinicalPanelProps
+apps/web/src/features/auth/components/auth-layout.tsx: AuthLayoutProps
+apps/web/src/features/auth/components/field.tsx: FieldProps
+apps/web/src/features/auth/components/form-alert.tsx: FormAlertProps
+apps/web/src/features/auth/components/google-sign-in-button.tsx: GoogleSignInButtonProps
+apps/web/src/features/auth/components/password-requirements.tsx: PasswordRequirementsProps
+apps/web/src/features/auth/index.ts: AuthLayoutProps, FieldProps, FormAlertProps, GoogleSignInButtonProps
+apps/web/src/features/auth/validation.ts: FieldError
+apps/web/src/features/campaigns/api/public-campaigns.ts: ListPublicCampaignsParams
+apps/web/src/features/campaigns/components/campaign-card.tsx: CampaignCardProps
+apps/web/src/features/campaigns/components/campaign-form-fields.tsx: TextAreaFieldProps
+apps/web/src/features/campaigns/components/campaign-manage-card.tsx: CampaignManageCardProps
+apps/web/src/features/campaigns/components/campaign-progress.tsx: CampaignProgressProps
+apps/web/src/features/catalog/api/public-animals.ts: FetchGlobalPublicAnimalsParams, GlobalPublicAnimalsPage
+apps/web/src/features/catalog/components/animal-detail-modal.tsx: AnimalDetailModalProps
+apps/web/src/features/catalog/components/catalog-animal-card.tsx: CatalogAnimalCardProps
+apps/web/src/features/catalog/components/hero-photo-grid.tsx: HeroPhotoGridProps
+apps/web/src/features/certificates/components/certificate-document.tsx: CertificateDocumentProps
+apps/web/src/features/certificates/components/certificate-qr.tsx: CertificateQrProps
+apps/web/src/features/community/components/community-form-fields.tsx: TextAreaFieldProps
+apps/web/src/features/community/components/post-card.tsx: PostCardProps
+apps/web/src/features/donations/components/donate-form.tsx: DonateFormProps
+apps/web/src/features/donations/components/donation-breakdown.tsx: DonationBreakdownProps
+apps/web/src/features/donations/components/donation-detail-modal.tsx: DonationDetailModalProps
+apps/web/src/features/donations/components/received-donation-detail-modal.tsx: ReceivedDonationDetailModalProps
+apps/web/src/features/donations/index.ts: DonateFormValues, BreakdownLine
+apps/web/src/features/donations/model/donation-breakdown-view.ts: BreakdownLine
+apps/web/src/features/marketplace/api/public-marketplace.ts: ListPublicProductsParams
+apps/web/src/features/marketplace/components/product-card.tsx: ProductCardProps
+apps/web/src/features/marketplace/components/product-form-fields.tsx: TextAreaFieldProps
+apps/web/src/features/marketplace/components/product-manage-card.tsx: ProductManageCardProps
+apps/web/src/features/org/components/org-profile-fields.tsx: OrgTextFieldProps, OrgTextAreaFieldProps, OrgSelectOption, OrgSelectFieldProps
+apps/web/src/features/org/components/org-profile-form.tsx: OrgProfileFormProps
+apps/web/src/features/org/components/org-tabs.tsx: OrgTabsNavProps, OrgTabPanelProps
+apps/web/src/features/org/components/profile-fields.tsx: TextFieldProps, TextAreaFieldProps
+apps/web/src/features/org/components/signature-pad.tsx: SignaturePadProps
+apps/web/src/features/org/data/colombia-department-paths.ts: ColombiaDepartmentPath
+apps/web/src/features/org/data/colombian-locations.ts: ColombianDepartment
+apps/web/src/features/org/index.ts: OrgProfileFormProps
+apps/web/src/features/portals/api/public-animals.ts: FetchPublicAnimalsParams
+apps/web/src/features/portals/api/public-campaigns.ts: FetchPublicOrgCampaignsParams
+apps/web/src/features/portals/components/animal-card.tsx: AnimalCardProps
+apps/web/src/features/portals/components/animal-detail-actions.tsx: AnimalDetailActionsProps
+apps/web/src/features/portals/components/animal-detail-info.tsx: AnimalDetailInfoProps
+apps/web/src/features/portals/components/org-type-badge.tsx: OrgTypeBadgeProps
+apps/web/src/features/portals/components/portal-about-section.tsx: PortalAboutSectionProps
+apps/web/src/features/portals/components/portal-adoption-section.tsx: PortalAdoptionSectionProps
+apps/web/src/features/portals/components/portal-campaigns-section.tsx: PortalCampaignsSectionProps
+apps/web/src/features/portals/components/portal-contact-info-section.tsx: PortalContactInfoSectionProps
+apps/web/src/features/portals/components/portal-donate-cta.tsx: PortalDonateCtaProps
+apps/web/src/features/portals/components/portal-header-actions.tsx: PortalHeaderActionsProps
+apps/web/src/features/portals/components/portal-help-cta.tsx: PortalHelpCtaProps
+apps/web/src/features/portals/components/portal-mini-preview.tsx: PortalMiniPreviewProps
+apps/web/src/features/portals/components/portal-needs-section.tsx: PortalNeedsSectionProps
+apps/web/src/features/portals/components/portal-placeholder-section.tsx: PortalPlaceholderSectionProps
+apps/web/src/features/portals/components/portal-products-section.tsx: PortalProductsSectionProps
+apps/web/src/features/portals/components/portal-profile-section.tsx: PortalProfileSectionProps
+apps/web/src/features/portals/components/portal-reviews-section.tsx: PortalReviewsSectionProps
+apps/web/src/features/portals/components/portal-social-links.tsx: PortalSocialLinksProps
+apps/web/src/features/portals/components/portal-transparency-bar.tsx: PortalTransparencyBarProps
+apps/web/src/features/portals/components/public-footer.tsx: PublicFooterProps
+apps/web/src/features/portals/components/public-header.tsx: PublicHeaderProps
+apps/web/src/features/portals/components/register-review-dialog.tsx: RegisterReviewDialogProps
+apps/web/src/features/portals/components/review-carousel.tsx: ReviewCarouselProps
+apps/web/src/features/portals/pages/org-public-page.tsx: OrgPublicPageProps
+apps/web/src/features/portals/use-portal-subdomain-slug.ts: PortalSubdomainState
+apps/web/src/features/resources/api/public-resources.ts: ListPublicNeedsParams
+apps/web/src/features/resources/components/need-card.tsx: NeedCardProps
+apps/web/src/features/resources/components/need-manage-card.tsx: NeedManageCardProps
+apps/web/src/features/resources/components/need-progress.tsx: NeedProgressProps
+apps/web/src/features/resources/components/resource-form-fields.tsx: TextAreaFieldProps
+apps/web/src/features/sponsorships/components/animal-deceased-modal.tsx: AnimalDeceasedModalProps
+apps/web/src/features/sponsorships/model/sponsorships-view.ts: SponsorshipMetrics
+apps/web/src/features/volunteering/components/student-service-enrollment-modal.tsx: StudentServiceEnrollmentModalProps
+apps/web/src/features/volunteering/components/volunteer-opportunity-manage-card.tsx: VolunteerOpportunityManageCardProps
+apps/web/src/shell/api/api-client.ts: RefreshTokensFn, ApiClientConfig, RequestOptions
+apps/web/src/shell/api/api-context.tsx: ApiClientProviderProps
+apps/web/src/shell/api/auth-api.ts: HttpAuthApiConfig
+apps/web/src/shell/api/auth-contract.ts: IncompleteProfileError, ProfileRequiredField, RegisterOrganizationDto, RegisterPersonDto, RefreshDto, LogoutDto
+apps/web/src/shell/api/create-shell-api.ts: CreateShellApiConfig
+apps/web/src/shell/api/index.ts: ApiClientConfig, RequestOptions, RefreshTokensFn, TokenStore, SessionTokens, HttpAuthApiConfig, MockAuthApiOptions, CreateShellApiConfig, ApiClientProviderProps, AuthTokens, GoogleSignInRequest, IncompleteProfileError, LoginResponse, ProfileRequiredField, RegisterResponse
+apps/web/src/shell/auth/index.ts: SessionStatus, RolesStatus, SessionUser, SessionContextValue, RequireAuthProps, RequireRolesProps
+apps/web/src/shell/auth/require-auth.tsx: RequireAuthProps
+apps/web/src/shell/auth/require-roles.tsx: RequireRolesProps
+apps/web/src/shell/auth/session-context.tsx: RolesStatus, TransparencySourceStatus, OrgTransparencySource, SessionContextValue
+apps/web/src/shell/index.ts: AppProvidersProps
+apps/web/src/shell/layout/brand.tsx: BrandProps
+apps/web/src/shell/layout/index.ts: FullPageErrorProps
+apps/web/src/shell/layout/layout-states.tsx: FullPageErrorProps
+apps/web/src/shell/layout/use-org-identity.ts: OrgIdentityState
+apps/web/src/shell/navigation/breakpoints.ts: Breakpoint
+apps/web/src/shell/navigation/index.ts: Breakpoint
+apps/web/src/shell/theme/index.ts: BrandTokens, ColorToken, ScalarToken
+apps/web/src/shell/theme/tokens.ts: ColorToken, ScalarToken, BrandTokens
+apps/web/src/shell/transparency/index.ts: TransparencyData, TransparencyStatus, TransparencySource, SessionTransparencyInput, AccountabilityState, TransparencyIndicatorProps
+apps/web/src/shell/transparency/transparency-context.tsx: TransparencySource, SessionTransparencyInput
+apps/web/src/shell/transparency/transparency-indicator.tsx: TransparencyIndicatorProps
+apps/web/src/test-utils.tsx: RenderShellOptions
+packages/ui/src/components/button.tsx: ButtonVariantOptions
+Duplicate exports (1)
+apps/api/src/modules/marketplace/marketplace-products.schemas.ts: productImageInputSchema, addProductImageSchema

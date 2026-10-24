@@ -75,7 +75,7 @@ export interface PortalView {
 
 /**
  * Resultado de resolver un subdominio real del portal
- * (`<subdominio>.adoptafacil.com`) a su slug de organización. Superficie
+ * (`<subdominio>.adoptafacil.org`) a su slug de organización. Superficie
  * pública mínima — SOLO el slug, nada más — para que el frontend reutilice
  * sin cambios cada endpoint público ya existente que se indexa por slug
  * (`organization_public`, `organization_portal_theme`, animales, campañas...)
@@ -136,6 +136,196 @@ export type PortalTheme = Partial<Record<PortalThemeToken, string>>;
 export type PortalLogoPosition = 'left' | 'center' | 'right';
 export type PortalSocialNavPosition = 'left' | 'right';
 
+/**
+ * Plantillas del portal público (Ola 3). Mismo contenido y mismos datos, otra
+ * identidad visual y otra estructura. Conjunto cerrado: nunca HTML ni CSS libre.
+ */
+export const PORTAL_TEMPLATE_IDS = [
+  'clasica',
+  'editorial',
+  'carnet',
+  'impacto',
+  'orbita',
+  'historias',
+] as const;
+export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
+export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
+
+/** En qué nivel de plan vive una plantilla. */
+export type PortalTemplateTier = 'free' | 'paid';
+
+export interface PortalTemplateInfo {
+  id: PortalTemplateId;
+  name: string;
+  tagline: string;
+  /** Decisión del cliente (2026-10-16): las 5 plantillas actuales son gratis
+   *  en todos los planes; `paid` queda para los futuros diseños "super Pro". */
+  tier: PortalTemplateTier;
+}
+
+/**
+ * Catálogo de plantillas. `tier` es un PARÁMETRO de negocio pendiente
+ * (TODO(client)): mientras no existan planes de pago, ninguna plantilla se
+ * bloquea y la interfaz solo muestra la etiqueta.
+ */
+export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
+  {
+    id: 'clasica',
+    name: 'Clásica',
+    tagline: 'Tu portada a todo el ancho y tus animales justo debajo.',
+    tier: 'free',
+  },
+  {
+    id: 'editorial',
+    name: 'Editorial',
+    tagline: 'Como una revista: titulares grandes, mucho aire y foto en arco.',
+    tier: 'free',
+  },
+  {
+    id: 'carnet',
+    name: 'Carnet',
+    tagline: 'Inspirada en el carnet de cada animal: fichas con personalidad.',
+    tier: 'free',
+  },
+  {
+    id: 'impacto',
+    name: 'Impacto',
+    tagline: 'Oscura y directa: el número de animales que buscan hogar manda.',
+    tier: 'free',
+  },
+  {
+    id: 'orbita',
+    name: 'Órbita',
+    tagline: 'Una constelación en 3D que forma una huella y reacciona al cursor.',
+    tier: 'free',
+  },
+  {
+    id: 'historias',
+    name: 'Historias',
+    tagline: 'Tus animales a pantalla completa: se pasan con el dedo, con video de portada.',
+    tier: 'paid',
+  },
+];
+
+/**
+ * Ajustes propios de cada plantilla (Ola 3). Conjunto cerrado: la API rechaza
+ * cualquier clave o valor fuera de esta lista, y la web arma el formulario a
+ * partir de ella. Nunca CSS ni HTML libre.
+ */
+export type PortalTemplateOptionValue = string | boolean;
+export type PortalTemplateOptions = Record<string, PortalTemplateOptionValue>;
+
+export type PortalTemplateOptionDef =
+  | { key: string; label: string; kind: 'toggle'; default: boolean }
+  | {
+      key: string;
+      label: string;
+      kind: 'choice';
+      default: string;
+      choices: ReadonlyArray<{ value: string; label: string }>;
+    };
+
+export const PORTAL_TEMPLATE_OPTIONS: Readonly<
+  Record<PortalTemplateId, readonly PortalTemplateOptionDef[]>
+> = {
+  clasica: [],
+  editorial: [
+    {
+      key: 'photoShape',
+      label: 'Forma de la foto de portada',
+      kind: 'choice',
+      default: 'arco',
+      choices: [
+        { value: 'arco', label: 'Arco' },
+        { value: 'recta', label: 'Recta' },
+        { value: 'circulo', label: 'Círculo' },
+      ],
+    },
+    { key: 'showFeatured', label: 'Mostrar "En esta edición"', kind: 'toggle', default: true },
+  ],
+  carnet: [
+    {
+      key: 'pattern',
+      label: 'Fondo de la página',
+      kind: 'choice',
+      default: 'puntos',
+      choices: [
+        { value: 'puntos', label: 'Puntos' },
+        { value: 'huellas', label: 'Huellas' },
+        { value: 'liso', label: 'Liso' },
+      ],
+    },
+    { key: 'showMinis', label: 'Mostrar mini carnets de animales', kind: 'toggle', default: true },
+  ],
+  impacto: [
+    { key: 'showMosaic', label: 'Mostrar mosaico de fotos', kind: 'toggle', default: true },
+    { key: 'motion', label: 'Cinta de nombres en movimiento', kind: 'toggle', default: true },
+  ],
+  orbita: [
+    {
+      key: 'density',
+      label: 'Intensidad de la constelación',
+      kind: 'choice',
+      default: 'media',
+      choices: [
+        { value: 'suave', label: 'Suave' },
+        { value: 'media', label: 'Media' },
+        { value: 'intensa', label: 'Intensa' },
+      ],
+    },
+    { key: 'showCount', label: 'Mostrar el número de animales', kind: 'toggle', default: true },
+  ],
+  historias: [
+    {
+      key: 'autoAdvance',
+      label: 'Pasar a la siguiente historia sola cada pocos segundos',
+      kind: 'toggle',
+      default: false,
+    },
+  ],
+};
+
+/**
+ * Video de portada de la plantilla Historias (opcional). Se sube al
+ * almacenamiento público de la organización (StoragePort) y se guarda solo su
+ * llave; nunca una URL libre de otro sitio.
+ */
+export const PORTAL_COVER_VIDEO_TYPES = ['video/mp4', 'video/webm'] as const;
+export type PortalCoverVideoType = (typeof PORTAL_COVER_VIDEO_TYPES)[number];
+
+/** Ajustes efectivos: los guardados válidos sobre los valores por defecto. */
+export function resolveTemplateOptions(
+  template: PortalTemplateId,
+  raw: unknown,
+): PortalTemplateOptions {
+  const defs = PORTAL_TEMPLATE_OPTIONS[template] ?? [];
+  const source =
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out: PortalTemplateOptions = {};
+  for (const def of defs) {
+    const value = source[def.key];
+    if (def.kind === 'toggle') {
+      out[def.key] = typeof value === 'boolean' ? value : def.default;
+    } else {
+      out[def.key] =
+        typeof value === 'string' && def.choices.some((c) => c.value === value)
+          ? value
+          : def.default;
+    }
+  }
+  return out;
+}
+
+/** ¿Se cobra la plantilla? Hasta que existan planes, nunca se bloquea.
+ *  @deprecated El cobro lo decide la API con `PLAN_ENFORCEMENT` y el plan de
+ *  cada organización; usa `PortalThemeConfig.premiumDesignsAvailable`. */
+export const PORTAL_TEMPLATE_TIERS_ENFORCED = false;
+
+/** ¿La plantilla es de pago ("super Pro")? */
+export function isPremiumTemplate(id: PortalTemplateId): boolean {
+  return PORTAL_TEMPLATES.find((t) => t.id === id)?.tier === 'paid';
+}
+
 /** Respuesta de lectura del tema (propio o público). */
 export interface PortalThemeConfig {
   tokens: PortalTheme;
@@ -143,6 +333,29 @@ export interface PortalThemeConfig {
   logoPosition?: PortalLogoPosition;
   /** De qué lado va el sidebar de redes/contacto (S2-PORTAL). Default: 'right'. */
   socialNavPosition?: PortalSocialNavPosition;
+  /** Plantilla del portal (Ola 3). Default: 'clasica'. */
+  template?: PortalTemplateId;
+  /** Ajustes de esa plantilla (Ola 3), ya resueltos con sus valores por defecto. */
+  templateOptions?: PortalTemplateOptions;
+  /** Video de portada (plantilla Historias), URL pública lista para `<video>`. */
+  coverVideoUrl?: string;
+  /**
+   * Plantilla de pago elegida que hoy no está disponible porque el plan de la
+   * organización no la incluye (terminó el lanzamiento o la suscripción). El
+   * portal se muestra con `template`, que es una gratuita; la elección queda
+   * guardada y vuelve sola al pagar un plan. Solo en la lectura propia.
+   */
+  lockedTemplate?: PortalTemplateId;
+  /** Si el plan vigente incluye las plantillas de pago. Solo en la lectura propia. */
+  premiumDesignsAvailable?: boolean;
+  /**
+   * Sello "Hecho con AdoptaFácil" (`portalRemoveSeal`). En la lectura pública es
+   * el valor efectivo: true solo si la organización lo pidió y su plan lo
+   * incluye. En la lectura propia es la elección guardada.
+   */
+  hideSeal?: boolean;
+  /** Si el plan vigente permite quitar el sello. Solo en la lectura propia. */
+  removeSealAvailable?: boolean;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */
@@ -150,6 +363,17 @@ export interface UpdatePortalThemeInput {
   tokens: PortalTheme;
   logoPosition?: PortalLogoPosition;
   socialNavPosition?: PortalSocialNavPosition;
+  /** Omitida, conserva la plantilla guardada. */
+  template?: PortalTemplateId;
+  /** Ajustes de la plantilla. Omitidos, se conservan los guardados. */
+  templateOptions?: PortalTemplateOptions;
+  /**
+   * Llave del video de portada en el almacenamiento público de la organización
+   * (`public/<orgId>/<archivo>.mp4` o `.webm`). Omitida, se conserva; `null` lo quita.
+   */
+  coverVideoKey?: string | null;
+  /** Ocultar el sello "Hecho con AdoptaFácil" (exige `portalRemoveSeal`). Omitido, se conserva. */
+  hideSeal?: boolean;
 }
 
 // ----------------------------------------------------------------------------

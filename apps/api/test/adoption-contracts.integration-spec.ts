@@ -1,16 +1,30 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import {
+  NOTIFICATION_PORT,
+  type NotificationMessage,
+} from '../src/core/notifications/notification.port';
+import { AdoptionContractCopyService } from '../src/modules/adoptions/adoption-contract-copy.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /** A minimal but genuinely valid 1x1 PNG — `embedPng` must accept it. Same
  *  constant already used by `legal-representative`/`volunteering` specs. */
 const SIGNATURE_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+/** Otra imagen PNG válida (2x2), distinta de la anterior — para registrar un
+ *  representante legal NUEVO y comprobar que el contrato ya firmado conserva
+ *  la firma de quien firmó. */
+const SECOND_SIGNATURE_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGPgEpHTMLJhcAuISsmrAAAPGAMNu2WgUwAAAABJRU5ErkJggg==';
+
+const sha256 = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const binaryParser = (res: any, cb: (err: Error | null, body: Buffer) => void): void => {
@@ -37,7 +51,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const longMessage = 'Tengo hogar y experiencia; quiero adoptar responsablemente a este animal.';
 
   let refugeToken = '';
@@ -45,6 +59,12 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
   let personToken = '';
   let personUserId = '';
   let otherToken = '';
+  let otherOrgId = '';
+  const refugeEmail = `t028b-refuge-${randomUUID()}@test.local`;
+  // Correos "enviados": se reemplaza el NotificationPort por un registrador.
+  const sentEmails: NotificationMessage[] = [];
+  const contractCopies = (): NotificationMessage[] =>
+    sentEmails.filter((m) => m.subject.startsWith('Copia firmada'));
   let animalId = '';
   let requestId = '';
   let contractId = '';
@@ -52,7 +72,14 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
   let adopterSignerId = '';
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(NOTIFICATION_PORT)
+      .useValue({
+        send: async (message: NotificationMessage) => {
+          sentEmails.push(message);
+        },
+      })
+      .compile();
     app = moduleRef.createNestApplication();
     await app.init();
     server = app.getHttpServer();
@@ -60,9 +87,10 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const refuge = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Contrato',
         displayName: 'Owner Refugio',
-        email: `t028b-refuge-${randomUUID()}@test.local`,
+        email: refugeEmail,
         password,
       })
       .expect(201);
@@ -103,6 +131,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const person = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
         email: `t028b-p-${randomUUID()}@test.local`,
         password,
@@ -117,6 +146,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const other = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otro Refugio',
         displayName: 'Owner Otro',
         email: `t028b-other-${randomUUID()}@test.local`,
@@ -124,7 +154,8 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       })
       .expect(201);
     otherToken = other.body.tokens.accessToken;
-    orgIds.push(other.body.user.organizationId);
+    otherOrgId = other.body.user.organizationId;
+    orgIds.push(otherOrgId);
 
     const animal = await request(server)
       .post('/animals')
@@ -196,7 +227,14 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     expect(data.animalAgeYears).toBe(2);
     expect(data.adopterDocumentNumber).toBe('1000000000');
     expect(data.adopterAddress).toMatch(/Bogotá/);
-    expect(data.followUpMonths).toBe(6);
+    // Plantilla v2 (texto revisado): la organización real como cedente (no
+    // "Adopta Fácil"), 12 meses de seguimiento con el plan ligero por defecto
+    // y la edad mínima de firma (18 si el entorno no fija otra).
+    expect(res.body.payload.templateVersion).toBe('v2');
+    expect(data.organizationName).toBe('Refugio Contrato');
+    expect(data.followUpMonths).toBe(12);
+    expect(data.followUpPlan).toBe('light');
+    expect(data.minimumSignerAge).toBe(18);
     // Lo nuevo (peso/estado de salud) NO existe en ningún otro lugar del
     // sistema — queda sin llenar hasta que la organización lo diligencie.
     expect(data.weightKg).toBeUndefined();
@@ -263,6 +301,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const bare = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Sin Representante',
         displayName: 'Owner Bare',
         email: `t028b-bare-${randomUUID()}@test.local`,
@@ -325,7 +364,15 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const repSigner = res.body.signers.find((s: { id: string }) => s.id === orgSignerId);
     expect(repSigner.signedAt).toBeTruthy();
     expect(repSigner.fullName).toBe('María Fernanda Gómez'); // reemplazó el placeholder
-    expect(repSigner.signatureFileRef).toBeUndefined(); // nunca se duplica el archivo
+    // No se duplica el archivo: se congela la referencia a la firma YA
+    // registrada del representante que firmó (para que un cambio posterior de
+    // representante no altere el contrato).
+    const registered = await admin.legalRepresentative.findFirst({
+      where: { organizationId: refugeOrgId },
+      orderBy: { signedAt: 'desc' },
+    });
+    expect(repSigner.signatureFileRef).toBe(registered?.signatureFileRef);
+    expect(repSigner.signatureHash).toBe(registered?.signatureHash);
   });
 
   it('una vez firmado el representante, el contenido queda congelado (PATCH de datos → 409)', async () => {
@@ -361,6 +408,19 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       .expect(400);
   });
 
+  it('rechaza una "firma" que no es una imagen PNG o JPG (400)', async () => {
+    await request(server)
+      .post(`/adoptions/contracts/${contractId}/signatures`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .send({
+        signerId: adopterSignerId,
+        signatureBase64: Buffer.from('<svg onload="x()"></svg>').toString('base64'),
+        signatureContentType: 'image/png',
+      })
+      .expect(400);
+    expect(contractCopies()).toHaveLength(0);
+  });
+
   it('el adoptante firma dibujando/subiendo su imagen → el contrato SELLA (hash + inmutable)', async () => {
     const sealed = await request(server)
       .post(`/adoptions/contracts/${contractId}/signatures`)
@@ -377,6 +437,88 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const adopterSigner = sealed.body.signers.find((s: { id: string }) => s.id === adopterSignerId);
     expect(adopterSigner.signatureHash).toMatch(/^[0-9a-f]{64}$/);
     expect(adopterSigner.signatureFileRef).toEqual(expect.any(String));
+  });
+
+  it('al sellarse, cada parte recibe UNA copia del contrato en PDF por correo', async () => {
+    const copies = contractCopies();
+    expect(copies.map((m) => m.to).sort()).toEqual(
+      ['adoptante@test.local', refugeEmail.toLowerCase()].sort(),
+    );
+    for (const message of copies) {
+      expect(message.attachments).toHaveLength(1);
+      const [attachment] = message.attachments ?? [];
+      expect(attachment.contentType).toBe('application/pdf');
+      expect(attachment.filename).toMatch(/^contrato-adopcion-firulais-[0-9a-f]{8}\.pdf$/);
+      expect(attachment.content.subarray(0, 5).toString('utf8')).toBe('%PDF-');
+      expect(message.html).toContain('Firulais');
+      expect(message.body).toContain(`/adopciones/contratos/${contractId}`);
+      // Branded template from the superadmin catalog (role label + document hash).
+      expect(message.template?.event).toBe('adoption.contract_signed');
+      expect(message.template?.data.huella).toMatch(/^[0-9a-f]{64}$/);
+      expect(['adoptante', 'representante de la organización']).toContain(
+        message.template?.data.rol,
+      );
+      expect(message.idempotencyKey).toContain(contractId);
+    }
+
+    // Trazabilidad sin datos personales: un evento por firmante, solo id y rol.
+    const events = await admin.auditLog.findMany({
+      where: { entityId: contractId, action: 'adoption.contract.copy_sent' },
+    });
+    expect(events).toHaveLength(2);
+    for (const e of events) {
+      expect(Object.keys(e.metadata as object).sort()).toEqual(['role', 'signerId']);
+      expect(JSON.stringify(e.metadata)).not.toContain('@');
+    }
+  });
+
+  it('reintentar el envío (incluso en paralelo) nunca duplica la copia', async () => {
+    const copier = app.get(AdoptionContractCopyService);
+    const results = await Promise.all([
+      copier.dispatch(refugeOrgId, contractId),
+      copier.dispatch(refugeOrgId, contractId),
+      copier.dispatch(refugeOrgId, contractId),
+    ]);
+    expect(results.every((r) => r.sent === 0 && r.alreadySent === 2)).toBe(true);
+    expect(contractCopies()).toHaveLength(2);
+  });
+
+  it('otra organización no puede disparar el envío de un contrato ajeno', async () => {
+    const copier = app.get(AdoptionContractCopyService);
+    const result = await copier.dispatch(otherOrgId, contractId);
+    expect(result).toEqual({ sent: 0, alreadySent: 0, skipped: 'not_found' });
+    expect(contractCopies()).toHaveLength(2);
+  });
+
+  it('la firma del representante queda congelada aunque la organización cambie de representante legal', async () => {
+    const contract = await request(server)
+      .get(`/adoptions/contracts/org/${contractId}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    const repSigner = contract.body.signers.find((s: { id: string }) => s.id === orgSignerId);
+    expect(repSigner.signatureHash).toBe(sha256(Buffer.from(SIGNATURE_PNG, 'base64')));
+
+    await request(server)
+      .post('/org/legal-representative')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({
+        role: 'legal_representative',
+        fullName: 'Nuevo Representante',
+        documentType: 'cedula_ciudadania',
+        documentNumber: '80.111.222',
+        position: 'Director',
+        signatureBase64: SECOND_SIGNATURE_PNG,
+        signatureContentType: 'image/png',
+      })
+      .expect(201);
+
+    const image = await request(server)
+      .get(`/adoptions/contracts/org/${contractId}/signatures/${orgSignerId}/image`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .buffer()
+      .parse(binaryParser)
+      .expect(200);
+    expect(sha256(image.body as Buffer)).toBe(repSigner.signatureHash);
   });
 
   it('cannot sign the same part twice, nor sign for someone else', async () => {

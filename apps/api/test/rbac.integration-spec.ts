@@ -6,6 +6,7 @@ import { Role } from '@adoptafacil/contracts';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * RBAC over HTTP: an endpoint gated by @Roles returns 200 for a user holding the
@@ -32,7 +33,7 @@ describe('RBAC endpoints (role gating + tenant-scoped authority)', () => {
 
   const ownerEmail = `t012-owner-${randomUUID()}@test.local`;
   const personEmail = `t012-person-${randomUUID()}@test.local`;
-  const password = 'password123';
+  const password = 'password-1234';
 
   let ownerToken = '';
   let personToken = '';
@@ -49,7 +50,13 @@ describe('RBAC endpoints (role gating + tenant-scoped authority)', () => {
     // Owner org + owner user (via real registration), then grant the Owner role.
     const orgReg = await request(server)
       .post('/auth/register/organization')
-      .send({ organizationName: 'Refugio RBAC', displayName: 'Owner', email: ownerEmail, password })
+      .send({
+        ...LEGAL_ORG,
+        organizationName: 'Refugio RBAC',
+        displayName: 'Owner',
+        email: ownerEmail,
+        password,
+      })
       .expect(201);
     ownerToken = orgReg.body.tokens.accessToken;
     ownerOrgId = orgReg.body.user.organizationId;
@@ -74,7 +81,7 @@ describe('RBAC endpoints (role gating + tenant-scoped authority)', () => {
     // A person in their OWN org with no roles.
     const personReg = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Persona', email: personEmail, password })
+      .send({ ...LEGAL_PERSON, displayName: 'Persona', email: personEmail, password })
       .expect(201);
     personToken = personReg.body.tokens.accessToken;
     createdOrgIds.push(personReg.body.user.organizationId);

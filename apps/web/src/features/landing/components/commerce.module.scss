@@ -1,0 +1,367 @@
+/* Formas de ayudar, campañas y cierre de la landing — marca v3. */
+
+.container {
+  width: 100%;
+  max-width: var(--af-container);
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+
+  @media (min-width: 640px) {
+    padding-inline: 2rem;
+  }
+}
+
+.head {
+  max-width: 44rem;
+}
+
+.head--row {
+  display: flex;
+  max-width: none;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-extra);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--af-teal-ink);
+}
+
+.head__title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: clamp(2rem, 5.5vw, 3.5rem);
+  font-weight: var(--fw-extra);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: var(--af-ink);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-teal-ink);
+  text-decoration: none;
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--r-full);
+  padding: 0 1.5rem;
+  font-size: 1rem;
+  font-weight: var(--fw-bold);
+  text-decoration: none;
+  transition: transform var(--transition-base);
+
+  svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-ink);
+    outline-offset: 3px;
+  }
+}
+
+.btn--ink {
+  background: var(--af-ink);
+  color: #fff;
+  box-shadow: 0 4px 0 #000;
+
+  &:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #000;
+  }
+}
+
+.btn--ghost {
+  border: 2px solid var(--af-ink);
+  color: var(--af-ink);
+
+  &:hover {
+    background: var(--af-ink);
+    color: #fff;
+  }
+}
+
+/* ------------------------------------------------ formas de ayudar */
+.ways {
+  scroll-margin-top: 5rem;
+  background: var(--af-paper);
+  padding-block: 4.5rem;
+
+  @media (min-width: 1024px) {
+    padding-block: 5.5rem;
+  }
+}
+
+.ways__grid {
+  display: grid;
+  gap: 1rem;
+  margin: 2.5rem 0 0;
+  padding: 0;
+  list-style: none;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (min-width: 1100px) {
+    &[data-count='3'] {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    &[data-count='4'] {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+}
+
+/* Bloques de color amplios: cada camino tiene su propio color. */
+.way {
+  --way-bg: var(--af-teal-deep);
+  --way-fg: #fff;
+  --way-soft: rgb(255 255 255 / 0.8);
+  --way-icon-bg: var(--af-teal);
+  --way-icon-fg: var(--af-teal-deep);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  min-height: 19rem;
+  flex-direction: column;
+  border-radius: var(--af-r-block);
+  background: var(--way-bg);
+  padding: 1.75rem;
+  color: var(--way-fg);
+
+  @media (min-width: 1024px) {
+    min-height: 23rem;
+    padding: 2.25rem;
+  }
+
+  &[data-tone='gold'] {
+    --way-bg: var(--af-sun);
+    --way-fg: var(--af-ink);
+    --way-soft: var(--af-ink-soft);
+    --way-icon-bg: #fff;
+    --way-icon-fg: var(--af-ink);
+  }
+
+  &[data-tone='coral'] {
+    --way-bg: var(--af-coral-soft);
+    --way-fg: var(--af-ink);
+    --way-soft: var(--af-ink-soft);
+    --way-icon-bg: var(--af-coral);
+    --way-icon-fg: var(--af-ink);
+  }
+
+  &[data-tone='navy'] {
+    --way-bg: var(--af-sky);
+    --way-fg: var(--af-ink);
+    --way-soft: var(--af-ink-soft);
+    --way-icon-bg: #fff;
+    --way-icon-fg: var(--af-ink);
+  }
+}
+
+.way__art {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  width: 8.5rem;
+  pointer-events: none;
+
+  @media (min-width: 1024px) {
+    top: 1.5rem;
+    right: 1.5rem;
+    width: 10rem;
+  }
+}
+
+.way__icon {
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  place-items: center;
+  border-radius: 1.1rem;
+  background: var(--way-icon-bg);
+  color: var(--way-icon-fg);
+
+  svg {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+}
+
+.way__title {
+  margin: auto 0 0;
+  padding-top: 2.5rem;
+  font-family: var(--font-brand);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: var(--fw-extra);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.way__text {
+  margin: 0.75rem 0 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--way-soft);
+}
+
+.way__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+  font-weight: var(--fw-extra);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+
+  svg {
+    width: 1.15rem;
+    height: 1.15rem;
+    transition: transform var(--transition-base);
+  }
+
+  &:hover svg {
+    transform: translateX(4px);
+  }
+
+  &:focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+/* ----------------------------------------------------------- campañas */
+.campaigns {
+  background: var(--af-cream);
+  padding-block: 4.5rem;
+
+  @media (min-width: 1024px) {
+    padding-block: 6rem;
+  }
+}
+
+.campaigns__grid {
+  display: grid;
+  gap: 1rem;
+  margin: 2.5rem 0 0;
+  padding: 0;
+  list-style: none;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* --------------------------------------------------------------- cierre */
+.final {
+  background: var(--af-cream);
+  padding-block: 4.5rem;
+
+  @media (min-width: 1024px) {
+    padding-block: 6rem;
+  }
+}
+
+.final__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  border-radius: var(--af-r-block);
+  background: var(--af-mint);
+  padding: 3rem 1.5rem 3.5rem;
+  text-align: center;
+  color: var(--af-ink);
+
+  @media (min-width: 1024px) {
+    padding: 4rem 3rem 4.5rem;
+  }
+}
+
+.final__art {
+  position: relative;
+  width: 15rem;
+  height: 10rem;
+}
+
+.final__dog {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 9rem;
+}
+
+.final__cat {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 8rem;
+}
+
+.final__spark {
+  position: absolute;
+  top: 0;
+  right: 2.5rem;
+  width: 2rem;
+  color: var(--af-sun);
+}
+
+.final__title {
+  margin: 1.5rem 0 0;
+  font-family: var(--font-brand);
+  font-size: clamp(2.25rem, 7vw, 4.25rem);
+  font-weight: var(--fw-extra);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.final__text {
+  max-width: 34rem;
+  margin: 1rem 0 0;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--af-ink-soft);
+}
+
+.final__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}

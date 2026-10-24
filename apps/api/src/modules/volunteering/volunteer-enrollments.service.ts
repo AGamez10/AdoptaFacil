@@ -229,6 +229,16 @@ export class VolunteerEnrollmentsService {
         to: row.volunteer_email,
         subject: buildEnrollmentConfirmationSubject(emailInput),
         body: buildEnrollmentConfirmationBody(emailInput),
+        template: {
+          event: 'volunteering.enrollment_received',
+          organizationName: emailInput.organizationName || undefined,
+          organizationId: row.organization_id,
+          data: {
+            nombre: emailInput.volunteerName,
+            oportunidad: emailInput.opportunityTitle,
+            organizacion: emailInput.organizationName,
+          },
+        },
       });
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
@@ -347,6 +357,19 @@ export class VolunteerEnrollmentsService {
         to: updated.volunteerEmail,
         subject: buildEnrollmentDecisionSubject(emailInput),
         body: buildEnrollmentDecisionBody(emailInput),
+        template: {
+          event: emailInput.accepted
+            ? 'volunteering.enrollment_accepted'
+            : 'volunteering.enrollment_rejected',
+          organizationName: emailInput.organizationName || undefined,
+          organizationId,
+          data: {
+            nombre: emailInput.volunteerName,
+            oportunidad: emailInput.opportunityTitle,
+            organizacion: emailInput.organizationName,
+            motivo: emailInput.rejectionReason ?? 'La organización no indicó un motivo.',
+          },
+        },
       });
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);

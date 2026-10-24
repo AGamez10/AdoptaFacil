@@ -1,13 +1,26 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { AuditService } from '../../core/audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { NotificationPort } from '../../core/notifications/notification.port';
-import type { PaymentPort } from '@adoptafacil/contracts';
+import {
+  computeBreakdown,
+  currentLegalAcceptanceItems,
+  DIRECT_COLLECTION_RATES,
+  type PaymentPort,
+  requiredGuestLegalDocuments,
+} from '@adoptafacil/contracts';
 import type { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import type { DonationCertificatesService } from './donation-certificates.service';
 import { DonationsService } from './donations.service';
+import { LegalService } from '../../core/legal/legal.service';
+import { encryptEpaycoSecret, loadEpaycoKeysEncryptionKey } from '../payments/epayco-keys-crypto';
 
 interface Harness {
   service: DonationsService;
@@ -23,7 +36,9 @@ interface Harness {
   tryIssueForApprovedDonation: jest.Mock;
 }
 
-function makeService(): Harness {
+let verifyAndNormalizeWebhookRef: jest.Mock;
+
+function makeService(configValues: Record<string, unknown> = {}): Harness {
   const queryRaw = jest.fn();
   const record = jest.fn().mockResolvedValue({});
   const createCollection = jest.fn().mockResolvedValue({ collectionId: 'col-1' });
@@ -43,25 +58,32 @@ function makeService(): Harness {
     organization: { findMany: organizationFindMany },
   } as unknown as PrismaService;
   const tenant = { getOrganizationId } as unknown as TenantContextService;
-  const audit = { record } as unknown as AuditService;
+  const audit = { record, recordWithTx: jest.fn() } as unknown as AuditService;
   const verifyAndNormalizeWebhook = jest.fn(
-    async (payload: { collectionId: string; status: string; eventId?: string }) => ({
+    async (payload: {
+      collectionId: string;
+      status: string;
+      eventId?: string;
+      amountCharged?: number;
+    }) => ({
       eventId: payload.eventId ?? 'evt-1',
       collectionId: payload.collectionId,
       status: payload.status,
       dedupKey: payload.eventId ?? 'evt-1',
+      amountCharged: payload.amountCharged,
     }),
   );
   const payment = { createCollection, verifyAndNormalizeWebhook } as unknown as PaymentPort;
+  verifyAndNormalizeWebhookRef = verifyAndNormalizeWebhook;
   const notifications = { send } as unknown as NotificationPort;
   const applyApprovedCollection = jest.fn().mockResolvedValue(undefined);
   const tryIssueForApprovedDonation = jest.fn().mockResolvedValue(undefined);
   const campaignFunding = { applyApprovedCollection } as unknown as CampaignFundingService;
   const certificates = { tryIssueForApprovedDonation } as unknown as DonationCertificatesService;
-  const config = { get: () => 'https://app.test.local' } as unknown as ConfigService<
-    Record<string, unknown>,
-    true
-  >;
+  const config = {
+    get: (key: string) =>
+      configValues[key] ?? (key === 'PAYMENT_DRIVER' ? 'fake' : 'https://app.test.local'),
+  } as unknown as ConfigService<Record<string, unknown>, true>;
   return {
     service: new DonationsService(
       prisma,
@@ -72,6 +94,7 @@ function makeService(): Harness {
       campaignFunding,
       certificates,
       config,
+      new LegalService(prisma, audit, notifications, config),
     ),
     queryRaw,
     record,
@@ -91,6 +114,8 @@ const BASE_INPUT = {
   intendedAmount: 50_000,
   commissionPayer: 'organization' as const,
   idempotencyKey: 'idem-key-guest-1',
+  // Un invitado acepta términos y autorización de datos en el formulario.
+  legalAcceptances: currentLegalAcceptanceItems(requiredGuestLegalDocuments()),
 };
 
 /**
@@ -102,9 +127,6 @@ describe('DonationsService.create — guest checkout', () => {
   it('succeeds with no actor when payer.email is present; donor_user_id travels as null', async () => {
     const h = makeService();
     // First $queryRaw call: idempotency pre-check (donation_by_idempotency) → none yet.
-    h.queryRaw.mockResolvedValueOnce([]);
-    // Second call: Split de Pagos 1:1 sponsor lookup (mercadopago_account_mp_user_id)
-    // → no connected account (the common case).
     h.queryRaw.mockResolvedValueOnce([]);
     // Third call: create_donation → the inserted row, donor_user_id null.
     h.queryRaw.mockResolvedValueOnce([
@@ -137,14 +159,28 @@ describe('DonationsService.create — guest checkout', () => {
     expect(result.donorUserId).toBeNull();
     expect(result.id).toBe('don-1');
     // The raw call's 2nd positional arg (donor_user_id) is null for a guest.
-    // (calls[0] = idempotency pre-check, calls[1] = sponsor mp_user_id lookup,
-    // calls[2] = create_donation — see the mocks above.)
-    const createCallArgs = h.queryRaw.mock.calls[2][0] as { values: unknown[] };
+    // (calls[0] = idempotency pre-check, calls[1] = create_donation — see the
+    // mocks above; the org's account is read with withOrgContext, not raw SQL.)
+    const createCallArgs = h.queryRaw.mock.calls[1][0] as { values: unknown[] };
     expect(createCallArgs.values[1]).toBeNull();
     // Audited with actorUserId: null (same precedent as the webhook path).
     expect(h.record).toHaveBeenCalledWith(
       expect.objectContaining({ actorUserId: null, action: 'donation.created' }),
     );
+  });
+
+  it('rechaza al invitado que no aceptó términos y datos, antes de cobrar', async () => {
+    const h = makeService();
+
+    await expect(
+      h.service.create(undefined, {
+        ...BASE_INPUT,
+        legalAcceptances: undefined,
+        payer: { email: 'guest@test.dev' },
+      }),
+    ).rejects.toMatchObject({ response: { code: 'LEGAL_ACCEPTANCE_REQUIRED' } });
+    expect(h.queryRaw).not.toHaveBeenCalled();
+    expect(h.createCollection).not.toHaveBeenCalled();
   });
 
   it('rejects with BadRequestException when there is no actor and no payer.email', async () => {
@@ -161,7 +197,6 @@ describe('DonationsService.create — guest checkout', () => {
 
   it('accepts an ANONYMOUS guest donation with no payer at all (no email, no receipt link)', async () => {
     const h = makeService();
-    h.queryRaw.mockResolvedValueOnce([]);
     h.queryRaw.mockResolvedValueOnce([]);
     h.queryRaw.mockResolvedValueOnce([
       {
@@ -237,7 +272,6 @@ describe('DonationsService.create — paymentLinkUrl (checkout redirect fix)', (
       paymentLinkUrl: 'https://mp.test/checkout/pref-1',
     });
     h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check: none yet
-    h.queryRaw.mockResolvedValueOnce([]); // sponsor mp_user_id lookup: none connected
     h.queryRaw.mockResolvedValueOnce([donationRow()]);
 
     const result = await h.service.create(undefined, {
@@ -305,7 +339,6 @@ describe('DonationsService.create — surfaces a synchronously-known gateway out
     const h = makeService();
     h.createCollection.mockResolvedValueOnce({ collectionId: 'col-1', status: 'declined' });
     h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check: none yet
-    h.queryRaw.mockResolvedValueOnce([]); // sponsor mp_user_id lookup: none connected
     h.queryRaw.mockResolvedValueOnce([donationRow()]);
 
     const result = await h.service.create(undefined, {
@@ -319,7 +352,6 @@ describe('DonationsService.create — surfaces a synchronously-known gateway out
   it('does NOT surface an "approved" gateway outcome immediately — stays "pending" like the DB row (regression: FakePaymentAdapter always returns approved)', async () => {
     const h = makeService();
     h.createCollection.mockResolvedValueOnce({ collectionId: 'col-1', status: 'approved' });
-    h.queryRaw.mockResolvedValueOnce([]);
     h.queryRaw.mockResolvedValueOnce([]);
     h.queryRaw.mockResolvedValueOnce([donationRow()]);
 
@@ -335,7 +367,6 @@ describe('DonationsService.create — surfaces a synchronously-known gateway out
     const h = makeService();
     h.createCollection.mockResolvedValueOnce({ collectionId: 'col-1', status: 'pending' });
     h.queryRaw.mockResolvedValueOnce([]);
-    h.queryRaw.mockResolvedValueOnce([]);
     h.queryRaw.mockResolvedValueOnce([donationRow()]);
 
     const result = await h.service.create(undefined, {
@@ -348,12 +379,12 @@ describe('DonationsService.create — surfaces a synchronously-known gateway out
 });
 
 /**
- * Split de Pagos 1:1 (T-OrdersAPI) — `create()` resolves the beneficiary
- * org's connected MercadoPago account (if any) and passes it through to
- * `PaymentPort.createCollection` as `sponsorMpUserId`, plus the tokenized
- * card fields from the request body.
+ * `create()` passes the request's (optional) tokenized card fields through to
+ * `PaymentPort.createCollection` untouched, and never charges with a platform
+ * account (ADR-PAG-001). Mercado Pago (and its per-org `collector`) was
+ * retired on 2026-10-17: no driver resolves a Mercado Pago account any more.
  */
-describe('DonationsService.create — Split de Pagos 1:1 (sponsorMpUserId) + card passthrough', () => {
+describe('DonationsService.create — direct collection + card passthrough', () => {
   function donationRow() {
     return {
       id: 'don-1',
@@ -376,10 +407,13 @@ describe('DonationsService.create — Split de Pagos 1:1 (sponsorMpUserId) + car
     };
   }
 
-  it('passes sponsorMpUserId through when the beneficiary org has a connected account', async () => {
+  it('fake driver: passes the card fields through and never resolves a Mercado Pago collector', async () => {
     const h = makeService();
+    h.withOrgContext.mockImplementation(async (_orgId, fn) =>
+      // Prueba de la aceptación del invitado (Ley 1581), en la misma org.
+      fn({ legalAcceptance: { createMany: jest.fn() } }),
+    );
     h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check: none yet
-    h.queryRaw.mockResolvedValueOnce([{ mp_user_id: 'mp-user-connected' }]); // sponsor lookup: connected
     h.queryRaw.mockResolvedValueOnce([donationRow()]);
 
     await h.service.create(undefined, {
@@ -390,20 +424,22 @@ describe('DonationsService.create — Split de Pagos 1:1 (sponsorMpUserId) + car
       installments: 1,
     });
 
-    expect(h.createCollection).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sponsorMpUserId: 'mp-user-connected',
-        cardToken: 'tok-abc',
-        paymentMethodId: 'visa',
-        installments: 1,
-      }),
+    const input = h.createCollection.mock.calls[0][0];
+    expect(input).toEqual(
+      expect.objectContaining({ cardToken: 'tok-abc', paymentMethodId: 'visa', installments: 1 }),
     );
+    expect(input.collector).toBeUndefined();
+    expect(input.epaycoCollector).toBeUndefined();
+    expect(input.sponsorMpUserId).toBeUndefined();
+    const sql = h.queryRaw.mock.calls
+      .map((call) => (call[0] as { strings: string[] }).strings.join('?'))
+      .join('\n');
+    expect(sql).not.toMatch(/mercadopago/i);
   });
 
-  it('omits sponsorMpUserId when the beneficiary org has NO connected account', async () => {
+  it('persists a breakdown with NO platform fee (direct collection, ADR-PAG-001)', async () => {
     const h = makeService();
-    h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check: none yet
-    h.queryRaw.mockResolvedValueOnce([]); // sponsor lookup: none connected
+    h.queryRaw.mockResolvedValueOnce([]);
     h.queryRaw.mockResolvedValueOnce([donationRow()]);
 
     await h.service.create(undefined, {
@@ -411,14 +447,28 @@ describe('DonationsService.create — Split de Pagos 1:1 (sponsorMpUserId) + car
       payer: { fullName: 'Invitado Test', email: 'guest@test.dev' },
     });
 
-    expect(h.createCollection).toHaveBeenCalledWith(
-      expect.objectContaining({ sponsorMpUserId: undefined }),
-    );
+    const createCallArgs = h.queryRaw.mock.calls[1][0] as { values: unknown[] };
+    const breakdown = JSON.parse(createCallArgs.values[7] as string);
+    expect(breakdown.platformFee).toBe(0);
+    expect(breakdown.platformIva).toBe(0);
+  });
+
+  it('with a non-fake driver, refuses an org that has not connected its own account (no platform fallback)', async () => {
+    const h = makeService({ PAYMENT_DRIVER: 'disabled' });
+    h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check: none yet
+
+    await expect(
+      h.service.create(undefined, {
+        ...BASE_INPUT,
+        payer: { fullName: 'Invitado Test', email: 'guest@test.dev' },
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(h.createCollection).not.toHaveBeenCalled();
   });
 });
 
 /**
- * PUBLIC "gracias" lookup (MercadoPago redirect-back) — resolves by
+ * PUBLIC "gracias" lookup (gateway redirect-back) — resolves by
  * `collectionId` (== the payer's `external_reference`), never distinguishes
  * an unknown reference from any other 404 reason.
  */
@@ -606,7 +656,7 @@ describe('DonationsService.applyWebhook — guest access link (magic link)', () 
     );
   });
 
-  it('does NOT issue an access link for an authenticated donor (donorUserId present)', async () => {
+  it('does NOT issue an access link for an authenticated donor, but thanks them (link to "Mis donaciones")', async () => {
     const h = makeService();
     h.queryRaw.mockResolvedValueOnce([webhookRow({ donor_user_id: 'user-1' })]);
 
@@ -616,7 +666,14 @@ describe('DonationsService.applyWebhook — guest access link (magic link)', () 
     );
 
     expect(h.donationAccessLinkCreate).not.toHaveBeenCalled();
-    expect(h.send).not.toHaveBeenCalled();
+    expect(h.send).toHaveBeenCalledTimes(1);
+    const message = h.send.mock.calls[0][0] as {
+      body: string;
+      template: { event: string; data: { enlace: string } };
+    };
+    expect(message.template.event).toBe('donation.thanks');
+    expect(message.template.data.enlace).toBe('https://app.test.local/mis-donaciones');
+    expect(message.body).not.toContain('token=');
   });
 
   it('does NOT issue an access link when the webhook declines the donation', async () => {
@@ -760,18 +817,259 @@ describe('DonationsService.getByAccessToken', () => {
 });
 
 describe('DonationsService.getOrganizationAvailability', () => {
-  it('is true only when the organization has a connected MercadoPago account', async () => {
+  it('fake driver (dev/test): always true, with no account lookup', async () => {
     const h = makeService();
-    h.queryRaw.mockResolvedValueOnce([{ mp_user_id: '12345' }]);
     await expect(h.service.getOrganizationAvailability('org-1')).resolves.toEqual({
       organizationId: 'org-1',
       canReceiveDonations: true,
     });
+    expect(h.queryRaw).not.toHaveBeenCalled();
+    expect(h.withOrgContext).not.toHaveBeenCalled();
+  });
 
-    h.queryRaw.mockResolvedValueOnce([]);
+  it('disabled driver: never available (and never looks up a Mercado Pago account)', async () => {
+    const h = makeService({ PAYMENT_DRIVER: 'disabled' });
     await expect(h.service.getOrganizationAvailability('org-2')).resolves.toEqual({
       organizationId: 'org-2',
       canReceiveDonations: false,
     });
+    expect(h.queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('DonationsService.applyWebhook — PAY-003 (fake driver)', () => {
+  const pendingRow = {
+    id: 'don-9',
+    organization_id: 'org-1',
+    donor_user_id: 'user-1',
+    concept_kind: 'organization',
+    concept_id: 'org-1',
+    commission_payer: 'organization',
+    intended_amount: 50_000,
+    amount_charged: 50_000,
+    currency: 'COP',
+    breakdown: { amountCharged: 50_000, gross: 50_000, net: 48_000 },
+    collection_id: 'af-k',
+    idempotency_key: 'k',
+    status: 'pending',
+    payer: null,
+    anonymous: false,
+    created_at: new Date('2026-10-08T00:00:00.000Z'),
+    updated_at: new Date('2026-10-08T00:00:00.000Z'),
+  };
+
+  it('never approves when the charged amount differs, and audits the mismatch', async () => {
+    const h = makeService();
+    h.queryRaw.mockResolvedValueOnce([pendingRow]); // donation_by_collection_id
+
+    const out = await h.service.applyWebhook(
+      { collectionId: 'af-k', status: 'approved', amountCharged: 1_000 },
+      'sig',
+    );
+
+    expect(out).toEqual({ applied: false, status: null, donationId: null });
+    expect(h.queryRaw).toHaveBeenCalledTimes(1); // apply_donation_webhook never ran
+    expect(h.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'donation.payment_mismatch',
+        metadata: { collectionId: 'af-k', mismatches: ['amount'] },
+      }),
+    );
+  });
+
+  it('ignores a Mercado Pago-style `user_id` in the body (lookup retired): no account query', async () => {
+    const h = makeService();
+    h.queryRaw.mockResolvedValueOnce([]); // apply: unknown collection → no-op
+
+    await h.service.applyWebhook(
+      { user_id: '777', collectionId: 'af-k', status: 'approved' },
+      'sig',
+    );
+
+    expect(h.queryRaw).toHaveBeenCalledTimes(1); // only apply_donation_webhook
+    const sql = (h.queryRaw.mock.calls[0][0] as { strings: string[] }).strings.join('?');
+    expect(sql).toContain('apply_donation_webhook');
+    expect(h.withOrgContext).not.toHaveBeenCalled();
+    const context = verifyAndNormalizeWebhookRef.mock.calls[0][2];
+    expect(context.collector).toBeUndefined();
+    expect(context.epaycoCollector).toBeUndefined();
+  });
+});
+
+describe('DonationsService — ePayco driver (ADR-PAG-002)', () => {
+  const KEY = loadEpaycoKeysEncryptionKey();
+  const ORG_KEYS = {
+    custId: '123456',
+    pKey: 'org-p-key-secret',
+    publicKey: 'org-public',
+    privateKey: 'org-private-secret',
+  };
+  const storedRow = {
+    custId: ORG_KEYS.custId,
+    publicKey: ORG_KEYS.publicKey,
+    pKeyEnc: encryptEpaycoSecret(ORG_KEYS.pKey, KEY),
+    privateKeyEnc: encryptEpaycoSecret(ORG_KEYS.privateKey, KEY),
+  };
+  const row = {
+    id: 'don-e1',
+    organization_id: 'org-1',
+    donor_user_id: null,
+    concept_kind: 'organization',
+    concept_id: 'org-1',
+    commission_payer: 'donor',
+    intended_amount: 50_000,
+    amount_charged: 52_300,
+    currency: 'COP',
+    breakdown: { amountCharged: 52_300 },
+    collection_id: 'af-epayco',
+    idempotency_key: 'idem-key-guest-1',
+    status: 'pending',
+    payer: null,
+    anonymous: false,
+    created_at: new Date('2026-10-15T00:00:00.000Z'),
+    updated_at: new Date('2026-10-15T00:00:00.000Z'),
+  };
+
+  function epaycoService(account: unknown = storedRow) {
+    const h = makeService({ PAYMENT_DRIVER: 'epayco', EPAYCO_TEST: true });
+    const findUnique = jest.fn().mockResolvedValue(account);
+    h.withOrgContext.mockImplementation(async (_orgId, fn) =>
+      fn({
+        organizationEpaycoAccount: { findUnique },
+        legalAcceptance: { createMany: jest.fn() },
+      }),
+    );
+    return { h, findUnique };
+  }
+
+  it("charges with the org's decrypted ePayco keys and returns the ephemeral checkout session", async () => {
+    const { h } = epaycoService();
+    const breakdown = computeBreakdown(50_000, 'donor', DIRECT_COLLECTION_RATES);
+    h.createCollection.mockResolvedValueOnce({
+      collectionId: 'af-epayco',
+      status: 'pending',
+      breakdown,
+      checkoutSessionId: 'sess-9',
+    });
+    h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check
+    h.queryRaw.mockResolvedValueOnce([row]); // create_donation
+
+    const donation = await h.service.create(undefined, {
+      ...BASE_INPUT,
+      commissionPayer: 'donor',
+      payer: { email: 'guest@test.dev' },
+    });
+
+    const input = h.createCollection.mock.calls[0][0];
+    expect(input.epaycoCollector).toEqual(ORG_KEYS);
+    expect(input.collector).toBeUndefined();
+    expect(donation.checkoutSessionId).toBe('sess-9');
+    expect(donation.checkoutTest).toBe(true);
+    // Persisted breakdown is the one the adapter charged; never a secret in audit.
+    const createArgs = h.queryRaw.mock.calls[1][0] as { values: unknown[] };
+    expect(JSON.parse(createArgs.values[7] as string)).toEqual(breakdown);
+    expect(JSON.stringify(h.record.mock.calls)).not.toContain(ORG_KEYS.pKey);
+    expect(JSON.stringify(h.record.mock.calls)).not.toContain(ORG_KEYS.privateKey);
+  });
+
+  it('409 when the organization has not connected ePayco (no platform fallback)', async () => {
+    const { h } = epaycoService(null);
+    h.queryRaw.mockResolvedValueOnce([]);
+    const error = await h.service
+      .create(undefined, { ...BASE_INPUT, payer: { email: 'guest@test.dev' } })
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as Error).message).toBe(
+      'Esta organización todavía no conectó su cuenta para recibir donaciones.',
+    );
+    expect(h.createCollection).not.toHaveBeenCalled();
+  });
+
+  it('availability follows the ePayco account', async () => {
+    const { h } = epaycoService({ id: 'acc-1' });
+    await expect(h.service.getOrganizationAvailability('org-1')).resolves.toEqual({
+      organizationId: 'org-1',
+      canReceiveDonations: true,
+    });
+    expect(h.queryRaw).not.toHaveBeenCalled();
+  });
+
+  const confirmation = {
+    x_ref_payco: '987654',
+    x_id_invoice: 'af-epayco',
+    x_cust_id_cliente: '123456',
+    collectionId: 'af-epayco',
+    status: 'approved',
+    amountCharged: 52_300,
+  };
+
+  it('webhook: resolves the org from the invoice and verifies with ITS keys', async () => {
+    const { h } = epaycoService();
+    verifyAndNormalizeWebhookRef.mockImplementationOnce(async () => ({
+      eventId: '987654',
+      collectionId: 'af-epayco',
+      status: 'approved',
+      dedupKey: 'epayco:987654:approved',
+      amountCharged: 52_300,
+      currency: 'COP',
+      receiverAccountId: '123456',
+    }));
+    h.queryRaw.mockResolvedValueOnce([row]); // invoice → donation → org
+    h.queryRaw.mockResolvedValueOnce([row]); // matchesExpectedPayment
+    h.queryRaw.mockResolvedValueOnce([{ ...row, status: 'approved' }]); // apply
+
+    const out = await h.service.applyWebhook(confirmation, '');
+    expect(out.applied).toBe(true);
+    const context = verifyAndNormalizeWebhookRef.mock.calls[0][2];
+    expect(context.epaycoCollector).toEqual(ORG_KEYS);
+    expect(context.collector).toBeUndefined();
+  });
+
+  it('webhook: falls back to the merchant id only when the invoice is unknown', async () => {
+    const { h } = epaycoService();
+    h.queryRaw.mockResolvedValueOnce([]); // unknown invoice
+    h.queryRaw.mockResolvedValueOnce([{ organization_id: 'org-1' }]); // cust id → org
+    h.queryRaw.mockResolvedValueOnce([]); // matchesExpectedPayment: unknown → true
+    h.queryRaw.mockResolvedValueOnce([]); // apply: no-op
+
+    await h.service.applyWebhook({ ...confirmation, x_id_invoice: 'af-unknown' }, '');
+    const sql = (h.queryRaw.mock.calls[1][0] as { strings: string[] }).strings.join('?');
+    expect(sql).toContain('epayco_account_organization_id');
+    expect(verifyAndNormalizeWebhookRef.mock.calls[0][2].epaycoCollector).toEqual(ORG_KEYS);
+  });
+
+  it('webhook: an amount or receiver mismatch is audited and never approves', async () => {
+    const { h } = epaycoService();
+    verifyAndNormalizeWebhookRef.mockImplementationOnce(async () => ({
+      eventId: '987654',
+      collectionId: 'af-epayco',
+      status: 'approved',
+      dedupKey: 'epayco:987654:approved',
+      amountCharged: Number.NaN,
+      currency: 'COP',
+      receiverAccountId: '555',
+    }));
+    h.queryRaw.mockResolvedValueOnce([row]);
+    h.queryRaw.mockResolvedValueOnce([row]);
+
+    const out = await h.service.applyWebhook(confirmation, '');
+    expect(out).toEqual({ applied: false, status: null, donationId: null });
+    expect(h.queryRaw).toHaveBeenCalledTimes(2);
+    expect(h.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'donation.payment_mismatch',
+        metadata: { collectionId: 'af-epayco', mismatches: ['receiver', 'amount'] },
+      }),
+    );
+  });
+
+  it('webhook: a verification failure is a 403, never a settlement', async () => {
+    const { h } = epaycoService();
+    verifyAndNormalizeWebhookRef.mockRejectedValueOnce(new Error('signature mismatch'));
+    h.queryRaw.mockResolvedValueOnce([row]);
+    await expect(h.service.applyWebhook(confirmation, '')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(h.queryRaw).toHaveBeenCalledTimes(1);
   });
 });

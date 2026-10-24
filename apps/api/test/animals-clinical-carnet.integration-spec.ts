@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * S2-04B-2 (RF08/RF09): the "carnet de vacunación" read-only view over the
@@ -19,7 +20,7 @@ describe('Clinical carnet — timeline + PDF (S2-04B-2)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -31,6 +32,7 @@ describe('Clinical carnet — timeline + PDF (S2-04B-2)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Dra. Ana',
         email: `carnet-${randomUUID()}@test.local`,
@@ -208,7 +210,12 @@ describe('Clinical carnet — timeline + PDF (S2-04B-2)', () => {
 
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `carnet-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `carnet-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     createdOrgIds.push(personRes.body.user.organizationId);
     // TODO(client)-driven default: a Persona/adoptante has no org role, so this

@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M11 (F-8, Ola 3) — comunidad: publicaciones, comentarios y likes,
@@ -19,7 +20,7 @@ describe('Community (M11, F-8: posts, comments, likes, RBAC, moderation)', () =>
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -31,6 +32,7 @@ describe('Community (M11, F-8: posts, comments, likes, RBAC, moderation)', () =>
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Org ${tag}`,
         displayName: 'Owner',
         email: `com-${tag}-${randomUUID()}@test.local`,
@@ -48,7 +50,12 @@ describe('Community (M11, F-8: posts, comments, likes, RBAC, moderation)', () =>
   async function registerPerson(tag: string): Promise<Actor> {
     const res = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Vecina', email: `com-${tag}-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Vecina',
+        email: `com-${tag}-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
     return {

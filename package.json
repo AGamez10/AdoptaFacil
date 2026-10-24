@@ -5,7 +5,7 @@
   "description": "AdoptaFácil V2.0 — monorepo (walking skeleton)",
   "packageManager": "pnpm@9.15.9",
   "engines": {
-    "node": ">=20",
+    "node": ">=24",
     "pnpm": ">=9 <10"
   },
   "prisma": {
@@ -24,7 +24,10 @@
     "seed:admin": "pnpm --filter @adoptafacil/api run seed:admin",
     "seed:demo": "pnpm --filter @adoptafacil/api run seed:demo",
     "seed:breeds": "pnpm --filter @adoptafacil/api run seed:breeds",
-    "db:deploy": "pnpm --filter @adoptafacil/api run db:deploy",
+    "seed:trafico": "pnpm --filter @adoptafacil/api run seed:trafico",
+    "db:deploy": "prisma migrate deploy",
+    "smoke": "node scripts/smoke/smoke-by-role.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "postinstall": "prisma generate",
     "prepare": "husky"
   },
@@ -60,8 +63,23 @@
   },
   "pnpm": {
     "overrides": {
-      "multer": "^2.5.0",
-      "body-parser": "^1.20.9"
+      "proxy-addr@<2.0.8": "^2.0.8",
+      "multer@<2.5.0": "^2.5.0",
+      "brace-expansion@<1.1.21": "^1.1.21",
+      "brace-expansion@>=2.0.0 <2.1.7": "^2.1.7",
+      "lodash@<4.18.0": "^4.18.1",
+      "qs@<6.16.0": "^6.16.0",
+      "body-parser@<1.20.9": "^1.20.9",
+      "handlebars@<4.7.10": "^4.7.10",
+      "fast-uri@>=3.0.0 <3.1.7": "^3.1.7",
+      "js-yaml@>=3.0.0 <3.15.2": "^3.15.2",
+      "js-yaml@>=4.0.0 <4.3.2": "^4.3.2",
+      "brace-expansion@>=4.0.0 <5.0.11": "^5.0.11",
+      "picomatch@>=4.0.0 <4.0.4": "^4.0.4",
+      "glob@>=10.2.0 <10.5.0": "^10.5.0",
+      "nanoid@<3.3.18": "^3.3.18",
+      "browserslist@<4.28.7": "^4.28.7",
+      "source-map-js@<1.2.2": "^1.2.2"
     }
   }
 }

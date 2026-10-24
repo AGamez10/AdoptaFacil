@@ -1,6 +1,11 @@
 import type { ConfigService } from '@nestjs/config';
-import type { IdentityPort } from '@adoptafacil/contracts';
+import {
+  currentLegalAcceptanceItems,
+  type IdentityPort,
+  requiredLegalDocuments,
+} from '@adoptafacil/contracts';
 import type { AuditService } from '../audit/audit.service';
+import { LegalService } from '../legal/legal.service';
 import type { NotificationPort } from '../notifications/notification.port';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { Env } from '../../config/env.validation';
@@ -21,7 +26,11 @@ interface TxMock {
   authCredential: { create: jest.Mock };
   userRole: { create: jest.Mock };
   animalBreed: { createMany: jest.Mock };
+  legalAcceptance: { createMany: jest.Mock };
 }
+
+const ORG_LEGAL = currentLegalAcceptanceItems(requiredLegalDocuments('organization'));
+const PERSON_LEGAL = currentLegalAcceptanceItems(requiredLegalDocuments('person'));
 
 function makeTx(): TxMock {
   return {
@@ -30,6 +39,7 @@ function makeTx(): TxMock {
     authCredential: { create: jest.fn().mockResolvedValue({}) },
     userRole: { create: jest.fn().mockResolvedValue({}) },
     animalBreed: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    legalAcceptance: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
 }
 
@@ -57,7 +67,16 @@ function makeService(tx: TxMock): { service: AuthService; withOrgContext: jest.M
   } as unknown as ConfigService<Env, true>;
   const identity = { verifyGoogleIdToken: jest.fn() } as unknown as IdentityPort;
   return {
-    service: new AuthService(prisma, passwords, tokens, notifications, identity, audit, config),
+    service: new AuthService(
+      prisma,
+      passwords,
+      tokens,
+      notifications,
+      identity,
+      audit,
+      config,
+      new LegalService(prisma, audit, notifications, config),
+    ),
     withOrgContext,
   };
 }
@@ -72,6 +91,7 @@ describe('AuthService — Owner on organization registration (T-012b)', () => {
       displayName: 'Rep',
       email: 'rep@test.local',
       password: 'password123',
+      legalAcceptances: ORG_LEGAL,
     });
 
     expect(withOrgContext).toHaveBeenCalledTimes(1);
@@ -97,6 +117,7 @@ describe('AuthService — Owner on organization registration (T-012b)', () => {
       displayName: 'Persona',
       email: 'persona@test.local',
       password: 'password123',
+      legalAcceptances: PERSON_LEGAL,
     });
 
     expect(tx.user.create).toHaveBeenCalledTimes(1);
@@ -115,7 +136,82 @@ describe('AuthService — Owner on organization registration (T-012b)', () => {
         displayName: 'Rep',
         email: 'fail@test.local',
         password: 'password123',
+        legalAcceptances: ORG_LEGAL,
       }),
     ).rejects.toThrow('role insert failed');
+  });
+});
+
+describe('AuthService — aceptación legal en el registro (Ley 1581)', () => {
+  it('no crea la cuenta si faltan los documentos obligatorios', async () => {
+    const tx = makeTx();
+    const { service, withOrgContext } = makeService(tx);
+
+    await expect(
+      service.registerPerson({
+        displayName: 'Persona',
+        email: 'sin-aceptar@test.local',
+        password: 'password123',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'LEGAL_ACCEPTANCE_REQUIRED' } });
+    expect(withOrgContext).not.toHaveBeenCalled();
+  });
+
+  it('una organización también debe aceptar sus condiciones propias', async () => {
+    const tx = makeTx();
+    const { service } = makeService(tx);
+
+    await expect(
+      service.registerOrganization({
+        organizationName: 'Org',
+        displayName: 'Rep',
+        email: 'org@test.local',
+        password: 'password123',
+        legalAcceptances: PERSON_LEGAL,
+      }),
+    ).rejects.toMatchObject({ response: { missing: ['org_terms'] } });
+  });
+
+  it('rechaza una versión que ya no está vigente', async () => {
+    const tx = makeTx();
+    const { service } = makeService(tx);
+
+    await expect(
+      service.registerPerson({
+        displayName: 'Persona',
+        email: 'vieja@test.local',
+        password: 'password123',
+        legalAcceptances: PERSON_LEGAL.map((i) => ({ ...i, version: '2020-01-01' })),
+      }),
+    ).rejects.toMatchObject({ response: { code: 'LEGAL_VERSION_OUTDATED' } });
+  });
+
+  it('registra versión, hash, canal, IP y navegador en la misma transacción', async () => {
+    const tx = makeTx();
+    const { service } = makeService(tx);
+
+    await service.registerPerson(
+      {
+        displayName: 'Persona',
+        email: 'ok@test.local',
+        password: 'password123',
+        legalAcceptances: PERSON_LEGAL,
+      },
+      { ipAddress: '203.0.113.7', userAgent: 'jest' },
+    );
+
+    expect(tx.legalAcceptance.createMany).toHaveBeenCalledTimes(1);
+    const rows = tx.legalAcceptance.createMany.mock.calls[0][0].data;
+    expect(rows.map((r: { documentKey: string }) => r.documentKey).sort()).toEqual(
+      [...requiredLegalDocuments('person')].sort(),
+    );
+    expect(rows[0]).toMatchObject({
+      subjectType: 'user',
+      channel: 'registration',
+      action: 'accepted',
+      ipAddress: '203.0.113.7',
+      userAgent: 'jest',
+    });
+    expect(rows[0].documentSha256).toMatch(/^[0-9a-f]{64}$/);
   });
 });

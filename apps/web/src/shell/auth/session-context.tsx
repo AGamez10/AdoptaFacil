@@ -20,6 +20,7 @@ import {
   type AccountType,
   type AuthApi,
   type AuthSession,
+  type AuthTokens,
   type AuthenticatedUser,
   type CompleteProfileRequest,
   type ForgotPasswordRequest,
@@ -28,6 +29,7 @@ import {
   type ResetPasswordRequest,
   type ShellApi,
 } from '../api';
+import { resumeSessionOnce } from './resume-session';
 import { IDLE_TIMEOUT_MS, useIdleLogout } from './use-idle-logout';
 
 /**
@@ -170,6 +172,13 @@ export interface SessionContextValue {
    * match, when `roles` is empty, or when there is no session.
    */
   hasAnyRole: (...roles: Role[]) => boolean;
+  /**
+   * F19 · adopt a token pair the API issued for THIS session (e.g. after the
+   * platform second factor: `POST /auth/mfa/verify` returns a new, verified
+   * pair and revokes the previous one). Same user and roles; only the in-memory
+   * tokens change. Optional so existing test doubles stay valid.
+   */
+  adoptTokens?: (tokens: AuthTokens) => void;
 }
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
@@ -355,17 +364,13 @@ export function SessionProvider({
 
     void (async () => {
       try {
-        const tokens = await api.authApi.refreshSilent?.();
-        if (!tokens) {
+        const resumed = await resumeSessionOnce(api);
+        if (!resumed) {
           if (!cancelled) setStatus('unauthenticated');
           return;
         }
-        // `me()` needs a token in the store to authenticate; `establish()`
-        // below sets it again with the same value right after (idempotent).
-        api.tokenStore.set(tokensFromContract(tokens));
-        const me = await api.authApi.me();
         if (cancelled) return;
-        await establish({ user: me, tokens });
+        await establish(resumed);
       } catch {
         if (!cancelled) {
           api.tokenStore.clear();
@@ -450,6 +455,13 @@ export function SessionProvider({
     [api],
   );
 
+  const adoptTokens = useCallback(
+    (tokens: AuthTokens) => {
+      api.tokenStore.set(tokensFromContract(tokens));
+    },
+    [api],
+  );
+
   const signOut = useCallback(async () => {
     const refreshToken = api.tokenStore.getRefreshToken();
     // Clear locally first so the UI can't act on a stale session even if the
@@ -487,6 +499,7 @@ export function SessionProvider({
       retryRoles,
       hasRole,
       hasAnyRole,
+      adoptTokens,
     }),
     [
       status,
@@ -505,6 +518,7 @@ export function SessionProvider({
       retryRoles,
       hasRole,
       hasAnyRole,
+      adoptTokens,
     ],
   );
 

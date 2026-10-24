@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -24,6 +25,10 @@ import {
 import { AuditService } from '../../core/audit/audit.service';
 import type { Env } from '../../config/env.validation';
 import { PAYMENT_PORT } from '../../core/payments/payment.port';
+import {
+  NOTIFICATION_PORT,
+  type NotificationPort,
+} from '../../core/notifications/notification.port';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -154,7 +159,7 @@ function toHistoryEntry(row: HistoryRow): SponsorshipStatusHistoryEntry {
  * Sponsorships (RF17 · T-056) — a Person (padrino) SUBSCRIBES to another org's
  * plan (cross-tenant creation, same technique as M05 donations); the org then
  * suspends/reactivates/cancels WITHIN its own tenant context (regular RLS write).
- * Requerimiento #17: subscribing charges a REAL MercadoPago collection
+ * Requerimiento #17: subscribing charges a collection through the PaymentPort
  * immediately (see `subscribe()`'s own doc comment) — the recurring cron/
  * poller/"Pagar de nuevo" machinery (`SponsorshipBillingService`,
  * `SponsorshipPaymentPollerService`, `SponsorshipPaymentsService.retryPayment`)
@@ -162,25 +167,16 @@ function toHistoryEntry(row: HistoryRow): SponsorshipStatusHistoryEntry {
  */
 @Injectable()
 export class SponsorshipsService {
+  private readonly logger = new Logger(SponsorshipsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
     @Inject(PAYMENT_PORT) private readonly payments: PaymentPort,
+    @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
   ) {}
-
-  /**
-   * Split de Pagos 1:1 (T-OAuth-Connect) — same narrow, token-free lookup
-   * `SponsorshipPaymentsService`/`DonationsService` each already duplicate
-   * (this codebase does not share service-level logic across files).
-   */
-  private async resolveSponsorMpUserId(organizationId: string): Promise<string | undefined> {
-    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
-      SELECT * FROM mercadopago_account_mp_user_id(${organizationId}::uuid)
-    `);
-    return rows[0]?.mp_user_id;
-  }
 
   private requireOrgId(): string {
     const organizationId = this.tenant.getOrganizationId();
@@ -196,8 +192,8 @@ export class SponsorshipsService {
    * SECURITY DEFINER `create_sponsorship` (validates the plan exists and is
    * active, inserts the sponsorship + its initial history entry atomically).
    *
-   * Requerimiento #17: immediately after creating the row, charges a REAL
-   * MercadoPago collection for the plan's amount — same mechanism
+   * Requerimiento #17: immediately after creating the row, charges a
+   * collection for the plan's amount — same mechanism
    * `SponsorshipPaymentsService.retryPayment` already uses (card tokenized
    * client-side by `CardPaymentBrick`, `createCollection` called OUTSIDE any
    * DB transaction). A synchronous `declined` CANCELS the just-created
@@ -228,7 +224,6 @@ export class SponsorshipsService {
     const plan = await this.prisma.withOrgContext(row.organization_id, (tx) =>
       tx.sponsorshipPlan.findUniqueOrThrow({ where: { id: row.plan_id } }),
     );
-    const sponsorMpUserId = await this.resolveSponsorMpUserId(row.organization_id);
     const now = new Date();
     const period = billingPeriod(now);
     const idempotencyKey = buildAttemptIdempotencyKey(row.id, period, 1);
@@ -242,7 +237,6 @@ export class SponsorshipsService {
       paymentMethodId: input.paymentMethodId,
       paymentMethodType: input.paymentMethodType,
       installments: input.installments,
-      sponsorMpUserId,
     });
 
     if (collection.status === 'declined') {
@@ -302,7 +296,59 @@ export class SponsorshipsService {
       });
     });
 
+    if (paid) {
+      await this.sendWelcomeBestEffort(
+        row.id,
+        actor.email,
+        row.organization_id,
+        row.animal_id,
+        plan.amount,
+      );
+    }
+
     return { ...fromRawRow(row), firstPaymentStatus: collection.status };
+  }
+
+  /** Thank-you + welcome for a sponsorship whose first payment is approved.
+   *  Best-effort: never fails the subscription. Pending first payments get
+   *  their confirmation through the regular billing emails instead. */
+  private async sendWelcomeBestEffort(
+    sponsorshipId: string,
+    to: string,
+    organizationId: string,
+    animalId: string,
+    amount: number,
+  ): Promise<void> {
+    try {
+      const [org, animal] = await Promise.all([
+        this.prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true },
+        }),
+        this.prisma.withOrgContext(organizationId, (tx) =>
+          tx.animal.findUnique({ where: { id: animalId }, select: { name: true } }),
+        ),
+      ]);
+      const animalName = animal?.name ?? 'tu ahijado';
+      const organizationName = org?.name ?? undefined;
+      const link = `${this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '')}/apadrinar`;
+      await this.notifications.send({
+        to,
+        idempotencyKey: `sponsorship.welcome:${sponsorshipId}`,
+        subject: `Ahora apadrinas a ${animalName}`,
+        body: `¡Gracias! Desde hoy apadrinas a ${animalName}. Puedes ver tu apadrinamiento en ${link}`,
+        template: {
+          event: 'sponsorship.welcome',
+          organizationName,
+          organizationId,
+          data: { animal: animalName, organizacion: organizationName, monto: amount, enlace: link },
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar la bienvenida del apadrinamiento: ${(error as Error).message}`,
+      );
+    }
   }
 
   /**

@@ -8,6 +8,7 @@ import { FollowUpService } from '../src/modules/adoptions/followup.service';
 import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M04 post-adoption FOLLOW-UP (T-028c, RF12) end-to-end: from a SIGNED contract the
@@ -21,7 +22,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const longMessage =
     'Tengo hogar y experiencia; deseo adoptar de forma responsable a este animal.';
 
@@ -44,6 +45,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const refuge = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Seguimiento',
         displayName: 'Owner Refugio',
         email: `t028c-refuge-${randomUUID()}@test.local`,
@@ -57,6 +59,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const person = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
         email: `t028c-p-${randomUUID()}@test.local`,
         password,
@@ -69,6 +72,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const other = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otro Refugio',
         displayName: 'Owner Otro',
         email: `t028c-other-${randomUUID()}@test.local`,
@@ -152,7 +156,9 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .set('Authorization', `Bearer ${personToken}`)
       .send({
         signerId: adopterSignerId,
-        signatureBase64: Buffer.from('fake-adopter-signature').toString('base64'),
+        // Debe ser una imagen real: la API valida PNG/JPG por sus bytes.
+        signatureBase64:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
         signatureContentType: 'image/png',
       })
       .expect(201);
@@ -241,6 +247,142 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .set('Authorization', `Bearer ${otherToken}`)
       .send({ answers: { x: 1 } })
       .expect(404);
+  });
+
+  it('lets the adopter upload the photo bytes with the response (multipart, private, identity-gated)', async () => {
+    const scheduled = await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Foto del primer mes', dueAt: '2030-07-01T00:00:00.000Z' })
+      .expect(201);
+    const milestoneId: string = scheduled.body.id;
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    );
+
+    // Someone who is not the adopter cannot attach evidence (404, nothing stored).
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(404);
+
+    // Only images are accepted.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', Buffer.from('hola'), { filename: 'nota.txt', contentType: 'text/plain' })
+      .expect(400);
+
+    // Unknown multipart fields are rejected like in the JSON endpoint.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .field('organizationId', refugeOrgId)
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(400);
+
+    const submitted = await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .field('answers', JSON.stringify({ estado: 'come bien' }))
+      .field('complete', 'true')
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(201);
+    expect(submitted.body.status).toBe('completed');
+
+    const listed = await request(server)
+      .get(`/adoptions/followups/by-contract/${contractId}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    const milestone = listed.body.find((m: { id: string }) => m.id === milestoneId);
+    const photo = milestone.evidence.find((e: { kind: string }) => e.kind === 'photo');
+    expect(photo.storageRef.startsWith(`private/${refugeOrgId}/`)).toBe(true);
+    expect(photo.photoUrl).toBe(
+      app.get<StoragePort>(STORAGE_PORT).resolvePublicUrl(photo.storageRef),
+    );
+
+    // The bytes really exist and are served only behind auth to the owning org.
+    const downloaded = await request(server)
+      .get(`/storage/private?key=${encodeURIComponent(photo.storageRef)}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    expect(Buffer.from(downloaded.body).equals(png)).toBe(true);
+    await request(server)
+      .get(`/storage/public?key=${encodeURIComponent(photo.storageRef)}`)
+      .expect((res) => expect(res.status).toBeGreaterThanOrEqual(400));
+
+    // A completed milestone no longer accepts evidence.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', png, { filename: 'casa.png', contentType: 'image/png' })
+      .expect(409);
+  });
+
+  it('accepts a phone video of up to 30 seconds as evidence and refuses a longer one', async () => {
+    const scheduled = await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Video del segundo mes', dueAt: '2030-08-01T00:00:00.000Z' })
+      .expect(201);
+    const milestoneId: string = scheduled.body.id;
+
+    // MP4 mínimo: ftyp + moov/mvhd (versión 0) con la duración en segundos.
+    const box = (type: string, payload: Buffer) => {
+      const header = Buffer.alloc(8);
+      header.writeUInt32BE(payload.length + 8, 0);
+      header.write(type, 4, 'latin1');
+      return Buffer.concat([header, payload]);
+    };
+    const mp4 = (seconds: number) => {
+      const mvhd = Buffer.alloc(100);
+      mvhd.writeUInt32BE(1000, 12);
+      mvhd.writeUInt32BE(seconds * 1000, 16);
+      return Buffer.concat([
+        box('ftyp', Buffer.from('isom0000isommp41', 'latin1')),
+        box('moov', box('mvhd', mvhd)),
+        box('mdat', Buffer.alloc(256)),
+      ]);
+    };
+
+    const tooLong = await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', mp4(45), { filename: 'paseo.mp4', contentType: 'video/mp4' })
+      .expect(400);
+    expect(tooLong.body.message).toMatch(/30 s/);
+
+    // Un archivo que dice ser video pero no lo es no pasa.
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .attach('file', Buffer.from('no soy un video'), {
+        filename: 'falso.mov',
+        contentType: 'video/quicktime',
+      })
+      .expect(400);
+
+    await request(server)
+      .post(`/adoptions/followups/${milestoneId}/photo`)
+      .set('Authorization', `Bearer ${personToken}`)
+      .field('complete', 'true')
+      .attach('file', mp4(28), { filename: 'paseo.mov', contentType: 'video/quicktime' })
+      .expect(201);
+
+    const listed = await request(server)
+      .get(`/adoptions/followups/by-contract/${contractId}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    const milestone = listed.body.find((m: { id: string }) => m.id === milestoneId);
+    const video = milestone.evidence.find((e: { kind: string }) => e.kind === 'video');
+    expect(video.storageRef.startsWith(`private/${refugeOrgId}/`)).toBe(true);
+    const downloaded = await request(server)
+      .get(`/storage/private?key=${encodeURIComponent(video.storageRef)}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    expect(downloaded.headers['content-type']).toMatch(/video\/quicktime/);
   });
 
   it('marks a past-due milestone overdue and alerts via the worker scan (audited, UTC)', async () => {

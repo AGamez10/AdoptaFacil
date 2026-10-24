@@ -3,10 +3,11 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown } from '@adoptafacil/contracts';
+import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M15b (F-5, RF26) — conciliación básica: recaudado (donaciones `approved`,
@@ -24,7 +25,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const currentPeriod = new Date().toISOString().slice(0, 7); // 'YYYY-MM' UTC
 
   interface Actor {
@@ -37,6 +38,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Org ${tag}`,
         displayName: 'Owner',
         email: `reconc-${tag}-${randomUUID()}@test.local`,
@@ -55,6 +57,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Donante',
         email: `reconc-${tag}-${randomUUID()}@test.local`,
         password,
@@ -109,7 +112,7 @@ describe('Reconciliation report (M15b, F-5, RF26: recaudado vs. dispersado)', ()
         eventId: `evt-reconc-${randomUUID()}`,
       })
       .expect(200);
-    return computeBreakdown(intendedAmount, 'organization').net;
+    return computeBreakdown(intendedAmount, 'organization', DIRECT_COLLECTION_RATES).net;
   }
 
   async function waitFor<T>(

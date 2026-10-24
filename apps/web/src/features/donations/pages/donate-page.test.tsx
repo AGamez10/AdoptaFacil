@@ -1,27 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CardPaymentBrickProps } from '../../payments';
 import { renderShell } from '../../../test-utils';
-
-/**
- * T-OrdersAPI: the real `CardPaymentBrick` loads MercadoPago's external SDK
- * script (jsdom can't execute it) — mocked here with a fake "submit" button
- * that calls `onResult` with fixed, deterministic card data, same technique
- * as `donate-form.test.tsx`.
- */
-vi.mock('../../payments', () => ({
-  CardPaymentBrick: ({ onResult }: CardPaymentBrickProps) => (
-    <button
-      type="button"
-      data-testid="fake-card-brick-submit"
-      onClick={() =>
-        void onResult({ cardToken: 'tok-test-123', paymentMethodId: 'visa', installments: 1 })
-      }
-    >
-      Simular pago con tarjeta
-    </button>
-  ),
-}));
 
 /**
  * T-064 — completes the "no target" branch of `/donaciones` (reached from the
@@ -51,7 +30,7 @@ function stubFetch(handler: (url: string) => unknown) {
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      // Org availability (MercadoPago conectado) — por defecto SÍ, salvo que el test lo sobreescriba.
+      // Org availability (cuenta ePayco conectada) — por defecto SÍ, salvo que el test lo sobreescriba.
       const body = url.includes('/availability') ? { canReceiveDonations: true } : handler(url);
       return Promise.resolve({
         ok: true,
@@ -455,17 +434,18 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     fireEvent.change(screen.getByTestId('donation-guest-email'), {
       target: { value: 'invitado@test.dev' },
     });
-    // Step 1 → step 2 (Card Payment Brick, mocked above) → the Brick's own
-    // submit is what actually triggers the charge (T-OrdersAPI).
+    fireEvent.click(screen.getByTestId('donation-legal-terms'));
+    fireEvent.click(screen.getByTestId('donation-legal-data'));
+    // Single step (ePayco): "Donar" creates the donation; with no checkout
+    // session in the response (fake driver) the page shows the result.
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();
     const cta = screen.getByTestId('create-account-cta');
     expect(cta).toHaveAttribute('href', '/register');
   });
 
-  it('T-OrdersAPI: shows an honest "pago rechazado" state (declined), with a retry that reopens the form', async () => {
+  it('shows an honest "pago rechazado" state (declined), with a retry that reopens the form', async () => {
     stubFetch((url) => {
       if (url.includes('/donations')) {
         return {
@@ -508,11 +488,17 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     fireEvent.change(screen.getByTestId('donation-guest-email'), {
       target: { value: 'invitado@test.dev' },
     });
+    fireEvent.click(screen.getByTestId('donation-legal-terms'));
+    fireEvent.click(screen.getByTestId('donation-legal-data'));
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
 
     expect(await screen.findByTestId('donation-declined')).toBeInTheDocument();
     expect(screen.queryByText(/¡Gracias por tu donación!/)).not.toBeInTheDocument();
+    // Neutral copy: Mercado Pago was retired (2026-10-17).
+    expect(screen.getByTestId('donation-declined')).toHaveTextContent(
+      'Tu banco o la pasarela de pagos rechazaron el pago',
+    );
+    expect(screen.getByTestId('donation-declined')).not.toHaveTextContent(/Mercado ?Pago/i);
 
     fireEvent.click(screen.getByTestId('donation-retry-card'));
     expect(await screen.findByTestId('donation-guest-name')).toBeInTheDocument();
@@ -557,7 +543,6 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     await screen.findByRole('heading', { name: 'Donar' });
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
-    fireEvent.click(await screen.findByTestId('fake-card-brick-submit'));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();
     expect(screen.queryByTestId('create-account-cta')).not.toBeInTheDocument();
@@ -572,10 +557,10 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
   });
 });
 
-describe('DonatePage — organización sin MercadoPago conectado', () => {
+describe('DonatePage — organización que aún no recibe donaciones en línea', () => {
   const route = '/donaciones?organizationId=org-1&organizationName=Refugio%20Patitas';
 
-  it('shows an alert and NO form when the organization has not connected MercadoPago', async () => {
+  it('shows a warm message with alternatives (no error, NO form) when the organization cannot receive donations yet', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) =>
@@ -590,10 +575,44 @@ describe('DonatePage — organización sin MercadoPago conectado', () => {
     );
     renderShell({ route, ...personSession() });
 
-    expect(await screen.findByTestId('donation-org-not-connected')).toHaveTextContent(
-      'no ha conectado su cuenta de MercadoPago',
+    // Nunca un error para el donante: mensaje cálido + otras formas de ayudar.
+    const notice = await screen.findByTestId('donation-org-not-connected');
+    expect(notice).toHaveTextContent('Este refugio está activando sus donaciones en línea.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(notice).getByRole('link', { name: 'Ver mascotas en adopción' })).toHaveAttribute(
+      'href',
+      '/',
     );
+    expect(within(notice).getByRole('link', { name: 'Ver campañas solidarias' })).toHaveAttribute(
+      'href',
+      '/campanas',
+    );
+    expect(
+      within(notice).getByRole('link', { name: 'Donar alimento, medicinas u otros insumos' }),
+    ).toHaveAttribute('href', '/recursos');
     expect(screen.queryByPlaceholderText('50000')).not.toBeInTheDocument();
+  });
+
+  it('links back to the organization portal (and offers to share it) when the slug is known', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () =>
+            String(input).includes('/availability') ? { canReceiveDonations: false } : [],
+        }),
+      ),
+    );
+    renderShell({ route: `${route}&organizationSlug=patitas`, ...personSession() });
+
+    const notice = await screen.findByTestId('donation-org-not-connected');
+    expect(
+      within(notice).getByRole('link', { name: 'Conocer a sus animales en adopción' }),
+    ).toHaveAttribute('href', '/o/patitas');
+    expect(within(notice).getByRole('button', { name: 'Compartir su portal' })).toBeInTheDocument();
   });
 
   it('shows a verification error (and NO form) when availability cannot be checked', async () => {
@@ -605,6 +624,11 @@ describe('DonatePage — organización sin MercadoPago conectado', () => {
 
     expect(await screen.findByTestId('donation-availability-error')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('50000')).not.toBeInTheDocument();
+    // Se puede reintentar sin recargar: vuelve a consultar la disponibilidad.
+    const fetchMock = vi.mocked(fetch);
+    const before = fetchMock.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Intentar de nuevo' }));
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
   });
 });
 

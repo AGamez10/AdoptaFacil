@@ -1,4 +1,8 @@
-import type { DonationCertificate, DonationCertificateVerification } from '@adoptafacil/contracts';
+import type {
+  DonationCertificate,
+  DonationCertificateVerification,
+  OrgReportVerification,
+} from '@adoptafacil/contracts';
 import type { ApiClient } from '../../../shell/api';
 
 /** El certificado de UNA donación propia (F-3, RF14) — 404 si aún no se
@@ -24,4 +28,19 @@ export async function fetchPublicCertificateVerification(
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('error');
   return (await response.json()) as DonationCertificateVerification;
+}
+
+/** Verificación PÚBLICA de un reporte sellado (M13) por su folio — sin sesión. */
+export async function fetchPublicReportVerification(
+  code: string,
+): Promise<OrgReportVerification | null> {
+  const response = await fetch(`${API_BASE}/public/reports/${encodeURIComponent(code)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('error');
+  return (await response.json()) as OrgReportVerification;
+}
+
+/** Los folios de reportes empiezan por `ADF-REP-`; el resto son certificados. */
+export function isReportCode(code: string): boolean {
+  return code.trim().toUpperCase().startsWith('ADF-REP-');
 }

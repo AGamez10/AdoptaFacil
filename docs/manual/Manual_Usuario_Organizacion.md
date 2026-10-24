@@ -255,7 +255,7 @@ contraste bloquee el guardado.
 
 ![Personalización del portal](img/20-personalizacion-portal.png)
 
-Si configuras un subdominio propio (`tu-organizacion.adoptafacil.com`), tu portal resuelve directamente
+Si configuras un subdominio propio (`tu-organizacion.adoptafacil.org`), tu portal resuelve directamente
 por esa dirección; mientras no lo configures, `/o/tu-organizacion` sigue funcionando como respaldo.
 
 ### Qué se ve hoy en tu portal público

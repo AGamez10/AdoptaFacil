@@ -35,16 +35,46 @@ export interface TransitionCheck {
  * of a forward step: to advance INTO that state, the listed document types must
  * be Approved AND current (vigente) for the organization.
  *
- * TODO(client): intentionally EMPTY — no requirement is invented here. With an
- * empty map every adjacent forward step is structurally allowed (the T-102
- * behavior is preserved). Populate/seed once the client confirms which documents
- * gate each advance.
+ * Decisión del cliente (hilo "Estados formales y verificación OCR", 2026-10-08):
+ * las funciones de organización formal se habilitan solo después de que la
+ * plataforma verifique sus documentos. Por eso entrar a Formalizada exige el RUT
+ * y el certificado de existencia y representación legal APROBADOS y vigentes.
+ * ESAL y ESAL_RTE además solo los asigna la plataforma (ver abajo). Las
+ * organizaciones que ya estaban en Formalizada no se tocan. Fundamento:
+ * docs/legal/estados-formales-y-funciones.md.
  */
 export const TRANSITION_REQUIREMENTS: Partial<Record<FormalizationState, readonly DocumentType[]>> =
   {
-    // TODO(client): e.g.
-    // [FormalizationState.Formalizada]: [DocumentType.ExistenceRepresentationCertificate],
+    [FormalizationState.Formalizada]: [
+      DocumentType.Rut,
+      DocumentType.ExistenceRepresentationCertificate,
+    ],
   };
+
+/**
+ * States an organization can never enter on its own (R2-2, SEC-003): being an
+ * ESAL — and above all an ESAL with RTE — unlocks tax-relevant capabilities
+ * (certificates), so only a platform reviewer moves an org INTO them, citing an
+ * approved document. Moving DOWN out of them stays with the org's Owner.
+ */
+export const PLATFORM_ONLY_STATES: readonly FormalizationState[] = [
+  FormalizationState.ESAL,
+  FormalizationState.ESAL_RTE,
+];
+
+/**
+ * Qué documento puede citar la plataforma como evidencia para subir a cada
+ * estado: la ESAL se prueba con el certificado de Cámara (dice "sin ánimo de
+ * lucro") y el RTE con el RUT (responsabilidad 04). Mismo origen que
+ * TRANSITION_REQUIREMENTS. TODO(client): confirmar con el contador si para el
+ * RTE también se pide la constancia de calificación de la DIAN.
+ */
+export const PLATFORM_TRANSITION_EVIDENCE: Partial<
+  Record<FormalizationState, readonly DocumentType[]>
+> = {
+  [FormalizationState.ESAL]: [DocumentType.ExistenceRepresentationCertificate],
+  [FormalizationState.ESAL_RTE]: [DocumentType.Rut],
+};
 
 export interface TransitionContext {
   /** Document types currently Approved AND vigente for the org. */

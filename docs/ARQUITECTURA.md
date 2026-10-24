@@ -18,7 +18,7 @@ flowchart LR
     WEB["apps/web<br/>React 18 + Vite"]
   end
   subgraph Servidor
-    API["apps/api<br/>NestJS (Node 20)"]
+    API["apps/api<br/>NestJS (Node 24)"]
     WORKERS["Workers BullMQ<br/>(mismo proceso)"]
   end
   subgraph Datos
@@ -26,7 +26,7 @@ flowchart LR
     REDIS[("Redis 7")]
     DISK[["Disco / StoragePort"]]
   end
-  MP["MercadoPago<br/>Orders + OAuth"]
+  MP["ePayco<br/>checkout v2"]
   SMTP["SMTP"]
   DIAN["DIAN (fake)"]
   WEB -- "HTTPS + JWT" --> API
@@ -36,7 +36,7 @@ flowchart LR
   API --> WORKERS
   API --> DISK
   API -- "PaymentPort" --> MP
-  MP -- "webhooks" --> API
+  MP -- "confirmación" --> API
   API -- "NotificationPort" --> SMTP
   API -- "DianPort" --> DIAN
 ```
@@ -77,7 +77,7 @@ flowchart LR
 
 | Pieza     | Responsabilidad                                                                                                                                           |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenant/` | `TenantContextMiddleware`: toma `org` del JWT (o `x-org-id` válido) y ejecuta la request en un `AsyncLocalStorage`                                        |
+| `tenant/` | `TenantContextMiddleware`: toma `org` SOLO del JWT (nunca de header, query ni body) y ejecuta la request en un `AsyncLocalStorage`                        |
 | `prisma/` | `PrismaService` conecta como **`adoptafacil_app`**; `withTenant` / `withOrgContext` abren una transacción con `set_config('app.current_org_id', …, true)` |
 | `auth/`   | Registro (organización / persona), login, refresh con rotación, reset de contraseña, Google Sign-In, perfil, rate limiting                                |
 | `rbac/`   | `@Roles(...)` + `RolesGuard` deny-by-default evaluado junto con el tenant                                                                                 |
@@ -100,7 +100,7 @@ flowchart LR
 | ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `STORAGE_PORT`                 | `disk` (por defecto), `stub` (en memoria, tests) | Claves `<public\|private>/<orgId>/<uuid>-<nombre>`, protección contra path traversal |
 | `NOTIFICATION_PORT`            | `log` (por defecto), `smtp` (nodemailer)         |                                                                                      |
-| `PAYMENT_PORT`                 | `fake` (por defecto), `mercadopago`              | Ver sección 6                                                                        |
+| `PAYMENT_PORT`                 | `fake` (por defecto), `epayco`, `disabled`       | Ver sección 6                                                                        |
 | `IDENTITY_PORT`                | `fake`, `google`                                 |                                                                                      |
 | `DIAN_PORT` / `SIGNATURE_PORT` | adaptadores fake                                 | Verificación DIAN y firma de contratos simuladas                                     |
 
@@ -121,21 +121,20 @@ flowchart LR
 | `community` (M11)    | Feed, comentarios, likes y moderación                                                                                                                     |
 | `reputation` (M12)   | Reseñas con moderación y resumen público                                                                                                                  |
 | `dashboards` (M13)   | Tableros de plataforma y de organización                                                                                                                  |
-| `payments`           | Cuenta bancaria, payouts, conciliación, OAuth de MercadoPago                                                                                              |
+| `payments`           | Cuenta bancaria, payouts, conciliación, conexión de la cuenta ePayco de la organización                                                                   |
 
 Convención de rutas: `/<recurso>` para usuarios autenticados, `/public/...` sin autenticación y `/platform/...`
 solo para `PlatformAdmin` / `PlatformSuperAdmin`.
 
 ### 3.6 Colas y workers (BullMQ sobre Redis)
 
-| Cola                        | Función                                   | Frecuencia               |
-| --------------------------- | ----------------------------------------- | ------------------------ |
-| `clinical-reminders`        | Escaneo y envío de recordatorios clínicos | Diaria                   |
-| `adoption-followups`        | Marca hitos vencidos                      | Configurable             |
-| `dian-verification`         | Verificación DIAN con backoff             | Por evento               |
-| `sponsorship-billing`       | Escaneo de cobros y _poller_ de pagos     | Diaria / 300 s           |
-| `mercadopago-token-refresh` | Renueva tokens OAuth antes de vencer      | Diaria                   |
-| `wompi-payouts`             | Despacho de payouts (nombre heredado)     | Por evento, 5 reintentos |
+| Cola                  | Función                                   | Frecuencia               |
+| --------------------- | ----------------------------------------- | ------------------------ |
+| `clinical-reminders`  | Escaneo y envío de recordatorios clínicos | Diaria                   |
+| `adoption-followups`  | Marca hitos vencidos                      | Configurable             |
+| `dian-verification`   | Verificación DIAN con backoff             | Por evento               |
+| `sponsorship-billing` | Escaneo de cobros y _poller_ de pagos     | Diaria / 300 s           |
+| `wompi-payouts`       | Despacho de payouts (nombre heredado)     | Por evento, 5 reintentos |
 
 ## 4. Seguridad (cadena de confianza)
 
@@ -178,35 +177,38 @@ flowchart LR
   IVA 19 % solo sobre comisiones, montos en COP enteros con redondeo half-up. Invariante:
   `bruto = neto + comisión + IVA comisión + pasarela + IVA pasarela`. La comisión la puede absorber la
   organización o el donante.
-- **MercadoPago:** cobro con **Checkout API / Orders** (`POST /v1/orders`) y el Card Payment Brick en el front
-  (el número de tarjeta nunca llega al backend, solo un token de un solo uso).
-- **Webhook:** valida `x-signature` (HMAC), consulta la orden y aplica el resultado con una función
+- **ePayco (única pasarela, ADR-PAG-002):** cada cobro es una sesión de checkout v2 creada con las llaves de la
+  propia organización (`organization_epayco_accounts`, cifradas); el donante paga en la pasarela de ePayco y el
+  dinero llega directo a la cuenta de la organización. Ver `docs/pagos/epayco.md`.
+- **Confirmación:** se verifica con la `P_KEY` de la organización dueña del pago y se aplica con una función
   `SECURITY DEFINER` idempotente.
-- **OAuth Connect:** cada organización conecta su propia cuenta; los tokens se guardan en
-  `organization_mercadopago_accounts` (con RLS) y un job los renueva.
+- **Mercado Pago retirado (2026-10-17, decisión del dueño):** sin driver, sin OAuth, sin Brick; la tabla
+  `organization_mercadopago_accounts` y sus tokens se eliminan con la migración 20261017110000.
 
 ```mermaid
 sequenceDiagram
   participant U as Donante
-  participant W as Web (Brick)
+  participant W as Web
   participant A as API
-  participant M as MercadoPago
-  U->>W: Datos de tarjeta
-  W->>M: Tokeniza tarjeta
-  W->>A: POST /donations (token)
-  A->>M: POST /v1/orders
-  A-->>W: Donación pending
-  M-->>A: Webhook (x-signature)
-  A->>M: GET /v1/orders/:id
+  participant M as ePayco
+  U->>W: Monto y datos
+  W->>A: POST /donations
+  A->>M: Crea sesión de checkout (llaves de la org)
+  A-->>W: Donación pending + sessionId
+  W->>M: Abre checkout (onpage)
+  U->>M: Paga (tarjeta, PSE, Nequi…)
+  M-->>A: Confirmación firmada (x_signature)
   A->>A: apply_donation_webhook, auditoría, recibo y certificado
   A-->>U: Correo / enlace de acceso (invitado)
 ```
 
 - **Apadrinamiento recurrente:** el primer cobro es inmediato; un cron diario abre el período y recorre una
   escalera de recordatorios (días 5/15/25) y expiraciones (10/20/30), tras lo cual suspende. No hay débito
-  automático real: la vía de pago tras una suspensión es `POST /sponsorships/:id/retry-payment`.
+  automático real: la vía de pago tras una suspensión es `POST /sponsorships/:id/retry-payment`. Desde el
+  retiro de Mercado Pago la web no cobra apadrinamientos (muestra "Pronto podrás apadrinar con pago en línea")
+  hasta que exista el cobro con ePayco.
 - **Dispersión T+1 y payouts:** la dispersión real (API "Disbursements") **no está implementada**;
-  `createPayout` lanza error hasta que MercadoPago apruebe los permisos. Hoy es una operación manual de un admin
+  no hay adaptador de payouts real (con ePayco el dinero llega directo a cada organización). Hoy es una operación manual de un admin
   de plataforma. La conciliación (`GET /platform/reconciliation`) compara donaciones aprobadas contra payouts.
 
 ## 7. Frontend (`apps/web`)
@@ -223,8 +225,8 @@ sequenceDiagram
 - **Portales y subdominios:** con `VITE_PORTAL_BASE_DOMAIN`, un host `<sub>.<dominio>` resuelve la organización y
   `/` renderiza su portal; sin esa variable queda la ruta `/o/:slug`.
 - **`src/features/`:** un directorio por módulo (`api/`, `components/`, `model/`, `pages/`).
-- **Variables Vite:** `VITE_API_URL`, `VITE_AUTH_MODE`, `VITE_GOOGLE_CLIENT_ID`, `VITE_MERCADOPAGO_PUBLIC_KEY`,
-  `VITE_PORTAL_BASE_DOMAIN`.
+- **Variables Vite:** `VITE_API_URL`, `VITE_AUTH_MODE`, `VITE_GOOGLE_CLIENT_ID`, `VITE_PAYMENT_PROVIDER`
+  (interruptor de apagado), `VITE_PORTAL_BASE_DOMAIN`.
 
 ## 8. Pruebas, CI y despliegue
 
@@ -265,7 +267,7 @@ sequenceDiagram
 ## 11. Puntos de atención (deuda y discrepancias conocidas)
 
 1. Comentarios y documentos antiguos aún mencionan **Checkout Pro** o **Wompi**; el código usa Orders y los
-   drivers de pago válidos son solo `fake` y `mercadopago`. La cola de payouts conserva el nombre `wompi-payouts`.
+   drivers de pago válidos son `fake`, `epayco` y `disabled` (Mercado Pago se retiró el 2026-10-17). La cola de payouts conserva el nombre `wompi-payouts`.
 2. `render.yaml` define `JWT_REFRESH_SECRET`, que ningún código lee. `JWT_SECRET` debe fijarse en producción.
 3. En Render existió un workaround con `NO FORCE RLS` (hallazgo S1-01 de `DEPLOY.md`); conviene verificar que
    producción tenga `FORCE RLS` activo.

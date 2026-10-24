@@ -15,7 +15,10 @@ import {
   citiesForDepartment,
 } from '../data/colombian-locations';
 import { IMAGE_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
-import { MercadoPagoConnectSection } from './mercadopago-connect-section';
+import { EpaycoConnectSection } from './epayco-connect-section';
+import { DonationQrCard } from '../../donations';
+import { isEpaycoProvider } from '../../payments/lib/payment-provider';
+import { useFeature } from '../../../shell/capabilities';
 import {
   OrgSelectField,
   OrgStaticField,
@@ -368,13 +371,13 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
     const client = useApiClient();
     const { toast } = useToast();
     const [searchParams] = useSearchParams();
-    // Vuelta del round trip OAuth de Mercado Pago (`?mercadopago=connected|error`,
-    // T-OAuth-Connect): abre la pestaña "Medios de pago" directamente en vez de
-    // dejar al usuario en "Datos institucionales" sin ver el resultado de la
-    // conexión que acaba de autorizar.
+    // `?tab=pagos` (avisos "Cobros pendientes de conexión") abre la pestaña
+    // "Medios de pago" directamente.
     const [activeTab, setActiveTab] = useState<string>(() =>
-      searchParams.get('mercadopago') ? 'pagos' : TABS[0].value,
+      searchParams.get('tab') === 'pagos' ? 'pagos' : TABS[0].value,
     );
+    const epayco = isEpaycoProvider();
+    const paymentsEnabled = useFeature('payments');
     const [form, setForm] = useState<FormState>(() => initialState(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
     const [saving, setSaving] = useState(false);
@@ -769,12 +772,39 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
           </div>
         </OrgTabPanel>
 
-        {/* Split de Pagos 1:1 (T-OAuth-Connect): su propia pestaña, no una
+        {/* Medios de pago: su propia pestaña, no una
             tarjeta fija debajo del formulario — antes aparecía sin importar
             qué pestaña del perfil estuviera activa. No participa del guardado
             de este formulario (conectar/desconectar ya es inmediato). */}
         <OrgTabPanel value="pagos" activeValue={activeTab}>
-          <MercadoPagoConnectSection />
+          <div className="flex flex-col gap-6">
+            {/* ADR-PAG-002: la organización conecta SU cuenta ePayco (llaves
+                API), la única pasarela. Con el interruptor de apagado
+                (VITE_PAYMENT_PROVIDER=off) no se ofrece conectar nada. */}
+            {epayco ? (
+              <EpaycoConnectSection />
+            ) : (
+              <p className="text-sm text-muted-foreground" data-testid="payments-online-off">
+                Los pagos en línea están pausados por ahora. Te avisaremos cuando puedas conectar la
+                cuenta de tu organización.
+              </p>
+            )}
+            {/* QR de donaciones: junto a la cuenta que recibe el dinero. Usa el
+                slug/subdominio GUARDADO (`initial`), no lo que se está editando. */}
+            {paymentsEnabled && (
+              <DonationQrCard
+                organization={{
+                  name: initial.name,
+                  slug: initial.slug,
+                  subdomain: initial.subdomain,
+                }}
+                onConfigureLink={() => {
+                  setActiveTab('institucional');
+                  window.setTimeout(() => document.getElementById('org-slug')?.focus(), 0);
+                }}
+              />
+            )}
+          </div>
         </OrgTabPanel>
 
         <OrgTabPanel value="nosotros" activeValue={activeTab}>

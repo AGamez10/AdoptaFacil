@@ -12,6 +12,8 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   computeBreakdown,
+  DIRECT_COLLECTION_RATES,
+  type EpaycoCollectorCredentials,
   type CreateDonationInput,
   type Donation,
   type DonationCertificate,
@@ -27,6 +29,7 @@ import {
   type PaymentConcept,
   type PaymentPort,
   type WebhookVerificationContext,
+  requiredGuestLegalDocuments,
 } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
@@ -38,10 +41,29 @@ import {
 } from '../../core/notifications/notification.port';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { requireCompleteProfile } from '../../core/auth/require-complete-profile';
+import { LegalService, type LegalRequestContext } from '../../core/legal/legal.service';
 import type { Env } from '../../config/env.validation';
 import { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { buildDonationAccessLink } from './donation-access-link';
+import {
+  EPAYCO_KEYS_ENCRYPTION_KEY,
+  loadEpaycoKeysEncryptionKey,
+} from '../payments/epayco-keys-crypto';
+import { loadEpaycoCollector } from '../payments/epayco-connect.service';
+
+/** Reference/invoice shape we accept from a gateway body before querying. */
+const GATEWAY_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Read one scalar field of an ePayco confirmation (parsed form/JSON or raw string). */
+function epaycoField(payload: unknown, key: string): string | undefined {
+  const source =
+    typeof payload === 'string' ? Object.fromEntries(new URLSearchParams(payload)) : payload;
+  if (!source || typeof source !== 'object') return undefined;
+  const value = (source as Record<string, unknown>)[key];
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+}
 
 /**
  * How long a guest's donation access link (magic link) stays valid (client's
@@ -117,6 +139,12 @@ export interface WebhookOutcome {
 export class DonationsService {
   private readonly logger = new Logger('Donations');
   private readonly webBaseUrl: string;
+  private readonly certificatesEnabled: boolean;
+  /** Real gateway ⇒ every charge needs the organization's own account. */
+  private readonly requiresCollector: boolean;
+  /** ADR-PAG-002: ePayco driver ⇒ the collector is the org's ePayco account. */
+  private readonly epayco: boolean;
+  private readonly epaycoTest: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -127,8 +155,17 @@ export class DonationsService {
     private readonly campaignFunding: CampaignFundingService,
     private readonly certificates: DonationCertificatesService,
     config: ConfigService<Env, true>,
+    private readonly legal: LegalService,
+    @Inject(EPAYCO_KEYS_ENCRYPTION_KEY)
+    private readonly epaycoKey: Buffer = loadEpaycoKeysEncryptionKey(),
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
+    this.certificatesEnabled =
+      config.get('FEATURE_DONATION_CERTIFICATES', { infer: true }) === true;
+    const driver = config.get('PAYMENT_DRIVER', { infer: true });
+    this.requiresCollector = driver !== 'fake';
+    this.epayco = driver === 'epayco';
+    this.epaycoTest = config.get('EPAYCO_TEST', { infer: true }) === true;
   }
 
   private requireOrgId(): string {
@@ -161,7 +198,11 @@ export class DonationsService {
    * Idempotent by (organizationId, idempotencyKey): a retry returns the SAME donation
    * without a second charge or a duplicate audit entry.
    */
-  async create(actor: RequestUser | undefined, input: CreateDonationInput): Promise<Donation> {
+  async create(
+    actor: RequestUser | undefined,
+    input: CreateDonationInput,
+    legalContext: LegalRequestContext = {},
+  ): Promise<Donation> {
     if (actor) {
       await requireCompleteProfile(this.prisma, actor);
     } else if (!input.anonymous && !input.payer?.email) {
@@ -172,6 +213,12 @@ export class DonationsService {
         'Para donar sin una cuenta necesitamos al menos tu correo electrónico.',
       );
     }
+    // Un invitado no aceptó nada al registrarse: antes de cobrar y de guardar
+    // sus datos debe aceptar los términos y autorizar el tratamiento (Ley 1581
+    // art. 9). Una Persona autenticada ya lo hizo en su registro.
+    const guestAcceptances = actor
+      ? []
+      : this.legal.assertAcceptances(input.legalAcceptances, requiredGuestLegalDocuments());
 
     const concept: PaymentConcept = input.concept ?? {
       kind: 'organization',
@@ -189,19 +236,35 @@ export class DonationsService {
       return this.fromRow(existing);
     }
 
-    // Single source of the money math (RNF12); persisted verbatim.
-    const breakdown = computeBreakdown(input.intendedAmount, input.commissionPayer);
+    // ADR-PAG-001 (cobro directo, sin custodia): the charge is created with
+    // the BENEFICIARY org's own connected account, so the money lands in the
+    // organization's account the moment it is approved. Without a connected
+    // account there is no donation: never a fallback to the platform account
+    // (that fallback was custody, PAY-001). The fake driver (dev/test) keeps
+    // working without one.
+    // ePayco (ADR-PAG-002, the only real gateway): the collector is the org's
+    // own ePayco account (keys decrypted server-side, never returned/logged/
+    // audited). Mercado Pago was retired on 2026-10-17.
+    const epaycoCollector = this.epayco
+      ? await this.resolveEpaycoCollector(input.organizationId)
+      : undefined;
+    if (this.requiresCollector && !epaycoCollector) {
+      throw new ConflictException(
+        'Esta organización todavía no conectó su cuenta para recibir donaciones.',
+      );
+    }
 
-    // Split de Pagos 1:1 (T-OAuth-Connect): if the BENEFICIARY org connected
-    // its own MercadoPago account, route the charge directly to it — read
-    // ONLY the mp_user_id (never the tokens), cross-tenant, via a bounded
-    // SECURITY DEFINER function (same posture as `organizationNamesById`
-    // below). Absent ⇒ undefined ⇒ old single-account behavior, unchanged.
-    const sponsorMpUserId = await this.resolveSponsorMpUserId(input.organizationId);
+    // Single source of the money math (RNF12); persisted verbatim. No
+    // per-transaction platform fee in direct collection: AdoptaFácil's revenue
+    // comes from subscription plans until a gateway splits at source.
+    const breakdown = computeBreakdown(
+      input.intendedAmount,
+      input.commissionPayer,
+      DIRECT_COLLECTION_RATES,
+    );
 
-    // Process the collection through the port (fake in Ola 1; Checkout API/
-    // Orders for the real MercadoPago driver, T-OrdersAPI). Ids are derived
-    // from the idempotency key, so a retry maps to the same collection.
+    // Process the collection through the port. Ids are derived from the
+    // idempotency key, so a retry maps to the same collection.
     const collection = await this.payment.createCollection({
       intendedAmount: input.intendedAmount,
       currency: 'COP',
@@ -213,8 +276,12 @@ export class DonationsService {
       paymentMethodId: input.paymentMethodId,
       paymentMethodType: input.paymentMethodType,
       installments: input.installments,
-      sponsorMpUserId,
+      epaycoCollector,
     });
+    // ePayco: the adapter is the one that knows the collection mode (a
+    // gateway split could carry an approved platform fee), so what it charged
+    // is what we persist; for every other driver the local math is identical.
+    const persistedBreakdown = this.epayco ? collection.breakdown : breakdown;
 
     let rows: DonationRow[];
     try {
@@ -226,8 +293,8 @@ export class DonationsService {
           ${concept.id}::uuid,
           ${input.commissionPayer},
           ${input.intendedAmount}::int,
-          ${breakdown.amountCharged}::int,
-          ${JSON.stringify(breakdown)}::jsonb,
+          ${persistedBreakdown.amountCharged}::int,
+          ${JSON.stringify(persistedBreakdown)}::jsonb,
           ${collection.collectionId},
           ${input.idempotencyKey},
           ${input.payer ? JSON.stringify(input.payer) : null}::jsonb,
@@ -247,6 +314,22 @@ export class DonationsService {
     }
     const row = rows[0];
 
+    if (guestAcceptances.length > 0) {
+      // Prueba de la autorización del invitado, en el tenant de la organización
+      // beneficiaria (responsable de sus datos), atada a esta donación.
+      await this.prisma.withOrgContext(input.organizationId, (tx) =>
+        this.legal.recordWithTx(tx, {
+          organizationId: input.organizationId,
+          actorUserId: null,
+          subject: { type: 'donation', donationId: row.id },
+          items: guestAcceptances,
+          channel: 'guest_donation',
+          context: legalContext,
+        }),
+      );
+      await this.legal.notifyAcceptance(input.payer?.email, guestAcceptances);
+    }
+
     await this.audit.record({
       organizationId: input.organizationId,
       actorUserId: actor?.id ?? null,
@@ -256,7 +339,7 @@ export class DonationsService {
       // NUNCA datos personales en claro; solo cifras/estructura.
       metadata: {
         intendedAmount: input.intendedAmount,
-        amountCharged: breakdown.amountCharged,
+        amountCharged: persistedBreakdown.amountCharged,
         commissionPayer: input.commissionPayer,
         collectionId: collection.collectionId,
       },
@@ -266,8 +349,7 @@ export class DonationsService {
     // the webhook is the sole, exactly-once writer of 'approved'/'declined'
     // (its `apply_donation_webhook`'s `WHERE status = 'pending'` guard is
     // also what gates receipt issuance, so the DB write here must stay
-    // untouched). But MercadoPago's Orders API often already KNOWS a DECLINE
-    // synchronously (T-OrdersAPI) — surfacing THAT in this response only
+    // untouched). But a gateway may already KNOW a DECLINE synchronously — surfacing THAT in this response only
     // (never persisted) lets the donor see the real result immediately
     // instead of a misleading "confirmando tu pago" for an already-failed
     // charge. An 'approved' outcome is deliberately NOT surfaced the same
@@ -290,13 +372,17 @@ export class DonationsService {
       ...this.fromRow(row),
       ...(immediateStatus ? { status: immediateStatus } : {}),
       paymentLinkUrl: collection.paymentLinkUrl,
+      // ePayco checkout v2: ephemeral, like `paymentLinkUrl` (never persisted).
+      ...(collection.checkoutSessionId
+        ? { checkoutSessionId: collection.checkoutSessionId, checkoutTest: this.epaycoTest }
+        : {}),
     };
   }
 
   /**
-   * PUBLIC, minimal status read for the post-checkout "gracias" page —
-   * MercadoPago redirects the payer back with `external_reference`, which IS
-   * our own `collectionId` (see `createCollection`'s doc comment). Cross-
+   * PUBLIC, minimal status read for the post-checkout "gracias" page — the
+   * gateway sends the payer back with our own reference, which IS the
+   * `collectionId` (see `createCollection`'s doc comment). Cross-
    * tenant (no session, no tenant context) via a bounded SECURITY DEFINER
    * function, same "never distinguish 404 reasons" principle as
    * `getByAccessToken`: an unknown reference is a single generic 404, never a
@@ -332,9 +418,23 @@ export class DonationsService {
     signature: string,
     context?: WebhookVerificationContext,
   ): Promise<WebhookOutcome> {
+    // ADR-PAG-001: the notified payment lives in the ORGANIZATION's account.
+    // The ids in the body are NOT trusted for anything else than picking
+    // whose keys verify it: a forged one only makes the verification fail.
+    const notifiedOrgId = this.epayco
+      ? await this.resolveEpaycoNotifiedOrganizationId(payload)
+      : undefined;
+    // ADR-PAG-002: the confirmation is signed with the ORGANIZATION's P_KEY,
+    // so it is verified with the keys of the org that owns the payment.
+    const epaycoCollector =
+      notifiedOrgId && this.epayco ? await this.resolveEpaycoCollector(notifiedOrgId) : undefined;
+
     let event: NormalizedWebhookEvent;
     try {
-      event = await this.payment.verifyAndNormalizeWebhook(payload, signature, context);
+      event = await this.payment.verifyAndNormalizeWebhook(payload, signature, {
+        ...context,
+        epaycoCollector,
+      });
     } catch (error) {
       // `verifyAndNormalizeWebhook` throws for several DISTINCT reasons (real
       // signature mismatch, the follow-up GET /v1/orders/:id failing, a
@@ -345,6 +445,10 @@ export class DonationsService {
       // the next failure be diagnosed from the log alone.
       this.logger.warn(`Webhook rechazado: ${(error as Error).message}`);
       throw new ForbiddenException('Webhook verification failed.');
+    }
+
+    if (!(await this.matchesExpectedPayment(event, notifiedOrgId, epaycoCollector?.custId))) {
+      return { applied: false, status: null, donationId: null };
     }
 
     const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
@@ -387,13 +491,16 @@ export class DonationsService {
       // F-3 (RF14): certificado real, emitido junto al recibo. Best-effort y
       // sin gating aquí — el servicio decide si la org es ESAL-RTE elegible;
       // si no lo es, simplemente no emite nada (no es un fallo del webhook).
-      await this.certificates.tryIssueForApprovedDonation({
-        donationId: donation.id,
-        organizationId: donation.organization_id,
-        donorName: donation.payer?.fullName,
-        amount: donation.intended_amount,
-        currency: donation.currency,
-      });
+      // Ola 1 (R1-1, D9): solo con FEATURE_DONATION_CERTIFICATES encendido.
+      if (this.certificatesEnabled) {
+        await this.certificates.tryIssueForApprovedDonation({
+          donationId: donation.id,
+          organizationId: donation.organization_id,
+          donorName: donation.payer?.fullName,
+          amount: donation.intended_amount,
+          currency: donation.currency,
+        });
+      }
 
       // Client requirement (final): a GUEST donor (no account) must be able to
       // check their donation later WITHOUT registering. Only for a guest
@@ -406,6 +513,18 @@ export class DonationsService {
           donation.id,
           donation.organization_id,
           donation.payer.email,
+          donation.intended_amount,
+        );
+      } else if (donation.donor_user_id && donation.payer?.email) {
+        // An authenticated donor gets the same thank-you, pointing to "Mis
+        // donaciones" instead of a magic link. Runs once per donation: a
+        // duplicate webhook returns no row from apply_donation_webhook.
+        await this.sendDonationThanks(
+          donation.id,
+          donation.organization_id,
+          donation.payer.email,
+          donation.intended_amount,
+          `${this.webBaseUrl.replace(/\/+$/, '')}/mis-donaciones`,
         );
       }
     }
@@ -425,6 +544,7 @@ export class DonationsService {
     donationId: string,
     organizationId: string,
     payerEmail: string,
+    amount?: number,
   ): Promise<void> {
     try {
       const token = randomBytes(32).toString('base64url');
@@ -447,8 +567,18 @@ export class DonationsService {
       });
 
       const accessLink = buildDonationAccessLink(this.webBaseUrl, token);
+      const organizationName = await this.organizationName(organizationId);
       await this.notifications.send({
         to: payerEmail,
+        // One thank-you per donation, even if the gateway repeats the webhook.
+        idempotencyKey: `donation.thanks:${donationId}`,
+        // Branded, superadmin-editable copy; subject/body below are the fallback.
+        template: {
+          event: 'donation.thanks',
+          organizationName,
+          organizationId,
+          data: { enlace: accessLink, monto: amount },
+        },
         subject: 'Tu comprobante de donación en AdoptaFácil',
         body:
           'Hola,\n\n' +
@@ -464,6 +594,49 @@ export class DonationsService {
       this.logger.warn(
         `No se pudo emitir el enlace de acceso de invitado para donation=${donationId}: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /** Best-effort thank-you for an authenticated donor (never fails the webhook). */
+  private async sendDonationThanks(
+    donationId: string,
+    organizationId: string,
+    payerEmail: string,
+    amount: number,
+    link: string,
+  ): Promise<void> {
+    try {
+      const organizationName = await this.organizationName(organizationId);
+      await this.notifications.send({
+        to: payerEmail,
+        idempotencyKey: `donation.thanks:${donationId}`,
+        subject: 'Gracias por tu donación en AdoptaFácil',
+        body:
+          'Hola,\n\n¡Gracias por tu donación! Tu pago fue confirmado.\n' +
+          `Puedes ver el recibo y el certificado (si aplica) en "Mis donaciones": ${link}`,
+        template: {
+          event: 'donation.thanks',
+          organizationName,
+          organizationId,
+          data: { enlace: link, monto: amount },
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar el agradecimiento de la donación: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async organizationName(organizationId: string): Promise<string | undefined> {
+    try {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true },
+      });
+      return org?.name ?? undefined;
+    } catch {
+      return undefined;
     }
   }
 
@@ -609,31 +782,115 @@ export class DonationsService {
     return rows.map((r) => this.fromRow(r, orgNames.get(r.organization_id)));
   }
 
-  /**
-   * Split de Pagos 1:1 (T-OAuth-Connect) — looks up the ORG's own connected
-   * MercadoPago account id, cross-tenant, via the `mercadopago_account_mp_user_id`
-   * SECURITY DEFINER function (narrow: returns ONLY `mp_user_id`, never the
-   * access/refresh tokens — see its migration for the same posture as
-   * `mercadopago_accounts_due_for_refresh`). `undefined` when the org never
-   * connected an account (the common case in Ola 1) — never thrown.
-   */
-  private async resolveSponsorMpUserId(organizationId: string): Promise<string | undefined> {
-    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
-      SELECT * FROM mercadopago_account_mp_user_id(${organizationId}::uuid)
-    `);
-    return rows[0]?.mp_user_id;
+  /** ADR-PAG-002: the org's own ePayco keys, decrypted under its RLS context. */
+  private resolveEpaycoCollector(
+    organizationId: string,
+  ): Promise<EpaycoCollectorCredentials | undefined> {
+    return loadEpaycoCollector(this.prisma, this.epaycoKey, organizationId);
   }
 
   /**
-   * PUBLIC: can this organization receive donations? `true` only when it has
-   * a connected MercadoPago account (the same cross-tenant, id-only lookup used
-   * by `create`). Exposes a boolean — never the connected account id.
+   * Organization that owns an ePayco confirmation. Primary path: our own
+   * reference (`x_id_invoice` = `collection_id`) → the donation's
+   * organization (`donation_by_collection_id`). Fallback, for a reference we
+   * do not know: the merchant (`x_cust_id_cliente`) → its organization, only
+   * when exactly one matches. Either way the body is NOT trusted beyond
+   * picking whose keys verify it: a forged invoice or merchant only makes the
+   * signature/merchant check in the adapter fail.
+   */
+  private async resolveEpaycoNotifiedOrganizationId(payload: unknown): Promise<string | undefined> {
+    const invoice = epaycoField(payload, 'x_id_invoice');
+    if (invoice && GATEWAY_REFERENCE_PATTERN.test(invoice)) {
+      const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+        SELECT * FROM donation_by_collection_id(${invoice})
+      `);
+      if (rows[0]) {
+        return rows[0].organization_id;
+      }
+    }
+    const custId = epaycoField(payload, 'x_cust_id_cliente');
+    if (!custId || !/^\d{1,20}$/.test(custId)) {
+      return undefined;
+    }
+    const rows = await this.prisma.$queryRaw<{ organization_id: string }[]>(Prisma.sql`
+      SELECT * FROM epayco_account_organization_id(${custId})
+    `);
+    return rows.length === 1 ? rows[0].organization_id : undefined;
+  }
+
+  /**
+   * PAY-003: a gateway event settles a donation only if it matches what we
+   * recorded — same organization that owns the receiving account, same amount
+   * and currency. A mismatch is audited and NEVER approved.
+   */
+  private async matchesExpectedPayment(
+    event: NormalizedWebhookEvent,
+    notifiedOrgId: string | undefined,
+    expectedReceiverAccountId?: string,
+  ): Promise<boolean> {
+    if (
+      notifiedOrgId === undefined &&
+      event.amountCharged === undefined &&
+      event.currency === undefined
+    ) {
+      return true; // nothing reported to compare (fake driver)
+    }
+    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+      SELECT * FROM donation_by_collection_id(${event.collectionId})
+    `);
+    const donation = rows[0];
+    if (!donation) {
+      return true; // unknown collection: `apply_donation_webhook` is a no-op
+    }
+    const mismatches: string[] = [];
+    if (
+      (notifiedOrgId !== undefined && donation.organization_id !== notifiedOrgId) ||
+      (expectedReceiverAccountId !== undefined &&
+        event.receiverAccountId !== expectedReceiverAccountId)
+    ) {
+      mismatches.push('receiver');
+    }
+    if (event.amountCharged !== undefined && event.amountCharged !== donation.amount_charged) {
+      mismatches.push('amount');
+    }
+    if (event.currency !== undefined && event.currency !== donation.currency) {
+      mismatches.push('currency');
+    }
+    if (mismatches.length === 0) {
+      return true;
+    }
+    this.logger.warn(`Pago no coincide con la donación ${donation.id}: ${mismatches.join(', ')}`);
+    await this.audit.record({
+      organizationId: donation.organization_id,
+      actorUserId: null,
+      action: 'donation.payment_mismatch',
+      entityType: 'donation',
+      entityId: donation.id,
+      metadata: { collectionId: event.collectionId, mismatches },
+    });
+    return false;
+  }
+
+  /**
+   * PUBLIC: can this organization receive donations? With ePayco, `true` only
+   * when it has connected its ePayco account (the same account `create`
+   * charges with). The fake driver (dev/test) needs no account, so it is
+   * always `true`; `disabled` is always `false`. Exposes a boolean — never
+   * the connected account id.
    */
   async getOrganizationAvailability(
     organizationId: string,
   ): Promise<DonationOrganizationAvailability> {
-    const mpUserId = await this.resolveSponsorMpUserId(organizationId);
-    return { organizationId, canReceiveDonations: Boolean(mpUserId) };
+    if (this.epayco) {
+      const account = await this.prisma.withOrgContext(organizationId, (tx) =>
+        tx.organizationEpaycoAccount.findUnique({
+          where: { organizationId },
+          select: { id: true },
+        }),
+      );
+      return { organizationId, canReceiveDonations: Boolean(account) };
+    }
+    return { organizationId, canReceiveDonations: !this.requiresCollector };
   }
 
   private async organizationNamesById(ids: string[]): Promise<Map<string, string>> {

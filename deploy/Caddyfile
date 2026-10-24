@@ -1,0 +1,73 @@
+# Caddy: TLS automático (Let's Encrypt), SPA y proxy inverso de la API.
+# Variables (deploy/.env): APP_DOMAIN, ACME_EMAIL, PORTALS_TLS y las credenciales
+# DNS del proveedor elegido (CLOUDFLARE_API_TOKEN o NAMECHEAP_*).
+#
+# Cada host sirve el SPA y, en /api/*, la API (se quita el prefijo /api antes de
+# pasar a NestJS). El front se compila con VITE_API_URL=/api (relativa), así que
+# cada host habla con la API en su propio origen: la cookie httpOnly de refresco
+# y CORS nunca cruzan dominios, tampoco desde un portal en <org>.APP_DOMAIN.
+#
+# Portales por subdominio (*.APP_DOMAIN, F7): PORTALS_TLS elige el bloque.
+#   off        sin comodín (por defecto)
+#   cloudflare certificado comodín por DNS-01 en Cloudflare (producción)
+#   namecheap  certificado comodín por DNS-01 en Namecheap (producción)
+#   internal   comodín con la CA interna de Caddy (CI y pruebas locales)
+# No se habilita on-demand TLS sin un endpoint `ask` que autorice solo dominios
+# verificados: sin él, cualquiera podría hacernos emitir certificados.
+{
+	email {$ACME_EMAIL}
+	# Logs de acceso en JSON por stdout (los recoge Docker con rotación).
+	log {
+		output stdout
+		format json
+	}
+}
+
+(app) {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), payment=(), usb=()"
+		-Server
+		-X-Powered-By
+	}
+
+	# Subidas: el tope de la API es STORAGE_MAX_FILE_MB (15 MB por defecto).
+	request_body {
+		max_size 20MB
+	}
+
+	handle_path /api/* {
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-Proto {scheme}
+			health_uri /health
+			health_interval 30s
+		}
+	}
+
+	# Recursos con hash en el nombre: caché larga e inmutable.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		header /index.html Cache-Control "no-cache"
+		file_server
+	}
+}
+
+{$APP_DOMAIN} {
+	import app
+}
+
+# www siempre redirige al dominio principal (necesita su registro DNS).
+www.{$APP_DOMAIN} {
+	redir https://{$APP_DOMAIN}{uri} permanent
+}
+
+import portals-{$PORTALS_TLS:off}.caddy

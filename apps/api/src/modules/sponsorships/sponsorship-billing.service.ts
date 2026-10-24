@@ -1,13 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import { BILLING_FAILURE_SUSPENSION_REASON, SponsorshipStatus } from '@adoptafacil/contracts';
+import {
+  BILLING_FAILURE_SUSPENSION_REASON,
+  SponsorshipStatus,
+  type EmailEventKey,
+} from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
 import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   NOTIFICATION_PORT,
   type NotificationPort,
+  type NotificationTemplateRequest,
 } from '../../core/notifications/notification.port';
 import {
   addMonths,
@@ -103,8 +108,7 @@ export class SponsorshipBillingService {
     );
     for (const row of rows) {
       // Per-row isolation: one sponsorship's failure (e.g. a DB error) must
-      // never abort the scan for every other one (same posture as
-      // `MercadoPagoConnectService.refreshDueAccounts`).
+      // never abort the scan for every other one.
       try {
         await this.openPeriodFor(row);
       } catch (error) {
@@ -176,6 +180,7 @@ export class SponsorshipBillingService {
         animalName: row.animal_name,
         amount: row.plan_amount,
       }),
+      sponsorshipTemplate('sponsorship.charge', row),
     );
   }
 
@@ -257,6 +262,7 @@ export class SponsorshipBillingService {
         amount: row.plan_amount,
         isFinal,
       }),
+      sponsorshipTemplate(isFinal ? 'sponsorship.final_reminder' : 'sponsorship.reminder', row),
     );
   }
 
@@ -312,6 +318,7 @@ export class SponsorshipBillingService {
         animalName: row.animal_name,
         amount: row.plan_amount,
       }),
+      sponsorshipTemplate('sponsorship.charge', row),
     );
   }
 
@@ -357,11 +364,13 @@ export class SponsorshipBillingService {
       row.sponsor_email,
       buildSuspensionSponsorSubject(),
       buildSuspensionSponsorBody(suspensionInput),
+      sponsorshipTemplate('sponsorship.suspended_sponsor', row),
     );
     await this.notifyBestEffort(
       `org:${row.organization_id}`,
       buildSuspensionOrgSubject(),
       buildSuspensionOrgBody(suspensionInput),
+      sponsorshipTemplate('sponsorship.suspended_org', row),
     );
   }
 
@@ -390,8 +399,9 @@ export class SponsorshipBillingService {
    *
    * Net effect: every period still needs 30 days (the existing ladder) to
    * reach the one moment a sponsor can really pay. TODO(client): recommend
-   * deciding, as a fast-follow, between (a) MercadoPago Customer+Card
-   * vaulting for real off-session recurring charges, or (b) converting EVERY
+   * deciding, as a fast-follow, between (a) gateway-side recurring charges
+   * (Mercado Pago was retired 2026-10-17; ePayco subscriptions are the
+   * candidate), or (b) converting EVERY
    * period (not only post-suspension recovery) into an immediate in-app
    * "pay now" prompt the moment it opens.
    */
@@ -404,9 +414,14 @@ export class SponsorshipBillingService {
     return { collectionId: `pending-${idempotencyKey}`, idempotencyKey };
   }
 
-  private async notifyBestEffort(to: string, subject: string, body: string): Promise<void> {
+  private async notifyBestEffort(
+    to: string,
+    subject: string,
+    body: string,
+    template?: NotificationTemplateRequest,
+  ): Promise<void> {
     try {
-      await this.notifications.send({ to, subject, body });
+      await this.notifications.send({ to, subject, body, template });
     } catch (error) {
       this.logger.warn(
         `Sponsorship billing notification failed (to=${to}): ${(error as Error).message}`,
@@ -417,4 +432,20 @@ export class SponsorshipBillingService {
 
 function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+/** Template request for a billing-ladder email (superadmin-editable copy). */
+function sponsorshipTemplate(
+  event: EmailEventKey,
+  row: { organization_name: string; animal_name: string; plan_amount?: number },
+): NotificationTemplateRequest {
+  return {
+    event,
+    organizationName: row.organization_name,
+    data: {
+      organizacion: row.organization_name,
+      animal: row.animal_name,
+      monto: row.plan_amount,
+    },
+  };
 }

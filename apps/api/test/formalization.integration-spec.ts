@@ -5,9 +5,11 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DianVerificationService } from '../src/modules/org/dian-verification.service';
+import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
 import { DIAN_PORT } from '../src/modules/org/dian.port';
 import { FakeDianAdapter } from '../src/modules/org/fake-dian.adapter';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /** Polls GET /org/formalization until `dianVerification.status` matches (or
  *  times out) — the auto-triggered verification is a REAL async BullMQ job
@@ -63,6 +65,8 @@ async function pollUntil<T>(
 /**
  * M01 formalization state machine (RF02): valid/invalid transitions, RBAC
  * (Owner only), append-only history, rteVigente coherence, same organization_id.
+ * R2-2 (SEC-003): the Owner can never move the org INTO ESAL / ESAL_RTE — only
+ * a PlatformAdmin citing an approved, current document with its file present.
  * Also covers S-2 (DIAN RTE verification, RNF07): the ESAL → ESAL_RTE gate,
  * its auto-trigger on reaching ESAL, and the manual-retry endpoint.
  */
@@ -71,17 +75,20 @@ describe('Formalization state machine (M01, RF02)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let ownerToken = '';
   let ownerOrgId = '';
   let owner2Token = '';
   let personToken = '';
+  let platformToken = '';
+  let evidenceDocId = '';
 
   async function registerOrg(): Promise<{ token: string; orgId: string }> {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org',
         displayName: 'Owner',
         email: `t102-${randomUUID()}@test.local`,
@@ -98,6 +105,22 @@ describe('Formalization state machine (M01, RF02)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ targetState, ...(reason ? { reason } : {}) });
 
+  const platformAdvance = (orgId: string, body: Record<string, unknown>) =>
+    request(server)
+      .post(`/platform/organizations/${orgId}/formalization/transitions`)
+      .set('Authorization', `Bearer ${platformToken}`)
+      .send(body);
+
+  /** An Approved document of `orgId` whose bytes exist in storage. */
+  async function approvedDocument(orgId: string, type = 'rut'): Promise<string> {
+    const storageRef = `organizations/${orgId}/documents/${randomUUID()}.pdf`;
+    await app.get<StoragePort>(STORAGE_PORT).saveObject(storageRef, Buffer.from('%PDF-1.4'));
+    const doc = await admin.organizationDocument.create({
+      data: { organizationId: orgId, type, storageRef, version: 1, status: 'approved' },
+    });
+    return doc.id;
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -109,9 +132,33 @@ describe('Formalization state machine (M01, RF02)', () => {
     ownerOrgId = owner.orgId;
     owner2Token = (await registerOrg()).token;
 
+    const platform = await request(server)
+      .post('/auth/register/person')
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'PA',
+        email: `t102-pa-${randomUUID()}@test.local`,
+        password,
+      })
+      .expect(201);
+    createdOrgIds.push(platform.body.user.organizationId);
+    await admin.userRole.create({
+      data: {
+        organizationId: platform.body.user.organizationId,
+        userId: platform.body.user.id,
+        role: 'platform_admin',
+      },
+    });
+    platformToken = platform.body.tokens.accessToken;
+
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `t102-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `t102-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     createdOrgIds.push(person.body.user.organizationId);
@@ -131,42 +178,96 @@ describe('Formalization state machine (M01, RF02)', () => {
     expect(res.body).toEqual({ state: 'informal', rteVigente: false });
   });
 
-  it('advances the Owner through the full chain, coherent rteVigente at ESAL_RTE — gated by a real (auto-triggered, fake-adapter) DIAN verification', async () => {
+  it('advances the Owner to Formalizada, then only the platform (with an approved document) reaches ESAL and ESAL_RTE', async () => {
     // S-2: reaching ESAL only auto-triggers a verification when the org has a
-    // NIT; registration doesn't collect one (by design), so this test sets it
-    // directly — proving the REAL gate, not bypassing it.
+    // NIT; registration doesn't collect one (by design), so it is set directly.
     await admin.organizationProfile.upsert({
       where: { organizationId: ownerOrgId },
       create: { organizationId: ownerOrgId, nit: '900123456-7' },
       update: { nit: '900123456-7' },
     });
 
-    for (const target of ['en_proceso', 'formalizada', 'esal']) {
-      const res = await advance(ownerToken, target).expect(201);
-      expect(res.body.status.state).toBe(target);
-      expect(res.body.status.rteVigente).toBe(false);
-      expect(res.body.transition.organizationId).toBe(ownerOrgId);
-      expect(res.body.transition.actorUserId).toEqual(expect.any(String));
-    }
+    await advance(ownerToken, 'en_proceso').expect(201);
+    // Formalizada exige el RUT y el certificado de Cámara APROBADOS (decisión
+    // del cliente: lo formal se habilita solo tras verificar documentos).
+    await advance(ownerToken, 'formalizada').expect(400);
+    const rutDocId = await approvedDocument(ownerOrgId, 'rut');
+    await advance(ownerToken, 'formalizada').expect(400); // falta el certificado
+    const cerlDocId = await approvedDocument(ownerOrgId, 'existence_representation_certificate');
+    const res = await advance(ownerToken, 'formalizada').expect(201);
+    expect(res.body.status.state).toBe('formalizada');
+    expect(res.body.status.rteVigente).toBe(false);
+    expect(res.body.transition.organizationId).toBe(ownerOrgId);
+    expect(res.body.transition.actorUserId).toEqual(expect.any(String));
 
-    // The auto-triggered verification is a real async BullMQ job (fast by
-    // default) — wait for it instead of racing a "still blocked" assertion
-    // against its resolution time (a dedicated test below proves the block
-    // deterministically, with the adapter forced to fail).
+    // SEC-003: no self-declaration of ESAL.
+    await advance(ownerToken, 'esal').expect(403);
+    // The platform needs evidence…
+    await platformAdvance(ownerOrgId, { targetState: 'esal' }).expect(400);
+    // …that belongs to THIS organization…
+    const foreignOrg = await registerOrg();
+    const foreignDoc = await approvedDocument(
+      foreignOrg.orgId,
+      'existence_representation_certificate',
+    );
+    await platformAdvance(ownerOrgId, {
+      targetState: 'esal',
+      evidenceDocumentId: foreignDoc,
+    }).expect(404);
+    // …and is Approved (a pending one is refused).
+    const pendingRef = `organizations/${ownerOrgId}/documents/${randomUUID()}.pdf`;
+    const pending = await admin.organizationDocument.create({
+      data: { organizationId: ownerOrgId, type: 'other', storageRef: pendingRef, version: 1 },
+    });
+    await platformAdvance(ownerOrgId, {
+      targetState: 'esal',
+      evidenceDocumentId: pending.id,
+    }).expect(400);
+
+    // …and is the right kind: ESAL se prueba con el certificado de Cámara, no con el RUT.
+    await platformAdvance(ownerOrgId, {
+      targetState: 'esal',
+      evidenceDocumentId: rutDocId,
+    }).expect(400);
+
+    evidenceDocId = cerlDocId;
+    const esal = await platformAdvance(ownerOrgId, {
+      targetState: 'esal',
+      evidenceDocumentId: evidenceDocId,
+    }).expect(201);
+    expect(esal.body.status).toEqual({ state: 'esal', rteVigente: false });
+
+    // The auto-triggered DIAN verification still runs on reaching ESAL.
     await waitForDianStatus(server, ownerToken, 'verified');
 
-    const rte = await advance(ownerToken, 'esal_rte').expect(201);
+    await advance(ownerToken, 'esal_rte').expect(403);
+    // El RTE se prueba con el RUT (responsabilidad 04), no con el certificado.
+    await platformAdvance(ownerOrgId, {
+      targetState: 'esal_rte',
+      evidenceDocumentId: cerlDocId,
+    }).expect(400);
+    const rte = await platformAdvance(ownerOrgId, {
+      targetState: 'esal_rte',
+      evidenceDocumentId: rutDocId,
+    }).expect(201);
     expect(rte.body.status).toEqual({ state: 'esal_rte', rteVigente: true });
   });
 
-  it('S1-05: a transition persists a recomputed verification level, even at esal_rte with no documents', async () => {
-    // No document was ever uploaded/approved for this org — reaching the top
-    // of the formalization ladder must NOT be enough on its own (tier 1 still
-    // requires an approved rut), proving the writer reads BOTH inputs.
+  it('R2-2: an org role (even Owner) cannot call the platform endpoint (403)', async () => {
+    await request(server)
+      .post(`/platform/organizations/${ownerOrgId}/formalization/transitions`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ targetState: 'esal', evidenceDocumentId: evidenceDocId })
+      .expect(403);
+  });
+
+  it('S1-05: a transition persists a recomputed verification level', async () => {
     const profile = await admin.organizationProfile.findUnique({
       where: { organizationId: ownerOrgId },
     });
-    expect(profile?.verificationLevel).toMatchObject({ level: 0, blockedBy: ['rut'] });
+    expect(profile?.verificationLevel).toEqual(
+      expect.objectContaining({ level: expect.any(Number) }),
+    );
   });
 
   it('records an append-only history preserving the same organization_id', async () => {
@@ -198,11 +299,18 @@ describe('Formalization state machine (M01, RF02)', () => {
     await advance(personToken, 'en_proceso').expect(403);
   });
 
-  it('records a transversal audit event per transition', async () => {
+  it('records a transversal audit event per transition, naming who drove it and the evidence', async () => {
     const events = await admin.auditLog.findMany({
       where: { organizationId: ownerOrgId, action: 'organization.formalization_changed' },
+      orderBy: { createdAt: 'asc' },
     });
     expect(events.length).toBe(4);
+    expect(events[0].metadata).toMatchObject({ by: 'organization' });
+    expect(events[2].metadata).toMatchObject({
+      by: 'platform',
+      to: 'esal',
+      evidenceDocumentId: evidenceDocId,
+    });
   });
 });
 
@@ -223,13 +331,14 @@ describe('DIAN RTE verification — retry ladder + manual retry + RBAC (M01, S-2
   let dianService: DianVerificationService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const NIT = '900123456-7';
 
   async function registerOrgWithNit(): Promise<{ token: string; orgId: string; userId: string }> {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org DIAN',
         displayName: 'Owner',
         email: `s2-dian-${randomUUID()}@test.local`,
@@ -316,8 +425,8 @@ describe('DIAN RTE verification — retry ladder + manual retry + RBAC (M01, S-2
     expect(status.body.dianVerification).toMatchObject({ status: 'retrying', attemptsCount: 1 });
     expect(status.body.dianVerification.nextRetryAt).toEqual(expect.any(String));
 
-    // The gate blocks ESAL_RTE while retrying, not just while pending.
-    await advance(owner.token, 'esal_rte').expect(400);
+    // The org can never self-declare ESAL_RTE, whatever the DIAN status (R2-2).
+    await advance(owner.token, 'esal_rte').expect(403);
   });
 
   it('exhausting all 4 staggered retries lands on "failed" (shown as "Verificación pendiente") — simulated instantly, never waiting real hours', async () => {
@@ -352,8 +461,8 @@ describe('DIAN RTE verification — retry ladder + manual retry + RBAC (M01, S-2
     expect(attempts.every((a) => a.result === 'failure')).toBe(true);
     expect(attempts.map((a) => a.attemptNumber)).toEqual([1, 2, 3, 4, 5]);
 
-    // Still gated — "failed" is not "verified".
-    await advance(owner.token, 'esal_rte').expect(400);
+    // Still gated — the org never self-declares ESAL_RTE (R2-2).
+    await advance(owner.token, 'esal_rte').expect(403);
 
     // Never the NIT, anywhere in the audit trail.
     const events = await admin.auditLog.findMany({

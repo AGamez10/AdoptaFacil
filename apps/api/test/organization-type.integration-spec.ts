@@ -5,6 +5,8 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * T-030: OrganizationType badge + the platform `showOrganizationType` policy.
@@ -18,7 +20,7 @@ describe('Organization type badge + platform policy (T-030, RF01)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -31,12 +33,14 @@ describe('Organization type badge + platform policy (T-030, RF01)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio',
         displayName: 'Owner',
         email: `t030-${randomUUID()}@test.local`,
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     createdOrgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,

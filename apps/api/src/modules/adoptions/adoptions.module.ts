@@ -6,17 +6,21 @@ import { AdoptionsController } from './adoptions.controller';
 import { AdoptionsService } from './adoptions.service';
 import { AdoptionContractsController } from './adoption-contracts.controller';
 import { AdoptionContractsService } from './adoption-contracts.service';
+import { AdoptionContractCopyService } from './adoption-contract-copy.service';
 import {
   SIGNATURE_ENCRYPTION_CONFIG,
   loadSignatureEncryptionConfig,
 } from '../../core/crypto/signature-crypto';
 import { SIGNATURE_PORT } from './signature/signature.port';
+import { DisabledSignatureAdapter } from './signature/disabled-signature.adapter';
 import { FakeSignatureAdapter } from './signature/fake-signature.adapter';
 import { FollowUpController } from './followup.controller';
 import { FollowUpService } from './followup.service';
 import { FollowUpScheduler } from './followup.scheduler';
 import { FollowUpProcessor } from './followup.processor';
 import { FOLLOWUP_QUEUE } from './followup.constants';
+import { AdoptionDeliveryController } from './adoption-delivery.controller';
+import { AdoptionDeliveryService } from './adoption-delivery.service';
 
 /**
  * M04 · Adoptions — request + evaluation kanban (T-028a), the CONTRACT +
@@ -36,11 +40,25 @@ import { FOLLOWUP_QUEUE } from './followup.constants';
  */
 @Module({
   imports: [AuthModule, OrgModule, BullModule.registerQueue({ name: FOLLOWUP_QUEUE })],
-  controllers: [AdoptionsController, AdoptionContractsController, FollowUpController],
+  controllers: [
+    AdoptionsController,
+    AdoptionContractsController,
+    FollowUpController,
+    AdoptionDeliveryController,
+  ],
   providers: [
     AdoptionsService,
     AdoptionContractsService,
-    { provide: SIGNATURE_PORT, useClass: FakeSignatureAdapter },
+    AdoptionContractCopyService,
+    // SIGNATURE_DRIVER (Ola 1, R0-1): 'fake' for dev/test; production must
+    // bind 'disabled' (env validation refuses 'fake' there).
+    {
+      provide: SIGNATURE_PORT,
+      useFactory: () =>
+        process.env.SIGNATURE_DRIVER === 'disabled'
+          ? new DisabledSignatureAdapter()
+          : new FakeSignatureAdapter(),
+    },
     // Mismo factory que `OrgModule` ya registra para sí mismo — no está en su
     // lista de `exports` (deliberadamente mínima, ver su propio comentario),
     // así que se re-registra aquí en vez de ampliar esa superficie exportada
@@ -49,6 +67,7 @@ import { FOLLOWUP_QUEUE } from './followup.constants';
     FollowUpService,
     FollowUpScheduler,
     FollowUpProcessor,
+    AdoptionDeliveryService,
   ],
 })
 export class AdoptionsModule {}

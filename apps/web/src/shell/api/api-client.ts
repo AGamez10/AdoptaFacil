@@ -2,6 +2,7 @@ import type { AuthTokens } from './auth-contract';
 import { ApiError, toApiError } from './api-error';
 import { apiErrorFromResponse, parseJsonResponse } from './http';
 import { tokensFromContract, type TokenStore } from './token-store';
+import { notifyDataChanged } from './data-changed';
 
 /**
  * Function that exchanges a refresh token for a fresh token pair. Injected so it
@@ -117,6 +118,8 @@ export class ApiClient {
     if (response.status === 401) {
       this.handleSessionExpired();
     }
+
+    if (response.ok) notifyDataChanged(options.method);
 
     return response;
   }

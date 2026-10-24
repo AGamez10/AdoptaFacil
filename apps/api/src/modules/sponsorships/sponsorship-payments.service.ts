@@ -84,23 +84,6 @@ export class SponsorshipPaymentsService {
     @Inject(PAYMENT_PORT) private readonly payments: PaymentPort,
   ) {}
 
-  /**
-   * Split de Pagos 1:1 (T-OAuth-Connect) — looks up the sponsored ORG's own
-   * connected MercadoPago account id, cross-tenant, via the
-   * `mercadopago_account_mp_user_id` SECURITY DEFINER function (narrow:
-   * returns ONLY `mp_user_id`, never the access/refresh tokens). `undefined`
-   * when the org never connected one — never thrown. Same helper
-   * `DonationsService` uses (duplicated, not shared — this codebase does not
-   * share service-level logic across module boundaries, see
-   * `organizationNamesById`'s equivalent there).
-   */
-  private async resolveSponsorMpUserId(organizationId: string): Promise<string | undefined> {
-    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
-      SELECT * FROM mercadopago_account_mp_user_id(${organizationId}::uuid)
-    `);
-    return rows[0]?.mp_user_id;
-  }
-
   private requireOrgId(): string {
     const organizationId = this.tenant.getOrganizationId();
     if (!organizationId) {
@@ -130,8 +113,8 @@ export class SponsorshipPaymentsService {
 
   /**
    * PUBLIC, minimal status read for the post-checkout "gracias" page —
-   * MercadoPago redirects the sponsor back with `external_reference`, which
-   * IS the attempt's own `collectionId` (same reasoning as
+   * the gateway sends the sponsor back with our own reference, which IS the
+   * attempt's own `collectionId` (same reasoning as
    * `DonationsService.getPublicStatusByCollectionId`). Cross-tenant, no
    * session, via a bounded SECURITY DEFINER function; an unknown reference is
    * a single generic 404. Deliberately narrow — status/amount/org name only,
@@ -195,9 +178,6 @@ export class SponsorshipPaymentsService {
 
     const nextAttemptNumber = ctx.attempt_count + 1;
     const idempotencyKey = buildAttemptIdempotencyKey(sponsorshipId, ctx.period, nextAttemptNumber);
-    // Split de Pagos 1:1 (T-OAuth-Connect) — same narrow, token-free lookup
-    // DonationsService uses (see its own doc comment).
-    const sponsorMpUserId = await this.resolveSponsorMpUserId(ctx.organization_id);
     const collection = await this.payments.createCollection({
       intendedAmount: ctx.plan_amount,
       currency: 'COP',
@@ -208,7 +188,6 @@ export class SponsorshipPaymentsService {
       paymentMethodId: card.paymentMethodId,
       paymentMethodType: card.paymentMethodType,
       installments: card.installments,
-      sponsorMpUserId,
     });
 
     // Reuses the SAME expiry window as attempt 1 — this is a one-off,

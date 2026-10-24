@@ -17,6 +17,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ReviewsService } from './reviews.service';
 import { createReviewSchema } from './reviews.schemas';
+import { RequireFeature } from '../../core/features';
 
 /**
  * M12 reviews (RF23) — creating and reading one's own reviews is open to ANY
@@ -31,6 +32,7 @@ import { createReviewSchema } from './reviews.schemas';
  * `owner_mark_review_spam` enforces both the tenant match and that the review
  * is the public kind, so this never reaches a verified review.
  */
+@RequireFeature('reputation')
 @Controller('reviews')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReviewsController {

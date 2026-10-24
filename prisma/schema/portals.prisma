@@ -30,6 +30,9 @@ model PortalTheme {
   /// "left" | "right" (S2-PORTAL). De qué lado va el sidebar de redes/contacto
   /// respecto al catálogo de animales.
   socialNavPosition String?  @default("right") @map("social_nav_position")
+  /// Planes (`portalRemoveSeal`): la organización pidió ocultar el sello "Hecho
+  /// con AdoptaFácil". Solo aplica si su plan vigente incluye la capacidad.
+  hideSeal          Boolean  @default(false) @map("hide_seal")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

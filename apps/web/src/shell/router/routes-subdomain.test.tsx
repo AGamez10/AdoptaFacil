@@ -25,8 +25,8 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
   });
 
   it('renders Org A\'s rich portal at "/" when the host is Org A\'s real subdomain', async () => {
-    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.com');
-    setHostname('patitas.adoptafacil.com');
+    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.org');
+    setHostname('patitas.adoptafacil.org');
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
@@ -55,29 +55,29 @@ describe('AppRoutes — real portal subdomain resolves at "/" (F-1, M14)', () =>
 
     expect(await screen.findByRole('heading', { name: 'Refugio Patitas' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Encuentra a tu próxima mascota' }),
+      screen.queryByRole('heading', { name: 'Adopta un amigo. Cambia dos vidas.' }),
     ).not.toBeInTheDocument();
   });
 
   it('falls back to the general portal when the host is not a real organization subdomain', async () => {
-    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.com');
+    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.org');
     setHostname('localhost');
 
     renderShell({ route: '/', session: { initialStatus: 'unauthenticated' } });
 
     expect(
-      await screen.findByRole('heading', { name: 'Encuentra a tu próxima mascota' }),
+      await screen.findByRole('heading', { name: 'Adopta un amigo. Cambia dos vidas.' }),
     ).toBeInTheDocument();
   });
 
   it('falls back to the general portal when VITE_PORTAL_BASE_DOMAIN is unset, even on a real-shaped host', async () => {
     vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', '');
-    setHostname('patitas.adoptafacil.com');
+    setHostname('patitas.adoptafacil.org');
 
     renderShell({ route: '/', session: { initialStatus: 'unauthenticated' } });
 
     expect(
-      await screen.findByRole('heading', { name: 'Encuentra a tu próxima mascota' }),
+      await screen.findByRole('heading', { name: 'Adopta un amigo. Cambia dos vidas.' }),
     ).toBeInTheDocument();
   });
 });

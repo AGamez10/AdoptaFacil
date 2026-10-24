@@ -267,6 +267,17 @@ export class ServiceHoursService {
         to: volunteerEmail,
         subject: buildServiceHoursDecisionSubject(emailInput),
         body: buildServiceHoursDecisionBody(emailInput),
+        template: {
+          event: emailInput.approved
+            ? 'volunteering.hours_approved'
+            : 'volunteering.hours_rejected',
+          data: {
+            nombre: emailInput.volunteerName,
+            oportunidad: emailInput.opportunityTitle,
+            horas: emailInput.hours,
+            motivo: emailInput.rejectionReason ?? 'La organización no indicó un motivo.',
+          },
+        },
       });
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);

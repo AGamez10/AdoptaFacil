@@ -6,10 +6,11 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PayoutsService } from '../src/modules/payments/payouts.service';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
- * M15b (F-4, RF26) — dispersión T+1 (Fase 2, not implemented by the real
- * MercadoPago adapter yet). Verifies, against the `fake` driver: the org's own
+ * M15b (F-4, RF26) — dispersión T+1 (Fase 2, no real payout adapter
+ * yet). Verifies, against the `fake` driver: the org's own
  * bank account registration (RBAC: Owner/Administrator only), triggering a
  * payout (RBAC: PlatformAdmin/PlatformSuperAdmin only, treasury operation),
  * idempotency (a retry with the same key never double-pays), the dispatch
@@ -26,7 +27,7 @@ describe('Payouts (M15b, RF26: bank account + dispatch + webhook + no double-pay
   let payoutsService: PayoutsService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -38,6 +39,7 @@ describe('Payouts (M15b, RF26: bank account + dispatch + webhook + no double-pay
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Org ${tag}`,
         displayName: 'Owner',
         email: `payouts-${tag}-${randomUUID()}@test.local`,

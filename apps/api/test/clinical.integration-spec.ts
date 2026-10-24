@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M03 clinical record (RF08, T-105): Owner/Administrator/Operator/Veterinarian
@@ -20,7 +21,7 @@ describe('Clinical record (M03, RF08: write roles + versioning + author)', () =>
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -32,6 +33,7 @@ describe('Clinical record (M03, RF08: write roles + versioning + author)', () =>
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org',
         displayName: 'Owner',
         email: `t105-${randomUUID()}@test.local`,
@@ -182,7 +184,12 @@ describe('Clinical record (M03, RF08: write roles + versioning + author)', () =>
 
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `t105-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `t105-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     createdOrgIds.push(personRes.body.user.organizationId);
     await createEvent(personRes.body.tokens.accessToken, vetAnimalId, minimal).expect(403);
@@ -199,7 +206,12 @@ describe('Clinical record (M03, RF08: write roles + versioning + author)', () =>
     // A non-write role (Person, no org) is denied the same as create/edit.
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P2', email: `t105-person2-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P2',
+        email: `t105-person2-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     createdOrgIds.push(personRes.body.user.organizationId);
     await reserveAttachment(personRes.body.tokens.accessToken, vetAnimalId).expect(403);

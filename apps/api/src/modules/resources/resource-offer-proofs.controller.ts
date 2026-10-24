@@ -30,6 +30,7 @@ import {
   ResourceOfferProofsService,
   type UploadedProofFile,
 } from './resource-offer-proofs.service';
+import { RequireFeature } from '../../core/features';
 
 /**
  * M09 — prueba del donante y su validación, anidadas bajo la oferta.
@@ -39,6 +40,7 @@ import {
  *     ReadOnlyAuditor de la organización beneficiaria (RLS).
  *   - `PATCH proof-validation`: aprobar/rechazar — Owner/Administrator/Operator.
  */
+@RequireFeature('resources')
 @Controller('resources/offers/:offerId')
 export class ResourceOfferProofsController {
   constructor(private readonly service: ResourceOfferProofsService) {}

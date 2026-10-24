@@ -7,6 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { BULK_IMPORT_HEADERS } from '../src/modules/animals/bulk-import.schemas';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * S2-04B-1 (RF07): bulk import of animals from a real .xlsx file — the
@@ -21,7 +22,7 @@ describe('Animals bulk import (S2-04B-1, RF07)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -33,6 +34,7 @@ describe('Animals bulk import (S2-04B-1, RF07)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `bulk-${randomUUID()}@test.local`,
@@ -107,7 +109,12 @@ describe('Animals bulk import (S2-04B-1, RF07)', () => {
 
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `bulk-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `bulk-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     person = {
       token: personRes.body.tokens.accessToken,

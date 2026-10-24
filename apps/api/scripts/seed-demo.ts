@@ -11,8 +11,10 @@
  * Env overrides (all optional):
  *   SEED_DEMO_PASSWORD   — shared password for the demo Owner/Person accounts.
  *                           Dev-only default below; NEVER a real credential.
- *   PLATFORM_ADMIN_EMAIL — must match the PlatformAdmin created by seed:admin
- *                           (same default as that script: admin@adoptafacil.local).
+ *   PLATFORM_ADMIN_EMAIL — REQUIRED: the PlatformAdmin created by seed:admin
+ *                           (no default since AF-037).
+ *
+ * Refuses to run with NODE_ENV=production: demo accounts share a password.
  *
  * Forces NOTIFICATION_DRIVER=log and STORAGE_DRIVER=disk regardless of `.env`
  * (the local `.env` has real Gmail SMTP configured; this seed must never send
@@ -50,7 +52,10 @@ import {
   DocumentType,
   FORMALIZATION_SEQUENCE,
   FormalizationState,
+  getLegalDocument,
+  type LegalAcceptanceItem,
   OrganizationType,
+  requiredLegalDocuments,
 } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { AuthService } from '../src/core/auth/auth.service';
@@ -59,10 +64,20 @@ import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OrgProfileService } from '../src/modules/org/org-profile.service';
 import { FormalizationService } from '../src/modules/org/formalization.service';
+import { PLATFORM_ONLY_STATES } from '../src/modules/org/formalization.machine';
 import { DocumentsService } from '../src/modules/org/documents.service';
 import { PlatformDocumentsService } from '../src/modules/org/platform-documents.service';
 import { AnimalsService } from '../src/modules/animals/animals.service';
 import { loadAssetOrGenerate, minimalPdf, simplePng } from './seed-assets';
+import { runLocalPreflight } from '../src/config/local-preflight';
+
+/** La cuenta demo acepta los textos legales vigentes, como en el registro real. */
+function demoAcceptances(accountType: 'organization' | 'person'): LegalAcceptanceItem[] {
+  return requiredLegalDocuments(accountType).map((key) => ({
+    key,
+    version: getLegalDocument(key).version,
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Credentials — NEVER hardcoded secrets. Emails are demo-only identifiers
@@ -70,9 +85,18 @@ import { loadAssetOrGenerate, minimalPdf, simplePng } from './seed-assets';
 // ALWAYS comes from env, with an obviously-dev fallback.
 // ---------------------------------------------------------------------------
 const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'DemoPass123!';
-const PLATFORM_ADMIN_EMAIL = (process.env.PLATFORM_ADMIN_EMAIL ?? 'admin@adoptafacil.local')
-  .trim()
-  .toLowerCase();
+const PLATFORM_ADMIN_EMAIL = (process.env.PLATFORM_ADMIN_EMAIL ?? '').trim().toLowerCase();
+
+if (process.env.NODE_ENV === 'production') {
+  console.error('[seed:demo] Se niega a correr con NODE_ENV=production (cuentas de demostración).');
+  process.exit(1);
+}
+if (!PLATFORM_ADMIN_EMAIL) {
+  console.error(
+    '[seed:demo] Define PLATFORM_ADMIN_EMAIL (el PlatformAdmin creado con seed:admin).',
+  );
+  process.exit(1);
+}
 
 if (!process.env.SEED_DEMO_PASSWORD) {
   console.warn(
@@ -287,6 +311,10 @@ interface CredentialRow {
 }
 
 async function main(): Promise<void> {
+  await runLocalPreflight(
+    ['postgres', 'redis'],
+    'seed:demo no puede cargar los datos de demostración',
+  );
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['warn', 'error'],
   });
@@ -337,11 +365,19 @@ async function main(): Promise<void> {
           displayName: def.ownerDisplayName,
           email: def.ownerEmail,
           password: DEMO_PASSWORD,
+          legalAcceptances: demoAcceptances('organization'),
         });
         organizationId = session.user.organizationId;
         ownerUserId = session.user.id;
         console.log(`[seed:demo] Organización creada (owner=${def.ownerEmail}).`);
       }
+      // R2-1: a new organization starts in review and is not public. The demo
+      // (never production, see the guard above) approves it directly so its
+      // portal and catalogs show up.
+      await prisma.organization.update({
+        where: { id: organizationId },
+        data: { status: 'approved', statusReason: null, statusChangedAt: new Date() },
+      });
       credentialRows.push({
         rol: `Owner — ${def.organizationName}`,
         correo: def.ownerEmail,
@@ -393,24 +429,6 @@ async function main(): Promise<void> {
       );
       console.log(`[seed:demo] Perfil actualizado (logo/portada reales vía StoragePort).`);
 
-      // 1c. Formalization — step through REAL adjacent transitions only as far
-      // as needed (idempotent: a second run finds the target already reached).
-      await tenant.run({ organizationId }, async () => {
-        const status = await formalization.getStatus();
-        let currentIndex = FORMALIZATION_SEQUENCE.indexOf(status.state);
-        const targetIndex = FORMALIZATION_SEQUENCE.indexOf(def.formalizationTarget);
-        if (currentIndex >= targetIndex) {
-          console.log(`[seed:demo] Formalización ya en "${status.state}" — sin cambios.`);
-          return;
-        }
-        while (currentIndex < targetIndex) {
-          const nextState = FORMALIZATION_SEQUENCE[currentIndex + 1];
-          await formalization.transition(ownerUserId, { targetState: nextState });
-          currentIndex += 1;
-          console.log(`[seed:demo] Formalización avanzada a "${nextState}".`);
-        }
-      });
-
       // 1d. Documents — upload (idempotent by type) + approve via PlatformAdmin
       // (idempotent: skips if already decided).
       for (const docDef of def.documents) {
@@ -450,6 +468,53 @@ async function main(): Promise<void> {
           console.log(`[seed:demo] Documento ${docDef.type} queda pendiente a propósito (demo).`);
         }
       }
+
+      // 1c. Formalization — step through REAL adjacent transitions only as far
+      // as needed (idempotent: a second run finds the target already reached).
+      await tenant.run({ organizationId }, async () => {
+        const status = await formalization.getStatus();
+        let currentIndex = FORMALIZATION_SEQUENCE.indexOf(status.state);
+        const targetIndex = FORMALIZATION_SEQUENCE.indexOf(def.formalizationTarget);
+        if (currentIndex >= targetIndex) {
+          console.log(`[seed:demo] Formalización ya en "${status.state}" — sin cambios.`);
+          return;
+        }
+        // ESAL / ESAL_RTE are platform-only (R2-2, SEC-003): the platform
+        // reviewer moves the org there in 1e, once a document is approved.
+        while (
+          currentIndex < targetIndex &&
+          !PLATFORM_ONLY_STATES.includes(FORMALIZATION_SEQUENCE[currentIndex + 1])
+        ) {
+          const nextState = FORMALIZATION_SEQUENCE[currentIndex + 1];
+          await formalization.transition(ownerUserId, { targetState: nextState });
+          currentIndex += 1;
+          console.log(`[seed:demo] Formalización avanzada a "${nextState}".`);
+        }
+      });
+
+      // 1e. Platform-only formalization states — the PlatformAdmin cites an
+      // approved, current document of this org as evidence (R2-2, SEC-003).
+      await tenant.run({ organizationId }, async () => {
+        const status = await formalization.getStatus();
+        let currentIndex = FORMALIZATION_SEQUENCE.indexOf(status.state);
+        const targetIndex = FORMALIZATION_SEQUENCE.indexOf(def.formalizationTarget);
+        if (currentIndex >= targetIndex) return;
+        const evidence = (await documents.list()).find((d) => d.status === DocumentStatus.Approved);
+        if (!evidence) {
+          throw new Error(
+            `[seed:demo] "${def.formalizationTarget}" requires an approved document as evidence.`,
+          );
+        }
+        while (currentIndex < targetIndex) {
+          const nextState = FORMALIZATION_SEQUENCE[currentIndex + 1];
+          await formalization.platformTransition(platformAdminUserId, organizationId, {
+            targetState: nextState,
+            evidenceDocumentId: evidence.id,
+          });
+          currentIndex += 1;
+          console.log(`[seed:demo] Formalización avanzada por la plataforma a "${nextState}".`);
+        }
+      });
 
       // 1e. Animals (idempotent by name within the org).
       await tenant.run({ organizationId }, async () => {
@@ -516,6 +581,7 @@ async function main(): Promise<void> {
         displayName: DONOR_NAME,
         email: DONOR_EMAIL,
         password: DEMO_PASSWORD,
+        legalAcceptances: demoAcceptances('person'),
       });
       console.log(`\n[seed:demo] Persona donante creada (${DONOR_EMAIL}).`);
     }

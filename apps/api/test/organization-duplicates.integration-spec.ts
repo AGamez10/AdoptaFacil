@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M01 organization duplicate detection (S-3) — risk-table §16 "Captación
@@ -25,7 +26,7 @@ describe('Organization duplicate detection (M01, S-3)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -37,6 +38,7 @@ describe('Organization duplicate detection (M01, S-3)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `s3-dup-${randomUUID()}@test.local`,
@@ -95,7 +97,12 @@ describe('Organization duplicate detection (M01, S-3)', () => {
 
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `s3-dup-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `s3-dup-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     person = {
       token: personRes.body.tokens.accessToken,

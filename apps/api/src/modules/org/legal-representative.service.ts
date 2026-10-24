@@ -1,6 +1,13 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import type { LegalRepresentative as LegalRepresentativeRow } from '@prisma/client';
 import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
+import type { Prisma, LegalRepresentative as LegalRepresentativeRow } from '@prisma/client';
+import {
+  Role,
   type LegalRepresentative,
   type LegalRepresentativeDocumentType,
   type LegalRepresentativeRole,
@@ -28,6 +35,11 @@ export interface LegalRepresentativeSigner {
   /** Raw image bytes (PNG, from `SignaturePad`'s canvas export) — ready to
    *  embed directly in a PDF via `pdf-lib`'s `embedPng`. */
   signatureImage: Buffer;
+  /** Clave opaca (StoragePort) del archivo CIFRADO de esa firma y su SHA-256.
+   *  Aditivo: permite que un documento firmado congele qué firma se usó, aunque
+   *  después se registre otro representante (append-only). */
+  signatureFileRef: string;
+  signatureHash: string;
 }
 
 function toContract(row: LegalRepresentativeRow): LegalRepresentative {
@@ -74,6 +86,54 @@ export class LegalRepresentativeService {
   }
 
   /**
+   * Quién puede registrar QUÉ firma. Nadie firma por otro ni acumula cargos:
+   * - `legal_representative`: solo un Owner de la organización (por defecto el
+   *   representante legal es quien controla la cuenta de la organización).
+   * - `accountant` / `fiscal_reviewer`: solo la persona que la organización
+   *   vinculó con ese cargo (designación vigente, creada por invitación del
+   *   Owner). Un Owner NO puede registrarlas a su nombre.
+   * - Una misma persona no puede ser vigente en dos cargos de firma.
+   */
+  private async assertMayRegister(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    actorUserId: string,
+    role: LegalRepresentativeRole,
+  ): Promise<void> {
+    if (role === 'legal_representative') {
+      const isOwner = await tx.userRole.findFirst({
+        where: { organizationId, userId: actorUserId, role: Role.Owner },
+        select: { id: true },
+      });
+      if (!isOwner) {
+        throw new ForbiddenException(
+          'Solo el propietario de la organización registra la firma del representante legal.',
+        );
+      }
+    } else {
+      const designation = await tx.orgSignerDesignation.findFirst({
+        where: { organizationId, userId: actorUserId, role, revokedAt: null },
+        select: { id: true },
+      });
+      if (!designation) {
+        throw new ForbiddenException(
+          'Esta firma solo la registra la persona que la organización vinculó con ese cargo.',
+        );
+      }
+    }
+    const others = await tx.legalRepresentative.findMany({
+      where: { organizationId, memberId: actorUserId, role: { not: role } },
+      select: { role: true },
+      take: 1,
+    });
+    if (others.length > 0) {
+      throw new ConflictException(
+        'Una misma persona no puede firmar en dos cargos distintos de la organización.',
+      );
+    }
+  }
+
+  /**
    * Register (or re-register, e.g. a change of representative/accountant/
    * fiscal reviewer) the CALLER's own signature UNDER `input.role`. `memberId`
    * is ALWAYS the authenticated actor, never a client-supplied id — combined
@@ -97,6 +157,12 @@ export class LegalRepresentativeService {
   ): Promise<LegalRepresentative> {
     const organizationId = this.requireOrgId();
 
+    // Antes de escribir nada en el almacenamiento: quien no puede firmar bajo
+    // este cargo no deja ni un archivo huérfano.
+    await this.prisma.withOrgContext(organizationId, (tx) =>
+      this.assertMayRegister(tx, organizationId, actorUserId, input.role),
+    );
+
     const plaintext = Buffer.from(input.signatureBase64, 'base64');
     if (plaintext.length === 0) {
       throw new BadRequestException('La firma está vacía o no es una imagen válida.');
@@ -113,6 +179,7 @@ export class LegalRepresentativeService {
     await this.storage.saveObject(stored.key, encrypted, 'application/octet-stream');
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
+      await this.assertMayRegister(tx, organizationId, actorUserId, input.role);
       const signedAt = new Date();
       const row = await tx.legalRepresentative.create({
         data: {
@@ -208,7 +275,48 @@ export class LegalRepresentativeService {
 
     try {
       const signatureImage = decryptSignature(stored.data, this.config.signatureEncryptionKey);
-      return { fullName: row.fullName, position: row.position, signatureImage };
+      return {
+        fullName: row.fullName,
+        position: row.position,
+        signatureImage,
+        signatureFileRef: row.signatureFileRef,
+        signatureHash: row.signatureHash,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * M13 (reportes): la imagen de UNA firma concreta, por el id del registro
+   * (append-only, así que un id siempre apunta a la misma firma). Se usa para
+   * volver a dibujar un reporte sellado con LAS MISMAS firmas con las que se
+   * generó, aunque después se haya registrado una firma nueva. Verifica que el
+   * SHA-256 de los bytes descifrados coincida con `expectedHash` (el sellado en
+   * el reporte); si no coincide, no se puede leer o no existe, devuelve `null`
+   * — nunca lanza, y nunca devuelve una firma de otra organización (RLS +
+   * filtro explícito por `organizationId`).
+   */
+  async getSignatureImageById(
+    organizationId: string,
+    legalRepresentativeId: string,
+    expectedHash: string,
+  ): Promise<Buffer | null> {
+    try {
+      const row = await this.prisma.withOrgContext(organizationId, (tx) =>
+        tx.legalRepresentative.findFirst({
+          where: { id: legalRepresentativeId, organizationId },
+        }),
+      );
+      if (!row || row.signatureHash !== expectedHash) {
+        return null;
+      }
+      const stored = await this.storage.readObject(row.signatureFileRef);
+      if (!stored) {
+        return null;
+      }
+      const image = decryptSignature(stored.data, this.config.signatureEncryptionKey);
+      return hashSignature(image) === expectedHash ? image : null;
     } catch {
       return null;
     }

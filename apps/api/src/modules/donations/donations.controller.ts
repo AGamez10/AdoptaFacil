@@ -8,8 +8,10 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   Role,
   type CreateDonationInput,
@@ -24,11 +26,13 @@ import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../core/auth/optional-jwt-auth.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
+import { legalContextFrom } from '../../core/legal/legal.service';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { DonationsService, type WebhookOutcome } from './donations.service';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { createDonationSchema } from './donations.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that VIEW the org's received donations/receipts (§13) — org set
  *  (Owner/Administrator/Operator), NOT the platform admin. */
@@ -45,6 +49,7 @@ const MANAGE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
  *     the PaymentPort verifies the signature and the settlement is idempotent.
  * All donation rows are tenant-scoped (RLS).
  */
+@RequireFeature('payments')
 @Controller('donations')
 export class DonationsController {
   constructor(
@@ -56,16 +61,16 @@ export class DonationsController {
    * Create a donation — a PERSON (authenticated) OR a GUEST (no account/login,
    * client requirement: donating must never be gated behind a login wall).
    * `OptionalJwtAuthGuard` never rejects the request; it links the donation to
-   * an account ONLY when a valid bearer token is present, same as MercadoPago
-   * Checkout Pro's own guest-checkout support.
+   * an account ONLY when a valid bearer token is present (guest checkout).
    */
   @Post()
   @UseGuards(OptionalJwtAuthGuard)
   create(
     @CurrentUser() actor: RequestUser | undefined,
     @Body(new ZodValidationPipe(createDonationSchema)) dto: CreateDonationInput,
+    @Req() req: Request,
   ): Promise<Donation> {
-    return this.service.create(actor, dto);
+    return this.service.create(actor, dto, legalContextFrom(req));
   }
 
   /** The beneficiary org's received donations with their receipts. */
@@ -100,6 +105,7 @@ export class DonationsController {
    * organization isn't an ESAL with RTE vigente (so nothing was ever issued).
    */
   @Get(':id/certificate')
+  @RequireFeature('donationCertificates')
   @UseGuards(JwtAuthGuard)
   getCertificate(
     @CurrentUser() actor: RequestUser,
@@ -115,6 +121,7 @@ export class DonationsController {
    * already exists; 422 if not eligible / not approved. Management roles only.
    */
   @Post(':id/certificate')
+  @RequireFeature('donationCertificates')
   @HttpCode(200)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...MANAGE_ROLES)
@@ -126,11 +133,10 @@ export class DonationsController {
   }
 
   /**
-   * Gateway webhook (PUBLIC — no JWT). The body is the raw gateway payload; the
-   * signature travels in the `x-signature` header (MercadoPago's `ts=...,v1=...`
-   * format). `x-request-id` and the `data.id` query param are ALSO required to
-   * build MercadoPago's signature manifest — bundled into `context` and passed
-   * through untouched. The PaymentPort verifies and normalizes it, and the
+   * Gateway webhook (PUBLIC — no JWT). The body is the raw gateway payload
+   * (ePayco signs its confirmation inside the body, `x_signature`). The
+   * `x-signature`/`x-request-id` headers and the query are still forwarded
+   * untouched in `context` for any adapter that needs them. The PaymentPort verifies and normalizes it, and the
    * settlement + receipt are idempotent (dedup by event).
    */
   @Post('webhook')

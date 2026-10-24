@@ -188,24 +188,76 @@ export class FollowUpService {
       throw new ConflictException(`El hito no admite respuestas (estado: ${current.status}).`);
     }
 
-    const hasPhoto = Boolean(input.photoFilename);
-    let storageRef: string | null = null;
-    let storageUrl: string | null = null;
-    if (hasPhoto) {
+    let photo: { storageRef: string; storageUrl: string } | null = null;
+    if (input.photoFilename) {
       const stored = await this.storage.createUploadTarget({
         organizationId: current.organization_id,
-        filename: input.photoFilename as string,
+        filename: input.photoFilename,
       });
-      storageRef = stored.key;
       // `createUploadTarget().url` is the PUT-only upload target (see
       // StorageController), never a viewable link — `resolvePublicUrl(key)` is
       // the GET-able one that must be persisted as `storageUrl`/`photoUrl`
       // (S1-04; same bug class as the localhost issue, found while auditing
       // every storage-URL construction site).
-      storageUrl = this.storage.resolvePublicUrl(stored.key);
+      photo = { storageRef: stored.key, storageUrl: this.storage.resolvePublicUrl(stored.key) };
     }
+    return this.recordSubmission(actor, milestoneId, current, input, photo);
+  }
 
-    const kind = hasPhoto ? 'photo' : 'questionnaire';
+  /**
+   * The adopter responds a milestone WITH the photo bytes in the same request
+   * (multipart). The generic `PUT /storage/upload` only accepts keys of the
+   * caller's own organization, and the adopter is a Persona of another tenant,
+   * so the photo travels through this endpoint instead: identity is checked
+   * against the milestone first, then the bytes land in a PRIVATE key of the
+   * owning organization (visible to it behind JWT+RBAC, never public).
+   */
+  async submitWithPhoto(
+    actor: RequestUser,
+    milestoneId: string,
+    file: { buffer: Buffer; mimetype: string; originalname: string },
+    input: Omit<SubmitFollowUpInput, 'photoFilename'>,
+    media: { kind: 'photo' | 'video'; maxBytes?: number } = { kind: 'photo' },
+  ): Promise<AdoptionFollowUpMilestone> {
+    const current = await this.loadForAdopter(milestoneId, actor.id);
+    if (!current) {
+      throw new NotFoundException('Hito de seguimiento no encontrado o no eres el adoptante.');
+    }
+    if (!canSubmitFollowUp(current.status as FollowUpMilestoneStatus)) {
+      throw new ConflictException(`El hito no admite respuestas (estado: ${current.status}).`);
+    }
+    const stored = await this.storage.createUploadTarget({
+      organizationId: current.organization_id,
+      filename:
+        file.originalname || (media.kind === 'video' ? 'seguimiento.mp4' : 'seguimiento.jpg'),
+      contentType: file.mimetype,
+      visibility: 'private',
+    });
+    await this.storage.saveObject(stored.key, file.buffer, file.mimetype, {
+      maxBytes: media.maxBytes,
+    });
+    return this.recordSubmission(
+      actor,
+      milestoneId,
+      current,
+      input,
+      { storageRef: stored.key, storageUrl: this.storage.resolvePublicUrl(stored.key) },
+      media.kind,
+    );
+  }
+
+  private async recordSubmission(
+    actor: RequestUser,
+    milestoneId: string,
+    current: MilestoneRow,
+    input: Pick<SubmitFollowUpInput, 'answers' | 'complete'>,
+    photo: { storageRef: string; storageUrl: string } | null,
+    mediaKind: 'photo' | 'video' = 'photo',
+  ): Promise<AdoptionFollowUpMilestone> {
+    const hasPhoto = photo !== null;
+    const storageRef = photo?.storageRef ?? null;
+    const storageUrl = photo?.storageUrl ?? null;
+    const kind = hasPhoto ? mediaKind : 'questionnaire';
     const complete = input.complete ?? true;
     const answers = input.answers ? JSON.stringify(input.answers) : null;
 
@@ -310,6 +362,10 @@ export class FollowUpService {
           subject: `Seguimiento de adopción pendiente: ${row.title}`,
           // NO PII/clinical detail beyond the milestone title.
           body: `Tu hito de seguimiento "${row.title}" venció el ${row.due_at.toISOString()}. Por favor complétalo.`,
+          template: {
+            event: 'adoption.followup_overdue',
+            data: { hito: row.title, fecha: row.due_at.toISOString() },
+          },
         });
       } catch (error) {
         sent = false;
@@ -331,6 +387,21 @@ export class FollowUpService {
   }
 
   /** Load a milestone for the adopter via the SECURITY DEFINER function. */
+  /**
+   * 404 unless `userId` is the adopter of the milestone and it still takes
+   * answers. Runs as a guard BEFORE the multipart body is read, so a stranger
+   * cannot make the API buffer a large upload for someone else's milestone.
+   */
+  async assertAdopterCanSubmit(milestoneId: string, userId: string): Promise<void> {
+    const current = await this.loadForAdopter(milestoneId, userId);
+    if (!current) {
+      throw new NotFoundException('Hito de seguimiento no encontrado o no eres el adoptante.');
+    }
+    if (!canSubmitFollowUp(current.status as FollowUpMilestoneStatus)) {
+      throw new ConflictException(`El hito no admite respuestas (estado: ${current.status}).`);
+    }
+  }
+
   private async loadForAdopter(milestoneId: string, userId: string): Promise<MilestoneRow | null> {
     const rows = await this.prisma.$queryRaw<MilestoneRow[]>(Prisma.sql`
       SELECT * FROM adoption_followup_for_adopter(${milestoneId}::uuid, ${userId}::uuid)

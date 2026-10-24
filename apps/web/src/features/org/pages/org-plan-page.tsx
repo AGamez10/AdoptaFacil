@@ -1,0 +1,257 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  BRANDED_EMAIL_MONTHLY_LIMIT,
+  PLAN_ALWAYS_INCLUDED,
+  PLAN_CAPABILITIES,
+  PLAN_CAPABILITY_INFO,
+  PLAN_LIMIT_LABELS,
+  formatPlanLimit,
+  priceWithIva,
+  type OrganizationPlanView,
+  type PlanDefinition,
+  type PlanKey,
+  type PlanLimit,
+} from '@adoptafacil/contracts';
+import {
+  Badge,
+  buttonVariants,
+  cn,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  ErrorState,
+  Skeleton,
+} from '@adoptafacil/ui';
+import { PageContainer, PageHeader } from '../../_layout';
+import { useApiClient } from '../../../shell/api';
+import { officialWhatsappUrl } from '../../../lib/contact';
+
+/** Labels, limits and the always-free list come from the plan catalog in
+ *  `@adoptafacil/contracts`, the same one the landing uses. */
+const LIMIT_LABELS = PLAN_LIMIT_LABELS;
+const formatLimit = formatPlanLimit;
+
+const cop = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+});
+
+const count = new Intl.NumberFormat('es-CO');
+
+/** Dates are stored in UTC; Colombia time is for display only. */
+const colombiaDate = new Intl.DateTimeFormat('es-CO', {
+  dateStyle: 'long',
+  timeZone: 'America/Bogota',
+});
+
+/** Where a shelter asks for a paid plan while billing is manual (payment link
+ *  or transfer to AdoptaFácil + electronic invoice). `VITE_BILLING_CONTACT_URL`
+ *  overrides it; by default the official WhatsApp opens with the plan written. */
+const BILLING_CONTACT_URL = import.meta.env.VITE_BILLING_CONTACT_URL as string | undefined;
+
+function planRequestUrl(plan: PlanDefinition): string {
+  if (BILLING_CONTACT_URL) {
+    return `${BILLING_CONTACT_URL}${BILLING_CONTACT_URL.includes('?') ? '&' : '?'}plan=${plan.key}`;
+  }
+  return officialWhatsappUrl(
+    `Hola, quiero el plan ${plan.name} de AdoptaFácil para mi organización.`,
+  );
+}
+
+function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean }) {
+  const paid = plan.monthlyPriceCop > 0;
+  const included = PLAN_CAPABILITIES.filter((capability) => plan.capabilities[capability]);
+  return (
+    <Card className={current ? 'border-primary ring-2 ring-primary/30' : undefined}>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>{plan.name}</CardTitle>
+          {current ? (
+            <Badge variant="success">Tu plan</Badge>
+          ) : (
+            paid && <Badge variant="outline">Opcional</Badge>
+          )}
+        </div>
+        <CardDescription>{plan.tagline}</CardDescription>
+        <p className="pt-2 text-2xl font-semibold">
+          {paid ? cop.format(plan.monthlyPriceCop) : 'Gratis, siempre'}
+          {paid && <span className="text-sm font-normal text-muted-foreground"> /mes + IVA</span>}
+        </p>
+        {paid && (
+          <p className="text-xs text-muted-foreground">
+            {cop.format(priceWithIva(plan.monthlyPriceCop))} con IVA, o{' '}
+            {cop.format(plan.annualPriceCop)} al año + IVA (2 meses gratis)
+          </p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <ul className="space-y-1">
+          {(Object.keys(plan.limits) as PlanLimit[]).map((limit) => (
+            <li key={limit} className="flex justify-between gap-2">
+              <span className="text-muted-foreground">{LIMIT_LABELS[limit]}</span>
+              <span className="font-medium">{formatLimit(limit, plan.limits[limit])}</span>
+            </li>
+          ))}
+        </ul>
+        {included.length > 0 && (
+          <ul className="list-inside list-disc space-y-1">
+            {included.map((capability) => (
+              <li key={capability}>
+                {PLAN_CAPABILITY_INFO[capability].label}
+                {capability === 'brandedEmails' &&
+                  ` (hasta ${count.format(BRANDED_EMAIL_MONTHLY_LIMIT[plan.key])} al mes)`}
+                {!PLAN_CAPABILITY_INFO[capability].available && (
+                  <Badge variant="secondary" className="ml-2">
+                    Próximamente
+                  </Badge>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+      {paid && !current && (
+        <CardFooter>
+          <a
+            className={cn(buttonVariants(), 'w-full')}
+            href={planRequestUrl(plan)}
+            target="_blank"
+            rel="noreferrer"
+            data-testid={`plan-request-${plan.key}`}
+          >
+            Quiero el plan {plan.name}
+          </a>
+        </CardFooter>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * `/organizacion/plan` — Plan y facturación (Owner/Administrator, same roles as
+ * `GET /org/plan`). Shows the plan in effect, how much of each limit is used,
+ * and the three plans side by side. While plans are not enforced it says so:
+ * the organization has everything and nothing is charged.
+ */
+export function OrgPlanPage() {
+  const client = useApiClient();
+  const [view, setView] = useState<OrganizationPlanView | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(() => {
+    setFailed(false);
+    client
+      .request<OrganizationPlanView>('/org/plan')
+      .then(setView)
+      .catch(() => setFailed(true));
+  }, [client]);
+
+  useEffect(load, [load]);
+
+  if (failed) {
+    return (
+      <PageContainer>
+        <PageHeader title="Plan y facturación" />
+        <ErrorState description="No pudimos cargar tu plan." onRetry={load} />
+      </PageContainer>
+    );
+  }
+
+  if (!view) {
+    return (
+      <PageContainer>
+        <PageHeader title="Plan y facturación" />
+        <Skeleton className="h-40 w-full" />
+      </PageContainer>
+    );
+  }
+
+  const current: PlanKey = view.effectivePlan;
+  const currentName = view.catalog.find((plan) => plan.key === current)?.name ?? current;
+  const periodEnd = view.subscription?.currentPeriodEnd;
+  const membersMax = view.limits.members;
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title="Plan y facturación"
+        description="Lo que protege a los animales y la transparencia es gratis siempre. Los planes de pago son opcionales: suman marca, alcance y comodidad."
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Estás en el plan {currentName}
+            {view.subscription && view.subscription.discountPercent > 0 && (
+              <Badge variant="info" className="ml-2">
+                {view.subscription.discountPercent} % de descuento fundador
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            {!view.enforced
+              ? 'Durante el piloto tienes todas las funciones sin costo.'
+              : view.launchPromoEndsAt
+                ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
+                : periodEnd
+                  ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
+                  : current === 'free'
+                    ? 'Sin costo y sin fecha de vencimiento.'
+                    : 'Sin fecha de vencimiento.'}
+            {view.graceEndsAt && view.subscription?.status === 'past_due' && (
+              <>
+                {' '}
+                Tu pago está pendiente: si no se renueva antes del{' '}
+                {colombiaDate.format(new Date(view.graceEndsAt))}, pasarás al plan Gratis sin perder
+                tus datos.
+              </>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm">
+            {LIMIT_LABELS.members}: <strong>{view.usage.members}</strong>
+            {membersMax !== null && ` de ${membersMax}`}
+          </p>
+          {view.usage.storageMb !== undefined && (
+            <p className="text-sm">
+              {LIMIT_LABELS.storageMb}:{' '}
+              <strong>{formatLimit('storageMb', view.usage.storageMb)}</strong>
+              {view.limits.storageMb !== null &&
+                ` de ${formatLimit('storageMb', view.limits.storageMb)}`}
+            </p>
+          )}
+          {view.usage.brandedEmails && (
+            <p className="text-sm">
+              Correos con tu marca este mes:{' '}
+              <strong>{count.format(view.usage.brandedEmails.sent)}</strong> de{' '}
+              {count.format(view.usage.brandedEmails.limit)}. Pasado el tope, tus correos siguen
+              saliendo con la marca de AdoptaFácil.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <section aria-labelledby="always-included" className="mt-6">
+        <h2 id="always-included" className="mb-2 text-lg font-semibold">
+          Incluido en todos los planes
+        </h2>
+        <ul className="grid gap-1 text-sm sm:grid-cols-2">
+          {PLAN_ALWAYS_INCLUDED.map((item) => (
+            <li key={item}>✓ {item}</li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-label="Planes" className="mt-6 grid gap-4 md:grid-cols-3">
+        {view.catalog.map((plan) => (
+          <PlanCard key={plan.key} plan={plan} current={view.enforced && plan.key === current} />
+        ))}
+      </section>
+    </PageContainer>
+  );
+}

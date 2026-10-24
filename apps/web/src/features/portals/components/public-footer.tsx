@@ -18,6 +18,8 @@ export interface PublicFooterProps {
     'name' | 'logoUrl' | 'socialLinks' | 'whatsapp' | 'contactEmail'
   >;
   navItems: readonly PublicHeaderNavItem[];
+  /** Sello "Hecho con AdoptaFácil". Lo quita un plan con `portalRemoveSeal`. */
+  showSeal?: boolean;
 }
 
 /**
@@ -27,7 +29,7 @@ export interface PublicFooterProps {
  * `OrganizationSocialLinks` no tiene ese campo hoy). Copyright con el año
  * actual (dinámico, nunca un año fijo).
  */
-export function PublicFooter({ organization, navItems }: PublicFooterProps) {
+export function PublicFooter({ organization, navItems, showSeal = true }: PublicFooterProps) {
   const socialIcons: Array<{ key: string; label: string; href: string; Icon: typeof IconGlobe }> =
     [];
   if (organization.socialLinks?.instagram) {
@@ -104,6 +106,16 @@ export function PublicFooter({ organization, navItems }: PublicFooterProps) {
       <div className={styles.footer__bottom}>
         <p className={styles.footer__copyright}>
           © {new Date().getFullYear()} {organization.name}. Todos los derechos reservados.
+          {showSeal && <span className="block opacity-75">Portal creado con AdoptaFácil</span>}
+        </p>
+        {/* La organización responde por su portal; AdoptaFácil es solo el software.
+            Sin el sello, los enlaces legales se quedan: no son publicidad. */}
+        <p className={styles.footer__copyright} data-testid="public-footer-legal">
+          {showSeal && 'Portal hecho con AdoptaFácil · '}
+          <a href="/legal/terminos">Términos</a> ·{' '}
+          <a href="/legal/politica-de-datos">Datos personales</a> ·{' '}
+          <a href="/legal/alcance">Qué es AdoptaFácil</a> ·{' '}
+          <a href="mailto:adoptafacil.oficial@gmail.com?subject=Reporte">Reportar</a>
         </p>
         <div className={styles.footer__social}>
           {socialIcons.map(({ key, label, href, Icon }) => (

@@ -24,6 +24,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { SponsorshipPlansService } from './sponsorship-plans.service';
 import { createSponsorshipPlanSchema, updateSponsorshipPlanSchema } from './sponsorships.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that may CREATE/EDIT/ARCHIVE a sponsorship plan (§13 M07). */
 const WRITE_ROLES = [Role.Owner, Role.Administrator] as const;
@@ -36,6 +37,7 @@ const VIEW_ROLES = [...WRITE_ROLES, Role.ReadOnlyAuditor] as const;
  * (deny-by-default). Subscribing to a plan is a separate, Person-facing endpoint
  * (see SponsorshipsController).
  */
+@RequireFeature('sponsorships')
 @Controller('sponsorship-plans')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SponsorshipPlansController {

@@ -7,6 +7,10 @@ import { DonationCertificatePublicController } from './donation-certificate-publ
 import { DonationAccessPublicController } from './donation-access-public.controller';
 import { DonationStatusPublicController } from './donation-status-public.controller';
 import { DonationCertificatesService } from './donation-certificates.service';
+import {
+  EPAYCO_KEYS_ENCRYPTION_KEY,
+  loadEpaycoKeysEncryptionKey,
+} from '../payments/epayco-keys-crypto';
 
 /**
  * M05 · Donations (T-050, P1). A Person donates to an organization, sees the
@@ -18,7 +22,7 @@ import { DonationCertificatesService } from './donation-certificates.service';
  *
  * PaymentPort: consumed from the GLOBAL `PAYMENT_PORT` provider (core `PaymentModule`,
  * @Global, T-052/T-054). No local binding — the service injects the token directly.
- * The adapter (fake / real MercadoPago) is chosen there via `PAYMENT_DRIVER`.
+ * The adapter (fake / ePayco / disabled) is chosen there via `PAYMENT_DRIVER`.
  *
  * CampaignsModule (T-057): imported ONLY to consume its exported
  * `CampaignFundingService` — the webhook enganche calls
@@ -40,7 +44,7 @@ import { DonationCertificatesService } from './donation-certificates.service';
  * donación (`donation_by_id`/`donation_receipt_by_donation`/
  * `donation_certificate_by_donation`).
  *
- * `DonationStatusPublicController` (MercadoPago redirect-back "gracias"
+ * `DonationStatusPublicController` (gateway redirect-back "gracias"
  * page): resolves `GET /public/donations/status/:reference` cross-tenant by
  * `collection_id` (`donation_by_collection_id`, SECURITY DEFINER) — status/
  * amount/org name only, no auth, generic 404 on an unknown reference.
@@ -53,6 +57,12 @@ import { DonationCertificatesService } from './donation-certificates.service';
     DonationAccessPublicController,
     DonationStatusPublicController,
   ],
-  providers: [DonationsService, DonationCertificatesService],
+  providers: [
+    DonationsService,
+    DonationCertificatesService,
+    // ADR-PAG-002: decrypts the beneficiary org's ePayco keys for the charge
+    // and the confirmation (same derivation as PaymentsModule).
+    { provide: EPAYCO_KEYS_ENCRYPTION_KEY, useFactory: loadEpaycoKeysEncryptionKey },
+  ],
 })
 export class DonationsModule {}

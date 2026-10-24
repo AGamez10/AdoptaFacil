@@ -5,6 +5,8 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Accountability end-to-end (RF16 · T-054, hardened to append-only immutable
@@ -21,7 +23,7 @@ describe('Campaign accountability (RF16 · T-054)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let ownerToken = '';
   let otherOwnerToken = '';
@@ -34,12 +36,14 @@ describe('Campaign accountability (RF16 · T-054)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Refugio ${tag}`,
         displayName: `Owner ${tag}`,
         email: `t054-${tag}-${randomUUID()}@test.local`,
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return { token: res.body.tokens.accessToken, orgId: res.body.user.organizationId };
   }
 
@@ -58,7 +62,12 @@ describe('Campaign accountability (RF16 · T-054)', () => {
 
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Persona', email: `t054-p-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Persona',
+        email: `t054-p-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     orgIds.push(person.body.user.organizationId);

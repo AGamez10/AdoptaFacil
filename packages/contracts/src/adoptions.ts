@@ -170,7 +170,14 @@ export const ADOPTION_CONTRACT_STATUSES: readonly AdoptionContractStatus[] = [
  * Rol de un firmante. Firmantes DINÁMICOS: como mínimo el representante de la
  * organización y el adoptante; se pueden añadir testigos u otros.
  */
-export type AdoptionSignerRole = 'organization_representative' | 'adopter' | 'witness';
+export type AdoptionSignerRole =
+  | 'organization_representative'
+  | 'adopter'
+  | 'witness'
+  /** Responsable firmante del hogar (estudio v4 §B): firma junto al adoptante
+   *  cuando este no alcanza la edad mínima de firma de la organización, y
+   *  asume las obligaciones del contrato de forma solidaria. Aditivo. */
+  | 'co_adopter';
 
 /**
  * Un firmante del contrato (parte de la lista dinámica). `signedAt`/`signatureId`
@@ -244,15 +251,78 @@ export interface AdoptionContractData {
   followUpMonths: number;
   /** "Firmado en ___" / "las partes fijan como domicilio la ciudad de ___". */
   signatureCity?: string;
+
+  // --- Campos aditivos de la plantilla v2 (contrato revisado, estudio v4) ---
+  // Todos opcionales: los contratos v1 ya sellados no los tienen y la
+  // plantilla v1 nunca los lee.
+
+  /** Razón social de la organización cedente (auto-rellenada al generar). */
+  organizationName?: string;
+  /** Tipo de documento del adoptante (cédula, extranjería, PPT, pasaporte). */
+  adopterDocumentType?: AdopterDocumentType;
+  /** La organización confirmó la identidad y la edad con el documento original
+   *  en la entrevista (sin guardar foto del documento). */
+  identityDocumentVerified?: boolean;
+  /** Edad mínima de firma que aplicó la organización a este contrato (18–30). */
+  minimumSignerAge?: number;
+  /** Identificación física del animal entregado. */
+  animalIdentificationType?: AnimalIdentificationType;
+  /** Número del microchip o de la placa (ausente si `none`). */
+  animalIdentificationNumber?: string;
+  /** El animal se entrega esterilizado. */
+  animalSterilized?: boolean;
+  /** Si NO se entrega esterilizado: meses que tiene el adoptante para
+   *  esterilizarlo (TODO(client): plazo por organización). Sin valor, la
+   *  cláusula queda sujeta a criterio del médico veterinario. */
+  sterilizationCommitmentMonths?: number;
+  /** Días de la semana de prueba previa (acta separada); ausente = sin prueba. */
+  trialPeriodDays?: number;
+  /** Plan de seguimiento elegido por el adoptante (estudio v4 §C). */
+  followUpPlan?: AdoptionFollowUpPlan;
+  /** Cuidador de respaldo (estudio v3/v4): nombre y celular. */
+  backupCaregiverName?: string;
+  backupCaregiverPhone?: string;
+  /** El adoptante declara que informó al cuidador y obtuvo su autorización
+   *  para entregar sus datos (Ley 1581). */
+  backupCaregiverInformed?: boolean;
+  /** Cuota de recuperación de gastos veterinarios pactada, en pesos (0 o
+   *  ausente = sin cuota). Nunca es precio de venta. */
+  recoveryFeeCop?: number;
 }
+
+/** Tipos de documento admitidos para el adoptante. */
+export type AdopterDocumentType = 'CC' | 'CE' | 'PPT' | 'PA';
+export const ADOPTER_DOCUMENT_TYPES: readonly AdopterDocumentType[] = ['CC', 'CE', 'PPT', 'PA'];
+
+/** Identificación física del animal en la entrega (estudio v3 §3). */
+export type AnimalIdentificationType = 'microchip' | 'tag' | 'none';
+export const ANIMAL_IDENTIFICATION_TYPES: readonly AnimalIdentificationType[] = [
+  'microchip',
+  'tag',
+  'none',
+];
+
+/**
+ * Plan de seguimiento post-adopción (estudio v4 §C): `light` (por defecto) =
+ * 1, 4 y 12 meses; `standard` ("acompañado") = 15 días, 1, 4 y 12 meses.
+ */
+export type AdoptionFollowUpPlan = 'light' | 'standard';
+export const ADOPTION_FOLLOW_UP_PLANS: readonly AdoptionFollowUpPlan[] = ['light', 'standard'];
+export const DEFAULT_FOLLOW_UP_PLAN: AdoptionFollowUpPlan = 'light';
+
+/** Rango permitido para la edad mínima de firma por organización (estudio v4 §B). */
+export const MIN_SIGNER_AGE_RANGE = { min: 18, max: 30 } as const;
 
 /** Entrada para `PATCH /adoptions/contracts/:id/data` — cualquier subconjunto
  *  de {@link AdoptionContractData}; solo aplicable mientras el contrato está
  *  en `draft` y nadie ha firmado todavía. */
 export type UpdateAdoptionContractDataInput = Partial<AdoptionContractData>;
 
-/** Default de {@link AdoptionContractData.followUpMonths} cuando se genera el contrato. */
-export const DEFAULT_FOLLOW_UP_MONTHS = 6;
+/** Default de {@link AdoptionContractData.followUpMonths} cuando se genera el
+ *  contrato — 12 meses desde la plantilla v2 (estudio v3/v4: la mayoría de
+ *  devoluciones llegan después de los 60 días). Los contratos v1 conservan el
+ *  valor que ya tienen guardado. */
+export const DEFAULT_FOLLOW_UP_MONTHS = 12;
 
 /**
  * Contenido CANÓNICO y versionable del contrato: es exactamente lo que se serializa
@@ -274,7 +344,18 @@ export interface AdoptionContractPayload {
   terms: string;
   /** Datos variables del texto legal fijo — ver {@link AdoptionContractData}. */
   data: AdoptionContractData;
+  /**
+   * Versión del TEXTO legal con que se generó el contrato (aditivo). Entra al
+   * sello por hash, así que liga cada firma al texto exacto que se mostró.
+   * Ausente = `v1` (contratos generados antes de la plantilla revisada).
+   */
+  templateVersion?: AdoptionContractTemplateVersion;
 }
+
+/** Versiones del texto legal del contrato. `v1` = texto original del cliente;
+ *  `v2` = texto revisado (octubre 2026). Ver `adoptions-contract-template.ts`. */
+export type AdoptionContractTemplateVersion = 'v1' | 'v2';
+export const CURRENT_ADOPTION_CONTRACT_TEMPLATE: AdoptionContractTemplateVersion = 'v2';
 
 /**
  * Contrato de adopción (§M04, RF11). Vive en el tenant de la organización dueña
@@ -425,8 +506,16 @@ export interface FollowUpQuestion {
   required?: boolean;
 }
 
-/** Tipo de evidencia asociada a un hito. */
-export type FollowUpEvidenceKind = 'photo' | 'questionnaire';
+/** Tipo de evidencia asociada a un hito. `video` es aditivo (2026-10-17). */
+export type FollowUpEvidenceKind = 'photo' | 'questionnaire' | 'video';
+
+/** Duración máxima del video de seguimiento (aprobada por el cliente el 2026-10-17). */
+export const FOLLOWUP_VIDEO_MAX_SECONDS = 30;
+/** Peso máximo por defecto del video de seguimiento, en MB. Configurable en el
+ *  servidor (`FOLLOWUP_VIDEO_MAX_MB`). TODO(client): confirmar los 50 MB. */
+export const FOLLOWUP_VIDEO_DEFAULT_MAX_MB = 50;
+/** Formatos de video aceptados: los que graban las cámaras de los celulares. */
+export const FOLLOWUP_VIDEO_CONTENT_TYPES = ['video/mp4', 'video/quicktime'] as const;
 
 /**
  * Evidencia de un hito (foto vía StoragePort y/o respuestas del cuestionario).
@@ -437,7 +526,8 @@ export interface AdoptionFollowUpEvidence {
   milestoneId: string;
   kind: FollowUpEvidenceKind;
   answers?: Record<string, unknown>;
-  /** URL pública de la foto (resuelta por el StoragePort), si aplica. */
+  /** URL de la foto o del video (resuelta por el StoragePort), si aplica.
+   *  Con `kind: 'video'` apunta al video. */
   photoUrl?: string;
   /** Clave opaca de almacenamiento (StoragePort), si aplica. */
   storageRef?: string;
@@ -504,4 +594,148 @@ export interface SubmitFollowUpInput {
   photoFilename?: string;
   /** Marcar el hito como completado (por defecto `true`). */
   complete?: boolean;
+}
+
+// ============================================================================
+// Acta de ENTREGA del animal (ajuste 6). Con el contrato firmado, la
+// organización registra la entrega (estado de salud, peso, foto obligatoria,
+// lo entregado) y la app genera un código de 6 dígitos (también en QR). El
+// adoptante lo confirma con su sesión abierta y, en una sola operación: se
+// sella el acta, el animal pasa a "adoptado", se programan los hitos del plan
+// del contrato y el adoptante recibe la ficha del animal (copia sellada).
+// ============================================================================
+
+/** pending_confirmation → confirmed (TERMINAL, inmutable) | cancelled. */
+export type AdoptionDeliveryStatus = 'pending_confirmation' | 'confirmed' | 'cancelled';
+
+/** Lo que la organización entrega junto con el animal (lista cerrada). */
+export type AdoptionDeliveryItem =
+  'vaccine_card' | 'food' | 'collar_leash' | 'bed' | 'toys' | 'medication' | 'documents';
+export const ADOPTION_DELIVERY_ITEMS: readonly AdoptionDeliveryItem[] = [
+  'vaccine_card',
+  'food',
+  'collar_leash',
+  'bed',
+  'toys',
+  'medication',
+  'documents',
+];
+
+/** Minutos de vigencia del código de confirmación (TODO(client): ajustable). */
+export const ADOPTION_DELIVERY_CODE_TTL_MINUTES = 30;
+/** Intentos fallidos antes de que la organización deba generar otro código. */
+export const ADOPTION_DELIVERY_MAX_ATTEMPTS = 5;
+
+/** Datos que registra la organización en el momento de la entrega. */
+export interface AdoptionDeliveryDetails {
+  /** Estado de salud al momento de la entrega (texto libre). */
+  healthStatus: string;
+  weightKg: number;
+  /** Identidad del adoptante confirmada con el documento original (sin copia). */
+  identityVerified: boolean;
+  /** Microchip o placa verificados contra el contrato. */
+  identificationChecked: boolean;
+  items: AdoptionDeliveryItem[];
+  /** Clave privada (StoragePort) de la foto del animal con su nuevo hogar. */
+  photoRef: string;
+}
+
+/** Evento clínico tal como lo ve el adoptante: tipo y fechas, sin notas
+ *  internas, costos, adjuntos ni datos del equipo. */
+export interface AdoptionRecordClinicalEntry {
+  /** Valor de `ClinicalEventType` (vaccine, sterilization, allergy, ...). */
+  type: string;
+  occurredAt: string;
+  nextDueDate?: string;
+}
+
+/** Declaración de comportamiento vigente, sin datos de quien la firmó. */
+export interface AdoptionRecordBehavior {
+  reactivityNotes?: string;
+  biteHistory: boolean;
+  biteHistoryDetail?: string;
+  childrenCompatibility: string;
+  medicalConditionsRelevant?: string;
+  declaredAt: string;
+}
+
+/**
+ * FICHA del animal que recibe el adoptante: copia sellada al momento de la
+ * entrega. La organización conserva su expediente completo; esto es solo lo
+ * que importa para el cuidado.
+ */
+export interface AdoptionAnimalRecord {
+  organizationName: string;
+  animal: {
+    id: string;
+    name: string;
+    species: string;
+    sex: string;
+    breed?: string;
+    birthDate?: string;
+    approximateAgeMonths?: number;
+  };
+  identification?: { type: AnimalIdentificationType; number?: string };
+  sterilized?: boolean;
+  /** Meses para esterilizar si se entregó sin esterilizar (del contrato). */
+  sterilizationCommitmentMonths?: number;
+  clinical: AdoptionRecordClinicalEntry[];
+  behavior?: AdoptionRecordBehavior;
+}
+
+/** Hito que se programa al confirmar la entrega (desde el plan del contrato). */
+export interface AdoptionDeliveryMilestonePlanItem {
+  title: string;
+  /** Plazo desde la confirmación, p. ej. "15 days", "4 months". */
+  offset: string;
+}
+
+export interface AdoptionDelivery {
+  id: string;
+  organizationId: string;
+  contractId: string;
+  requestId: string;
+  animalId: string;
+  animalName: string;
+  status: AdoptionDeliveryStatus;
+  details: AdoptionDeliveryDetails;
+  record: AdoptionAnimalRecord;
+  milestonePlan: AdoptionDeliveryMilestonePlanItem[];
+  /** SHA-256 hex del acta (detalles + ficha + plan) en forma canónica. */
+  contentHash: string;
+  /** Vigencia del código actual (UTC); null si ya no hay código activo. */
+  codeExpiresAt: string | null;
+  createdAt: string;
+  confirmedAt: string | null;
+}
+
+/** `POST /adoptions/deliveries` (org). */
+export interface StartAdoptionDeliveryInput {
+  contractId: string;
+  healthStatus: string;
+  weightKg: number;
+  identityVerified: boolean;
+  identificationChecked: boolean;
+  items: AdoptionDeliveryItem[];
+  photoRef: string;
+}
+
+/** Respuesta al iniciar la entrega o regenerar el código: el código se
+ *  muestra UNA vez (y se envía por correo al adoptante); nunca se guarda en claro. */
+export interface AdoptionDeliveryCodeIssued {
+  delivery: AdoptionDelivery;
+  code: string;
+  /** Enlace que codifica el QR (página de confirmación del adoptante). */
+  confirmUrl: string;
+}
+
+/** `POST /adoptions/deliveries/:id/confirm` (adoptante). */
+export interface ConfirmAdoptionDeliveryInput {
+  code: string;
+}
+
+/** `POST /adoptions/deliveries/photo-target` (org): dónde subir la foto. */
+export interface AdoptionDeliveryPhotoTarget {
+  storageRef: string;
+  uploadUrl: string;
 }

@@ -5,23 +5,56 @@
 /// catalog of organizations. Every future business table carries organization_id
 /// referencing this table and MUST enable RLS (see _rls_probe as the reference).
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                    String    @id @default(uuid()) @db.Uuid
+  name                  String
+  /// Operational status (R2-1, AF-023, MVP-RF-07): 'draft' | 'pending_review' |
+  /// 'observed' | 'approved' | 'rejected' | 'suspended' (OrganizationStatus
+  /// contract). The Owner submits draft/observed for review; every other move
+  /// is PlatformAdmin/PlatformSuperAdmin only. Only 'approved' organizations are
+  /// visible on the public surface (portal, catalogs); 'suspended' also blocks
+  /// the backoffice. Every change is audited in the organization's trail.
+  status                String    @default("draft")
+  /// Reason of the last status change (mandatory for observed/rejected/suspended).
+  statusReason          String?   @map("status_reason")
+  statusChangedAt       DateTime? @map("status_changed_at")
+  statusChangedByUserId String?   @map("status_changed_by_user_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   members                  OrgMember[]
   users                    User[]
   roleAssignments          UserRole[]
   auditLogs                AuditLog[]
+  legalAcceptances         LegalAcceptance[]
   profile                  OrganizationProfile?
   formalizationTransitions FormalizationTransition[]
   documents                OrganizationDocument[]
   legalRepresentatives     LegalRepresentative[]
   dianVerificationAttempts DianVerificationAttempt[]
-  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[] @relation("OrganizationDuplicateFlagsFlagged")
-  duplicateFlagsAsMatched  OrganizationDuplicateFlag[] @relation("OrganizationDuplicateFlagsMatched")
+  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsFlagged")
+  duplicateFlagsAsMatched  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsMatched")
+  invitations              OrganizationInvitation[]
+  reports                  OrgReport[]
+  signerDesignations       OrgSignerDesignation[]
+  thirdPartyConsents       ThirdPartyConsent[]
+  reportApprovals          OrgReportApproval[]
+  reportPolicies           OrgReportPolicy[]
+  // Platform workspace (F19): the team's own work when this organization is a
+  // platform team. See platform-workspace.prisma.
+  workspaceTickets         PlatformWorkspaceTicket[]
+  workspaceTicketEvents    PlatformWorkspaceTicketEvent[]
+  sensitiveActions         PlatformSensitiveAction[]
+  sensitiveActionDecisions PlatformSensitiveActionDecision[]
+  // ePayco (ADR-PAG-002): the organization's own connected merchant account.
+  // See payments.prisma.
+  epaycoAccount            OrganizationEpaycoAccount?
+  // Comunidad, primer corte del ecosistema. See community.prisma.
+  serviceListings          ServiceListing[]
+  serviceListingReviews    ServiceListingReview[]
+  petProfiles              PetProfile[]
+  emailUsage               OrganizationEmailUsage[]
 
+  @@index([status])
   @@map("organizations")
 }
 
@@ -202,12 +235,20 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  credential           AuthCredential?
-  refreshTokens        RefreshToken[]
-  passwordResetTokens  PasswordResetToken[]
-  roleAssignments      UserRole[]
-  legalRepresentatives LegalRepresentative[]
+  organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credential                AuthCredential?
+  refreshTokens             RefreshToken[]
+  passwordResetTokens       PasswordResetToken[]
+  roleAssignments           UserRole[]
+  legalRepresentatives      LegalRepresentative[]
+  generatedReports          OrgReport[]
+  signerDesignationsOwn     OrgSignerDesignation[] @relation("SignerDesignationUser")
+  signerDesignationsMade    OrgSignerDesignation[] @relation("SignerDesignationBy")
+  signerDesignationsRevoked OrgSignerDesignation[] @relation("SignerDesignationRevokedBy")
+  thirdPartyConsents        ThirdPartyConsent[]    @relation("ThirdPartyConsentSubject")
+  reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
+  reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
+  mfaFactor                 AuthMfaFactor?
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -271,13 +312,17 @@ model AuthCredential {
 /// refresh token is stored — never the token itself. Rotation revokes the old
 /// row and links it to its replacement for reuse detection.
 model RefreshToken {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String    @map("user_id") @db.Uuid
-  tokenHash    String    @unique @map("token_hash")
-  expiresAt    DateTime  @map("expires_at")
-  revokedAt    DateTime? @map("revoked_at")
-  replacedById String?   @map("replaced_by_id") @db.Uuid
-  createdAt    DateTime  @default(now()) @map("created_at")
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  replacedById  String?   @map("replaced_by_id") @db.Uuid
+  /// When this session passed the second factor (platform staff only). Carried
+  /// over on rotation so a staff session keeps its MFA for the work day, and
+  /// dropped once that window or the idle timeout passes (see TokenService).
+  mfaVerifiedAt DateTime? @map("mfa_verified_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -360,8 +405,9 @@ model LegalRepresentative {
   signedAt         DateTime @map("signed_at")
   createdAt        DateTime @default(now()) @map("created_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  member       User         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member          User                @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  reportApprovals OrgReportApproval[]
 
   @@index([organizationId])
   @@index([organizationId, role, signedAt])
@@ -422,7 +468,7 @@ model OrganizationDuplicateFlag {
   createdAt             DateTime  @default(now()) @map("created_at")
 
   organization        Organization @relation("OrganizationDuplicateFlagsFlagged", fields: [organizationId], references: [id], onDelete: Cascade)
-  matchedOrganization  Organization @relation("OrganizationDuplicateFlagsMatched", fields: [matchedOrganizationId], references: [id], onDelete: Cascade)
+  matchedOrganization Organization @relation("OrganizationDuplicateFlagsMatched", fields: [matchedOrganizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([matchedOrganizationId])
@@ -440,4 +486,34 @@ model RlsProbe {
   payload        String
 
   @@map("_rls_probe")
+}
+
+/// Invitation to join an organization with a role (R2-3, AF-017, condition C9).
+/// Tenant-scoped: RLS ENABLE+FORCE + tenant_isolation, so an org only sees its
+/// own invitations. Only the SHA-256 HASH of the token is stored; the raw token
+/// lives only in the emailed link. Single use (`accepted_at`), revocable
+/// (`revoked_at`), with an expiry. The invitee has no account (nor tenant) yet,
+/// so the token is resolved through the bounded SECURITY DEFINER function
+/// `organization_invitation_by_token_hash`. The app role may SELECT/INSERT/
+/// UPDATE (accept/revoke) but never DELETE: the history is kept. UTC times.
+model OrganizationInvitation {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  email           String
+  role            String
+  /// Cargo de firmante adicional ('accountant' | 'fiscal_reviewer') si la invitación es para firmar.
+  signerRole      String?   @map("signer_role")
+  tokenHash       String    @unique @map("token_hash")
+  invitedByUserId String    @map("invited_by_user_id") @db.Uuid
+  expiresAt       DateTime  @map("expires_at")
+  acceptedAt      DateTime? @map("accepted_at")
+  acceptedUserId  String?   @map("accepted_user_id") @db.Uuid
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, email])
+  @@map("organization_invitations")
 }

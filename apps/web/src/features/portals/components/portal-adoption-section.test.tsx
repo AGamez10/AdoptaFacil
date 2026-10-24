@@ -152,4 +152,35 @@ describe('PortalAdoptionSection', () => {
       await screen.findByText('Ningún animal coincide con los filtros elegidos.'),
     ).toBeInTheDocument();
   });
+
+  it('mobile: "Filtros" opens a panel with the filters, counts active ones and closes with Escape', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubAnimals({
+        items: [animal('a1', 'Firulais'), animal('a2', 'Michi', { species: 'cat', sex: 'female' })],
+        total: 2,
+        limit: 12,
+        offset: 0,
+      }),
+    );
+    renderSection();
+    await screen.findAllByTestId('animal-card');
+
+    const toggle = screen.getByTestId('catalog-filters-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+
+    const panel = screen.getByRole('dialog', { name: 'Filtros' });
+    expect(panel).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filtrar por sexo'), { target: { value: 'female' } });
+    expect(screen.getByRole('button', { name: 'Ver 1 animal' })).toBeInTheDocument();
+    expect(screen.getAllByTestId('animal-card')).toHaveLength(1);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Filtros' })).not.toBeInTheDocument();
+    expect(toggle).toHaveTextContent('1');
+    expect(toggle).toHaveFocus();
+    // The same controls stay in the page (inline on larger screens).
+    expect(screen.getByLabelText('Filtrar por sexo')).toHaveValue('female');
+  });
 });

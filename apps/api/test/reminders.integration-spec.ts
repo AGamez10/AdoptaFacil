@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { RemindersService } from '../src/modules/animals/reminders.service';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M03 clinical reminders (RF09, T-106): the background worker generates in-app
@@ -22,7 +23,7 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
   let reminders: RemindersService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   // Toggleable NotificationPort stub (best-effort send).
   const notifier = {
@@ -46,6 +47,7 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Org',
         displayName: 'Owner',
         email: `t106-${randomUUID()}@test.local`,
@@ -182,7 +184,12 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
 
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `t106-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `t106-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     createdOrgIds.push(personRes.body.user.organizationId);
     await listReminders(personRes.body.tokens.accessToken).expect(403); // no role → no view

@@ -1,14 +1,11 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../core/auth/auth.module';
-import { MercadoPagoOAuthClient } from '../../core/payments/mercadopago-oauth.client';
 import { BankAccountsController } from './bank-accounts.controller';
 import { BankAccountsService } from './bank-accounts.service';
-import { MercadoPagoConnectController } from './mercadopago-connect.controller';
-import { MercadoPagoConnectService } from './mercadopago-connect.service';
-import { MercadoPagoTokenRefreshProcessor } from './mercadopago-token-refresh.processor';
-import { MercadoPagoTokenRefreshScheduler } from './mercadopago-token-refresh.scheduler';
-import { MERCADOPAGO_TOKEN_REFRESH_QUEUE } from './mercadopago-connect.constants';
+import { EpaycoConnectController } from './epayco-connect.controller';
+import { EpaycoConnectService } from './epayco-connect.service';
+import { EPAYCO_KEYS_ENCRYPTION_KEY, loadEpaycoKeysEncryptionKey } from './epayco-keys-crypto';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsProcessor } from './payouts.processor';
 import { PayoutsService } from './payouts.service';
@@ -17,9 +14,9 @@ import { ReconciliationController } from './reconciliation.controller';
 import { ReconciliationService } from './reconciliation.service';
 
 /**
- * M15b · Dispersión T+1 (RF26) — Fase 2, BLOQUEADA (pendiente aprobación de
- * Disbursements de MercadoPago; el diseño original apuntaba a Wompi Payouts,
- * ya reemplazado). Owns:
+ * M15b · Dispersión T+1 (RF26) — Fase 2, BLOQUEADA (sin adaptador de payouts
+ * real: Wompi y Mercado Pago fueron retirados; con ePayco el dinero llega
+ * directo a la cuenta de cada organización). Owns:
  *   - `organization_bank_accounts` (RLS) — the org's own registered payout
  *     destination (Owner/Administrator self-service, `/org/payout-bank-account`).
  *   - `payouts` (RLS) — one row per dispersión attempt, dispatched through a
@@ -30,12 +27,11 @@ import { ReconciliationService } from './reconciliation.service';
  *   - `/platform/reconciliation` (F-5, RF26) — read-only report crossing
  *     recaudo (donations) vs. dispersión (payouts), by org and calendar
  *     month; no table of its own, aggregates over the two above.
- *   - `organization_mercadopago_accounts` (RLS, T-OAuth-Connect) — Split de
- *     Pagos 1:1: an org connects its OWN MercadoPago account via OAuth
- *     (`/org/mercadopago/connect|callback|status`, Owner/Administrator +
- *     one public callback route) plus a daily BullMQ token-refresh scan. This
- *     is ONLY the connect infra — wiring the connected `mpUserId` into an
- *     actual split payment at checkout is a separate follow-up, not here.
+ *   - `organization_epayco_accounts` (RLS, ADR-PAG-002) — the org's OWN ePayco
+ *     merchant keys (`/org/epayco/connect|status`, Owner/Administrator), the
+ *     secrets encrypted at rest. Every ePayco checkout is created with them.
+ *     (Mercado Pago's OAuth connect + token refresh were retired 2026-10-17;
+ *     its table was dropped by migration 20261017110000.)
  *
  * PaymentPort: consumed from the GLOBAL `PAYMENT_PORT` provider (core
  * `PaymentModule`, @Global) — no local binding, same convention as
@@ -43,26 +39,20 @@ import { ReconciliationService } from './reconciliation.service';
  * BullMQ↔Redis connection (`QueueModule`, @Global).
  */
 @Module({
-  imports: [
-    AuthModule,
-    BullModule.registerQueue({ name: PAYOUTS_QUEUE }),
-    BullModule.registerQueue({ name: MERCADOPAGO_TOKEN_REFRESH_QUEUE }),
-  ],
+  imports: [AuthModule, BullModule.registerQueue({ name: PAYOUTS_QUEUE })],
   controllers: [
     BankAccountsController,
     PayoutsController,
     ReconciliationController,
-    MercadoPagoConnectController,
+    EpaycoConnectController,
   ],
   providers: [
     BankAccountsService,
     PayoutsService,
     PayoutsProcessor,
     ReconciliationService,
-    MercadoPagoOAuthClient,
-    MercadoPagoConnectService,
-    MercadoPagoTokenRefreshScheduler,
-    MercadoPagoTokenRefreshProcessor,
+    EpaycoConnectService,
+    { provide: EPAYCO_KEYS_ENCRYPTION_KEY, useFactory: loadEpaycoKeysEncryptionKey },
   ],
 })
 export class PaymentsModule {}

@@ -1,9 +1,11 @@
 import type {
   PortalLogoPosition,
   PortalSocialNavPosition,
+  PortalTemplateId,
   PortalTheme,
   PortalThemeToken,
 } from '@adoptafacil/contracts';
+import { DEFAULT_PORTAL_TEMPLATE, PORTAL_TEMPLATE_IDS } from '@adoptafacil/contracts';
 
 /**
  * M14 personalización por tokens (T-027) — metadatos de la UI de configuración y
@@ -96,4 +98,28 @@ export function safeSocialNavPosition(raw: unknown): PortalSocialNavPosition {
   return typeof raw === 'string' && SOCIAL_NAV_POSITIONS.has(raw)
     ? (raw as PortalSocialNavPosition)
     : 'right';
+}
+
+const TEMPLATE_IDS = new Set<string>(PORTAL_TEMPLATE_IDS);
+
+/** Ola 3: plantilla del portal. Un valor desconocido cae en la Clásica. */
+export function safeTemplate(raw: unknown): PortalTemplateId {
+  return typeof raw === 'string' && TEMPLATE_IDS.has(raw)
+    ? (raw as PortalTemplateId)
+    : DEFAULT_PORTAL_TEMPLATE;
+}
+
+/**
+ * Video de portada (Historias). La API ya lo resuelve desde una llave pública
+ * de la propia organización; aquí solo se acepta una URL http(s) absoluta,
+ * para nunca poner en `<video src>` un esquema inesperado.
+ */
+export function safeMediaUrl(raw: unknown): string | undefined {
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }

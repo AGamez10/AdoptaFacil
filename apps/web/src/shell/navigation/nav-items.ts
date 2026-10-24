@@ -32,6 +32,10 @@ export const ANIMAL_VIEW_ROLES = [
 ] as const;
 
 export const ORG_DOCUMENTS_ROLES = [Role.Owner, Role.Administrator, Role.ReadOnlyAuditor] as const;
+/** Gestionan/ven a los firmantes de la organización (M13). */
+export const ORG_SIGNERS_ROLES = [Role.Owner, Role.Administrator] as const;
+/** Firman documentos: el representante legal (Owner) y los firmantes vinculados (auditor). */
+export const ORG_SIGNING_ROLES = [Role.Owner, Role.ReadOnlyAuditor] as const;
 
 /**
  * M13 (S-14) — "Dashboard de donaciones y campañas" de la organización. Es
@@ -89,6 +93,10 @@ export const PLATFORM_REVIEWS_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdm
  */
 export const ORG_REVIEWS_ROLES = [Role.Owner, Role.Administrator] as const;
 
+/** Planes y suscripciones · copiado VERBATIM del `@Roles` de `GET /org/plan`:
+ *  el plan y su cobro son asunto del Owner/Administrator. */
+export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
+
 /**
  * M13 (S-8, RF24) — "Dashboard de plataforma" (conteos de colas), audiencia
  * de PLATAFORMA. Copiado VERBATIM del `@Roles` de
@@ -96,6 +104,12 @@ export const ORG_REVIEWS_ROLES = [Role.Owner, Role.Administrator] as const;
  * — mismos dos roles que `PLATFORM_DOCUMENTS_ROLES`, declarado aparte por el
  * mismo criterio del resto de constantes de este archivo.
  */
+/**
+ * F19 — espacio de trabajo del equipo de plataforma (`/plataforma/equipo`).
+ * Copiado del `@Roles` de `WorkspaceController` (`/platform/workspace/*`).
+ */
+export const PLATFORM_TEAM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
+
 export const PLATFORM_ADMIN_DASHBOARD_ROLES = [
   Role.PlatformAdmin,
   Role.PlatformSuperAdmin,
@@ -246,6 +260,13 @@ export interface NavItem {
    */
   roles?: readonly Role[];
   /**
+   * Firmantes vinculados (auditor con cargo de firma): `signing-inbox` solo lo
+   * ve quien firma (Owner o auditor con cargo); `not-for-signers` se oculta a
+   * quien solo entró a firmar, porque la API le limita la lista a sus
+   * documentos y el menú no debe ofrecerle lo que no va a poder usar.
+   */
+  signerGate?: 'signing-inbox' | 'not-for-signers';
+  /**
    * F1-01: restricts the entry to a Persona account (`session.user.accountType
    * === 'person'`), the INVERSE of `roles` — an org account has at least one
    * `ORG_ROLES` entry and a Persona has none, so `roles` (an allow-list of "has
@@ -335,13 +356,33 @@ export const navItems: NavItem[] = [
         comingSoon: true,
       },
       {
-        path: '/organizacion/reporte-exogeno',
-        label: 'Reporte exógeno 2575',
+        path: '/organizacion/reportes',
+        label: 'Reportes',
         icon: ShieldIcon,
-        roles: ORG_MEMBER_ROLES,
-        comingSoon: true,
+        roles: ORG_DOCUMENTS_ROLES,
+        signerGate: 'not-for-signers',
+      },
+      {
+        path: '/organizacion/documentos-por-firmar',
+        label: 'Documentos por firmar',
+        icon: ShieldIcon,
+        roles: ORG_SIGNING_ROLES,
+        signerGate: 'signing-inbox',
+      },
+      {
+        path: '/organizacion/firmantes',
+        label: 'Firmantes',
+        icon: ShieldIcon,
+        roles: ORG_SIGNERS_ROLES,
       },
     ],
+  },
+  // M13: cada persona decide si su nombre y documento aparecen en los reportes
+  // y certificados de las organizaciones con las que ha donado o trabajado.
+  {
+    path: '/uso-de-mis-datos',
+    label: 'Uso de mis datos',
+    icon: ShieldIcon,
   },
   // MENU-SUBMENUS: "Donaciones" agrupa las dos entradas planas que existían
   // (mismas rutas, mismos roles de siempre) — el padre solo expande/colapsa,
@@ -387,6 +428,10 @@ export const navItems: NavItem[] = [
   // (cualquier autenticado), así que el filtro real es `personaOnly` — ver su
   // doc en NavItem para por qué no puede expresarse con `roles`.
   { path: '/mis-solicitudes', label: 'Mis solicitudes', icon: PawIcon, personaOnly: true },
+  // T-028c: el adoptante responde sus hitos de seguimiento post-adopción.
+  { path: '/mis-seguimientos', label: 'Mis seguimientos', icon: PawIcon, personaOnly: true },
+  // Ajuste 6: ficha de los animales recibidos (entrega confirmada).
+  { path: '/mis-animales', label: 'Mis animales', icon: PawIcon, personaOnly: true },
   // MENU-SUBMENUS: "Apadrinamientos" agrupa "Mis apadrinamientos" (donante,
   // sin @Roles) y la gestión de la org ("Apadrinamientos recibidos", antes
   // el ítem plano "Apadrinamientos", SPONSORSHIP_VIEW_ROLES) — mismas rutas y
@@ -411,6 +456,20 @@ export const navItems: NavItem[] = [
         roles: SPONSORSHIP_VIEW_ROLES,
       },
     ],
+  },
+  // Ajuste 13 · anuncio urgente a los contactos propios (Owner/Administrator).
+  {
+    path: '/organizacion/anuncios',
+    label: 'Anuncios urgentes',
+    icon: AlertTriangleIcon,
+    roles: ORG_PLAN_ROLES,
+  },
+  // Planes y suscripciones · plan en efecto, uso de límites y los tres planes.
+  {
+    path: '/organizacion/plan',
+    label: 'Plan',
+    icon: BoxIcon,
+    roles: ORG_PLAN_ROLES,
   },
   // M14 · portal personalization by tokens (T-027) — REMOVED from the sidebar
   // (S2-04A §4): it now lives as a button inside "Mi organización"'s action bar
@@ -473,6 +532,8 @@ export const navItems: NavItem[] = [
     children: [
       { path: '/comunidad', label: 'Feed', icon: ChatIcon },
       { path: '/mis-publicaciones', label: 'Mis publicaciones', icon: ChatIcon },
+      { path: '/mis-mascotas', label: 'Mis mascotas', icon: PawIcon },
+      { path: '/mi-negocio', label: 'Mi negocio', icon: ShoppingBagIcon },
     ],
   },
   // S2-01: "Campañas" RESTORED — T-065 removed it because the link pointed at
@@ -524,6 +585,13 @@ export const navItems: NavItem[] = [
   // M01, S-3 · organizaciones posiblemente duplicadas (mitigación de riesgo
   // "Captación ilegal / LA-FT", §16). Audiencia de PLATAFORMA — ruta hermana
   // de la revisión de documentos, misma zona.
+  // R2-1 · aprobación de organizaciones (solo las aprobadas son públicas).
+  {
+    path: '/plataforma/organizaciones',
+    label: 'Aprobar organizaciones',
+    icon: ShieldIcon,
+    roles: PLATFORM_DUPLICATES_ROLES,
+  },
   {
     path: '/plataforma/organizaciones-duplicadas',
     label: 'Organizaciones duplicadas',
@@ -535,6 +603,13 @@ export const navItems: NavItem[] = [
     path: '/plataforma/comunidad',
     label: 'Moderación de comunidad',
     icon: ChatIcon,
+    roles: COMMUNITY_MODERATION_ROLES,
+  },
+  // Comunidad · revisión de perfiles y reseñas del directorio de servicios.
+  {
+    path: '/plataforma/servicios',
+    label: 'Directorio de servicios',
+    icon: ShoppingBagIcon,
     roles: COMMUNITY_MODERATION_ROLES,
   },
   // M12 (S-7, RF23) · moderación de reseñas, audiencia de PLATAFORMA — ruta
@@ -567,6 +642,22 @@ export const navItems: NavItem[] = [
   {
     path: '/plataforma/banner',
     label: 'Banner del portal',
+    icon: ShieldIcon,
+    roles: PLATFORM_DOCUMENTS_ROLES,
+  },
+  // F19 · espacio de trabajo del equipo de plataforma: tareas, doble
+  // aprobación, personas del equipo, bitácora y "Mi seguridad".
+  {
+    path: '/plataforma/equipo',
+    label: 'Equipo y seguridad',
+    icon: ShieldIcon,
+    roles: PLATFORM_TEAM_ROLES,
+  },
+  // Correos: plantillas de los correos por evento y de los envíos masivos,
+  // editables con vista previa y versiones — mismos roles que /plataforma/*.
+  {
+    path: '/plataforma/correos',
+    label: 'Correos',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
   },

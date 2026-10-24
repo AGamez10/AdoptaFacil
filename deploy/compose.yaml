@@ -1,0 +1,171 @@
+# AdoptaFácil — despliegue de producción en un VPS (decisión D11: Docker Compose
+# + Caddy, sin Kubernetes). Guía completa: docs/operacion/DESPLIEGUE_VPS.md.
+#
+#   cp deploy/.env.example deploy/.env   # y rellenar los secretos
+#   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
+#
+# Orden de arranque: postgres + redis sanos -> migrate (migraciones, rotación
+# del rol de runtime y chequeo de postura RLS) termina OK -> api sana -> caddy.
+# Si la postura RLS falla, la API no arranca.
+#
+# Redes: `data` es interna (sin salida ni puertos publicados): solo api y
+# migrate llegan a Postgres y Redis. Solo Caddy publica puertos (80/443).
+
+name: adoptafacil
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [data]
+    shm_size: 256mb
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    # noeviction: BullMQ exige que Redis nunca descarte claves de las colas.
+    # Sin contraseña mientras la API descarte las credenciales de REDIS_URL
+    # (BLD-003, lo corrige el hilo "Arranque seguro y flags"); hasta entonces
+    # Redis solo es alcanzable desde la red interna `data`.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redis_data:/data
+    networks: [data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/docker/api.Dockerfile
+      target: migrate
+    image: adoptafacil-migrate:${RELEASE:-local}
+    restart: 'no'
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data]
+    logging: *logging
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/docker/api.Dockerfile
+      target: runtime
+    image: adoptafacil-api:${RELEASE:-local}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      API_PORT: '3000'
+      # La API solo usa el rol de runtime (sin BYPASSRLS). DATABASE_URL es
+      # obligatoria en la validación de entorno, pero la API no la usa: se le da
+      # la misma cadena del rol de runtime para que el contenedor nunca tenga
+      # la contraseña del owner.
+      DATABASE_URL: postgresql://adoptafacil_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DATABASE_URL_APP: postgresql://adoptafacil_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://redis:6379
+      API_CORS_ORIGIN: https://${APP_DOMAIN:?APP_DOMAIN}
+      WEB_BASE_URL: https://${APP_DOMAIN}
+      STORAGE_DRIVER: disk
+      STORAGE_DISK_ROOT: /var/lib/adoptafacil/storage
+      STORAGE_MAX_FILE_MB: ${STORAGE_MAX_FILE_MB:-15}
+      STORAGE_PUBLIC_BASE_URL: https://${APP_DOMAIN}/api
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET}
+      SIGNATURE_ENCRYPTION_KEY: ${SIGNATURE_ENCRYPTION_KEY:?SIGNATURE_ENCRYPTION_KEY}
+      # Caddy es el único proxy delante de la API; el límite de peticiones se
+      # comparte en Redis (exigidos por la guarda de producción, R0-1/R1-3).
+      TRUST_PROXY_HOPS: '1'
+      THROTTLER_STORAGE: redis
+    # Drivers e integraciones (NOTIFICATION_DRIVER, SMTP_*, PAYMENT_DRIVER,
+    # AUTH_IDENTITY_DRIVER, GOOGLE_OAUTH_CLIENT_ID, …) van en deploy/api.env:
+    # la validación de la API rechaza variables vacías, así que lo que no se
+    # use debe faltar, no quedar en blanco. Ver deploy/api.env.example.
+    env_file:
+      - path: ./api.env
+        required: false
+    volumes:
+      - api_storage:/var/lib/adoptafacil/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks: [data, edge]
+    logging: *logging
+
+  caddy:
+    build:
+      context: ..
+      dockerfile: deploy/docker/web.Dockerfile
+      target: edge
+      args:
+        # Relativa: cada host (dominio principal o <org>.APP_DOMAIN) llama a la
+        # API en su propio origen a través de Caddy. Ver deploy/Caddyfile.
+        VITE_API_URL: /api
+        PORTALS_TLS: ${PORTALS_TLS:-off}
+        VITE_PORTAL_BASE_DOMAIN: ${VITE_PORTAL_BASE_DOMAIN:-}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_PAYMENT_PROVIDER: ${VITE_PAYMENT_PROVIDER:-}
+    image: adoptafacil-edge:${RELEASE:-local}
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL}
+      PORTALS_TLS: ${PORTALS_TLS:-off}
+      # Credenciales DNS del proveedor elegido en PORTALS_TLS (solo una se usa).
+      # Viven en deploy/.env del servidor, nunca en el repo.
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      NAMECHEAP_API_USER: ${NAMECHEAP_API_USER:-}
+      NAMECHEAP_API_KEY: ${NAMECHEAP_API_KEY:-}
+      NAMECHEAP_CLIENT_IP: ${NAMECHEAP_CLIENT_IP:-}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [edge]
+    logging: *logging
+
+networks:
+  data:
+    internal: true
+  edge: {}
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_storage:
+  caddy_data:
+  caddy_config:

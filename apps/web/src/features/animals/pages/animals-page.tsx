@@ -26,6 +26,7 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { useFeature } from '../../../shell/capabilities';
 import { AnimalDetailPanel } from '../components/animal-detail-panel';
 import { AnimalFormModal } from '../components/animal-form-modal';
 import { AnimalBehaviorDisclosureModal } from '../components/animal-behavior-disclosure-modal';
@@ -99,7 +100,10 @@ export function AnimalsPage() {
   // S2-03-REV: matches `SponsorshipPlansController.WRITE_ROLES` VERBATIM — no
   // Operator/Veterinarian, unlike the broader `canManage` above (M07 money
   // gate is narrower than M03's own edit gate).
-  const canManageSponsorship = hasRole(Role.Owner) || hasRole(Role.Administrator);
+  // Hidden while the sponsorships module is off (R1-1): its API answers 404.
+  const sponsorshipsOn = useFeature('sponsorships');
+  const canManageSponsorship =
+    sponsorshipsOn && (hasRole(Role.Owner) || hasRole(Role.Administrator));
   const { toast } = useToast();
 
   const [animals, setAnimals] = useState<Animal[]>([]);
@@ -261,7 +265,7 @@ export function AnimalsPage() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
             <div className={cn('space-y-3', selectedId && 'hidden lg:block')}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-row items-center gap-2">
                 <div className="relative flex-1">
                   <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -269,14 +273,14 @@ export function AnimalsPage() {
                     placeholder="Buscar por nombre…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8"
+                    className="!pl-9"
                   />
                 </div>
                 <select
                   aria-label="Filtrar por especie"
                   value={speciesFilter}
                   onChange={(e) => setSpeciesFilter(e.target.value as 'all' | AnimalSpecies)}
-                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-40"
+                  className="flex h-10 w-32 shrink-0 rounded-md border border-input bg-background px-2 py-2 text-sm sm:w-40 sm:px-3"
                 >
                   {SPECIES_FILTER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>

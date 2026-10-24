@@ -74,8 +74,11 @@ describe('RegisterPage — Organization vs Person', () => {
     await user.type(screen.getByLabelText('Nombre de la organización'), 'Fundación Patitas');
     await user.type(screen.getByLabelText('Nombre de contacto'), 'Ana Ruiz');
     await user.type(screen.getByLabelText('Correo electrónico'), 'org@patitas.org');
-    await user.type(screen.getByLabelText('Contraseña'), 'supersecret');
-    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
+    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret12');
+    await user.click(screen.getByTestId('org-legal-terms'));
+    await user.click(screen.getByTestId('org-legal-data'));
+    await user.click(screen.getByTestId('org-legal-organization'));
 
     await user.click(screen.getByRole('button', { name: 'Crear cuenta de organización' }));
 
@@ -94,12 +97,40 @@ describe('RegisterPage — Organization vs Person', () => {
     await user.type(screen.getByLabelText('Nombre'), 'Camila');
     await user.type(screen.getByLabelText('Apellido'), 'Gómez');
     await user.type(screen.getByLabelText('Correo electrónico'), 'camila@correo.com');
-    await user.type(screen.getByLabelText('Contraseña'), 'supersecret');
-    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
+    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret12');
+    await user.click(screen.getByTestId('person-legal-terms'));
+    await user.click(screen.getByTestId('person-legal-data'));
 
     await user.click(screen.getByRole('button', { name: 'Crear cuenta personal' }));
 
     expect(await screen.findByRole('heading', { name: 'Inicio' })).toBeInTheDocument();
+  });
+
+  it('no crea la cuenta sin aceptar términos y autorización de datos (ninguna casilla viene marcada)', async () => {
+    const user = userEvent.setup();
+    renderShell({ route: '/register', session: { initialStatus: 'unauthenticated' } });
+
+    await user.click(screen.getByRole('tab', { name: 'Persona' }));
+    expect(screen.getByTestId('person-legal-terms')).not.toBeChecked();
+    expect(screen.getByTestId('person-legal-data')).not.toBeChecked();
+    expect(screen.getByTestId('person-legal-commercial')).not.toBeChecked();
+    expect(screen.getByTestId('person-legal-ai')).not.toBeChecked();
+    await user.type(screen.getByLabelText('Nombre'), 'Camila');
+    await user.type(screen.getByLabelText('Apellido'), 'Gómez');
+    await user.type(screen.getByLabelText('Correo electrónico'), 'camila@correo.com');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
+    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret12');
+    await user.click(screen.getByTestId('person-legal-terms'));
+
+    await user.click(screen.getByRole('button', { name: 'Crear cuenta personal' }));
+
+    expect(
+      await screen.findByText(
+        'Para crear la cuenta debes aceptar los términos y autorizar el tratamiento de datos.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Inicio' })).not.toBeInTheDocument();
   });
 
   it('rejects mismatched passwords', async () => {
@@ -110,7 +141,7 @@ describe('RegisterPage — Organization vs Person', () => {
     await user.type(screen.getByLabelText('Nombre'), 'Camila');
     await user.type(screen.getByLabelText('Apellido'), 'Gómez');
     await user.type(screen.getByLabelText('Correo electrónico'), 'camila@correo.com');
-    await user.type(screen.getByLabelText('Contraseña'), 'supersecret');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
     await user.type(screen.getByLabelText('Confirmar contraseña'), 'different1');
 
     await user.click(screen.getByRole('button', { name: 'Crear cuenta personal' }));

@@ -15,6 +15,7 @@ import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port'
 import { addAnimalIdCardPage, animalCardCode, safe } from './animal-id-card.renderer';
 import { AnimalsService } from './animals.service';
 import { ClinicalService } from './clinical.service';
+import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
 
 const TYPE_LABELS: Record<ClinicalEventType, string> = {
   [ClinicalEventType.Vaccine]: 'Vacuna',
@@ -227,6 +228,7 @@ export class CarnetService {
       }
     }
 
+    await stampPlatformDocumentNotice(pdf);
     const bytes = await pdf.save();
     return Buffer.from(bytes);
   }

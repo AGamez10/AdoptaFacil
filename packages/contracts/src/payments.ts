@@ -84,9 +84,13 @@ export interface CreateCollectionInput {
    * `FakePaymentAdapter`, existing tests, and callers with no user present to
    * tokenize a card (`SponsorshipBillingService`'s automated daily cron — see
    * its header comment for why) keep compiling/working unchanged.
+   * @deprecated Mercado Pago retirado 2026-10-17: no adapter reads it (ePayco collects in its own checkout).
    */
   cardToken?: string;
-  /** MercadoPago's own payment method id from the Brick (e.g. 'visa', 'master'). */
+  /**
+   * MercadoPago's own payment method id from the Brick (e.g. 'visa', 'master').
+   * @deprecated Mercado Pago retirado 2026-10-17.
+   */
   paymentMethodId?: string;
   /**
    * 'credit_card' | 'debit_card' — MercadoPago Orders requires this alongside
@@ -95,9 +99,13 @@ export interface CreateCollectionInput {
    * 'credit_card' when unknown.
    * TODO(client): confirm against the live Brick (real test cards) whether
    * debit needs explicit handling once MercadoPago hands over sandbox access.
+   * @deprecated Mercado Pago retirado 2026-10-17.
    */
   paymentMethodType?: 'credit_card' | 'debit_card';
-  /** Installments chosen in the Brick (MercadoPago requires it even for 1). */
+  /**
+   * Installments chosen in the Brick (MercadoPago requires it even for 1).
+   * @deprecated Mercado Pago retirado 2026-10-17.
+   */
   installments?: number;
   /**
    * Split de Pagos 1:1 (T-OAuth-Connect) — the BENEFICIARY organization's own
@@ -110,8 +118,53 @@ export interface CreateCollectionInput {
    * of this task; see `MercadoPagoPaymentAdapter.createCollection`). Absent
    * ⇒ the old single-account behavior (everything settles to AdoptaFácil's
    * own account).
+   * @deprecated Mercado Pago retirado 2026-10-17: no service sets it and no adapter reads it.
    */
   sponsorMpUserId?: string;
+  /**
+   * ADR-PAG-001 (cobro directo, sin custodia): the BENEFICIARY organization's
+   * own gateway credentials, resolved SERVER-SIDE by the calling service from
+   * the org's connected account. The real adapter creates the charge WITH
+   * these credentials, so the organization is the collector and the money
+   * lands in its account. SERVER-ONLY: never serialized to a client, never
+   * logged, never audited. The real driver refuses to charge without it.
+   * @deprecated Mercado Pago retirado 2026-10-17: Mercado Pago-only (OAuth token); use `epaycoCollector`.
+   */
+  collector?: CollectorCredentials;
+  /**
+   * ADR-PAG-002 (ePayco): the BENEFICIARY organization's own ePayco merchant
+   * keys, resolved SERVER-SIDE from its connected account. Same rules as
+   * `collector`: server-only, never serialized, logged or audited. The ePayco
+   * driver refuses to charge without it.
+   */
+  epaycoCollector?: EpaycoCollectorCredentials;
+}
+
+/**
+ * The organization's own ePayco merchant keys (dashboard → Integraciones →
+ * Llaves API). `custId` and `publicKey` are not secrets; `privateKey` and
+ * `pKey` are, and are stored encrypted at rest.
+ */
+export interface EpaycoCollectorCredentials {
+  /** `P_CUST_ID_CLIENTE`: the merchant id at ePayco. Not a secret. */
+  custId: string;
+  /** `P_KEY`: signs/verifies the confirmation (`x_signature`). Secret. */
+  pKey: string;
+  /** `PUBLIC_KEY` for the Apify login. Not a secret. */
+  publicKey: string;
+  /** `PRIVATE_KEY` for the Apify login. Secret. */
+  privateKey: string;
+}
+
+/**
+ * Server-only credentials of the organization that receives the money.
+ * @deprecated Mercado Pago retirado 2026-10-17: Mercado Pago OAuth credentials; see `EpaycoCollectorCredentials`.
+ */
+export interface CollectorCredentials {
+  /** The org's OAuth access token at the gateway. Secret. */
+  accessToken: string;
+  /** The org's account id at the gateway (MP `user_id`). Not a secret. */
+  accountId: string;
 }
 
 export interface CollectionResult {
@@ -126,6 +179,12 @@ export interface CollectionResult {
    * present.
    */
   paymentLinkUrl?: string;
+  /**
+   * ePayco checkout v2: the session the browser opens with
+   * `ePayco.checkout.configure({ sessionId })`. Ephemeral, like
+   * `paymentLinkUrl`. Absent for every other driver.
+   */
+  checkoutSessionId?: string;
 }
 
 /** Normalized, idempotent webhook event (dedup by `dedupKey`). */
@@ -135,6 +194,16 @@ export interface NormalizedWebhookEvent {
   status: PaymentStatus;
   /** Stable key to dedup repeated deliveries of the same event. */
   dedupKey: string;
+  /**
+   * What the gateway reports was charged, read back from its API (integer COP
+   * pesos). Optional/additive: the caller compares it with the stored
+   * `amountCharged` and never settles a donation on a mismatch (PAY-003).
+   */
+  amountCharged?: number;
+  /** Currency reported by the gateway, when it reports one. */
+  currency?: string;
+  /** Account that received the money, as established by the read-back. */
+  receiverAccountId?: string;
 }
 
 /**
@@ -148,6 +217,15 @@ export interface NormalizedWebhookEvent {
 export interface WebhookVerificationContext {
   headers?: Record<string, string | undefined>;
   query?: Record<string, string | undefined>;
+  /**
+   * ADR-PAG-001: credentials of the organization that owns the notified
+   * payment (resolved server-side from the notification's account id). The
+   * real adapter reads the payment back WITH them. Server-only.
+   * @deprecated Mercado Pago retirado 2026-10-17: use `epaycoCollector`.
+   */
+  collector?: CollectorCredentials;
+  /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
+  epaycoCollector?: EpaycoCollectorCredentials;
 }
 
 /** Colombian bank account type (RF26 payouts — ahorros/corriente). */
@@ -236,6 +314,10 @@ export interface PayoutView {
 }
 
 // ============================================================================
+// DEPRECATED — Mercado Pago retirado del producto el 2026-10-17 (decisión del
+// dueño): los endpoints `/org/mercadopago/*` ya no existen y la tabla con los
+// tokens se eliminó (migración 20261017110000). Los tipos se conservan solo
+// porque los contratos son aditivos (invariante #6).
 // Split de Pagos 1:1 (T-OAuth-Connect) — "conectar tu cuenta de Mercado Pago"
 // per organization via OAuth. This is ONLY the connect infra (these DTOs never
 // carry the access/refresh tokens); using the connected `mpUserId` to create an
@@ -244,13 +326,15 @@ export interface PayoutView {
 
 /** Returned by `GET /org/mercadopago/connect` — the frontend does the actual
  *  full-page navigation (`window.location.href = authorizeUrl`), same
- *  pattern as a donation's `paymentLinkUrl`. */
+ *  pattern as a donation's `paymentLinkUrl`.
+ *  @deprecated Mercado Pago retirado 2026-10-17: the endpoint no longer exists. */
 export interface MercadoPagoConnectUrlView {
   authorizeUrl: string;
 }
 
 /** Returned by `GET /org/mercadopago/status` — NEVER the tokens, only enough
- *  to render "Cuenta conectada" vs. the connect button. */
+ *  to render "Cuenta conectada" vs. the connect button.
+ *  @deprecated Mercado Pago retirado 2026-10-17: the endpoint no longer exists; see `EpaycoConnectStatusView`. */
 export interface MercadoPagoConnectStatusView {
   connected: boolean;
   connectedAt?: string;
@@ -319,14 +403,31 @@ export function roundPesosHalfUp(value: number): number {
 }
 
 /** Commission components computed from a gross amount (each rounded to the peso). */
-function feesFromGross(gross: number): Omit<PaymentBreakdown, 'amountCharged' | 'gross' | 'net'> {
-  const { platformRate, gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
+function feesFromGross(
+  gross: number,
+  platformRate: number,
+): Omit<PaymentBreakdown, 'amountCharged' | 'gross' | 'net'> {
+  const { gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
   const platformFee = roundPesosHalfUp(platformRate * gross);
   const platformIva = roundPesosHalfUp(ivaRate * platformFee);
   const gatewayFee = roundPesosHalfUp(gatewayRate * gross + gatewayFixed);
   const gatewayIva = roundPesosHalfUp(ivaRate * gatewayFee);
   return { platformFee, platformIva, gatewayFee, gatewayIva };
 }
+
+/** Optional overrides for {@link computeBreakdown}. */
+export interface BreakdownRates {
+  /** Platform commission over gross. Defaults to `PAYMENT_FEE_CONFIG.platformRate`. */
+  platformRate?: number;
+}
+
+/**
+ * Rates for direct collection (ADR-PAG-001): the organization collects with its
+ * own account and AdoptaFácil takes NO per-transaction fee (its revenue comes
+ * from subscription plans). The 4 % only returns with a gateway split at
+ * source confirmed in writing.
+ */
+export const DIRECT_COLLECTION_RATES: Readonly<Required<BreakdownRates>> = { platformRate: 0 };
 
 /**
  * Compute the auditable breakdown for a collection.
@@ -344,12 +445,17 @@ function feesFromGross(gross: number): Omit<PaymentBreakdown, 'amountCharged' | 
 export function computeBreakdown(
   intendedAmount: number,
   commissionPayer: CommissionPayer,
+  rates: BreakdownRates = {},
 ): PaymentBreakdown {
   if (!Number.isInteger(intendedAmount) || intendedAmount <= 0) {
     throw new RangeError('intendedAmount must be a positive integer number of COP pesos');
   }
 
-  const { platformRate, gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
+  const platformRate = rates.platformRate ?? PAYMENT_FEE_CONFIG.platformRate;
+  if (!Number.isFinite(platformRate) || platformRate < 0 || platformRate >= 1) {
+    throw new RangeError('platformRate must be in [0, 1)');
+  }
+  const { gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
 
   let gross: number;
   if (commissionPayer === 'organization') {
@@ -364,7 +470,7 @@ export function computeBreakdown(
     gross = roundPesosHalfUp((intendedAmount + fixed) / (1 - proportional));
   }
 
-  const fees = feesFromGross(gross);
+  const fees = feesFromGross(gross, platformRate);
   const net = gross - fees.platformFee - fees.platformIva - fees.gatewayFee - fees.gatewayIva;
 
   return { amountCharged: gross, gross, ...fees, net };

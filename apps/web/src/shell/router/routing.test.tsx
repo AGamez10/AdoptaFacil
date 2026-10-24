@@ -23,7 +23,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** La página de donar consulta si la organización tiene MercadoPago conectado. */
+/** La página de donar consulta si la organización tiene ePayco conectado. */
 function stubOrgConnected() {
   vi.stubGlobal(
     'fetch',
@@ -57,7 +57,7 @@ describe('routing — public vs protected', () => {
   it('shows the public general portal at "/" to an unauthenticated visitor (no redirect to login)', async () => {
     renderShell({ route: '/', session: { initialStatus: 'unauthenticated' } });
     expect(
-      await screen.findByRole('heading', { name: 'Encuentra a tu próxima mascota' }),
+      await screen.findByRole('heading', { name: 'Adopta un amigo. Cambia dos vidas.' }),
     ).toBeInTheDocument();
     // "Ingresar" appears in both the navbar (banner) and the footer.
     expect(
@@ -76,7 +76,7 @@ describe('routing — public vs protected', () => {
     // a link, now — see nav-items.ts.
     expect(screen.getByRole('button', { name: 'Donaciones' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Encuentra a tu próxima mascota' }),
+      screen.queryByRole('heading', { name: 'Adopta un amigo. Cambia dos vidas.' }),
     ).not.toBeInTheDocument();
     // The system-health block is platform-admin only (F-VISUAL-02); the default
     // test session carries no roles, so it stays hidden here. Covered for both

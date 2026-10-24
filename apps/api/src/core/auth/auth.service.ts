@@ -18,11 +18,15 @@ import {
   type IdentityPort,
   type LoginDto,
   type RegisterOrganizationDto,
+  type LegalAcceptanceItem,
   type RegisterPersonDto,
+  requiredLegalDocuments,
+  OrganizationStatus,
   Role,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import { IDENTITY_PORT } from '../identity/identity.port';
+import { LegalService, type LegalRequestContext } from '../legal/legal.service';
 import { NOTIFICATION_PORT, type NotificationPort } from '../notifications/notification.port';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DEFAULT_ANIMAL_BREEDS } from '../../modules/animals/animal-breeds.catalog';
@@ -54,24 +58,41 @@ export class AuthService {
     @Inject(IDENTITY_PORT) private readonly identity: IdentityPort,
     private readonly audit: AuditService,
     config: ConfigService<Env, true>,
+    private readonly legal: LegalService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
   }
 
-  async registerOrganization(dto: RegisterOrganizationDto): Promise<AuthSession> {
+  async registerOrganization(
+    dto: RegisterOrganizationDto,
+    context: LegalRequestContext = {},
+  ): Promise<AuthSession> {
     return this.register(
       'organization',
       dto.email,
       dto.password,
       dto.displayName,
       dto.organizationName,
+      dto.legalAcceptances,
+      context,
     );
   }
 
-  async registerPerson(dto: RegisterPersonDto): Promise<AuthSession> {
+  async registerPerson(
+    dto: RegisterPersonDto,
+    context: LegalRequestContext = {},
+  ): Promise<AuthSession> {
     // A person gets their own personal organization so multi-tenant RLS applies
     // uniformly to every principal.
-    return this.register('person', dto.email, dto.password, dto.displayName, dto.displayName);
+    return this.register(
+      'person',
+      dto.email,
+      dto.password,
+      dto.displayName,
+      dto.displayName,
+      dto.legalAcceptances,
+      context,
+    );
   }
 
   private async register(
@@ -80,8 +101,16 @@ export class AuthService {
     password: string,
     displayName: string,
     organizationName: string,
+    legalAcceptances: LegalAcceptanceItem[] | undefined,
+    context: LegalRequestContext,
   ): Promise<AuthSession> {
     const normalizedEmail = email.trim().toLowerCase();
+    // Autorización previa (Ley 1581 art. 9): sin los documentos obligatorios en
+    // su versión vigente no se guarda ningún dato de la cuenta.
+    const acceptances = this.legal.assertAcceptances(
+      legalAcceptances,
+      requiredLegalDocuments(accountType),
+    );
 
     const existing = await this.prisma.authCredential.findUnique({
       where: { email: normalizedEmail },
@@ -98,7 +127,17 @@ export class AuthService {
     // accepts the insert. `organizations` and the auth tables are not tenant-
     // scoped, but writing them inside the same transaction is fine.
     await this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.organization.create({ data: { id: organizationId, name: organizationName } });
+      // R2-1 (AF-023): a new ORGANIZATION starts as a draft, not public until
+      // its Owner submits it and the platform approves it; a person's personal
+      // organization has nothing to review.
+      await tx.organization.create({
+        data: {
+          id: organizationId,
+          name: organizationName,
+          status:
+            accountType === 'organization' ? OrganizationStatus.Draft : OrganizationStatus.Approved,
+        },
+      });
       await tx.user.create({
         data: { id: userId, organizationId, accountType, email: normalizedEmail, displayName },
       });
@@ -126,7 +165,18 @@ export class AuthService {
           skipDuplicates: true,
         });
       }
+      // Prueba de la autorización, en la MISMA transacción que la cuenta: no
+      // existe cuenta sin su aceptación registrada, ni aceptación sin cuenta.
+      await this.legal.recordWithTx(tx, {
+        organizationId,
+        actorUserId: userId,
+        subject: { type: 'user', userId },
+        items: acceptances,
+        channel: 'registration',
+        context,
+      });
     });
+    await this.legal.notifyAcceptance(normalizedEmail, acceptances);
 
     const user: AuthenticatedUser = {
       id: userId,
@@ -174,7 +224,7 @@ export class AuthService {
       where: { email: normalizedEmail },
     });
 
-    // Always run a bcrypt comparison (dummy hash when the user is unknown) so
+    // Always run a hash comparison (dummy hash when the user is unknown) so
     // response timing does not reveal whether the email exists.
     const passwordOk = await this.passwords.verify(
       dto.password,
@@ -182,6 +232,14 @@ export class AuthService {
     );
     if (!credential || !passwordOk) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+    // AF-026: a legacy (bcrypt) hash is upgraded to Argon2id right after a
+    // successful sign-in — the only moment the plaintext is available.
+    if (this.passwords.needsRehash(credential.passwordHash)) {
+      await this.prisma.authCredential.update({
+        where: { id: credential.id },
+        data: { passwordHash: await this.passwords.hash(dto.password) },
+      });
     }
 
     const accountType = credential.accountType as AccountType;
@@ -285,7 +343,9 @@ export class AuthService {
     const displayName = claims.name.trim() || normalizedEmail;
 
     await this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.organization.create({ data: { id: organizationId, name: displayName } });
+      await tx.organization.create({
+        data: { id: organizationId, name: displayName, status: OrganizationStatus.Approved },
+      });
       await tx.user.create({
         data: {
           id: userId,
@@ -408,6 +468,9 @@ export class AuthService {
     const resetLink = buildPasswordResetLink(this.webBaseUrl, token);
     await this.notifications.send({
       to: normalizedEmail,
+      // Branded, superadmin-editable copy (required event: can't be disabled);
+      // subject/body below are the plain fallback.
+      template: { event: 'auth.password_reset', data: { enlace: resetLink } },
       subject: 'Restablece tu contraseña de AdoptaFácil',
       body:
         'Hola,\n\n' +

@@ -8,6 +8,7 @@ import {
   PayloadTooLargeException,
   Put,
   Query,
+  Req,
   Res,
   UploadedFile,
   UseGuards,
@@ -15,16 +16,22 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { Role } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlansService } from '../plans/plans.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import type { RequestUser } from '../auth/auth.types';
+import type { AuthenticatedRequest, RequestUser } from '../auth/auth.types';
+import {
+  PLATFORM_SECURITY_CONFIG,
+  type PlatformSecurityConfig,
+} from '../auth/mfa/platform-security.config';
+import { enforcePlatformMfa } from '../rbac/platform-mfa.policy';
 import { STORAGE_PORT, type StoragePort } from './storage.port';
-import { ALLOWED_CONTENT_TYPES, parseStorageKey } from './storage-keys';
+import { isAllowedUpload, parseByteRange, parseStorageKey } from './storage-keys';
 
 /** Minimal shape of a multer memory-storage file (no @types/multer installed). */
 interface UploadedFileLike {
@@ -56,7 +63,9 @@ export class StorageController {
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly plans: PlansService,
     config: ConfigService<Env, true>,
+    @Inject(PLATFORM_SECURITY_CONFIG) private readonly platformSecurity: PlatformSecurityConfig,
   ) {
     this.maxMb = config.get('STORAGE_MAX_FILE_MB', { infer: true });
     this.maxBytes = this.maxMb * 1024 * 1024;
@@ -89,10 +98,12 @@ export class StorageController {
     if (file.size > this.maxBytes) {
       throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);
     }
-    if (!ALLOWED_CONTENT_TYPES.includes(file.mimetype)) {
+    if (!isAllowedUpload(file.mimetype, parsed.visibility)) {
       throw new BadRequestException(`Unsupported content type: ${file.mimetype}`);
     }
 
+    // Cuota de espacio del plan (solo con los planes encendidos).
+    await this.plans.assertStorageAvailable(parsed.organizationId, file.size);
     await this.storage.saveObject(key, file.buffer, file.mimetype);
     await this.audit.record({
       organizationId: parsed.organizationId,
@@ -106,7 +117,11 @@ export class StorageController {
   }
 
   @Get('public')
-  async servePublic(@Query('key') key: string, @Res() res: Response): Promise<void> {
+  async servePublic(
+    @Query('key') key: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
     const parsed = parseStorageKey(key ?? '');
     if (!parsed || parsed.visibility !== 'public') {
       throw new NotFoundException();
@@ -116,6 +131,20 @@ export class StorageController {
       throw new NotFoundException();
     }
     res.setHeader('Content-Type', object.contentType ?? 'application/octet-stream');
+    // Rangos de bytes: Safari en iPhone no reproduce un video sin ellos.
+    res.setHeader('Accept-Ranges', 'bytes');
+    const size = object.data.length;
+    const range = parseByteRange(req.headers.range, size);
+    if (range === 'invalid') {
+      res.status(416).setHeader('Content-Range', `bytes */${size}`);
+      res.end();
+      return;
+    }
+    if (range) {
+      res.status(206).setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+      res.send(object.data.subarray(range.start, range.end + 1));
+      return;
+    }
     res.send(object.data);
   }
 
@@ -124,6 +153,7 @@ export class StorageController {
   async servePrivate(
     @CurrentUser() user: RequestUser,
     @Query('key') key: string,
+    @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ): Promise<void> {
     const parsed = parseStorageKey(key ?? '');
@@ -137,6 +167,14 @@ export class StorageController {
       user.organizationId === parsed.organizationId && roles.has(Role.Owner);
     if (!isPlatform && !isOwnerOfOwningOrg) {
       throw new ForbiddenException('Not allowed to download this document');
+    }
+    // F19: reaching another org's document only through platform authority
+    // needs a fresh second factor, and lands in the staff member's team trail.
+    if (!isOwnerOfOwningOrg) {
+      const platformRoles = [Role.PlatformAdmin, Role.PlatformSuperAdmin].filter((r) =>
+        roles.has(r),
+      );
+      await enforcePlatformMfa(req, platformRoles, this.prisma, this.platformSecurity);
     }
 
     const object = await this.storage.readObject(key);

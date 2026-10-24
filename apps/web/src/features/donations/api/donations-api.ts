@@ -52,7 +52,7 @@ export async function fetchGuestDonationAccess(token: string): Promise<GuestDona
 
 /**
  * Public: whether the organization can receive donations (it has connected its
- * MercadoPago account). No auth. Throws on a non-2xx so the caller can tell
+ * ePayco account). No auth. Throws on a non-2xx so the caller can tell
  * "not connected" (`canReceiveDonations: false`) from "could not verify".
  */
 export async function fetchOrganizationDonationAvailability(
@@ -66,6 +66,28 @@ export async function fetchOrganizationDonationAvailability(
   }
   const body = (await response.json()) as Partial<DonationOrganizationAvailability> | null;
   return { organizationId, canReceiveDonations: body?.canReceiveDonations === true };
+}
+
+/**
+ * Fail-open variant for the portal's "Donar" buttons: only an EXPLICIT
+ * `canReceiveDonations: false` reads as `unavailable`; any failure or odd body
+ * is `unknown` (the donation page re-checks and decides). Never throws.
+ */
+export async function checkOrganizationDonationAvailability(
+  organizationId: string,
+): Promise<'available' | 'unavailable' | 'unknown'> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/public/donations/organizations/${encodeURIComponent(organizationId)}/availability`,
+    );
+    if (!response.ok) return 'unknown';
+    const body = (await response.json()) as { canReceiveDonations?: unknown } | null;
+    if (body?.canReceiveDonations === true) return 'available';
+    if (body?.canReceiveDonations === false) return 'unavailable';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 /**

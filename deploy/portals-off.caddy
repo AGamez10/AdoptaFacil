@@ -1,0 +1,2 @@
+# PORTALS_TLS=off: sin portales por subdominio; las organizaciones se ven en
+# https://APP_DOMAIN/o/<slug>. Archivo vacío a propósito.

@@ -1,15 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import type { PublicHeroBanner } from '@adoptafacil/contracts';
-import { buttonVariants, cn } from '@adoptafacil/ui';
 import { useSession } from '../../../shell/auth';
 import { FullPageLoading, PublicFooter, PublicNavbar } from '../../../shell/layout';
+import { STATIC_PAGES } from '../../../seo/page-meta.js';
+import { organizationLd, useSeo, websiteLd } from '../../../seo/seo';
 import {
-  GENERAL_CATALOG_HEADING_ID,
-  GeneralCatalogSection,
-} from '../components/general-catalog-section';
-import { GeneralPortalFeaturesSection } from '../components/general-portal-features-section';
-import { HeroPhotoGrid } from '../components/hero-photo-grid';
+  ActiveCampaignsSection,
+  AdoptionStepsSection,
+  CommunitySection,
+  FinalCtaSection,
+  ForOrganizationsSection,
+  ImpactSection,
+  LANDING_CATALOG_ID,
+  LandingHero,
+  PromisesSection,
+  WaitingAnimalsSection,
+  WaysToHelpSection,
+  useCatalogSnapshot,
+} from '../../landing';
+import { buildAdoptPath } from '../model/adopt-filters';
+
+const LEGACY_SPECIES: Record<string, 'dog' | 'cat'> = { perros: 'dog', gatos: 'cat' };
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -35,6 +47,17 @@ function useHeroBannerPhotos(): string[] {
   return photos;
 }
 
+/** Los enlaces `/#organizaciones` y `/#ayudar` llevan a su sección
+ *  (react-router no desplaza a anclas por sí solo). */
+function useScrollToHash() {
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    target?.scrollIntoView({ block: 'start' });
+  }, [hash]);
+}
+
 /**
  * Portal GENERAL de entrada de AdoptaFácil (F-LANDING-01, M14, RF25, documento
  * base §8, objetivo #7 "bajar barreras de entrada"). ES la nueva "/" pública:
@@ -51,7 +74,16 @@ function useHeroBannerPhotos(): string[] {
  */
 export function GeneralPortalPage() {
   const { status } = useSession();
+  const { hash, search } = useLocation();
   const heroBannerPhotos = useHeroBannerPhotos();
+  const snapshot = useCatalogSnapshot();
+  useSeo({
+    title: STATIC_PAGES['/'].title,
+    description: STATIC_PAGES['/'].description,
+    path: '/',
+    jsonLd: [organizationLd(), websiteLd()],
+  });
+  useScrollToHash();
 
   if (status === 'loading') {
     return <FullPageLoading label="Verificando tu sesión…" />;
@@ -61,59 +93,36 @@ export function GeneralPortalPage() {
     return <Navigate to="/inicio" replace />;
   }
 
+  // El catálogo completo vive ahora en /adoptar; los enlaces viejos
+  // (`/#adoptar`, `/?especie=gatos&ciudad=Medellín#adoptar`) siguen sirviendo.
+  const legacy = new URLSearchParams(search);
+  if (hash === `#${LANDING_CATALOG_ID}` || legacy.has('especie') || legacy.has('ciudad')) {
+    const species = LEGACY_SPECIES[legacy.get('especie') ?? ''] ?? 'all';
+    return <Navigate to={buildAdoptPath(species, legacy.get('ciudad'))} replace />;
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-foreground">
       <PublicNavbar />
 
       <main className="flex-1">
-        {/* Hero con marca (REFACTOR-VISUAL Fase C1) — franja navy a todo el ancho,
-            igual que el hero del mockup de referencia. El copy es el mismo que
-            ya existía (nunca se inventaron cifras: el mockup ilustra "3.482
-            adopciones formalizadas" etc., pero esos números no existen en
-            ningún endpoint público — se omiten en vez de fabricarse). */}
-        <section className="bg-navy px-4 py-16 text-white sm:px-6 sm:py-20">
-          <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-2 md:items-center">
-            <div className="space-y-6">
-              <h1 className="max-w-2xl font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-                Encuentra a tu <span className="text-brand-teal">próxima mascota</span>
-              </h1>
-              <p className="max-w-2xl text-white/70">
-                Explora animales en adopción de organizaciones de rescate en toda Colombia. Mirar el
-                catálogo no requiere una cuenta — solo para adoptar o donar te pediremos iniciar
-                sesión.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href={`#${GENERAL_CATALOG_HEADING_ID}`}
-                  className={cn(buttonVariants({ size: 'lg' }))}
-                >
-                  Ver mascotas en adopción
-                </a>
-                <Link
-                  to="/register"
-                  className={cn(
-                    buttonVariants({ variant: 'outline', size: 'lg' }),
-                    'border-white/20 bg-white/5 text-white hover:border-white hover:bg-white/10 hover:text-white',
-                  )}
-                >
-                  Soy una organización
-                </Link>
-              </div>
-            </div>
+        {/* Landing marca v3 (rediseño 2026-10): primero animales reales y
+            "Quiero adoptar", luego las formas de ayudar (donar y recursos
+            solo con su módulo encendido), cómo adoptar, la red en cifras
+            reales, campañas, comunidad, la propuesta
+            para organizaciones y el cierre. Ninguna cifra que no salga de
+            la API. */}
+        <LandingHero snapshot={snapshot} />
+        <WaitingAnimalsSection snapshot={snapshot} />
+        <WaysToHelpSection />
+        <AdoptionStepsSection photos={heroBannerPhotos} />
+        <ImpactSection snapshot={snapshot} />
 
-            {/* Collage (LANDING-MOCKUP) — decorativo por defecto; desde S-15
-                muestra las fotos reales que el PlatformAdmin suba en
-                `/plataforma/banner` (ver hero-photo-grid.tsx). El catálogo
-                real está más abajo. */}
-            <HeroPhotoGrid photos={heroBannerPhotos} />
-          </div>
-        </section>
-
-        <GeneralPortalFeaturesSection />
-
-        <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-10 sm:px-6">
-          <GeneralCatalogSection />
-        </div>
+        <ActiveCampaignsSection />
+        <CommunitySection />
+        <ForOrganizationsSection />
+        <PromisesSection />
+        <FinalCtaSection />
       </main>
 
       <PublicFooter />

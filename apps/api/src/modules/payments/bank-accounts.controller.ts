@@ -12,6 +12,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { BankAccountsService } from './bank-accounts.service';
 import { registerBankAccountSchema } from './bank-accounts.schemas';
+import { RequireFeature } from '../../core/features';
 
 /** Roles that manage the org's payout destination — same set as other
  *  org-management endpoints (Owner/Administrator), deny-by-default otherwise. */
@@ -23,6 +24,7 @@ const MANAGE_ROLES = [Role.Owner, Role.Administrator] as const;
  * Owner/Administrator (financial data), same guard order as every other
  * RBAC-protected controller in this codebase.
  */
+@RequireFeature('payments')
 @Controller('org/payout-bank-account')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...MANAGE_ROLES)

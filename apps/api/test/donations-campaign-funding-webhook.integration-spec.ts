@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { CampaignFundingService } from '../src/modules/campaigns/campaign-funding.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * Donations webhook → campaign funding enganche (T-057). When the gateway webhook
@@ -22,7 +23,7 @@ describe('Donations webhook → campaign funding enganche (T-057)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const applyApprovedCollection = jest.fn();
 
   let orgToken = '';
@@ -42,6 +43,7 @@ describe('Donations webhook → campaign funding enganche (T-057)', () => {
     const orgReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio T057',
         displayName: 'Owner T057',
         email: `t057-org-${randomUUID()}@test.local`,
@@ -54,7 +56,12 @@ describe('Donations webhook → campaign funding enganche (T-057)', () => {
 
     const personReg = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Donante T057', email: `t057-p-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Donante T057',
+        email: `t057-p-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = personReg.body.tokens.accessToken;
     orgIds.push(personReg.body.user.organizationId);

@@ -14,6 +14,7 @@
 // en payments.ts), IVA 19% solo sobre comisiones, COP (pesos enteros), sin
 // custodia de saldos.
 
+import type { LegalAcceptanceItem } from './legal';
 import type {
   CommissionPayer,
   PaymentBreakdown,
@@ -122,6 +123,15 @@ export interface Donation {
    * en vez de mostrar la pantalla de "gracias" localmente.
    */
   paymentLinkUrl?: string;
+  /**
+   * ePayco checkout v2 (ADR-PAG-002): sesión que el navegador abre con
+   * `ePayco.checkout.configure({ sessionId, type: 'onpage' })`. Mismas reglas
+   * que `paymentLinkUrl`: solo en la respuesta de `POST /donations`, nunca
+   * persistida. Ausente con cualquier otra pasarela.
+   */
+  checkoutSessionId?: string;
+  /** `true` cuando `checkoutSessionId` es de pruebas (sandbox de ePayco). */
+  checkoutTest?: boolean;
 }
 
 /**
@@ -176,6 +186,13 @@ export interface CreateDonationInput {
   /** "¿Donar de forma anónima frente a la organización?" (default `false`). */
   anonymous?: boolean;
   /**
+   * ADDITIVE: términos y autorización de datos aceptados por un donante
+   * INVITADO (sin cuenta). La API los exige en su versión vigente
+   * (`requiredGuestLegalDocuments`) cuando no hay sesión; una Persona
+   * autenticada ya los aceptó al registrarse y no los envía.
+   */
+  legalAcceptances?: LegalAcceptanceItem[];
+  /**
    * Checkout API (Orders) — T-OrdersAPI. Tokenized card data from MercadoPago's
    * Card Payment Brick (card number never reaches this backend). Optional on
    * this contract/DTO (additive — existing callers/tests that build this
@@ -183,10 +200,15 @@ export interface CreateDonationInput {
    * without one); the REAL gateway adapter requires it and throws a clear
    * error otherwise. See `CreateCollectionInput` (payments.ts) for the full
    * field-by-field rationale — these four mirror it verbatim.
+   * @deprecated Mercado Pago retirado 2026-10-17: the web no longer sends a card (ePayco collects in its
+   * own checkout). Kept because contracts are additive-only.
    */
   cardToken?: string;
+  /** @deprecated Mercado Pago retirado 2026-10-17. */
   paymentMethodId?: string;
+  /** @deprecated Mercado Pago retirado 2026-10-17. */
   paymentMethodType?: 'credit_card' | 'debit_card';
+  /** @deprecated Mercado Pago retirado 2026-10-17. */
   installments?: number;
 }
 
@@ -265,9 +287,9 @@ export interface GuestDonationAccess {
 
 /**
  * Proyección PÚBLICA y MÍNIMA para la pantalla de "gracias" post-checkout
- * (`GET /public/donations/status/:reference`), a la que MercadoPago redirige
- * al donante de vuelta (`back_urls` + `auto_return`) con `external_reference`
- * (== nuestro propio `collectionId`) en la query string. Deliberadamente
+ * (`GET /public/donations/status/:reference`), a la que la pasarela redirige
+ * al donante de vuelta con nuestra propia referencia (== `collectionId`) en la
+ * query string. Deliberadamente
  * acotada — mismo criterio de exposición que `DonationCertificateVerification`/
  * `GuestDonationAccess`: solo estado/monto/nombre de la organización, NUNCA la
  * identidad del donante ni ids internos.
@@ -283,7 +305,7 @@ export interface DonationPublicStatus {
  * PUBLIC availability of an organization to RECEIVE donations
  * (`GET /public/donations/organizations/:organizationId/availability`, no auth).
  * `canReceiveDonations` is `true` only when the organization has connected its
- * MercadoPago account (OAuth). Deliberately a single boolean — the connected
+ * ePayco account (Mercado Pago, retired 2026-10-17, no longer counts). Deliberately a single boolean — the connected
  * account id itself is never exposed.
  */
 export interface DonationOrganizationAvailability {

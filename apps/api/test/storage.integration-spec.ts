@@ -12,6 +12,7 @@ import type { Env } from '../src/config/env.validation';
 import { DiskStorageAdapter } from '../src/core/storage/disk-storage.adapter';
 import { STORAGE_PORT } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * T-108 storage endpoints with the REAL disk adapter (bytes persisted to a temp
@@ -24,7 +25,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const storageRoot = mkdtempSync(join(tmpdir(), 'adoptafacil-it-'));
 
   interface Actor {
@@ -37,6 +38,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio',
         displayName: 'Owner',
         email: `t108-${randomUUID()}@test.local`,
@@ -204,5 +206,41 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
     await upload(ownerB.token, docKey, docBytes, 'demanda.pdf', 'application/pdf').expect(403);
     // Disallowed content type → rejected.
     await upload(ownerA.token, photoKey, Buffer.from('hi'), 'note.txt', 'text/plain').expect(400);
+  });
+
+  it('accepts a public video (Historias cover), serves byte ranges, and never a video to a private key', async () => {
+    const video = await request(server)
+      .post('/org/profile/uploads')
+      .set('Authorization', `Bearer ${ownerA.token}`)
+      .send({ filename: 'portada.mp4', contentType: 'video/mp4' })
+      .expect(201);
+    const videoKey: string = video.body.key;
+    const videoBytes = Buffer.from(Array.from({ length: 100 }, (_, i) => i));
+    await upload(ownerA.token, videoKey, videoBytes, 'portada.mp4', 'video/mp4').expect(200);
+
+    const full = await request(server)
+      .get(`/storage/public?key=${encodeURIComponent(videoKey)}`)
+      .buffer()
+      .parse(binaryParser)
+      .expect(200);
+    expect(full.headers['accept-ranges']).toBe('bytes');
+    expect(full.headers['content-type']).toContain('video/mp4');
+
+    const part = await request(server)
+      .get(`/storage/public?key=${encodeURIComponent(videoKey)}`)
+      .set('Range', 'bytes=10-19')
+      .buffer()
+      .parse(binaryParser)
+      .expect(206);
+    expect(part.headers['content-range']).toBe('bytes 10-19/100');
+    expect((part.body as Buffer).equals(videoBytes.subarray(10, 20))).toBe(true);
+
+    await request(server)
+      .get(`/storage/public?key=${encodeURIComponent(videoKey)}`)
+      .set('Range', 'bytes=500-')
+      .expect(416);
+
+    // A video never goes into a private (legal document) key.
+    await upload(ownerA.token, docKey, videoBytes, 'x.mp4', 'video/mp4').expect(400);
   });
 });

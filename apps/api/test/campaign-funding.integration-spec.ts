@@ -8,6 +8,8 @@ import { CampaignFundingService } from '../src/modules/campaigns/campaign-fundin
 import { computeProgress } from '../src/modules/campaigns/campaign-progress';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Real campaign funding end-to-end (RF15 · T-055): an APPROVED campaign-attributed
@@ -23,7 +25,7 @@ describe('Campaign funding (RF15 · T-055)', () => {
   let funding: CampaignFundingService;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let tokenA = '';
   let tokenB = '';
@@ -37,12 +39,14 @@ describe('Campaign funding (RF15 · T-055)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Refugio ${tag}`,
         displayName: `Owner ${tag}`,
         email: `t055-${tag}-${randomUUID()}@test.local`,
         password,
       })
       .expect(201);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return { token: res.body.tokens.accessToken, orgId: res.body.user.organizationId };
   }
 
@@ -109,7 +113,12 @@ describe('Campaign funding (RF15 · T-055)', () => {
 
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Donante', email: `t055-p-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Donante',
+        email: `t055-p-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     orgIds.push(person.body.user.organizationId);

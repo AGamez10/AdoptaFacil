@@ -6,7 +6,7 @@
   white-space: nowrap;
   border-radius: var(--r-full);
   font-family: var(--font-sans);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   font-size: var(--fs-sm);
   transition: var(--transition-base);
   cursor: pointer;
@@ -19,7 +19,9 @@
 
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px var(--brand-light);
+    box-shadow:
+      0 0 0 2px var(--bg-surface),
+      0 0 0 4px hsl(var(--primary));
   }
 }
 

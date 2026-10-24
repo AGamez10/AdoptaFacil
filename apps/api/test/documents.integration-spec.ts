@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M01 organization documents (RF03, T-103): versioned uploads (history kept),
@@ -18,7 +19,7 @@ describe('Organization documents (M01, RF03: versioning + RBAC + platform review
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -30,6 +31,7 @@ describe('Organization documents (M01, RF03: versioning + RBAC + platform review
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: name,
         displayName: 'Owner',
         email: `t103-${randomUUID()}@test.local`,
@@ -92,7 +94,12 @@ describe('Organization documents (M01, RF03: versioning + RBAC + platform review
 
     const personRes = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'P', email: `t103-person-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'P',
+        email: `t103-person-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     person = {
       token: personRes.body.tokens.accessToken,

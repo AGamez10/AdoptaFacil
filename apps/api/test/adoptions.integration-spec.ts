@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M04 adoptions (T-028a) end-to-end: an authenticated PERSON applies to adopt a
@@ -19,7 +20,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const longMessage =
     'Tengo patio, tiempo y experiencia con perros rescatados; quiero darle un hogar.';
 
@@ -43,6 +44,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
     const refugeReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Patitas',
         displayName: 'Owner Refugio',
         email: `t028-refuge-${randomUUID()}@test.local`,
@@ -56,6 +58,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
     const personReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
         email: `t028-p-${randomUUID()}@test.local`,
         password,
@@ -68,6 +71,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
     const otherReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otro Refugio',
         displayName: 'Owner Otro',
         email: `t028-other-${randomUUID()}@test.local`,

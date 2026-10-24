@@ -3,10 +3,11 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown } from '@adoptafacil/contracts';
+import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * M05 donations (T-050, P1) end-to-end: an authenticated PERSON donates to an
@@ -22,7 +23,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   let orgToken = '';
   let orgId = '';
@@ -39,6 +40,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const orgReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio Beneficiario',
         displayName: 'Owner Refugio',
         email: `t050-org-${randomUUID()}@test.local`,
@@ -52,6 +54,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const otherReg = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Otra Org',
         displayName: 'Owner Otra',
         email: `t050-other-${randomUUID()}@test.local`,
@@ -64,6 +67,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const personReg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Persona Donante',
         email: `t050-p1-${randomUUID()}@test.local`,
         password,
@@ -76,6 +80,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const person2Reg = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: 'Otra Persona',
         email: `t050-p2-${randomUUID()}@test.local`,
         password,
@@ -110,7 +115,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
 
     expect(res.body.status).toBe('pending');
     expect(res.body.organizationId).toBe(orgId);
-    const expected = computeBreakdown(50000, 'organization');
+    const expected = computeBreakdown(50000, 'organization', DIRECT_COLLECTION_RATES);
     expect(res.body.amountCharged).toBe(50000);
     expect(res.body.breakdown).toEqual(expected);
     // Org absorbs the commissions: the net it receives is below the intended amount.
@@ -168,7 +173,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       })
       .expect(201);
     expect(res.body.amountCharged).toBeGreaterThan(50000);
-    expect(res.body.breakdown).toEqual(computeBreakdown(50000, 'donor'));
+    expect(res.body.breakdown).toEqual(computeBreakdown(50000, 'donor', DIRECT_COLLECTION_RATES));
     // The org receives (net) essentially the intended amount (rounding ≤ 2 pesos).
     expect(Math.abs(res.body.breakdown.net - 50000)).toBeLessThanOrEqual(2);
   });

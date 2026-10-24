@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
+import { LEGAL_ORG } from './support/legal';
 
 /**
  * S-15 (pedido del cliente, 2026-10-05): el PlatformAdmin puede subir hasta 4
@@ -19,7 +20,7 @@ describe('Platform hero banner photos (T-030, S-15)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const createdOrgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
 
   interface Actor {
     token: string;
@@ -31,6 +32,7 @@ describe('Platform hero banner photos (T-030, S-15)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: 'Refugio S15',
         displayName: 'Owner',
         email: `s15-${randomUUID()}@test.local`,

@@ -29,6 +29,8 @@ describe('SmtpNotificationAdapter (T-109)', () => {
       port: 465,
       secure: true,
       auth: { user: 'mailer@example.test', pass: 'app-password' },
+      pool: true,
+      maxConnections: 5,
     });
   });
 
@@ -47,14 +49,64 @@ describe('SmtpNotificationAdapter (T-109)', () => {
     });
   });
 
-  it('is best-effort: a send failure does NOT throw (never tumbles the caller)', async () => {
+  it('branded email: keeps the SMTP_FROM address, changes only the name, adds Reply-To', async () => {
+    const sendMail = jest.fn().mockResolvedValue({});
+    const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;
+    const adapter = new SmtpNotificationAdapter(makeConfig(), createTransport);
+
+    await adapter.send({
+      to: 'user@dest.test',
+      subject: 'Hola',
+      body: 'contenido',
+      fromName: 'Huellitas vía AdoptaFácil',
+      replyTo: 'contacto@huellitas.org',
+    });
+
+    expect(sendMail).toHaveBeenCalledWith({
+      from: { name: 'Huellitas vía AdoptaFácil', address: 'no-reply@example.test' },
+      replyTo: 'contacto@huellitas.org',
+      to: 'user@dest.test',
+      subject: 'Hola',
+      text: 'contenido',
+    });
+  });
+
+  it('adds html, headers and attachments only when present (additive)', async () => {
+    const sendMail = jest.fn().mockResolvedValue({});
+    const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;
+    const adapter = new SmtpNotificationAdapter(makeConfig(), createTransport);
+    const attachments = [
+      { filename: 'a.pdf', content: Buffer.from('x'), contentType: 'application/pdf' },
+    ];
+
+    await adapter.send({
+      to: 'user@dest.test',
+      subject: 'Hola',
+      body: 'texto',
+      html: '<p>hola</p>',
+      headers: { 'List-Unsubscribe': '<https://x/u>' },
+      attachments,
+    });
+
+    expect(sendMail).toHaveBeenCalledWith({
+      from: 'AdoptaFácil <no-reply@example.test>',
+      to: 'user@dest.test',
+      subject: 'Hola',
+      text: 'texto',
+      html: '<p>hola</p>',
+      headers: { 'List-Unsubscribe': '<https://x/u>' },
+      attachments,
+    });
+  });
+
+  it('rethrows a send failure so the delivery queue can retry it', async () => {
     const sendMail = jest.fn().mockRejectedValue(new Error('SMTP connection refused'));
     const createTransport = (() => ({ sendMail }) as MailTransport) as MailTransportFactory;
     const adapter = new SmtpNotificationAdapter(makeConfig(), createTransport);
 
     await expect(
       adapter.send({ to: 'user@dest.test', subject: 'Hola', body: 'x' }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('SMTP connection refused');
     expect(sendMail).toHaveBeenCalledTimes(1);
   });
 });

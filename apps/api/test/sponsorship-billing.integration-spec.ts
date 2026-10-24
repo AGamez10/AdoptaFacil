@@ -14,6 +14,7 @@ import { SponsorshipBillingService } from '../src/modules/sponsorships/sponsorsh
 import { SponsorshipPaymentPollerService } from '../src/modules/sponsorships/sponsorship-payment-poller.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * Requerimiento #17: `subscribe()` now charges period 1 ITSELF (see
@@ -52,7 +53,7 @@ describe('Sponsorship recurring billing (S-5-REDISEÑO, M07/RF17, T-057)', () =>
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   let billing: SponsorshipBillingService;
   let poller: SponsorshipPaymentPollerService;
 
@@ -66,6 +67,7 @@ describe('Sponsorship recurring billing (S-5-REDISEÑO, M07/RF17, T-057)', () =>
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Refugio ${tag}`,
         displayName: 'Owner',
         email: `s5-o-${tag}-${randomUUID()}@test.local`,
@@ -84,6 +86,7 @@ describe('Sponsorship recurring billing (S-5-REDISEÑO, M07/RF17, T-057)', () =>
     const res = await request(server)
       .post('/auth/register/person')
       .send({
+        ...LEGAL_PERSON,
         displayName: `Padrino ${tag}`,
         email: `s5-p-${tag}-${randomUUID()}@test.local`,
         password,

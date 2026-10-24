@@ -13,12 +13,13 @@ import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
  * Requerimiento #17: `subscribe()` now ALWAYS calls `PaymentPort.createCollection`
  * — this test file's app runs against `.env`'s real `PAYMENT_DRIVER` otherwise
- * (this repo's env is currently `mercadopago`, which hard-requires a tokenized
- * card), so every test here would 500 without this override. Overriding with a
+ * (a real gateway driver needs the organization's connected account), so
+ * every test here would 500 without this override. Overriding with a
  * controllable `FakePaymentAdapter` subclass keeps this file network-free/
  * deterministic (same reasoning the adapter's own doc comment gives) AND lets
  * the "declined" test flip the outcome without touching any other test.
@@ -45,7 +46,7 @@ describe('Sponsorships base (RF17 · T-056)', () => {
   let server: ReturnType<INestApplication['getHttpServer']>;
   const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
   const orgIds: string[] = [];
-  const password = 'password123';
+  const password = 'password-1234';
   const paymentPort = new ControllableFakePaymentAdapter();
 
   let tokenA = '';
@@ -59,6 +60,7 @@ describe('Sponsorships base (RF17 · T-056)', () => {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
+        ...LEGAL_ORG,
         organizationName: `Refugio ${tag}`,
         displayName: `Owner ${tag}`,
         email: `t056-${tag}-${randomUUID()}@test.local`,
@@ -86,7 +88,12 @@ describe('Sponsorships base (RF17 · T-056)', () => {
 
     const person = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Padrino', email: `t056-p-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Padrino',
+        email: `t056-p-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personToken = person.body.tokens.accessToken;
     orgIds.push(person.body.user.organizationId);
@@ -94,7 +101,12 @@ describe('Sponsorships base (RF17 · T-056)', () => {
 
     const personB = await request(server)
       .post('/auth/register/person')
-      .send({ displayName: 'Padrino B', email: `t056-pb-${randomUUID()}@test.local`, password })
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Padrino B',
+        email: `t056-pb-${randomUUID()}@test.local`,
+        password,
+      })
       .expect(201);
     personBToken = personB.body.tokens.accessToken;
     orgIds.push(personB.body.user.organizationId);

@@ -20,6 +20,12 @@ function canonicalize(value: unknown): unknown {
   return value;
 }
 
+/** Texto canónico (claves ordenadas) de cualquier valor JSON; lo reutiliza el
+ *  acta de entrega para su propio sello. */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
+
 /** Representación canónica en texto del payload (determinista). */
 export function canonicalContractString(payload: AdoptionContractPayload): string {
   return JSON.stringify(canonicalize(payload));
