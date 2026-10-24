@@ -267,6 +267,7 @@ export class CommunityPostsService {
               template: {
                 event: 'community.campaign_update',
                 organizationName: org?.name ?? undefined,
+                organizationId,
                 data: {
                   organizacion: orgName,
                   nombre: firstName(name) ?? 'amigo(a)',

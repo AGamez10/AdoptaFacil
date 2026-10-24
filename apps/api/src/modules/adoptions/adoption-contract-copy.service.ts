@@ -260,6 +260,7 @@ export class AdoptionContractCopyService {
         template: {
           event: 'adoption.contract_signed',
           organizationName: claim.organizationName,
+          organizationId,
           data: {
             nombre: recipient.fullName,
             animal: animalName,

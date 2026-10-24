@@ -10,6 +10,7 @@ import { LogNotificationAdapter } from './log-notification.adapter';
 import { SmtpNotificationAdapter } from './smtp-notification.adapter';
 import { NOTIFICATION_PORT, type NotificationPort } from './notification.port';
 import { TemplatedNotificationAdapter } from './templated-notification.adapter';
+import { OrgEmailBrandingService } from './branding/org-email-branding.service';
 import { EmailTemplateService } from './templates/email-template.service';
 
 /** The raw transport (log stub or SMTP), before the template layer. */
@@ -38,6 +39,7 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
   providers: [
     EmailTemplateService,
     EmailDeliveryWorker,
+    OrgEmailBrandingService,
     {
       provide: NOTIFICATION_TRANSPORT,
       inject: [ConfigService],
@@ -48,9 +50,12 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
     },
     {
       provide: EMAIL_DELIVERY,
-      inject: [NOTIFICATION_TRANSPORT, EmailTemplateService],
-      useFactory: (transport: NotificationPort, templates: EmailTemplateService) =>
-        new TemplatedNotificationAdapter(transport, templates),
+      inject: [NOTIFICATION_TRANSPORT, EmailTemplateService, OrgEmailBrandingService],
+      useFactory: (
+        transport: NotificationPort,
+        templates: EmailTemplateService,
+        branding: OrgEmailBrandingService,
+      ) => new TemplatedNotificationAdapter(transport, templates, branding),
     },
     {
       provide: NOTIFICATION_PORT,

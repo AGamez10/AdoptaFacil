@@ -29,6 +29,7 @@ import {
   verifyUnsubscribe,
 } from './email-compose';
 import { exampleValues, validateContent, type RenderValues } from './email-render';
+import type { EmailBrand } from '../branding/org-email-branding';
 
 export const BULK_CATEGORY = 'bulk';
 const STATE_CACHE_TTL_MS = 30_000;
@@ -111,11 +112,13 @@ export class EmailTemplateService {
     to: string,
     data: RenderValues,
     organizationName?: string,
+    brand?: EmailBrand,
   ): RenderedEmail {
     const bulk = def.category === 'bulk';
     const unsubscribeUrl = bulk ? buildUnsubscribeUrl(this.webBaseUrl, this.secret, to) : undefined;
     const email = composeEmail(def, content, data, {
       organizationName,
+      ...(brand ? { brand } : {}),
       webBaseUrl: this.webBaseUrl,
       unsubscribeUrl,
     });

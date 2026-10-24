@@ -354,6 +354,7 @@ export class SponsorshipsService {
         template: {
           event: 'sponsorship.welcome',
           organizationName,
+          organizationId,
           data: { animal: animalName, organizacion: organizationName, monto: amount, enlace: link },
         },
       });
