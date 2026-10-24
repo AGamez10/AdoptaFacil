@@ -166,6 +166,27 @@ services:
       HUSKY=0 pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @adoptafacil/web build
     staticPublishPath: apps/web/dist
+    # Cabeceras de seguridad del sitio (auditoría M14). Render ya sirve solo por
+    # HTTPS y redirige HTTP→HTTPS en su borde; HSTS evita que el navegador vuelva a
+    # intentar HTTP. La CSP no restringe scripts, estilos, imágenes ni fuentes: solo
+    # sube a HTTPS cualquier petición http:// (sin contenido mixto), bloquea plugins
+    # (<object>/<embed>), impide cambiar la URL base y que otro sitio enmarque la app.
+    headers:
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000
+      - path: /*
+        name: Content-Security-Policy
+        value: "upgrade-insecure-requests; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
     routes:
       # SPA: cualquier ruta que no sea un asset debe servir index.html para
       # que React Router la resuelva client-side (si no, F5 en /organizacion da 404).

@@ -1,6 +1,7 @@
 import type { OrganizationExtendedContact, OrganizationLocation } from '@adoptafacil/contracts';
 import { Card, CardContent, CardHeader, CardTitle } from '@adoptafacil/ui';
 import { googleMapsEmbedFromAddress, toGoogleMapsEmbedUrl } from '../model/google-maps';
+import { safeExternalUrl } from '../model/safe-url';
 
 export interface PortalContactInfoSectionProps {
   contact: OrganizationExtendedContact;
@@ -23,6 +24,7 @@ export function PortalContactInfoSection({ contact, location }: PortalContactInf
   // El mapa se ve SIN hacer clic: 1) el enlace de Google Maps cargado por la
   // organización, si se puede embeber; 2) si no (p. ej. un enlace corto de
   // "compartir") o no hay enlace, la DIRECCIÓN (+ ciudad/departamento/país reales).
+  const mapHref = safeExternalUrl(contact.mapUrl);
   const embedUrl =
     (contact.mapUrl ? toGoogleMapsEmbedUrl(contact.mapUrl) : null) ??
     googleMapsEmbedFromAddress(
@@ -69,9 +71,9 @@ export function PortalContactInfoSection({ contact, location }: PortalContactInf
             data-testid="portal-contact-map"
           />
         )}
-        {contact.mapUrl && (
+        {mapHref && (
           <a
-            href={contact.mapUrl}
+            href={mapHref}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"

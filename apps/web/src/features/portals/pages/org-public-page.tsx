@@ -57,6 +57,8 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { ownerPreviewOrganization } from '../model/owner-preview';
 import { PortalPreviewContext } from '../model/portal-preview-context';
+import { TemplatePortal } from '../templates/template-portal';
+import { isEngineTemplate } from '../templates/registry';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -390,7 +392,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       }
     : null;
 
-  return (
+  const classic = (
     <PortalPreviewContext.Provider value={previewClient}>
       <div
         className={templateStyles.page}
@@ -578,4 +580,19 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       </div>
     </PortalPreviewContext.Provider>
   );
+  // Plantillas del motor (14 gratuitas nuevas): pintan el mismo contenido con su
+  // propio diseño. Si la plantilla no carga o los datos fallan, se muestra el
+  // portal clásico de arriba: nunca queda un portal caído por el diseño elegido.
+  if (state === 'ready' && view && slug && isEngineTemplate(layout.template)) {
+    return (
+      <TemplatePortal
+        template={layout.template}
+        slug={slug}
+        organization={view.profile.organization}
+        themeStyle={themeStyle}
+        fallback={classic}
+      />
+    );
+  }
+  return classic;
 }
