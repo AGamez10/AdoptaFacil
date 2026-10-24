@@ -70,11 +70,23 @@ export const envSchema = z.object({
   // T-108 (storage): which StoragePort adapter to bind. `disk` = real filesystem
   // (prod on the VPS); `stub` = in-memory (tests set this via load-env). Default
   // `disk` so production persists real bytes unless explicitly overridden.
-  STORAGE_DRIVER: z.enum(['stub', 'disk']).default('disk'),
+  STORAGE_DRIVER: z.enum(['stub', 'disk', 's3']).default('disk'),
+  // STORAGE_DRIVER=s3: any S3-compatible bucket (Cloudflare R2, Backblaze B2,
+  // AWS S3). Path-style URLs: `${S3_ENDPOINT}/${S3_BUCKET}/<key>`. The bucket
+  // stays private; bytes are still served through the API's storage endpoints.
+  S3_ENDPOINT: z.string().url().optional(),
+  // R2 uses `auto`.
+  S3_REGION: z.string().min(1).default('auto'),
+  S3_BUCKET: z.string().min(1).optional(),
+  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   // Root directory for the disk adapter (outside the webroot; per-tenant subdirs).
   STORAGE_DISK_ROOT: z.string().min(1).default('./.storage'),
   // Max upload size in MB (enforced by the adapter and the upload endpoint).
   STORAGE_MAX_FILE_MB: z.coerce.number().int().positive().max(100).default(15),
+  // Video de seguimiento postadopción (máximo 30 s, decisión del 2026-10-17):
+  // peso máximo en MB. TODO(client): confirmar los 50 MB propuestos.
+  FOLLOWUP_VIDEO_MAX_MB: z.coerce.number().int().positive().max(100).default(50),
   // Base URL the API is reachable at, used to build upload/serve URLs.
   STORAGE_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3000'),
   // T-052 (payments): which PaymentPort adapter to bind. 'fake' = deterministic
@@ -231,6 +243,16 @@ export const envSchema = z.object({
   // treated as plan `pro` (nothing gated, nothing charged); turning it on is
   // the owner's call once the subscription can actually be invoiced.
   PLAN_ENFORCEMENT: featureFlag(),
+  // Fecha del lanzamiento comercial (ISO-8601, p. ej. 2026-11-01). Desde ahí y
+  // durante LAUNCH_PRO_PROMO_MONTHS (3 meses) toda organización SIN suscripción
+  // pagada tiene Pro gratis, plantillas de pago incluidas. Sin la fecha no hay
+  // promoción: con PLAN_ENFORCEMENT encendido, quien no paga queda en Gratis.
+  PLAN_LAUNCH_DATE: z
+    .string()
+    .optional()
+    .refine((value) => value === undefined || !Number.isNaN(Date.parse(value)), {
+      message: 'PLAN_LAUNCH_DATE debe ser una fecha ISO-8601 (por ejemplo 2026-11-01)',
+    }),
   // Written approval reference (PSP confirmation + legal review, D1–D7/D17)
   // that production requires before FEATURE_PAYMENTS or FEATURE_SPONSORSHIPS
   // can be turned on. Free text (ticket, email date, document id); it is only
@@ -304,6 +326,12 @@ const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['mercadopago', '
 
 /** Google OAuth vars required when AUTH_IDENTITY_DRIVER=google (fail-fast at boot). */
 const REQUIRED_GOOGLE_IDENTITY_KEYS = ['GOOGLE_OAUTH_CLIENT_ID'] as const;
+const REQUIRED_S3_KEYS = [
+  'S3_ENDPOINT',
+  'S3_BUCKET',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+] as const;
 
 /**
  * Production safety rules (Ola 1, R0-1 / R1-1 / R1-3). Closes the root cause
@@ -413,6 +441,17 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} is required when AUTH_IDENTITY_DRIVER=google`,
+        });
+      }
+    }
+  }
+  if (env.STORAGE_DRIVER === 's3') {
+    for (const key of REQUIRED_S3_KEYS) {
+      if (env[key] === undefined || env[key] === null || env[key] === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when STORAGE_DRIVER=s3`,
         });
       }
     }

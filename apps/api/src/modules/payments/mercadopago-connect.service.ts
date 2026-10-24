@@ -17,6 +17,11 @@ import {
   type MercadoPagoConnectStateClaims,
 } from './mercadopago-connect.constants';
 import { isDueForRefresh } from './mercadopago-token-refresh.window';
+import {
+  loadMercadoPagoTokensEncryptionKey,
+  openMercadoPagoToken,
+  sealMercadoPagoToken,
+} from './mercadopago-tokens-crypto';
 
 /** Default token lifetime when MercadoPago's response doesn't include
  *  `expires_in` — verified live against the real sandbox (both access and
@@ -52,6 +57,8 @@ interface DueForRefreshRow {
 @Injectable()
 export class MercadoPagoConnectService {
   private readonly logger = new Logger(MercadoPagoConnectService.name);
+  /** Tokens are stored encrypted (mercadopago-tokens-crypto.ts). */
+  private readonly tokenKey = loadMercadoPagoTokensEncryptionKey();
 
   constructor(
     private readonly jwt: JwtService,
@@ -121,6 +128,8 @@ export class MercadoPagoConnectService {
       Date.now() + (tokens.expires_in ?? DEFAULT_TOKEN_TTL_SECONDS) * 1000,
     );
     const mpUserId = String(tokens.user_id ?? '');
+    const accessToken = sealMercadoPagoToken(tokens.access_token, this.tokenKey);
+    const refreshToken = sealMercadoPagoToken(tokens.refresh_token ?? '', this.tokenKey);
 
     await this.prisma.withOrgContext(organizationId, async (tx) => {
       await tx.organizationMercadoPagoAccount.upsert({
@@ -128,14 +137,14 @@ export class MercadoPagoConnectService {
         create: {
           organizationId,
           mpUserId,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? '',
+          accessToken,
+          refreshToken,
           expiresAt,
         },
         update: {
           mpUserId,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? '',
+          accessToken,
+          refreshToken,
           expiresAt,
         },
       });
@@ -230,7 +239,9 @@ export class MercadoPagoConnectService {
   }
 
   private async refreshOneAccount(row: DueForRefreshRow): Promise<void> {
-    const tokens = await this.oauth.refreshToken(row.refresh_token);
+    const tokens = await this.oauth.refreshToken(
+      openMercadoPagoToken(row.refresh_token, this.tokenKey),
+    );
     const expiresAt = new Date(
       Date.now() + (tokens.expires_in ?? DEFAULT_TOKEN_TTL_SECONDS) * 1000,
     );
@@ -238,10 +249,14 @@ export class MercadoPagoConnectService {
       await tx.organizationMercadoPagoAccount.update({
         where: { organizationId: row.organization_id },
         data: {
-          accessToken: tokens.access_token,
+          accessToken: sealMercadoPagoToken(tokens.access_token, this.tokenKey),
           // A refresh_token grant may or may not return a NEW refresh token —
-          // keep the existing one when MercadoPago omits it.
-          refreshToken: tokens.refresh_token ?? row.refresh_token,
+          // keep the existing one when MercadoPago omits it (re-sealed, so a
+          // legacy clear value ends up encrypted too).
+          refreshToken: sealMercadoPagoToken(
+            tokens.refresh_token ?? openMercadoPagoToken(row.refresh_token, this.tokenKey),
+            this.tokenKey,
+          ),
           expiresAt,
         },
       });

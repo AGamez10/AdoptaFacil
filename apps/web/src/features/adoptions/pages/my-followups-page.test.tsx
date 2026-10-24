@@ -155,7 +155,7 @@ describe('MyFollowUpsPage', () => {
     await user.type(await screen.findByLabelText(/¿Cómo se ha adaptado\?/), 'Feliz');
     await user.click(screen.getByRole('radio', { name: 'Sí' }));
     const photo = new File(['img'], 'firulais.png', { type: 'image/png' });
-    await user.upload(screen.getByLabelText('Foto adicional (opcional)'), photo);
+    await user.upload(screen.getByLabelText('Foto o video adicional (opcional)'), photo);
     await user.click(screen.getByRole('button', { name: 'Enviar seguimiento' }));
 
     await waitFor(() =>
@@ -176,7 +176,44 @@ describe('MyFollowUpsPage', () => {
     renderShell({ route: '/mis-seguimientos', ...personaSession() });
 
     const doc = new File(['pdf'], 'doc.pdf', { type: 'application/pdf' });
-    await user.upload(await screen.findByLabelText('Foto adicional (opcional)'), doc);
-    expect(await screen.findByText(/no es una foto válida/)).toBeInTheDocument();
+    await user.upload(await screen.findByLabelText('Foto o video adicional (opcional)'), doc);
+    expect(await screen.findByText(/no es válido/)).toBeInTheDocument();
+  });
+
+  it('accepts a phone video of up to 30 s and warns when it is longer', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubApi([BASE]);
+    // jsdom no reproduce videos: se simula la duración que leería el navegador.
+    let duration = 45;
+    const createElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const element = createElement(tag);
+      if (tag === 'video') {
+        Object.defineProperty(element, 'duration', { get: () => duration });
+        Object.defineProperty(element, 'src', {
+          set: () => setTimeout(() => element.onloadedmetadata?.(new Event('loadedmetadata'))),
+        });
+      }
+      return element;
+    });
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:v', revokeObjectURL: () => {} });
+    renderShell({ route: '/mis-seguimientos', ...personaSession() });
+
+    await user.type(await screen.findByLabelText(/¿Cómo se ha adaptado\?/), 'Feliz');
+    await user.click(screen.getByRole('radio', { name: 'Sí' }));
+    const input = screen.getByLabelText('Foto o video adicional (opcional)');
+    await user.upload(input, new File(['v'], 'paseo.mp4', { type: 'video/mp4' }));
+    expect(await screen.findByText(/El video dura 45 s/)).toBeInTheDocument();
+
+    duration = 20;
+    await user.upload(input, new File(['v'], 'paseo.mov', { type: 'video/quicktime' }));
+    await waitFor(() => expect(screen.queryByText(/El video dura/)).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Enviar seguimiento' }));
+    await waitFor(() =>
+      expect(callsTo(fetchMock, '/adoptions/followups/ms-1/photo')).toHaveLength(1),
+    );
+    const [, init] = callsTo(fetchMock, '/adoptions/followups/ms-1/photo')[0];
+    expect(((init?.body as FormData).get('file') as File).name).toBe('paseo.mov');
+    vi.restoreAllMocks();
   });
 });

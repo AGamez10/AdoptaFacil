@@ -16,19 +16,24 @@ import { useApiClient } from '../../../shell/api';
 import { listMyFollowUps, submitFollowUp, submitFollowUpWithPhoto } from '../api/adoptions-api';
 import { formatBogota } from '../model/adoptions-view';
 import {
-  FOLLOWUP_PHOTO_ACCEPT,
+  FOLLOWUP_MEDIA_ACCEPT,
   FOLLOWUP_PHOTO_MAX_MB,
   FOLLOWUP_STATUS_LABELS,
   followUpStatusVariant,
   formatFollowUpAnswer,
+  isFollowUpVideo,
   mergedFollowUpAnswers,
   normalizeMyFollowUps,
+  readVideoDuration,
   sortMyFollowUps,
-  validateFollowUpPhoto,
+  validateFollowUpMedia,
+  videoDurationError,
 } from '../model/adoptions-followup-view';
+import { FOLLOWUP_VIDEO_DEFAULT_MAX_MB, FOLLOWUP_VIDEO_MAX_SECONDS } from '@adoptafacil/contracts';
 
-/** Answer stored for a `photo` question once its picture is sent. */
+/** Answer stored for a `photo` question once its picture (or video) is sent. */
 const PHOTO_ANSWER = 'Foto adjunta';
+const VIDEO_ANSWER = 'Video adjunto';
 
 /**
  * "Mis seguimientos" (T-028c, RF12) — el ADOPTANTE responde los hitos de
@@ -193,9 +198,18 @@ function FollowUpForm({
       return next;
     });
     if (!file) return;
-    const invalid = validateFollowUpPhoto(file);
+    const invalid = validateFollowUpMedia(file);
     if (invalid) {
       setErrors((prev) => ({ ...prev, [key]: invalid }));
+      return;
+    }
+    if (isFollowUpVideo(file)) {
+      // Aviso inmediato si dura más de 30 s; la API lo vuelve a medir.
+      void readVideoDuration(file).then((seconds) => {
+        const tooLong = videoDurationError(seconds);
+        if (tooLong) setErrors((prev) => ({ ...prev, [key]: tooLong }));
+        else setPhotos((prev) => ({ ...prev, [key]: file }));
+      });
       return;
     }
     setPhotos((prev) => ({ ...prev, [key]: file }));
@@ -212,7 +226,7 @@ function FollowUpForm({
       if (missing) found[question.id] = 'Esta pregunta es obligatoria.';
     }
     if (milestone.questionnaire.length === 0 && !photos[GENERAL_PHOTO]) {
-      found[GENERAL_PHOTO] = 'Adjunta al menos una foto para enviar este seguimiento.';
+      found[GENERAL_PHOTO] = 'Adjunta al menos una foto o un video para enviar este seguimiento.';
     }
     return found;
   };
@@ -239,7 +253,7 @@ function FollowUpForm({
       } else if (question.kind === 'boolean' && booleans[question.id] !== undefined) {
         answers[question.id] = booleans[question.id];
       } else if (question.kind === 'photo' && photos[question.id]) {
-        answers[question.id] = PHOTO_ANSWER;
+        answers[question.id] = isFollowUpVideo(photos[question.id]) ? VIDEO_ANSWER : PHOTO_ANSWER;
       }
     }
     // The photo endpoint takes one file per call: every photo but the last goes
@@ -330,7 +344,7 @@ function FollowUpForm({
           <input
             id={id}
             type="file"
-            accept={FOLLOWUP_PHOTO_ACCEPT.join(',')}
+            accept={FOLLOWUP_MEDIA_ACCEPT.join(',')}
             aria-describedby={describedBy}
             aria-invalid={!!errors[question.id]}
             onChange={(event) => pickPhoto(question.id, event.target.files?.[0])}
@@ -367,19 +381,20 @@ function FollowUpForm({
       <div className="space-y-1.5">
         <label htmlFor={generalId} className="block font-medium">
           {milestone.questionnaire.length === 0
-            ? 'Foto de tu mascota *'
-            : 'Foto adicional (opcional)'}
+            ? 'Foto o video de tu mascota *'
+            : 'Foto o video adicional (opcional)'}
         </label>
         <input
           id={generalId}
           type="file"
-          accept={FOLLOWUP_PHOTO_ACCEPT.join(',')}
+          accept={FOLLOWUP_MEDIA_ACCEPT.join(',')}
           aria-describedby={`${generalId}-hint${errors[GENERAL_PHOTO] ? ` ${generalId}-error` : ''}`}
           aria-invalid={!!errors[GENERAL_PHOTO]}
           onChange={(event) => pickPhoto(GENERAL_PHOTO, event.target.files?.[0])}
         />
         <p id={`${generalId}-hint`} className="text-muted-foreground">
-          JPG, PNG o WebP, hasta {FOLLOWUP_PHOTO_MAX_MB} MB.
+          Foto JPG, PNG o WebP hasta {FOLLOWUP_PHOTO_MAX_MB} MB, o video MP4 o MOV de máximo{' '}
+          {FOLLOWUP_VIDEO_MAX_SECONDS} segundos y {FOLLOWUP_VIDEO_DEFAULT_MAX_MB} MB.
         </p>
         {fieldError(GENERAL_PHOTO)}
       </div>

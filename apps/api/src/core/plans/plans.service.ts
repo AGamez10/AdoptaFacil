@@ -1,4 +1,10 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { OrganizationSubscription as SubscriptionRow, Prisma } from '@prisma/client';
 import {
@@ -6,6 +12,7 @@ import {
   PLAN_KEYS,
   PLAN_REQUIRED_CODE,
   graceEnd,
+  launchPromoEnd,
   minimumPlanFor,
   minimumPlanForLimit,
   planIncludes,
@@ -23,6 +30,9 @@ import {
 import type { Env } from '../../config/env.validation';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { STORAGE_PORT, type StoragePort } from '../storage/storage.port';
+
+const MB = 1024 * 1024;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -51,13 +61,18 @@ function toContract(row: SubscriptionRow): OrganizationSubscription {
 @Injectable()
 export class PlansService {
   readonly enforced: boolean;
+  /** End of the launch promotion (Pro for free), or null without a launch date. */
+  readonly promoEndsAt: Date | null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     config: ConfigService<Env, true>,
+    @Optional() @Inject(STORAGE_PORT) private readonly storage?: StoragePort,
   ) {
     this.enforced = config.get('PLAN_ENFORCEMENT', { infer: true }) === true;
+    const launch = config.get('PLAN_LAUNCH_DATE', { infer: true });
+    this.promoEndsAt = launch ? launchPromoEnd(new Date(launch)) : null;
   }
 
   private async findSubscription(organizationId: string): Promise<SubscriptionRow | null> {
@@ -72,7 +87,12 @@ export class PlansService {
       return 'pro';
     }
     const row = await this.findSubscription(organizationId);
-    return resolveEffectivePlan(row ? toContract(row) : null, now, true);
+    return resolveEffectivePlan(row ? toContract(row) : null, now, true, this.promoEndsAt);
+  }
+
+  /** Whether the org's plan includes `capability` (no exception). */
+  async hasCapability(organizationId: string, capability: PlanCapability): Promise<boolean> {
+    return planIncludes(await this.effectivePlan(organizationId), capability);
   }
 
   /** 403 `PLAN_REQUIRED` unless the org's plan includes `capability`. */
@@ -94,14 +114,16 @@ export class PlansService {
    * 403 `PLAN_REQUIRED` when creating one more item would exceed `limit`.
    * `countAfter` is the total the org would hold AFTER the creation. Only call
    * it on creation paths: existing data above a limit (after a downgrade) stays
-   * readable and is never removed.
+   * readable and is never removed. Pass `plan` (from {@link effectivePlan},
+   * read before opening a transaction) when calling from inside one.
    */
   async assertWithinLimit(
     organizationId: string,
     limit: PlanLimit,
     countAfter: number,
+    plan?: PlanKey,
   ): Promise<void> {
-    const plan = await this.effectivePlan(organizationId);
+    plan ??= await this.effectivePlan(organizationId);
     const max = PLAN_CATALOG[plan].limits[limit];
     if (max !== null && countAfter > max) {
       const requiredPlan = minimumPlanForLimit(limit, countAfter);
@@ -115,6 +137,19 @@ export class PlansService {
     }
   }
 
+  /**
+   * Storage quota of the plan (1 / 10 / 50 GB): 403 `PLAN_REQUIRED` when saving
+   * `addBytes` more would exceed it. Applies only with plans on and an adapter
+   * that can measure; files already stored are never removed.
+   */
+  async assertStorageAvailable(organizationId: string, addBytes: number): Promise<void> {
+    if (!this.enforced || !this.storage?.measureOrganizationUsage) {
+      return;
+    }
+    const used = await this.storage.measureOrganizationUsage(organizationId);
+    await this.assertWithinLimit(organizationId, 'storageMb', Math.ceil((used + addBytes) / MB));
+  }
+
   /** `GET /org/plan`: plan, limits, usage and catalog for the caller's org. */
   async view(organizationId: string, now = new Date()): Promise<OrganizationPlanView> {
     const [row, members] = await this.prisma.withOrgContext(organizationId, (tx) =>
@@ -124,8 +159,13 @@ export class PlansService {
       ]),
     );
     const subscription = row ? toContract(row) : null;
-    const effectivePlan = resolveEffectivePlan(subscription, now, this.enforced);
+    const effectivePlan = resolveEffectivePlan(subscription, now, this.enforced, this.promoEndsAt);
     const definition = PLAN_CATALOG[effectivePlan];
+    const inPromo =
+      this.enforced &&
+      subscription === null &&
+      this.promoEndsAt !== null &&
+      now.getTime() <= this.promoEndsAt.getTime();
     const lapsing =
       this.enforced &&
       subscription !== null &&
@@ -139,9 +179,19 @@ export class PlansService {
       graceEndsAt: lapsing
         ? graceEnd(new Date(subscription.currentPeriodEnd as string)).toISOString()
         : null,
+      launchPromoEndsAt: inPromo ? (this.promoEndsAt as Date).toISOString() : null,
       limits: definition.limits,
       capabilities: definition.capabilities,
-      usage: { members },
+      usage: {
+        members,
+        ...(this.storage?.measureOrganizationUsage
+          ? {
+              storageMb: Math.ceil(
+                (await this.storage.measureOrganizationUsage(organizationId)) / MB,
+              ),
+            }
+          : {}),
+      },
       catalog: PLAN_KEYS.map((key) => PLAN_CATALOG[key]),
     };
   }

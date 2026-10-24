@@ -78,6 +78,10 @@ describe('MercadoPagoConnectService — state JWT (T-OAuth-Connect)', () => {
         create: expect.objectContaining({ organizationId: 'org-1', mpUserId: '999' }),
       }),
     );
+    // Los tokens nunca se guardan en claro.
+    const saved = upsert.mock.calls[0][0].create;
+    expect(saved.accessToken).toMatch(/^enc1:/);
+    expect(saved.refreshToken).toMatch(/^enc1:/);
   });
 
   it('rejects a TAMPERED state (payload/signature mismatch) — never trusts it unverified', async () => {
