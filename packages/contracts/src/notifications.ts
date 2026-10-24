@@ -24,6 +24,7 @@ export const EMAIL_EVENT_KEYS = [
   'adoption.status_changed',
   'adoption.followup_overdue',
   'adoption.contract_signed',
+  'adoption.delivery_code',
   'volunteering.enrollment_received',
   'volunteering.enrollment_accepted',
   'volunteering.enrollment_rejected',

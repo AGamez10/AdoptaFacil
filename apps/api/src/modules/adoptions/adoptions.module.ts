@@ -19,6 +19,8 @@ import { FollowUpService } from './followup.service';
 import { FollowUpScheduler } from './followup.scheduler';
 import { FollowUpProcessor } from './followup.processor';
 import { FOLLOWUP_QUEUE } from './followup.constants';
+import { AdoptionDeliveryController } from './adoption-delivery.controller';
+import { AdoptionDeliveryService } from './adoption-delivery.service';
 
 /**
  * M04 · Adoptions — request + evaluation kanban (T-028a), the CONTRACT +
@@ -38,7 +40,12 @@ import { FOLLOWUP_QUEUE } from './followup.constants';
  */
 @Module({
   imports: [AuthModule, OrgModule, BullModule.registerQueue({ name: FOLLOWUP_QUEUE })],
-  controllers: [AdoptionsController, AdoptionContractsController, FollowUpController],
+  controllers: [
+    AdoptionsController,
+    AdoptionContractsController,
+    FollowUpController,
+    AdoptionDeliveryController,
+  ],
   providers: [
     AdoptionsService,
     AdoptionContractsService,
@@ -60,6 +67,7 @@ import { FOLLOWUP_QUEUE } from './followup.constants';
     FollowUpService,
     FollowUpScheduler,
     FollowUpProcessor,
+    AdoptionDeliveryService,
   ],
 })
 export class AdoptionsModule {}

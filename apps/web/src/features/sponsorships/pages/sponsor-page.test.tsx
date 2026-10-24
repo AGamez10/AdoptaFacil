@@ -233,7 +233,7 @@ describe('SponsorPage — sin animalId muestra "Mis apadrinamientos"', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pagar de nuevo' }));
     expect(await screen.findByTestId('fake-card-brick-submit')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
     expect(screen.queryByTestId('fake-card-brick-submit')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pagar de nuevo' })).toBeInTheDocument();
   });
