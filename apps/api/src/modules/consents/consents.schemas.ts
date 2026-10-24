@@ -5,7 +5,7 @@ const purpose = z.literal('org_report_identification');
 /** Cuerpo estricto: nada de campos extra (p. ej. un `subjectUserId` inyectado). */
 export const grantConsentSchema = z
   .object({
-    organizationId: z.string().uuid(),
+    organizationId: z.string().guid(),
     purpose,
     version: z.string().min(1).max(32),
   })
@@ -13,7 +13,7 @@ export const grantConsentSchema = z
 
 export const revokeConsentSchema = z
   .object({
-    organizationId: z.string().uuid(),
+    organizationId: z.string().guid(),
     purpose,
   })
   .strict();

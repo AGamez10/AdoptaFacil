@@ -16,6 +16,6 @@ export const platformTransitionSchema = z
   .object({
     targetState: z.nativeEnum(FormalizationState),
     reason: z.string().trim().min(1).max(1000).optional(),
-    evidenceDocumentId: z.string().uuid().optional(),
+    evidenceDocumentId: z.string().guid().optional(),
   })
   .strict();

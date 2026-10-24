@@ -5,7 +5,7 @@ import { z } from 'zod';
  *  integer-only rule applies here. */
 export const logServiceHoursSchema = z
   .object({
-    enrollmentId: z.string().uuid(),
+    enrollmentId: z.string().guid(),
     date: z.string().datetime({ offset: true }),
     hours: z.number().positive().max(24),
     description: z.string().trim().min(1).max(1000),

@@ -11,7 +11,7 @@ import { z } from 'zod';
  */
 export const createVolunteerEnrollmentSchema = z
   .object({
-    opportunityId: z.string().uuid(),
+    opportunityId: z.string().guid(),
     isMinor: z.boolean().optional(),
     guardianName: z.string().trim().min(1).max(200).optional(),
     guardianDocument: z.string().trim().min(1).max(50).optional(),

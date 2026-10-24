@@ -5,7 +5,7 @@ import { z } from 'zod';
  *  profundidad). `comment` es opcional; vacío tras trim se guarda como null. */
 export const createReviewSchema = z
   .object({
-    organizationId: z.string().uuid(),
+    organizationId: z.string().guid(),
     rating: z.number().int().min(1).max(5),
     comment: z.string().trim().max(2000).optional(),
     isAnonymous: z.boolean().optional(),

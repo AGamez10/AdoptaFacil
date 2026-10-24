@@ -4,7 +4,7 @@ import { z } from 'zod';
  *  rejects unknown keys — same convention as donations. */
 export const requestPayoutSchema = z
   .object({
-    organizationId: z.string().uuid(),
+    organizationId: z.string().guid(),
     amount: z.number().int('El monto debe ser un número entero de pesos.').positive(),
     idempotencyKey: z.string().trim().min(8).max(200),
   })
