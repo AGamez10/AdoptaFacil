@@ -62,6 +62,40 @@ export interface EmailVariableDescriptor {
   example: string;
 }
 
+/**
+ * Accent colors the editor offers for an email (bar, icon bubble and note
+ * box). A closed palette from the brand so text and button keep AA contrast;
+ * absent = the event's own theme color.
+ */
+export const EMAIL_ACCENT_COLORS = [
+  'teal',
+  'navy',
+  'coral',
+  'gold',
+  'blue',
+  'red',
+  'purple',
+  'green',
+] as const;
+export type EmailAccentColor = (typeof EMAIL_ACCENT_COLORS)[number];
+
+/** Header icons the editor offers; absent = the event's own theme icon. */
+export const EMAIL_ICONS = [
+  '🐾',
+  '🏡',
+  '💛',
+  '🤝',
+  '📣',
+  '⏰',
+  '🔒',
+  '🎉',
+  '🩺',
+  '📅',
+  '⭐',
+  '🚨',
+] as const;
+export type EmailIcon = (typeof EMAIL_ICONS)[number];
+
 /** The editable copy of an email. */
 export interface EmailTemplateContent {
   subject: string;
@@ -71,6 +105,9 @@ export interface EmailTemplateContent {
   /** Button label; empty/absent = no button. The button's URL is fixed by the catalog. */
   ctaLabel?: string;
   footerNote?: string;
+  /** Optional design (additive): accent color and header icon. */
+  accentColor?: EmailAccentColor;
+  icon?: EmailIcon;
 }
 
 export interface EmailTemplateVersion extends EmailTemplateContent {

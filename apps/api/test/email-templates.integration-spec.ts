@@ -168,6 +168,26 @@ describe('Email templates (superadmin panel)', () => {
     expect(detail.body.versions).toHaveLength(0);
   });
 
+  it('saves the color and icon of a version, and only from the closed palette', async () => {
+    await request(server)
+      .post(`/platform/email-templates/${EVENT}/versions`)
+      .set(auth(platformAdmin.token))
+      .send({ ...draft, accentColor: '#000000' })
+      .expect(400);
+    await request(server)
+      .post(`/platform/email-templates/${EVENT}/versions`)
+      .set(auth(platformAdmin.token))
+      .send({ ...draft, icon: '<img>' })
+      .expect(400);
+    const preview = await request(server)
+      .post(`/platform/email-templates/${EVENT}/preview`)
+      .set(auth(platformAdmin.token))
+      .send({ content: { ...draft, accentColor: 'purple', icon: '🎉' } })
+      .expect(200);
+    expect(preview.body.html).toContain('#8E6CC8');
+    expect(preview.body.html).toContain('🎉');
+  });
+
   it('saves versions, activates one (audited), and real sends use it', async () => {
     const v1 = await request(server)
       .post(`/platform/email-templates/${EVENT}/versions`)
@@ -315,5 +335,19 @@ describe('Email templates (superadmin panel)', () => {
       template: { event: 'auth.password_reset', data: { enlace: 'https://app.test/r' } },
     });
     expect(sent).toHaveLength(1);
+  });
+
+  it('a saved version keeps its color and icon', async () => {
+    await request(server)
+      .post(`/platform/email-templates/${EVENT}/versions`)
+      .set(auth(platformAdmin.token))
+      .send({ ...draft, accentColor: 'green', icon: '🩺' })
+      .expect(201);
+    const detail = await request(server)
+      .get(`/platform/email-templates/${EVENT}`)
+      .set(auth(platformAdmin.token))
+      .expect(200);
+    const latest = detail.body.versions[0];
+    expect(latest).toMatchObject({ accentColor: 'green', icon: '🩺' });
   });
 });

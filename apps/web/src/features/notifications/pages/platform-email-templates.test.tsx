@@ -155,6 +155,36 @@ describe('Superadmin email templates', () => {
       });
     });
   });
+
+  it('editor lets the admin pick the color and icon and sends them with the version', async () => {
+    const calls = stubFetch((url, init) => {
+      if (url.endsWith('/preview')) {
+        return { subject: 'Gracias', preheader: 'p', html: '<p>hola</p>', text: 'hola' };
+      }
+      if (url.endsWith('/versions') && init?.method === 'POST') {
+        return { ...DETAIL, activeVersion: 3, latestVersion: 3 };
+      }
+      return DETAIL;
+    });
+    renderShell({
+      route: '/plataforma/correos/donation.thanks',
+      ...sessionWith([Role.PlatformSuperAdmin]),
+    });
+
+    await screen.findByLabelText('Asunto');
+    await userEvent.click(screen.getByRole('button', { name: 'Morado' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ícono 🎉' }));
+    expect(screen.getByRole('button', { name: 'Morado' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar y activar' }));
+
+    await waitFor(() => {
+      const save = calls.find((c) => c.url.endsWith('/versions'));
+      expect(JSON.parse(String(save?.init?.body))).toMatchObject({
+        accentColor: 'purple',
+        icon: '🎉',
+      });
+    });
+  });
 });
 
 describe('Public unsubscribe page', () => {
