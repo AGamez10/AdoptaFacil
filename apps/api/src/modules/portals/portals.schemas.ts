@@ -2,6 +2,8 @@ import { z } from 'zod';
 import {
   PORTAL_TEMPLATE_IDS,
   type PortalColorToken,
+  type PortalDesignId,
+  type PortalPremiumDesignId,
   type PortalTheme,
   type PortalThemeToken,
 } from '@adoptafacil/contracts';
@@ -110,6 +112,63 @@ const templateOptionsSchema = z
   .record(z.string().regex(/^[a-zA-Z]{1,32}$/), z.union([z.boolean(), z.string().max(32)]))
   .refine((value) => Object.keys(value).length <= 10, 'Demasiados ajustes');
 
+/**
+ * Diseños completos del portal público (M14, 14 gratuitos). Enum cerrado: el
+ * portal solo puede pedir un diseño que exista en la web, nunca markup libre.
+ * El `satisfies` obliga a que esta lista y el contrato `PortalDesignId` no se
+ * desalineen.
+ */
+export const PORTAL_DESIGN_IDS = [
+  'clasico',
+  'hogar',
+  'revista',
+  'expediente',
+  'cartel',
+  'orbita',
+  'galeria',
+  'mosaico',
+  'match',
+  'estudio',
+  'cine',
+  'aurora',
+  'constelacion',
+  'portada',
+  'hilo',
+] as const satisfies readonly PortalDesignId[];
+
+/**
+ * Diseños Premium. APAGADOS salvo que `PORTAL_PREMIUM_DESIGNS_ENABLED=true`
+ * (solo para localhost y la demo): apagados no se pueden guardar y una fila con
+ * alguno se lee como el default.
+ */
+export const PORTAL_PREMIUM_DESIGN_IDS = [
+  'album',
+  'linterna',
+  'revelado',
+  'velitas',
+  'terminal',
+] as const satisfies readonly PortalPremiumDesignId[];
+
+/** Default de una organización que nunca eligió diseño (el portal de siempre). */
+export const DEFAULT_PORTAL_DESIGN: PortalDesignId = 'clasico';
+
+export function premiumDesignsEnabled(): boolean {
+  return process.env.PORTAL_PREMIUM_DESIGNS_ENABLED === 'true';
+}
+
+const designSchema = z
+  .enum([...PORTAL_DESIGN_IDS, ...PORTAL_PREMIUM_DESIGN_IDS])
+  .refine(
+    (id) => premiumDesignsEnabled() || (PORTAL_DESIGN_IDS as readonly string[]).includes(id),
+    { message: 'Diseño no disponible' },
+  );
+
+/** Normaliza un valor leído de la BD: cualquier cosa fuera del enum ⇒ default. */
+export function safePortalDesign(value: unknown): PortalDesignId | PortalPremiumDesignId {
+  const parsed = designSchema.safeParse(value);
+  return parsed.success ? parsed.data : DEFAULT_PORTAL_DESIGN;
+}
+
 /** PUT /portals/theme body. `logoPosition`/`socialNavPosition` are optional and
  *  independent of `tokens` (S2-PORTAL) — a request may update either or both. */
 export const updatePortalThemeSchema = z
@@ -121,6 +180,7 @@ export const updatePortalThemeSchema = z
     templateOptions: templateOptionsSchema.optional(),
     /** Llave del video de portada; el servicio exige que sea pública y propia. */
     coverVideoKey: z.string().trim().min(1).max(512).nullable().optional(),
+    design: designSchema.optional(),
   })
   .strict();
 

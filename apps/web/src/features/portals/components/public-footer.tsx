@@ -10,6 +10,7 @@ import {
   IconTikTok,
   IconWhatsapp,
 } from './portal-icons';
+import { safeExternalUrl } from '../model/safe-url';
 import styles from '../styles/public-portal.module.scss';
 
 export interface PublicFooterProps {
@@ -28,37 +29,44 @@ export interface PublicFooterProps {
  * actual (dinámico, nunca un año fijo).
  */
 export function PublicFooter({ organization, navItems }: PublicFooterProps) {
+  // Solo http(s): React no bloquea `javascript:` en href.
+  const social = {
+    instagram: safeExternalUrl(organization.socialLinks?.instagram),
+    facebook: safeExternalUrl(organization.socialLinks?.facebook),
+    tiktok: safeExternalUrl(organization.socialLinks?.tiktok),
+    website: safeExternalUrl(organization.socialLinks?.website),
+  };
   const socialIcons: Array<{ key: string; label: string; href: string; Icon: typeof IconGlobe }> =
     [];
-  if (organization.socialLinks?.instagram) {
+  if (social.instagram) {
     socialIcons.push({
       key: 'instagram',
       label: 'Instagram',
-      href: organization.socialLinks.instagram,
+      href: social.instagram,
       Icon: IconInstagram,
     });
   }
-  if (organization.socialLinks?.facebook) {
+  if (social.facebook) {
     socialIcons.push({
       key: 'facebook',
       label: 'Facebook',
-      href: organization.socialLinks.facebook,
+      href: social.facebook,
       Icon: IconFacebook,
     });
   }
-  if (organization.socialLinks?.tiktok) {
+  if (social.tiktok) {
     socialIcons.push({
       key: 'tiktok',
       label: 'TikTok',
-      href: organization.socialLinks.tiktok,
+      href: social.tiktok,
       Icon: IconTikTok,
     });
   }
-  if (organization.socialLinks?.website) {
+  if (social.website) {
     socialIcons.push({
       key: 'website',
       label: 'Sitio web',
-      href: organization.socialLinks.website,
+      href: social.website,
       Icon: IconGlobe,
     });
   }

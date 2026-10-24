@@ -6,6 +6,8 @@ import type {
   PortalThemeConfig,
   PortalLogoPosition,
   PortalSocialNavPosition,
+  PortalDesignId,
+  PortalPremiumDesignId,
   PortalTemplateId,
   PortalTemplateOptions,
   PortalTheme,
@@ -57,6 +59,8 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { ownerPreviewOrganization } from '../model/owner-preview';
 import { PortalPreviewContext } from '../model/portal-preview-context';
+import { TemplatePortal } from '../templates/template-portal';
+import { safeDesignId } from '../templates/registry';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -70,6 +74,8 @@ interface Layout {
   templateOptions: PortalTemplateOptions;
   /** Historias: video de portada opcional (URL pública ya resuelta). */
   coverVideoUrl?: string;
+  /** M14: diseño completo del portal; 'clasico' = este portal con su plantilla. */
+  design: PortalDesignId | PortalPremiumDesignId;
 }
 
 const DEFAULT_LAYOUT: Layout = {
@@ -77,6 +83,7 @@ const DEFAULT_LAYOUT: Layout = {
   socialNavPosition: 'right',
   template: 'clasica',
   templateOptions: {},
+  design: 'clasico',
 };
 
 /**
@@ -190,6 +197,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               template?: unknown;
               templateOptions?: unknown;
               coverVideoUrl?: unknown;
+              design?: unknown;
             }>)
           : null,
       )
@@ -205,6 +213,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
             body?.templateOptions,
           ),
           coverVideoUrl: safeMediaUrl(body?.coverVideoUrl),
+          design: safeDesignId(body?.design),
         },
       }))
       .catch(() => ({ tokens: {} as PortalTheme, layout: DEFAULT_LAYOUT }));
@@ -266,6 +275,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           template,
           templateOptions: resolveTemplateOptions(template, themeConfig?.templateOptions),
           coverVideoUrl: safeMediaUrl(themeConfig?.coverVideoUrl),
+          design: safeDesignId(themeConfig?.design),
         });
         setOwnerPreview(true);
         setState('ready');
@@ -383,7 +393,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       }
     : null;
 
-  return (
+  const classic = (
     <PortalPreviewContext.Provider value={previewClient}>
       <div
         className={templateStyles.page}
@@ -567,4 +577,19 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       </div>
     </PortalPreviewContext.Provider>
   );
+
+  // Diseño completo elegido: mismas secciones y reglas, otra página. Si algo
+  // falla al cargarlo, `TemplatePortal` pinta el portal clásico de arriba.
+  if (state === 'ready' && view && slug && !ownerPreview && layout.design !== 'clasico') {
+    return (
+      <TemplatePortal
+        template={layout.design}
+        slug={slug}
+        organization={view.profile.organization}
+        themeStyle={themeStyle}
+        fallback={classic}
+      />
+    );
+  }
+  return classic;
 }

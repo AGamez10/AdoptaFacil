@@ -319,6 +319,37 @@ export function resolveTemplateOptions(
 /** ¿Se cobra la plantilla? Hasta que existan planes, nunca se bloquea. */
 export const PORTAL_TEMPLATE_TIERS_ENFORCED = false;
 
+/**
+ * Diseños completos del portal público (M14, 14 gratuitos). A diferencia de las
+ * plantillas de arriba (que cambian la portada del portal clásico), un diseño
+ * reemplaza la página entera con las mismas secciones y las mismas reglas de
+ * visibilidad. 'clasico' = sin diseño: se ve el portal de siempre con su
+ * plantilla. Solo tipo: los valores viven en la API (enum Zod) y en la web.
+ */
+export type PortalDesignId =
+  | 'clasico'
+  | 'hogar'
+  | 'revista'
+  | 'expediente'
+  | 'cartel'
+  | 'orbita'
+  | 'galeria'
+  | 'mosaico'
+  | 'match'
+  | 'estudio'
+  | 'cine'
+  | 'aurora'
+  | 'constelacion'
+  | 'portada'
+  | 'hilo';
+
+/**
+ * Diseños Premium (modo claro y oscuro). APAGADOS por defecto: solo se pueden
+ * guardar y pintar cuando la API y la web tienen encendida su variable
+ * (PORTAL_PREMIUM_DESIGNS_ENABLED / VITE_PORTAL_PREMIUM_DESIGNS).
+ */
+export type PortalPremiumDesignId = 'album' | 'linterna' | 'revelado' | 'velitas' | 'terminal';
+
 /** Respuesta de lectura del tema (propio o público). */
 export interface PortalThemeConfig {
   tokens: PortalTheme;
@@ -332,6 +363,8 @@ export interface PortalThemeConfig {
   templateOptions?: PortalTemplateOptions;
   /** Video de portada (plantilla Historias), URL pública lista para `<video>`. */
   coverVideoUrl?: string;
+  /** Diseño completo del portal (M14). Default: 'clasico'. */
+  design?: PortalDesignId | PortalPremiumDesignId;
 }
 
 /** Entrada para crear/actualizar el tema (Owner/Admin). */
@@ -348,6 +381,8 @@ export interface UpdatePortalThemeInput {
    * (`public/<orgId>/<archivo>.mp4` o `.webm`). Omitida, se conserva; `null` lo quita.
    */
   coverVideoKey?: string | null;
+  /** Omitido, conserva el diseño guardado. */
+  design?: PortalDesignId | PortalPremiumDesignId;
 }
 
 // ----------------------------------------------------------------------------

@@ -11,6 +11,7 @@ import {
   IconWhatsapp,
   type IconProps,
 } from './portal-icons';
+import { safeExternalUrl } from '../model/safe-url';
 import styles from '../styles/public-portal.module.scss';
 
 export interface PortalSocialLinksProps {
@@ -34,7 +35,7 @@ const SOCIAL_META: Record<
  */
 export function PortalSocialLinks({ organization }: PortalSocialLinksProps) {
   const socialEntries = (['instagram', 'facebook', 'tiktok', 'website'] as const).flatMap((key) => {
-    const url = organization.socialLinks?.[key];
+    const url = safeExternalUrl(organization.socialLinks?.[key]);
     return url ? [{ key, url, ...SOCIAL_META[key] }] : [];
   });
 

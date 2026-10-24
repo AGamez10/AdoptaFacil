@@ -1,4 +1,11 @@
-import { contrastRatio, MIN_CONTRAST_RATIO, updatePortalThemeSchema } from './portals.schemas';
+import {
+  contrastRatio,
+  MIN_CONTRAST_RATIO,
+  PORTAL_PREMIUM_DESIGN_IDS,
+  PORTAL_DESIGN_IDS,
+  safePortalDesign,
+  updatePortalThemeSchema,
+} from './portals.schemas';
 
 /** T-027 · token validation is the deny-by-default gate for M14 personalization
  *  (tokens only, never arbitrary CSS): format, range and unknown keys. Contrast
@@ -75,5 +82,31 @@ describe('contrastRatio', () => {
 
   it('returns null for unparsable input', () => {
     expect(contrastRatio('nope', '0 0% 100%')).toBeNull();
+  });
+});
+
+describe('diseños Premium', () => {
+  afterEach(() => {
+    delete process.env.PORTAL_PREMIUM_DESIGNS_ENABLED;
+  });
+  const tokens = { primary: '142 72% 29%' };
+
+  it.each(PORTAL_PREMIUM_DESIGN_IDS)('apagados: no deja guardar %s', (id) => {
+    expect(updatePortalThemeSchema.safeParse({ tokens, design: id }).success).toBe(false);
+  });
+
+  it.each(PORTAL_PREMIUM_DESIGN_IDS)('apagados: una fila con %s se lee como el clásico', (id) => {
+    expect(safePortalDesign(id)).toBe('clasico');
+  });
+
+  it.each(PORTAL_PREMIUM_DESIGN_IDS)('con la variable encendida se puede guardar %s', (id) => {
+    process.env.PORTAL_PREMIUM_DESIGNS_ENABLED = 'true';
+    expect(updatePortalThemeSchema.safeParse({ tokens, design: id }).success).toBe(true);
+    expect(safePortalDesign(id)).toBe(id);
+  });
+
+  it('ninguna Premium está en la lista de diseños gratuitos', () => {
+    const accepted: readonly string[] = PORTAL_DESIGN_IDS;
+    expect(PORTAL_PREMIUM_DESIGN_IDS.filter((id) => accepted.includes(id))).toEqual([]);
   });
 });

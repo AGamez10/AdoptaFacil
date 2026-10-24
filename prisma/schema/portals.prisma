@@ -30,6 +30,9 @@ model PortalTheme {
   /// "left" | "right" (S2-PORTAL). De qué lado va el sidebar de redes/contacto
   /// respecto al catálogo de animales.
   socialNavPosition String?  @default("right") @map("social_nav_position")
+  /// Diseño completo del portal público (M14). Enum cerrado validado en la API
+  /// (`PORTAL_DESIGN_IDS`); 'clasico' = el portal de siempre con su plantilla.
+  design            String?  @default("clasico")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

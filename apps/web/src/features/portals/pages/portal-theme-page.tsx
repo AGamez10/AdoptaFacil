@@ -8,12 +8,15 @@ import {
   PORTAL_TEMPLATES,
   PORTAL_TEMPLATE_OPTIONS,
   resolveTemplateOptions,
+  type PortalDesignId,
+  type PortalPremiumDesignId,
   type PortalTemplateId,
   type PortalTemplateOptions,
   type PortalTheme,
   type PortalThemeConfig,
 } from '@adoptafacil/contracts';
 import {
+  Badge,
   Button,
   Card,
   CardContent,
@@ -44,6 +47,12 @@ import { TemplateOptionsForm } from '../components/templates/template-options-fo
 import { TemplateLivePreview } from '../components/templates/template-live-preview';
 import { CoverVideoField } from '../components/templates/cover-video-field';
 import { OrgStatusCard } from '../../org/components/org-status-card';
+import {
+  PREMIUM_CATALOG,
+  PREMIUM_TEMPLATES_ENABLED,
+  safeDesignId,
+  TEMPLATE_CATALOG,
+} from '../templates/registry';
 
 /** Empty string ⇒ "use the default token" (the field is omitted from the payload). */
 type FormState = Partial<Record<string, string>>;
@@ -209,6 +218,60 @@ const LOGO_POSITION_OPTIONS = [
   { value: 'right' as const, label: 'Derecha', dotClass: 'right-1' },
 ];
 
+type DesignChoice = PortalDesignId | PortalPremiumDesignId;
+
+interface DesignPickerProps {
+  value: DesignChoice;
+  onChange: (value: DesignChoice) => void;
+}
+
+/**
+ * Selector de diseño completo (M14). 'Clásico' deja el portal de siempre con
+ * la plantilla de arriba; cualquier otro reemplaza la página entera con el
+ * mismo contenido. Las Premium solo aparecen con su variable encendida.
+ */
+function DesignPicker({ value, onChange }: DesignPickerProps) {
+  const options = [
+    ...TEMPLATE_CATALOG.map((tpl) => ({ ...tpl, premium: false })),
+    ...(PREMIUM_TEMPLATES_ENABLED ? PREMIUM_CATALOG.map((tpl) => ({ ...tpl, premium: true })) : []),
+  ];
+  return (
+    <fieldset className="space-y-2">
+      <legend className="sr-only">Diseño completo del portal</legend>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {options.map((tpl) => (
+          <button
+            key={tpl.id}
+            type="button"
+            aria-pressed={value === tpl.id}
+            data-testid={`design-${tpl.id}`}
+            onClick={() => onChange(tpl.id)}
+            className={`flex flex-col gap-1.5 rounded-md border p-2 text-left text-xs transition-colors ${
+              value === tpl.id
+                ? 'border-primary bg-primary/5 text-foreground'
+                : 'border-input text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            <span
+              aria-hidden
+              className="block h-10 w-full rounded"
+              style={{
+                background: `linear-gradient(135deg, ${tpl.swatch[0]} 0 55%, ${tpl.swatch[1]} 55% 100%)`,
+                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)',
+              }}
+            />
+            <span className="flex items-center justify-between gap-1">
+              <span className="font-medium text-foreground">{tpl.name}</span>
+              <Badge variant="secondary">{tpl.premium ? 'Premium' : 'Gratis'}</Badge>
+            </span>
+            <span className="leading-snug">{tpl.description}</span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 const SOCIAL_NAV_POSITION_OPTIONS = [
   { value: 'left' as const, label: 'Izquierda', dotClass: 'left-1' },
   { value: 'right' as const, label: 'Derecha', dotClass: 'right-1' },
@@ -236,6 +299,7 @@ export function PortalThemePage() {
   const [socialNavPosition, setSocialNavPosition] = useState<PortalSocialNavPosition>('right');
   const [template, setTemplate] = useState<PortalTemplateId>('clasica');
   const [templateOptions, setTemplateOptions] = useState<PortalTemplateOptions>({});
+  const [design, setDesign] = useState<DesignChoice>('clasico');
   // Historias: video de portada. `coverVideoKey` undefined = sin cambios.
   const [coverVideoUrl, setCoverVideoUrl] = useState<string | undefined>(undefined);
   const [coverVideoKey, setCoverVideoKey] = useState<string | null | undefined>(undefined);
@@ -268,6 +332,7 @@ export function PortalThemePage() {
           resolveTemplateOptions(safeTemplate(config.template), config.templateOptions),
         );
         setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
+        setDesign(safeDesignId(config.design));
         setSlug(org?.slug ?? undefined);
         setOrgName(org?.name ?? undefined);
       })
@@ -338,6 +403,7 @@ export function PortalThemePage() {
           socialNavPosition,
           template,
           templateOptions,
+          design,
           ...(coverVideoKey !== undefined ? { coverVideoKey } : {}),
         },
       });
@@ -348,6 +414,7 @@ export function PortalThemePage() {
       setTemplateOptions(
         resolveTemplateOptions(safeTemplate(themeConfig.template), themeConfig.templateOptions),
       );
+      setDesign(safeDesignId(themeConfig.design));
       if (coverVideoKey !== undefined) {
         setCoverVideoUrl(safeMediaUrl(themeConfig.coverVideoUrl));
         setCoverVideoKey(undefined);
@@ -446,6 +513,20 @@ export function PortalThemePage() {
               </CardHeader>
               <CardContent>
                 <TemplatePicker value={template} onChange={chooseTemplate} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Diseño completo de la página</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Opcional. Con &quot;Clásico&quot; tu portal usa la plantilla de arriba; con
+                  cualquier otro diseño la página entera cambia, con la misma información de tu
+                  organización. Tus colores se aplican a todos.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <DesignPicker value={design} onChange={setDesign} />
               </CardContent>
             </Card>
 

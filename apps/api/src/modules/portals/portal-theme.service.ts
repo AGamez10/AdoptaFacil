@@ -18,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { parseStorageKey } from '../../core/storage/storage-keys';
+import { safePortalDesign } from './portals.schemas';
 
 /**
  * Ola 3: la plantilla elegida viaja DENTRO del JSON `tokens` bajo esta clave
@@ -139,6 +140,7 @@ export class PortalThemeService {
         ...present(stored, this.storage),
         logoPosition: (row?.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row?.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
+        design: safePortalDesign(row?.design),
       };
     });
   }
@@ -190,6 +192,7 @@ export class PortalThemeService {
           ...(input.socialNavPosition !== undefined
             ? { socialNavPosition: input.socialNavPosition }
             : {}),
+          ...(input.design !== undefined ? { design: input.design } : {}),
         },
         update: {
           tokens,
@@ -197,6 +200,7 @@ export class PortalThemeService {
           ...(input.socialNavPosition !== undefined
             ? { socialNavPosition: input.socialNavPosition }
             : {}),
+          ...(input.design !== undefined ? { design: input.design } : {}),
         },
       });
       await this.audit.recordWithTx(tx, {
@@ -215,6 +219,7 @@ export class PortalThemeService {
             ...(input.template !== undefined ? ['template'] : []),
             ...(input.templateOptions !== undefined ? ['templateOptions'] : []),
             ...(input.coverVideoKey !== undefined ? ['coverVideo'] : []),
+            ...(input.design !== undefined ? ['design'] : []),
           ],
         },
       });
@@ -223,6 +228,7 @@ export class PortalThemeService {
         ...present(stored, this.storage),
         logoPosition: (row.logoPosition as PortalLogoPosition | null) ?? undefined,
         socialNavPosition: (row.socialNavPosition as PortalSocialNavPosition | null) ?? undefined,
+        design: safePortalDesign(row.design),
       };
     });
   }
@@ -240,6 +246,7 @@ export class PortalThemeService {
           tokens: PortalTheme;
           logoPosition: PortalLogoPosition;
           socialNavPosition: PortalSocialNavPosition;
+          design?: string;
         } | null;
       }>
     >(Prisma.sql`SELECT organization_portal_theme(${slug}) AS data`);
@@ -249,6 +256,7 @@ export class PortalThemeService {
       ...present(stored, this.storage, DEFAULT_PORTAL_TEMPLATE),
       logoPosition: data?.logoPosition ?? 'left',
       socialNavPosition: data?.socialNavPosition ?? 'right',
+      design: safePortalDesign(data?.design),
     };
   }
 }

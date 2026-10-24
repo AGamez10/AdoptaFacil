@@ -310,6 +310,45 @@ describe('PortalThemePage — owner personalization (visual only, S2-REORG)', ()
     });
   });
 
+  describe('M14: selector de diseño completo (premium apagadas)', () => {
+    it('lists the 15 free designs, every one marked "Gratis", with the saved one pressed', async () => {
+      stubFetchByUrl({ tokens: {}, design: 'cine' });
+      renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+      await screen.findByRole('group', { name: 'Diseño completo del portal' });
+      const picker = screen.getByRole('group', { name: 'Diseño completo del portal' });
+      const buttons = within(picker).getAllByRole('button');
+      expect(buttons).toHaveLength(15);
+      buttons.forEach((b) => expect(within(b).getByText('Gratis')).toBeInTheDocument());
+      expect(screen.getByTestId('design-cine')).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('design-clasico')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('falls back to Clásico when the API returns an unknown design', async () => {
+      stubFetchByUrl({ tokens: {}, design: '<script>' });
+      renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+      await screen.findByRole('group', { name: 'Diseño completo del portal' });
+      expect(screen.getByTestId('design-clasico')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('sends the chosen design on save', async () => {
+      const calls: Array<{ url: string; init?: RequestInit }> = [];
+      stubFetch((url, init) => {
+        calls.push({ url, init });
+        if (init?.method === 'PUT') return { tokens: {}, design: 'hilo' };
+        return { tokens: {} };
+      });
+      renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+      await screen.findByRole('group', { name: 'Diseño completo del portal' });
+      fireEvent.click(screen.getByTestId('design-hilo'));
+      fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+      await waitFor(() => {
+        const put = calls.find((c) => c.url.includes('/portals/theme') && c.init?.method === 'PUT');
+        expect(JSON.parse(String(put?.init?.body))).toMatchObject({ design: 'hilo' });
+      });
+      expect(screen.getByTestId('design-hilo')).toHaveAttribute('aria-pressed', 'true');
+    });
+  });
+
   describe('S2-REORG: contenido de la organización ya NO vive aquí', () => {
     it('never shows "Nosotros"/contacto extendido — movidos a Mi organización', async () => {
       renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });

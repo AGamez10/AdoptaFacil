@@ -161,6 +161,32 @@ describe('Portal theme (M14: tokens + RBAC + public read)', () => {
     expect(JSON.stringify(events[0].metadata)).not.toContain('142 72% 29%');
   });
 
+  it('persists the chosen design and exposes it publicly (M14 diseños gratuitos)', async () => {
+    await request(server)
+      .put('/portals/theme')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ tokens: { primary: '142 72% 29%' }, design: 'hilo' })
+      .expect(200)
+      .expect((res) => expect(res.body.design).toBe('hilo'));
+    const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+    expect(pub.body.design).toBe('hilo');
+    // Omitirlo en un PUT posterior deja el diseño guardado intacta.
+    await request(server)
+      .put('/portals/theme')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ tokens: { primary: '142 72% 29%' } })
+      .expect(200)
+      .expect((res) => expect(res.body.design).toBe('hilo'));
+  });
+
+  it('rejects an unknown design (closed enum)', async () => {
+    await request(server)
+      .put('/portals/theme')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ tokens: {}, design: 'premium' })
+      .expect(400);
+  });
+
   describe('public endpoint GET /public/organizations/:slug/theme', () => {
     it('returns the saved tokens for a known slug (no auth)', async () => {
       const res = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);

@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
+  /** 'true' enciende los 5 diseños Premium del portal (solo localhost y demo). */
+  readonly VITE_PORTAL_PREMIUM_DESIGNS?: string;
   /** Google OAuth 2.0 Client ID (T-Google-SignIn). Empty/unset in dev renders
    *  a "Continuar con Google (prueba)" button against the FakeIdentityAdapter
    *  instead of loading the real Google Identity Services script. */
