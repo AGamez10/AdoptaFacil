@@ -250,18 +250,37 @@ ${KIT.contact()}
       return new THREE.CanvasTexture(c);
     };
     const glow = glowTex();
+    // Núcleo: el logo subido por la organización; si no hay logo o no carga, las iniciales.
     const coreTex = () => {
       const c = document.createElement('canvas');
       c.width = c.height = 512;
       const g = c.getContext('2d');
-      if (g) {
+      const paintInitials = () => {
+        if (!g) return;
         g.fillStyle = '#fff';
         g.font = '700 150px Unbounded, Arial, sans-serif';
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.fillText(unesc(m.ORG.initials), 256, 266);
+      };
+      paintInitials();
+      const tex = new THREE.CanvasTexture(c);
+      if (m.ORG.logo) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.referrerPolicy = 'no-referrer';
+        img.onload = () => {
+          if (signal.aborted || !g) return;
+          g.clearRect(0, 0, 512, 512);
+          const k = Math.min(400 / img.naturalWidth, 400 / img.naturalHeight);
+          const w = img.naturalWidth * k;
+          const h = img.naturalHeight * k;
+          g.drawImage(img, 256 - w / 2, 256 - h / 2, w, h);
+          tex.needsUpdate = true;
+        };
+        img.src = unesc(m.ORG.logo);
       }
-      return new THREE.CanvasTexture(c);
+      return tex;
     };
     // Textura del planeta: foto real (si el servidor permite CORS) o ilustración.
     const portraitTex = (a: TplAnimal, done: (t: CanvasTexture) => void) => {
