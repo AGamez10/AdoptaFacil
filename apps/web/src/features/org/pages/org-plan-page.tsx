@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  PLAN_ALWAYS_INCLUDED,
   PLAN_CAPABILITIES,
+  PLAN_CAPABILITY_INFO,
+  PLAN_LIMIT_LABELS,
+  formatPlanLimit,
   priceWithIva,
   type OrganizationPlanView,
-  type PlanCapability,
   type PlanDefinition,
   type PlanKey,
   type PlanLimit,
@@ -25,35 +28,10 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { officialWhatsappUrl } from '../../../lib/contact';
 
-/** What each paid capability means for a shelter, in its own words. */
-const CAPABILITY_LABELS: Record<PlanCapability, string> = {
-  portalAllDesigns: 'Todos los diseños de portal público',
-  portalPremiumDesigns: 'Plantillas Pro del portal (como Historias, con video)',
-  portalAdvancedCustomization: 'Personalización avanzada del portal',
-  portalRemoveSeal: 'Portal sin el sello "Hecho con AdoptaFácil"',
-  customDomain: 'Dominio propio (www.turefugio.org)',
-  brandedEmails: 'Correos a adoptantes y donantes con tu marca',
-  dataExport: 'Exportar tus datos a Excel',
-  impactReport: 'Reporte de impacto en PDF para donantes',
-  corporateSponsorship: 'Patrocinio de empresas',
-  prioritySupport: 'Soporte prioritario por WhatsApp',
-};
-
-/** Included in every plan, free too: what protects the animal, the adopter and
- *  transparency is never sold. */
-const ALWAYS_INCLUDED = [
-  'Animales ilimitados con ficha clínica',
-  'Adopciones con contrato y seguimiento',
-  'Recaudo de donaciones, también si aún no estás formalizado',
-  'Comprobantes de donación y documentos de la organización',
-  'Portal público en tu subdominio',
-];
-
-const LIMIT_LABELS: Record<PlanLimit, string> = {
-  members: 'Miembros del equipo',
-  storageMb: 'Almacenamiento',
-  portalDesigns: 'Diseños de portal',
-};
+/** Labels, limits and the always-free list come from the plan catalog in
+ *  `@adoptafacil/contracts`, the same one the landing uses. */
+const LIMIT_LABELS = PLAN_LIMIT_LABELS;
+const formatLimit = formatPlanLimit;
 
 const cop = new Intl.NumberFormat('es-CO', {
   style: 'currency',
@@ -66,13 +44,6 @@ const colombiaDate = new Intl.DateTimeFormat('es-CO', {
   dateStyle: 'long',
   timeZone: 'America/Bogota',
 });
-
-function formatLimit(limit: PlanLimit, value: number | null): string {
-  if (value === null) return 'Sin límite';
-  if (limit === 'storageMb')
-    return value >= 1024 ? `${Math.round((value / 1024) * 10) / 10} GB` : `${value} MB`;
-  return String(value);
-}
 
 /** Where a shelter asks for a paid plan while billing is manual (payment link
  *  or transfer to AdoptaFácil + electronic invoice). `VITE_BILLING_CONTACT_URL`
@@ -96,11 +67,15 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle>{plan.name}</CardTitle>
-          {current && <Badge variant="success">Tu plan</Badge>}
+          {current ? (
+            <Badge variant="success">Tu plan</Badge>
+          ) : (
+            paid && <Badge variant="outline">Opcional</Badge>
+          )}
         </div>
         <CardDescription>{plan.tagline}</CardDescription>
         <p className="pt-2 text-2xl font-semibold">
-          {paid ? cop.format(plan.monthlyPriceCop) : 'Gratis'}
+          {paid ? cop.format(plan.monthlyPriceCop) : 'Gratis, siempre'}
           {paid && <span className="text-sm font-normal text-muted-foreground"> /mes + IVA</span>}
         </p>
         {paid && (
@@ -122,7 +97,14 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
         {included.length > 0 && (
           <ul className="list-inside list-disc space-y-1">
             {included.map((capability) => (
-              <li key={capability}>{CAPABILITY_LABELS[capability]}</li>
+              <li key={capability}>
+                {PLAN_CAPABILITY_INFO[capability].label}
+                {!PLAN_CAPABILITY_INFO[capability].available && (
+                  <Badge variant="secondary" className="ml-2">
+                    Próximamente
+                  </Badge>
+                )}
+              </li>
             ))}
           </ul>
         )}
@@ -192,7 +174,7 @@ export function OrgPlanPage() {
     <PageContainer>
       <PageHeader
         title="Plan y facturación"
-        description="Lo que protege a los animales y la transparencia es gratis siempre. Los planes suman marca, alcance y comodidad."
+        description="Lo que protege a los animales y la transparencia es gratis siempre. Los planes de pago son opcionales: suman marca, alcance y comodidad."
       />
 
       <Card>
@@ -246,7 +228,7 @@ export function OrgPlanPage() {
           Incluido en todos los planes
         </h2>
         <ul className="grid gap-1 text-sm sm:grid-cols-2">
-          {ALWAYS_INCLUDED.map((item) => (
+          {PLAN_ALWAYS_INCLUDED.map((item) => (
             <li key={item}>✓ {item}</li>
           ))}
         </ul>

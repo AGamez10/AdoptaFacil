@@ -7,6 +7,7 @@ import {
   launchPromoEnd,
   minimumPlanFor,
   minimumPlanForLimit,
+  planHighlights,
   priceWithIva,
   resolveEffectivePlan,
   type OrganizationSubscription,
@@ -65,6 +66,24 @@ describe('plan catalog', () => {
   it('adds 19 % IVA', () => {
     expect(priceWithIva(39_000)).toBe(46_410);
     expect(priceWithIva(79_000)).toBe(94_010);
+  });
+});
+
+describe('planHighlights (landing and plans screen share the catalog)', () => {
+  it('lists the free limits and, for each paid plan, only what it adds', () => {
+    const free = planHighlights('free').map((h) => h.text);
+    expect(free).toContain('Hasta 3 personas del equipo');
+    expect(free).toContain('1 GB para fotos y documentos');
+
+    const crece = planHighlights('crece').map((h) => h.text);
+    expect(crece[0]).toBe('Todo lo del plan Gratis');
+    expect(crece).not.toContain('Todos los diseños de portal público');
+    expect(crece).toContain('Hasta 10 personas del equipo');
+
+    const pro = planHighlights('pro');
+    expect(pro[0].text).toBe('Todo lo del plan Crece');
+    expect(pro.map((h) => h.text)).toContain('Equipo sin límite de personas');
+    expect(pro.find((h) => h.text.startsWith('Dominio propio'))?.available).toBe(false);
   });
 });
 
