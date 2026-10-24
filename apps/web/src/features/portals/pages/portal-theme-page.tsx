@@ -455,7 +455,7 @@ export function PortalThemePage() {
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
           <div className="space-y-6">
             <TemplateUpsell premiumAvailable={premiumAvailable} lockedTemplate={lockedTemplate} />
 
@@ -547,7 +547,30 @@ export function PortalThemePage() {
             <div className="flex justify-end">{saveButton}</div>
           </div>
 
-          <div className="lg:sticky lg:top-4 lg:self-start">
+          <div className="order-first min-w-0 lg:order-none lg:sticky lg:top-4 lg:self-start">
+            {/* Móvil: cambio de plantilla inmediato, arriba de la vista previa. */}
+            <div
+              className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden"
+              role="group"
+              aria-label="Cambiar plantilla"
+              data-testid="template-quick-switch"
+            >
+              {PORTAL_TEMPLATES.map((info) => (
+                <button
+                  key={info.id}
+                  type="button"
+                  aria-pressed={template === info.id}
+                  onClick={() => chooseTemplate(info.id)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                    template === info.id
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'bg-background text-foreground'
+                  }`}
+                >
+                  {info.name}
+                </button>
+              ))}
+            </div>
             <Card>
               <CardHeader>
                 <CardTitle>Vista previa en vivo</CardTitle>

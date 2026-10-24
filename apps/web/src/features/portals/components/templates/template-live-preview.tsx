@@ -15,7 +15,9 @@ import { buildPortalView } from '../../model/portal-view';
 import { isEngineTemplate, loadDesign } from '../../templates/registry';
 import type { TemplateDesign } from '../../templates/engine/types';
 import type { TemplateSourceData } from '../../templates/engine/model';
-import { PortalTemplateView } from '../../templates/portal-template-view';
+import { BASE_CSS } from '../../templates/engine/base-css';
+import { createKit } from '../../templates/engine/kit';
+import { buildTemplateModel } from '../../templates/engine/model';
 import { AnimalCard } from '../animal-card';
 import { PortalProfileSection } from '../portal-profile-section';
 import {
@@ -75,7 +77,10 @@ export function TemplateLivePreview({
   logoPosition,
   coverVideoUrl,
 }: TemplateLivePreviewProps) {
-  const [device, setDevice] = useState<Device>('desktop');
+  // En pantallas pequeñas se abre la vista de celular (el editor usa el ancho del dispositivo).
+  const [device, setDevice] = useState<Device>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 'mobile' : 'desktop',
+  );
   const [organization, setOrganization] = useState<OrganizationPublic | null>(null);
   const [animals, setAnimals] = useState<AnimalSummary[]>([]);
   const [total, setTotal] = useState<number | undefined>(undefined);
@@ -202,7 +207,12 @@ export function TemplateLivePreview({
           {...{ inert: '' }}
         >
           {engine ? (
-            <EnginePreview template={engine} source={engineSource} themeStyle={style} />
+            <EnginePreview
+              template={engine}
+              source={engineSource}
+              themeStyle={style}
+              width={width}
+            />
           ) : (
             <div
               className={templateStyles.page}
@@ -256,16 +266,47 @@ export function TemplateLivePreview({
   );
 }
 
+/**
+ * Sin scripts, las entradas animadas (que activa el JS del portal) se quedarían
+ * ocultas: aquí se muestran en su estado final y se quitan las transiciones.
+ */
+const PREVIEW_STATIC_CSS = `.af-tpl *,.af-tpl *::before,.af-tpl *::after{transition:none!important;animation:none!important}
+.af-tpl .is-pre,.af-tpl .k-name span,.af-tpl .k-fr span,.af-tpl .k-slide{opacity:1!important;transform:none!important;filter:none!important;clip-path:none!important}`;
+
+/**
+ * Documento de la vista previa: la MISMA plantilla (su CSS y su marcado real) dentro
+ * de un iframe del ancho real del dispositivo. Así los media queries y las unidades de
+ * viewport se comportan como en el portal, no según la ventana del editor. Sin scripts.
+ */
+function buildPreviewDoc(
+  design: TemplateDesign,
+  source: TemplateSourceData,
+  themeStyle: CSSProperties,
+): string {
+  const model = buildTemplateModel(source);
+  const body = design.html(model, createKit(model));
+  const vars = Object.entries(themeStyle as Record<string, string>)
+    .map(([key, value]) => `${key}:${String(value).replace(/["<>]/g, '')}`)
+    .join(';');
+  const fonts = design.fonts
+    ? `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${design.fonts}&display=swap">`
+    : '';
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${fonts}<style>html,body{margin:0}${BASE_CSS}${design.css}${PREVIEW_STATIC_CSS}</style></head><body><div class="af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}" style="${vars}">${body}</div></body></html>`;
+}
+
 function EnginePreview({
   template,
   source,
   themeStyle,
+  width,
 }: {
   template: PortalTemplateId;
   source: TemplateSourceData;
   themeStyle: CSSProperties;
+  width: number;
 }) {
   const [design, setDesign] = useState<TemplateDesign | null>(null);
+  const [height, setHeight] = useState(600);
 
   useEffect(() => {
     let active = true;
@@ -281,13 +322,22 @@ function EnginePreview({
     };
   }, [template]);
 
+  const srcDoc = useMemo(
+    () => (design ? buildPreviewDoc(design, source, themeStyle) : ''),
+    [design, source, themeStyle],
+  );
   if (!design) return null;
   return (
-    <PortalTemplateView
-      design={design}
-      source={source}
-      themeStyle={themeStyle}
-      onReviewCreated={() => undefined}
+    <iframe
+      title={`Vista previa de la plantilla ${design.id}`}
+      srcDoc={srcDoc}
+      // Sin scripts ni navegación: solo se mira. allow-same-origin deja medir la altura.
+      sandbox="allow-same-origin"
+      style={{ width, height, border: 0, display: 'block' }}
+      onLoad={(event) => {
+        const doc = event.currentTarget.contentDocument;
+        if (doc) setHeight(doc.documentElement.scrollHeight);
+      }}
     />
   );
 }
