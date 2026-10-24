@@ -170,7 +170,13 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
     const animal = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${orgToken}`)
-      .send({ name: 'Canela', species: 'dog', sex: 'female', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Canela',
+        species: 'dog',
+        sex: 'female',
+        size: 'medium',
+      })
       .expect(201);
     const plan = await request(server)
       .post('/sponsorship-plans')

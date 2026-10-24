@@ -126,6 +126,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .post('/animals')
       .set('Authorization', `Bearer ${ownerA.token}`)
       .send({
+        approximateAgeMonths: 12,
         name: 'Firu',
         species: 'dog',
         sex: 'male',

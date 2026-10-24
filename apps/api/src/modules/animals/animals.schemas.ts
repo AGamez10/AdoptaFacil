@@ -1,3 +1,4 @@
+import { isFutureBirthDate } from '@adoptafacil/contracts';
 import { z } from 'zod';
 
 /** Enums mirror the STABLE contract value sets (animals.ts). Exported so
@@ -16,10 +17,20 @@ const photoInput = z
   })
   .strict();
 
+/** Birth date: ISO-8601 with offset, never after today in Colombia. Shared
+ *  with the bulk import so both paths reject a future birth date. */
+export const birthDate = z
+  .string()
+  .datetime({ offset: true })
+  .refine((value) => !isFutureBirthDate(value), {
+    message: 'La fecha de nacimiento no puede ser futura.',
+  });
+
 /** Personality tags (S2-04A) — free text, max 10, no empty/oversized entries. */
 export const tags = z.array(z.string().trim().min(1).max(40)).max(10);
 
-/** Create an animal record. `.strict()` rejects unknown keys. */
+/** Create an animal record. `.strict()` rejects unknown keys. The age is
+ *  required: an exact `birthDate` or, when unknown, `approximateAgeMonths`. */
 export const createAnimalSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
@@ -29,15 +40,20 @@ export const createAnimalSchema = z
     status: status.optional(),
     breedId: z.string().guid().optional(),
     customBreed: z.string().trim().min(1).max(80).optional(),
-    birthDate: z.string().datetime({ offset: true }).optional(),
+    birthDate: birthDate.optional(),
     approximateAgeMonths: z.number().int().min(0).max(1200).optional(),
     description: z.string().trim().max(5000).optional(),
     tags: tags.optional(),
     photos: z.array(photoInput).max(20).optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.birthDate !== undefined || value.approximateAgeMonths !== undefined, {
+    message: 'Indica la fecha de nacimiento o una edad aproximada.',
+    path: ['birthDate'],
+  });
 
-/** Patch an animal record. At least one field must be present. */
+/** Patch an animal record. At least one field must be present. `birthDate:
+ *  null` clears it; the service checks the record still keeps an age. */
 export const updateAnimalSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
@@ -47,7 +63,7 @@ export const updateAnimalSchema = z
     status: status.optional(),
     breedId: z.string().guid().optional(),
     customBreed: z.string().trim().min(1).max(80).optional(),
-    birthDate: z.string().datetime({ offset: true }).optional(),
+    birthDate: birthDate.nullable().optional(),
     approximateAgeMonths: z.number().int().min(0).max(1200).optional(),
     description: z.string().trim().max(5000).optional(),
     tags: tags.optional(),

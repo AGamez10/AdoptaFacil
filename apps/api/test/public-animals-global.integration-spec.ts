@@ -55,7 +55,10 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
   }
 
   const createAnimal = (token: string, body: Record<string, unknown>) =>
-    request(server).post('/animals').set('Authorization', `Bearer ${token}`).send(body);
+    request(server)
+      .post('/animals')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ approximateAgeMonths: 12, ...body });
 
   const publicListAll = (query = '') => request(server).get(`/public/animals${query}`);
 

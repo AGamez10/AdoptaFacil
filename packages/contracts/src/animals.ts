@@ -239,8 +239,34 @@ export interface AnimalPhotoInput {
   order?: number;
 }
 
+/** Colombia is UTC-5 all year (no DST); "today" for a birth date is Colombia's. */
+const COLOMBIA_UTC_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/**
+ * Today's calendar date in Colombia as `YYYY-MM-DD` — the latest birth date an
+ * animal may have. Used as the `max` of the date input and by the API check.
+ */
+export function latestAllowedBirthDate(now: Date = new Date()): string {
+  return new Date(now.getTime() - COLOMBIA_UTC_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * True when `birthDate` (ISO-8601) falls AFTER today in Colombia. A birth date
+ * is a calendar day stored as UTC midnight (age math reads its UTC parts), so
+ * its UTC date is compared with Colombia's date — not the raw instant, which
+ * would let "tomorrow" through every evening after 19:00 local time. Invalid
+ * dates count as future so a caller never lets them through.
+ */
+export function isFutureBirthDate(birthDate: string, now: Date = new Date()): boolean {
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) return true;
+  return date.toISOString().slice(0, 10) > latestAllowedBirthDate(now);
+}
+
 /** Create an animal record (expediente). At least one photo is expected (§10).
- *  `status` defaults to `available`; the record starts active. */
+ *  `status` defaults to `available`; the record starts active. The age is
+ *  REQUIRED: exactly known (`birthDate`, never in the future) or, for rescues
+ *  whose birth date is unknown, `approximateAgeMonths`. */
 export interface CreateAnimalInput {
   name: string;
   species: AnimalSpecies;
@@ -249,7 +275,8 @@ export interface CreateAnimalInput {
   status?: AnimalStatus;
   breedId?: string;
   customBreed?: string;
-  /** ISO-8601 UTC date of birth (preferred for age). */
+  /** ISO-8601 UTC date of birth (preferred for age). Not in the future. One of
+   *  `birthDate` / `approximateAgeMonths` is required. */
   birthDate?: string;
   /** Approximate age in months when the birth date is unknown. */
   approximateAgeMonths?: number;
@@ -269,7 +296,9 @@ export interface UpdateAnimalInput {
   status?: AnimalStatus;
   breedId?: string;
   customBreed?: string;
-  birthDate?: string;
+  /** Not in the future. `null` clears it (switching to an approximate age);
+   *  the record must keep a birth date or an approximate age. */
+  birthDate?: string | null;
   approximateAgeMonths?: number;
   description?: string;
   /** Personality tags (S2-04A), max 10. */
