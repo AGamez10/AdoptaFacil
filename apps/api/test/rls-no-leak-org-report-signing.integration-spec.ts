@@ -13,15 +13,22 @@ const APP_DATABASE_URL =
   process.env.DATABASE_URL_APP ??
   'postgresql://adoptafacil_app:adoptafacil_app@localhost:5433/adoptafacil?schema=public';
 
+// Un runner propio lento puede pasar de los 5 s por defecto al sembrar datos.
+const SEED_TX_TIMEOUT_MS = 30_000;
+
 async function withOrgContext<T>(
   prisma: PrismaClient,
   organizationId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  timeoutMs?: number,
 ): Promise<T> {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
-    return fn(tx);
-  });
+  return prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
+      return fn(tx);
+    },
+    timeoutMs === undefined ? undefined : { timeout: timeoutMs },
+  );
 }
 
 describe('RLS cross-org no-leak (firma con consentimiento)', () => {
@@ -36,6 +43,8 @@ describe('RLS cross-org no-leak (firma con consentimiento)', () => {
   let designationA = '';
 
   async function seedOrg(orgId: string, userId: string, label: string) {
+    const withSeedContext = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) =>
+      withOrgContext(prisma, orgId, fn, SEED_TX_TIMEOUT_MS);
     await admin.organization.create({ data: { id: orgId, name: label } });
     await admin.user.create({
       data: {
@@ -60,7 +69,7 @@ describe('RLS cross-org no-leak (firma con consentimiento)', () => {
         signedAt: new Date(),
       },
     });
-    const report = await withOrgContext(prisma, orgId, (tx) =>
+    const report = await withSeedContext((tx) =>
       tx.orgReport.create({
         data: {
           organizationId: orgId,
@@ -80,7 +89,7 @@ describe('RLS cross-org no-leak (firma con consentimiento)', () => {
         },
       }),
     );
-    const approval = await withOrgContext(prisma, orgId, (tx) =>
+    const approval = await withSeedContext((tx) =>
       tx.orgReportApproval.create({
         data: {
           organizationId: orgId,
@@ -94,7 +103,7 @@ describe('RLS cross-org no-leak (firma con consentimiento)', () => {
         },
       }),
     );
-    const designation = await withOrgContext(prisma, orgId, (tx) =>
+    const designation = await withSeedContext((tx) =>
       tx.orgSignerDesignation.create({
         data: {
           organizationId: orgId,
@@ -104,7 +113,7 @@ describe('RLS cross-org no-leak (firma con consentimiento)', () => {
         },
       }),
     );
-    await withOrgContext(prisma, orgId, (tx) =>
+    await withSeedContext((tx) =>
       tx.orgReportPolicy.create({
         data: {
           organizationId: orgId,
