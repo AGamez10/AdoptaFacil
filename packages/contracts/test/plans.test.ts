@@ -87,6 +87,8 @@ describe('planHighlights (landing and plans screen share the catalog)', () => {
     expect(pro.find((h) => h.text.startsWith('Dominio propio'))?.available).toBe(false);
     // Exportar a Excel ya funciona (GET /org/exports/data.xlsx).
     expect(PLAN_CAPABILITY_INFO.dataExport.available).toBe(true);
+    // Y el reporte de impacto (GET /org/exports/impact-report.pdf).
+    expect(PLAN_CAPABILITY_INFO.impactReport.available).toBe(true);
   });
 });
 

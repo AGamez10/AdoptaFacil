@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../../core/audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -6,6 +7,8 @@ import {
   renderDataExportXlsx,
   type DataExportInput,
 } from './data-export-xlsx';
+import { renderImpactReportPdf, type ImpactReportData } from './impact-report-pdf';
+import { resolveReportPeriod } from '../reports/report-period';
 
 interface DonationBreakdown {
   net?: number;
@@ -34,10 +37,18 @@ function colombiaStamp(now: Date): string {
  */
 @Injectable()
 export class OrgExportsService {
+  private readonly webBaseUrl: string;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-  ) {}
+    @Inject(ConfigService) config: ConfigService,
+  ) {
+    this.webBaseUrl = String(config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(
+      /\/$/,
+      '',
+    );
+  }
 
   async collectData(organizationId: string, now = new Date()): Promise<DataExportInput> {
     const organization = await this.prisma.withOrgContext(organizationId, (tx) =>
@@ -255,5 +266,161 @@ export class OrgExportsService {
       },
     });
     return { filename: `adoptafacil-datos-${colombiaStamp(now)}.xlsx`, data };
+  }
+
+  /**
+   * Cifras del reporte de impacto para un período (fechas de Colombia,
+   * inclusivas, máximo un año, nunca en el futuro). Todo son conteos y sumas:
+   * ninguna consulta devuelve el contacto de una persona al servicio.
+   */
+  async collectImpact(
+    organizationId: string,
+    startDate: string,
+    endDate: string,
+    now = new Date(),
+  ): Promise<ImpactReportData> {
+    const period = resolveReportPeriod(startDate, endDate, now);
+    const range = { gte: period.fromUtc, lt: period.toUtcExclusive };
+
+    const [org, profile] = await this.prisma.withOrgContext(organizationId, (tx) =>
+      Promise.all([
+        tx.organization.findUniqueOrThrow({
+          where: { id: organizationId },
+          select: { name: true },
+        }),
+        tx.organizationProfile.findUnique({
+          where: { organizationId },
+          select: { slug: true, location: true },
+        }),
+      ]),
+    );
+
+    const [animalsRegistered, adoptionsCompleted, byStatus, care] =
+      await this.prisma.withOrgContext(organizationId, (tx) =>
+        Promise.all([
+          tx.animal.count({ where: { organizationId, createdAt: range } }),
+          tx.adoptionContract.count({
+            where: { organizationId, status: 'signed', signedAt: range },
+          }),
+          tx.animal.groupBy({
+            by: ['status'],
+            where: { organizationId, isActive: true },
+            _count: { _all: true },
+          }),
+          // Una atención = un evento clínico (la última versión de cada `eventId`).
+          tx.clinicalEvent.findMany({
+            where: {
+              organizationId,
+              occurredAt: range,
+              type: { in: ['vaccine', 'sterilization', 'surgery', 'treatment'] },
+            },
+            orderBy: [{ eventId: 'asc' }, { version: 'desc' }],
+            distinct: ['eventId'],
+            select: { type: true },
+          }),
+        ]),
+      );
+    const adoptedTotal = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.animal.count({ where: { organizationId, status: 'adopted' } }),
+    );
+
+    const donations = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.donation.findMany({
+        where: {
+          organizationId,
+          status: 'approved',
+          OR: [{ receipt: { issuedAt: range } }, { receipt: null, updatedAt: range }],
+        },
+        select: { breakdown: true, donorUserId: true },
+      }),
+    );
+    const accounts = new Set(donations.map((d) => d.donorUserId).filter(Boolean));
+    const guests = donations.filter((d) => !d.donorUserId).length;
+
+    const [hours, campaigns] = await this.prisma.withOrgContext(organizationId, (tx) =>
+      Promise.all([
+        tx.serviceHours.findMany({
+          where: { organizationId, status: 'approved', date: range },
+          select: { hours: true, volunteerUserId: true },
+        }),
+        tx.campaign.findMany({
+          where: {
+            organizationId,
+            status: { not: 'cancelled' },
+            createdAt: { lt: period.toUtcExclusive },
+            deadline: { gte: period.fromUtc },
+          },
+          orderBy: { raisedAmount: 'desc' },
+          take: 50,
+          select: {
+            title: true,
+            category: true,
+            status: true,
+            goalAmount: true,
+            raisedAmount: true,
+          },
+        }),
+      ]),
+    );
+
+    const statusCount = (status: string) =>
+      byStatus.find((g) => g.status === status)?._count._all ?? 0;
+    const careCount = (type: string) => care.filter((e) => e.type === type).length;
+    const city = (profile?.location as { city?: string } | null | undefined)?.city?.trim();
+
+    return {
+      organization: { name: org.name, ...(city ? { city } : {}) },
+      period: { start: period.startDate, end: period.endDate },
+      generatedAt: now,
+      animalsRegistered,
+      adoptionsCompleted,
+      donations: {
+        count: donations.length,
+        netTotal: donations.reduce(
+          (sum, d) => sum + ((d.breakdown as DonationBreakdown | null)?.net ?? 0),
+          0,
+        ),
+        donors: accounts.size + guests,
+      },
+      care: {
+        vaccines: careCount('vaccine'),
+        sterilizations: careCount('sterilization'),
+        surgeries: careCount('surgery'),
+        treatments: careCount('treatment'),
+      },
+      volunteerHours: Math.round(hours.reduce((sum, h) => sum + h.hours, 0) * 100) / 100,
+      volunteers: new Set(hours.map((h) => h.volunteerUserId)).size,
+      campaigns,
+      animalsToday: {
+        available: statusCount('available'),
+        inProcess: statusCount('in_process'),
+        adopted: adoptedTotal,
+      },
+      ...(profile?.slug
+        ? { portalUrl: `${this.webBaseUrl}/o/${encodeURIComponent(profile.slug)}` }
+        : {}),
+    };
+  }
+
+  /** PDF del reporte de impacto, con su descarga en la bitácora. */
+  async impactReport(
+    organizationId: string,
+    actorUserId: string,
+    startDate: string,
+    endDate: string,
+    now = new Date(),
+  ): Promise<{ filename: string; data: Buffer }> {
+    const data = await this.collectImpact(organizationId, startDate, endDate, now);
+    const pdf = await renderImpactReportPdf(data);
+    await this.audit.record({
+      organizationId,
+      actorUserId,
+      action: 'organization.impact_report_generated',
+      entityType: 'organization',
+      entityId: organizationId,
+      metadata: { periodStart: data.period.start, periodEnd: data.period.end },
+    });
+    const stamp = `${data.period.start}_${data.period.end}`.replace(/-/g, '');
+    return { filename: `adoptafacil-impacto-${stamp}.pdf`, data: pdf };
   }
 }

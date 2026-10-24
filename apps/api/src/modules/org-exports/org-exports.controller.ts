@@ -1,4 +1,4 @@
-import { Controller, Get, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { Role } from '@adoptafacil/contracts';
@@ -40,5 +40,26 @@ export class OrgExportsController {
   @Throttle({ default: { limit: 5, ttl: 10 * 60_000 } })
   async data(@CurrentUser() actor: RequestUser, @Res() res: Response): Promise<void> {
     sendFile(res, await this.service.exportData(actor.organizationId, actor.id), XLSX);
+  }
+
+  /** Reporte de impacto en PDF: `?start=AAAA-MM-DD&end=AAAA-MM-DD` (hora de Colombia, máximo un año). */
+  @Get('impact-report.pdf')
+  @Roles(Role.Owner, Role.Administrator)
+  @RequirePlan('impactReport')
+  @Throttle({ default: { limit: 10, ttl: 10 * 60_000 } })
+  async impact(
+    @CurrentUser() actor: RequestUser,
+    @Query('start') start: unknown,
+    @Query('end') end: unknown,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (typeof start !== 'string' || typeof end !== 'string') {
+      throw new BadRequestException('Indica el período con start y end (AAAA-MM-DD).');
+    }
+    sendFile(
+      res,
+      await this.service.impactReport(actor.organizationId, actor.id, start, end),
+      'application/pdf',
+    );
   }
 }

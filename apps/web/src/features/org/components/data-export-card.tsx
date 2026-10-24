@@ -1,14 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PLAN_REQUIRED_CODE, type PlanRequiredError } from '@adoptafacil/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@adoptafacil/ui';
-import { ApiError, useApiClient } from '../../../shell/api';
-
-function planRequired(error: unknown): PlanRequiredError | null {
-  if (!ApiError.is(error) || error.status !== 403) return null;
-  const body = error.details as Partial<PlanRequiredError> | undefined;
-  return body?.code === PLAN_REQUIRED_CODE ? (body as PlanRequiredError) : null;
-}
+import { useApiClient } from '../../../shell/api';
+import { downloadOrgExport, exportErrorMessage } from './org-export-download';
 
 /**
  * "Exportar tus datos" (planes Crece y Pro): descarga un Excel con los
@@ -25,37 +19,16 @@ export function DataExportCard() {
     setBusy(true);
     setMessage(null);
     try {
-      const blob = await client.requestBlob('/org/exports/data.xlsx');
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `adoptafacil-datos.xlsx`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
+      await downloadOrgExport(client, '/org/exports/data.xlsx', 'adoptafacil-datos.xlsx');
     } catch (error) {
-      const plan = planRequired(error);
-      if (plan) {
-        setMessage({ text: plan.message, needsPlan: true });
-      } else if (ApiError.is(error) && error.status === 429) {
-        setMessage({
-          text: 'Ya descargaste varias veces en pocos minutos. Espera un momento y vuelve a intentarlo.',
-          needsPlan: false,
-        });
-      } else {
-        setMessage({
-          text: 'No se pudo generar el archivo. Inténtalo de nuevo.',
-          needsPlan: false,
-        });
-      }
+      setMessage(exportErrorMessage(error));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card className="mt-6" data-testid="data-export-card">
+    <Card data-testid="data-export-card">
       <CardHeader>
         <CardTitle className="text-base">Exportar tus datos</CardTitle>
         <CardDescription>
@@ -68,17 +41,26 @@ export function DataExportCard() {
         <Button onClick={() => void download()} disabled={busy}>
           {busy ? 'Generando…' : 'Exportar mis datos'}
         </Button>
-        {message && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {message.text}{' '}
-            {message.needsPlan && (
-              <Link to="/organizacion/plan" className="underline underline-offset-4">
-                Ver planes
-              </Link>
-            )}
-          </p>
-        )}
+        <ExportMessage message={message} />
       </CardContent>
     </Card>
+  );
+}
+
+export function ExportMessage({
+  message,
+}: {
+  message: { text: string; needsPlan: boolean } | null;
+}) {
+  if (!message) return null;
+  return (
+    <p role="status" className="text-sm text-muted-foreground">
+      {message.text}{' '}
+      {message.needsPlan && (
+        <Link to="/organizacion/plan" className="underline underline-offset-4">
+          Ver planes
+        </Link>
+      )}
+    </p>
   );
 }
