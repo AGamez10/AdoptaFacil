@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { currentLegalAcceptanceItems, requiredGuestLegalDocuments } from '@adoptafacil/contracts';
-import type { CardPaymentBrickProps } from '../../payments';
 import { DonateForm } from './donate-form';
 
 /**
@@ -9,35 +8,14 @@ import { DonateForm } from './donate-form';
  * "cubro la comisión" checkbox drives commissionPayer. Presentational only (no
  * api/session), so it renders standalone.
  *
- * T-OrdersAPI: the real `CardPaymentBrick` loads MercadoPago's external SDK
- * script (jsdom can't execute it, and it would make these tests network-
- * dependent) — mocked here with a fake "submit" button that calls `onResult`
- * with fixed, deterministic card data, same technique any Brick-embedding
- * form in this codebase should use.
+ * ePayco is the only gateway (Mercado Pago retired 2026-10-17): there is no
+ * card step — "Donar" calls `onDonate` directly, with NO card fields, and the
+ * page opens ePayco's own checkout.
  */
-vi.mock('../../payments', () => ({
-  CardPaymentBrick: ({ onResult }: CardPaymentBrickProps) => (
-    <button
-      type="button"
-      data-testid="fake-card-brick-submit"
-      onClick={() =>
-        void onResult({
-          cardToken: 'tok-test-123',
-          paymentMethodId: 'visa',
-          installments: 1,
-        })
-      }
-    >
-      Simular pago con tarjeta
-    </button>
-  ),
-}));
-
 const digits = (el: HTMLElement) => Number.parseInt(el.textContent!.replace(/[^\d]/g, ''), 10);
 
-/** Fills a valid amount and advances past step 1 ("Continuar"/"Donar a …") into
- *  the card step, where the fake Brick above is rendered. */
-function goToCardStep(organizationName = 'Refugio Patitas') {
+/** Fills a valid amount and clicks "Donar a …" (single step, ePayco). */
+function clickDonate(organizationName = 'Refugio Patitas') {
   fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`Donar a ${organizationName}`) }));
 }
@@ -98,23 +76,23 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
     expect(screen.queryByTestId('donation-guest-email')).not.toBeInTheDocument();
   });
 
-  it('step 2: advancing past "Donar" renders the Card Payment Brick, not an immediate charge', () => {
+  it('never renders a card form: "Donar" calls onDonate directly (ePayco checkout)', () => {
     const onDonate = vi.fn().mockResolvedValue(undefined);
     render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={onDonate} />);
-    goToCardStep();
+    expect(screen.getByText(/pasarela segura de ePayco/)).toBeInTheDocument();
+    expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
+    clickDonate();
 
-    expect(screen.getByTestId('fake-card-brick-submit')).toBeInTheDocument();
-    expect(onDonate).not.toHaveBeenCalled();
+    expect(onDonate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('card-payment-brick')).not.toBeInTheDocument();
   });
 
-  it('submits the intended amount, commission payer, anonymous, and the tokenized card ONLY once the Brick submits', async () => {
+  it('submits the intended amount, commission payer and anonymous — never card fields', () => {
     const onDonate = vi.fn().mockResolvedValue(undefined);
     render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={onDonate} />);
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.click(screen.getByTestId('cover-fee'));
-    goToCardStep();
-
-    fireEvent.click(screen.getByTestId('fake-card-brick-submit'));
+    fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
 
     expect(onDonate).toHaveBeenCalledTimes(1);
     expect(onDonate).toHaveBeenCalledWith({
@@ -122,10 +100,7 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
       commissionPayer: 'donor',
       anonymous: false,
       guestPayer: undefined,
-      cardToken: 'tok-test-123',
-      paymentMethodId: 'visa',
-      paymentMethodType: undefined,
-      installments: 1,
+      legalAcceptances: undefined,
     });
   });
 
@@ -134,28 +109,16 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
     render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={onDonate} />);
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.click(screen.getByTestId('donate-anonymous'));
-    goToCardStep();
-    fireEvent.click(screen.getByTestId('fake-card-brick-submit'));
+    clickDonate();
 
     expect(onDonate).toHaveBeenCalledWith(expect.objectContaining({ anonymous: true }));
-  });
-
-  it('"Volver" returns to step 1 without ever calling onDonate', () => {
-    const onDonate = vi.fn();
-    render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={onDonate} />);
-    goToCardStep();
-    fireEvent.click(screen.getByTestId('donate-back-to-details'));
-
-    expect(screen.getByTestId('donation-breakdown')).toBeInTheDocument();
-    expect(onDonate).not.toHaveBeenCalled();
   });
 });
 
 /**
  * Checkout de invitado (requisito FINAL del cliente): donar nunca exige cuenta
  * ni login. Sin sesión, el formulario pide nombre + correo y los exige antes
- * de habilitar "Donar" (step 1 — la tarjeta sigue siendo el paso 2, igual que
- * con sesión).
+ * de habilitar "Donar" (un solo paso; el pago ocurre en ePayco).
  */
 /** El invitado acepta términos y autorización de datos (casillas obligatorias). */
 function acceptGuestLegal(): void {
@@ -234,15 +197,14 @@ describe('DonateForm (guest checkout — no session)', () => {
     fireEvent.click(screen.getByTestId('donate-anonymous'));
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     acceptGuestLegal();
-    goToCardStep();
-    fireEvent.click(screen.getByTestId('fake-card-brick-submit'));
+    clickDonate();
 
     expect(onDonate).toHaveBeenCalledWith(
       expect.objectContaining({ anonymous: true, guestPayer: undefined }),
     );
   });
 
-  it('submits the guest name/email as guestPayer, with the tokenized card, once the Brick submits', () => {
+  it('submits the guest name/email as guestPayer (no card fields) on "Donar"', () => {
     const onDonate = vi.fn().mockResolvedValue(undefined);
     render(
       <DonateForm organizationName="Refugio Patitas" hasSession={false} onDonate={onDonate} />,
@@ -255,8 +217,7 @@ describe('DonateForm (guest checkout — no session)', () => {
       target: { value: 'invitado@test.dev' },
     });
     acceptGuestLegal();
-    goToCardStep();
-    fireEvent.click(screen.getByTestId('fake-card-brick-submit'));
+    clickDonate();
 
     expect(onDonate).toHaveBeenCalledWith({
       intendedAmount: 50000,
@@ -266,10 +227,6 @@ describe('DonateForm (guest checkout — no session)', () => {
       legalAcceptances: expect.arrayContaining(
         currentLegalAcceptanceItems(requiredGuestLegalDocuments()),
       ),
-      cardToken: 'tok-test-123',
-      paymentMethodId: 'visa',
-      paymentMethodType: undefined,
-      installments: 1,
     });
   });
 });

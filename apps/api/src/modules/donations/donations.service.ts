@@ -13,7 +13,6 @@ import { Prisma } from '@prisma/client';
 import {
   computeBreakdown,
   DIRECT_COLLECTION_RATES,
-  type CollectorCredentials,
   type EpaycoCollectorCredentials,
   type CreateDonationInput,
   type Donation,
@@ -52,10 +51,6 @@ import {
   loadEpaycoKeysEncryptionKey,
 } from '../payments/epayco-keys-crypto';
 import { loadEpaycoCollector } from '../payments/epayco-connect.service';
-import {
-  loadMercadoPagoTokensEncryptionKey,
-  openMercadoPagoToken,
-} from '../payments/mercadopago-tokens-crypto';
 
 /** Reference/invoice shape we accept from a gateway body before querying. */
 const GATEWAY_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -144,8 +139,6 @@ export interface WebhookOutcome {
 export class DonationsService {
   private readonly logger = new Logger('Donations');
   private readonly webBaseUrl: string;
-  /** Mercado Pago tokens are stored encrypted (mercadopago-tokens-crypto.ts). */
-  private readonly mpTokenKey = loadMercadoPagoTokensEncryptionKey();
   private readonly certificatesEnabled: boolean;
   /** Real gateway ⇒ every charge needs the organization's own account. */
   private readonly requiresCollector: boolean;
@@ -249,13 +242,13 @@ export class DonationsService {
     // account there is no donation: never a fallback to the platform account
     // (that fallback was custody, PAY-001). The fake driver (dev/test) keeps
     // working without one.
-    // ePayco (ADR-PAG-002): the collector is the org's own ePayco account
-    // (keys decrypted server-side, never returned/logged/audited).
+    // ePayco (ADR-PAG-002, the only real gateway): the collector is the org's
+    // own ePayco account (keys decrypted server-side, never returned/logged/
+    // audited). Mercado Pago was retired on 2026-10-17.
     const epaycoCollector = this.epayco
       ? await this.resolveEpaycoCollector(input.organizationId)
       : undefined;
-    const collector = this.epayco ? undefined : await this.resolveCollector(input.organizationId);
-    if (this.epayco ? !epaycoCollector : !collector && this.requiresCollector) {
+    if (this.requiresCollector && !epaycoCollector) {
       throw new ConflictException(
         'Esta organización todavía no conectó su cuenta para recibir donaciones.',
       );
@@ -283,7 +276,6 @@ export class DonationsService {
       paymentMethodId: input.paymentMethodId,
       paymentMethodType: input.paymentMethodType,
       installments: input.installments,
-      collector,
       epaycoCollector,
     });
     // ePayco: the adapter is the one that knows the collection mode (a
@@ -357,8 +349,7 @@ export class DonationsService {
     // the webhook is the sole, exactly-once writer of 'approved'/'declined'
     // (its `apply_donation_webhook`'s `WHERE status = 'pending'` guard is
     // also what gates receipt issuance, so the DB write here must stay
-    // untouched). But MercadoPago's Orders API often already KNOWS a DECLINE
-    // synchronously (T-OrdersAPI) — surfacing THAT in this response only
+    // untouched). But a gateway may already KNOW a DECLINE synchronously — surfacing THAT in this response only
     // (never persisted) lets the donor see the real result immediately
     // instead of a misleading "confirmando tu pago" for an already-failed
     // charge. An 'approved' outcome is deliberately NOT surfaced the same
@@ -389,9 +380,9 @@ export class DonationsService {
   }
 
   /**
-   * PUBLIC, minimal status read for the post-checkout "gracias" page —
-   * MercadoPago redirects the payer back with `external_reference`, which IS
-   * our own `collectionId` (see `createCollection`'s doc comment). Cross-
+   * PUBLIC, minimal status read for the post-checkout "gracias" page — the
+   * gateway sends the payer back with our own reference, which IS the
+   * `collectionId` (see `createCollection`'s doc comment). Cross-
    * tenant (no session, no tenant context) via a bounded SECURITY DEFINER
    * function, same "never distinguish 404 reasons" principle as
    * `getByAccessToken`: an unknown reference is a single generic 404, never a
@@ -427,15 +418,12 @@ export class DonationsService {
     signature: string,
     context?: WebhookVerificationContext,
   ): Promise<WebhookOutcome> {
-    // ADR-PAG-001: the notified order lives in the ORGANIZATION's account, so
-    // the adapter must read it back with that organization's token. The
-    // account id in the body is NOT trusted for anything else: a forged one
-    // only makes the read-back fail (the order is not in that account).
+    // ADR-PAG-001: the notified payment lives in the ORGANIZATION's account.
+    // The ids in the body are NOT trusted for anything else than picking
+    // whose keys verify it: a forged one only makes the verification fail.
     const notifiedOrgId = this.epayco
       ? await this.resolveEpaycoNotifiedOrganizationId(payload)
-      : await this.resolveNotifiedOrganizationId(payload);
-    const collector =
-      notifiedOrgId && !this.epayco ? await this.resolveCollector(notifiedOrgId) : undefined;
+      : undefined;
     // ADR-PAG-002: the confirmation is signed with the ORGANIZATION's P_KEY,
     // so it is verified with the keys of the org that owns the payment.
     const epaycoCollector =
@@ -445,7 +433,6 @@ export class DonationsService {
     try {
       event = await this.payment.verifyAndNormalizeWebhook(payload, signature, {
         ...context,
-        collector,
         epaycoCollector,
       });
     } catch (error) {
@@ -795,44 +782,6 @@ export class DonationsService {
     return rows.map((r) => this.fromRow(r, orgNames.get(r.organization_id)));
   }
 
-  /**
-   * Split de Pagos 1:1 (T-OAuth-Connect) — looks up the ORG's own connected
-   * MercadoPago account id, cross-tenant, via the `mercadopago_account_mp_user_id`
-   * SECURITY DEFINER function (narrow: returns ONLY `mp_user_id`, never the
-   * access/refresh tokens — see its migration for the same posture as
-   * `mercadopago_accounts_due_for_refresh`). `undefined` when the org never
-   * connected an account (the common case in Ola 1) — never thrown.
-   */
-  private async resolveSponsorMpUserId(organizationId: string): Promise<string | undefined> {
-    const rows = await this.prisma.$queryRaw<{ mp_user_id: string }[]>(Prisma.sql`
-      SELECT * FROM mercadopago_account_mp_user_id(${organizationId}::uuid)
-    `);
-    return rows[0]?.mp_user_id;
-  }
-
-  /**
-   * ADR-PAG-001: the organization's own connected Mercado Pago credentials,
-   * read under THAT organization's RLS context (server-side only; never
-   * returned, logged or audited). `undefined` when it never connected.
-   */
-  private async resolveCollector(
-    organizationId: string,
-  ): Promise<CollectorCredentials | undefined> {
-    const row = await this.prisma.withOrgContext(organizationId, (tx) =>
-      tx.organizationMercadoPagoAccount.findUnique({
-        where: { organizationId },
-        select: { accessToken: true, mpUserId: true },
-      }),
-    );
-    if (!row?.accessToken || !row.mpUserId) {
-      return undefined;
-    }
-    return {
-      accessToken: openMercadoPagoToken(row.accessToken, this.mpTokenKey),
-      accountId: row.mpUserId,
-    };
-  }
-
   /** ADR-PAG-002: the org's own ePayco keys, decrypted under its RLS context. */
   private resolveEpaycoCollector(
     organizationId: string,
@@ -865,26 +814,6 @@ export class DonationsService {
     }
     const rows = await this.prisma.$queryRaw<{ organization_id: string }[]>(Prisma.sql`
       SELECT * FROM epayco_account_organization_id(${custId})
-    `);
-    return rows.length === 1 ? rows[0].organization_id : undefined;
-  }
-
-  /**
-   * Organization connected with the Mercado Pago account named in a webhook
-   * body (`user_id`). Exactly one match or nothing: an account connected to
-   * two organizations is ambiguous and is never used to settle a payment.
-   */
-  private async resolveNotifiedOrganizationId(payload: unknown): Promise<string | undefined> {
-    const raw = (payload as { user_id?: unknown } | null)?.user_id;
-    if (typeof raw !== 'string' && typeof raw !== 'number') {
-      return undefined;
-    }
-    const accountId = String(raw);
-    if (!/^\d{1,20}$/.test(accountId)) {
-      return undefined;
-    }
-    const rows = await this.prisma.$queryRaw<{ organization_id: string }[]>(Prisma.sql`
-      SELECT * FROM mercadopago_account_organization_id(${accountId})
     `);
     return rows.length === 1 ? rows[0].organization_id : undefined;
   }
@@ -943,9 +872,11 @@ export class DonationsService {
   }
 
   /**
-   * PUBLIC: can this organization receive donations? `true` only when it has
-   * a connected MercadoPago account (the same cross-tenant, id-only lookup used
-   * by `create`). Exposes a boolean — never the connected account id.
+   * PUBLIC: can this organization receive donations? With ePayco, `true` only
+   * when it has connected its ePayco account (the same account `create`
+   * charges with). The fake driver (dev/test) needs no account, so it is
+   * always `true`; `disabled` is always `false`. Exposes a boolean — never
+   * the connected account id.
    */
   async getOrganizationAvailability(
     organizationId: string,
@@ -959,8 +890,7 @@ export class DonationsService {
       );
       return { organizationId, canReceiveDonations: Boolean(account) };
     }
-    const mpUserId = await this.resolveSponsorMpUserId(organizationId);
-    return { organizationId, canReceiveDonations: Boolean(mpUserId) };
+    return { organizationId, canReceiveDonations: !this.requiresCollector };
   }
 
   private async organizationNamesById(ids: string[]): Promise<Map<string, string>> {

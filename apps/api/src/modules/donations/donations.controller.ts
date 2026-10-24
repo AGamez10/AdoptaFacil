@@ -61,8 +61,7 @@ export class DonationsController {
    * Create a donation — a PERSON (authenticated) OR a GUEST (no account/login,
    * client requirement: donating must never be gated behind a login wall).
    * `OptionalJwtAuthGuard` never rejects the request; it links the donation to
-   * an account ONLY when a valid bearer token is present, same as MercadoPago
-   * Checkout Pro's own guest-checkout support.
+   * an account ONLY when a valid bearer token is present (guest checkout).
    */
   @Post()
   @UseGuards(OptionalJwtAuthGuard)
@@ -134,11 +133,10 @@ export class DonationsController {
   }
 
   /**
-   * Gateway webhook (PUBLIC — no JWT). The body is the raw gateway payload; the
-   * signature travels in the `x-signature` header (MercadoPago's `ts=...,v1=...`
-   * format). `x-request-id` and the `data.id` query param are ALSO required to
-   * build MercadoPago's signature manifest — bundled into `context` and passed
-   * through untouched. The PaymentPort verifies and normalizes it, and the
+   * Gateway webhook (PUBLIC — no JWT). The body is the raw gateway payload
+   * (ePayco signs its confirmation inside the body, `x_signature`). The
+   * `x-signature`/`x-request-id` headers and the query are still forwarded
+   * untouched in `context` for any adapter that needs them. The PaymentPort verifies and normalizes it, and the
    * settlement + receipt are idempotent (dedup by event).
    */
   @Post('webhook')

@@ -84,9 +84,13 @@ export interface CreateCollectionInput {
    * `FakePaymentAdapter`, existing tests, and callers with no user present to
    * tokenize a card (`SponsorshipBillingService`'s automated daily cron — see
    * its header comment for why) keep compiling/working unchanged.
+   * @deprecated Mercado Pago retirado 2026-10-17: no adapter reads it (ePayco collects in its own checkout).
    */
   cardToken?: string;
-  /** MercadoPago's own payment method id from the Brick (e.g. 'visa', 'master'). */
+  /**
+   * MercadoPago's own payment method id from the Brick (e.g. 'visa', 'master').
+   * @deprecated Mercado Pago retirado 2026-10-17.
+   */
   paymentMethodId?: string;
   /**
    * 'credit_card' | 'debit_card' — MercadoPago Orders requires this alongside
@@ -95,9 +99,13 @@ export interface CreateCollectionInput {
    * 'credit_card' when unknown.
    * TODO(client): confirm against the live Brick (real test cards) whether
    * debit needs explicit handling once MercadoPago hands over sandbox access.
+   * @deprecated Mercado Pago retirado 2026-10-17.
    */
   paymentMethodType?: 'credit_card' | 'debit_card';
-  /** Installments chosen in the Brick (MercadoPago requires it even for 1). */
+  /**
+   * Installments chosen in the Brick (MercadoPago requires it even for 1).
+   * @deprecated Mercado Pago retirado 2026-10-17.
+   */
   installments?: number;
   /**
    * Split de Pagos 1:1 (T-OAuth-Connect) — the BENEFICIARY organization's own
@@ -110,6 +118,7 @@ export interface CreateCollectionInput {
    * of this task; see `MercadoPagoPaymentAdapter.createCollection`). Absent
    * ⇒ the old single-account behavior (everything settles to AdoptaFácil's
    * own account).
+   * @deprecated Mercado Pago retirado 2026-10-17: no service sets it and no adapter reads it.
    */
   sponsorMpUserId?: string;
   /**
@@ -119,6 +128,7 @@ export interface CreateCollectionInput {
    * these credentials, so the organization is the collector and the money
    * lands in its account. SERVER-ONLY: never serialized to a client, never
    * logged, never audited. The real driver refuses to charge without it.
+   * @deprecated Mercado Pago retirado 2026-10-17: Mercado Pago-only (OAuth token); use `epaycoCollector`.
    */
   collector?: CollectorCredentials;
   /**
@@ -146,7 +156,10 @@ export interface EpaycoCollectorCredentials {
   privateKey: string;
 }
 
-/** Server-only credentials of the organization that receives the money. */
+/**
+ * Server-only credentials of the organization that receives the money.
+ * @deprecated Mercado Pago retirado 2026-10-17: Mercado Pago OAuth credentials; see `EpaycoCollectorCredentials`.
+ */
 export interface CollectorCredentials {
   /** The org's OAuth access token at the gateway. Secret. */
   accessToken: string;
@@ -208,6 +221,7 @@ export interface WebhookVerificationContext {
    * ADR-PAG-001: credentials of the organization that owns the notified
    * payment (resolved server-side from the notification's account id). The
    * real adapter reads the payment back WITH them. Server-only.
+   * @deprecated Mercado Pago retirado 2026-10-17: use `epaycoCollector`.
    */
   collector?: CollectorCredentials;
   /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
@@ -300,6 +314,10 @@ export interface PayoutView {
 }
 
 // ============================================================================
+// DEPRECATED — Mercado Pago retirado del producto el 2026-10-17 (decisión del
+// dueño): los endpoints `/org/mercadopago/*` ya no existen y la tabla con los
+// tokens se eliminó (migración 20261017110000). Los tipos se conservan solo
+// porque los contratos son aditivos (invariante #6).
 // Split de Pagos 1:1 (T-OAuth-Connect) — "conectar tu cuenta de Mercado Pago"
 // per organization via OAuth. This is ONLY the connect infra (these DTOs never
 // carry the access/refresh tokens); using the connected `mpUserId` to create an
@@ -308,13 +326,15 @@ export interface PayoutView {
 
 /** Returned by `GET /org/mercadopago/connect` — the frontend does the actual
  *  full-page navigation (`window.location.href = authorizeUrl`), same
- *  pattern as a donation's `paymentLinkUrl`. */
+ *  pattern as a donation's `paymentLinkUrl`.
+ *  @deprecated Mercado Pago retirado 2026-10-17: the endpoint no longer exists. */
 export interface MercadoPagoConnectUrlView {
   authorizeUrl: string;
 }
 
 /** Returned by `GET /org/mercadopago/status` — NEVER the tokens, only enough
- *  to render "Cuenta conectada" vs. the connect button. */
+ *  to render "Cuenta conectada" vs. the connect button.
+ *  @deprecated Mercado Pago retirado 2026-10-17: the endpoint no longer exists; see `EpaycoConnectStatusView`. */
 export interface MercadoPagoConnectStatusView {
   connected: boolean;
   connectedAt?: string;

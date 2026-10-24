@@ -9,8 +9,8 @@ import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG } from './support/legal';
 
 /**
- * M15b (F-4, RF26) — dispersión T+1 (Fase 2, not implemented by the real
- * MercadoPago adapter yet). Verifies, against the `fake` driver: the org's own
+ * M15b (F-4, RF26) — dispersión T+1 (Fase 2, no real payout adapter
+ * yet). Verifies, against the `fake` driver: the org's own
  * bank account registration (RBAC: Owner/Administrator only), triggering a
  * payout (RBAC: PlatformAdmin/PlatformSuperAdmin only, treasury operation),
  * idempotency (a retry with the same key never double-pays), the dispatch

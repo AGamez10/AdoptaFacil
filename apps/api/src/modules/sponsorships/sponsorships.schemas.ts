@@ -28,7 +28,8 @@ export const updateSponsorshipPlanSchema = z
   });
 
 /**
- * Card fields a tokenized MercadoPago charge needs — shared shape between
+ * Optional tokenized-card fields (kept for contract compatibility; no web
+ * client sends them since Mercado Pago was retired on 2026-10-17) — shared shape between
  * subscribing (requerimiento #17, charges immediately) and `retry-payment`.
  * All optional on purpose (same reasoning as `createDonationSchema`'s card
  * fields): the real gateway adapter is the one place that hard-requires a
@@ -43,7 +44,7 @@ const cardFieldsShape = {
 
 /**
  * Subscribe to a plan (authenticated Person = the padrino). Requerimiento
- * #17: charges a real MercadoPago collection immediately, hence the card
+ * #17: charges a collection immediately through the PaymentPort, hence the card
  * fields (see {@link cardFieldsShape}).
  */
 export const createSponsorshipSchema = z

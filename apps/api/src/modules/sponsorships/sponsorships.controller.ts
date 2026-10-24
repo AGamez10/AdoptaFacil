@@ -71,9 +71,9 @@ export class SponsorshipsController {
    * Recovery after auto-suspension by billing failure (Objetivo 6) — any
    * authenticated Person may retry ONLY their own suspended sponsorship (no
    * @Roles gate, ownership checked cross-tenant inside the service).
-   * T-OrdersAPI: the body now carries the sponsor's tokenized card (Checkout
-   * API/Orders — the frontend's Card Payment Brick replaces the retired
-   * MercadoPago redirect); optional so an old/no-body caller doesn't 400.
+   * The body may carry a tokenized card (contract kept; the web stopped
+   * sending one when Mercado Pago was retired, 2026-10-17); optional so an
+   * old/no-body caller doesn't 400.
    */
   @Post(':id/retry-payment')
   @HttpCode(200)

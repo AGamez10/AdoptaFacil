@@ -98,11 +98,9 @@ export function getSponsorshipPayments(
  * `POST /sponsorships/:id/retry-payment`). The backend rejects it (400/404)
  * if the caller is not the sponsor or the suspension was not billing-related.
  *
- * T-OrdersAPI: `card` carries the token MercadoPago's Card Payment Brick just
- * produced (replaces the old Checkout Pro redirect link this endpoint used
- * to generate) — optional/defaulted to `{}` so an old caller compiles, but
- * the REAL gateway rejects a retry with no card (see
- * `MercadoPagoPaymentAdapter.createCollection`).
+ * `card` is optional/defaulted to `{}` (contract kept additive). The web no
+ * longer calls this since Mercado Pago's Card Payment Brick was retired
+ * (2026-10-17); it stays for the upcoming ePayco sponsorship payment.
  */
 export function retrySponsorshipPayment(
   client: ApiClient,

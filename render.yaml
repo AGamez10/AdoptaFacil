@@ -123,7 +123,7 @@ services:
         value: disabled
       # Módulos apagados (R1-1): la API responde 404 y la web los oculta.
       # Para encender pagos o apadrinamientos en producción hacen falta
-      # PAYMENT_DRIVER=mercadopago y PAYMENTS_PRODUCTION_APPROVAL_REF (la
+      # PAYMENT_DRIVER=epayco y PAYMENTS_PRODUCTION_APPROVAL_REF (la
       # referencia de la aprobación escrita del proveedor y del abogado).
       - key: FEATURE_PAYMENTS
         value: 'false'

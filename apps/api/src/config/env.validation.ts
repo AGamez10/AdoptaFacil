@@ -90,25 +90,24 @@ export const envSchema = z.object({
   // Base URL the API is reachable at, used to build upload/serve URLs.
   STORAGE_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3000'),
   // T-052 (payments): which PaymentPort adapter to bind. 'fake' = deterministic
-  // dev/test double (default); 'mercadopago' is the real gateway (recaudo via
-  // Checkout Pro preferences). Swap happens in PaymentModule, no consumer
-  // changes. Wompi was fully replaced by MercadoPago (client decision) — the
-  // gateway never conviven, so this enum has no 'wompi' option any more.
-  // 'disabled' (Ola 1, R0-1): binds an adapter that refuses every call — the
-  // production value while money stays off (D1–D7). 'fake' is rejected in
-  // production by assertProductionSafety below.
-  // 'epayco' (ADR-PAG-002, pasarela principal desde 2026-10-15): every charge
+  // dev/test double (default). Swap happens in PaymentModule, no consumer
+  // changes. 'disabled' (Ola 1, R0-1): binds an adapter that refuses every
+  // call — the production value while money stays off (D1–D7). 'fake' is
+  // rejected in production by assertProductionSafety below.
+  // 'epayco' (ADR-PAG-002, única pasarela desde 2026-10-17): every charge
   // is a checkout v2 session created with the BENEFICIARY organization's own
   // ePayco keys (stored encrypted, `organization_epayco_accounts`), so no
   // platform credential is needed to boot in the default direct mode.
-  PAYMENT_DRIVER: z.enum(['fake', 'mercadopago', 'epayco', 'disabled']).default('fake'),
+  // Mercado Pago was retired from the product on 2026-10-17 (owner decision):
+  // 'mercadopago' is no longer an accepted value (Wompi was retired earlier).
+  PAYMENT_DRIVER: z.enum(['fake', 'epayco', 'disabled']).default('fake'),
   // ePayco (ADR-PAG-002). Base URLs are overridable only for tests/mocks.
   EPAYCO_APIFY_BASE_URL: z.string().url().default('https://apify.epayco.co'),
   EPAYCO_SECURE_BASE_URL: z.string().url().default('https://secure.epayco.co'),
   // Public URL ePayco POSTs the confirmation to (this API's
   // `/donations/webhook`). Optional: falls back to
   // `${STORAGE_PUBLIC_BASE_URL}/donations/webhook` (the API's public base URL,
-  // same fallback MERCADOPAGO_OAUTH_REDIRECT_URI uses).
+  // same fallback the storage URLs use).
   EPAYCO_CONFIRMATION_URL: z.string().url().optional(),
   // Where ePayco sends the payer back after the checkout (the web's donation
   // result page). ePayco appends `?ref_payco=…`; the API adds our own
@@ -133,45 +132,6 @@ export const envSchema = z.object({
   EPAYCO_PLATFORM_P_KEY: z.string().min(1).optional(),
   EPAYCO_PLATFORM_PUBLIC_KEY: z.string().min(1).optional(),
   EPAYCO_PLATFORM_PRIVATE_KEY: z.string().min(1).optional(),
-  // MercadoPago credentials — read ONLY from env; never hardcoded, never
-  // committed. Optional at the schema level so 'fake' mode boots without them;
-  // the refine below enforces their presence when PAYMENT_DRIVER=mercadopago.
-  MERCADOPAGO_BASE_URL: z.string().url().default('https://api.mercadopago.com'),
-  MERCADOPAGO_PUBLIC_KEY: z.string().min(1).optional(),
-  MERCADOPAGO_ACCESS_TOKEN: z.string().min(1).optional(),
-  MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
-  // T-OAuth-Connect (Split de Pagos 1:1): the platform-level MercadoPago
-  // "Marketplace"-capable application's own id/secret — used ONLY for the
-  // OAuth connect dance (an organization authorizing AdoptaFácil to act on
-  // its behalf), never for a collection/payout call (those keep using
-  // MERCADOPAGO_ACCESS_TOKEN above). Optional at the schema level for the
-  // same 'fake' boot reason as the other MERCADOPAGO_* vars; required when
-  // PAYMENT_DRIVER=mercadopago (see REQUIRED_MERCADOPAGO_KEYS below).
-  MERCADOPAGO_APP_ID: z.string().min(1).optional(),
-  // NEVER logged, never returned in any response — read only inside the OAuth
-  // token-exchange/refresh calls.
-  MERCADOPAGO_CLIENT_SECRET: z.string().min(1).optional(),
-  // Where MercadoPago redirects back after the org authorizes access
-  // (`GET /org/mercadopago/callback`, public). Optional/no schema default —
-  // same "resolve a fallback at construction time, not here" pattern
-  // `MercadoPagoPaymentAdapter` already uses for `publicBaseUrl`/`webBaseUrl`
-  // (see mercadopago-oauth.client.ts): falls back to
-  // `${STORAGE_PUBLIC_BASE_URL}/org/mercadopago/callback` when
-  // STORAGE_PUBLIC_BASE_URL is set, else `http://localhost:3000/org/mercadopago/callback`.
-  MERCADOPAGO_OAUTH_REDIRECT_URI: z.string().url().optional(),
-  // Interval of the repeatable MercadoPago token-refresh scan job (renews any
-  // connected account's access/refresh token before it lapses). Same
-  // daily-default shape as REMINDERS_SCAN_INTERVAL_MS/
-  // SPONSORSHIP_BILLING_SCAN_INTERVAL_MS.
-  MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(86_400_000),
-  // A connected account is refreshed once its token expires within this many
-  // days (MercadoPago tokens last ~180 days) — "not urgent, just don't let it
-  // lapse", per T-OAuth-Connect.
-  MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS: z.coerce.number().int().positive().max(180).default(15),
   // S-5-REDISEÑO (M07/RF17, T-057): interval of the repeatable sponsorship
   // billing scan job — opens a new period for sponsorships that just reached
   // their nextBillingAt, and advances the reminder/retry ladder of open
@@ -206,7 +166,7 @@ export const envSchema = z.object({
   // (fail-fast, see the refine). The client has not handed over real Google
   // OAuth credentials yet, so `google` cannot be exercised end-to-end until
   // then — same "stub until credentials exist" shape PAYMENT_DRIVER had
-  // before T-052/MercadoPago.
+  // before T-052.
   // 'disabled' (Ola 1, R0-1, SEC-001): `POST /auth/google` answers 404 —
   // the production value until real Google credentials exist. 'fake' is
   // rejected in production by assertProductionSafety below.
@@ -291,22 +251,6 @@ const REQUIRED_SMTP_KEYS = [
   'SMTP_FROM',
 ] as const;
 
-/** MercadoPago vars required when PAYMENT_DRIVER=mercadopago (fail-fast at boot). */
-const REQUIRED_MERCADOPAGO_KEYS = [
-  'MERCADOPAGO_BASE_URL',
-  'MERCADOPAGO_PUBLIC_KEY',
-  'MERCADOPAGO_ACCESS_TOKEN',
-  'MERCADOPAGO_WEBHOOK_SECRET',
-  // T-OAuth-Connect: required so the connect dance (authorize URL + token
-  // exchange) can actually run once PAYMENT_DRIVER=mercadopago. NOTE: as of
-  // this task MERCADOPAGO_CLIENT_SECRET is NOT yet set in the local .env
-  // (pending the client handing it over) — until then the API fails to boot
-  // with PAYMENT_DRIVER=mercadopago. See this task's report for the two ways
-  // to unblock local dev in the meantime.
-  'MERCADOPAGO_APP_ID',
-  'MERCADOPAGO_CLIENT_SECRET',
-] as const;
-
 /**
  * ePayco vars required ONLY for `EPAYCO_COLLECTION_MODE=platform_split`
  * (fail-fast at boot). The default direct mode needs no platform credential:
@@ -322,7 +266,7 @@ const REQUIRED_EPAYCO_SPLIT_KEYS = [
 ] as const;
 
 /** Real gateways allowed to back the money modules in production. */
-const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['mercadopago', 'epayco'];
+const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['epayco'];
 
 /** Google OAuth vars required when AUTH_IDENTITY_DRIVER=google (fail-fast at boot). */
 const REQUIRED_GOOGLE_IDENTITY_KEYS = ['GOOGLE_OAUTH_CLIENT_ID'] as const;
@@ -367,7 +311,7 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     if (!REAL_PAYMENT_DRIVERS.includes(env.PAYMENT_DRIVER)) {
       fail(
         'PAYMENT_DRIVER',
-        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=mercadopago or epayco in production',
+        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=epayco in production',
       );
     }
     if (!env.PAYMENTS_PRODUCTION_APPROVAL_REF) {
@@ -399,7 +343,7 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   }
 }
 
-/** The validated schema + cross-field rules (fail-fast for smtp/mercadopago credentials). */
+/** The validated schema + cross-field rules (fail-fast for smtp/ePayco split credentials). */
 export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
   if (env.NOTIFICATION_DRIVER === 'smtp') {
     for (const key of REQUIRED_SMTP_KEYS) {
@@ -408,17 +352,6 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} is required when NOTIFICATION_DRIVER=smtp`,
-        });
-      }
-    }
-  }
-  if (env.PAYMENT_DRIVER === 'mercadopago') {
-    for (const key of REQUIRED_MERCADOPAGO_KEYS) {
-      if (env[key] === undefined || env[key] === null || env[key] === '') {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [key],
-          message: `${key} is required when PAYMENT_DRIVER=mercadopago`,
         });
       }
     }

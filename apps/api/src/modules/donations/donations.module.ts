@@ -22,7 +22,7 @@ import {
  *
  * PaymentPort: consumed from the GLOBAL `PAYMENT_PORT` provider (core `PaymentModule`,
  * @Global, T-052/T-054). No local binding — the service injects the token directly.
- * The adapter (fake / real MercadoPago) is chosen there via `PAYMENT_DRIVER`.
+ * The adapter (fake / ePayco / disabled) is chosen there via `PAYMENT_DRIVER`.
  *
  * CampaignsModule (T-057): imported ONLY to consume its exported
  * `CampaignFundingService` — the webhook enganche calls
@@ -44,7 +44,7 @@ import {
  * donación (`donation_by_id`/`donation_receipt_by_donation`/
  * `donation_certificate_by_donation`).
  *
- * `DonationStatusPublicController` (MercadoPago redirect-back "gracias"
+ * `DonationStatusPublicController` (gateway redirect-back "gracias"
  * page): resolves `GET /public/donations/status/:reference` cross-tenant by
  * `collection_id` (`donation_by_collection_id`, SECURITY DEFINER) — status/
  * amount/org name only, no auth, generic 404 on an unknown reference.

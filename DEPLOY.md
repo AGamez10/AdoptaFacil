@@ -335,7 +335,7 @@ not found` durante el build (T-D07):** pnpm salta TODAS las devDependencies
   serían visibles en la instancia que los recibió. Migrar a un `StoragePort`
   real (S3/R2) es directo gracias a la abstracción existente, pero es trabajo
   aparte (`TODO(client)`).
-- **Pagos reales**: `PAYMENT_DRIVER=mercadopago` + `FEATURE_PAYMENTS=true`
+- **Pagos reales**: `PAYMENT_DRIVER=epayco` + `FEATURE_PAYMENTS=true`
   solo arrancan en producción con `PAYMENTS_PRODUCTION_APPROVAL_REF` (la
   referencia de la aprobación escrita del proveedor y del abogado). Ver
   `docs/seguridad/arranque-seguro.md`.
