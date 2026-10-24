@@ -7,7 +7,7 @@ import {
   WORKSPACE_TICKET_STATUSES,
 } from '@adoptafacil/contracts';
 
-const uuid = z.string().uuid();
+const uuid = z.string().guid();
 const version = z.number().int().min(1).max(1_000_000);
 const platformRole = z
   .nativeEnum(Role)
@@ -55,7 +55,7 @@ export const PAYLOAD_SCHEMAS = {
 
 export const createSensitiveActionSchema = z.object({
   type: z.enum(SENSITIVE_ACTION_TYPES),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
   reason: z.string().trim().min(5).max(1000),
 });
 
