@@ -26,7 +26,7 @@ flowchart LR
     REDIS[("Redis 7")]
     DISK[["Disco / StoragePort"]]
   end
-  MP["ePayco<br/>checkout v2"]
+  MP["Pasarela de pagos<br/>(ninguna conectada hoy)"]
   SMTP["SMTP"]
   DIAN["DIAN (fake)"]
   WEB -- "HTTPS + JWT" --> API
@@ -100,7 +100,7 @@ flowchart LR
 | ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `STORAGE_PORT`                 | `disk` (por defecto), `stub` (en memoria, tests) | Claves `<public\|private>/<orgId>/<uuid>-<nombre>`, protección contra path traversal |
 | `NOTIFICATION_PORT`            | `log` (por defecto), `smtp` (nodemailer)         |                                                                                      |
-| `PAYMENT_PORT`                 | `fake` (por defecto), `epayco`, `disabled`       | Ver sección 6                                                                        |
+| `PAYMENT_PORT`                 | `fake` (por defecto), `disabled`                 | Ver sección 6                                                                        |
 | `IDENTITY_PORT`                | `fake`, `google`                                 |                                                                                      |
 | `DIAN_PORT` / `SIGNATURE_PORT` | adaptadores fake                                 | Verificación DIAN y firma de contratos simuladas                                     |
 
@@ -121,7 +121,7 @@ flowchart LR
 | `community` (M11)    | Feed, comentarios, likes y moderación                                                                                                                     |
 | `reputation` (M12)   | Reseñas con moderación y resumen público                                                                                                                  |
 | `dashboards` (M13)   | Tableros de plataforma y de organización                                                                                                                  |
-| `payments`           | Cuenta bancaria, payouts, conciliación, conexión de la cuenta ePayco de la organización                                                                   |
+| `payments`           | Cuenta bancaria, payouts, conciliación                                                                                                                    |
 
 Convención de rutas: `/<recurso>` para usuarios autenticados, `/public/...` sin autenticación y `/platform/...`
 solo para `PlatformAdmin` / `PlatformSuperAdmin`.
@@ -177,11 +177,13 @@ flowchart LR
   IVA 19 % solo sobre comisiones, montos en COP enteros con redondeo half-up. Invariante:
   `bruto = neto + comisión + IVA comisión + pasarela + IVA pasarela`. La comisión la puede absorber la
   organización o el donante.
-- **ePayco (única pasarela, ADR-PAG-002):** cada cobro es una sesión de checkout v2 creada con las llaves de la
-  propia organización (`organization_epayco_accounts`, cifradas); el donante paga en la pasarela de ePayco y el
-  dinero llega directo a la cuenta de la organización. Ver `docs/pagos/epayco.md`.
-- **Confirmación:** se verifica con la `P_KEY` de la organización dueña del pago y se aplica con una función
-  `SECURITY DEFINER` idempotente.
+- **Sin pasarela conectada (2026-10-29, decisión del dueño):** `PAYMENT_DRIVER` solo acepta `fake` (dev/test) y
+  `disabled`. Con `disabled`, `POST /donations` responde 409 con un mensaje claro y la disponibilidad pública de
+  cada organización es `false`; la web muestra un aviso tranquilo en vez de un flujo roto. Una pasarela nueva se
+  enchufa detrás de `PaymentPort` (`apps/api/src/core/payments/payment.module.ts`) sin tocar a los consumidores;
+  el cobro sigue siendo directo a la organización (ADR-PAG-001).
+- **Confirmación:** el adaptador verifica la firma del webhook y normaliza el evento; `DonationsService` lo
+  compara con lo registrado (monto, moneda; PAY-003) y lo aplica con una función `SECURITY DEFINER` idempotente.
 - **Mercado Pago retirado (2026-10-17, decisión del dueño):** sin driver, sin OAuth, sin Brick; la tabla
   `organization_mercadopago_accounts` y sus tokens se eliminan con la migración 20261017110000.
 
@@ -190,14 +192,13 @@ sequenceDiagram
   participant U as Donante
   participant W as Web
   participant A as API
-  participant M as ePayco
+  participant M as Pasarela
   U->>W: Monto y datos
   W->>A: POST /donations
-  A->>M: Crea sesión de checkout (llaves de la org)
-  A-->>W: Donación pending + sessionId
-  W->>M: Abre checkout (onpage)
-  U->>M: Paga (tarjeta, PSE, Nequi…)
-  M-->>A: Confirmación firmada (x_signature)
+  A->>M: Crea el cobro con la cuenta de la org
+  A-->>W: Donación pending
+  U->>M: Paga
+  M-->>A: Confirmación firmada
   A->>A: apply_donation_webhook, auditoría, recibo y certificado
   A-->>U: Correo / enlace de acceso (invitado)
 ```
@@ -206,9 +207,9 @@ sequenceDiagram
   escalera de recordatorios (días 5/15/25) y expiraciones (10/20/30), tras lo cual suspende. No hay débito
   automático real: la vía de pago tras una suspensión es `POST /sponsorships/:id/retry-payment`. Desde el
   retiro de Mercado Pago la web no cobra apadrinamientos (muestra "Pronto podrás apadrinar con pago en línea")
-  hasta que exista el cobro con ePayco.
+  hasta que exista una pasarela con cobro recurrente.
 - **Dispersión T+1 y payouts:** la dispersión real (API "Disbursements") **no está implementada**;
-  no hay adaptador de payouts real (con ePayco el dinero llega directo a cada organización). Hoy es una operación manual de un admin
+  no hay adaptador de payouts real (el cobro es directo a cada organización). Hoy es una operación manual de un admin
   de plataforma. La conciliación (`GET /platform/reconciliation`) compara donaciones aprobadas contra payouts.
 
 ## 7. Frontend (`apps/web`)
@@ -267,7 +268,7 @@ sequenceDiagram
 ## 11. Puntos de atención (deuda y discrepancias conocidas)
 
 1. Comentarios y documentos antiguos aún mencionan **Checkout Pro** o **Wompi**; el código usa Orders y los
-   drivers de pago válidos son `fake`, `epayco` y `disabled` (Mercado Pago se retiró el 2026-10-17). La cola de payouts conserva el nombre `wompi-payouts`.
+   drivers de pago válidos son `fake` y `disabled` (no hay pasarela conectada). La cola de payouts conserva el nombre `wompi-payouts`.
 2. `render.yaml` define `JWT_REFRESH_SECRET`, que ningún código lee. `JWT_SECRET` debe fijarse en producción.
 3. En Render existió un workaround con `NO FORCE RLS` (hallazgo S1-01 de `DEPLOY.md`); conviene verificar que
    producción tenga `FORCE RLS` activo.

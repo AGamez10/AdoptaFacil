@@ -6,7 +6,7 @@ import { DonationResultPage } from './donation-result-page';
 describe('DonationResultPage', () => {
   it('never claims approval from the query string, only that the payment is being confirmed', () => {
     render(
-      <MemoryRouter initialEntries={['/donaciones/resultado?ref_payco=1&x_response=Aceptada']}>
+      <MemoryRouter initialEntries={['/donaciones/resultado?status=approved&reference=af-1']}>
         <DonationResultPage />
       </MemoryRouter>,
     );

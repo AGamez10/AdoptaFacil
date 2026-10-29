@@ -27,12 +27,11 @@ import type { PaymentCurrency } from './payments';
 // ----------------------------------------------------------------------------
 
 /**
- * Gateways an organization can connect. Since 2026-10-15 ePayco is the main
- * gateway (owner's decision, ADR-PAG-002); the order here is historical and
- * carries no meaning. Mercado Pago was retired from the product on 2026-10-17
- * and removed from this list by the owner's decision.
+ * Gateways an organization can connect. The order is historical and carries
+ * no meaning. Retired gateways are removed from this list by the owner's
+ * decision; a new gateway is added here and in `GATEWAY_CATALOG`.
  */
-export const GATEWAY_PROVIDERS = ['wompi', 'epayco', 'bold', 'external_link'] as const;
+export const GATEWAY_PROVIDERS = ['wompi', 'bold', 'external_link'] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 /**
@@ -44,7 +43,7 @@ export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
  *  - `platform_split`: the gateway itself splits at source; the org is still
  *    the collector and the platform fee is deducted by the gateway. Requires a
  *    written provider confirmation (D1/D2, §3.4).
- *  - `external_link`: the org's own payment link (Bold, Nequi, ePayco, a bank
+ *  - `external_link`: the org's own payment link (Bold, Nequi, a bank
  *    button…). AdoptaFácil only redirects; it cannot verify the payment.
  */
 export const COLLECTION_MODES = ['direct_to_org', 'platform_split', 'external_link'] as const;
@@ -99,39 +98,6 @@ export const GATEWAY_CATALOG: readonly GatewayCapability[] = [
     status: 'documented',
     checkedAt: '2026-10-08',
     sources: ['https://docs.wompi.co/en/docs/colombia/inicio-rapido/'],
-  },
-  {
-    provider: 'epayco',
-    mode: 'direct_to_org',
-    credentialKind: 'merchant_keys',
-    verifiable: true,
-    platformFeeAtSource: false,
-    // The org's own ePayco account (persona natural or jurídica): checkout v2
-    // session created with ITS keys, confirmation signed with ITS P_KEY and
-    // read back from ePayco. The money lands in the org's ePayco balance.
-    status: 'documented',
-    checkedAt: '2026-10-15',
-    sources: [
-      'https://docs.epayco.com/docs/checkout-implementacion',
-      'https://docs.epayco.com/docs/checkout-respuesta-y-confirmacion',
-    ],
-  },
-  {
-    provider: 'epayco',
-    mode: 'platform_split',
-    credentialKind: 'merchant_keys',
-    verifiable: true,
-    platformFeeAtSource: true,
-    // "Pagos divididos": aggregator/gateway models only, enabled by ePayco on
-    // request; receivers must be validated ePayco merchants. In the aggregator
-    // model the transaction is in the PRINCIPAL's name (AdoptaFácil) and the
-    // dispersion runs from its account: legal review required (ADR-PAG-002).
-    status: 'requires_written_confirmation',
-    checkedAt: '2026-10-15',
-    sources: [
-      'https://docs.epayco.com/docs/split-descripcion',
-      'https://epayco.com/pagos-divididos/',
-    ],
   },
   {
     provider: 'bold',
@@ -210,21 +176,25 @@ export type CollectionDecision =
   { ok: true; plan: CollectionPlan } | { ok: false; reason: CollectionRefusal };
 
 function capabilityFor(
+  catalog: readonly GatewayCapability[],
   provider: GatewayProvider,
   mode: CollectionMode,
 ): GatewayCapability | undefined {
-  return GATEWAY_CATALOG.find((c) => c.provider === provider && c.mode === mode);
+  return catalog.find((c) => c.provider === provider && c.mode === mode);
 }
 
 /**
  * Decide whether `organizationId` may collect through `connection`, and how.
  * Pure and deterministic: the API calls it before creating any checkout, and
- * the web may call it to explain why the "Donar" button is hidden.
+ * the web may call it to explain why the "Donar" button is hidden. `catalog`
+ * defaults to `GATEWAY_CATALOG`; tests pass their own to exercise a mode no
+ * listed gateway offers today (e.g. `platform_split`).
  */
 export function planCollection(
   organizationId: string,
   connection: OrgGatewayConnection | null,
   policy: CollectionPolicy,
+  catalog: readonly GatewayCapability[] = GATEWAY_CATALOG,
 ): CollectionDecision {
   if (policy.enabledModes.length === 0) return { ok: false, reason: 'payments_disabled' };
   if (!connection || connection.status !== 'active') {
@@ -235,7 +205,7 @@ export function planCollection(
   }
   if (!policy.enabledModes.includes(connection.mode)) return { ok: false, reason: 'mode_disabled' };
 
-  const capability = capabilityFor(connection.provider, connection.mode);
+  const capability = capabilityFor(catalog, connection.provider, connection.mode);
   if (!capability || capability.status === 'not_available') {
     return { ok: false, reason: 'mode_not_supported_by_provider' };
   }

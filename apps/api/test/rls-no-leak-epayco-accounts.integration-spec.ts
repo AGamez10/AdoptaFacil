@@ -8,6 +8,10 @@ import { purgeOrganizations } from './support/cleanup';
  * the merchant→organization lookup exposes ONLY the organization id. Connects
  * as the NON-SUPERUSER `adoptafacil_app` role. Every test name carries
  * "no-leak" so `test:rls` (-t "no-leak") runs it. Superuser only for teardown.
+ *
+ * RETIRADA: ePayco salió del producto el 2026-10-29 y ningún código usa la
+ * tabla, pero mientras exista (guarda llaves cifradas) su RLS se sigue
+ * probando. Este archivo se borra junto con la migración que la elimina.
  */
 const APP_DATABASE_URL =
   process.env.DATABASE_URL_APP ??

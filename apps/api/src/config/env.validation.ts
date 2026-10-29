@@ -94,44 +94,10 @@ export const envSchema = z.object({
   // changes. 'disabled' (Ola 1, R0-1): binds an adapter that refuses every
   // call — the production value while money stays off (D1–D7). 'fake' is
   // rejected in production by assertProductionSafety below.
-  // 'epayco' (ADR-PAG-002, única pasarela desde 2026-10-17): every charge
-  // is a checkout v2 session created with the BENEFICIARY organization's own
-  // ePayco keys (stored encrypted, `organization_epayco_accounts`), so no
-  // platform credential is needed to boot in the default direct mode.
-  // Mercado Pago was retired from the product on 2026-10-17 (owner decision):
-  // 'mercadopago' is no longer an accepted value (Wompi was retired earlier).
-  PAYMENT_DRIVER: z.enum(['fake', 'epayco', 'disabled']).default('fake'),
-  // ePayco (ADR-PAG-002). Base URLs are overridable only for tests/mocks.
-  EPAYCO_APIFY_BASE_URL: z.string().url().default('https://apify.epayco.co'),
-  EPAYCO_SECURE_BASE_URL: z.string().url().default('https://secure.epayco.co'),
-  // Public URL ePayco POSTs the confirmation to (this API's
-  // `/donations/webhook`). Optional: falls back to
-  // `${STORAGE_PUBLIC_BASE_URL}/donations/webhook` (the API's public base URL,
-  // same fallback the storage URLs use).
-  EPAYCO_CONFIRMATION_URL: z.string().url().optional(),
-  // Where ePayco sends the payer back after the checkout (the web's donation
-  // result page). ePayco appends `?ref_payco=…`; the API adds our own
-  // `reference` (the donation's collectionId). Optional: falls back to
-  // `${WEB_BASE_URL}/donaciones/resultado`.
-  EPAYCO_RESPONSE_URL: z.string().url().optional(),
-  // ePayco sandbox: sessions are created with `test: true`. OFF unless "true".
-  EPAYCO_TEST: featureFlag(),
-  // ADR-PAG-001: 'direct_to_org' (default) = the org collects with its own
-  // keys, platform fee 0. 'platform_split' = ePayco "pagos divididos" with
-  // AdoptaFácil as principal merchant — only honored when `planCollection`
-  // approves it (written approval ref + valid fee rate); otherwise every
-  // charge is refused (fails closed, never falls back to custody).
-  EPAYCO_COLLECTION_MODE: z.enum(['direct_to_org', 'platform_split']).default('direct_to_org'),
-  EPAYCO_SPLIT_APPROVAL_REF: z.string().min(1).optional(),
-  EPAYCO_SPLIT_FEE_RATE: z.coerce.number().min(0).lt(1).optional(),
-  // Platform merchant keys — ONLY used in 'platform_split'. Never logged.
-  EPAYCO_PLATFORM_CUST_ID: z
-    .string()
-    .regex(/^\d{1,20}$/)
-    .optional(),
-  EPAYCO_PLATFORM_P_KEY: z.string().min(1).optional(),
-  EPAYCO_PLATFORM_PUBLIC_KEY: z.string().min(1).optional(),
-  EPAYCO_PLATFORM_PRIVATE_KEY: z.string().min(1).optional(),
+  // No real gateway is wired today (the previous ones were retired by the
+  // owner). A new gateway adds its own value here (and to
+  // REAL_PAYMENT_DRIVERS) and its branch in PaymentModule.
+  PAYMENT_DRIVER: z.enum(['fake', 'disabled']).default('fake'),
   // S-5-REDISEÑO (M07/RF17, T-057): interval of the repeatable sponsorship
   // billing scan job — opens a new period for sponsorships that just reached
   // their nextBillingAt, and advances the reminder/retry ladder of open
@@ -251,22 +217,9 @@ const REQUIRED_SMTP_KEYS = [
   'SMTP_FROM',
 ] as const;
 
-/**
- * ePayco vars required ONLY for `EPAYCO_COLLECTION_MODE=platform_split`
- * (fail-fast at boot). The default direct mode needs no platform credential:
- * every charge uses the organization's own keys.
- */
-const REQUIRED_EPAYCO_SPLIT_KEYS = [
-  'EPAYCO_SPLIT_APPROVAL_REF',
-  'EPAYCO_SPLIT_FEE_RATE',
-  'EPAYCO_PLATFORM_CUST_ID',
-  'EPAYCO_PLATFORM_P_KEY',
-  'EPAYCO_PLATFORM_PUBLIC_KEY',
-  'EPAYCO_PLATFORM_PRIVATE_KEY',
-] as const;
-
-/** Real gateways allowed to back the money modules in production. */
-const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['epayco'];
+/** Real gateways allowed to back the money modules in production. Empty
+ *  until a gateway is wired: the money modules stay off in production. */
+const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = [];
 
 /** Google OAuth vars required when AUTH_IDENTITY_DRIVER=google (fail-fast at boot). */
 const REQUIRED_GOOGLE_IDENTITY_KEYS = ['GOOGLE_OAUTH_CLIENT_ID'] as const;
@@ -311,7 +264,7 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     if (!REAL_PAYMENT_DRIVERS.includes(env.PAYMENT_DRIVER)) {
       fail(
         'PAYMENT_DRIVER',
-        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=epayco in production',
+        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require a real PAYMENT_DRIVER in production (none is wired today)',
       );
     }
     if (!env.PAYMENTS_PRODUCTION_APPROVAL_REF) {
@@ -343,7 +296,7 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   }
 }
 
-/** The validated schema + cross-field rules (fail-fast for smtp/ePayco split credentials). */
+/** The validated schema + cross-field rules (fail-fast for smtp credentials). */
 export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
   if (env.NOTIFICATION_DRIVER === 'smtp') {
     for (const key of REQUIRED_SMTP_KEYS) {
@@ -352,17 +305,6 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} is required when NOTIFICATION_DRIVER=smtp`,
-        });
-      }
-    }
-  }
-  if (env.PAYMENT_DRIVER === 'epayco' && env.EPAYCO_COLLECTION_MODE === 'platform_split') {
-    for (const key of REQUIRED_EPAYCO_SPLIT_KEYS) {
-      if (env[key] === undefined || env[key] === null || env[key] === '') {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [key],
-          message: `${key} is required when EPAYCO_COLLECTION_MODE=platform_split`,
         });
       }
     }

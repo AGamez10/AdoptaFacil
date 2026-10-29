@@ -299,7 +299,7 @@ export function AppRoutes() {
           review" form here instead of on a separate route. */}
           <Route path="/organizaciones/:slug/resenas" element={<OrganizationReputationPage />} />
           {/* M05 · donación (§M05, requisito FINAL del cliente: donar NUNCA exige
-          cuenta ni login — checkout de invitado; ePayco lo soporta). Movida FUERA de <RequireAuth>/<AppLayout> (antes vivía
+          cuenta ni login — checkout de invitado). Movida FUERA de <RequireAuth>/<AppLayout> (antes vivía
           bajo el gate de sesión padre — ver el SEAM que dejó esta nota en la
           sección protegida de abajo). `POST /donations` usa
           `OptionalJwtAuthGuard`: si llega un bearer token válido la donación
@@ -315,7 +315,7 @@ export function AppRoutes() {
           credencial (`GET /public/donations/access/:token`, sin auth). Mismo
           SEAM que `/donaciones` y `/verificar/:code` arriba. */}
           <Route path="/donaciones/comprobante" element={<DonationAccessPage />} />
-          {/* ADR-PAG-002: regreso del checkout de ePayco. Solo informa que el pago se
+          {/* Regreso desde el checkout de una pasarela. Solo informa que el pago se
           está confirmando; la aprobación llega por la confirmación firmada. */}
           <Route path="/donaciones/resultado" element={<DonationResultPage />} />
           {/* Baja voluntaria de correos masivos (Ley 1581) — pública, sin sesión:
@@ -327,9 +327,8 @@ export function AppRoutes() {
           site (no external redirect, so no return URL to resolve). Both
           `DonationThanksPage`/`SponsorshipThanksPage` and the public status
           fetch helpers they used are DELETED (unreachable otherwise); the
-          equivalent "thank you" state is shown IN-PAGE (`DonatePage`); ePayco's
-          return lands on `/donaciones/resultado` above. Mercado Pago (and its
-          Card Payment Brick) was retired on 2026-10-17. */}
+          equivalent "thank you" state is shown IN-PAGE (`DonatePage`); a
+          gateway's return lands on `/donaciones/resultado` above. */}
 
           {/* Protected — guard first, then the shell layout */}
           <Route element={<RequireAuth />}>

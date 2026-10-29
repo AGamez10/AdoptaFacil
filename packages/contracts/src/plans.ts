@@ -85,7 +85,7 @@ const NONE: Record<PlanCapability, boolean> = {
 /** The plan catalog: the single source of truth for the landing, the plans
  *  screen and the enforcement, so they never disagree. Paid plans are optional
  *  (client decision 2026-10-22); publishing a price never turns charging on —
- *  that is `PLAN_ENFORCEMENT` plus a manual or ePayco subscription. */
+ *  that is `PLAN_ENFORCEMENT` plus a manual subscription. */
 export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
   free: {
     key: 'free',
@@ -275,10 +275,8 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 /** How the subscription is collected. `manual` = payment link/transfer to
  *  AdoptaFácil's own account + electronic invoice, activated by the platform.
- *  `epayco` = recurring charge with ePayco on AdoptaFácil's OWN merchant
- *  account (ADR-PAG-002): it is AdoptaFácil's revenue for the software, so it
- *  never touches a donation. */
-export const BILLING_PROVIDERS = ['manual', 'epayco'] as const;
+ *  The only provider today: no recurring gateway charge is wired. */
+export const BILLING_PROVIDERS = ['manual'] as const;
 export type BillingProvider = (typeof BILLING_PROVIDERS)[number];
 
 /** The stored subscription of one organization (at most one per org). */

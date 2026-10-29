@@ -122,9 +122,10 @@ services:
       - key: SIGNATURE_DRIVER
         value: disabled
       # Módulos apagados (R1-1): la API responde 404 y la web los oculta.
-      # Para encender pagos o apadrinamientos en producción hacen falta
-      # PAYMENT_DRIVER=epayco y PAYMENTS_PRODUCTION_APPROVAL_REF (la
-      # referencia de la aprobación escrita del proveedor y del abogado).
+      # Para encender pagos o apadrinamientos en producción hacen falta una
+      # pasarela real (hoy no hay ninguna conectada) y
+      # PAYMENTS_PRODUCTION_APPROVAL_REF (la referencia de la aprobación
+      # escrita del proveedor y del abogado).
       - key: FEATURE_PAYMENTS
         value: 'false'
       - key: FEATURE_SPONSORSHIPS

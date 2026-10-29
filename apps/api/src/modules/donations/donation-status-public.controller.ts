@@ -26,7 +26,7 @@ export class DonationStatusPublicController {
     return this.service.getPublicStatusByCollectionId(reference);
   }
 
-  /** Whether the org has a connected ePayco account (boolean only). */
+  /** Whether the org can receive online donations now (boolean only). */
   @Get('public/donations/organizations/:organizationId/availability')
   getOrganizationAvailability(
     @Param('organizationId', ParseUUIDPipe) organizationId: string,

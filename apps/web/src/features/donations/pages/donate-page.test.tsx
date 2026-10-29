@@ -30,7 +30,7 @@ function stubFetch(handler: (url: string) => unknown) {
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      // Org availability (cuenta ePayco conectada) — por defecto SÍ, salvo que el test lo sobreescriba.
+      // Org availability (la organización puede recibir donaciones) — por defecto SÍ, salvo que el test lo sobreescriba.
       const body = url.includes('/availability') ? { canReceiveDonations: true } : handler(url);
       return Promise.resolve({
         ok: true,
@@ -436,8 +436,8 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     });
     fireEvent.click(screen.getByTestId('donation-legal-terms'));
     fireEvent.click(screen.getByTestId('donation-legal-data'));
-    // Single step (ePayco): "Donar" creates the donation; with no checkout
-    // session in the response (fake driver) the page shows the result.
+    // Single step: "Donar" creates the donation and (fake driver) the page
+    // shows the result.
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();

@@ -99,7 +99,7 @@ export function getSponsorshipPayments(
  * if the caller is not the sponsor or the suspension was not billing-related.
  *
  * The body is empty. The web does not call this yet; it stays for the
- * upcoming ePayco sponsorship payment.
+ * upcoming gateway sponsorship payment.
  */
 export function retrySponsorshipPayment(
   client: ApiClient,

@@ -65,7 +65,7 @@ Solo para Colombia, con los proveedores del proyecto. Primero se clasifica cada 
 | Proveedor de correo         | Transmisión | Correo, nombre y contenido de los mensajes       | ⟦Pendiente de elegir⟧                  | ⟦ ⟧                                         | ⟦ ⟧                    |
 | Copias de seguridad         | Transmisión | Copia de la base de datos                        | ⟦Pendiente de elegir⟧                  | ⟦ ⟧                                         | ⟦ ⟧                    |
 | Google (inicio de sesión)   | ⟦Confirmar⟧ | Nombre, correo y foto de la cuenta de Google     | ⟦Confirmar⟧                            | ⟦ ⟧                                         | ⟦ ⟧                    |
-| Mercado Pago o ePayco       | ⟦Confirmar⟧ | Datos de pago, en la cuenta de cada organización | ⟦Confirmar por pasarela⟧               | Contrato de la organización con la pasarela | ⟦ ⟧                    |
+| Pasarela de pagos           | ⟦Confirmar⟧ | Datos de pago, en la cuenta de cada organización | ⟦Confirmar por pasarela⟧               | Contrato de la organización con la pasarela | ⟦ ⟧                    |
 | Proveedor de IA (si se usa) | Transmisión | Solo datos anonimizados, salvo autorización      | ⟦Pendiente de elegir⟧                  | Debe prohibir que use los datos para sí     | ⟦ ⟧                    |
 
 Por cada fila, antes de salir a producción y cada vez que cambie:

@@ -119,7 +119,7 @@ model PostLike {
 // ---------------------------------------------------------------------------
 // Primer corte del ecosistema (directorio de servicios + ficha de mascota).
 // A diferencia de los modelos de arriba, la FK a `organizations` SÍ se modela
-// (con su campo de vuelta en org.prisma), como ya hacen legal y ePayco, para
+// (con su campo de vuelta en org.prisma), como ya hace legal, para
 // que el gate de deriva de esquema no crezca.
 // ---------------------------------------------------------------------------
 

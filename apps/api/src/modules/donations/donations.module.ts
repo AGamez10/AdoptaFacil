@@ -7,10 +7,6 @@ import { DonationCertificatePublicController } from './donation-certificate-publ
 import { DonationAccessPublicController } from './donation-access-public.controller';
 import { DonationStatusPublicController } from './donation-status-public.controller';
 import { DonationCertificatesService } from './donation-certificates.service';
-import {
-  EPAYCO_KEYS_ENCRYPTION_KEY,
-  loadEpaycoKeysEncryptionKey,
-} from '../payments/epayco-keys-crypto';
 
 /**
  * M05 · Donations (T-050, P1). A Person donates to an organization, sees the
@@ -22,7 +18,7 @@ import {
  *
  * PaymentPort: consumed from the GLOBAL `PAYMENT_PORT` provider (core `PaymentModule`,
  * @Global, T-052/T-054). No local binding — the service injects the token directly.
- * The adapter (fake / ePayco / disabled) is chosen there via `PAYMENT_DRIVER`.
+ * The adapter (fake / disabled) is chosen there via `PAYMENT_DRIVER`.
  *
  * CampaignsModule (T-057): imported ONLY to consume its exported
  * `CampaignFundingService` — the webhook enganche calls
@@ -57,12 +53,6 @@ import {
     DonationAccessPublicController,
     DonationStatusPublicController,
   ],
-  providers: [
-    DonationsService,
-    DonationCertificatesService,
-    // ADR-PAG-002: decrypts the beneficiary org's ePayco keys for the charge
-    // and the confirmation (same derivation as PaymentsModule).
-    { provide: EPAYCO_KEYS_ENCRYPTION_KEY, useFactory: loadEpaycoKeysEncryptionKey },
-  ],
+  providers: [DonationsService, DonationCertificatesService],
 })
 export class DonationsModule {}

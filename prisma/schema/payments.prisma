@@ -61,14 +61,10 @@ model Payout {
   @@map("payouts")
 }
 
-/// ADR-PAG-001/002 (cobro directo con ePayco, sin custodia): the org's OWN
-/// ePayco merchant account. The checkout session is created with these keys,
-/// so the organization is the merchant of record and receives the money in its
-/// own ePayco balance. One row per organization; `custId` is globally unique
-/// (one ePayco account never backs two organizations). `pKeyEnc` and
-/// `privateKeyEnc` are AES-256-GCM ciphertexts (see
-/// apps/api/src/modules/payments/epayco-keys-crypto.ts) — never returned by any
-/// endpoint, logged or audited (audit carries at most `custId`).
+/// RETIRADA (2026-10-29, decisión del dueño): ePayco salió del producto y
+/// ningún código lee ni escribe esta tabla. Se conserva SOLO hasta que el
+/// dueño apruebe la migración que la elimina (con las llaves cifradas que aún
+/// guarda); su gate RLS sigue activo mientras exista. No agregar usos nuevos.
 model OrganizationEpaycoAccount {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @unique @map("organization_id") @db.Uuid

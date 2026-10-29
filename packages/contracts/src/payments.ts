@@ -6,9 +6,10 @@
 // the real gateway adapter (that is M15 implementation, a later task).
 //
 // CLOSED decisions reflected here (do NOT reopen):
-//   - Gateway: ePayco, cobro directo a la organización (ADR-PAG-002; Mercado
-//     Pago se retiró el 2026-10-17). NO split at checkout — the port never
-//     models a split; `breakdown` is informational/accounting only.
+//   - Cobro directo a la organización (ADR-PAG-001). No real gateway is wired
+//     today (the previous ones were retired by the owner). NO split at checkout
+//     — the port never models a split; `breakdown` is informational/accounting
+//     only.
 //   - Platform commission 4% on gross; gateway commission 2.65% + 700 (fixed);
 //     IVA 19% ONLY over commissions; no custody of third-party balances; COP.
 //   - SARLAFT/KYC (RF28) is validated in M15 BEFORE createPayout — NOT by the port.
@@ -74,29 +75,6 @@ export interface CreateCollectionInput {
   payer?: PaymentPayer;
   /** Caller-supplied key: a retry with the same key must NOT double-charge. */
   idempotencyKey: string;
-  /**
-   * ADR-PAG-002 (ePayco): the BENEFICIARY organization's own ePayco merchant
-   * keys, resolved SERVER-SIDE from its connected account. Server-only:
-   * never serialized, logged or audited. The ePayco driver refuses to charge
-   * without it.
-   */
-  epaycoCollector?: EpaycoCollectorCredentials;
-}
-
-/**
- * The organization's own ePayco merchant keys (dashboard → Integraciones →
- * Llaves API). `custId` and `publicKey` are not secrets; `privateKey` and
- * `pKey` are, and are stored encrypted at rest.
- */
-export interface EpaycoCollectorCredentials {
-  /** `P_CUST_ID_CLIENTE`: the merchant id at ePayco. Not a secret. */
-  custId: string;
-  /** `P_KEY`: signs/verifies the confirmation (`x_signature`). Secret. */
-  pKey: string;
-  /** `PUBLIC_KEY` for the Apify login. Not a secret. */
-  publicKey: string;
-  /** `PRIVATE_KEY` for the Apify login. Secret. */
-  privateKey: string;
 }
 
 export interface CollectionResult {
@@ -111,12 +89,6 @@ export interface CollectionResult {
    * present.
    */
   paymentLinkUrl?: string;
-  /**
-   * ePayco checkout v2: the session the browser opens with
-   * `ePayco.checkout.configure({ sessionId })`. Ephemeral, like
-   * `paymentLinkUrl`. Absent for every other driver.
-   */
-  checkoutSessionId?: string;
 }
 
 /** Normalized, idempotent webhook event (dedup by `dedupKey`). */
@@ -149,8 +121,6 @@ export interface NormalizedWebhookEvent {
 export interface WebhookVerificationContext {
   headers?: Record<string, string | undefined>;
   query?: Record<string, string | undefined>;
-  /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
-  epaycoCollector?: EpaycoCollectorCredentials;
 }
 
 /** Colombian bank account type (RF26 payouts — ahorros/corriente). */

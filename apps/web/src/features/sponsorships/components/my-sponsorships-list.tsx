@@ -30,7 +30,7 @@ import styles from './my-sponsorships-list.module.scss';
  * mismo patrón que `sponsorships_for_sponsor`, no agregado sin acordarlo antes.
  *
  * Mercado Pago retirado (2026-10-17): "Pagar de nuevo" abría su Card Payment
- * Brick. Mientras ePayco no tenga cobro de apadrinamientos, una suspensión por
+ * Brick. Mientras no haya pasarela con cobro de apadrinamientos, una suspensión por
  * pago fallido muestra un aviso tranquilo en vez de un botón que no funciona.
  */
 export function MySponsorshipsList() {

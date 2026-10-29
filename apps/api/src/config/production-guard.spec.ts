@@ -35,11 +35,6 @@ function omit(env: Record<string, string>, ...keys: string[]): Record<string, st
   return Object.fromEntries(Object.entries(env).filter(([key]) => !keys.includes(key)));
 }
 
-/** ePayco is the only real gateway (Mercado Pago retired 2026-10-17). */
-const EPAYCO = {
-  PAYMENT_DRIVER: 'epayco',
-};
-
 describe('production guard (R0-1)', () => {
   it('boots a production config with every simulated adapter replaced', () => {
     expect(() => validateEnv(SAFE_PRODUCTION)).not.toThrow();
@@ -153,21 +148,21 @@ describe('module feature flags (R1-1)', () => {
     }
   });
 
-  it('refuses money modules in production without the real gateway and a written approval', () => {
+  it('refuses money modules in production without a real gateway and a written approval', () => {
     expect(() => validateEnv({ ...SAFE_PRODUCTION, FEATURE_PAYMENTS: 'true' })).toThrow(
       /PAYMENT_DRIVER[\s\S]*PAYMENTS_PRODUCTION_APPROVAL_REF/,
     );
-    expect(() =>
-      validateEnv({ ...SAFE_PRODUCTION, ...EPAYCO, FEATURE_SPONSORSHIPS: 'true' }),
-    ).toThrow(/PAYMENTS_PRODUCTION_APPROVAL_REF/);
-    expect(() =>
-      validateEnv({
-        ...SAFE_PRODUCTION,
-        ...EPAYCO,
-        FEATURE_PAYMENTS: 'true',
-        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-10-01',
-      }),
-    ).not.toThrow();
+    // No real gateway is wired today: even with the approval reference the
+    // money modules cannot be switched on in production.
+    for (const flag of ['FEATURE_PAYMENTS', 'FEATURE_SPONSORSHIPS']) {
+      expect(() =>
+        validateEnv({
+          ...SAFE_PRODUCTION,
+          [flag]: 'true',
+          PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-10-01',
+        }),
+      ).toThrow(/PAYMENT_DRIVER/);
+    }
   });
 
   it("refuses PAYMENT_DRIVER='mercadopago' in production (Mercado Pago retired 2026-10-17)", () => {
@@ -179,17 +174,6 @@ describe('module feature flags (R1-1)', () => {
         PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-10-01',
       }),
     ).toThrow(/PAYMENT_DRIVER/);
-  });
-
-  it('accepts ePayco as the real gateway for money modules in production (ADR-PAG-002)', () => {
-    expect(() =>
-      validateEnv({
-        ...SAFE_PRODUCTION,
-        PAYMENT_DRIVER: 'epayco',
-        FEATURE_PAYMENTS: 'true',
-        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-10-15',
-      }),
-    ).not.toThrow();
   });
 
   it('refuses donation certificates without payments in production', () => {
@@ -218,10 +202,6 @@ describe('empty values count as unset (R0-5, BLD-001)', () => {
         SMTP_USER: '',
         SMTP_PASS: '',
         SMTP_FROM: '',
-        EPAYCO_CONFIRMATION_URL: '',
-        EPAYCO_RESPONSE_URL: '',
-        EPAYCO_PLATFORM_CUST_ID: '',
-        EPAYCO_PLATFORM_P_KEY: '',
         GOOGLE_OAUTH_CLIENT_ID: '',
       }),
     ).not.toThrow();

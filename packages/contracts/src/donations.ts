@@ -123,15 +123,6 @@ export interface Donation {
    * en vez de mostrar la pantalla de "gracias" localmente.
    */
   paymentLinkUrl?: string;
-  /**
-   * ePayco checkout v2 (ADR-PAG-002): sesión que el navegador abre con
-   * `ePayco.checkout.configure({ sessionId, type: 'onpage' })`. Mismas reglas
-   * que `paymentLinkUrl`: solo en la respuesta de `POST /donations`, nunca
-   * persistida. Ausente con cualquier otra pasarela.
-   */
-  checkoutSessionId?: string;
-  /** `true` cuando `checkoutSessionId` es de pruebas (sandbox de ePayco). */
-  checkoutTest?: boolean;
 }
 
 /**
@@ -286,9 +277,10 @@ export interface DonationPublicStatus {
 /**
  * PUBLIC availability of an organization to RECEIVE donations
  * (`GET /public/donations/organizations/:organizationId/availability`, no auth).
- * `canReceiveDonations` is `true` only when the organization has connected its
- * ePayco account (Mercado Pago, retired 2026-10-17, no longer counts). Deliberately a single boolean — the connected
- * account id itself is never exposed.
+ * `canReceiveDonations` is `true` only when the organization can be charged
+ * through the active payment driver (with no real gateway wired, only the
+ * dev/test fake driver answers `true`). Deliberately a single boolean — a
+ * connected account id is never exposed.
  */
 export interface DonationOrganizationAvailability {
   organizationId: string;

@@ -23,7 +23,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** La página de donar consulta si la organización tiene ePayco conectado. */
+/** La página de donar consulta si la organización puede recibir donaciones. */
 function stubOrgConnected() {
   vi.stubGlobal(
     'fetch',

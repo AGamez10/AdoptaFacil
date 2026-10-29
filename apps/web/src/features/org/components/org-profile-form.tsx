@@ -15,9 +15,7 @@ import {
   citiesForDepartment,
 } from '../data/colombian-locations';
 import { IMAGE_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
-import { EpaycoConnectSection } from './epayco-connect-section';
 import { OrgQrCard } from '../../portals/components/org-qr-card';
-import { isEpaycoProvider } from '../../payments/lib/payment-provider';
 import {
   OrgSelectField,
   OrgStaticField,
@@ -376,7 +374,6 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
     const [activeTab, setActiveTab] = useState<string>(() =>
       searchParams.get('tab') === 'pagos' ? 'pagos' : TABS[0].value,
     );
-    const epayco = isEpaycoProvider();
     const [form, setForm] = useState<FormState>(() => initialState(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
     const [saving, setSaving] = useState(false);
@@ -777,17 +774,12 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
             de este formulario (conectar/desconectar ya es inmediato). */}
         <OrgTabPanel value="pagos" activeValue={activeTab}>
           <div className="flex flex-col gap-6">
-            {/* ADR-PAG-002: la organización conecta SU cuenta ePayco (llaves
-                API), la única pasarela. Con el interruptor de apagado
-                (VITE_PAYMENT_PROVIDER=off) no se ofrece conectar nada. */}
-            {epayco ? (
-              <EpaycoConnectSection />
-            ) : (
-              <p className="text-sm text-muted-foreground" data-testid="payments-online-off">
-                Los pagos en línea están pausados por ahora. Te avisaremos cuando puedas conectar la
-                cuenta de tu organización.
-              </p>
-            )}
+            {/* Hoy no hay pasarela de pagos conectada: no se ofrece conectar
+                ninguna cuenta. Un aviso tranquilo, nunca un error. */}
+            <p className="text-sm text-muted-foreground" data-testid="payments-online-off">
+              Los pagos en línea están pausados por ahora. Te avisaremos cuando puedas conectar la
+              cuenta de tu organización.
+            </p>
           </div>
         </OrgTabPanel>
 

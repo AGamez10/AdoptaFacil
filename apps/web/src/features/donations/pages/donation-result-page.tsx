@@ -5,11 +5,11 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 
 /**
  * `/donaciones/resultado` — página a la que vuelve el navegador tras el
- * checkout de ePayco (ADR-PAG-002, `EPAYCO_RESPONSE_URL`). PÚBLICA.
+ * checkout de una pasarela de pagos. PÚBLICA.
  *
- * A propósito NO lee el estado del pago de la query string (`ref_payco`,
- * `x_response`…): esos parámetros los puede escribir cualquiera. La donación
- * solo se aprueba con la confirmación firmada que ePayco envía al servidor;
+ * A propósito NO lee el estado del pago de la query string: esos parámetros
+ * los puede escribir cualquiera. La donación solo se aprueba con la
+ * confirmación firmada que la pasarela envía al servidor;
  * aquí se le dice al donante, con honestidad, que el pago se está confirmando
  * y que el comprobante le llega por correo.
  */

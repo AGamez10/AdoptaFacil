@@ -45,8 +45,7 @@ model Organization {
   workspaceTicketEvents    PlatformWorkspaceTicketEvent[]
   sensitiveActions         PlatformSensitiveAction[]
   sensitiveActionDecisions PlatformSensitiveActionDecision[]
-  // ePayco (ADR-PAG-002): the organization's own connected merchant account.
-  // See payments.prisma.
+  // RETIRADA: pending drop migration (owner approval). See payments.prisma.
   epaycoAccount            OrganizationEpaycoAccount?
   // Comunidad, primer corte del ecosistema. See community.prisma.
   serviceListings          ServiceListing[]
