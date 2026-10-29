@@ -8,6 +8,7 @@ import { organizationLd, useSeo, websiteLd } from '../../../seo/seo';
 import {
   ActiveCampaignsSection,
   AdoptionStepsSection,
+  CoffeeSection,
   CommunitySection,
   FinalCtaSection,
   ForOrganizationsSection,
@@ -15,6 +16,7 @@ import {
   LANDING_CATALOG_ID,
   LandingHero,
   PromisesSection,
+  TemplateGallerySection,
   WaitingAnimalsSection,
   WaysToHelpSection,
   useCatalogSnapshot,
@@ -119,8 +121,10 @@ export function GeneralPortalPage() {
         <ImpactSection snapshot={snapshot} />
 
         <ActiveCampaignsSection />
+        <CoffeeSection />
         <CommunitySection />
         <ForOrganizationsSection />
+        <TemplateGallerySection />
         <PromisesSection />
         <FinalCtaSection />
       </main>
