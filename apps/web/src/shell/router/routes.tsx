@@ -61,6 +61,10 @@ const OrgDonateRedirectPage = lazyPage(
   () => import('../../features/portals/pages/org-donate-redirect-page'),
   'OrgDonateRedirectPage',
 );
+const OrgQrRedirectPage = lazyPage(
+  () => import('../../features/portals/pages/org-qr-redirect-page'),
+  'OrgQrRedirectPage',
+);
 const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
 const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
@@ -250,6 +254,10 @@ export function AppRoutes() {
           `/donaciones`. `/donar` solo tiene sentido en un subdominio real de
           organización; en el dominio principal lleva a `/donaciones`. */}
           <Route path="/o/:slug/donar" element={<OrgDonateRedirectPage />} />
+          {/* QR FIJO por organización: la etiqueta impresa no cambia; la org
+          elige desde su panel si lleva a su perfil, a donar, a una campaña o a
+          apadrinar un animal. La API valida el destino en cada escaneo. */}
+          <Route path="/q/:code" element={<OrgQrRedirectPage />} />
           <Route
             path="/donar"
             element={
