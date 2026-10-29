@@ -77,13 +77,19 @@ export class MercadoPagoOAuthClient {
   }
 
   /** Intercambia el `code` del callback por el par de tokens del vendedor. */
-  exchangeCode(code: string): Promise<MercadoPagoOAuthTokenResponse> {
+  exchangeCode(
+    code: string,
+    options: { testToken?: boolean } = {},
+  ): Promise<MercadoPagoOAuthTokenResponse> {
     return this.postToken({
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
       grant_type: 'authorization_code',
       code,
       redirect_uri: this.config.redirectUri,
+      // `test_token: true` genera credenciales de PRUEBA para el vínculo; sin él el
+      // token del vendedor es de producción y MP rechaza los pagos entre cuentas de prueba.
+      ...(options.testToken ? { test_token: true } : {}),
     });
   }
 
@@ -97,7 +103,9 @@ export class MercadoPagoOAuthClient {
     });
   }
 
-  private async postToken(body: Record<string, string>): Promise<MercadoPagoOAuthTokenResponse> {
+  private async postToken(
+    body: Record<string, string | boolean>,
+  ): Promise<MercadoPagoOAuthTokenResponse> {
     const response = await this.fetchFn(this.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

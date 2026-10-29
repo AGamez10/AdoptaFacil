@@ -58,7 +58,9 @@ async function sellerCredentials(): Promise<{
 }> {
   const code = arg('code');
   if (code) {
-    const tokens = await oauthClient().exchangeCode(code);
+    const tokens = await oauthClient().exchangeCode(code, {
+      testToken: process.env.MP_OAUTH_TEST_TOKEN !== 'false',
+    });
     console.log(
       `OAuth OK: vendedor user_id=${tokens.user_id} live_mode=${tokens.live_mode} refresh_token=${tokens.refresh_token ? 'sí' : 'no'} expires_in=${tokens.expires_in}`,
     );

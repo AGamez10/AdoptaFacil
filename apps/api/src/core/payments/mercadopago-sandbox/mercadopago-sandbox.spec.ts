@@ -66,6 +66,18 @@ describe('MercadoPagoOAuthClient', () => {
     });
   });
 
+  it('sends test_token only when asked (sandbox credentials)', async () => {
+    const { fn, calls } = mockFetch(
+      jsonResponse(200, { access_token: 'TEST-x' }),
+      jsonResponse(200, { access_token: 'APP_USR-x' }),
+    );
+    const client = new MercadoPagoOAuthClient(OAUTH_CONFIG, fn);
+    await client.exchangeCode('TG-a', { testToken: true });
+    await client.exchangeCode('TG-b');
+    expect(JSON.parse(String(calls[0].init?.body))).toMatchObject({ test_token: true });
+    expect(JSON.parse(String(calls[1].init?.body))).not.toHaveProperty('test_token');
+  });
+
   it('refreshes with refresh_token grant', async () => {
     const { fn, calls } = mockFetch(jsonResponse(200, { access_token: 'new' }));
     await new MercadoPagoOAuthClient(OAUTH_CONFIG, fn).refreshToken('TG-refresh');
