@@ -17,6 +17,7 @@
     "seed:demo": "ts-node --transpile-only scripts/seed-demo.ts",
     "seed:breeds": "ts-node --transpile-only scripts/seed-breeds.ts",
     "seed:trafico": "ts-node --transpile-only scripts/seed-trafico.ts",
+    "mp:sandbox": "ts-node --transpile-only scripts/mp-sandbox-split.ts",
     "db:deploy": "prisma migrate deploy"
   },
   "prisma": {
