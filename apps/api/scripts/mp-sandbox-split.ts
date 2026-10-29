@@ -19,10 +19,7 @@ import {
   MERCADOPAGO_API_BASE_URL,
   MercadoPagoOAuthClient,
 } from '../src/core/payments/mercadopago-sandbox/mercadopago-oauth.client';
-import {
-  MercadoPagoApiError,
-  MercadoPagoSplitClient,
-} from '../src/core/payments/mercadopago-sandbox/mercadopago-split.client';
+import { MercadoPagoSplitClient } from '../src/core/payments/mercadopago-sandbox/mercadopago-split.client';
 
 // Tarjeta de prueba Mastercard publicada por Mercado Pago para Colombia.
 const TEST_CARD = { number: '5254133674403564', cvv: '123', month: 11, year: 2030 };
