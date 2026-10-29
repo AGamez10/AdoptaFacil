@@ -135,7 +135,13 @@ async function pay(): Promise<void> {
     .split(',')
     .map((e) => e.trim())
     .filter(Boolean);
-  const payers: Array<string | undefined> = candidates.length > 0 ? candidates : [undefined];
+  // Además de los correos dados, prueba los formatos genéricos de sandbox
+  // (`test_user_<número>@testuser.com`), por si MP solo exige un pagador de prueba.
+  const generic = [
+    `test_user_${Math.floor(Math.random() * 1e9)}@testuser.com`,
+    'test@testuser.com',
+  ];
+  const payers: Array<string | undefined> = [...candidates, ...generic];
   let result: Awaited<ReturnType<typeof attempt>> | undefined;
   // 1) Con application_fee; prueba cada pagador candidato hasta que uno sea aceptado.
   for (const email of payers) {
