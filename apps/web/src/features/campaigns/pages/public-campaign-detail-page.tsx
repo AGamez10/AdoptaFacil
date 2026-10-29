@@ -3,13 +3,16 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import type { CampaignAccountabilityReport, CampaignPublic } from '@adoptafacil/contracts';
 import {
   Badge,
+  buttonVariants,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  cn,
   EmptyState,
   Skeleton,
 } from '@adoptafacil/ui';
+import { useFeature } from '../../../shell/capabilities';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { getCampaignAccountability, getPublicCampaign } from '../api/public-campaigns';
 import { CampaignProgress } from '../components/campaign-progress';
@@ -23,6 +26,19 @@ import {
 } from '../model/campaigns-view';
 
 type DetailState = 'loading' | 'ready' | 'not-found' | 'error';
+
+/** Flujo de donación existente (`/donaciones`) con la campaña como concepto. */
+export function buildCampaignDonateHref(
+  campaign: Pick<CampaignPublic, 'id' | 'title' | 'organizationId' | 'organizationName'>,
+): string {
+  const params = new URLSearchParams({
+    organizationId: campaign.organizationId,
+    organizationName: campaign.organizationName,
+    campaignId: campaign.id,
+    campaignTitle: campaign.title,
+  });
+  return `/donaciones?${params.toString()}`;
+}
 
 interface CampaignNavState {
   campaign?: CampaignPublic;
@@ -43,6 +59,7 @@ export function PublicCampaignDetailPage() {
   const [campaign, setCampaign] = useState<CampaignPublic | null>(preloaded ?? null);
   const [state, setState] = useState<DetailState>(preloaded ? 'ready' : 'loading');
   const [report, setReport] = useState<CampaignAccountabilityReport | null>(null);
+  const payments = useFeature('payments');
 
   useEffect(() => {
     if (preloaded || !id) {
@@ -129,6 +146,15 @@ export function PublicCampaignDetailPage() {
                   goalAmount={campaign.goalAmount}
                   progress={campaign.progress}
                 />
+                {payments && campaign.status === 'active' && (
+                  <Link
+                    to={buildCampaignDonateHref(campaign)}
+                    className={cn(buttonVariants({ size: 'lg' }), 'w-full sm:w-auto')}
+                    data-testid="campaign-donate-cta"
+                  >
+                    Donar a esta campaña
+                  </Link>
+                )}
                 <dl className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <dt className="text-xs uppercase text-muted-foreground">Meta</dt>
