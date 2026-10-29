@@ -6,9 +6,10 @@
 // the real gateway adapter (that is M15 implementation, a later task).
 //
 // CLOSED decisions reflected here (do NOT reopen):
-//   - Gateway: cobro directo a la organización. Mercado Pago con OAuth del
-//     refugio (ADR-PAG-003, 2026-11-06) o ePayco con sus llaves (ADR-PAG-002). NO split at checkout — the port never
-//     models a split; `breakdown` is informational/accounting only.
+//   - Gateway: cobro directo a la organización con Mercado Pago y la cuenta
+//     propia del refugio conectada por OAuth (ADR-PAG-003). NO split at
+//     checkout — the port never models a split; `breakdown` is
+//     informational/accounting only.
 //   - Platform commission 4% on gross; gateway commission 2.65% + 700 (fixed);
 //     IVA 19% ONLY over commissions; no custody of third-party balances; COP.
 //   - SARLAFT/KYC (RF28) is validated in M15 BEFORE createPayout — NOT by the port.
@@ -77,13 +78,6 @@ export interface CreateCollectionInput {
   /** Caller-supplied key: a retry with the same key must NOT double-charge. */
   idempotencyKey: string;
   /**
-   * ADR-PAG-002 (ePayco): the BENEFICIARY organization's own ePayco merchant
-   * keys, resolved SERVER-SIDE from its connected account. Server-only:
-   * never serialized, logged or audited. The ePayco driver refuses to charge
-   * without it.
-   */
-  epaycoCollector?: EpaycoCollectorCredentials;
-  /**
    * ADR-PAG-003 (Mercado Pago OAuth): the BENEFICIARY organization's own
    * access token, obtained through OAuth and decrypted SERVER-SIDE. Server-only:
    * never serialized, logged or audited. The Mercado Pago driver refuses to
@@ -105,22 +99,6 @@ export interface MercadoPagoCollectorCredentials {
   accessToken: string;
 }
 
-/**
- * The organization's own ePayco merchant keys (dashboard → Integraciones →
- * Llaves API). `custId` and `publicKey` are not secrets; `privateKey` and
- * `pKey` are, and are stored encrypted at rest.
- */
-export interface EpaycoCollectorCredentials {
-  /** `P_CUST_ID_CLIENTE`: the merchant id at ePayco. Not a secret. */
-  custId: string;
-  /** `P_KEY`: signs/verifies the confirmation (`x_signature`). Secret. */
-  pKey: string;
-  /** `PUBLIC_KEY` for the Apify login. Not a secret. */
-  publicKey: string;
-  /** `PRIVATE_KEY` for the Apify login. Secret. */
-  privateKey: string;
-}
-
 export interface CollectionResult {
   collectionId: string;
   status: PaymentStatus;
@@ -133,12 +111,6 @@ export interface CollectionResult {
    * present.
    */
   paymentLinkUrl?: string;
-  /**
-   * ePayco checkout v2: the session the browser opens with
-   * `ePayco.checkout.configure({ sessionId })`. Ephemeral, like
-   * `paymentLinkUrl`. Absent for every other driver.
-   */
-  checkoutSessionId?: string;
 }
 
 /** Normalized, idempotent webhook event (dedup by `dedupKey`). */
@@ -174,8 +146,6 @@ export interface NormalizedWebhookEvent {
 export interface WebhookVerificationContext {
   headers?: Record<string, string | undefined>;
   query?: Record<string, string | undefined>;
-  /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
-  epaycoCollector?: EpaycoCollectorCredentials;
   /** ADR-PAG-003: Mercado Pago grant of the organization that owns the payment. */
   mercadopagoCollector?: MercadoPagoCollectorCredentials;
 }

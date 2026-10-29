@@ -15,8 +15,7 @@ organizaciones; ingreso por comisión sobre transacciones (4% con desglose trans
 sobre la comisión). Pasarela **Mercado Pago por OAuth** (desde el 2026-11-06, ADR-PAG-003,
 `docs/pagos/mercadopago-oauth.md`): cada refugio conecta su propia cuenta y cada donación se cobra con su
 token, así que el dinero llega directo a su cuenta; AdoptaFácil cobra sus planes con su propia cuenta
-(suscripción). Sin split. ePayco (ADR-PAG-002) sigue disponible con `PAYMENT_DRIVER=epayco`. No hay
-adaptador de payouts real: `createPayout` no está implementado.
+(suscripción). Sin split y sin comisión de plataforma (0 %, decisión del dueño).
 
 **Jerarquía de fuentes de verdad** (gana el de más arriba): (1) Documento base (requisitos y
 roadmap) → (2) Consolidación operativa → (3) Metodología → (4) Instructivo del desarrollador →

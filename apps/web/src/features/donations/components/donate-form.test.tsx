@@ -8,13 +8,12 @@ import { DonateForm } from './donate-form';
  * "cubro la comisión" checkbox drives commissionPayer. Presentational only (no
  * api/session), so it renders standalone.
  *
- * ePayco is the only gateway (Mercado Pago retired 2026-10-17): there is no
- * card step — "Donar" calls `onDonate` directly, with NO card fields, and the
- * page opens ePayco's own checkout.
+ * There is no card step: "Donar" calls `onDonate` directly, with NO card
+ * fields.
  */
 const digits = (el: HTMLElement) => Number.parseInt(el.textContent!.replace(/[^\d]/g, ''), 10);
 
-/** Fills a valid amount and clicks "Donar a …" (single step, ePayco). */
+/** Fills a valid amount and clicks "Donar a …" (single step). */
 function clickDonate(organizationName = 'Refugio Patitas') {
   fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`Donar a ${organizationName}`) }));
@@ -76,10 +75,10 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
     expect(screen.queryByTestId('donation-guest-email')).not.toBeInTheDocument();
   });
 
-  it('never renders a card form: "Donar" calls onDonate directly (ePayco checkout)', () => {
+  it('never renders a card form: "Donar" calls onDonate directly', () => {
     const onDonate = vi.fn().mockResolvedValue(undefined);
     render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={onDonate} />);
-    expect(screen.getByText(/pasarela segura de ePayco/)).toBeInTheDocument();
+    expect(screen.getByText(/pasarela de pagos segura/)).toBeInTheDocument();
     expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
     clickDonate();
 
@@ -118,7 +117,7 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
 /**
  * Checkout de invitado (requisito FINAL del cliente): donar nunca exige cuenta
  * ni login. Sin sesión, el formulario pide nombre + correo y los exige antes
- * de habilitar "Donar" (un solo paso; el pago ocurre en ePayco).
+ * de habilitar "Donar" (un solo paso).
  */
 /** El invitado acepta términos y autorización de datos (casillas obligatorias). */
 function acceptGuestLegal(): void {

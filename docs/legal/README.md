@@ -39,7 +39,7 @@ AdoptaFácil la opera, mientras se constituye la sociedad, **una persona natural
 ## Datos que faltan (marcados ⟦así⟧ en los textos o en `LEGAL_CONTROLLER`)
 
 - Nombre completo, cédula, NIT del RUT, matrícula mercantil, ciudad y dirección de la persona natural. Luego, razón social y NIT de la sociedad. Fecha de publicación. Dominio: adoptafacil.org (ya completado).
-- Encargados: Hostinger (VPS), Cloudflare (dominio y red), correo, copias de seguridad y pasarelas (Mercado Pago, ePayco), en la política, sección 7. Falta confirmar el **país del centro de datos** elegido al contratar; como Hostinger es extranjera, puede ser transferencia internacional. Proveedores de correo y copias de seguridad, y el país donde procesa cada uno: pendientes.
+- Encargados: Hostinger (VPS), Cloudflare (dominio y red), correo, copias de seguridad y pasarelas de pago (hoy ninguna conectada; la versión vigente de la política aún nombra pasarelas retiradas y debe actualizarse en la próxima versión), en la política, sección 7. Falta confirmar el **país del centro de datos** elegido al contratar; como Hostinger es extranjera, puede ser transferencia internacional. Proveedores de correo y copias de seguridad, y el país donde procesa cada uno: pendientes.
 - Plazos: conservación de datos tras cerrar la cuenta, conservación de evidencia de reportes, atención de reportes, aviso de cambios (propuesto 15 días), aviso de precios (30 días), aviso de incidentes a organizaciones (72 horas), exportación al terminar (30 días), registro de trazabilidad (10 años).
 
 Las respuestas del asesor del cliente a estas preguntas, contrastadas con los textos, están en `revision-asesor.md`, junto con el checklist de transferencia internacional y la tabla del acuerdo encargado-responsable.

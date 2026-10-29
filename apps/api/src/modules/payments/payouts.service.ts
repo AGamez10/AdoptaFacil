@@ -43,8 +43,7 @@ function fromRow(row: PayoutRow): PayoutView {
 
 /**
  * M15b (RF26) — dispersión T+1 (Fase 2, BLOQUEADA: not implemented by the real
- * payout adapter: Wompi and Mercado Pago were retired; with ePayco the money
- * lands directly in each organization's account). `requestPayout` is
+ * payout adapter: no payment gateway is connected today). `requestPayout` is
  * the PlatformAdmin-triggered entry point (a treasury operation): it persists
  * the attempt idempotently and enqueues the actual gateway call on a BullMQ
  * worker so a gateway hiccup retries with backoff instead of failing the HTTP

@@ -7,6 +7,7 @@ import {
   planCollection,
   type CollectionPolicy,
   type ExpectedGatewayPayment,
+  type GatewayCapability,
   type GatewayPaymentSnapshot,
   type OrgGatewayConnection,
 } from '../src/payment-gateways';
@@ -24,7 +25,7 @@ const LAUNCH: CollectionPolicy = {
 function conn(over: Partial<OrgGatewayConnection> = {}): OrgGatewayConnection {
   return {
     organizationId: ORG_A,
-    provider: 'epayco',
+    provider: 'wompi',
     mode: 'direct_to_org',
     status: 'active',
     gatewayAccountId: '292020059',
@@ -38,7 +39,7 @@ describe('planCollection — sin custodia (D1)', () => {
     expect(d).toEqual({
       ok: true,
       plan: {
-        provider: 'epayco',
+        provider: 'wompi',
         mode: 'direct_to_org',
         collector: 'organization',
         platformFeeRate: 0,
@@ -118,27 +119,46 @@ describe('planCollection — split con comisión', () => {
     expect(d).toEqual({ ok: false, reason: 'mode_not_supported_by_provider' });
   });
 
-  it('ePayco split needs a written approval reference', () => {
-    const c = conn({ provider: 'epayco', mode: 'platform_split' });
-    expect(planCollection(ORG_A, c, SPLIT_ON)).toEqual({
+  // No listed gateway offers a split today: these cases run against a
+  // test-only catalog so the approval and fee-rate rules stay pinned.
+  const SPLIT_CATALOG: readonly GatewayCapability[] = [
+    {
+      provider: 'wompi',
+      mode: 'platform_split',
+      credentialKind: 'oauth',
+      verifiable: true,
+      platformFeeAtSource: true,
+      status: 'requires_written_confirmation',
+      checkedAt: '2026-10-29',
+      sources: [],
+    },
+  ];
+  const splitConn = () => conn({ provider: 'wompi', mode: 'platform_split' });
+
+  it('a split needs a written approval reference', () => {
+    expect(planCollection(ORG_A, splitConn(), SPLIT_ON, SPLIT_CATALOG)).toEqual({
       ok: false,
       reason: 'split_without_written_approval',
     });
-    expect(planCollection(ORG_A, c, { ...SPLIT_ON, splitApprovalRef: '   ' })).toEqual({
+    expect(
+      planCollection(ORG_A, splitConn(), { ...SPLIT_ON, splitApprovalRef: '   ' }, SPLIT_CATALOG),
+    ).toEqual({
       ok: false,
       reason: 'split_without_written_approval',
     });
   });
 
   it('with approval, the 4 % fee applies and the org is still the collector', () => {
-    const d = planCollection(ORG_A, conn({ provider: 'epayco', mode: 'platform_split' }), {
-      ...SPLIT_ON,
-      splitApprovalRef: 'EPAYCO-2026-10',
-    });
+    const d = planCollection(
+      ORG_A,
+      splitConn(),
+      { ...SPLIT_ON, splitApprovalRef: 'PSP-2026-10' },
+      SPLIT_CATALOG,
+    );
     expect(d).toEqual({
       ok: true,
       plan: {
-        provider: 'epayco',
+        provider: 'wompi',
         mode: 'platform_split',
         collector: 'organization',
         platformFeeRate: 0.04,
@@ -148,11 +168,12 @@ describe('planCollection — split con comisión', () => {
   });
 
   it.each([-0.01, 1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects fee rate %s', (rate) => {
-    const d = planCollection(ORG_A, conn({ provider: 'epayco', mode: 'platform_split' }), {
-      ...SPLIT_ON,
-      splitApprovalRef: 'X',
-      splitPlatformFeeRate: rate,
-    });
+    const d = planCollection(
+      ORG_A,
+      splitConn(),
+      { ...SPLIT_ON, splitApprovalRef: 'X', splitPlatformFeeRate: rate },
+      SPLIT_CATALOG,
+    );
     expect(d).toEqual({ ok: false, reason: 'invalid_fee_rate' });
   });
 });

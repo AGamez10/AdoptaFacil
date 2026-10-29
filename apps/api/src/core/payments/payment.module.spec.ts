@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing';
 import { FakePaymentAdapter, type PaymentPort } from '@adoptafacil/contracts';
 import { PAYMENT_PORT } from './payment.port';
 import { PaymentModule } from './payment.module';
-import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
 import { DisabledPaymentAdapter } from './disabled-payment.adapter';
 import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
 
@@ -70,16 +69,10 @@ describe('PaymentModule (T-052)', () => {
     expect(p1.status).toBe('scheduled');
   });
 
-  it('binds PAYMENT_PORT to the EpaycoPaymentAdapter when PAYMENT_DRIVER=epayco (no platform keys needed)', async () => {
-    const port = await resolvePortWithEnv({ PAYMENT_DRIVER: 'epayco' });
-    expect(port).toBeInstanceOf(EpaycoPaymentAdapter);
-  });
-
   it('binds PAYMENT_PORT to the MercadoPagoPaymentAdapter when PAYMENT_DRIVER=mercadopago', async () => {
     const port = await resolvePortWithEnv({ PAYMENT_DRIVER: 'mercadopago' });
     expect(port).toBeInstanceOf(MercadoPagoPaymentAdapter);
   });
-
   it('binds the DisabledPaymentAdapter when PAYMENT_DRIVER=disabled', async () => {
     const port = await resolvePortWithEnv({ PAYMENT_DRIVER: 'disabled' });
     expect(port).toBeInstanceOf(DisabledPaymentAdapter);

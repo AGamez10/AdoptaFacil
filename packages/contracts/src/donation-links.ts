@@ -5,7 +5,7 @@
 // Every organization gets ONE stable donation URL that its community can scan
 // from a printed QR. The URL must survive gateway changes (it points to
 // AdoptaFácil, never to a gateway link), so a sticker printed today keeps
-// working when the org switches from Mercado Pago to ePayco or adds methods.
+// working when the org switches gateways or adds methods.
 //
 // Browser-safe, dependency-free.
 

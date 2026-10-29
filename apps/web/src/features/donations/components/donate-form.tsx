@@ -43,20 +43,18 @@ export interface DonateFormProps {
    *  "Continuar". Con sesión, esos campos ni se muestran (se prellenan aparte). */
   hasSession: boolean;
   /**
-   * ADR-PAG-002: "Donar" llama a `onDonate` directo (sin datos de tarjeta) y
-   * la página abre el checkout de ePayco, que ofrece los medios que la
-   * organización tenga habilitados. Un rechazo lo comunica la página (toast).
+   * "Donar" llama a `onDonate` directo (sin datos de tarjeta): la página crea
+   * la donación. Un rechazo lo comunica la página (toast).
    */
   onDonate: (values: DonateFormValues) => Promise<void>;
 }
 
 /**
- * Formulario de donación (§M05, P1 + checkout de invitado + ADR-PAG-002). PRESENTACIONAL
+ * Formulario de donación (§M05, P1 + checkout de invitado). PRESENTACIONAL
  * (sin api/sesión real, recibe `hasSession` como prop) para poder testearlo directo.
  * Un solo paso: monto + casillas + desglose transparente EN VIVO (misma cuenta que el
  * backend, vía `computeBreakdown`) + identidad de invitado si no hay sesión. "Donar"
- * crea la donación y la página abre la pasarela segura de ePayco (la única desde que
- * Mercado Pago se retiró, 2026-10-17): nunca se piden datos de tarjeta en AdoptaFácil.
+ * crea la donación: nunca se piden datos de tarjeta en AdoptaFácil.
  * Ofrece la casilla "cubro la comisión de la pasarela"
  * (commissionPayer = 'donor'; F-NOMENCLATURA-CHECKBOX: el donante cubre la comisión
  * real de la pasarela de pago, un tercero).
@@ -205,15 +203,14 @@ export function DonateForm({
       )}
 
       <p className={styles.hint}>
-        Pagarás en la pasarela segura de ePayco con los medios que tenga habilitados{' '}
-        {organizationName} (tarjeta, PSE, Nequi, Daviplata, efectivo…). El dinero llega directo a su
-        cuenta.
+        Pagarás en una pasarela de pagos segura, sin dar datos de tarjeta en AdoptaFácil. El dinero
+        llega directo a la cuenta de {organizationName}.
       </p>
 
       <Button
         disabled={!canContinue}
         onClick={() => {
-          // Sin paso de tarjeta: la página crea la donación y abre ePayco. Un
+          // Sin paso de tarjeta: la página crea la donación. Un
           // rechazo ya lo comunica la página (toast); aquí solo se evita el
           // "unhandled rejection".
           onDonate({
