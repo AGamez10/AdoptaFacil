@@ -2,14 +2,14 @@
 //
 // Cada organización tiene UNA etiqueta QR que nunca cambia: codifica
 // `<appOrigin>/q/<code>`. Lo único que la organización cambia desde su panel es
-// el DESTINO, guardado como tipo + id (nunca una URL): donar, una de sus
-// campañas activas o apadrinar uno de sus animales. Al escanear, la API valida
+// el DESTINO, guardado como tipo + id (nunca una URL): su perfil público,
+// donar, una de sus campañas activas o apadrinar uno de sus animales. Al escanear, la API valida
 // que el destino siga siendo de la organización y publicable; si no, lleva a
 // donar a esa misma organización.
 //
 // Browser-safe, dependency-free.
 
-export const QR_TARGET_KINDS = ['donate', 'campaign', 'animal'] as const;
+export const QR_TARGET_KINDS = ['profile', 'donate', 'campaign', 'animal'] as const;
 export type QrTargetKind = (typeof QR_TARGET_KINDS)[number];
 
 /** 8 caracteres sin 0/1/i/l/o. Igual al CHECK de `organization_qr_links.code`. */
@@ -20,7 +20,7 @@ export const ORG_QR_PATH_PREFIX = '/q/';
 
 export interface QrTarget {
   kind: QrTargetKind;
-  /** Campaña o animal; `null` cuando `kind` es `donate`. */
+  /** Campaña o animal; `null` cuando `kind` es `profile` o `donate`. */
   id: string | null;
 }
 
@@ -54,6 +54,11 @@ export interface UpdateOrganizationQrTargetInput {
 export interface PublicQrResolution {
   slug: string;
   target: QrTarget;
+}
+
+/** Destinos que no llevan id (la organización misma). */
+export function qrTargetNeedsId(kind: QrTargetKind): boolean {
+  return kind === 'campaign' || kind === 'animal';
 }
 
 /** URL que va impresa en el QR. */

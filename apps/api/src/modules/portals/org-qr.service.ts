@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import {
   CampaignStatus,
   ORG_QR_CODE_PATTERN,
+  qrTargetNeedsId,
   type OrganizationQr,
   type PublicQrResolution,
   type QrTarget,
@@ -30,7 +31,7 @@ const DONATE: QrTarget = { kind: 'donate', id: null };
 
 /**
  * QR fijo por organización. La organización lee su QR (el código se crea la
- * primera vez y no cambia nunca) y elige a dónde lleva: donar, una de sus
+ * primera vez y no cambia nunca) y elige a dónde lleva: su perfil, donar, una de sus
  * campañas activas o apadrinar uno de sus animales. Todo bajo su RLS, así que
  * una campaña o un animal de otra organización ni siquiera se encuentra. El
  * escaneo público se resuelve con `resolve_organization_qr` (SECURITY DEFINER),
@@ -64,7 +65,7 @@ export class OrgQrService {
       });
       const target: QrTarget = { kind: link.targetKind as QrTargetKind, id: link.targetId };
       const valid =
-        target.kind === 'donate' ||
+        !qrTargetNeedsId(target.kind) ||
         (target.kind === 'campaign' ? campaigns : animals).some((o) => o.id === target.id);
       return {
         code: link.code,
@@ -83,9 +84,9 @@ export class OrgQrService {
   ): Promise<OrganizationQr> {
     const organizationId = this.requireOrgId();
     await this.ensureLink(organizationId);
-    const targetId = input.kind === 'donate' ? null : (input.id ?? null);
+    const targetId = qrTargetNeedsId(input.kind) ? (input.id ?? null) : null;
     await this.prisma.withOrgContext(organizationId, async (tx) => {
-      if (input.kind !== 'donate') {
+      if (qrTargetNeedsId(input.kind)) {
         const { campaigns, animals } = await this.options(tx, organizationId);
         const pool = input.kind === 'campaign' ? campaigns : animals;
         if (!pool.some((o) => o.id === targetId)) {

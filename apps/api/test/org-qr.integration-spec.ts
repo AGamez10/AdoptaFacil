@@ -149,6 +149,14 @@ describe('QR fijo por organización', () => {
     expect(audit?.metadata).toMatchObject({ kind: 'campaign', targetId: campaignA });
   });
 
+  it('can point to the organization profile (no id)', async () => {
+    const { body } = await setTarget(tokenA, { kind: 'profile' }).expect(200);
+    expect(body.effectiveTarget).toEqual({ kind: 'profile', id: null });
+    const scan = await request(server).get(`/public/qr/${body.code}`).expect(200);
+    expect(scan.body).toEqual({ slug: slugA, target: { kind: 'profile', id: null } });
+    await setTarget(tokenA, { kind: 'profile', id: campaignA }).expect(400);
+  });
+
   it('rejects a campaign of ANOTHER organization', async () => {
     await setTarget(tokenA, { kind: 'campaign', id: campaignB }).expect(400);
   });

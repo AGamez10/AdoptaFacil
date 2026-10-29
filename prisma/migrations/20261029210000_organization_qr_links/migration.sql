@@ -1,7 +1,8 @@
 -- ============================================================================
 -- QR fijo por organización (portals). Una etiqueta impresa que nunca cambia
 -- (`/q/<code>`) y un destino que la organización elige desde su panel:
--- donar, una de sus campañas activas o apadrinar uno de sus animales.
+-- su perfil público, donar, una de sus campañas activas o apadrinar uno de
+-- sus animales.
 --
 -- El destino se guarda como tipo + id, nunca como URL: no hay redirección
 -- abierta posible. La lectura pública pasa por `resolve_organization_qr`
@@ -21,8 +22,8 @@ CREATE TABLE "organization_qr_links" (
     CONSTRAINT "organization_qr_links_pkey" PRIMARY KEY ("id"),
     -- 8 caracteres sin 0/1/i/l/o (fáciles de confundir si alguien lo dicta).
     CONSTRAINT "organization_qr_links_code_format" CHECK ("code" ~ '^[a-hjkmnp-z2-9]{8}$'),
-    CONSTRAINT "organization_qr_links_target_kind" CHECK ("target_kind" IN ('donate', 'campaign', 'animal')),
-    CONSTRAINT "organization_qr_links_target_id" CHECK (("target_kind" = 'donate') = ("target_id" IS NULL))
+    CONSTRAINT "organization_qr_links_target_kind" CHECK ("target_kind" IN ('profile', 'donate', 'campaign', 'animal')),
+    CONSTRAINT "organization_qr_links_target_id" CHECK (("target_kind" IN ('profile', 'donate')) = ("target_id" IS NULL))
 );
 
 CREATE UNIQUE INDEX "organization_qr_links_organization_id_key" ON "organization_qr_links"("organization_id");
@@ -118,7 +119,9 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  IF q.target_kind = 'campaign' THEN
+  IF q.target_kind = 'profile' THEN
+    v_kind := 'profile';
+  ELSIF q.target_kind = 'campaign' THEN
     PERFORM 1 FROM campaigns c
       WHERE c.id = q.target_id
         AND c.organization_id = q.organization_id

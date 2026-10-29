@@ -43,7 +43,8 @@ model PortalTheme {
 /// QR fijo de la organización (una etiqueta impresa que nunca cambia). El QR
 /// codifica `/q/<code>`; `code` se crea una vez y un trigger impide cambiarlo.
 /// Lo único editable es el DESTINO, guardado como tipo + id (nunca una URL, así
-/// no hay redirección abierta): `donate` (donar a la org), `campaign` (una de
+/// no hay redirección abierta): `profile` (su portal público), `donate`
+/// (donar a la org), `campaign` (una de
 /// sus campañas activas) o `animal` (apadrinar uno de sus animales). La lectura
 /// pública pasa por `resolve_organization_qr(code)` (SECURITY DEFINER), que
 /// valida que el destino siga siendo de la org y publicable; si no, cae a donar.
@@ -51,9 +52,9 @@ model OrganizationQrLink {
   id              String   @id @default(uuid()) @db.Uuid
   organizationId  String   @unique @map("organization_id") @db.Uuid
   code            String   @unique
-  /// "donate" | "campaign" | "animal" (contrato QrTargetKind).
+  /// "profile" | "donate" | "campaign" | "animal" (contrato QrTargetKind).
   targetKind      String   @default("donate") @map("target_kind")
-  /// Campaña o animal de la misma org; null cuando `targetKind` es "donate".
+  /// Campaña o animal de la misma org; null para "profile" y "donate".
   targetId        String?  @map("target_id") @db.Uuid
   updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")
