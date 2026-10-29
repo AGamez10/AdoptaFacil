@@ -226,6 +226,8 @@ describe('PublicAnimalDetailPage', () => {
     renderDetail();
     expect(await screen.findByText('Animal no encontrado')).toBeInTheDocument();
     expect(screen.queryByTestId('request-adoption-cta')).not.toBeInTheDocument();
+    // Un QR de carnet ya impreso de un animal adoptado lleva a su organización.
+    expect(screen.getByTestId('animal-not-found-org-link').getAttribute('href')).toMatch(/^\/o\//);
   });
 
   it('F-LANDING-02: always shows "Volver al inicio" (→ /), even before the org name loads', () => {
