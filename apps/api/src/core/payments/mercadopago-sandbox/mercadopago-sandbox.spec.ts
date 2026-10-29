@@ -171,6 +171,16 @@ describe('MercadoPagoSplitClient.createSplitPayment', () => {
     });
   });
 
+  it('omits application_fee only when asked (diagnostic)', async () => {
+    const { fn, calls } = mockFetch(jsonResponse(201, { id: 1, status: 'approved' }));
+    const result = await new MercadoPagoSplitClient({}, fn).createSplitPayment({
+      ...PAYMENT_INPUT,
+      omitApplicationFee: true,
+    });
+    expect(JSON.parse(String(calls[0].init?.body))).not.toHaveProperty('application_fee');
+    expect(result.applicationFeeCop).toBe(0);
+  });
+
   it('refuses to charge without the seller token (no custody)', async () => {
     const { fn } = mockFetch();
     await expect(

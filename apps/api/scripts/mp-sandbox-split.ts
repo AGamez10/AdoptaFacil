@@ -19,7 +19,10 @@ import {
   MERCADOPAGO_API_BASE_URL,
   MercadoPagoOAuthClient,
 } from '../src/core/payments/mercadopago-sandbox/mercadopago-oauth.client';
-import { MercadoPagoSplitClient } from '../src/core/payments/mercadopago-sandbox/mercadopago-split.client';
+import {
+  MercadoPagoApiError,
+  MercadoPagoSplitClient,
+} from '../src/core/payments/mercadopago-sandbox/mercadopago-split.client';
 
 // Tarjeta de prueba Mastercard publicada por Mercado Pago para Colombia.
 const TEST_CARD = { number: '5254133674403564', cvv: '123', month: 11, year: 2030 };
@@ -113,18 +116,30 @@ async function createCardToken(publicKey: string): Promise<string> {
 async function pay(): Promise<void> {
   const amountCop = Number(arg('amount') ?? 50_000);
   const seller = await sellerCredentials();
-  const cardToken = await createCardToken(seller.publicKey);
-  const idempotencyKey = randomUUID();
-  const result = await new MercadoPagoSplitClient().createSplitPayment({
-    sellerAccessToken: seller.accessToken,
-    amountCop,
-    cardToken,
-    paymentMethodId: 'master',
-    payerEmail: process.env.MP_BUYER_EMAIL ?? `test_buyer_${Date.now()}@testuser.com`,
-    externalReference: `af-${idempotencyKey}`,
-    idempotencyKey,
-    description: 'AdoptaFácil sandbox split 4%',
-  });
+  const attempt = async (omitApplicationFee: boolean) => {
+    const cardToken = await createCardToken(seller.publicKey);
+    const idempotencyKey = randomUUID();
+    return new MercadoPagoSplitClient().createSplitPayment({
+      sellerAccessToken: seller.accessToken,
+      amountCop,
+      cardToken,
+      paymentMethodId: 'master',
+      payerEmail: process.env.MP_BUYER_EMAIL ?? `test_buyer_${Date.now()}@testuser.com`,
+      externalReference: `af-${idempotencyKey}`,
+      idempotencyKey,
+      description: 'AdoptaFácil sandbox split 4%',
+      omitApplicationFee,
+    });
+  };
+  let result;
+  try {
+    result = await attempt(false);
+  } catch (err) {
+    if (!(err instanceof MercadoPagoApiError) || !/application_fee/.test(err.message)) throw err;
+    console.error(`Con application_fee: ${err.message}`);
+    console.log('Reintentando el mismo cobro SIN application_fee para aislar la causa...');
+    result = await attempt(true);
+  }
   console.log('Pago creado:', JSON.stringify(result, null, 2));
   if (result.collectorId && result.collectorId !== seller.userId) {
     console.warn('ATENCIÓN: collector_id no coincide con el vendedor conectado.');

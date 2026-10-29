@@ -56,6 +56,8 @@ export interface SplitPaymentInput {
   description?: string;
   notificationUrl?: string;
   feeRate?: number;
+  /** Solo diagnóstico: cobra sin `application_fee` para aislar si el rechazo es del split. */
+  omitApplicationFee?: boolean;
 }
 
 /** Campos de `GET/POST /v1/payments` de los que dependemos. */
@@ -137,11 +139,12 @@ export class MercadoPagoSplitClient {
         'createSplitPayment requires a tokenized card (cardToken + paymentMethodId).',
       );
     }
-    const applicationFee = computeApplicationFee(input.amountCop, input.feeRate);
+    const applicationFee = input.omitApplicationFee
+      ? 0
+      : computeApplicationFee(input.amountCop, input.feeRate);
 
     const body: Record<string, unknown> = {
       transaction_amount: input.amountCop,
-      application_fee: applicationFee,
       token: input.cardToken,
       payment_method_id: input.paymentMethodId,
       installments: input.installments ?? 1,
@@ -149,6 +152,7 @@ export class MercadoPagoSplitClient {
       external_reference: input.externalReference,
       description: input.description ?? 'Donación AdoptaFácil',
     };
+    if (!input.omitApplicationFee) body.application_fee = applicationFee;
     if (input.notificationUrl) body.notification_url = input.notificationUrl;
 
     const response = await this.fetchFn(`${this.baseUrl}/v1/payments`, {
