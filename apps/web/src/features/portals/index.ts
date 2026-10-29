@@ -4,3 +4,5 @@ export { PortalThemePage } from './pages/portal-theme-page';
 export { usePortalSubdomainSlug } from './use-portal-subdomain-slug';
 export { OrgDonateRedirectPage } from './pages/org-donate-redirect-page';
 export { OrgQrRedirectPage } from './pages/org-qr-redirect-page';
+export { OrgQrCard, type OrgQrCardProps } from './components/org-qr-card';
+export { QrSharePanel, type QrSharePanelProps } from './components/qr-share-panel';
