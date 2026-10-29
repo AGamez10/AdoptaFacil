@@ -134,34 +134,45 @@ async function pay(): Promise<void> {
       omitApplicationFee,
     });
   };
-  let result;
-  try {
-    result = await attempt(false);
-  } catch (err) {
-    if (!(err instanceof MercadoPagoApiError) || !/application_fee/.test(err.message)) throw err;
-    console.error(`Con application_fee: ${err.message}`);
-    console.log('Reintentando el mismo cobro SIN application_fee para aislar la causa...');
+  const candidates = (process.env.MP_BUYER_EMAILS ?? process.env.MP_BUYER_EMAIL ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const payers: Array<string | undefined> = candidates.length > 0 ? candidates : [undefined];
+  let result: Awaited<ReturnType<typeof attempt>> | undefined;
+  // 1) Con application_fee; prueba cada pagador candidato hasta que uno sea aceptado.
+  for (const email of payers) {
+    try {
+      result = await attempt(false, email);
+      console.log(`Pagador aceptado: ${email ?? '(aleatorio)'}`);
+      break;
+    } catch (e) {
+      console.error(
+        `Con application_fee, pagador ${email ?? '(aleatorio)'}: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+  // 2) Control sin application_fee, solo para aislar la causa.
+  if (!result) {
+    console.log('Reintentando SIN application_fee para aislar la causa...');
     const me = await fetch(`${MERCADOPAGO_API_BASE_URL}/users/me`, {
       headers: { Authorization: `Bearer ${seller.accessToken}` },
     });
     const meBody = (await me.json().catch(() => ({}))) as { site_id?: string; tags?: string[] };
     console.log(`Vendedor: site_id=${meBody.site_id} tags=${(meBody.tags ?? []).join(',')}`);
-    // MP_BUYER_EMAILS: candidatos separados por coma; se prueba cada uno hasta que uno sea aceptado.
-    const candidates = (process.env.MP_BUYER_EMAILS ?? process.env.MP_BUYER_EMAIL ?? '')
-      .split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-    for (const email of candidates.length > 0 ? candidates : [undefined]) {
+    for (const email of payers) {
       try {
         result = await attempt(true, email);
-        console.log(`Pagador aceptado: ${email}`);
+        console.log(`Control sin comisión: pagador aceptado ${email ?? '(aleatorio)'}`);
         break;
       } catch (e) {
-        console.error(`Pagador ${email ?? '(aleatorio)'}: ${e instanceof Error ? e.message : e}`);
+        console.error(
+          `Sin application_fee, pagador ${email ?? '(aleatorio)'}: ${e instanceof Error ? e.message : e}`,
+        );
       }
     }
-    if (!result) throw new Error('Ningún pagador candidato fue aceptado en el cobro de control.');
   }
+  if (!result) throw new Error('Ningún cobro fue aceptado por Mercado Pago.');
   console.log('Pago creado:', JSON.stringify(result, null, 2));
   if (result.collectorId && result.collectorId !== seller.userId) {
     console.warn('ATENCIÓN: collector_id no coincide con el vendedor conectado.');
