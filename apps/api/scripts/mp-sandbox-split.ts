@@ -116,7 +116,7 @@ async function createCardToken(publicKey: string): Promise<string> {
 async function pay(): Promise<void> {
   const amountCop = Number(arg('amount') ?? 50_000);
   const seller = await sellerCredentials();
-  const attempt = async (omitApplicationFee: boolean) => {
+  const attempt = async (omitApplicationFee: boolean, payerEmail?: string) => {
     const cardToken = await createCardToken(seller.publicKey);
     const idempotencyKey = randomUUID();
     return new MercadoPagoSplitClient().createSplitPayment({
@@ -124,7 +124,8 @@ async function pay(): Promise<void> {
       amountCop,
       cardToken,
       paymentMethodId: 'master',
-      payerEmail: process.env.MP_BUYER_EMAIL ?? `test_buyer_${Date.now()}@testuser.com`,
+      payerEmail:
+        payerEmail ?? process.env.MP_BUYER_EMAIL ?? `test_buyer_${Date.now()}@testuser.com`,
       externalReference: `af-${idempotencyKey}`,
       idempotencyKey,
       description: 'AdoptaFácil sandbox split 4%',
@@ -138,7 +139,26 @@ async function pay(): Promise<void> {
     if (!(err instanceof MercadoPagoApiError) || !/application_fee/.test(err.message)) throw err;
     console.error(`Con application_fee: ${err.message}`);
     console.log('Reintentando el mismo cobro SIN application_fee para aislar la causa...');
-    result = await attempt(true);
+    const me = await fetch(`${MERCADOPAGO_API_BASE_URL}/users/me`, {
+      headers: { Authorization: `Bearer ${seller.accessToken}` },
+    });
+    const meBody = (await me.json().catch(() => ({}))) as { site_id?: string; tags?: string[] };
+    console.log(`Vendedor: site_id=${meBody.site_id} tags=${(meBody.tags ?? []).join(',')}`);
+    // MP_BUYER_EMAILS: candidatos separados por coma; se prueba cada uno hasta que uno sea aceptado.
+    const candidates = (process.env.MP_BUYER_EMAILS ?? process.env.MP_BUYER_EMAIL ?? '')
+      .split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+    for (const email of candidates.length > 0 ? candidates : [undefined]) {
+      try {
+        result = await attempt(true, email);
+        console.log(`Pagador aceptado: ${email}`);
+        break;
+      } catch (e) {
+        console.error(`Pagador ${email ?? '(aleatorio)'}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    if (!result) throw new Error('Ningún pagador candidato fue aceptado en el cobro de control.');
   }
   console.log('Pago creado:', JSON.stringify(result, null, 2));
   if (result.collectorId && result.collectorId !== seller.userId) {
