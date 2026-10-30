@@ -21,6 +21,7 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { PublicReputationService } from './public-reputation.service';
 import { createPublicReviewSchema } from './reviews.schemas';
 import { RequireFeature } from '../../core/features';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * Public reputation indicators (RF23 · M12) — NO auth, mirrors
@@ -33,6 +34,7 @@ export class PublicReputationController {
   constructor(private readonly service: PublicReputationService) {}
 
   @Get('public/organizations/:slug/reputation-summary')
+  @PublicCache()
   async summary(@Param('slug') slug: string): Promise<OrganizationReputationSummary> {
     const summary = await this.service.getSummaryByOrgSlug(slug);
     if (!summary) {
@@ -42,6 +44,7 @@ export class PublicReputationController {
   }
 
   @Get('public/organizations/:slug/reviews')
+  @PublicCache()
   async reviews(
     @Param('slug') slug: string,
     @Query('limit') limit?: string,

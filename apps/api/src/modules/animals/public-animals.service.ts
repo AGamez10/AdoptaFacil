@@ -7,9 +7,7 @@ import type {
   AnimalStatus,
   AnimalSummary,
   AnimalSummaryPage,
-  PublicAnimalOrganizationSummary,
   PublicAnimalsPage,
-  PublicAnimalSummary,
 } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
@@ -32,6 +30,37 @@ interface RawItem {
   birthDate: string | null;
   approximateAgeMonths: number | null;
   createdAt: string;
+}
+
+interface RawGlobalItem extends RawItem {
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    city: string | null;
+  };
+}
+
+interface RawGlobalPage {
+  items: RawGlobalItem[];
+  total: number | string;
+}
+
+/** Opaque keyset cursor over `(createdAt, id)` for the global catalog. */
+export function encodeCursor(createdAt: string, id: string): string {
+  return Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url');
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Decode a cursor; a malformed one is ignored (first page), never a 500. */
+export function decodeCursor(cursor: string): { createdAt: string; id: string } | null {
+  const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+  if (!createdAt || !id || !UUID_RE.test(id) || Number.isNaN(Date.parse(createdAt))) {
+    return null;
+  }
+  return { createdAt, id };
 }
 
 interface RawPage {
@@ -97,116 +126,51 @@ export class PublicAnimalsService {
   }
 
   /**
-   * The GLOBAL adoptable catalog across EVERY organization with a public
-   * profile (S1-07), for the public landing page.
+   * The GLOBAL adoptable catalog across EVERY approved organization with a
+   * public profile (S1-07), for the public landing page.
    *
-   * RLS note (no migrations allowed for this task): there is no existing
-   * cross-org SECURITY DEFINER function that returns organization_profiles
-   * fields (slug/logoUrl/city) for MORE than one org at a time — every public
-   * cross-tenant read in this codebase (`organization_public`,
-   * `public_org_adoptable_animals`, `public_campaigns`...) is SLUG- or
-   * ID-scoped, and adding a new one requires a migration. Instead this method:
-   *   1. Reads `organizations` (the tenant anchor — NOT RLS-protected) to get
-   *      every organization id, then reads each one's profile inside its own
-   *      `withOrgContext` transaction (the same explicit-org accessor
-   *      seeds/jobs already use) to find which ones have a public slug.
-   *   2. Calls the EXISTING `public_org_adoptable_animals` SECURITY DEFINER
-   *      function for each public org, page by page (up to `PER_ORG_MAX`
-   *      items each), and merges + paginates the results in memory.
+   * One query per request, whatever the number of organizations (plan de
+   * escala, B1): the bounded SECURITY DEFINER function
+   * `public_adoptable_animals` joins organizations + public profiles and pages
+   * in Postgres over a partial index. It returns the same public-safe columns
+   * as the per-org function plus the organization's public summary.
    *
-   * Cost is O(organizations on the platform) per request, not O(animals) —
-   * fine at pilot scale (a handful of real rescue orgs), but NOT how this
-   * should work once the platform has many orgs: that needs a proper
-   * cross-tenant SECURITY DEFINER function (a follow-up task, since it
-   * requires a migration this one cannot make).
+   * Paging: `page`/`limit` (the web's pager) or `cursor` (keyset over
+   * `(createdAt, id)`, no OFFSET) — `nextCursor` is set while more items remain.
    */
   async listAllAdoptable(query: PublicAnimalsGlobalQuery): Promise<PublicAnimalsPage> {
     const page = query.page ?? 1;
     const limit = Math.min(query.limit ?? 20, 50);
+    const after = query.cursor ? decodeCursor(query.cursor) : null;
+    const offset = after ? 0 : (page - 1) * limit;
 
-    let directory = await this.getPublicOrgDirectory();
-    if (query.city) {
-      const needle = query.city.trim().toLowerCase();
-      directory = directory.filter((org) => org.city?.toLowerCase() === needle);
-    }
+    const rows = await this.prisma.$queryRaw<Array<{ data: RawGlobalPage | null }>>(
+      Prisma.sql`SELECT public_adoptable_animals(${limit}::int, ${offset}::int, ${query.species ?? null}::text, ${query.city ?? null}::text, ${after?.createdAt ?? null}::timestamp(3), ${after?.id ?? null}::uuid) AS data`,
+    );
+    const result = rows[0]?.data;
+    const items = result?.items ?? [];
+    const total = Number(result?.total ?? 0);
 
     const now = new Date();
-    const perOrg = await Promise.all(
-      directory.map((org) => this.allAdoptableOf(org.slug, query.species ?? null)),
-    );
-
-    const allItems: PublicAnimalSummary[] = [];
-    perOrg.forEach((items, i) => {
-      const org = directory[i];
-      for (const item of items) {
-        allItems.push({ ...this.toSummary(item, now), organization: org });
-      }
-    });
-
-    const start = (page - 1) * limit;
+    const data = items.map(({ organization, ...item }) => ({
+      ...this.toSummary(item, now),
+      organization: {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        logoUrl: organization.logoUrl ?? undefined,
+        city: organization.city ?? undefined,
+      },
+    }));
+    const last = items[items.length - 1];
+    const hasMore = items.length === limit && (after ? true : offset + items.length < total);
     return {
-      data: allItems.slice(start, start + limit),
-      total: allItems.length,
-      page,
+      data,
+      total,
+      page: after ? 1 : page,
       limit,
+      ...(hasMore && last ? { nextCursor: encodeCursor(last.createdAt, last.id) } : {}),
     };
-  }
-
-  /** Page size of the per-org SECURITY DEFINER function (its own max). */
-  private static readonly ORG_PAGE_SIZE = 50;
-  /** Upper bound per organization for the global catalog fan-out (see
-   *  {@link listAllAdoptable}'s RLS note): 20 pages. */
-  private static readonly PER_ORG_MAX = 1000;
-
-  /**
-   * Every adoptable animal of one org, read page by page through the bounded
-   * function. Before, the global catalog took only the first 50 of each org,
-   * so an org with 100 animals showed half of them on /adoptar.
-   */
-  private async allAdoptableOf(slug: string, species: string | null): Promise<RawItem[]> {
-    const items: RawItem[] = [];
-    const size = PublicAnimalsService.ORG_PAGE_SIZE;
-    for (let offset = 0; offset < PublicAnimalsService.PER_ORG_MAX; offset += size) {
-      const rows = await this.prisma.$queryRaw<Array<{ data: RawPage | null }>>(
-        Prisma.sql`SELECT public_org_adoptable_animals(${slug}, ${size}::int, ${offset}::int, ${species}::text) AS data`,
-      );
-      const page = rows[0]?.data;
-      if (!page) break;
-      items.push(...page.items);
-      if (page.items.length < size || items.length >= Number(page.total)) break;
-    }
-    return items;
-  }
-
-  /** Every APPROVED organization (R2-1) with a public profile (slug set),
-   *  with just the public-safe fields the global catalog needs. */
-  private async getPublicOrgDirectory(): Promise<PublicAnimalOrganizationSummary[]> {
-    const organizations = await this.prisma.organization.findMany({
-      where: { status: 'approved' },
-      select: { id: true, name: true },
-    });
-    const profiles = await Promise.all(
-      organizations.map((org) =>
-        this.prisma.withOrgContext(org.id, (tx) =>
-          tx.organizationProfile.findUnique({ where: { organizationId: org.id } }),
-        ),
-      ),
-    );
-
-    const directory: PublicAnimalOrganizationSummary[] = [];
-    organizations.forEach((org, i) => {
-      const profile = profiles[i];
-      if (!profile?.slug) return;
-      const location = profile.location as { city?: string } | null;
-      directory.push({
-        id: org.id,
-        name: org.name,
-        slug: profile.slug,
-        logoUrl: profile.logoUrl ?? undefined,
-        city: location?.city ?? undefined,
-      });
-    });
-    return directory;
   }
 
   private toSummary(item: RawItem, now: Date): AnimalSummary {

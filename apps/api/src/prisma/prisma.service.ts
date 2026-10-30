@@ -24,7 +24,30 @@ function resolveAppDatabaseUrl(): string {
         'Run `pnpm setup:env` or provide DATABASE_URL_APP.',
     );
   }
-  return appUrl;
+  return withPoolParams(appUrl, process.env);
+}
+
+/**
+ * Plan de escala (B4): add explicit pool settings to the connection string —
+ * `connection_limit` (DATABASE_POOL_SIZE), `pool_timeout`
+ * (DATABASE_POOL_TIMEOUT_S) and `pgbouncer=true` (DATABASE_PGBOUNCER) — unless
+ * the URL already carries them, so an operator's explicit URL always wins.
+ */
+export function withPoolParams(url: string, env: NodeJS.ProcessEnv): string {
+  const parsed = new URL(url);
+  const set = (name: string, value: string | undefined) => {
+    if (value && !parsed.searchParams.has(name)) parsed.searchParams.set(name, value);
+  };
+  set('connection_limit', env.DATABASE_POOL_SIZE);
+  set('pool_timeout', env.DATABASE_POOL_TIMEOUT_S ?? '10');
+  if (env.DATABASE_PGBOUNCER === 'true') set('pgbouncer', 'true');
+  return parsed.toString();
+}
+
+/** Per-statement cap inside tenant transactions (DATABASE_STATEMENT_TIMEOUT_MS). */
+function statementTimeoutMs(): string {
+  const value = Number(process.env.DATABASE_STATEMENT_TIMEOUT_MS ?? 15_000);
+  return String(Number.isFinite(value) && value >= 100 ? Math.floor(value) : 15_000);
 }
 
 /**
@@ -104,7 +127,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   ): Promise<T> {
     return this.$transaction(async (tx: Prisma.TransactionClient) => {
       // set_config(name, value, is_local=true) is injection-safe (parameterized).
-      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true)`;
+      // Both settings ride the same round trip and end with the transaction, so
+      // they stay correct behind PgBouncer in transaction mode.
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${organizationId}, true), set_config('statement_timeout', ${statementTimeoutMs()}, true)`;
       return fn(tx);
     });
   }

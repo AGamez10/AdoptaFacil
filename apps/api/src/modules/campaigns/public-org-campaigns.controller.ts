@@ -1,6 +1,7 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import type { CampaignPublic, Paginated } from '@adoptafacil/contracts';
 import { PublicCampaignsService } from './public-campaigns.service';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * PUBLIC per-organization campaign feed (S2-07, M06, RF15/RF16). No
@@ -20,6 +21,7 @@ export class PublicOrgCampaignsController {
   constructor(private readonly service: PublicCampaignsService) {}
 
   @Get('public/organizations/:slug/campaigns')
+  @PublicCache()
   async list(
     @Param('slug') slug: string,
     @Query('limit') limit?: string,
