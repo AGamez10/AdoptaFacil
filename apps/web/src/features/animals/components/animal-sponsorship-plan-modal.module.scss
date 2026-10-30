@@ -25,3 +25,16 @@
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
+
+.label {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-dark);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
