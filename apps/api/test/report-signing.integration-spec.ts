@@ -200,11 +200,15 @@ describe('Report signing: consent, separation between organizations and signers 
     expect(b.body.signers.map((s: { role: string }) => s.role)).toEqual(['legal_representative']);
   });
 
-  it('whoever drafts cannot also be the signer of that document', async () => {
-    // El Owner (representante legal) es el único firmante de B más el revisor: no puede redactar.
-    const res = await draft(B.owner).expect(400);
-    expect(res.body.message).toMatch(/no puede ser también su firmante/);
-    // Como redactor, el Administrator sí puede.
+  it('the main account drafting applies ONLY its own legal representative signature; the reviewer still has to authorize', async () => {
+    // El Owner (representante legal) genera: su firma queda aplicada al generar,
+    // pero el documento no se emite hasta que el revisor fiscal lo autorice.
+    const res = await draft(B.owner).expect(201);
+    expect(res.body.status).toBe('pending_signatures');
+    expect(res.body.approvals).toEqual([
+      expect.objectContaining({ role: 'legal_representative', decision: 'approved' }),
+    ]);
+    // Como redactor, el Administrator también puede (mismo documento, mismo folio).
     await draft(B.drafter).expect(201);
   });
 
