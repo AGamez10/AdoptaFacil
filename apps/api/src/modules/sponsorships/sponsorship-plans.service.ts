@@ -201,7 +201,7 @@ export class SponsorshipPlansService {
   ): Promise<AnimalSponsorshipSettings> {
     const organizationId = this.requireOrgId();
     return this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sponsorship_plan:${animalId}`}))`;
+      await this.lockAnimal(tx, animalId);
       await this.requireAnimal(tx, animalId, { mustBeActive: true });
       const current = await tx.sponsorshipPlan.findFirst({
         where: { organizationId, animalId, isActive: true },
@@ -292,7 +292,7 @@ export class SponsorshipPlansService {
   ): Promise<AnimalSponsorshipSettings> {
     const organizationId = this.requireOrgId();
     return this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sponsorship_plan:${animalId}`}))`;
+      await this.lockAnimal(tx, animalId);
       await this.requireAnimal(tx, animalId, { mustBeActive: false });
       const active = await tx.sponsorshipPlan.findMany({
         where: { organizationId, animalId, isActive: true },
@@ -311,6 +311,12 @@ export class SponsorshipPlansService {
       }
       return this.settingsFor(tx, animalId);
     });
+  }
+
+  /** Serializes per-animal sponsorship writes until the transaction ends. */
+  private async lockAnimal(tx: Prisma.TransactionClient, animalId: string): Promise<void> {
+    const lockKey = `sponsorship_plan:${animalId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
   }
 
   private async requireAnimal(
