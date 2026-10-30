@@ -52,7 +52,6 @@ model Organization {
   sensitiveActionDecisions PlatformSensitiveActionDecision[]
   qrLink                   OrganizationQrLink?
   qrScanDays               OrganizationQrScanDay[]
-  epaycoAccount            OrganizationEpaycoAccount?
   mercadopagoConnection    OrganizationMercadoPagoConnection?
   mercadopagoPayments      MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.
