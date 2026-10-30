@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
   AnimalSummary,
@@ -93,6 +93,8 @@ export function PublicAnimalDetailPage() {
 
   const [animal, setAnimal] = useState<AnimalSummary | null>(preloaded ?? null);
   const [state, setState] = useState<DetailState>(preloaded ? 'ready' : 'loading');
+  const animalRef = useRef(animal);
+  animalRef.current = animal;
   const [org, setOrg] = useState<PublicOrgProfile | null>(null);
   const [catalog, setCatalog] = useState<AnimalSummary[]>([]);
 
@@ -133,6 +135,10 @@ export function PublicAnimalDetailPage() {
       setState('not-found');
       return;
     }
+    // Tras reemplazar un enlace viejo por la URL canónica, el animal ya está
+    // cargado: no se vuelve a pedir ni se muestra el esqueleto otra vez.
+    const current = animalRef.current;
+    if (current && (current.publicCode === parsed.ref || current.id === parsed.ref)) return;
     const controller = new AbortController();
     setState('loading');
     fetchPublicAnimal(slug, parsed.ref, controller.signal)
