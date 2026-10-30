@@ -1,10 +1,22 @@
 import { useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { Link } from 'react-router-dom';
-import type { CampaignPublic } from '@adoptafacil/contracts';
+import type {
+  CampaignPublic,
+  ResourceNeedPublic,
+  VolunteerOpportunityPublic,
+} from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
 import { listPublicCampaigns } from '../../campaigns/api/public-campaigns';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
+import { listPublicNeeds } from '../../resources/api/public-resources';
+import {
+  CATEGORY_LABELS as RESOURCE_CATEGORY_LABELS,
+  progressPercent,
+  publicResourceNeedHref,
+} from '../../resources/model/resources-view';
+import { listPublicOpportunities } from '../../volunteering/api/public-volunteering';
+import { formatBogota, volunteerSignupHref } from '../../volunteering/model/volunteering-view';
 import { BoneSticker, CatMascot, DogMascot, HeartSticker, Sparkle } from './illustrations';
 import { IconArrowRight, IconBox, IconHeart, IconMegaphone, IconPaw } from './landing-icons';
 import styles from './commerce.module.scss';
@@ -165,6 +177,185 @@ export function ActiveCampaignsSection() {
               <CampaignCard campaign={campaign} variant="brand" />
             </li>
           ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** "12 oct 2026" o "12 oct 2026 – 14 oct 2026", siempre en hora Colombia. */
+function dateRange(startIso: string, endIso: string): string {
+  const start = formatBogota(startIso);
+  const end = formatBogota(endIso);
+  return start === end ? start : `${start} – ${end}`;
+}
+
+/** Jornadas de voluntariado abiertas (`GET /public/volunteer-opportunities`):
+ *  solo activas y que aún no terminan, de organizaciones aprobadas. Sin
+ *  jornadas, la sección no se monta. */
+export function OpenVolunteeringSection() {
+  const [items, setItems] = useState<VolunteerOpportunityPublic[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    listPublicOpportunities({ limit: 3, signal: controller.signal })
+      .then((page) => setItems(page.items.slice(0, 3)))
+      .catch(() => {
+        // Best-effort: sin datos la sección simplemente no aparece.
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <section
+      className={cn(styles.campaigns, styles['campaigns--paper'])}
+      aria-labelledby="landing-volunteering-title"
+      data-testid="landing-volunteering"
+    >
+      <div className={styles.container}>
+        <div className={cn(styles.head, styles['head--row'])}>
+          <div>
+            <p className={styles.eyebrow}>Dona tu tiempo</p>
+            <h2 id="landing-volunteering-title" className={styles.head__title}>
+              Jornadas de voluntariado
+            </h2>
+          </div>
+          <Link to="/voluntariado" className={styles.link}>
+            Ver todas las jornadas
+            <IconArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+        <ul className={styles.campaigns__grid}>
+          {items.map((item) => (
+            <li key={item.id}>
+              <article className={styles.item} data-tone="sky" data-testid="volunteering-card">
+                <div className={styles.item__top}>
+                  <span className={styles.item__tag}>{item.category}</span>
+                  <span className={styles.item__org}>{item.organizationName}</span>
+                </div>
+                <h3 className={styles.item__title}>{item.title}</h3>
+                {item.description && <p className={styles.item__text}>{item.description}</p>}
+                <dl className={styles.item__facts}>
+                  <div>
+                    <dt>Cuándo</dt>
+                    <dd>{dateRange(item.startDate, item.endDate)}</dd>
+                  </div>
+                  <div>
+                    <dt>Dónde</dt>
+                    <dd>{item.location}</dd>
+                  </div>
+                  {typeof item.capacity === 'number' && (
+                    <div>
+                      <dt>Cupos</dt>
+                      <dd>{item.capacity}</dd>
+                    </div>
+                  )}
+                </dl>
+                <div className={styles.item__foot}>
+                  {item.appliesToStudentService ? (
+                    <span className={styles.item__note}>Cuenta como servicio social</span>
+                  ) : (
+                    <span />
+                  )}
+                  <Link to={volunteerSignupHref(item.id)} className={styles.item__cta}>
+                    Quiero participar
+                  </Link>
+                </div>
+              </article>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** Necesidades del banco de recursos que aún aceptan ayuda
+ *  (`GET /public/resources/needs`). Solo con el módulo encendido (con él
+ *  apagado la API responde 404) y solo si hay necesidades publicadas. */
+export function ResourceNeedsSection() {
+  const enabled = useFeature('resources');
+  const [items, setItems] = useState<ResourceNeedPublic[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController();
+    listPublicNeeds({ limit: 3, signal: controller.signal })
+      .then((page) => setItems(page.items.slice(0, 3)))
+      .catch(() => {
+        // Best-effort: sin datos la sección simplemente no aparece.
+      });
+    return () => controller.abort();
+  }, [enabled]);
+
+  if (!enabled || items.length === 0) return null;
+
+  return (
+    <section
+      className={styles.campaigns}
+      aria-labelledby="landing-needs-title"
+      data-testid="landing-needs"
+    >
+      <div className={styles.container}>
+        <div className={cn(styles.head, styles['head--row'])}>
+          <div>
+            <p className={styles.eyebrow}>Banco de recursos</p>
+            <h2 id="landing-needs-title" className={styles.head__title}>
+              Lo que necesitan hoy
+            </h2>
+          </div>
+          <Link to="/recursos" className={styles.link}>
+            Ver todas las necesidades
+            <IconArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+        <ul className={styles.campaigns__grid}>
+          {items.map((need) => {
+            const pct = progressPercent(need.progress);
+            const href = publicResourceNeedHref(need.id);
+            return (
+              <li key={need.id}>
+                <article className={styles.item} data-tone="sun" data-testid="need-card">
+                  <div className={styles.item__top}>
+                    <span className={styles.item__tag}>
+                      {RESOURCE_CATEGORY_LABELS[need.category] ?? need.category}
+                    </span>
+                    <span className={styles.item__org}>{need.organizationName}</span>
+                  </div>
+                  <h3 className={styles.item__title}>
+                    <Link to={href} state={{ need }}>
+                      {need.title}
+                    </Link>
+                  </h3>
+                  {need.description && <p className={styles.item__text}>{need.description}</p>}
+                  <div className={styles.item__progress}>
+                    <div
+                      className={styles.item__bar}
+                      role="progressbar"
+                      aria-label={`Avance de ${need.title}`}
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
+                      <div style={{ width: `${pct}%` }} />
+                    </div>
+                    <p>
+                      <strong>
+                        {need.quantityFulfilled} de {need.quantityNeeded}
+                      </strong>{' '}
+                      {need.unit} · {pct}%
+                    </p>
+                  </div>
+                  <div className={styles.item__foot}>
+                    <span />
+                    <Link to={href} state={{ need }} className={styles.item__cta}>
+                      Quiero ayudar
+                    </Link>
+                  </div>
+                </article>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </section>

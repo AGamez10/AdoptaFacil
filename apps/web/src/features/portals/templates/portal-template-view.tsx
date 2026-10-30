@@ -55,6 +55,11 @@ export function PortalTemplateView({
   // Con el módulo de reseñas apagado, la API responde 404 a "Registrar reseña":
   // la plantilla no muestra ni la sección ni el botón (igual que el clásico).
   const reputation = useFeature('reputation');
+  // Igual con la tienda (marketplace) y el banco de recursos: con el módulo
+  // apagado la sección no se pinta, en vez de un "no hay productos" que hace
+  // creer que la organización no ha publicado nada.
+  const marketplace = useFeature('marketplace');
+  const resources = useFeature('resources');
 
   // Hoja de estilos de la plantilla (acotada a .af-tpl / .tpl-<id>) + fuentes.
   useTemplateAssets(design);
@@ -104,9 +109,14 @@ export function PortalTemplateView({
         },
       });
       kit.init(root, motion);
-      if (!reputation) {
+      const hidden = [
+        ...(reputation ? [] : ['[data-sec="resenas"]', '[data-review]']),
+        ...(marketplace ? [] : ['[data-sec="productos"]']),
+        ...(resources ? [] : ['[data-sec="necesidades"]']),
+      ];
+      if (hidden.length > 0) {
         const gone = new Set<string>();
-        root.querySelectorAll('[data-sec="resenas"], [data-review]').forEach((el) => {
+        root.querySelectorAll(hidden.join(', ')).forEach((el) => {
           if (el.id) gone.add(el.id);
           el.remove();
         });
@@ -124,7 +134,7 @@ export function PortalTemplateView({
       ctl.abort();
       root.innerHTML = '';
     };
-  }, [design, model, three, navigate, reputation]);
+  }, [design, model, three, navigate, reputation, marketplace, resources]);
 
   // Delegación de clics: enlaces internos por el router, anclas dentro de la
   // plantilla, y los diálogos de reseña y libro público.

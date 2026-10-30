@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   type CreateProductInput,
+  type Organization,
   PRODUCT_CATEGORIES,
   ProductCategory,
   type Product,
@@ -53,6 +55,9 @@ export function MarketplacePage() {
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
   const [saving, setSaving] = useState(false);
+  // El comprador contacta a la organización por el WhatsApp de su perfil: sin
+  // él, el producto se ve en el marketplace pero nadie puede pedirlo.
+  const [missingWhatsapp, setMissingWhatsapp] = useState(false);
 
   // ⚠️ Blindaje anti-regresión (patrón de public-campaigns.ts): SIEMPRE se
   // normaliza `.items` a `[]` si la respuesta no trae un array.
@@ -62,6 +67,22 @@ export function MarketplacePage() {
     );
     setProducts(Array.isArray(page?.items) ? page.items : []);
   };
+
+  useEffect(() => {
+    if (!canManage) return;
+    let active = true;
+    client
+      .request<Organization>('/org/profile')
+      .then((org) => {
+        if (active) setMissingWhatsapp(!org?.whatsapp?.trim());
+      })
+      .catch(() => {
+        // Best-effort: sin perfil no se muestra el aviso.
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, canManage]);
 
   useEffect(() => {
     let active = true;
@@ -137,6 +158,20 @@ export function MarketplacePage() {
         description="Publica productos físicos de tu organización. El contacto y la venta ocurren por WhatsApp, fuera de la plataforma."
         actions={canManage && <Button onClick={() => setShowForm(true)}>Publicar producto</Button>}
       />
+      {missingWhatsapp && (
+        <p
+          role="status"
+          data-testid="marketplace-missing-whatsapp"
+          className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          Tus productos se ven en el marketplace, pero los compradores aún no tienen cómo
+          escribirte: agrega el WhatsApp de la organización en{' '}
+          <Link to="/organizacion" className="font-semibold underline">
+            el perfil
+          </Link>
+          . La plataforma no cobra en línea; el pago y la entrega se acuerdan por WhatsApp.
+        </p>
+      )}
       {loading && <Skeleton className="h-64 w-full" />}
       {!loading && (
         <div className="space-y-6">

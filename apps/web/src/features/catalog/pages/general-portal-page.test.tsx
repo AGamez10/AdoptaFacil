@@ -245,4 +245,104 @@ describe('GeneralPortalPage (landing)', () => {
     expect(pro.getAllByText('Próximamente').length).toBeGreaterThan(0);
     expect(screen.getByTestId('landing-plans').textContent).not.toMatch(/Muy pronto/);
   });
+  describe('jornadas de voluntariado y necesidades del banco de recursos', () => {
+    const opportunity = {
+      id: 'op-1',
+      organizationId: 'org-1',
+      organizationName: 'Refugio Uno',
+      title: 'Jornada de baño',
+      description: 'Bañamos a los perritos del refugio.',
+      category: 'Cuidado',
+      startDate: '2026-11-07T14:00:00.000Z',
+      endDate: '2026-11-07T20:00:00.000Z',
+      capacity: 12,
+      location: 'Bogotá',
+      appliesToStudentService: true,
+    };
+    const need = {
+      id: 'need-1',
+      organizationId: 'org-1',
+      organizationName: 'Refugio Uno',
+      title: 'Cobijas para el invierno',
+      category: 'supplies',
+      quantityNeeded: 20,
+      unit: 'unidades',
+      quantityFulfilled: 5,
+      progress: 0.25,
+      status: 'partially_fulfilled',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    };
+
+    function stubApi() {
+      const fetchMock = vi.fn((url: string) => {
+        const body = url.includes('/public/volunteer-opportunities')
+          ? { items: [opportunity], total: 1, limit: 3, offset: 0 }
+          : url.includes('/public/resources/needs')
+            ? { items: [need], total: 1, limit: 3, offset: 0 }
+            : { data: [], total: 0, items: [] };
+        return Promise.resolve({ ok: true, status: 200, json: async () => body });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+
+    function renderWith(capabilities?: typeof OPEN_CAPABILITIES) {
+      const page = (
+        <SessionProvider initialStatus="unauthenticated">
+          <GeneralPortalPage />
+        </SessionProvider>
+      );
+      return render(
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          {capabilities ? (
+            <CapabilitiesProvider value={capabilities}>{page}</CapabilitiesProvider>
+          ) : (
+            page
+          )}
+        </MemoryRouter>,
+      );
+    }
+
+    it('shows open volunteering days with a link to sign up for that one', async () => {
+      stubApi();
+      renderWith();
+      const section = await screen.findByTestId('landing-volunteering');
+      expect(within(section).getByText('Jornada de baño')).toBeInTheDocument();
+      expect(within(section).getByText('Refugio Uno')).toBeInTheDocument();
+      expect(within(section).getByText('Cuenta como servicio social')).toBeInTheDocument();
+      expect(within(section).getByRole('link', { name: 'Quiero participar' })).toHaveAttribute(
+        'href',
+        '/voluntariado?oportunidad=op-1',
+      );
+    });
+
+    it('with the resource bank on, shows needs linked to their public detail', async () => {
+      stubApi();
+      renderWith(OPEN_CAPABILITIES);
+      const section = await screen.findByTestId('landing-needs');
+      expect(within(section).getByText('Cobijas para el invierno')).toBeInTheDocument();
+      expect(within(section).getByText('5 de 20')).toBeInTheDocument();
+      expect(within(section).getByRole('link', { name: 'Quiero ayudar' })).toHaveAttribute(
+        'href',
+        '/recursos/need-1',
+      );
+    });
+
+    it('with the resource bank off, never asks the API for needs nor shows the block', async () => {
+      const fetchMock = stubApi();
+      renderWith();
+      await screen.findByTestId('landing-volunteering');
+      expect(screen.queryByTestId('landing-needs')).not.toBeInTheDocument();
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/resources/needs'))).toBe(
+        false,
+      );
+    });
+
+    it('without open days or needs, neither block appears', async () => {
+      renderLanding();
+      await settle();
+      expect(screen.queryByTestId('landing-volunteering')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('landing-needs')).not.toBeInTheDocument();
+    });
+  });
 });

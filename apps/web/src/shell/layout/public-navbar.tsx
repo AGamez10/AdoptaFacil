@@ -51,6 +51,11 @@ export function PublicNavbar() {
     { label: 'Para organizaciones', to: '/#organizaciones', anchor: true },
   ];
 
+  // Con todos los módulos encendidos, los enlaces no caben en una fila junto a
+  // "Ingresar" y "Registrar mi organización" hasta pantallas muy anchas: en
+  // ese caso el menú desplegable se usa también en escritorio.
+  const crowded = links.length > 5;
+
   const renderLink = (link: PublicNavLink, className: string, activeClass: string) =>
     link.anchor ? (
       <Link key={link.to} to={link.to} className={className}>
@@ -67,7 +72,7 @@ export function PublicNavbar() {
     );
 
   return (
-    <header className={styles.navbar} data-open={open}>
+    <header className={styles.navbar} data-open={open} data-crowded={crowded}>
       <div className={styles.navbar__row}>
         <Link to="/" aria-label="Ir al inicio" className={styles.navbar__brand}>
           <Brand />

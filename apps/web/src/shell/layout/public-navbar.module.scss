@@ -264,3 +264,25 @@
     transition: none;
   }
 }
+
+/* Muchos enlaces (todos los módulos encendidos): fila completa solo desde
+   1600px; por debajo, el menú desplegable, igual que en móvil. */
+.navbar[data-crowded='true'] {
+  .navbar__links {
+    @media (min-width: 1024px) and (max-width: 1599.98px) {
+      display: none;
+    }
+  }
+
+  .navbar__toggle {
+    @media (min-width: 1024px) and (max-width: 1599.98px) {
+      display: inline-flex;
+    }
+  }
+
+  .navbar__mobile:not([hidden]) {
+    @media (min-width: 1024px) and (max-width: 1599.98px) {
+      display: flex;
+    }
+  }
+}

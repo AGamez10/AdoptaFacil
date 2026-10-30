@@ -128,4 +128,30 @@ describe('MarketplacePage — gestión interna del catálogo (F-7)', () => {
     });
     expect(await screen.findByText('Producto publicado')).toBeInTheDocument();
   });
+  it('warns a manager when the organization has no WhatsApp for buyers to write to', async () => {
+    stubFetch((url) =>
+      url.includes('/org/profile')
+        ? { id: 'org-1', name: 'Refugio' }
+        : { items: [product('p1', 'Concentrado Premium')], total: 1, limit: 50, offset: 0 },
+    );
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    const notice = await screen.findByTestId('marketplace-missing-whatsapp');
+    expect(within(notice).getByRole('link', { name: 'el perfil' })).toHaveAttribute(
+      'href',
+      '/organizacion',
+    );
+  });
+
+  it('does not warn once the organization has a WhatsApp', async () => {
+    stubFetch((url) =>
+      url.includes('/org/profile')
+        ? { id: 'org-1', name: 'Refugio', whatsapp: '3001234567' }
+        : { items: [product('p1', 'Concentrado Premium')], total: 1, limit: 50, offset: 0 },
+    );
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByText('Concentrado Premium')).toBeInTheDocument();
+    expect(screen.queryByTestId('marketplace-missing-whatsapp')).not.toBeInTheDocument();
+  });
 });

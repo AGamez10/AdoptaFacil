@@ -79,7 +79,8 @@ describe('Volunteering (M08, RF18/RF19)', () => {
       title: 'Jornada de esterilización',
       category: 'sterilizations',
       startDate: '2026-09-01T00:00:00.000Z',
-      endDate: '2026-09-30T00:00:00.000Z',
+      // Fin lejano: el listado público nacional solo muestra jornadas que no han terminado.
+      endDate: '2099-12-31T00:00:00.000Z',
       location: 'Refugio Patitas',
       appliesToStudentService,
     });
@@ -158,6 +159,19 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // GET /public/campaigns.
     const globalList = await request(server).get('/public/volunteer-opportunities').expect(200);
     expect(globalList.body.items.some((o: { id: string }) => o.id === created.body.id)).toBe(true);
+  });
+
+  it('the global feed leaves out an active opportunity whose end date already passed', async () => {
+    const created = await publishOpportunity(org.token, false).expect(201);
+    await admin.volunteerOpportunity.update({
+      where: { id: created.body.id },
+      data: { endDate: new Date('2026-01-31T00:00:00.000Z') },
+    });
+
+    const globalList = await request(server)
+      .get('/public/volunteer-opportunities?limit=50')
+      .expect(200);
+    expect(globalList.body.items.some((o: { id: string }) => o.id === created.body.id)).toBe(false);
   });
 
   it('a person without a role cannot publish an opportunity (403)', async () => {

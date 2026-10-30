@@ -14,6 +14,8 @@ export {
   ActiveCampaignsSection,
   FinalCtaSection,
   LANDING_HELP_ID,
+  OpenVolunteeringSection,
+  ResourceNeedsSection,
   WaysToHelpSection,
 } from './components/commerce-sections';
 export {

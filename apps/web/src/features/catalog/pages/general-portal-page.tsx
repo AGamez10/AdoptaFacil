@@ -15,7 +15,9 @@ import {
   ImpactSection,
   LANDING_CATALOG_ID,
   LandingHero,
+  OpenVolunteeringSection,
   PromisesSection,
+  ResourceNeedsSection,
   TemplateGallerySection,
   WaitingAnimalsSection,
   WaysToHelpSection,
@@ -111,7 +113,8 @@ export function GeneralPortalPage() {
         {/* Landing marca v3 (rediseño 2026-10): primero animales reales y
             "Quiero adoptar", luego las formas de ayudar (donar y recursos
             solo con su módulo encendido), cómo adoptar, la red en cifras
-            reales, campañas, comunidad, la propuesta
+            reales, campañas, jornadas de voluntariado abiertas y
+            necesidades del banco de recursos, comunidad, la propuesta
             para organizaciones y el cierre. Ninguna cifra que no salga de
             la API. */}
         <LandingHero snapshot={snapshot} />
@@ -121,6 +124,8 @@ export function GeneralPortalPage() {
         <ImpactSection snapshot={snapshot} />
 
         <ActiveCampaignsSection />
+        <OpenVolunteeringSection />
+        <ResourceNeedsSection />
         <CoffeeSection />
         <CommunitySection />
         <ForOrganizationsSection />
