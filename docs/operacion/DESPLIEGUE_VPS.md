@@ -8,17 +8,17 @@
 
 ## Lo que necesitas antes de empezar
 
-| Qué                                    | Recomendación                                                                                     | Para qué                                                   |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| VPS                                    | Hostinger **KVM 2** (2 vCPU, 8 GB RAM, 100 GB NVMe), plantilla **Ubuntu 24.04 LTS** sin panel     | todo el stack; ver §Tamaño                                 |
-| Dominio `adoptafacil.org`              | ya registrado en **Namecheap** (un año); renovación automática activada, ver §Renovación          | —                                                          |
-| DNS con API                            | **Cloudflare** (plan Free), decidido; ver §DNS                                                    | certificado comodín de los portales por DNS-01             |
-| Cuenta de **Backblaze B2**             | un bucket privado `adoptafacil-backups` y una clave de aplicación limitada a ese bucket           | copia off-site de los respaldos cifrados                   |
-| App **ntfy** en el celular             | un tema con nombre largo y aleatorio (`openssl rand -hex 12`)                                     | alertas del servidor (`ALERT_WEBHOOK_URL`)                 |
-| Cuenta gratuita de **UptimeRobot**     | monitor HTTPS cada 5 min a `https://adoptafacil.org/api/health` con palabra clave `"status":"ok"` | aviso si el VPS entero cae (lo que el VPS no puede avisar) |
-| Cuenta gratuita de **healthchecks.io** | un check diario con 2 h de gracia                                                                 | aviso si el respaldo diario no corre                       |
-| Clave SSH                              | la tuya, cargada al crear el VPS                                                                  | entrar al servidor sin contraseña                          |
-| Par de claves **age**                  | generado en tu computador (`age-keygen -o adoptafacil-backup.key`); la privada nunca va al VPS    | cifrar los respaldos; ver `BACKUPS.md`                     |
+| Qué                                    | Recomendación                                                                                                                             | Para qué                                                                                           |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| VPS                                    | Hostinger **KVM 1** (1 vCPU, 4 GB RAM, 50 GB NVMe, el plan más pequeño que hoy lista Hostinger), plantilla **Ubuntu 24.04 LTS** sin panel | todo el stack; ver §Tamaño y §Costos                                                               |
+| Dominio `adoptafacil.org`              | ya registrado en **Namecheap** (un año); renovación automática activada, ver §Renovación                                                  | —                                                                                                  |
+| DNS con API                            | **Cloudflare** (plan Free), decidido; ver §DNS                                                                                            | certificado comodín de los portales por DNS-01                                                     |
+| Cuenta de **Backblaze B2**             | un bucket privado `adoptafacil-backups` y una clave de aplicación limitada a ese bucket                                                   | copia off-site de los respaldos cifrados (opcional en una demo; obligatoria antes de datos reales) |
+| App **ntfy** en el celular             | un tema con nombre largo y aleatorio (`openssl rand -hex 12`)                                                                             | alertas del servidor (`ALERT_WEBHOOK_URL`)                                                         |
+| Cuenta gratuita de **UptimeRobot**     | monitor HTTPS cada 5 min a `https://adoptafacil.org/api/health` con palabra clave `"status":"ok"`                                         | aviso si el VPS entero cae (lo que el VPS no puede avisar)                                         |
+| Cuenta gratuita de **healthchecks.io** | un check diario con 2 h de gracia                                                                                                         | aviso si el respaldo diario no corre                                                               |
+| Clave SSH                              | la tuya, cargada al crear el VPS                                                                                                          | entrar al servidor sin contraseña                                                                  |
+| Par de claves **age**                  | generado en tu computador (`age-keygen -o adoptafacil-backup.key`); la privada nunca va al VPS                                            | cifrar los respaldos; ver `BACKUPS.md`                                                             |
 
 **Secretos: solo en el servidor.** Contraseñas, `JWT_SECRET`, las credenciales
 del DNS (Cloudflare o Namecheap), la clave de B2, el SMTP y, cuando se enciendan los pagos, el access
@@ -32,10 +32,35 @@ públicas que el navegador ve de todas formas).
 Medido con este compose: en reposo la API usa ~111 MB, Postgres ~25 MB, Caddy
 ~13 MB y Redis ~5 MB. Lo que pesa es **construir** las imágenes en el propio VPS
 (`pnpm install` + build de API y web), que pide 2–3 GB de RAM durante unos
-minutos. Por eso KVM 2: deja margen para construir sin detener el servicio y
-para que Postgres crezca. KVM 1 (1 vCPU, 4 GB) arranca, pero cada despliegue
-compite con la API por la única CPU. Centro de datos: el más cercano a Colombia
+minutos. Por eso el mínimo recomendado son 4 GB. KVM 1 (1 vCPU, 4 GB) es el plan
+más pequeño que hoy lista Hostinger; cada despliegue compite con la API por la
+única CPU, así que conviene construir fuera de horas de uso. Un plan de 2 GB no
+aparece en la lista pública consultada: si Hostinger lo ofrece al comprar, no lo
+uses para construir en el mismo VPS. Centro de datos: el más cercano a Colombia
 que ofrezca Hostinger al comprar (Sudamérica o EE. UU.).
+
+## Costos (inicio de bajo costo)
+
+Pensado para una demo o un primer lanzamiento. Los números se revisaron en las
+páginas oficiales el 24 de octubre de 2026; los precios cambian, así que
+confírmalos antes de comprar.
+
+- **Almacenamiento (Cloudflare R2), plan gratuito:** 10 GB-mes de almacenamiento
+  Standard, 1 millón de operaciones Clase A y 10 millones de Clase B al mes, y
+  salida de datos (egress) gratis. Fuente: [precios de R2](https://developers.cloudflare.com/r2/pricing/).
+  Para una demo, las fotos caben de sobra en el plan gratuito. Si se supera:
+  $0.015 por GB-mes, $4.50 por millón de operaciones Clase A y $0.36 por millón
+  de Clase B.
+- **VPS (Hostinger KVM 1):** precio de renovación de $11.99/mes en la página
+  pública consultada, con renovación a 2 años. Hostinger muestra un precio de
+  promoción al comprar que solo aplica al primer periodo: revisa el precio de
+  renovación antes de pagar, porque es el que se cobra después.
+- **Dominio:** se paga por año en Namecheap.
+- **Sin MinIO en el mismo VPS:** consumiría la misma RAM, CPU y disco del
+  servidor, y sus respaldos. R2 cumple el mismo papel sin esa carga.
+- **Servicios gratuitos de la guía:** Cloudflare DNS (plan Free), ntfy,
+  UptimeRobot y healthchecks.io. Revisa sus límites en cada página antes de
+  depender de ellos.
 
 ## Qué se despliega
 
@@ -62,9 +87,9 @@ que ofrezca Hostinger al comprar (Sudamérica o EE. UU.).
   migración inicial la deja fija, AF-016) y ejecuta el chequeo de postura RLS.
   Si la postura falla, **la API no arranca**.
 - Los procesadores de colas (BullMQ) corren dentro del proceso de la API.
-- Archivos subidos: driver `disk` sobre el volumen `api_storage` (incluido en
-  los respaldos). El paso a S3 compatible (F28) depende del adaptador S3, que no
-  existe aún.
+- Archivos subidos: por defecto driver `disk` sobre el volumen `api_storage`
+  (incluido en los respaldos). Para usar Cloudflare R2 (driver `s3`), ver la
+  sección "Almacenamiento en Cloudflare R2" más abajo.
 
 ## Antes de poner datos reales (condiciones)
 
@@ -159,7 +184,7 @@ los portales, los correos con enlaces y la renovación de certificados.
 ## Primer despliegue [VPS]
 
 ```bash
-# 1. Crear el VPS en hPanel: KVM 2, Ubuntu 24.04 LTS, tu clave SSH.
+# 1. Crear el VPS en hPanel: KVM 1 (mínimo recomendado 4 GB), Ubuntu 24.04 LTS, tu clave SSH.
 #    hPanel → VPS → Firewall: permitir solo 22/tcp, 80/tcp, 443/tcp y 443/udp.
 #    (El firewall de Hostinger filtra antes de llegar al VPS, así que también
 #    cubre lo que Docker publique saltándose ufw.)
@@ -211,8 +236,63 @@ sudo deploy/scripts/backup.sh && sudo deploy/scripts/restore-test.sh
 # 8. Tareas programadas (sección siguiente) y monitor externo en UptimeRobot.
 
 # 9. PlatformAdmin inicial: contraseña fuerte, nunca la de por defecto (AF-037)
-#    (procedimiento del hilo "RBAC y organizaciones", R1-5).
+#    (procedimiento del hilo "RBAC y organizaciones", R1-5). Ver comando abajo.
 ```
+
+### PlatformAdmin inicial [VPS]
+
+La contraseña se pide en el servidor y no queda en el historial de la shell ni
+en `argv`. El servicio `migrate` ya tiene la `DATABASE_URL` del owner, que el
+script necesita para saltarse RLS al crear el primer usuario.
+
+```bash
+read -rp "Correo del PlatformAdmin: " PLATFORM_ADMIN_EMAIL
+read -rp "Nombre: " PLATFORM_ADMIN_NAME
+read -rs  -p "Contraseña (no se muestra): " PLATFORM_ADMIN_PASSWORD; echo
+export PLATFORM_ADMIN_EMAIL PLATFORM_ADMIN_NAME PLATFORM_ADMIN_PASSWORD
+sudo -E docker compose -f deploy/compose.yaml --env-file deploy/.env run --rm --no-deps \
+  --entrypoint "" \
+  -e PLATFORM_ADMIN_EMAIL -e PLATFORM_ADMIN_NAME -e PLATFORM_ADMIN_PASSWORD \
+  migrate sh -c 'cd /repo/apps/api && /repo/node_modules/.bin/ts-node --transpile-only scripts/seed-platform-admin.ts'
+unset PLATFORM_ADMIN_PASSWORD
+```
+
+Si el script se niega por la contraseña, usa una más larga (el mínimo lo marca
+`MIN_PASSWORD_LENGTH` en `apps/api/scripts/seed-platform-admin.ts`) y que no sea de ejemplo. Si falla por una dependencia, es señal de que el servicio
+`migrate` no trae `ts-node` en `/repo/node_modules`; en ese caso revisa la imagen.
+
+### Almacenamiento en Cloudflare R2 [VPS]
+
+R2 habla el protocolo S3. La API firma las peticiones y sirve los archivos por
+sus propias rutas (`/api/storage/...`), así que **el bucket puede ser privado**:
+no hace falta acceso público ni CORS.
+
+1. En el panel de Cloudflare: R2 → crear el bucket (p. ej. `adoptafacil-media`),
+   sin acceso público.
+2. R2 → Manage API tokens → crear un token con permiso **Object Read & Write**
+   limitado solo a ese bucket. Guarda la clave de acceso y la clave secreta.
+3. En el servidor, activa el driver en `deploy/api.env` (no en el repo):
+
+   ```bash
+   sudo nano deploy/api.env        # chmod 600 ya aplicado en el paso 5
+   # STORAGE_DRIVER=s3
+   # S3_ENDPOINT=https://<id-de-cuenta>.r2.cloudflarestorage.com
+   # S3_REGION=auto
+   # S3_BUCKET=<nombre-del-bucket>
+   # S3_ACCESS_KEY_ID=<clave de acceso>
+   # S3_SECRET_ACCESS_KEY=<clave secreta>
+   ```
+
+4. Vuelve a levantar la API: `sudo docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --wait api`.
+   Si falta alguna de las variables `S3_*`, la API no arranca: la validación lo exige.
+
+**Importante:** cambiar el driver no copia los archivos que ya están en el disco.
+Los archivos subidos antes siguen en el volumen `api_storage` y no se verán con
+`s3`. Si hay datos reales que migrar, hay que copiarlos al bucket antes del cambio;
+ese paso no está automatizado en el repo.
+
+Verificación: sube una foto desde el panel y revisa que aparezca un objeto nuevo
+en el bucket, y que `curl -fsS https://<dominio>/api/health` siga respondiendo `ok`.
 
 ### Verificación posterior [VPS]
 

@@ -33,6 +33,47 @@ export function buildAdoptPath(species, city) {
   return `/adoptar/${speciesPart}`;
 }
 
+/** Código público de un animal: 8 caracteres de Crockford base32 (lo genera la base). */
+export const PUBLIC_CODE_PATTERN = /^[0-9a-hjkmnp-tv-z]{8}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Último tramo de la URL pública de un animal: "luna-k7m2qp8x" (nombre + código
+ * público). Sin código (proyecciones viejas) cae al id, que la API sigue
+ * resolviendo y la ficha redirige a la URL nueva.
+ * @param {{ id: string; name: string; publicCode?: string }} animal
+ */
+export function animalUrlSegment(animal) {
+  if (!animal.publicCode) return animal.id;
+  const name = citySlug(animal.name).slice(0, 60).replace(/-+$/, '');
+  return name ? `${name}-${animal.publicCode}` : animal.publicCode;
+}
+
+/**
+ * URL pública de la ficha: /o/<org>/animales/<nombre>-<código>. Nunca expone el
+ * id interno cuando el animal ya tiene código público.
+ * @param {string} orgSlug
+ * @param {{ id: string; name: string; publicCode?: string }} animal
+ */
+export function publicAnimalPath(orgSlug, animal) {
+  return `/o/${encodeURIComponent(orgSlug)}/animales/${encodeURIComponent(animalUrlSegment(animal))}`;
+}
+
+/**
+ * Lee el tramo de la URL de una ficha. Acepta la forma nueva ("luna-k7m2qp8x":
+ * vale el código del final, el nombre es decorativo) y la vieja (UUID, que
+ * `legacy` marca para redirigir). Cualquier otra cosa → null (no encontrado),
+ * sin llamar a la API.
+ * @param {string | undefined} segment
+ * @returns {{ ref: string; legacy: boolean } | null}
+ */
+export function parseAnimalUrlSegment(segment) {
+  const value = (segment ?? '').trim().toLowerCase();
+  if (UUID_PATTERN.test(value)) return { ref: value, legacy: true };
+  const code = value.slice(value.lastIndexOf('-') + 1);
+  return PUBLIC_CODE_PATTERN.test(code) ? { ref: code, legacy: false } : null;
+}
+
 /** @type {Record<'dog' | 'cat' | 'other' | 'all', string>} */
 export const SPECIES_PLURAL = {
   dog: 'Perros',

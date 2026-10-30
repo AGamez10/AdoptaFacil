@@ -17,6 +17,7 @@ import {
   ORG_PLAN_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
+  ORG_LEDGER_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
@@ -60,6 +61,10 @@ const PortalThemePage = lazyPage(
 const OrgDonateRedirectPage = lazyPage(
   () => import('../../features/portals/pages/org-donate-redirect-page'),
   'OrgDonateRedirectPage',
+);
+const OrgQrRedirectPage = lazyPage(
+  () => import('../../features/portals/pages/org-qr-redirect-page'),
+  'OrgQrRedirectPage',
 );
 const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
@@ -146,6 +151,8 @@ const VolunteerOpportunitiesPage = lazyPage(loadVolunteering, 'VolunteerOpportun
 const VolunteerOpportunityDetailPage = lazyPage(loadVolunteering, 'VolunteerOpportunityDetailPage');
 const loadReputation = () => import('../../features/reputation');
 const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
+const loadLedger = () => import('../../features/ledger');
+const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -250,6 +257,10 @@ export function AppRoutes() {
           `/donaciones`. `/donar` solo tiene sentido en un subdominio real de
           organización; en el dominio principal lleva a `/donaciones`. */}
           <Route path="/o/:slug/donar" element={<OrgDonateRedirectPage />} />
+          {/* QR FIJO por organización: la etiqueta impresa no cambia; la org
+          elige desde su panel si lleva a su perfil, a donar, a una campaña o a
+          apadrinar un animal. La API valida el destino en cada escaneo. */}
+          <Route path="/q/:code" element={<OrgQrRedirectPage />} />
           <Route
             path="/donar"
             element={
@@ -607,6 +618,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
                       <ProductDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* RF14 · libro público de la organización (registrar/anular solo
+              Owner/Administrator; la API vuelve a exigirlo). */}
+                <Route
+                  path="organizacion/libro-publico"
+                  element={
+                    <RequireRoles roles={ORG_LEDGER_ROLES}>
+                      <OrgLedgerPage />
                     </RequireRoles>
                   }
                 />

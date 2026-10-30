@@ -45,13 +45,20 @@ pnpm setup:env
 # 3. Infraestructura local (Postgres 16 en el puerto 5433 + Redis 7)
 docker compose up -d
 
+# Atajo para ver la demo local con todos los módulos (hace los pasos 4 y 5):
+#   pnpm demo:prepare
+# Enciende en .env los módulos de la demo sin tocar el resto (pnpm setup:demo-env),
+# migra, compila @adoptafacil/contracts y corre seed:admin (te pide correo y
+# contraseña), seed:demo, seed:trafico y seed:volumen. Después: pnpm dev.
+
 # 4. Migrar la base de datos (tablas, RLS, funciones y rol adoptafacil_app)
 pnpm prisma migrate dev
 
 # 5. Datos iniciales (opcional)
 pnpm seed:admin    # PlatformAdmin / PlatformSuperAdmin
-pnpm seed:demo     # organizaciones y datos de demostración (idempotente)
+pnpm seed:demo     # organizaciones y datos de demostración (idempotente; usa el admin de seed:admin)
 pnpm seed:trafico --yes-demo  # tráfico ficticio: donaciones, adopciones, campañas y voluntariado (solo base local)
+pnpm seed:volumen --yes-demo  # una organización ficticia con 100 animales (--animales=N para otra cantidad; solo base local)
 
 # 6. API y web
 pnpm dev                                # api + web con Turborepo
@@ -85,20 +92,23 @@ configuración se valida al arrancar y la API falla rápido si falta algo. En pr
 
 ## Scripts (raíz, orquestados por Turborepo)
 
-| Comando                                           | Qué hace                                                                             |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `pnpm dev`                                        | Levanta api + web en modo watch                                                      |
-| `pnpm build`                                      | Compila todos los paquetes y apps                                                    |
-| `pnpm lint` / `pnpm typecheck`                    | ESLint y `tsc --noEmit` en todo el monorepo                                          |
-| `pnpm test`                                       | Pruebas unitarias (jest + vitest)                                                    |
-| `pnpm --filter @adoptafacil/api test:integration` | Suite de integración (requiere Postgres y Redis)                                     |
-| `pnpm --filter @adoptafacil/api test:rls`         | Solo las pruebas `no-leak` de aislamiento entre organizaciones                       |
-| `pnpm format` / `pnpm format:check`               | Prettier                                                                             |
-| `pnpm setup:env`                                  | Crea el `.env` desde `.env.example`                                                  |
-| `pnpm seed:admin` / `seed:demo` / `seed:breeds`   | Semillas (administradores, demo, catálogo de razas)                                  |
-| `pnpm seed:trafico --yes-demo`                    | Tráfico ficticio para ver cifras en local (se niega en producción, CI o base remota) |
-| `pnpm db:deploy`                                  | `prisma migrate deploy` (producción)                                                 |
-| `pnpm docs:manuals`                               | Genera los manuales Word desde `docs/manual/*.md`                                    |
+| Comando                                           | Qué hace                                                                                |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `pnpm dev`                                        | Levanta api + web en modo watch                                                         |
+| `pnpm build`                                      | Compila todos los paquetes y apps                                                       |
+| `pnpm lint` / `pnpm typecheck`                    | ESLint y `tsc --noEmit` en todo el monorepo                                             |
+| `pnpm test`                                       | Pruebas unitarias (jest + vitest)                                                       |
+| `pnpm --filter @adoptafacil/api test:integration` | Suite de integración (requiere Postgres y Redis)                                        |
+| `pnpm --filter @adoptafacil/api test:rls`         | Solo las pruebas `no-leak` de aislamiento entre organizaciones                          |
+| `pnpm format` / `pnpm format:check`               | Prettier                                                                                |
+| `pnpm setup:env`                                  | Crea el `.env` desde `.env.example`                                                     |
+| `pnpm setup:demo-env`                             | Enciende en `.env` los módulos de la demo local sin tocar el resto                      |
+| `pnpm demo:prepare`                               | Demo local completa: módulos, migraciones, contracts y todas las semillas               |
+| `pnpm seed:admin` / `seed:demo` / `seed:breeds`   | Semillas (administradores, demo, catálogo de razas)                                     |
+| `pnpm seed:trafico --yes-demo`                    | Tráfico ficticio para ver cifras en local (se niega en producción, CI o base remota)    |
+| `pnpm seed:volumen --yes-demo`                    | Organización ficticia con 100 animales para probar el catálogo con volumen (solo local) |
+| `pnpm db:deploy`                                  | `prisma migrate deploy` (producción)                                                    |
+| `pnpm docs:manuals`                               | Genera los manuales Word desde `docs/manual/*.md`                                       |
 
 ## Estructura
 

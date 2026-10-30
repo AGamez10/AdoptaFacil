@@ -25,6 +25,7 @@ import {
   animalDescription,
   animalTitle,
   buildAdoptPath,
+  publicAnimalPath,
 } from '../src/seo/page-meta.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -107,7 +108,7 @@ function adoptPage(species, city, animals) {
     .slice(0, 24)
     .map((a) => [
       `${a.name}${a.breed ? `, ${a.breed}` : ''}${a.organization?.city ? ` (${a.organization.city})` : ''}`,
-      `/o/${a.organization.slug}/animales/${a.id}`,
+      publicAnimalPath(a.organization.slug, a),
     ]);
   return {
     path,
@@ -191,7 +192,7 @@ function buildPages(animals) {
 
   for (const a of animals) {
     const city = a.organization?.city;
-    const path = `/o/${a.organization.slug}/animales/${a.id}`;
+    const path = publicAnimalPath(a.organization.slug, a);
     const title = animalTitle(a, city);
     pages.push({
       path,
@@ -336,6 +337,11 @@ const PRIVATE_PATHS = [
   '/donaciones-recibidas',
   '/certificado',
   '/plataforma',
+  // Transaccionales: checkout, comprobantes y verificaciones llevan referencias
+  // y tokens en la URL; además cada página pone `noindex` (useNoIndex).
+  '/donaciones',
+  '/verificar',
+  '/correo',
 ];
 
 async function main() {

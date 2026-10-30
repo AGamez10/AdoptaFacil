@@ -57,6 +57,32 @@ services:
       retries: 10
     logging: *logging
 
+  # Plan de escala (B10): caché de lecturas públicas en un Redis APARTE del de
+  # colas. Este sí descarta claves (allkeys-lru) y no persiste: perderlo solo
+  # enfría la caché. El de colas sigue en noeviction.
+  redis-cache:
+    image: redis:7
+    restart: unless-stopped
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory',
+        '${REDIS_CACHE_MAXMEMORY:-256mb}',
+        '--maxmemory-policy',
+        'allkeys-lru',
+      ]
+    networks: [data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
   migrate:
     build:
       context: ..
@@ -73,6 +99,40 @@ services:
     networks: [data]
     logging: *logging
 
+  # Plan de escala (B4): PgBouncer en modo transacción entre la API y Postgres.
+  # Las réplicas de API y los workers abren muchas conexiones cliente baratas;
+  # Postgres solo ve DEFAULT_POOL_SIZE conexiones reales del rol de runtime.
+  # El RLS sigue intacto: la API fija app.current_org_id con SET LOCAL dentro
+  # de cada transacción, que es justo la unidad que PgBouncer asigna.
+  # Las migraciones van directo a Postgres (servicio migrate), nunca por aquí.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: adoptafacil_app
+      DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: '1000'
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_POOL_SIZE:-20}
+      MAX_DB_CONNECTIONS: ${PGBOUNCER_MAX_DB_CONNECTIONS:-40}
+      # Parámetros de arranque que Prisma y psql mandan y PgBouncer no reenvía
+      # (search_path sale de ?schema=public; public ya es el valor por defecto).
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options,search_path
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
   api:
     build:
       context: ..
@@ -81,7 +141,12 @@ services:
     image: adoptafacil-api:${RELEASE:-local}
     restart: unless-stopped
     init: true
-    environment:
+    # Plan de escala (B3/B7): varias réplicas idénticas detrás de Caddy, solo
+    # HTTP (APP_ROLE=api); las colas las atiende el servicio worker.
+    deploy:
+      replicas: ${API_REPLICAS:-2}
+    environment: &api-environment
+      APP_ROLE: api
       NODE_ENV: production
       API_PORT: '3000'
       # La API solo usa el rol de runtime (sin BYPASSRLS). DATABASE_URL es
@@ -89,11 +154,13 @@ services:
       # la misma cadena del rol de runtime para que el contenedor nunca tenga
       # la contraseña del owner.
       DATABASE_URL: postgresql://adoptafacil_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-      DATABASE_URL_APP: postgresql://adoptafacil_app:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DATABASE_URL_APP: postgresql://adoptafacil_app:${APP_DB_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}?schema=public
+      DATABASE_PGBOUNCER: 'true'
+      DATABASE_POOL_SIZE: ${API_DB_POOL_SIZE:-10}
       REDIS_URL: redis://redis:6379
+      REDIS_CACHE_URL: redis://redis-cache:6379
       API_CORS_ORIGIN: https://${APP_DOMAIN:?APP_DOMAIN}
       WEB_BASE_URL: https://${APP_DOMAIN}
-      STORAGE_DRIVER: disk
       STORAGE_DISK_ROOT: /var/lib/adoptafacil/storage
       STORAGE_MAX_FILE_MB: ${STORAGE_MAX_FILE_MB:-15}
       STORAGE_PUBLIC_BASE_URL: https://${APP_DOMAIN}/api
@@ -103,6 +170,8 @@ services:
       # comparte en Redis (exigidos por la guarda de producción, R0-1/R1-3).
       TRUST_PROXY_HOPS: '1'
       THROTTLER_STORAGE: redis
+      # Plan de escala (B9): una línea JSON por petición (sin URL, IP ni usuario).
+      HTTP_ACCESS_LOG: 'true'
     # Drivers e integraciones (NOTIFICATION_DRIVER, SMTP_*, PAYMENT_DRIVER,
     # AUTH_IDENTITY_DRIVER, GOOGLE_OAUTH_CLIENT_ID, …) van en deploy/api.env:
     # la validación de la API rechaza variables vacías, así que lo que no se
@@ -112,11 +181,41 @@ services:
         required: false
     volumes:
       - api_storage:/var/lib/adoptafacil/storage
-    depends_on:
+    depends_on: &api-depends-on
       migrate:
         condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks: [data, edge]
+    logging: *logging
+
+  # Plan de escala (B7): workers de colas (correo, recordatorios, seguimientos,
+  # verificación, alertas) con la misma imagen y APP_ROLE=worker. Responde
+  # /health para el chequeo del contenedor, pero Caddy no le manda tráfico.
+  # Necesita la red edge para salir a SMTP.
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/docker/api.Dockerfile
+      target: runtime
+    image: adoptafacil-api:${RELEASE:-local}
+    restart: unless-stopped
+    init: true
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+    environment:
+      <<: *api-environment
+      APP_ROLE: worker
+    env_file:
+      - path: ./api.env
+        required: false
+    volumes:
+      - api_storage:/var/lib/adoptafacil/storage
+    depends_on: *api-depends-on
     networks: [data, edge]
     logging: *logging
 

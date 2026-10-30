@@ -92,7 +92,7 @@ function Paw({ className }: { className?: string }) {
 }
 
 function animalHref(slug: string, animal: AnimalSummary): string {
-  return `/o/${encodeURIComponent(slug)}/animales/${encodeURIComponent(animal.id)}`;
+  return publicAnimalDetailHref(slug, animal);
 }
 
 // ---------------------------------------------------------------------------
@@ -608,7 +608,7 @@ export function HistoriasHero({
                     Quiero adoptar a {animal.name}
                   </Link>
                   <Link
-                    to={publicAnimalDetailHref(slug, animal.id)}
+                    to={publicAnimalDetailHref(slug, animal)}
                     state={{ animal }}
                     className={historias.btnGhost}
                   >

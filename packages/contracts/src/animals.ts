@@ -168,6 +168,10 @@ export interface AnimalSummary {
   /** ISO-8601 UTC — recently published catalog UI (e.g. a "Nuevo" badge) reads
    *  this; absent on projections that don't expose it. */
   createdAt?: string;
+  /** Public URL code (8 random chars, never the id): the public animal page lives
+   *  at `/o/<org>/animales/<name>-<publicCode>`. Absent on older projections,
+   *  where links fall back to the id (still resolved by the public endpoint). */
+  publicCode?: string;
 }
 
 /**
@@ -223,6 +227,8 @@ export interface PublicAnimalsPage {
   page: number;
   /** Effective page size (server-capped). */
   limit: number;
+  /** Opaque keyset cursor for the next page (`?cursor=`); absent on the last page. */
+  nextCursor?: string;
 }
 
 // ============================================================================

@@ -3,6 +3,25 @@ import { describe, expect, it } from 'vitest';
 import { PortalSocialLinks } from './portal-social-links';
 
 describe('PortalSocialLinks (T-D02)', () => {
+  it('never renders a javascript:/data: social link saved before the API validated schemes', () => {
+    render(
+      <PortalSocialLinks
+        organization={{
+          socialLinks: {
+            instagram: 'javascript:alert(1)',
+            facebook: 'data:text/html,<script>alert(1)</script>',
+            website: 'https://patitas.org',
+          },
+        }}
+      />,
+    );
+    expect(screen.queryByText('Instagram')).not.toBeInTheDocument();
+    expect(screen.queryByText('Facebook')).not.toBeInTheDocument();
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('href')).toMatch(/^https:\/\//);
+    }
+  });
+
   it('renders only the social/contact fields that carry a real value', () => {
     render(
       <PortalSocialLinks

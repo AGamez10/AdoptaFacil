@@ -59,6 +59,10 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
     request(server).get(`/public/organizations/${slug}/animals${query}`);
 
   let orgA: Actor;
+  let orgB: Actor;
+  let adoptedId: string;
+  let hiddenId: string;
+  let soloBId: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -91,13 +95,14 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
     }).expect(201);
 
     // Non-adoptable: adopted status (active) → excluded.
-    await createAnimal(orgA.token, {
+    const adopted = await createAnimal(orgA.token, {
       name: 'Adoptado',
       species: 'dog',
       sex: 'male',
       size: 'medium',
       status: 'adopted',
     }).expect(201);
+    adoptedId = adopted.body.id;
 
     // Inactive (available but deactivated) → excluded.
     const hidden = await createAnimal(orgA.token, {
@@ -110,15 +115,17 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
       .post(`/animals/${hidden.body.id}/deactivate`)
       .set('Authorization', `Bearer ${orgA.token}`)
       .expect(201);
+    hiddenId = hidden.body.id;
 
     // Another org with its own adoptable animal → must never appear in orgA.
-    const orgB = await registerOrgWithSlug();
-    await createAnimal(orgB.token, {
+    orgB = await registerOrgWithSlug();
+    const soloB = await createAnimal(orgB.token, {
       name: 'SoloB',
       species: 'dog',
       sex: 'male',
       size: 'medium',
     }).expect(201);
+    soloBId = soloB.body.id;
   });
 
   afterAll(async () => {
@@ -187,5 +194,82 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
 
   it('rejects an invalid species filter (400)', async () => {
     await publicList(orgA.slug, '?species=dragon').expect(400);
+  });
+
+  describe('public animal page (GET /public/organizations/:slug/animals/:ref)', () => {
+    const publicDetail = (slug: string, ref: string) =>
+      request(server).get(`/public/organizations/${slug}/animals/${ref}`);
+
+    it('lists a non-enumerable public code for every adoptable animal', async () => {
+      const res = await publicList(orgA.slug).expect(200);
+      const codes = res.body.items.map((a: { publicCode: string }) => a.publicCode);
+      expect(codes.every((c: string) => /^[0-9a-hjkmnp-tv-z]{8}$/.test(c))).toBe(true);
+      expect(new Set(codes).size).toBe(codes.length);
+    });
+
+    it('resolves an adoptable animal by public code and by legacy id, same projection', async () => {
+      const list = await publicList(orgA.slug).expect(200);
+      const rex = list.body.items.find((a: { name: string }) => a.name === 'Rex');
+      const byCode = await publicDetail(orgA.slug, rex.publicCode).expect(200);
+      expect(byCode.body).toMatchObject({ id: rex.id, name: 'Rex', publicCode: rex.publicCode });
+      expect(Object.keys(byCode.body)).not.toContain('birthDate');
+      expect(Object.keys(byCode.body)).not.toContain('description');
+      const byId = await publicDetail(orgA.slug, rex.id).expect(200);
+      expect(byId.body).toEqual(byCode.body);
+      // Codes are case-insensitive in the URL.
+      await publicDetail(orgA.slug, rex.publicCode.toUpperCase()).expect(200);
+    });
+
+    it('answers the same 404 for adopted, inactive and other-org animals (no existence leak)', async () => {
+      await publicDetail(orgA.slug, adoptedId).expect(404);
+      await publicDetail(orgA.slug, hiddenId).expect(404);
+      await publicDetail(orgA.slug, soloBId).expect(404);
+      await publicDetail(orgB.slug, soloBId).expect(200);
+      await publicDetail(`nope-${randomUUID().slice(0, 8)}`, soloBId).expect(404);
+      await publicDetail(orgA.slug, 'zzzzzzzz').expect(404);
+    });
+
+    it('rejects refs that are neither a public code nor a UUID (400)', async () => {
+      await publicDetail(orgA.slug, 'luna').expect(400);
+      await publicDetail(orgA.slug, "1' OR '1'='1").expect(400);
+      await publicDetail('Bad_Slug', soloBId).expect(400);
+    });
+
+    it('with 100 animals in one org: the global catalog lists all 100 and every animal page loads', async () => {
+      const big = await registerOrgWithSlug();
+      for (let i = 0; i < 100; i += 1) {
+        await createAnimal(big.token, {
+          name: `Animal ${i}`,
+          species: i % 3 === 0 ? 'cat' : 'dog',
+          sex: 'female',
+          size: 'small',
+        }).expect(201);
+      }
+
+      // /adoptar reads GET /public/animals page by page: before, only the
+      // first 50 of an org reached it.
+      const fromBig: { publicCode: string; organization: { slug: string } }[] = [];
+      for (let page = 1; page <= 20; page += 1) {
+        const res = await request(server).get(`/public/animals?limit=50&page=${page}`).expect(200);
+        fromBig.push(
+          ...res.body.data.filter(
+            (a: { organization: { slug: string } }) => a.organization.slug === big.slug,
+          ),
+        );
+        if (res.body.data.length < 50) break;
+      }
+      expect(fromBig).toHaveLength(100);
+
+      // Every one of the 100 resolves by its public code — including the
+      // oldest ones, past the first 50 of the per-org catalog.
+      const slowest = { ms: 0 };
+      for (const animal of fromBig) {
+        const started = Date.now();
+        await publicDetail(big.slug, animal.publicCode).expect(200);
+        slowest.ms = Math.max(slowest.ms, Date.now() - started);
+      }
+      // Generous bound (shared CI runners); locally it is a few ms.
+      expect(slowest.ms).toBeLessThan(2000);
+    });
   });
 });

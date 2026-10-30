@@ -32,6 +32,7 @@ import {
 import { enforcePlatformMfa } from '../rbac/platform-mfa.policy';
 import { STORAGE_PORT, type StoragePort } from './storage.port';
 import { isAllowedUpload, parseByteRange, parseStorageKey } from './storage-keys';
+import { optimizeImage, sniffImageContentType } from './image-optimizer';
 
 /** Minimal shape of a multer memory-storage file (no @types/multer installed). */
 interface UploadedFileLike {
@@ -102,9 +103,15 @@ export class StorageController {
       throw new BadRequestException(`Unsupported content type: ${file.mimetype}`);
     }
 
+    // Las fotos se recomprimen a WebP antes de guardar; el original ya pasó el límite.
+    const optimized = await optimizeImage(file.buffer, file.mimetype);
+    if (!optimized) {
+      throw new BadRequestException('La imagen no se pudo procesar');
+    }
+
     // Cuota de espacio del plan (solo con los planes encendidos).
-    await this.plans.assertStorageAvailable(parsed.organizationId, file.size);
-    await this.storage.saveObject(key, file.buffer, file.mimetype);
+    await this.plans.assertStorageAvailable(parsed.organizationId, optimized.buffer.length);
+    await this.storage.saveObject(key, optimized.buffer, optimized.contentType);
     await this.audit.record({
       organizationId: parsed.organizationId,
       actorUserId: user.id,
@@ -130,7 +137,12 @@ export class StorageController {
     if (!object) {
       throw new NotFoundException();
     }
-    res.setHeader('Content-Type', object.contentType ?? 'application/octet-stream');
+    res.setHeader('Content-Type', servedContentType(object));
+    // Plan de escala (B2): la clave lleva un uuid nuevo por archivo, así que su
+    // contenido no cambia; la CDN y el navegador la guardan 30 días y la API
+    // solo atiende los fallos de caché. 30 días (no un año) para que una foto
+    // borrada deje de circular pronto aunque nadie purgue la CDN.
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     // Rangos de bytes: Safari en iPhone no reproduce un video sin ellos.
     res.setHeader('Accept-Ranges', 'bytes');
     const size = object.data.length;
@@ -191,7 +203,17 @@ export class StorageController {
       entityId: key,
       metadata: { visibility: 'private' },
     });
-    res.setHeader('Content-Type', object.contentType ?? 'application/octet-stream');
+    res.setHeader('Content-Type', servedContentType(object));
     res.send(object.data);
   }
+}
+
+/**
+ * Tipo con el que se sirve un objeto. Las fotos recomprimidas conservan la clave
+ * .jpg/.png, así que el tipo real sale de los bytes cuando son imagen.
+ */
+function servedContentType(object: { data: Buffer; contentType?: string }): string {
+  const declared = object.contentType ?? 'application/octet-stream';
+  if (!declared.startsWith('image/')) return declared;
+  return sniffImageContentType(object.data) ?? declared;
 }

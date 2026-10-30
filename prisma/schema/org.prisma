@@ -35,6 +35,7 @@ model Organization {
   duplicateFlagsAsMatched  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsMatched")
   invitations              OrganizationInvitation[]
   reports                  OrgReport[]
+  ledgerEntries            LedgerEntry[]
   signerDesignations       OrgSignerDesignation[]
   thirdPartyConsents       ThirdPartyConsent[]
   reportApprovals          OrgReportApproval[]
@@ -45,6 +46,8 @@ model Organization {
   workspaceTicketEvents    PlatformWorkspaceTicketEvent[]
   sensitiveActions         PlatformSensitiveAction[]
   sensitiveActionDecisions PlatformSensitiveActionDecision[]
+  qrLink                   OrganizationQrLink?
+  qrScanDays               OrganizationQrScanDay[]
   // ePayco (ADR-PAG-002): the organization's own connected merchant account.
   // See payments.prisma.
   epaycoAccount            OrganizationEpaycoAccount?
