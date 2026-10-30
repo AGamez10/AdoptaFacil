@@ -11,8 +11,10 @@
  * Env overrides (all optional):
  *   SEED_DEMO_PASSWORD   — shared password for the demo Owner/Person accounts.
  *                           Dev-only default below; NEVER a real credential.
- *   PLATFORM_ADMIN_EMAIL — REQUIRED: the PlatformAdmin created by seed:admin
- *                           (no default since AF-037).
+ *   PLATFORM_ADMIN_EMAIL — the PlatformAdmin created by seed:admin. Optional
+ *                           when the local DB has exactly one (it is used);
+ *                           required when there are several (no default
+ *                           credential since AF-037).
  *
  * Refuses to run with NODE_ENV=production: demo accounts share a password.
  *
@@ -36,6 +38,7 @@
  * ("Verificado") — formalización por debajo de "Formalizada" le bloquea el 3.
  */
 import { NestFactory } from '@nestjs/core';
+import { PrismaClient } from '@prisma/client';
 
 // Force these BEFORE the Nest app (and its ConfigModule) bootstraps — dotenv
 // never overrides an already-set process.env value, so this wins over `.env`.
@@ -56,6 +59,7 @@ import {
   type LegalAcceptanceItem,
   OrganizationType,
   requiredLegalDocuments,
+  Role,
 } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { AuthService } from '../src/core/auth/auth.service';
@@ -85,16 +89,9 @@ function demoAcceptances(accountType: 'organization' | 'person'): LegalAcceptanc
 // ALWAYS comes from env, with an obviously-dev fallback.
 // ---------------------------------------------------------------------------
 const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? 'DemoPass123!';
-const PLATFORM_ADMIN_EMAIL = (process.env.PLATFORM_ADMIN_EMAIL ?? '').trim().toLowerCase();
 
 if (process.env.NODE_ENV === 'production') {
   console.error('[seed:demo] Se niega a correr con NODE_ENV=production (cuentas de demostración).');
-  process.exit(1);
-}
-if (!PLATFORM_ADMIN_EMAIL) {
-  console.error(
-    '[seed:demo] Define PLATFORM_ADMIN_EMAIL (el PlatformAdmin creado con seed:admin).',
-  );
   process.exit(1);
 }
 
@@ -304,6 +301,44 @@ function loadRootEnvFallback(): void {
 }
 loadRootEnvFallback();
 
+/**
+ * PLATFORM_ADMIN_EMAIL (env or `.env`) when set; otherwise the only platform
+ * super admin in the local DB, so `seed:admin` then `seed:demo` works with no
+ * extra variable. Reads user_roles across teams, which RLS hides from the app
+ * role, so it uses DATABASE_URL (the migration role) like seed:admin does.
+ */
+async function resolvePlatformAdminEmail(): Promise<string> {
+  const fromEnv = (process.env.PLATFORM_ADMIN_EMAIL ?? '').trim().toLowerCase();
+  if (fromEnv) return fromEnv;
+
+  const owner = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+  try {
+    const roles = await owner.userRole.findMany({
+      where: { role: Role.PlatformSuperAdmin },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+    const credentials = await owner.authCredential.findMany({
+      where: { userId: { in: roles.map((r) => r.userId) } },
+      select: { email: true },
+    });
+    if (credentials.length === 1) {
+      console.log(
+        `[seed:demo] PLATFORM_ADMIN_EMAIL no definida; uso el único admin: ${credentials[0].email}.`,
+      );
+      return credentials[0].email;
+    }
+    throw new Error(
+      credentials.length === 0
+        ? 'No hay ningún PlatformAdmin todavía. Corre `pnpm seed:admin` primero.'
+        : `Hay varios PlatformAdmin (${credentials.map((c) => c.email).join(', ')}). ` +
+            'Indica cuál con PLATFORM_ADMIN_EMAIL=<correo> pnpm seed:demo.',
+    );
+  } finally {
+    await owner.$disconnect();
+  }
+}
+
 interface CredentialRow {
   rol: string;
   correo: string;
@@ -333,6 +368,7 @@ async function main(): Promise<void> {
 
   try {
     // --- 0. Resolve the PlatformAdmin created by `seed:admin` ---------------
+    const PLATFORM_ADMIN_EMAIL = await resolvePlatformAdminEmail();
     const platformAdminCredential = await prisma.authCredential.findUnique({
       where: { email: PLATFORM_ADMIN_EMAIL },
     });
