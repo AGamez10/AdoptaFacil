@@ -1,3 +1,4 @@
+import { ledgerBlock } from '../engine/ledger';
 import { COPY, EMPTY, type TplAnimal, type TplModel } from '../engine/model';
 import {
   campaignArt,
@@ -449,7 +450,7 @@ ${
   ${REVIEWS.length ? `<div class="r-lets">${REVIEWS.map((r) => `<figure><span class="st" aria-label="${r.rating} de 5 estrellas">${stars(r.rating)}</span>${r.text ? `<blockquote>“${r.text}”</blockquote>` : ''}<figcaption>${r.name}${r.date ? ` · ${r.date}` : ''}</figcaption></figure>`).join('')}</div>` : `<p class="r-empty">${EMPTY.resenas}</p>`}
 </section>
 <section class="w r-sec r-acc" id="r-acc" data-sec="libro">${hd('libro', 'Libro <em>público</em>', `Transparencia. ${COPY.ledgerText}`, `<button type="button" class="r-lnk" data-ledger style="margin-top:12px">Ver libro completo ${ic.arrow}</button>`)}
-  <p class="r-empty">${EMPTY.libro}</p>
+  ${ledgerBlock(m, 'r-empty')}
 </section>
 ${
   SHOW.contacto

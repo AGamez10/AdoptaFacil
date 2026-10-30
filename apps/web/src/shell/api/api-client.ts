@@ -162,7 +162,13 @@ export class ApiClient {
     const refreshToken = this.config.tokenStore.getRefreshToken();
     if (!refreshToken) {
       this.handleSessionExpired();
-      return Promise.reject(new ApiError(401, 'session_expired', 'No hay refresh token'));
+      return Promise.reject(
+        new ApiError(
+          401,
+          'session_expired',
+          'Tu sesión terminó. Vuelve a iniciar sesión para continuar.',
+        ),
+      );
     }
 
     this.refreshing = this.config

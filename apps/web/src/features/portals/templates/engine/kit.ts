@@ -1,3 +1,4 @@
+import { ledgerBlock } from './ledger';
 import { COPY, EMPTY, type TplModel } from './model';
 import {
   fmt,
@@ -133,7 +134,7 @@ export function createKit(m: TplModel) {
         `<button type="button" class="k-lnk" data-ledger>Ver libro completo ${ic.arrow}</button>`,
       ),
     ) =>
-      `<section class="w k-sec" data-sec="libro">${head}<p class="k-sub" style="margin:-20px 0 26px">${COPY.ledgerText}</p><p class="k-empty">${EMPTY.libro}</p></section>`,
+      `<section class="w k-sec" data-sec="libro">${head}<p class="k-sub" style="margin:-20px 0 26px">${COPY.ledgerText}</p>${ledgerBlock(m, 'k-empty')}</section>`,
     contactRows: (cls = '', icons = false) => {
       const c = ORG.contact;
       const i = (k: 'clock' | 'pin' | 'phone') => (icons ? ic[k] : '');

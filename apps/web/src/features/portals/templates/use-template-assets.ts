@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BASE_CSS } from './engine/base-css';
+import { LEDGER_CSS } from './engine/ledger';
 import type { TemplateDesign } from './engine/types';
 
 const STYLE_ID = 'af-tpl-style';
@@ -15,7 +16,7 @@ export function useTemplateAssets(design: TemplateDesign | null | undefined): vo
     if (!design) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = BASE_CSS + design.css;
+    style.textContent = BASE_CSS + LEDGER_CSS + design.css;
     document.head.appendChild(style);
     let link: HTMLLinkElement | null = null;
     if (design.fonts) {

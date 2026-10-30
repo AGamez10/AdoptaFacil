@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Review } from '@adoptafacil/contracts';
-import { ComingSoon, Dialog, DialogContent, DialogHeader, DialogTitle } from '@adoptafacil/ui';
 import { RegisterReviewDialog } from '../components/register-review-dialog';
+import { PublicLedgerDialog } from '../../ledger/components/public-ledger-dialog';
+import { useFeature } from '../../../shell/capabilities';
 import { hslStringToHex } from '../model/color-conversion';
 import { createKit } from './engine/kit';
-import { COPY, buildTemplateModel, type TemplateSourceData } from './engine/model';
+import { buildTemplateModel, type TemplateSourceData } from './engine/model';
 import { createCatalog, createMotion } from './engine/runtime';
 import type { TemplateDesign, ThreeModule } from './engine/types';
 import { useTemplateAssets } from './use-template-assets';
@@ -51,6 +52,9 @@ export function PortalTemplateView({
   );
 
   const model = useMemo(() => buildTemplateModel(source), [source]);
+  // Con el módulo de reseñas apagado, la API responde 404 a "Registrar reseña":
+  // la plantilla no muestra ni la sección ni el botón (igual que el clásico).
+  const reputation = useFeature('reputation');
 
   // Hoja de estilos de la plantilla (acotada a .af-tpl / .tpl-<id>) + fuentes.
   useTemplateAssets(design);
@@ -100,6 +104,17 @@ export function PortalTemplateView({
         },
       });
       kit.init(root, motion);
+      if (!reputation) {
+        const gone = new Set<string>();
+        root.querySelectorAll('[data-sec="resenas"], [data-review]').forEach((el) => {
+          if (el.id) gone.add(el.id);
+          el.remove();
+        });
+        // Sin enlaces muertos en la navegación de la plantilla.
+        root.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((a) => {
+          if (gone.has(a.getAttribute('href')?.slice(1) ?? '')) a.remove();
+        });
+      }
     } catch (error) {
       // Una animación que falle nunca debe dejar el portal en blanco: el
       // contenido (HTML ya montado) sigue visible y navegable.
@@ -109,7 +124,7 @@ export function PortalTemplateView({
       ctl.abort();
       root.innerHTML = '';
     };
-  }, [design, model, three, navigate]);
+  }, [design, model, three, navigate, reputation]);
 
   // Delegación de clics: enlaces internos por el router, anclas dentro de la
   // plantilla, y los diálogos de reseña y libro público.
@@ -164,23 +179,15 @@ export function PortalTemplateView({
         data-testid="portal-template"
         data-template={design.id}
       />
-      <RegisterReviewDialog
-        slug={source.slug}
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
-        onSubmitted={onReviewCreated}
-      />
-      <Dialog open={ledgerOpen} onOpenChange={setLedgerOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{COPY.ledgerTitle}</DialogTitle>
-          </DialogHeader>
-          <ComingSoon
-            title="Libro público"
-            description="El registro público de movimientos de esta organización estará disponible próximamente."
-          />
-        </DialogContent>
-      </Dialog>
+      {reputation && (
+        <RegisterReviewDialog
+          slug={source.slug}
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          onSubmitted={onReviewCreated}
+        />
+      )}
+      <PublicLedgerDialog slug={source.slug} open={ledgerOpen} onOpenChange={setLedgerOpen} />
     </>
   );
 }

@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   type CreatePublicReviewInput,
@@ -15,6 +16,7 @@ import {
   type PublicReview,
   type Review,
 } from '@adoptafacil/contracts';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { PublicReputationService } from './public-reputation.service';
 import { createPublicReviewSchema } from './reviews.schemas';
@@ -60,6 +62,9 @@ export class PublicReputationController {
    */
   @Post('public/organizations/:slug/reviews')
   @HttpCode(201)
+  // Sin sesión: tope por IP contra el spam (10 reseñas cada 10 minutos).
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 10 * 60_000 } })
   createReview(
     @Param('slug') slug: string,
     @Body(new ZodValidationPipe(createPublicReviewSchema)) dto: CreatePublicReviewInput,

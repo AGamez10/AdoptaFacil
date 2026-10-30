@@ -1,3 +1,4 @@
+import { ledgerBlock } from '../engine/ledger';
 import { COPY, EMPTY, type TplAnimal } from '../engine/model';
 import {
   availLine,
@@ -342,7 +343,7 @@ ${
 <section class="w g-sec" data-sec="resenas"><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap"><div><p class="g-eyebrow">Libro de visitas</p><h2 class="g-h2" style="margin-top:14px">Lo que dicen <em>quienes nos conocen</em></h2></div><button type="button" class="g-btn ghost" data-review>Registrar reseña</button></div>
   ${REVIEWS.length ? `<div class="g-visit">${REVIEWS.map((r) => `<blockquote class="g-vc g-rv" style="margin:0"><span class="st" aria-label="${r.rating} de 5">${stars(r.rating)}</span>${r.text ? `<p>“${r.text}”</p>` : ''}<footer>${r.name}${r.date ? ` · ${r.date}` : ''}</footer></blockquote>`).join('')}</div>` : `<p class="g-empty">${EMPTY.resenas}</p>`}</section>
 <section class="w g-sec" data-sec="libro" style="padding-top:0"><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap"><div><p class="g-eyebrow">Transparencia · libro público</p><h2 class="g-h2" style="margin-top:14px">Registro de la <em>colección</em></h2><p class="g-note" style="font-size:15px">${COPY.ledgerText}</p></div><button type="button" class="g-btn ghost" data-ledger>Ver libro completo ${ic.arrow}</button></div>
-  <p class="g-empty">${EMPTY.libro}</p></section>
+  ${ledgerBlock(m, 'g-empty')}</section>
 ${
   SHOW.contacto
     ? `<section class="w g-sec" data-sec="contacto" style="padding-top:0"><p class="g-eyebrow">Visítanos</p><h2 class="g-h2" style="margin:14px 0 36px">Información de <em>contacto</em></h2>
