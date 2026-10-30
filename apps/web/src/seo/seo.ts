@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
+import { OFFICIAL_EMAIL, OFFICIAL_PHONE_E164 } from '../lib/contact';
 import { useDocumentTitle } from '../lib/use-document-title';
+import { ORGANIZATION_DESCRIPTION } from './page-meta.js';
 
 /**
  * SEO por página (rediseño 2026-10): título, descripción, URL canónica,
@@ -125,11 +127,21 @@ export function organizationLd(): JsonLd {
     name: SITE_NAME,
     url: siteUrl(),
     logo: absoluteUrl('/icon-512.png'),
-    email: 'adoptafacil.oficial@gmail.com',
+    description: ORGANIZATION_DESCRIPTION,
+    email: OFFICIAL_EMAIL,
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: OFFICIAL_EMAIL,
+      telephone: OFFICIAL_PHONE_E164,
+      areaServed: 'CO',
+      availableLanguage: 'es',
+    },
     areaServed: { '@type': 'Country', name: 'Colombia' },
   };
 }
 
+/** Sin `SearchAction`: /adoptar filtra por especie y ciudad en la ruta, no por `?q=`. */
 export function websiteLd(): JsonLd {
   return {
     '@context': 'https://schema.org',
@@ -137,11 +149,6 @@ export function websiteLd(): JsonLd {
     name: SITE_NAME,
     url: siteUrl(),
     inLanguage: 'es-CO',
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: `${absoluteUrl('/adoptar')}?q={search_term_string}`,
-      'query-input': 'required name=search_term_string',
-    },
   };
 }
 
