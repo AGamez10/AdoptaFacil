@@ -17,9 +17,7 @@ import {
   parseStorageKey,
   resolveServeUrl,
 } from './storage-keys';
-
-/** How long a measured org total is reused before walking the folders again. */
-const USAGE_CACHE_MS = 5 * 60 * 1000;
+import { MemoryUsageCache, type UsageCache } from './usage-cache';
 
 /**
  * Real filesystem StoragePort for the VPS (T-108). Persists bytes under
@@ -38,14 +36,18 @@ export class DiskStorageAdapter implements StoragePort {
   private readonly maxBytes: number;
   private readonly publicBaseUrl: string;
   private readonly cdnBaseUrl: string | undefined;
-  private readonly usageCache = new Map<string, { bytes: number; at: number }>();
 
-  constructor(config: ConfigService<Env, true>) {
+  constructor(
+    config: ConfigService<Env, true>,
+    private readonly usageCache: UsageCache = new MemoryUsageCache(),
+  ) {
     this.root = resolve(config.get('STORAGE_DISK_ROOT', { infer: true }));
     this.maxBytes = config.get('STORAGE_MAX_FILE_MB', { infer: true }) * 1024 * 1024;
     // Trim a trailing slash so URL building is predictable.
     this.publicBaseUrl = config.get('STORAGE_PUBLIC_BASE_URL', { infer: true }).replace(/\/+$/, '');
-    this.cdnBaseUrl = config.get('STORAGE_PUBLIC_CDN_BASE_URL', { infer: true })?.replace(/\/+$/, '');
+    this.cdnBaseUrl = config
+      .get('STORAGE_PUBLIC_CDN_BASE_URL', { infer: true })
+      ?.replace(/\/+$/, '');
   }
 
   async createUploadTarget(input: CreateUploadInput): Promise<StoredObject> {
@@ -78,20 +80,19 @@ export class DiskStorageAdapter implements StoragePort {
     await writeFile(full, data);
     // Keep a cached total current (an overwrite may count twice until it expires).
     const org = parseStorageKey(key)?.organizationId;
-    const cached = org ? this.usageCache.get(org) : undefined;
-    if (cached) cached.bytes += data.length;
+    if (org) await this.usageCache.add(org, data.length);
   }
 
   async measureOrganizationUsage(organizationId: string): Promise<number> {
-    const cached = this.usageCache.get(organizationId);
-    if (cached && Date.now() - cached.at < USAGE_CACHE_MS) {
-      return cached.bytes;
+    const cached = await this.usageCache.get(organizationId);
+    if (cached !== null) {
+      return cached;
     }
     let bytes = 0;
     for (const visibility of ['public', 'private']) {
       bytes += await this.folderBytes(this.resolvePath(`${visibility}/${organizationId}`));
     }
-    this.usageCache.set(organizationId, { bytes, at: Date.now() });
+    await this.usageCache.set(organizationId, bytes);
     return bytes;
   }
 
