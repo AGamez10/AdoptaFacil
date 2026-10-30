@@ -1,27 +1,13 @@
 import { Link } from 'react-router-dom';
 import { cn } from '@adoptafacil/ui';
-import { ENGINE_TEMPLATE_IDS, type EngineTemplateId } from '../../portals/templates/registry';
+import {
+  DEMO_TEMPLATE_IDS,
+  templateDemoHref,
+  templateName,
+} from '../../portals/templates/demo/demo-templates';
 import { IconArrowRight } from './landing-icons';
 import landing from './landing.module.scss';
 import styles from './showcase.module.scss';
-
-/** Nombres visibles de las plantillas gratuitas (catálogo de `registry.ts`). */
-const FREE_NAMES: Record<EngineTemplateId, string> = {
-  hogar: 'Hogar',
-  revista: 'Revista',
-  expediente: 'Expediente',
-  cartel: 'Cartel',
-  solar: 'Solar',
-  galeria: 'Galería',
-  mosaico: 'Mosaico',
-  match: 'Match',
-  estudio: 'Estudio',
-  cine: 'Cine',
-  aurora: 'Aurora',
-  constelacion: 'Constelación',
-  portada: 'Portada',
-  hilo: 'Hilo',
-};
 
 /** Plantillas premium: todavía no están en el código, se muestran como próximamente y sin precio. */
 const PREMIUM_NAMES = ['Álbum', 'Linterna', 'Revelado', 'Velitas', 'Terminal'] as const;
@@ -33,6 +19,8 @@ export const LANDING_COFFEE_ID = 'cafe';
  * Galería de plantillas: las 14 del motor más la Clásica son gratuitas. Las
  * premium se marcan como próximamente, sin precio. Las miniaturas salen de
  * `public/template-previews` (datos de demostración, no de una organización real).
+ * Cada una abre su vista de ejemplo completa (`/plantillas/:id`), desde donde se
+ * registra la fundación con esa plantilla.
  */
 export function TemplateGallerySection() {
   return (
@@ -54,22 +42,26 @@ export function TemplateGallerySection() {
         </div>
 
         <ul className={styles.gallery} aria-label="Plantillas gratuitas">
-          <li className={styles.tile}>
-            <div className={styles['tile--text']}>
-              <span className={styles.tile__name}>Clásica</span>
-            </div>
-          </li>
-          {ENGINE_TEMPLATE_IDS.map((id) => (
+          {DEMO_TEMPLATE_IDS.map((id) => (
             <li key={id} className={styles.tile}>
-              <img
-                src={`/template-previews/${id}-390.jpg`}
-                alt={`Vista previa de la plantilla ${FREE_NAMES[id]}`}
-                loading="lazy"
-                decoding="async"
-                width={390}
-                height={488}
-              />
-              <p className={styles.tile__name}>{FREE_NAMES[id]}</p>
+              <Link
+                to={templateDemoHref(id)}
+                className={styles.tile__link}
+                aria-label={`Ver la plantilla ${templateName(id)} con datos de ejemplo`}
+              >
+                <img
+                  src={`/template-previews/${id}-390.jpg`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width={390}
+                  height={488}
+                />
+                <p className={styles.tile__name}>
+                  {templateName(id)}
+                  <span className={styles.tile__cta}>Ver ejemplo</span>
+                </p>
+              </Link>
             </li>
           ))}
         </ul>

@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useLocation, useNavigate, type Location } from 'react-router-dom';
 import { Button } from '@adoptafacil/ui';
-import { toApiError } from '../../../shell/api';
+import { toApiError, useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { landingAfterSignIn } from '../../org/lib/portal-readiness';
 import { AuthLayout } from '../components/auth-layout';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
@@ -28,7 +29,14 @@ export function LoginPage() {
   // with its context intact. Same `state.from` mechanism (RequireAuth), just no longer
   // dropping `search`.
   const origin = (location.state as FromState | null)?.from;
-  const from = origin ? `${origin.pathname}${origin.search}` : '/';
+  const from = origin ? `${origin.pathname}${origin.search}` : null;
+  const client = useApiClient();
+  // Sin una ruta pedida, quien gestiona una organización que aún no puede
+  // publicar su portal entra primero a "Mi organización" a completarlo.
+  const destination = useCallback(
+    async () => from ?? (await landingAfterSignIn(client)),
+    [from, client],
+  );
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,7 +63,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await signIn({ email, password });
-      navigate(from, { replace: true });
+      navigate(await destination(), { replace: true });
     } catch (error) {
       setFormError(loginErrorMessage(toApiError(error).status));
       setSubmitting(false);
@@ -72,13 +80,13 @@ export function LoginPage() {
       setSubmitting(true);
       try {
         await signInWithGoogle(idToken);
-        navigate(from, { replace: true });
+        navigate(await destination(), { replace: true });
       } catch {
         setFormError('No pudimos iniciar sesión con Google. Inténtalo de nuevo.');
         setSubmitting(false);
       }
     },
-    [signInWithGoogle, navigate, from],
+    [signInWithGoogle, navigate, destination],
   );
 
   return (
