@@ -235,21 +235,41 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
       await publicDetail('Bad_Slug', soloBId).expect(400);
     });
 
-    it('reaches animals past the first 50 of the catalog', async () => {
+    it('with 100 animals in one org: the global catalog lists all 100 and every animal page loads', async () => {
       const big = await registerOrgWithSlug();
-      for (let i = 0; i < 52; i += 1) {
+      for (let i = 0; i < 100; i += 1) {
         await createAnimal(big.token, {
           name: `Animal ${i}`,
-          species: 'dog',
+          species: i % 3 === 0 ? 'cat' : 'dog',
           sex: 'female',
           size: 'small',
         }).expect(201);
       }
-      // The catalog returns the NEWEST 50 first; offset 50 holds the oldest.
-      const tail = await publicList(big.slug, '?limit=50&offset=50').expect(200);
-      expect(tail.body.items.length).toBe(2);
-      const oldest = tail.body.items[tail.body.items.length - 1];
-      await publicDetail(big.slug, oldest.publicCode).expect(200);
+
+      // /adoptar reads GET /public/animals page by page: before, only the
+      // first 50 of an org reached it.
+      const fromBig: { publicCode: string; organization: { slug: string } }[] = [];
+      for (let page = 1; page <= 20; page += 1) {
+        const res = await request(server).get(`/public/animals?limit=50&page=${page}`).expect(200);
+        fromBig.push(
+          ...res.body.data.filter(
+            (a: { organization: { slug: string } }) => a.organization.slug === big.slug,
+          ),
+        );
+        if (res.body.data.length < 50) break;
+      }
+      expect(fromBig).toHaveLength(100);
+
+      // Every one of the 100 resolves by its public code — including the
+      // oldest ones, past the first 50 of the per-org catalog.
+      const slowest = { ms: 0 };
+      for (const animal of fromBig) {
+        const started = Date.now();
+        await publicDetail(big.slug, animal.publicCode).expect(200);
+        slowest.ms = Math.max(slowest.ms, Date.now() - started);
+      }
+      // Generous bound (shared CI runners); locally it is a few ms.
+      expect(slowest.ms).toBeLessThan(2000);
     });
   });
 });

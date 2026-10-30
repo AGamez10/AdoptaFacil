@@ -129,7 +129,7 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
   });
 
   it('merges adoptable animals from MULTIPLE organizations, with org id/name/slug/city attached', async () => {
-    const res = await publicListAll().expect(200);
+    const res = await publicListAll('?limit=50').expect(200);
     const names = res.body.data.map((a: { name: string }) => a.name);
     expect(names).toEqual(expect.arrayContaining(['PerroA', 'GatoA', 'PerroB']));
 
