@@ -223,6 +223,8 @@ export interface PublicAnimalsPage {
   page: number;
   /** Effective page size (server-capped). */
   limit: number;
+  /** Opaque keyset cursor for the next page (`?cursor=`); absent on the last page. */
+  nextCursor?: string;
 }
 
 // ============================================================================

@@ -27,6 +27,8 @@ export const publicAnimalsGlobalQuerySchema = z.object({
   city: z.string().trim().min(1).optional(),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).optional(),
+  // Keyset cursor from a previous page's `nextCursor` (opaque); wins over `page`.
+  cursor: z.string().trim().min(1).max(200).optional(),
 });
 
 export type PublicAnimalsGlobalQuery = z.infer<typeof publicAnimalsGlobalQuerySchema>;
