@@ -138,6 +138,11 @@ export class StorageController {
       throw new NotFoundException();
     }
     res.setHeader('Content-Type', servedContentType(object));
+    // Plan de escala (B2): la clave lleva un uuid nuevo por archivo, así que su
+    // contenido no cambia; la CDN y el navegador la guardan 30 días y la API
+    // solo atiende los fallos de caché. 30 días (no un año) para que una foto
+    // borrada deje de circular pronto aunque nadie purgue la CDN.
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     // Rangos de bytes: Safari en iPhone no reproduce un video sin ellos.
     res.setHeader('Accept-Ranges', 'bytes');
     const size = object.data.length;

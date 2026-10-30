@@ -195,6 +195,8 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .expect(200);
     const body = res.body as Buffer;
     expect(res.headers['content-type']).toMatch(/^image\//);
+    // Plan de escala (B2): la CDN puede guardarla; la clave no cambia de contenido.
+    expect(res.headers['cache-control']).toBe('public, max-age=2592000, immutable');
     expect((await sharp(body).metadata()).width).toBe(64);
   });
 

@@ -89,6 +89,12 @@ export const envSchema = z.object({
   FOLLOWUP_VIDEO_MAX_MB: z.coerce.number().int().positive().max(100).default(50),
   // Base URL the API is reachable at, used to build upload/serve URLs.
   STORAGE_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3000'),
+  // Plan de escala (B2): host de la CDN para los archivos PÚBLICOS (fotos,
+  // logos). Es la misma API detrás de Cloudflare con un nombre propio (p. ej.
+  // https://img.adoptafacil.org/api): la CDN guarda la respuesta de
+  // /storage/public (Cache-Control largo) y la API solo atiende los fallos de
+  // caché. Los archivos privados nunca usan este host. Vacío = sin CDN.
+  STORAGE_PUBLIC_CDN_BASE_URL: z.string().url().optional(),
   // T-052 (payments): which PaymentPort adapter to bind. 'fake' = deterministic
   // dev/test double (default). Swap happens in PaymentModule, no consumer
   // changes. 'disabled' (Ola 1, R0-1): binds an adapter that refuses every

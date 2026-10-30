@@ -14,6 +14,7 @@ import {
   buildStorageKey,
   contentTypeFromKey,
   parseStorageKey,
+  resolveServeUrl,
 } from './storage-keys';
 
 /** How long a measured org total is reused before listing the bucket again. */
@@ -50,6 +51,7 @@ export class S3StorageAdapter implements StoragePort {
   private readonly secretAccessKey: string;
   private readonly maxBytes: number;
   private readonly publicBaseUrl: string;
+  private readonly cdnBaseUrl: string | undefined;
   private readonly usageCache = new Map<string, { bytes: number; at: number }>();
 
   constructor(
@@ -64,6 +66,7 @@ export class S3StorageAdapter implements StoragePort {
     this.secretAccessKey = config.get('S3_SECRET_ACCESS_KEY', { infer: true }) as string;
     this.maxBytes = config.get('STORAGE_MAX_FILE_MB', { infer: true }) * 1024 * 1024;
     this.publicBaseUrl = config.get('STORAGE_PUBLIC_BASE_URL', { infer: true }).replace(/\/+$/, '');
+    this.cdnBaseUrl = config.get('STORAGE_PUBLIC_CDN_BASE_URL', { infer: true })?.replace(/\/+$/, '');
   }
 
   async createUploadTarget(input: CreateUploadInput): Promise<StoredObject> {
@@ -76,8 +79,7 @@ export class S3StorageAdapter implements StoragePort {
   }
 
   resolvePublicUrl(key: string): string {
-    const route = key.startsWith('public/') ? 'public' : 'private';
-    return `${this.publicBaseUrl}/storage/${route}?key=${encodeURIComponent(key)}`;
+    return resolveServeUrl(this.publicBaseUrl, this.cdnBaseUrl, key);
   }
 
   async saveObject(
