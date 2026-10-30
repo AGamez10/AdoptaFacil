@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
+import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG } from './support/legal';
 
 /**
@@ -11,6 +13,8 @@ import { LEGAL_ORG } from './support/legal';
 describe('Scale rate limits (plan de escala, B6)', () => {
   let app: INestApplication;
   let server: ReturnType<INestApplication['getHttpServer']>;
+  const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+  const createdOrgIds: string[] = [];
   const saved = {
     pub: process.env.PUBLIC_RATE_LIMIT_PER_MIN,
     org: process.env.ORG_WRITE_RATE_LIMIT_PER_MIN,
@@ -30,6 +34,8 @@ describe('Scale rate limits (plan de escala, B6)', () => {
   afterAll(async () => {
     process.env.PUBLIC_RATE_LIMIT_PER_MIN = saved.pub;
     process.env.ORG_WRITE_RATE_LIMIT_PER_MIN = saved.org;
+    await purgeOrganizations(admin, createdOrgIds);
+    await admin.$disconnect();
     await app?.close();
   });
 
@@ -55,6 +61,7 @@ describe('Scale rate limits (plan de escala, B6)', () => {
           password: 'password-1234',
         })
         .expect(201);
+      createdOrgIds.push(res.body.user.organizationId);
       return res.body.tokens.accessToken as string;
     };
     const tokenA = await register();
