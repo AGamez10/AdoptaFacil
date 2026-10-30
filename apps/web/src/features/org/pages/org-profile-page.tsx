@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { FormalizationState, Role, type Organization } from '@adoptafacil/contracts';
+import {
+  FormalizationState,
+  OrganizationStatus,
+  Role,
+  type Organization,
+} from '@adoptafacil/contracts';
 import {
   Badge,
   Button,
@@ -15,6 +20,8 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { OrgProfileForm, type OrgProfileFormHandle } from '../components/org-profile-form';
+import { OrgStatusCard } from '../components/org-status-card';
+import { PortalReadinessCard } from '../components/portal-readiness-card';
 import { computeProfileCompletenessMock } from '../lib/profile-completeness';
 
 /** Same wording as `org-formalization-page.tsx`'s STATE_LABELS (not exported
@@ -157,6 +164,7 @@ export function OrgProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<OrganizationStatus | null>(null);
   const formRef = useRef<OrgProfileFormHandle>(null);
   const canEdit = hasAnyRole(Role.Owner, Role.Administrator);
 
@@ -188,7 +196,13 @@ export function OrgProfilePage() {
       <PageHeader
         title="Perfil de la organización"
         description={
-          org ? `Perfil ${completeness}% completo · publicado en tu portal público` : undefined
+          org
+            ? `Perfil ${completeness}% completo · ${
+                org.slug && status === OrganizationStatus.Approved
+                  ? 'publicado en tu portal público'
+                  : 'tu portal público aún no se muestra'
+              }`
+            : undefined
         }
         actions={
           org ? (
@@ -209,6 +223,14 @@ export function OrgProfilePage() {
       {error && !loading && <p className="text-sm text-destructive">{error}</p>}
       {org && !loading && (
         <>
+          {/* Primer paso de una organización nueva (llega aquí al iniciar sesión):
+            qué falta para que su portal muestre lo que registre. */}
+          <div className="space-y-4">
+            {canEdit && (status !== null || !org.slug) && (
+              <PortalReadinessCard org={org} status={status} />
+            )}
+            <OrgStatusCard hideWhenApproved onStatus={setStatus} />
+          </div>
           {canEdit ? (
             <OrgProfileForm
               ref={formRef}
