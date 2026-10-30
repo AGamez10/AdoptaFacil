@@ -103,6 +103,19 @@ export function useSeo({
   }, [title, description, path, image, type, ldText, noindex]);
 }
 
+/**
+ * Páginas transaccionales o con datos de una persona (checkout de donación,
+ * comprobantes, verificación de certificados, baja de correos): nunca al
+ * índice ni a resultados de IA. Complementa el `Disallow` de `robots.txt` que
+ * escribe `scripts/prerender-seo.mjs` (sus URLs llevan referencias y tokens).
+ */
+export function useNoIndex(): void {
+  useEffect(() => {
+    upsertMeta('name', 'robots', 'noindex, nofollow');
+    return () => upsertMeta('name', 'robots', undefined);
+  }, []);
+}
+
 /* ------------------------------------------------------------ JSON-LD */
 
 export function organizationLd(): JsonLd {

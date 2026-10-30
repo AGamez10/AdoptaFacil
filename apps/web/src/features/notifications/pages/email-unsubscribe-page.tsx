@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Button, buttonVariants, Card, CardContent, cn } from '@adoptafacil/ui';
 import { PageContainer } from '../../_layout';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
+import { useNoIndex } from '../../../seo/seo';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -17,6 +18,7 @@ type State = 'idle' | 'sending' | 'done' | 'invalid' | 'error';
  * advertising.
  */
 export function EmailUnsubscribePage() {
+  useNoIndex();
   const [params] = useSearchParams();
   const h = params.get('h') ?? '';
   const t = params.get('t') ?? '';

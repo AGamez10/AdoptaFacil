@@ -24,6 +24,7 @@ import { DonationsActivatingNotice } from '../components/donations-activating-no
 import { formatCop } from '../model/donation-breakdown-view';
 import { isEpaycoProvider } from '../../payments/lib/payment-provider';
 import { openEpaycoCheckout } from '../../payments/lib/epayco-checkout';
+import { useNoIndex } from '../../../seo/seo';
 import styles from './donate-page.module.scss';
 
 interface DonationTarget {
@@ -89,6 +90,7 @@ function useDonationTarget(): DonationTarget | null {
  * (invitado). `POST /donations` acepta ambos casos (`OptionalJwtAuthGuard`).
  */
 export function DonatePage() {
+  useNoIndex();
   const client = useApiClient();
   const { status, user } = useSession();
   const hasSession = status === 'authenticated';

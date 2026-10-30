@@ -19,6 +19,8 @@ import type { PublicAnimalsGlobalQuery, PublicAnimalsQuery } from './public-anim
 /** Raw item shape emitted by the SECURITY DEFINER function (public-safe only). */
 interface RawItem {
   id: string;
+  /** Present once the 20261030 migration ran (public URL code). */
+  publicCode?: string | null;
   organizationId: string;
   name: string;
   species: AnimalSpecies;
@@ -76,6 +78,22 @@ export class PublicAnimalsService {
       limit: page.limit,
       offset: page.offset,
     };
+  }
+
+  /**
+   * ONE adoptable animal of a public organization, by its public code or (for
+   * links published before public codes existed) its id. Goes through the
+   * bounded SECURITY DEFINER function `public_org_adoptable_animal`, with the
+   * same filters and projection as the catalog: null (→ 404) for an unknown
+   * org, an inactive/adopted animal or another org's animal alike, so the
+   * response never reveals whether a non-public animal exists.
+   */
+  async findAdoptable(slug: string, ref: string): Promise<AnimalSummary | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ data: RawItem | null }>>(
+      Prisma.sql`SELECT public_org_adoptable_animal(${slug}, ${ref}) AS data`,
+    );
+    const item = rows[0]?.data;
+    return item ? this.toSummary(item, new Date()) : null;
   }
 
   /**
@@ -193,6 +211,7 @@ export class PublicAnimalsService {
         : undefined,
       isActive: true,
       createdAt: item.createdAt,
+      publicCode: item.publicCode ?? undefined,
     };
   }
 }

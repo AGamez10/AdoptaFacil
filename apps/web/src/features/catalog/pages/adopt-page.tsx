@@ -176,7 +176,7 @@ function AdoptListing({
       itemListLd(
         results.slice(0, 24).map((animal) => ({
           name: animal.name,
-          path: publicAnimalDetailHref(animal.organization.slug, animal.id),
+          path: publicAnimalDetailHref(animal.organization.slug, animal),
           image: animal.photoUrl,
         })),
       ),
