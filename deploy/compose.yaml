@@ -119,8 +119,9 @@ services:
       MAX_CLIENT_CONN: '1000'
       DEFAULT_POOL_SIZE: ${PGBOUNCER_POOL_SIZE:-20}
       MAX_DB_CONNECTIONS: ${PGBOUNCER_MAX_DB_CONNECTIONS:-40}
-      # Prisma manda este parámetro de arranque; PgBouncer no lo conoce.
-      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
+      # Parámetros de arranque que Prisma y psql mandan y PgBouncer no reenvía
+      # (search_path sale de ?schema=public; public ya es el valor por defecto).
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options,search_path
     depends_on:
       migrate:
         condition: service_completed_successfully
