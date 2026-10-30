@@ -25,7 +25,22 @@ export const envSchema = z.object({
   // process.env.DATABASE_URL_APP at construction — omitting it here would strip
   // it from process.env and break `pnpm --filter api dev`.
   DATABASE_URL_APP: z.string().url(),
+  // Plan de escala (B4): pool de conexiones de Prisma, explícito. Sin valor,
+  // Prisma usa 2 × CPU + 1 (5 en un VPS de 2 vCPU). Con PgBouncer delante, este
+  // número es por réplica y PgBouncer reparte las conexiones reales.
+  DATABASE_POOL_SIZE: z.coerce.number().int().min(1).max(200).optional(),
+  // Segundos que una petición espera una conexión libre antes de fallar.
+  DATABASE_POOL_TIMEOUT_S: z.coerce.number().int().min(1).max(120).default(10),
+  // true cuando DATABASE_URL_APP apunta a PgBouncer en modo transacción
+  // (Prisma desactiva las sentencias preparadas con nombre).
+  DATABASE_PGBOUNCER: featureFlag(),
+  // Tope por sentencia dentro de las transacciones con tenant (SET LOCAL): una
+  // consulta desbocada no retiene una conexión del pool indefinidamente.
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(600_000).default(15_000),
   REDIS_URL: z.string().url(),
+  // Plan de escala (B7): 'api' sirve HTTP sin workers de colas, 'worker' corre
+  // los workers, 'all' hace ambas cosas (desarrollo local). Ver app-role.ts.
+  APP_ROLE: z.enum(['all', 'api', 'worker']).default('all'),
   // T-110 (auth/RF05): base URL of the web app, used to build the clickable
   // password-reset link emailed to users ({WEB_BASE_URL}/reset-password?token=…).
   // Defaults to the Vite dev server so local dev works without extra config; set
