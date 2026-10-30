@@ -152,6 +152,32 @@ describe('OrgSignersPage (M13)', () => {
     });
   });
 
+  it('when the server sends no real email, it says so and offers the link to copy', async () => {
+    stubApi({
+      '/org/signers': SIGNERS,
+      '/org/reports/readiness': READY,
+      '/org/invitations': {
+        email: 'contador@firma.co',
+        emailDelivery: 'simulated',
+        simulatedInviteLink: 'http://localhost:5173/invitacion#token=abc',
+      },
+    });
+    renderShell({ route: '/organizacion/firmantes', ...sessionWith([Role.Owner]) });
+
+    await screen.findByText('Diana Revisora');
+    fireEvent.change(screen.getByLabelText('Correo de la persona'), {
+      target: { value: 'contador@firma.co' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Invitar' }));
+
+    expect(
+      await screen.findByText('El correo de invitación a contador@firma.co no se envió.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('http://localhost:5173/invitacion#token=abc')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copiar enlace' })).toBeInTheDocument();
+    expect(screen.getByText('Invitación creada, pero el correo no salió')).toBeInTheDocument();
+  });
+
   it('an Administrator can see the signers but gets no invite form nor revoke buttons', async () => {
     stubApi({ '/org/signers': SIGNERS, '/org/reports/readiness': READY });
     renderShell({ route: '/organizacion/firmantes', ...sessionWith([Role.Administrator]) });

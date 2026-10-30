@@ -7,6 +7,7 @@ import {
   type OrgReportPolicy,
   type OrgReportsReadiness,
   type OrgSigner,
+  type OrganizationInvitation,
 } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -140,6 +141,9 @@ export function OrgSignersPage() {
   const [email, setEmail] = useState('');
   const [seat, setSeat] = useState<AdditionalSignerRole>('fiscal_reviewer');
   const [busy, setBusy] = useState(false);
+  // Invitación cuyo correo NO salió (servidor sin proveedor de correo): se
+  // avisa en pantalla en vez de decir "enviada" sin que llegue nada.
+  const [unsent, setUnsent] = useState<OrganizationInvitation | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -163,15 +167,25 @@ export function OrgSignersPage() {
     event.preventDefault();
     setBusy(true);
     try {
-      await client.request('/org/invitations', {
+      const created = await client.request<OrganizationInvitation>('/org/invitations', {
         method: 'POST',
         json: { email: email.trim(), role: Role.ReadOnlyAuditor, signerRole: seat },
       });
-      toast({
-        title: 'Invitación enviada',
-        description: 'La persona crea su propia cuenta y contraseña con el enlace del correo.',
-        variant: 'success',
-      });
+      if (created?.emailDelivery === 'simulated') {
+        setUnsent(created);
+        toast({
+          title: 'Invitación creada, pero el correo no salió',
+          description: 'Este servidor no tiene configurado el envío de correos.',
+          variant: 'warning',
+        });
+      } else {
+        setUnsent(null);
+        toast({
+          title: 'Invitación enviada',
+          description: 'La persona crea su propia cuenta y contraseña con el enlace del correo.',
+          variant: 'success',
+        });
+      }
       setEmail('');
       await load();
     } catch (error) {
@@ -301,6 +315,48 @@ export function OrgSignersPage() {
                 <p className="text-sm text-muted-foreground">
                   Solo el propietario de la organización vincula o revoca firmantes.
                 </p>
+              )}
+              {unsent && (
+                <div
+                  role="alert"
+                  className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                >
+                  <p className="font-medium">
+                    El correo de invitación a {unsent.email} no se envió.
+                  </p>
+                  <p>
+                    Este servidor no tiene configurado un proveedor de correo
+                    (NOTIFICATION_DRIVER=smtp y los datos SMTP). La invitación sí quedó creada.
+                  </p>
+                  {unsent.simulatedInviteLink ? (
+                    <>
+                      <p>
+                        Mientras tanto, copia este enlace y envíaselo solo a esa persona. Sirve una
+                        sola vez y caduca en 7 días.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="break-all rounded bg-white px-2 py-1 text-xs">
+                          {unsent.simulatedInviteLink}
+                        </code>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            void navigator.clipboard
+                              ?.writeText(unsent.simulatedInviteLink ?? '')
+                              .then(() => toast({ title: 'Enlace copiado', variant: 'success' }))
+                              .catch(() => undefined);
+                          }}
+                        >
+                          Copiar enlace
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p>Configura el correo y vuelve a invitar a la persona.</p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

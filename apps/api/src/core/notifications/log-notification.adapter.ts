@@ -20,5 +20,10 @@ export class LogNotificationAdapter implements NotificationPort {
     this.logger.log(
       `[SIMULATED] to=${message.to} subject="${message.subject}"${extras ? ` ${extras}` : ''}`,
     );
+    // En desarrollo el cuerpo (con sus enlaces) es la única forma de ver el
+    // correo. En producción nunca: puede llevar enlaces de un solo uso.
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log(`[SIMULATED] body:\n${message.body}`);
+    }
   }
 }
