@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import {
   CLOSED_CAPABILITIES,
   type AnimalSummary,
@@ -30,7 +30,10 @@ const ANIMAL: AnimalSummary = {
   status: 'available',
   photoUrl: 'https://cdn.test/firulais.jpg',
   breed: 'Criollo',
+  publicCode: 'k7m2qp8x',
 };
+
+const CANONICAL_PATH = '/o/patitas/animales/firulais-k7m2qp8x';
 
 // F-EDAD-DETALLE: a 1-year-old, non-approximate animal — ageLabel() renders
 // this as "1 año" (see animals-catalog.test.ts), same string AnimalCard shows
@@ -41,26 +44,58 @@ const ANIMAL_WITH_AGE: AnimalSummary = {
 };
 
 function renderDetail(
-  options: { state?: { animal: AnimalSummary }; capabilities?: PublicCapabilities } = {},
+  options: {
+    state?: { animal: AnimalSummary };
+    capabilities?: PublicCapabilities;
+    pathname?: string;
+  } = {},
 ) {
   return render(
     <CapabilitiesProvider value={options.capabilities ?? OPEN_CAPABILITIES}>
       <MemoryRouter
-        initialEntries={[{ pathname: '/o/patitas/animales/a1', state: options.state ?? null }]}
+        initialEntries={[
+          { pathname: options.pathname ?? CANONICAL_PATH, state: options.state ?? null },
+        ]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
-          <Route path="/o/:slug/animales/:animalId" element={<PublicAnimalDetailPage />} />
+          <Route
+            path="/o/:slug/animales/:animalId"
+            element={
+              <>
+                <PublicAnimalDetailPage />
+                <LocationProbe />
+              </>
+            }
+          />
         </Routes>
       </MemoryRouter>
     </CapabilitiesProvider>,
   );
 }
 
-function stubAnimals(body: unknown) {
+/** Shows the router's current path so redirects can be asserted. */
+function LocationProbe() {
+  return <output data-testid="location">{useLocation().pathname}</output>;
+}
+
+/** Discriminates the ONE-animal endpoint (`/animals/:ref`, 404 when `animal` is
+ *  null) from the catalog (`/animals?…`) and anything else (org profile). */
+function stubDetail(animal: AnimalSummary | null, catalog: unknown = { items: [], total: 0 }) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve({ ok: true, status: 200, json: async () => body })),
+    vi.fn((url: RequestInfo | URL) => {
+      const href = String(url);
+      if (/\/animals\/[^/?]+$/.test(href)) {
+        return Promise.resolve(
+          animal
+            ? { ok: true, status: 200, json: async () => animal }
+            : { ok: false, status: 404, json: async () => ({}) },
+        );
+      }
+      const body = href.includes('/animals') ? catalog : {};
+      return Promise.resolve({ ok: true, status: 200, json: async () => body });
+    }),
   );
 }
 
@@ -97,7 +132,7 @@ function stubByUrl(profileBody: unknown, animalsBody: unknown) {
   );
 }
 
-// Every test either overrides this via stubAnimals/stubByUrl, or relies on
+// Every test either overrides this via stubDetail/stubByUrl, or relies on
 // nav-state to skip the animal fetch — but the org-NAME fetch always fires
 // regardless of nav-state, so fetch must never be left unstubbed.
 beforeEach(() => {
@@ -181,7 +216,7 @@ describe('PublicAnimalDetailPage', () => {
   });
 
   it('F-CTA-APADRINAR: absent in the not-found state, same as "Solicitar adopción"', async () => {
-    stubAnimals({ items: [], total: 0, limit: 50, offset: 0 });
+    stubDetail(null);
     renderDetail();
     await screen.findByText('Animal no encontrado');
     expect(screen.queryByTestId('sponsor-animal-cta')).not.toBeInTheDocument();
@@ -214,15 +249,37 @@ describe('PublicAnimalDetailPage', () => {
     expect(screen.queryByText(/expediente|historia cl[ií]nica|vacun|recordatorio/i)).toBeNull();
   });
 
-  it('resolves the animal from the public catalog on a deep link (no nav-state)', async () => {
-    stubAnimals({ items: [ANIMAL], total: 1, limit: 50, offset: 0 });
+  it('resolves the animal by its public code on a deep link (no nav-state)', async () => {
+    stubDetail(ANIMAL);
     renderDetail();
     expect(await screen.findByTestId('public-animal-detail')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Firulais' })).toBeInTheDocument();
+    const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(calls).toContain('http://localhost:3000/public/organizations/patitas/animals/k7m2qp8x');
+    // "Más animales" reads only a handful of rows, never the whole catalog.
+    expect(calls.some((url) => url.includes('limit=50'))).toBe(false);
   });
 
-  it('shows a not-found state when the animal is not in the public catalog', async () => {
-    stubAnimals({ items: [], total: 0, limit: 50, offset: 0 });
+  it('a legacy link with the internal id loads and is replaced by the public-code URL', async () => {
+    const legacyId = '3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90';
+    stubDetail({ ...ANIMAL, id: legacyId });
+    renderDetail({ pathname: `/o/patitas/animales/${legacyId}` });
+    expect(await screen.findByTestId('public-animal-detail')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(CANONICAL_PATH));
+    const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(calls.some((url) => url.endsWith(`/animals/${legacyId}`))).toBe(true);
+  });
+
+  it('a URL segment that is neither a code nor an id is not found without asking the API for it', async () => {
+    stubDetail(ANIMAL);
+    renderDetail({ pathname: '/o/patitas/animales/firulais' });
+    expect(await screen.findByText('Animal no encontrado')).toBeInTheDocument();
+    const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(calls.some((url) => /\/animals\/[^/?]+$/.test(url))).toBe(false);
+  });
+
+  it('shows a not-found state when the public endpoint answers 404', async () => {
+    stubDetail(null);
     renderDetail();
     expect(await screen.findByText('Animal no encontrado')).toBeInTheDocument();
     expect(screen.queryByTestId('request-adoption-cta')).not.toBeInTheDocument();

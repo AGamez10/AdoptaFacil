@@ -387,7 +387,7 @@ function toAnimal(
     isNew: isRecentlyPublished(a.createdAt, now),
     days,
     photo: safeImgSrc(a.photoUrl),
-    href: esc(publicAnimalDetailHref(slug, a.id)),
+    href: esc(publicAnimalDetailHref(slug, a)),
     adoptHref: esc(buildAdoptionRequestHref(organizationId, a)),
     sponsorHref: esc(buildSponsorHref(a)),
     bg: coat.bg,

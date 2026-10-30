@@ -1,10 +1,12 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
-import type { AnimalSummaryPage, PublicAnimalsPage } from '@adoptafacil/contracts';
+import type { AnimalSummary, AnimalSummaryPage, PublicAnimalsPage } from '@adoptafacil/contracts';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { PublicAnimalsService } from './public-animals.service';
 import {
+  type PublicAnimalParams,
   type PublicAnimalsGlobalQuery,
   type PublicAnimalsQuery,
+  publicAnimalParamsSchema,
   publicAnimalsGlobalQuerySchema,
   publicAnimalsQuerySchema,
 } from './public-animals.schemas';
@@ -31,6 +33,20 @@ export class PublicAnimalsController {
       throw new NotFoundException('Organization not found');
     }
     return page;
+  }
+
+  /** ONE adoptable animal (public animal page), by public code or legacy id.
+   *  Replaces the web's old "search the first 50 catalog rows" lookup, which
+   *  left animals past the 50th unreachable. Same 404 for every non-public case. */
+  @Get('public/organizations/:slug/animals/:ref')
+  async detail(
+    @Param(new ZodValidationPipe(publicAnimalParamsSchema)) params: PublicAnimalParams,
+  ): Promise<AnimalSummary> {
+    const animal = await this.service.findAdoptable(params.slug, params.ref);
+    if (!animal) {
+      throw new NotFoundException('Animal not found');
+    }
+    return animal;
   }
 
   /** GLOBAL adoptable catalog across every public org (S1-07), for the public

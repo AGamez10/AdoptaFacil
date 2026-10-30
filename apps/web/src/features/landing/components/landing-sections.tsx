@@ -13,6 +13,7 @@ import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-c
 import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
 import { OfficialContactButtons } from '../../guide/components/official-contact-buttons';
 import { officialWhatsappUrl } from '../../../lib/contact';
+import { publicAnimalPath } from '../../../seo/page-meta.js';
 import { useFeature } from '../../../shell/capabilities/capabilities-context';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
 import { HeroVisual } from './hero-visual';
@@ -164,7 +165,7 @@ function HeroCollage({ animals }: { animals: PublicAnimalSummary[] }) {
       {withPhoto.map((animal, index) => (
         <Link
           key={animal.id}
-          to={`/o/${encodeURIComponent(animal.organization.slug)}/animales/${encodeURIComponent(animal.id)}`}
+          to={publicAnimalPath(animal.organization.slug, animal)}
           state={{ animal }}
           className={cn(styles.polaroid, styles[`polaroid--${index}`])}
         >

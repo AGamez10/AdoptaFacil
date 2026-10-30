@@ -1,18 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
   AnimalSummary,
   OrganizationPublic,
   PublicAnimalSummary,
 } from '@adoptafacil/contracts';
 import { buttonVariants, cn, EmptyState, Skeleton } from '@adoptafacil/ui';
-import { animalDescription, animalTitle, SPECIES_PLURAL } from '../../../seo/page-meta.js';
+import {
+  animalDescription,
+  animalTitle,
+  animalUrlSegment,
+  parseAnimalUrlSegment,
+  publicAnimalPath,
+  SPECIES_PLURAL,
+} from '../../../seo/page-meta.js';
 import { breadcrumbLd, useSeo } from '../../../seo/seo';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { brandTokensToStyle } from '../../../shell/theme';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
-import { fetchPublicAnimals } from '../api/public-animals';
+import { fetchPublicAnimal, fetchPublicAnimals } from '../api/public-animals';
 import { AnimalDetailActions } from '../components/animal-detail-actions';
 import {
   ageLabel,
@@ -30,9 +37,6 @@ import { usePublicTheme } from '../templates/use-public-theme';
 import { useTemplateAssets } from '../templates/use-template-assets';
 import styles from './public-animal-detail-page.module.scss';
 
-// Cap del endpoint público (§RF07). En deep-link buscamos el animal dentro del
-// catálogo (no hay GET público de un animal individual y NO se crean endpoints).
-const CATALOG_CAP = 50;
 const SIMILAR_MAX = 4;
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
@@ -58,7 +62,9 @@ const ADOPTION_STEPS = [
  * (§M14/M03). Sin autenticación y con SOLO campos públicos de `AnimalSummary` — nunca
  * expediente clínico, recordatorios ni documentos (superficie interna de M03). Al
  * navegar desde una tarjeta el animal llega por nav-state (sin refetch); en deep-link
- * se resuelve buscándolo en el catálogo público de la organización.
+ * se pide a `GET /public/organizations/:slug/animals/:ref`. La URL es
+ * `/o/:slug/animales/<nombre>-<código público>`; un enlace viejo con el id interno
+ * sigue funcionando y se reemplaza por la URL nueva (sin dejar el id en la barra).
  *
  * Rediseño 2026-10 (marca v3): foto grande, datos en fichas de color, tarjeta de la
  * organización, llamado principal fijo abajo en celular y "más animales" de la misma
@@ -74,8 +80,9 @@ const ADOPTION_STEPS = [
  * y "Ver {nombre real}" (best-effort; si el nombre no carga, no aparece).
  */
 export function PublicAnimalDetailPage() {
-  const { slug, animalId } = useParams<{ slug: string; animalId: string }>();
+  const { slug, animalId: segment } = useParams<{ slug: string; animalId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const preloaded = (location.state as AnimalNavState | null)?.animal;
   const onOrgSubdomain = Boolean(
     resolveOrgSubdomain(
@@ -87,7 +94,7 @@ export function PublicAnimalDetailPage() {
   const [animal, setAnimal] = useState<AnimalSummary | null>(preloaded ?? null);
   const [state, setState] = useState<DetailState>(preloaded ? 'ready' : 'loading');
   const [org, setOrg] = useState<PublicOrgProfile | null>(null);
-  const [others, setOthers] = useState<AnimalSummary[]>([]);
+  const [catalog, setCatalog] = useState<AnimalSummary[]>([]);
 
   // La ficha toma la temática de la plantilla de la organización (colores,
   // tipografía y decoración de su diseño). Sin plantilla de motor, se queda
@@ -116,30 +123,58 @@ export function PublicAnimalDetailPage() {
   }, [engine]);
   useTemplateAssets(design);
 
+  // Deep-link: una lectura del animal por su código (o id heredado). Antes se
+  // buscaba dentro de las primeras 50 filas del catálogo y los animales más
+  // viejos de una organización grande no cargaban.
   useEffect(() => {
-    if (!slug || !animalId) {
+    if (preloaded) return;
+    const parsed = parseAnimalUrlSegment(segment);
+    if (!slug || !parsed) {
       setState('not-found');
       return;
     }
-    let active = true;
-    // Una sola lectura del catálogo de la organización: resuelve el deep-link y
-    // alimenta "más animales". Con nav-state solo sirve para lo segundo.
-    fetchPublicAnimals({ slug, limit: CATALOG_CAP, offset: 0 })
-      .then((page) => {
-        if (!active) return;
-        setOthers(page.items.filter((a) => a.id !== animalId).slice(0, SIMILAR_MAX));
-        if (preloaded) return;
-        const found = page.items.find((a) => a.id === animalId) ?? null;
+    const controller = new AbortController();
+    setState('loading');
+    fetchPublicAnimal(slug, parsed.ref, controller.signal)
+      .then((found) => {
         setAnimal(found);
         setState(found ? 'ready' : 'not-found');
       })
       .catch(() => {
-        if (active && !preloaded) setState('error');
+        if (!controller.signal.aborted) setState('error');
+      });
+    return () => controller.abort();
+  }, [preloaded, slug, segment]);
+
+  // "Más animales" de la organización: solo los primeros, nunca el catálogo entero.
+  useEffect(() => {
+    if (!slug) return;
+    let active = true;
+    fetchPublicAnimals({ slug, limit: SIMILAR_MAX + 1, offset: 0 })
+      .then((page) => {
+        if (active) setCatalog(page.items);
+      })
+      .catch(() => {
+        // Best-effort: la sección simplemente no aparece.
       });
     return () => {
       active = false;
     };
-  }, [preloaded, slug, animalId]);
+  }, [slug]);
+
+  // URL canónica: un enlace viejo (id) o con otro nombre se reemplaza por
+  // /o/<org>/animales/<nombre>-<código> sin sumar una entrada al historial.
+  useEffect(() => {
+    if (!slug || !animal?.publicCode || !segment) return;
+    if (segment.toLowerCase() !== animalUrlSegment(animal)) {
+      navigate(publicAnimalPath(slug, animal), { replace: true, state: location.state });
+    }
+  }, [animal, slug, segment, navigate, location.state]);
+
+  const others = useMemo(
+    () => catalog.filter((a) => a.id !== animal?.id).slice(0, SIMILAR_MAX),
+    [catalog, animal?.id],
+  );
 
   useEffect(() => {
     if (!slug) return;
@@ -165,7 +200,7 @@ export function PublicAnimalDetailPage() {
   useSeo({
     title: animal ? animalTitle(animal, city) : undefined,
     description: animal ? animalDescription(animal, orgName, city) : undefined,
-    path: slug && animalId ? `/o/${slug}/animales/${animalId}` : undefined,
+    path: slug && animal ? publicAnimalPath(slug, animal) : undefined,
     image: animal?.photoUrl,
     noindex: state === 'not-found',
     jsonLd: animal
@@ -174,7 +209,7 @@ export function PublicAnimalDetailPage() {
             { name: 'Inicio', path: '/' },
             { name: 'Adoptar', path: ADOPT_BASE_PATH },
             { name: SPECIES_PLURAL[animal.species], path: buildAdoptPath(animal.species) },
-            { name: animal.name, path: `/o/${slug ?? ''}/animales/${animal.id}` },
+            { name: animal.name, path: publicAnimalPath(slug ?? '', animal) },
           ]),
         ]
       : [],

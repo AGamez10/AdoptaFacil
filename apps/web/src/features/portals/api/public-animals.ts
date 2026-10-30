@@ -65,3 +65,23 @@ export async function fetchPublicAnimals({
     offset: typeof body?.offset === 'number' ? body.offset : 0,
   };
 }
+
+/**
+ * Ficha PÚBLICA de un animal adoptable: `GET /public/organizations/:slug/animals/:ref`,
+ * con `ref` = código público o id (enlaces viejos). `null` cuando la API responde
+ * 404 (adoptado, retirado, de otra organización o inexistente: la API no los
+ * distingue); cualquier otro fallo lanza para que la página muestre el error.
+ */
+export async function fetchPublicAnimal(
+  slug: string,
+  ref: string,
+  signal?: AbortSignal,
+): Promise<AnimalSummary | null> {
+  const url = `${API_BASE}/public/organizations/${encodeURIComponent(slug)}/animals/${encodeURIComponent(ref)}`;
+  const response = await fetch(url, signal ? { signal } : undefined);
+  if (response.status === 404 || response.status === 400) return null;
+  if (!response.ok) {
+    throw new Error('error');
+  }
+  return (await response.json()) as AnimalSummary;
+}

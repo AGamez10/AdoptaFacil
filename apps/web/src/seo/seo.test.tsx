@@ -3,7 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { GuidePage, GuidesIndexPage } from '../features/guias';
 import { GUIDES } from './guides';
-import { adoptDescription, adoptTitle, animalDescription, animalTitle } from './page-meta.js';
+import {
+  adoptDescription,
+  adoptTitle,
+  animalDescription,
+  animalTitle,
+  animalUrlSegment,
+  parseAnimalUrlSegment,
+  publicAnimalPath,
+} from './page-meta.js';
 import { breadcrumbLd, useSeo } from './seo';
 
 function Probe({ noindex = false }: { noindex?: boolean }) {
@@ -113,5 +121,38 @@ describe('Guías públicas', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Todo lo que necesitas para adoptar bien.' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('URL pública de un animal (sin id interno)', () => {
+  const luna = {
+    id: '3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90',
+    name: 'Luna Ñoña',
+    publicCode: 'k7m2qp8x',
+  };
+
+  it('arma /o/<org>/animales/<nombre>-<código> sin el id', () => {
+    expect(publicAnimalPath('huellitas', luna)).toBe('/o/huellitas/animales/luna-nona-k7m2qp8x');
+    expect(publicAnimalPath('huellitas', luna)).not.toContain(luna.id);
+  });
+
+  it('sin código público (proyección vieja) usa el id; sin nombre útil, solo el código', () => {
+    expect(animalUrlSegment({ id: luna.id, name: 'Luna' })).toBe(luna.id);
+    expect(animalUrlSegment({ ...luna, name: '¡¡!!' })).toBe('k7m2qp8x');
+  });
+
+  it('lee la forma nueva (vale el código final) y la vieja (UUID, marcada para redirigir)', () => {
+    expect(parseAnimalUrlSegment('luna-nona-k7m2qp8x')).toEqual({ ref: 'k7m2qp8x', legacy: false });
+    expect(parseAnimalUrlSegment('otro-nombre-K7M2QP8X')).toEqual({
+      ref: 'k7m2qp8x',
+      legacy: false,
+    });
+    expect(parseAnimalUrlSegment(luna.id)).toEqual({ ref: luna.id, legacy: true });
+  });
+
+  it('rechaza cualquier otra cosa sin llegar a la API', () => {
+    for (const bad of [undefined, '', 'luna', 'luna-k7m2qp8', 'luna-k7m2qp8i', "' OR 1=1 --"]) {
+      expect(parseAnimalUrlSegment(bad)).toBeNull();
+    }
   });
 });

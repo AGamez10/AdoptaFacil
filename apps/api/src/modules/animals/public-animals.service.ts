@@ -19,6 +19,8 @@ import type { PublicAnimalsGlobalQuery, PublicAnimalsQuery } from './public-anim
 /** Raw item shape emitted by the SECURITY DEFINER function (public-safe only). */
 interface RawItem {
   id: string;
+  /** Present once the 20261030 migration ran (public URL code). */
+  publicCode?: string | null;
   organizationId: string;
   name: string;
   species: AnimalSpecies;
@@ -79,6 +81,22 @@ export class PublicAnimalsService {
   }
 
   /**
+   * ONE adoptable animal of a public organization, by its public code or (for
+   * links published before public codes existed) its id. Goes through the
+   * bounded SECURITY DEFINER function `public_org_adoptable_animal`, with the
+   * same filters and projection as the catalog: null (→ 404) for an unknown
+   * org, an inactive/adopted animal or another org's animal alike, so the
+   * response never reveals whether a non-public animal exists.
+   */
+  async findAdoptable(slug: string, ref: string): Promise<AnimalSummary | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ data: RawItem | null }>>(
+      Prisma.sql`SELECT public_org_adoptable_animal(${slug}, ${ref}) AS data`,
+    );
+    const item = rows[0]?.data;
+    return item ? this.toSummary(item, new Date()) : null;
+  }
+
+  /**
    * The GLOBAL adoptable catalog across EVERY organization with a public
    * profile (S1-07), for the public landing page.
    *
@@ -93,8 +111,8 @@ export class PublicAnimalsService {
    *      `withOrgContext` transaction (the same explicit-org accessor
    *      seeds/jobs already use) to find which ones have a public slug.
    *   2. Calls the EXISTING `public_org_adoptable_animals` SECURITY DEFINER
-   *      function once per public org (capped at `PER_ORG_CAP` items each),
-   *      and merges + paginates the results in memory.
+   *      function for each public org, page by page (up to `PER_ORG_MAX`
+   *      items each), and merges + paginates the results in memory.
    *
    * Cost is O(organizations on the platform) per request, not O(animals) —
    * fine at pilot scale (a handful of real rescue orgs), but NOT how this
@@ -114,19 +132,13 @@ export class PublicAnimalsService {
 
     const now = new Date();
     const perOrg = await Promise.all(
-      directory.map((org) =>
-        this.prisma.$queryRaw<Array<{ data: RawPage | null }>>(
-          Prisma.sql`SELECT public_org_adoptable_animals(${org.slug}, ${PublicAnimalsService.PER_ORG_CAP}::int, 0::int, ${query.species ?? null}::text) AS data`,
-        ),
-      ),
+      directory.map((org) => this.allAdoptableOf(org.slug, query.species ?? null)),
     );
 
     const allItems: PublicAnimalSummary[] = [];
-    perOrg.forEach((rows, i) => {
+    perOrg.forEach((items, i) => {
       const org = directory[i];
-      const orgPage = rows[0]?.data;
-      if (!orgPage) return;
-      for (const item of orgPage.items) {
+      for (const item of items) {
         allItems.push({ ...this.toSummary(item, now), organization: org });
       }
     });
@@ -140,9 +152,31 @@ export class PublicAnimalsService {
     };
   }
 
-  /** Server cap per organization for the global catalog fan-out (see
-   *  {@link listAllAdoptable}'s RLS note) — matches the per-org endpoint's max. */
-  private static readonly PER_ORG_CAP = 50;
+  /** Page size of the per-org SECURITY DEFINER function (its own max). */
+  private static readonly ORG_PAGE_SIZE = 50;
+  /** Upper bound per organization for the global catalog fan-out (see
+   *  {@link listAllAdoptable}'s RLS note): 20 pages. */
+  private static readonly PER_ORG_MAX = 1000;
+
+  /**
+   * Every adoptable animal of one org, read page by page through the bounded
+   * function. Before, the global catalog took only the first 50 of each org,
+   * so an org with 100 animals showed half of them on /adoptar.
+   */
+  private async allAdoptableOf(slug: string, species: string | null): Promise<RawItem[]> {
+    const items: RawItem[] = [];
+    const size = PublicAnimalsService.ORG_PAGE_SIZE;
+    for (let offset = 0; offset < PublicAnimalsService.PER_ORG_MAX; offset += size) {
+      const rows = await this.prisma.$queryRaw<Array<{ data: RawPage | null }>>(
+        Prisma.sql`SELECT public_org_adoptable_animals(${slug}, ${size}::int, ${offset}::int, ${species}::text) AS data`,
+      );
+      const page = rows[0]?.data;
+      if (!page) break;
+      items.push(...page.items);
+      if (page.items.length < size || items.length >= Number(page.total)) break;
+    }
+    return items;
+  }
 
   /** Every APPROVED organization (R2-1) with a public profile (slug set),
    *  with just the public-safe fields the global catalog needs. */
@@ -193,6 +227,7 @@ export class PublicAnimalsService {
         : undefined,
       isActive: true,
       createdAt: item.createdAt,
+      publicCode: item.publicCode ?? undefined,
     };
   }
 }
