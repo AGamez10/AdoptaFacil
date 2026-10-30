@@ -20,6 +20,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs,mjs,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,cjs,mjs,json,md,yml,yaml}\"",
     "setup:env": "node scripts/setup-env.mjs",
+    "setup:demo-env": "node scripts/setup-demo-env.mjs",
+    "demo:prepare": "pnpm setup:demo-env && prisma migrate deploy && pnpm --filter @adoptafacil/contracts build && pnpm seed:demo && pnpm seed:volumen --yes-demo",
     "docs:manuals": "node scripts/generate-docx-manuals.mjs",
     "seed:admin": "pnpm --filter @adoptafacil/api run seed:admin",
     "seed:demo": "pnpm --filter @adoptafacil/api run seed:demo",
