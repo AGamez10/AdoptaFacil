@@ -53,6 +53,8 @@ model Organization {
   serviceListingReviews    ServiceListingReview[]
   petProfiles              PetProfile[]
   emailUsage               OrganizationEmailUsage[]
+  qrLink                   OrganizationQrLink?
+  qrScanDays               OrganizationQrScanDay[]
 
   @@index([status])
   @@map("organizations")
