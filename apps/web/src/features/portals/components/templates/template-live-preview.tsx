@@ -272,7 +272,9 @@ export function TemplateLivePreview({
  * ocultas: aquí se muestran en su estado final y se quitan las transiciones.
  */
 const PREVIEW_STATIC_CSS = `.af-tpl *,.af-tpl *::before,.af-tpl *::after{transition:none!important;animation:none!important}
-.af-tpl .is-pre,.af-tpl .k-name span,.af-tpl .k-fr span,.af-tpl .k-slide{opacity:1!important;transform:none!important;filter:none!important;clip-path:none!important}`;
+.af-tpl .is-pre,.af-tpl .k-name span,.af-tpl .k-fr span,.af-tpl .k-slide{opacity:1!important;transform:none!important;filter:none!important;clip-path:none!important}
+/* Marcos que empiezan recortados (arco de revista, foto de portada) y se abren por JS. */
+.af-tpl .r-arch,.af-tpl .r-fig .ph{clip-path:none!important}`;
 
 /**
  * Documento de la vista previa: la MISMA plantilla (su CSS y su marcado real) dentro
