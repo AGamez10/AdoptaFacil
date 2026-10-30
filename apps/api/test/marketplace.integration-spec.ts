@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
+import sharp from 'sharp';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
@@ -266,5 +268,98 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       .get(`/marketplace/products/${productId}`)
       .set('Authorization', `Bearer ${orgB.token}`)
       .expect(404);
+  });
+  describe('la foto del producto (una sola, subida en un paso)', () => {
+    const photo = (width: number, height: number) =>
+      sharp({ create: { width, height, channels: 3, background: { r: 200, g: 150, b: 90 } } })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+
+    const putImage = (token: string, id: string, file: Buffer, name = 'foto.jpg') =>
+      request(server)
+        .put(`/marketplace/products/${id}/image`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', file, name);
+
+    let photoProductId = '';
+
+    beforeAll(async () => {
+      const res = await createProduct(org.token, { name: `Collar ${randomUUID()}` }).expect(201);
+      photoProductId = res.body.id;
+    });
+
+    it('RBAC: a ReadOnlyAuditor cannot set the photo (403)', async () => {
+      const auditor = await actorWithRoles('photo-auditor', ['read_only_auditor']);
+      await putImage(auditor.token, photoProductId, await photo(50, 50)).expect(403);
+    });
+
+    it('stores ONE photo, recompressed to a light WebP, and shows it publicly', async () => {
+      const res = await putImage(org.token, photoProductId, await photo(3000, 2000)).expect(200);
+      expect(res.body.images).toHaveLength(1);
+
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const ref = (
+        await admin.productImage.findFirstOrThrow({ where: { productId: photoProductId } })
+      ).storageRef;
+      const stored = await storage.readObject(ref);
+      expect(stored).not.toBeNull();
+      const meta = await sharp(stored!.data).metadata();
+      expect(meta.format).toBe('webp');
+      expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(1200);
+      expect(stored!.data.length).toBeLessThanOrEqual(250 * 1024);
+
+      const publicDetail = await request(server)
+        .get(`/public/marketplace/products/${photoProductId}`)
+        .expect(200);
+      expect(publicDetail.body.images).toHaveLength(1);
+    });
+
+    it('a new photo REPLACES the previous one and frees its bytes', async () => {
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const before = (
+        await admin.productImage.findFirstOrThrow({ where: { productId: photoProductId } })
+      ).storageRef;
+
+      const res = await putImage(org.token, photoProductId, await photo(800, 800)).expect(200);
+      expect(res.body.images).toHaveLength(1);
+      const rows = await admin.productImage.findMany({ where: { productId: photoProductId } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].storageRef).not.toBe(before);
+      expect(await storage.readObject(before)).toBeNull();
+    });
+
+    it('the old two-step endpoint refuses a second photo (409)', async () => {
+      await request(server)
+        .post(`/marketplace/products/${photoProductId}/images`)
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({ filename: 'otra.jpg', contentType: 'image/jpeg' })
+        .expect(409);
+    });
+
+    it('rejects a file that is not a JPG, PNG or WebP photo, in Spanish', async () => {
+      const res = await putImage(
+        org.token,
+        photoProductId,
+        Buffer.from('%PDF-1.4 no es una foto'),
+        'factura.jpg',
+      ).expect(400);
+      expect(res.body.message).toBe('La foto debe ser JPG, PNG o WebP.');
+    });
+
+    it('another organization cannot set the photo of this product (404)', async () => {
+      await putImage(orgB.token, photoProductId, await photo(50, 50)).expect(404);
+    });
+
+    it('removing the photo also deletes its bytes', async () => {
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const row = await admin.productImage.findFirstOrThrow({
+        where: { productId: photoProductId },
+      });
+      await request(server)
+        .delete(`/marketplace/products/${photoProductId}/images/${row.id}`)
+        .set('Authorization', `Bearer ${org.token}`)
+        .expect(204);
+      expect(await storage.readObject(row.storageRef)).toBeNull();
+    });
   });
 });

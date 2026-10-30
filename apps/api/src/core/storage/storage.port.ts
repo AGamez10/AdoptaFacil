@@ -78,4 +78,11 @@ export interface StoragePort {
    * quota is not applied.
    */
   measureOrganizationUsage?(organizationId: string): Promise<number>;
+
+  /**
+   * Optional (additive): delete the bytes of a key that nothing references any
+   * more (a replaced or removed photo), so they stop counting toward the
+   * storage bill and the plan quota. Deleting a missing key is not an error.
+   */
+  deleteObject?(key: string): Promise<void>;
 }

@@ -86,4 +86,18 @@ describe('DiskStorageAdapter (T-108)', () => {
     expect(await adapter.measureOrganizationUsage(ORG)).toBe(160);
     expect(await makeAdapter(root).measureOrganizationUsage(other)).toBe(999);
   });
+  it('deleteObject removes the bytes, frees the measured usage and ignores a missing key', async () => {
+    const { key } = await adapter.createUploadTarget({
+      organizationId: ORG,
+      filename: 'producto.webp',
+      visibility: 'public',
+    });
+    await adapter.saveObject(key, Buffer.alloc(1000));
+    expect(await adapter.measureOrganizationUsage(ORG)).toBe(1000);
+
+    await adapter.deleteObject(key);
+    expect(await adapter.readObject(key)).toBeNull();
+    expect(await adapter.measureOrganizationUsage(ORG)).toBe(0);
+    await expect(adapter.deleteObject(key)).resolves.toBeUndefined();
+  });
 });
