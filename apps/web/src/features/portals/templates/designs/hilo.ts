@@ -1,3 +1,4 @@
+import { ledgerBlock } from '../engine/ledger';
 import { COPY, EMPTY, type TplAnimal } from '../engine/model';
 import {
   availLine,
@@ -367,7 +368,7 @@ ${SHOW.nosotros ? `<section class="w h-sec" data-sec="nosotros"><div class="h-ab
   ${REVIEWS.length ? `<div class="h-revs">${REVIEWS.map((r) => `<figure><span class="st" aria-label="${r.rating} de 5 estrellas">${stars(r.rating)}</span>${r.text ? `<blockquote>${r.text}</blockquote>` : ''}<figcaption>${r.name}${r.date ? ` · ${r.date}` : ''}</figcaption></figure>`).join('')}</div>` : `<p class="h-empty">${EMPTY.resenas}</p>`}
 </section>
 <section class="w h-sec" data-sec="libro" style="padding-top:${REVIEWS.length ? '40px' : '0'}"><div class="h-hd"><div><span class="h-eb"><i></i>Transparencia</span><h2 class="h-h2" style="margin-top:18px">Libro <mark>público</mark></h2><p class="h-sub">${COPY.ledgerText}</p></div><button type="button" class="h-lnk" data-ledger>Ver libro completo ${ic.arrow}</button></div>
-  <p class="h-empty">${EMPTY.libro}</p>
+  ${ledgerBlock(m, 'h-empty')}
 </section>
 ${SHOW.contacto ? `<section class="w h-sec" data-sec="contacto" style="padding-top:0"><div class="h-contact h-card${map ? '' : ' nomap'}"><div class="info"><span class="h-eb"><i></i>Visítanos</span><h2 class="h-h2" style="margin-top:14px;font-size:clamp(36px,4vw,58px)">Contacto</h2>${KIT.contactRows()}${mapLink(m, 'h-lnk')}</div>${map ? `<div class="map">${map}</div>` : ''}</div></section>` : ''}
 <footer class="h-ftr"><div class="w"><p class="big">${ORG.short}<span>.</span></p>

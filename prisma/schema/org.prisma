@@ -35,6 +35,7 @@ model Organization {
   duplicateFlagsAsMatched  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsMatched")
   invitations              OrganizationInvitation[]
   reports                  OrgReport[]
+  ledgerEntries            LedgerEntry[]
   signerDesignations       OrgSignerDesignation[]
   thirdPartyConsents       ThirdPartyConsent[]
   reportApprovals          OrgReportApproval[]

@@ -1,3 +1,4 @@
+import { ledgerBlock } from '../engine/ledger';
 import { COPY, EMPTY, type TplAnimal } from '../engine/model';
 import {
   availLine,
@@ -347,7 +348,7 @@ ${
   ${REVIEWS.length ? `<div class="m-revs">${REVIEWS.map((r) => `<figure class="m-rev"><span class="st" aria-label="${r.rating} de 5">${stars(r.rating)}</span>${r.text ? `<blockquote>“${r.text}”</blockquote>` : ''}<figcaption><i>${esc(unesc(r.name).charAt(0))}</i>${r.name}${r.date ? ` · ${r.date}` : ''}</figcaption></figure>`).join('')}</div>` : `<p class="m-empty">${EMPTY.resenas}</p>`}
 </section>
 <section class="w" id="m-libro" data-sec="libro" style="padding-bottom:96px"><div class="m-hd"><div><h2 class="m-h2">${COPY.ledgerTitle}</h2><p class="m-sub" style="margin-top:10px">${COPY.ledgerText}</p></div><button type="button" class="m-go2" data-ledger>Ver libro completo ${ic.arrow}</button></div>
-  <p class="m-empty">${EMPTY.libro}</p>
+  ${ledgerBlock(m, 'm-empty')}
 </section>
 ${
   SHOW.contacto

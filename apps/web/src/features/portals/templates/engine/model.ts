@@ -1,9 +1,13 @@
 import {
   FormalizationState,
+  LEDGER_CATEGORY_LABELS,
+  LedgerEntryKind,
+  LedgerSource,
   type AnimalSummary,
   type CampaignPublic,
   type OrganizationPublic,
   type ProductPublic,
+  type PublicLedgerPage,
   type PublicReview,
   type ResourceNeedPublic,
 } from '@adoptafacil/contracts';
@@ -46,6 +50,8 @@ export interface TemplateSourceData {
   needs: ResourceNeedPublic[];
   products: ProductPublic[];
   reviews: PublicReview[];
+  /** RF14: libro público (null/ausente si no cargó: la sección muestra su texto vacío). */
+  ledger?: PublicLedgerPage | null;
 }
 
 export type Species = 'perro' | 'gato' | 'otro';
@@ -129,6 +135,29 @@ export interface TplReview {
   text: string;
 }
 
+export interface TplLedgerRow {
+  id: string;
+  date: string;
+  concept: string;
+  category: string;
+  /** Monto con signo y formato COP ("+ $ 50.000"). */
+  amount: string;
+  income: boolean;
+  online: boolean;
+  support: boolean;
+  voided: boolean;
+  voidReason: string;
+}
+
+export interface TplLedger {
+  rows: TplLedgerRow[];
+  income: string;
+  expense: string;
+  balance: string;
+  count: number;
+  last: string;
+}
+
 export interface TplSocial {
   key: 'instagram' | 'facebook' | 'tiktok' | 'website' | 'whatsapp' | 'email';
   label: string;
@@ -199,6 +228,7 @@ export interface TplModel {
   NEEDS: TplNeed[];
   PRODUCTS: TplProduct[];
   REVIEWS: TplReview[];
+  LEDGER: TplLedger;
   SOCIALS: TplSocial[];
   BADGES: TplBadge[];
   /** Reglas de visibilidad (idénticas a `OrgPublicPage`). */
@@ -220,7 +250,7 @@ export const COPY = {
   socialsTitle: 'Síguenos',
   socialsText: 'Conoce más de nuestro trabajo y acompáñanos en redes sociales.',
   ledgerTitle: 'Transparencia — libro público',
-  ledgerText: 'Cada donación y gasto ejecutado, con fecha y responsable.',
+  ledgerText: 'Cada donación recibida y cada gasto ejecutado, con fecha y soporte.',
   accountability:
     'Rendición de cuentas: disponible cuando la organización tenga campañas y donaciones.',
 } as const;
@@ -231,7 +261,8 @@ export const EMPTY = {
   necesidades: 'Esta organización todavía no ha publicado necesidades en el banco de recursos.',
   campana: 'Esta organización no tiene una campaña de recaudación activa por ahora.',
   resenas: 'Aún no hay reseñas para esta organización. ¡Sé el primero en dejar una!',
-  libro: 'El registro público de movimientos de esta organización estará disponible próximamente.',
+  libro:
+    'Esta organización aún no ha registrado movimientos. Cuando reciba donaciones o registre gastos, aparecerán aquí.',
 } as const;
 
 const FORMALIZATION_LABELS: Record<FormalizationState, string> = {
@@ -465,6 +496,52 @@ function buildSocials(org: OrganizationPublic): TplSocial[] {
 }
 
 /** Arma el view-model saneado de una organización. `now` es inyectable para pruebas. */
+const COP = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+});
+
+/** Filas del libro que la plantilla muestra sin abrir el diálogo. */
+const LEDGER_PREVIEW = 5;
+
+function ledgerDate(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return new Intl.DateTimeFormat('es-CO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+function buildLedger(page: PublicLedgerPage | null | undefined): TplLedger {
+  const totals = page?.totals;
+  return {
+    rows: (page?.items ?? []).slice(0, LEDGER_PREVIEW).map((e) => {
+      const income = e.kind === LedgerEntryKind.Income;
+      return {
+        id: esc(e.id),
+        date: esc(ledgerDate(e.occurredOn)),
+        concept: esc(e.concept),
+        category: esc(LEDGER_CATEGORY_LABELS[e.category] ?? ''),
+        amount: `${income ? '+' : '−'} ${esc(COP.format(Math.max(0, e.amountCop)))}`,
+        income,
+        online: e.source === LedgerSource.OnlineDonation,
+        support: Boolean(e.hasSupport),
+        voided: Boolean(e.voided),
+        voidReason: esc(e.voidReason ?? ''),
+      };
+    }),
+    income: esc(COP.format(totals?.incomeCop ?? 0)),
+    expense: esc(COP.format(totals?.expenseCop ?? 0)),
+    balance: esc(COP.format(totals?.balanceCop ?? 0)),
+    count: totals?.entryCount ?? 0,
+    last: totals?.lastEntryOn ? esc(ledgerDate(totals.lastEntryOn)) : '',
+  };
+}
+
 export function buildTemplateModel(src: TemplateSourceData, now: Date = new Date()): TplModel {
   const org = src.organization;
   const name = org.name ?? '';
@@ -590,6 +667,7 @@ export function buildTemplateModel(src: TemplateSourceData, now: Date = new Date
       date: esc(dateLabel(r.createdAt, { month: 'short', year: 'numeric' })),
       text: esc(r.comment ?? ''),
     })),
+    LEDGER: buildLedger(src.ledger),
     SOCIALS: socials,
     BADGES: badges,
     SHOW: {

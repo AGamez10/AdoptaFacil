@@ -1,3 +1,4 @@
+import { ledgerBlock } from '../engine/ledger';
 import { COPY, EMPTY, type TplAnimal } from '../engine/model';
 import {
   availLine,
@@ -366,7 +367,7 @@ ${SHOW.nosotros ? `<section class="w x-sec" data-sec="nosotros" style="padding-t
   ${REVIEWS.length ? `<div class="x-revs">${REVIEWS.map((r, k) => `<figure class="x-rev" style="--r:${[-2, 1.5, -1][k % 3]}deg"><span class="st" aria-label="${r.rating} de 5">${stars(r.rating)}</span>${r.text ? `<blockquote>${r.text}</blockquote>` : ''}<figcaption><i>${initial(r.name)}</i>${r.name}<span>${r.date}</span></figcaption></figure>`).join('')}</div>` : `<p class="x-empty">${EMPTY.resenas}</p>`}
 </section>
 <section class="w x-sec" data-sec="libro" style="padding-top:0"><div class="x-hd"><div><p class="x-eb">${COPY.ledgerTitle}</p><h2 class="x-h2">Cada peso, a la vista</h2><p class="x-sub" style="margin-top:10px">${COPY.ledgerText}</p></div><button type="button" class="x-pill big" data-ledger>Ver libro completo</button></div>
-  <p class="x-empty">${EMPTY.libro}</p>
+  ${ledgerBlock(m, 'x-empty')}
 </section>
 ${
   SHOW.contacto

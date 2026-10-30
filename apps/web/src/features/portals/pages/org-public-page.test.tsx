@@ -30,6 +30,46 @@ const ORG: OrganizationPublic = {
   nit: '900123456-7',
 };
 
+const LEDGER = {
+  items: [
+    {
+      id: 'l-1',
+      source: 'manual',
+      kind: 'expense',
+      category: 'veterinaria',
+      occurredOn: '2026-10-20',
+      amountCop: 185000,
+      concept: 'Esterilización de Luna',
+      counterparty: 'Clínica San Roque',
+      hasSupport: true,
+      createdAt: '2026-10-20T15:00:00.000Z',
+      voided: false,
+    },
+    {
+      id: 'l-2',
+      source: 'online_donation',
+      kind: 'income',
+      category: 'donacion_dinero',
+      occurredOn: '2026-10-19',
+      amountCop: 50000,
+      concept: 'Donación en línea',
+      hasSupport: true,
+      createdAt: '2026-10-19T15:00:00.000Z',
+      voided: false,
+    },
+  ],
+  total: 2,
+  limit: 5,
+  offset: 0,
+  totals: {
+    incomeCop: 50000,
+    expenseCop: 185000,
+    balanceCop: -135000,
+    entryCount: 2,
+    lastEntryOn: '2026-10-20',
+  },
+};
+
 interface StubOptions {
   org?: unknown;
   orgStatus?: number;
@@ -59,6 +99,9 @@ function stubFetch({
           status: 200,
           json: async () => ({ tokens: theme, logoPosition, socialNavPosition, hideSeal }),
         });
+      }
+      if (url.includes('/ledger')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => LEDGER });
       }
       return Promise.resolve({ ok: orgOk, status: orgStatus, json: async () => org });
     }),
@@ -184,7 +227,7 @@ describe('OrgPublicPage — rich public portal', () => {
     expect(screen.getByRole('heading', { name: 'Necesita hoy' })).toBeInTheDocument();
   });
 
-  it('Ola 1/3: with every module off it shows no money, products, needs, reviews nor ledger', async () => {
+  it('Ola 1/3: with every module off it shows no money, products, needs nor reviews — the ledger stays (transparency is always on)', async () => {
     renderShell({ route: '/o/patitas', ...PUBLIC_SESSION, capabilities: CLOSED_CAPABILITIES });
     await screen.findByRole('heading', { level: 1, name: 'Refugio Patitas' });
 
@@ -194,7 +237,7 @@ describe('OrgPublicPage — rich public portal', () => {
     expect(screen.queryByRole('heading', { name: 'Productos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Necesita hoy' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Reseñas' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('portal-public-ledger-section')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('portal-public-ledger-section')).toBeInTheDocument();
     // The closing block explains how to adopt instead of asking for money.
     expect(
       screen.getByRole('heading', { name: 'Cómo adoptar en Refugio Patitas' }),
@@ -764,16 +807,25 @@ describe('OrgPublicPage — rich public portal', () => {
       expect(panel.parentElement).toBe(screen.getByTestId('portal-main-grid'));
     });
 
-    it('shows "Transparencia — libro público" with a ComingSoon modal (no real ledger data)', async () => {
+    it('shows the real public ledger (totals + movements, no donor) and the full-ledger dialog', async () => {
       renderShell({ route: '/o/patitas', ...PUBLIC_SESSION });
       await screen.findByRole('heading', { name: /Refugio Patitas/ });
 
       expect(
         screen.getByRole('heading', { name: 'Transparencia — libro público' }),
       ).toBeInTheDocument();
+      const section = screen.getByTestId('portal-public-ledger-section');
+      expect(await within(section).findByText('Esterilización de Luna')).toBeInTheDocument();
+      expect(within(section).getByText('Pago en línea verificado')).toBeInTheDocument();
+      expect(within(section).getByText('Con soporte')).toBeInTheDocument();
+      expect(screen.queryByText('Pronto')).not.toBeInTheDocument();
+
       await userEvent.click(screen.getByRole('button', { name: 'Ver libro completo →' }));
-      expect(await screen.findByText('Libro público')).toBeInTheDocument();
-      expect(screen.getByText('Pronto')).toBeInTheDocument();
+      const dialog = await screen.findByTestId('public-ledger-dialog');
+      expect(await within(dialog).findByText('Esterilización de Luna')).toBeInTheDocument();
+      expect(
+        within(dialog).getByText(/Nunca publicamos datos de quienes donan/),
+      ).toBeInTheDocument();
     });
   });
 });

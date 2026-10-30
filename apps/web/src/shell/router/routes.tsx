@@ -17,6 +17,7 @@ import {
   ORG_PLAN_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
+  ORG_LEDGER_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
@@ -146,6 +147,8 @@ const VolunteerOpportunitiesPage = lazyPage(loadVolunteering, 'VolunteerOpportun
 const VolunteerOpportunityDetailPage = lazyPage(loadVolunteering, 'VolunteerOpportunityDetailPage');
 const loadReputation = () => import('../../features/reputation');
 const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
+const loadLedger = () => import('../../features/ledger');
+const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -607,6 +610,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
                       <ProductDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* RF14 · libro público de la organización (registrar/anular solo
+              Owner/Administrator; la API vuelve a exigirlo). */}
+                <Route
+                  path="organizacion/libro-publico"
+                  element={
+                    <RequireRoles roles={ORG_LEDGER_ROLES}>
+                      <OrgLedgerPage />
                     </RequireRoles>
                   }
                 />

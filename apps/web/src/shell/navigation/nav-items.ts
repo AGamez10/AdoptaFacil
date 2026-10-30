@@ -93,6 +93,15 @@ export const PLATFORM_REVIEWS_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdm
  */
 export const ORG_REVIEWS_ROLES = [Role.Owner, Role.Administrator] as const;
 
+/** RF14 · Libro público · copiado VERBATIM del `@Roles` de `GET /org/ledger`
+ *  (registrar y anular exige además Owner/Administrator, en la API y en la UI). */
+export const ORG_LEDGER_ROLES = [
+  Role.Owner,
+  Role.Administrator,
+  Role.Operator,
+  Role.ReadOnlyAuditor,
+] as const;
+
 /** Planes y suscripciones · copiado VERBATIM del `@Roles` de `GET /org/plan`:
  *  el plan y su cobro son asunto del Owner/Administrator. */
 export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
@@ -556,6 +565,13 @@ export const navItems: NavItem[] = [
     label: 'Marketplace',
     icon: ShoppingBagIcon,
     roles: MARKETPLACE_VIEW_ROLES,
+  },
+  // RF14 · Libro público: ingresos y gastos que se publican en el portal.
+  {
+    path: '/organizacion/libro-publico',
+    label: 'Libro público',
+    icon: ShieldIcon,
+    roles: ORG_LEDGER_ROLES,
   },
   // Fix (M12/S7-b) · lo que el Owner/Administrator necesita para poder usar
   // "marcar como spam": ver las reseñas públicas de SU organización primero.
