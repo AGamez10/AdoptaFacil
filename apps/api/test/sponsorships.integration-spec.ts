@@ -408,7 +408,13 @@ describe('Sponsorships base (RF17 · T-056)', () => {
       const animal = await request(server)
         .post('/animals')
         .set('Authorization', `Bearer ${tokenA}`)
-        .send({ name: 'Canela', species: 'dog', sex: 'female', size: 'small' })
+        .send({
+          name: 'Canela',
+          species: 'dog',
+          sex: 'female',
+          size: 'small',
+          approximateAgeMonths: 24,
+        })
         .expect(201);
       needyAnimalId = animal.body.id;
     });

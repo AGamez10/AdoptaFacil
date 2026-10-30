@@ -1,5 +1,6 @@
-import { isFutureBirthDate } from '@adoptafacil/contracts';
+import { DATE_RULES } from '@adoptafacil/contracts';
 import { z } from 'zod';
+import { ruledDate } from '../../core/validation/date-rules';
 
 /** Enums mirror the STABLE contract value sets (animals.ts). Exported so
  *  `bulk-import.schemas.ts` (S2-04B-1) validates rows against the SAME rules
@@ -19,12 +20,7 @@ const photoInput = z
 
 /** Birth date: ISO-8601 with offset, never after today in Colombia. Shared
  *  with the bulk import so both paths reject a future birth date. */
-export const birthDate = z
-  .string()
-  .datetime({ offset: true })
-  .refine((value) => !isFutureBirthDate(value), {
-    message: 'La fecha de nacimiento no puede ser futura.',
-  });
+export const birthDate = ruledDate(DATE_RULES.animalBirth);
 
 /** Personality tags (S2-04A) — free text, max 10, no empty/oversized entries. */
 export const tags = z.array(z.string().trim().min(1).max(40)).max(10);

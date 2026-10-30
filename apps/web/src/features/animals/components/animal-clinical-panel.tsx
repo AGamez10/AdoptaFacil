@@ -18,6 +18,7 @@ import { useAnimalClinicalRecord } from '../hooks/use-animal-clinical-record';
 import { ClinicalAttachmentsField } from './clinical-attachments-field';
 import { EventHistory } from './event-history';
 import { CLINICAL_TYPE_LABELS, formatClinicalDate } from '../lib/clinical-format';
+import { dateBounds } from '../../../lib/date-rules';
 
 /** Same derivation shown in `animals-page.tsx`'s `ageLabel` — duplicated
  *  feature-locally (project convention, see `formatCop`/`formatBogota`)
@@ -116,6 +117,7 @@ export function AnimalClinicalPanel({ animalId }: AnimalClinicalPanelProps) {
               type="date"
               aria-label="Fecha del evento"
               value={form.occurredAt}
+              {...dateBounds('clinicalOccurred')}
               onChange={(e) => form.setOccurredAt(e.target.value)}
             />
             <Input

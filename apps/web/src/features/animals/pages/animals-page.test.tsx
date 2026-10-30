@@ -206,7 +206,7 @@ describe('AnimalsPage — lista + detalle maestro-detalle', () => {
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Registrar animal' }));
     expect(
-      await screen.findByText('La fecha de nacimiento no puede ser futura.'),
+      await screen.findByText('La fecha de nacimiento no puede ser posterior a hoy.'),
     ).toBeInTheDocument();
     expect(calls.some((c) => c.init?.method === 'POST')).toBe(false);
   });

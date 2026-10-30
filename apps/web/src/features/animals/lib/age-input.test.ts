@@ -14,7 +14,10 @@ describe('validateAgeInput', () => {
 
   it('rejects a future birth date', () => {
     const result = exact('2026-10-30');
-    expect(result).toEqual({ ok: false, message: 'La fecha de nacimiento no puede ser futura.' });
+    expect(result).toEqual({
+      ok: false,
+      message: 'La fecha de nacimiento no puede ser posterior a hoy.',
+    });
   });
 
   it('accepts today and sends the date as UTC midnight', () => {

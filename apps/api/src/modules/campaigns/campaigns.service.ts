@@ -1,10 +1,17 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Campaign as CampaignRow } from '@prisma/client';
 import {
   type Campaign,
   type CampaignCategory,
   type CampaignStatus,
   type CreateCampaignInput,
+  DATE_RULES,
+  dateRuleError,
   type Paginated,
   type UpdateCampaignInput,
 } from '@adoptafacil/contracts';
@@ -119,6 +126,12 @@ export class CampaignsService {
       const existing = await tx.campaign.findUnique({ where: { id } });
       if (!existing) {
         throw new NotFoundException('Campaign not found');
+      }
+      // Una fecha límite NUEVA no puede quedar en el pasado; reenviar la que ya
+      // estaba guardada (al editar otros campos) sí se permite.
+      if (input.deadline && new Date(input.deadline).getTime() !== existing.deadline.getTime()) {
+        const error = dateRuleError(input.deadline, DATE_RULES.campaignDeadline);
+        if (error) throw new BadRequestException(error);
       }
       const updated = await tx.campaign.update({
         where: { id },

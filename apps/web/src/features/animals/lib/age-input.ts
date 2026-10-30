@@ -1,4 +1,4 @@
-import { isFutureBirthDate } from '@adoptafacil/contracts';
+import { DATE_RULES, dateRuleError } from '@adoptafacil/contracts';
 
 /** How the operator states the age: the exact birth date, or an approximate
  *  age for rescues whose birth date nobody knows. */
@@ -42,14 +42,9 @@ export function validateAgeInput(value: AgeFormValue, now: Date = new Date()): A
         message: 'Indica la fecha de nacimiento o marca que no conoces la fecha exacta.',
       };
     }
-    const iso = new Date(`${value.birthDate}T00:00:00.000Z`);
-    if (Number.isNaN(iso.getTime())) {
-      return { ok: false, message: 'La fecha de nacimiento no es válida.' };
-    }
-    if (isFutureBirthDate(iso.toISOString(), now)) {
-      return { ok: false, message: 'La fecha de nacimiento no puede ser futura.' };
-    }
-    return { ok: true, fields: { birthDate: iso.toISOString() } };
+    const error = dateRuleError(value.birthDate, DATE_RULES.animalBirth, now);
+    if (error) return { ok: false, message: error };
+    return { ok: true, fields: { birthDate: `${value.birthDate}T00:00:00.000Z` } };
   }
 
   if (!value.approxYears.trim() && !value.approxMonths.trim()) {
