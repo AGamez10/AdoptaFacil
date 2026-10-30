@@ -16,9 +16,8 @@ import {
 } from '../data/colombian-locations';
 import { IMAGE_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
 import { EpaycoConnectSection } from './epayco-connect-section';
-import { DonationQrCard } from '../../donations';
+import { OrgQrCard } from '../../portals/components/org-qr-card';
 import { isEpaycoProvider } from '../../payments/lib/payment-provider';
-import { useFeature } from '../../../shell/capabilities';
 import {
   OrgSelectField,
   OrgStaticField,
@@ -52,6 +51,7 @@ const TABS: OrgTabItem[] = [
   { value: 'contacto', label: 'Contacto' },
   { value: 'imagenes', label: 'Imágenes y redes' },
   { value: 'pagos', label: 'Medios de pago' },
+  { value: 'qr', label: 'Código QR' },
   { value: 'nosotros', label: 'Acerca de nosotros' },
 ];
 
@@ -377,7 +377,6 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
       searchParams.get('tab') === 'pagos' ? 'pagos' : TABS[0].value,
     );
     const epayco = isEpaycoProvider();
-    const paymentsEnabled = useFeature('payments');
     const [form, setForm] = useState<FormState>(() => initialState(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
     const [saving, setSaving] = useState(false);
@@ -789,22 +788,22 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
                 cuenta de tu organización.
               </p>
             )}
-            {/* QR de donaciones: junto a la cuenta que recibe el dinero. Usa el
-                slug/subdominio GUARDADO (`initial`), no lo que se está editando. */}
-            {paymentsEnabled && (
-              <DonationQrCard
-                organization={{
-                  name: initial.name,
-                  slug: initial.slug,
-                  subdomain: initial.subdomain,
-                }}
-                onConfigureLink={() => {
-                  setActiveTab('institucional');
-                  window.setTimeout(() => document.getElementById('org-slug')?.focus(), 0);
-                }}
-              />
-            )}
           </div>
+        </OrgTabPanel>
+
+        <OrgTabPanel value="qr" activeValue={activeTab}>
+          {/* QR FIJO de la organización: siempre disponible (perfil, donar,
+              campaña o apadrinar). Usa el slug GUARDADO (`initial`), no lo que
+              se está editando. Los QR de donación ya impresos con
+              `/o/<slug>/donar` siguen funcionando. */}
+          <OrgQrCard
+            organizationName={initial.name}
+            hasPortalLink={!!initial.slug}
+            onConfigureLink={() => {
+              setActiveTab('institucional');
+              window.setTimeout(() => document.getElementById('org-slug')?.focus(), 0);
+            }}
+          />
         </OrgTabPanel>
 
         <OrgTabPanel value="nosotros" activeValue={activeTab}>

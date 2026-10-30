@@ -6,6 +6,8 @@ import { PortalSubdomainController } from './portal-subdomain.controller';
 import { PortalSubdomainService } from './portal-subdomain.service';
 import { PortalPreviewController } from './portal-preview.controller';
 import { PortalPreviewService } from './portal-preview.service';
+import { OrgQrController, PublicOrgQrController } from './org-qr.controller';
+import { OrgQrService } from './org-qr.service';
 
 /**
  * M14 · Portals (T-027) — per-organization brand personalization by TOKENS.
@@ -16,10 +18,18 @@ import { PortalPreviewService } from './portal-preview.service';
  * from the org contract (FORMALIZATION_SEQUENCE), so it needs no endpoint here.
  * Also owns real-subdomain resolution (subdomain → slug, T-portal-subdomain):
  * a public read-only lookup, no tenant context, no new table.
+ * Also owns the fixed per-organization QR (organization_qr_links, RLS) and
+ * its public scan resolution (`resolve_organization_qr`).
  */
 @Module({
   imports: [AuthModule],
-  controllers: [PortalThemeController, PortalSubdomainController, PortalPreviewController],
-  providers: [PortalThemeService, PortalSubdomainService, PortalPreviewService],
+  controllers: [
+    PortalThemeController,
+    PortalSubdomainController,
+    PortalPreviewController,
+    OrgQrController,
+    PublicOrgQrController,
+  ],
+  providers: [PortalThemeService, PortalSubdomainService, PortalPreviewService, OrgQrService],
 })
 export class PortalsModule {}

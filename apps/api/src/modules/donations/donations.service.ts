@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
+  CampaignStatus,
   computeBreakdown,
   DIRECT_COLLECTION_RATES,
   type EpaycoCollectorCredentials,
@@ -235,6 +236,8 @@ export class DonationsService {
       // response already carried the one (still-live) checkout link.
       return this.fromRow(existing);
     }
+
+    await this.assertConceptOfOrganization(input.organizationId, concept);
 
     // ADR-PAG-001 (cobro directo, sin custodia): the charge is created with
     // the BENEFICIARY org's own connected account, so the money lands in the
@@ -699,6 +702,37 @@ export class DonationsService {
       issuedAt: row.issued_at.toISOString(),
       contentHash: row.content_hash,
     };
+  }
+
+  /**
+   * El concepto de una donación (a qué se destina) debe ser de la MISMA
+   * organización que la recibe: la propia org, uno de sus animales o una de sus
+   * campañas activas. Sin esto, una donación aprobada a la org A podía sumar al
+   * progreso público de una campaña de la org B (`apply_campaign_funding` es
+   * SECURITY DEFINER y salta la RLS). Se lee bajo el contexto de la org
+   * beneficiaria, así un id de otra org simplemente no aparece.
+   */
+  private async assertConceptOfOrganization(
+    organizationId: string,
+    concept: PaymentConcept,
+  ): Promise<void> {
+    if (concept.kind === 'organization') {
+      if (concept.id === organizationId) return;
+    } else {
+      const found = await this.prisma.withOrgContext(organizationId, (tx) =>
+        concept.kind === 'campaign'
+          ? tx.campaign.count({
+              where: { id: concept.id, organizationId, status: CampaignStatus.Active },
+            })
+          : tx.animal.count({ where: { id: concept.id, organizationId } }),
+      );
+      if (found > 0) return;
+    }
+    throw new BadRequestException(
+      concept.kind === 'campaign'
+        ? 'Esta campaña no es de la organización o ya no recibe donaciones.'
+        : 'El destino de la donación no corresponde a esta organización.',
+    );
   }
 
   /**
