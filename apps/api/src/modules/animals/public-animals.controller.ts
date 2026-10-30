@@ -8,6 +8,7 @@ import {
   publicAnimalsGlobalQuerySchema,
   publicAnimalsQuerySchema,
 } from './public-animals.schemas';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * PUBLIC adoption catalog (T-029, RF07). No authentication: exposes only the
@@ -22,6 +23,7 @@ export class PublicAnimalsController {
   constructor(private readonly service: PublicAnimalsService) {}
 
   @Get('public/organizations/:slug/animals')
+  @PublicCache()
   async list(
     @Param('slug') slug: string,
     @Query(new ZodValidationPipe(publicAnimalsQuerySchema)) query: PublicAnimalsQuery,
@@ -37,6 +39,7 @@ export class PublicAnimalsController {
    *  landing page's portfolio view. See `PublicAnimalsService.listAllAdoptable`
    *  for how this stays RLS-safe without a new SQL function. */
   @Get('public/animals')
+  @PublicCache()
   async listAll(
     @Query(new ZodValidationPipe(publicAnimalsGlobalQuerySchema)) query: PublicAnimalsGlobalQuery,
   ): Promise<PublicAnimalsPage> {

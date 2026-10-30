@@ -4,6 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation';
 import { AuditModule } from './core/audit/audit.module';
 import { AuthModule } from './core/auth/auth.module';
+import { PublicCacheModule } from './core/cache/public-cache.module';
+import { RateLimitModule } from './core/rate-limit/rate-limit.module';
 import { FeaturesModule } from './core/features/features.module';
 import { PlansModule } from './core/plans/plans.module';
 import { IdentityModule } from './core/identity/identity.module';
@@ -57,6 +59,10 @@ import { RedisModule } from './redis/redis.module';
     TenantModule,
     PrismaModule,
     RedisModule,
+    // Plan de escala (B5): caché de lecturas públicas anónimas (@PublicCache).
+    PublicCacheModule,
+    // Plan de escala (B6): límites por IP en lecturas públicas y por refugio en escrituras.
+    RateLimitModule,
     QueueModule,
     NotificationModule,
     // Superadmin-editable email templates + public bulk-email opt-out.

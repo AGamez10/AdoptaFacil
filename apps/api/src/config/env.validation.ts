@@ -41,6 +41,16 @@ export const envSchema = z.object({
   // Plan de escala (B7): 'api' sirve HTTP sin workers de colas, 'worker' corre
   // los workers, 'all' hace ambas cosas (desarrollo local). Ver app-role.ts.
   APP_ROLE: z.enum(['all', 'api', 'worker']).default('all'),
+  // Plan de escala (B5/B10): Redis APARTE para la caché de lecturas públicas
+  // (allkeys-lru). Vacío = sin caché en Redis (solo cabeceras para la CDN).
+  REDIS_CACHE_URL: z.string().url().optional(),
+  // Segundos que una lectura pública vive en Redis y en la CDN (s-maxage).
+  PUBLIC_CACHE_TTL_S: z.coerce.number().int().min(1).max(3600).default(30),
+  // Plan de escala (B6): presupuesto por minuto de lecturas públicas por IP y
+  // de escrituras por organización. Con Cloudflare delante, TRUST_PROXY_HOPS
+  // debe contar también el salto de Cloudflare para ver la IP real.
+  PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(600),
+  ORG_WRITE_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(300),
   // T-110 (auth/RF05): base URL of the web app, used to build the clickable
   // password-reset link emailed to users ({WEB_BASE_URL}/reset-password?token=…).
   // Defaults to the Vite dev server so local dev works without extra config; set
