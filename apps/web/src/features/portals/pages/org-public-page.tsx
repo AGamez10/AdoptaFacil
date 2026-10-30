@@ -370,7 +370,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     { label: payments ? 'Cómo ayudar' : 'Cómo adoptar', href: '#portal-help-cta' },
     ...(aboutUs ? [{ label: 'Nosotros', href: '#portal-about' }] : []),
     ...(reputation ? [{ label: 'Reseñas', href: '#portal-reviews' }] : []),
-    ...(payments ? [{ label: 'Transparencia', href: '#portal-section-public-ledger' }] : []),
+    // RF14: el libro público se ve siempre (la transparencia es un pilar).
+    { label: 'Transparencia', href: '#portal-section-public-ledger' },
     ...(hasContactInfo ? [{ label: 'Contacto', href: '#portal-contact-info' }] : []),
   ];
 
@@ -552,11 +553,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 </section>
               )}
 
-              {payments && (
-                <div style={{ scrollMarginTop: '5rem' }}>
-                  <PortalPublicLedgerSection />
-                </div>
-              )}
+              <PortalPublicLedgerSection slug={slug as string} />
             </div>
           )}
         </main>

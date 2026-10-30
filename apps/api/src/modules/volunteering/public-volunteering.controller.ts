@@ -1,6 +1,7 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import type { Paginated, VolunteerOpportunityPublic } from '@adoptafacil/contracts';
 import { VolunteerOpportunitiesService } from './volunteer-opportunities.service';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * PUBLIC per-organization volunteer opportunity feed (RF18). No
@@ -16,6 +17,7 @@ export class PublicVolunteeringController {
 
   /** Global feed (all organizations) — same pattern as `GET /public/campaigns`. */
   @Get('public/volunteer-opportunities')
+  @PublicCache()
   listGlobal(
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
@@ -24,6 +26,7 @@ export class PublicVolunteeringController {
   }
 
   @Get('public/organizations/:slug/volunteer-opportunities')
+  @PublicCache()
   async list(
     @Param('slug') slug: string,
     @Query('limit') limit?: string,

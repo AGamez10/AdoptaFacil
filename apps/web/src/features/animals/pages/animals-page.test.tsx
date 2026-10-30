@@ -404,118 +404,146 @@ describe('AnimalsPage — activar apadrinamiento desde el panel de detalle (S2-0
     ).not.toBeInTheDocument();
   });
 
-  it('lets an Owner create a plan for an animal with none yet', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
-    let created = false;
-    stubFetch((url, init) => {
-      calls.push({ url, init });
-      if (url.includes('/animals/breeds')) return [];
-      if (init?.method === 'POST' && url.includes('/sponsorship-plans')) {
-        created = true;
-        return {
-          id: 'plan-1',
+  const settingsFor = (over: {
+    amount?: number;
+    active?: boolean;
+    sponsors?: number;
+    id?: string;
+  }) => ({
+    animalId: 'a1',
+    needsSponsorship: over.active ?? false,
+    plan: over.active
+      ? {
+          id: over.id ?? 'plan-1',
           organizationId: 'org-1',
           animalId: 'a1',
           name: 'Apadrinamiento mensual',
-          amount: 25000,
+          amount: over.amount ?? 50000,
           periodicity: 'monthly',
           isActive: true,
           createdAt: '2026-08-08T00:00:00.000Z',
-        };
-      }
-      if (url.includes('/sponsorship-plans')) {
-        return {
-          items: created
-            ? [
-                {
-                  id: 'plan-1',
-                  organizationId: 'org-1',
-                  animalId: 'a1',
-                  name: 'Apadrinamiento mensual',
-                  amount: 25000,
-                  periodicity: 'monthly',
-                  isActive: true,
-                  createdAt: '2026-08-08T00:00:00.000Z',
-                },
-              ]
-            : [],
-          total: created ? 1 : 0,
-          limit: 1,
-          offset: 0,
-        };
-      }
-      if (url.includes('/animals')) return [animal('a1', 'Firulais')];
-      return [];
-    });
-    renderShell({ route: '/animales', ...sessionWith([Role.Owner]) });
+        }
+      : null,
+    activeSponsorsCount: over.sponsors ?? 0,
+    suggestedAmount: 50000,
+  });
 
+  async function openSponsorship(roles: Role[]) {
+    renderShell({ route: '/animales', ...sessionWith(roles) });
     await selectRow('Firulais');
     fireEvent.click(
       within(screen.getByRole('main')).getByRole('button', { name: /Apadrinamiento/ }),
     );
+    return screen.findByRole('dialog');
+  }
 
-    const dialog = await screen.findByRole('dialog');
-    await within(dialog).findByText(/todavía no tiene un plan/);
-    fireEvent.change(within(dialog).getByLabelText('Monto mensual (COP)'), {
-      target: { value: '25000' },
-    });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Crear plan' }));
-
-    await waitFor(() => {
-      const post = calls.find(
-        (c) => c.init?.method === 'POST' && c.url.includes('/sponsorship-plans'),
-      );
-      expect(post).toBeDefined();
-      const body = JSON.parse(String(post?.init?.body));
-      expect(body).toMatchObject({ animalId: 'a1', amount: 25000, periodicity: 'monthly' });
-    });
-    expect(await within(dialog).findByText('Activo')).toBeInTheDocument();
-    expect(await screen.findByText('Plan de apadrinamiento creado')).toBeInTheDocument();
-  });
-
-  it('lets an Owner deactivate an existing active plan via PATCH', async () => {
+  it('marks an animal as needing sponsorship with the 50.000 COP suggestion prefilled', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
-    let active = true;
-    const planRow = () => ({
-      id: 'plan-1',
-      organizationId: 'org-1',
-      animalId: 'a1',
-      name: 'Apadrinamiento mensual',
-      amount: 25000,
-      periodicity: 'monthly',
-      isActive: active,
-      createdAt: '2026-08-08T00:00:00.000Z',
-    });
+    let marked = false;
     stubFetch((url, init) => {
       calls.push({ url, init });
       if (url.includes('/animals/breeds')) return [];
-      if (init?.method === 'PATCH' && url.includes('/sponsorship-plans/plan-1')) {
-        active = false;
-        return planRow();
+      if (url.includes('/sponsorship-plans/animal/a1')) {
+        if (init?.method === 'PUT') marked = true;
+        return settingsFor({ active: marked });
       }
-      if (url.includes('/sponsorship-plans'))
-        return { items: [planRow()], total: 1, limit: 1, offset: 0 };
       if (url.includes('/animals')) return [animal('a1', 'Firulais')];
       return [];
     });
-    renderShell({ route: '/animales', ...sessionWith([Role.Administrator]) });
 
-    await selectRow('Firulais');
+    const dialog = await openSponsorship([Role.Owner]);
+    const input = await within(dialog).findByLabelText('Aporte mensual (COP)');
+    expect(input).toHaveValue('50.000');
+    expect(within(dialog).getByText(/Sugerido: .*50\.000 al mes/)).toBeInTheDocument();
     fireEvent.click(
-      within(screen.getByRole('main')).getByRole('button', { name: /Apadrinamiento/ }),
+      within(dialog).getByRole('button', { name: 'Marcar que necesita apadrinamiento' }),
     );
 
-    const dialog = await screen.findByRole('dialog');
-    await within(dialog).findByText('Activo');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Desactivar plan' }));
+    await waitFor(() => {
+      const put = calls.find((c) => c.init?.method === 'PUT');
+      expect(put?.url).toContain('/sponsorship-plans/animal/a1');
+      expect(JSON.parse(String(put?.init?.body))).toEqual({ amount: 50000 });
+    });
+    expect(await within(dialog).findByText('Visible en tu portal')).toBeInTheDocument();
+    expect(await screen.findByText('Listo: necesita apadrinamiento')).toBeInTheDocument();
+  });
+
+  it('lets the organization change the amount, and warns current sponsors keep theirs', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    let amount = 50000;
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/animals/breeds')) return [];
+      if (url.includes('/sponsorship-plans/animal/a1')) {
+        if (init?.method === 'PUT') amount = JSON.parse(String(init.body)).amount;
+        return settingsFor({ active: true, amount, sponsors: 2, id: `plan-${amount}` });
+      }
+      if (url.includes('/animals')) return [animal('a1', 'Firulais')];
+      return [];
+    });
+
+    const dialog = await openSponsorship([Role.Administrator]);
+    const input = await within(dialog).findByLabelText('Aporte mensual (COP)');
+    const saveButton = within(dialog).getByRole('button', { name: 'Guardar aporte' });
+    expect(saveButton).toBeDisabled();
+
+    fireEvent.change(input, { target: { value: '70.000' } });
+    expect(within(dialog).getByText(/aplica solo a padrinos nuevos/)).toBeInTheDocument();
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
-      const patch = calls.find((c) => c.init?.method === 'PATCH');
-      expect(patch).toBeDefined();
-      expect(patch?.url).toContain('/sponsorship-plans/plan-1');
-      expect(JSON.parse(String(patch?.init?.body))).toEqual({ isActive: false });
+      const put = calls.find((c) => c.init?.method === 'PUT');
+      expect(JSON.parse(String(put?.init?.body))).toEqual({ amount: 70000 });
     });
-    expect(await within(dialog).findByText('Inactivo')).toBeInTheDocument();
-    expect(await screen.findByText('Plan desactivado')).toBeInTheDocument();
+    expect(await screen.findByText('Aporte actualizado')).toBeInTheDocument();
+  });
+
+  it('explains an invalid amount in plain words and sends nothing', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/animals/breeds')) return [];
+      if (url.includes('/sponsorship-plans/animal/a1')) return settingsFor({});
+      if (url.includes('/animals')) return [animal('a1', 'Firulais')];
+      return [];
+    });
+
+    const dialog = await openSponsorship([Role.Owner]);
+    fireEvent.change(await within(dialog).findByLabelText('Aporte mensual (COP)'), {
+      target: { value: '50.000,50' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Marcar que necesita apadrinamiento' }),
+    );
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/sin centavos/);
+    expect(calls.some((c) => c.init?.method === 'PUT')).toBe(false);
+  });
+
+  it('unmarks the animal via DELETE', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    let active = true;
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/animals/breeds')) return [];
+      if (url.includes('/sponsorship-plans/animal/a1')) {
+        if (init?.method === 'DELETE') active = false;
+        return settingsFor({ active });
+      }
+      if (url.includes('/animals')) return [animal('a1', 'Firulais')];
+      return [];
+    });
+
+    const dialog = await openSponsorship([Role.Owner]);
+    fireEvent.click(
+      await within(dialog).findByRole('button', { name: 'Ya no necesita apadrinamiento' }),
+    );
+
+    await waitFor(() => {
+      expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(true);
+    });
+    expect(
+      await within(dialog).findByRole('button', { name: 'Marcar que necesita apadrinamiento' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Ya no recibe padrinos nuevos')).toBeInTheDocument();
   });
 });

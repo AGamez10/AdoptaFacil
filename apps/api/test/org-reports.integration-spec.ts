@@ -688,6 +688,55 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
       .expect(200);
     expect(anonRes.body.donorName).toBe('Donante anónimo');
   });
+  it('the main account issues with the legal representative signature; the fiscal reviewer gets an email and authorizes', async () => {
+    const auth = (a: { token: string }) => ({ Authorization: `Bearer ${a.token}` });
+    const tenDaysAgo = new Date(Date.now() - 5 * 3600_000 - 10 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    // Solo representante legal: la cuenta principal lo genera y queda emitido,
+    // sin pedirle nada a nadie.
+    const sentBefore = notifications.sent.length;
+    const social = await generate(orgA, {
+      kind: 'social_service',
+      periodStart: tenDaysAgo,
+      periodEnd: today,
+    }).expect(201);
+    expect(social.body.signers.map((s: { role: string }) => s.role)).toEqual([
+      'legal_representative',
+    ]);
+    expect(social.body.status).toBe('issued');
+    expect(notifications.sent.length).toBe(sentBefore);
+
+    // Con revisor fiscal: la firma del representante legal queda aplicada al
+    // generar; al revisor le llega un correo y el documento espera su firma.
+    const donations = await generate(orgA, {
+      kind: 'donations',
+      periodStart: tenDaysAgo,
+      periodEnd: today,
+    }).expect(201);
+    expect(donations.body.status).toBe('pending_signatures');
+    expect(donations.body.approvals).toEqual([
+      expect.objectContaining({ role: 'legal_representative', decision: 'approved' }),
+    ]);
+    const mail = notifications.sent.find(
+      (m) => m.to === reviewerA.email && m.body.includes(donations.body.code),
+    );
+    expect(mail?.body).toContain('/organizacion/documentos-por-firmar');
+    expect(
+      notifications.sent.some(
+        (m) => m.to !== reviewerA.email && m.body.includes(donations.body.code),
+      ),
+    ).toBe(false);
+
+    const authorized = await request(server)
+      .post(`/org/reports/${donations.body.id}/decision`)
+      .set(auth(reviewerA))
+      .send({ decision: 'approved' })
+      .expect(200);
+    expect(authorized.body.status).toBe('issued');
+  });
+
   it('with signatures OFF (default) reports never carry signatures, even for a certified-grade org', async () => {
     // Los casos anteriores ejercen el camino con firmas (load-env las enciende);
     // aquí se apaga solo para este servicio, como queda en producción.

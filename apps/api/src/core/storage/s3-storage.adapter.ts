@@ -14,10 +14,9 @@ import {
   buildStorageKey,
   contentTypeFromKey,
   parseStorageKey,
+  resolveServeUrl,
 } from './storage-keys';
-
-/** How long a measured org total is reused before listing the bucket again. */
-const USAGE_CACHE_MS = 5 * 60 * 1000;
+import { MemoryUsageCache, type UsageCache } from './usage-cache';
 
 type FetchLike = typeof fetch;
 
@@ -50,12 +49,13 @@ export class S3StorageAdapter implements StoragePort {
   private readonly secretAccessKey: string;
   private readonly maxBytes: number;
   private readonly publicBaseUrl: string;
-  private readonly usageCache = new Map<string, { bytes: number; at: number }>();
+  private readonly cdnBaseUrl: string | undefined;
 
   constructor(
     config: ConfigService<Env, true>,
     private readonly fetchImpl: FetchLike = fetch,
     private readonly now: () => Date = () => new Date(),
+    private readonly usageCache: UsageCache = new MemoryUsageCache(),
   ) {
     this.endpoint = new URL(config.get('S3_ENDPOINT', { infer: true }) as string);
     this.region = config.get('S3_REGION', { infer: true }) ?? 'auto';
@@ -64,6 +64,9 @@ export class S3StorageAdapter implements StoragePort {
     this.secretAccessKey = config.get('S3_SECRET_ACCESS_KEY', { infer: true }) as string;
     this.maxBytes = config.get('STORAGE_MAX_FILE_MB', { infer: true }) * 1024 * 1024;
     this.publicBaseUrl = config.get('STORAGE_PUBLIC_BASE_URL', { infer: true }).replace(/\/+$/, '');
+    this.cdnBaseUrl = config
+      .get('STORAGE_PUBLIC_CDN_BASE_URL', { infer: true })
+      ?.replace(/\/+$/, '');
   }
 
   async createUploadTarget(input: CreateUploadInput): Promise<StoredObject> {
@@ -76,8 +79,7 @@ export class S3StorageAdapter implements StoragePort {
   }
 
   resolvePublicUrl(key: string): string {
-    const route = key.startsWith('public/') ? 'public' : 'private';
-    return `${this.publicBaseUrl}/storage/${route}?key=${encodeURIComponent(key)}`;
+    return resolveServeUrl(this.publicBaseUrl, this.cdnBaseUrl, key);
   }
 
   async saveObject(
@@ -98,8 +100,7 @@ export class S3StorageAdapter implements StoragePort {
       throw new Error(`Storage upload failed with status ${res.status}`);
     }
     const org = parseStorageKey(key)?.organizationId;
-    const cached = org ? this.usageCache.get(org) : undefined;
-    if (cached) cached.bytes += data.length;
+    if (org) await this.usageCache.add(org, data.length);
   }
 
   async readObject(key: string): Promise<StoredObjectData | null> {
@@ -116,9 +117,9 @@ export class S3StorageAdapter implements StoragePort {
   }
 
   async measureOrganizationUsage(organizationId: string): Promise<number> {
-    const cached = this.usageCache.get(organizationId);
-    if (cached && Date.now() - cached.at < USAGE_CACHE_MS) {
-      return cached.bytes;
+    const cached = await this.usageCache.get(organizationId);
+    if (cached !== null) {
+      return cached;
     }
     let bytes = 0;
     for (const visibility of ['public', 'private']) {
@@ -140,7 +141,7 @@ export class S3StorageAdapter implements StoragePort {
           : undefined;
       } while (token);
     }
-    this.usageCache.set(organizationId, { bytes, at: Date.now() });
+    await this.usageCache.set(organizationId, bytes);
     return bytes;
   }
 

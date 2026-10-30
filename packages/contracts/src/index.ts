@@ -25,6 +25,7 @@ export * from './marketplace';
 export * from './community';
 export * from './community-directory';
 export * from './reputation';
+export * from './ledger';
 export * from './portals';
 export * from './dashboards';
 export * from './reports';

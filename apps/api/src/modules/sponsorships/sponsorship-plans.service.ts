@@ -1,15 +1,21 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { SponsorshipPlan as PlanRow } from '@prisma/client';
+import type { Prisma, SponsorshipPlan as PlanRow } from '@prisma/client';
 import {
+  type AnimalSponsorshipSettings,
   type CreateSponsorshipPlanInput,
+  DEFAULT_SPONSORSHIP_AMOUNT_COP,
+  DEFAULT_SPONSORSHIP_PLAN_NAME,
+  type MarkAnimalNeedsSponsorshipInput,
   type Paginated,
-  type SponsorshipPeriodicity,
   type SponsorshipPlan,
+  SponsorshipPeriodicity,
+  SponsorshipStatus,
   type UpdateSponsorshipPlanInput,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
@@ -38,6 +44,9 @@ function toPlan(row: PlanRow): SponsorshipPlan {
     createdAt: row.createdAt.toISOString(),
   };
 }
+
+/** Sponsorship states that still bind the sponsor to the plan's amount. */
+const LIVE_STATUSES = [SponsorshipStatus.Active, SponsorshipStatus.Suspended];
 
 /**
  * Sponsorship PLANS (RF17 · T-056) — tenant-scoped (RLS): an org creates/edits
@@ -133,6 +142,19 @@ export class SponsorshipPlansService {
       if (!existing) {
         throw new NotFoundException('Sponsorship plan not found');
       }
+      // Changing the price of a plan that sponsors already joined would bill
+      // them an amount they never accepted. The per-animal endpoint handles it
+      // (archives this plan and opens a new one for new sponsors only).
+      if (input.amount !== undefined && input.amount !== existing.amount) {
+        const live = await tx.sponsorship.count({
+          where: { planId: id, status: { in: LIVE_STATUSES } },
+        });
+        if (live > 0) {
+          throw new ConflictException(
+            'Este plan ya tiene padrinos: cambia el monto desde la ficha del animal para que aplique solo a los nuevos padrinos.',
+          );
+        }
+      }
       const updated = await tx.sponsorshipPlan.update({
         where: { id },
         data: {
@@ -152,5 +174,186 @@ export class SponsorshipPlansService {
       });
       return toPlan(updated);
     });
+  }
+
+  /** Sponsorship settings of one of the caller's animals. */
+  async getForAnimal(animalId: string): Promise<AnimalSponsorshipSettings> {
+    const organizationId = this.requireOrgId();
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      await this.requireAnimal(tx, animalId, { mustBeActive: false });
+      return this.settingsFor(tx, animalId);
+    });
+  }
+
+  /**
+   * "Este animal necesita apadrinamiento" — idempotent. Without an active plan,
+   * opens one with the given amount (or the suggested default). With one, a
+   * new amount is applied in place when nobody sponsors on it yet; otherwise
+   * that plan is archived and a new one opened, so current sponsors keep
+   * paying what they agreed to and only new sponsors see the new amount.
+   * Serialized per animal (advisory lock) so a double click or a retried
+   * request never opens two plans.
+   */
+  async markNeedsSponsorship(
+    actorUserId: string,
+    animalId: string,
+    input: MarkAnimalNeedsSponsorshipInput,
+  ): Promise<AnimalSponsorshipSettings> {
+    const organizationId = this.requireOrgId();
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      await this.lockAnimal(tx, animalId);
+      await this.requireAnimal(tx, animalId, { mustBeActive: true });
+      const current = await tx.sponsorshipPlan.findFirst({
+        where: { organizationId, animalId, isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!current) {
+        const amount = input.amount ?? DEFAULT_SPONSORSHIP_AMOUNT_COP;
+        const row = await tx.sponsorshipPlan.create({
+          data: {
+            organizationId,
+            animalId,
+            name: DEFAULT_SPONSORSHIP_PLAN_NAME,
+            amount,
+            periodicity: SponsorshipPeriodicity.Monthly,
+          },
+        });
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'sponsorship_plan.created',
+          entityType: 'sponsorship_plan',
+          entityId: row.id,
+          metadata: { animalId, amount, source: 'needs_sponsorship' },
+        });
+        return this.settingsFor(tx, animalId);
+      }
+
+      if (input.amount === undefined || input.amount === current.amount) {
+        return this.settingsFor(tx, animalId);
+      }
+
+      const live = await tx.sponsorship.count({
+        where: { planId: current.id, status: { in: LIVE_STATUSES } },
+      });
+      if (live === 0) {
+        await tx.sponsorshipPlan.update({
+          where: { id: current.id },
+          data: { amount: input.amount },
+        });
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'sponsorship_plan.updated',
+          entityType: 'sponsorship_plan',
+          entityId: current.id,
+          metadata: { fields: ['amount'], from: current.amount, to: input.amount },
+        });
+        return this.settingsFor(tx, animalId);
+      }
+
+      await tx.sponsorshipPlan.update({ where: { id: current.id }, data: { isActive: false } });
+      const next = await tx.sponsorshipPlan.create({
+        data: {
+          organizationId,
+          animalId,
+          name: current.name,
+          amount: input.amount,
+          periodicity: current.periodicity,
+        },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId,
+        action: 'sponsorship_plan.repriced',
+        entityType: 'sponsorship_plan',
+        entityId: next.id,
+        metadata: {
+          animalId,
+          previousPlanId: current.id,
+          from: current.amount,
+          to: input.amount,
+          sponsorsKeepingPreviousAmount: live,
+        },
+      });
+      return this.settingsFor(tx, animalId);
+    });
+  }
+
+  /**
+   * "Ya no necesita apadrinamiento" — archives the animal's active plans so no
+   * new sponsor can join. Current sponsorships are untouched (the organization
+   * suspends or cancels them explicitly, with a reason). Idempotent.
+   */
+  async unmarkNeedsSponsorship(
+    actorUserId: string,
+    animalId: string,
+  ): Promise<AnimalSponsorshipSettings> {
+    const organizationId = this.requireOrgId();
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      await this.lockAnimal(tx, animalId);
+      await this.requireAnimal(tx, animalId, { mustBeActive: false });
+      const active = await tx.sponsorshipPlan.findMany({
+        where: { organizationId, animalId, isActive: true },
+        select: { id: true },
+      });
+      for (const plan of active) {
+        await tx.sponsorshipPlan.update({ where: { id: plan.id }, data: { isActive: false } });
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'sponsorship_plan.updated',
+          entityType: 'sponsorship_plan',
+          entityId: plan.id,
+          metadata: { fields: ['isActive'], source: 'needs_sponsorship_off' },
+        });
+      }
+      return this.settingsFor(tx, animalId);
+    });
+  }
+
+  /** Serializes per-animal sponsorship writes until the transaction ends. */
+  private async lockAnimal(tx: Prisma.TransactionClient, animalId: string): Promise<void> {
+    const lockKey = `sponsorship_plan:${animalId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+  }
+
+  private async requireAnimal(
+    tx: Prisma.TransactionClient,
+    animalId: string,
+    { mustBeActive }: { mustBeActive: boolean },
+  ): Promise<void> {
+    // RLS already hides other tenants' animals: not found = not yours.
+    const animal = await tx.animal.findUnique({
+      where: { id: animalId },
+      select: { isActive: true },
+    });
+    if (!animal) {
+      throw new NotFoundException('Animal not found');
+    }
+    if (mustBeActive && !animal.isActive) {
+      throw new BadRequestException('Animal not found or inactive');
+    }
+  }
+
+  private async settingsFor(
+    tx: Prisma.TransactionClient,
+    animalId: string,
+  ): Promise<AnimalSponsorshipSettings> {
+    const [plan, activeSponsorsCount] = await Promise.all([
+      tx.sponsorshipPlan.findFirst({
+        where: { animalId, isActive: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      tx.sponsorship.count({ where: { animalId, status: { in: LIVE_STATUSES } } }),
+    ]);
+    return {
+      animalId,
+      needsSponsorship: plan !== null,
+      plan: plan ? toPlan(plan) : null,
+      activeSponsorsCount,
+      suggestedAmount: DEFAULT_SPONSORSHIP_AMOUNT_COP,
+    };
   }
 }

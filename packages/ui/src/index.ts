@@ -2,6 +2,15 @@
 // Import the stylesheet separately in the host app: `@adoptafacil/ui/styles.css`.
 
 export { cn } from './lib/utils';
+export {
+  GENERIC_ERROR_MESSAGE,
+  NETWORK_ERROR_MESSAGE,
+  friendlyErrorMessage,
+  friendlyMessage,
+  isTechnicalMessage,
+  messageForStatus,
+  stripFieldPrefixes,
+} from './lib/friendly-error';
 
 // Button (Sprint 0)
 export { Button, buttonVariants, type ButtonProps } from './components/button';

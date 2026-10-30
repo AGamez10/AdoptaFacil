@@ -1,4 +1,9 @@
 import * as React from 'react';
+import {
+  GENERIC_ERROR_MESSAGE,
+  isTechnicalMessage,
+  stripFieldPrefixes,
+} from '../lib/friendly-error';
 
 /**
  * In-memory toast store (adapted from shadcn/ui's use-toast).
@@ -93,12 +98,27 @@ export interface ToastHandle {
   update: (props: Partial<ToasterToast>) => void;
 }
 
+/**
+ * Red de seguridad: una alerta NUNCA muestra un mensaje técnico ("Cannot POST
+ * /…", "Failed to fetch", un error en inglés). Si la descripción es texto de
+ * máquina se cambia por el mensaje genérico amable. Solo aplica a alertas de
+ * error/advertencia: las de éxito llevan textos escritos a mano.
+ */
+function humanize<T extends Partial<ToasterToast>>(props: T): T {
+  const { description, variant } = props;
+  if (typeof description !== 'string') return props;
+  if (variant !== 'destructive' && variant !== 'warning') return props;
+  const cleaned = stripFieldPrefixes(description);
+  return { ...props, description: isTechnicalMessage(cleaned) ? GENERIC_ERROR_MESSAGE : cleaned };
+}
+
 /** Queue a toast imperatively. Returns handles to update or dismiss it. */
-export function toast(props: Toast): ToastHandle {
+export function toast(rawProps: Toast): ToastHandle {
+  const props = humanize(rawProps);
   const id = genId();
   const dismiss = () => dispatch({ type: 'DISMISS_TOAST', toastId: id });
   const update = (next: Partial<ToasterToast>) =>
-    dispatch({ type: 'UPDATE_TOAST', toast: { ...next, id } });
+    dispatch({ type: 'UPDATE_TOAST', toast: { ...humanize(next), id } });
 
   dispatch({
     type: 'ADD_TOAST',

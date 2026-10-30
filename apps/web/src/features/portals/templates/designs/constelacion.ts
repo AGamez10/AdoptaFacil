@@ -1,3 +1,4 @@
+import { ledgerBlock } from '../engine/ledger';
 import { COPY, EMPTY, type TplAnimal } from '../engine/model';
 import {
   availLine,
@@ -331,7 +332,7 @@ ${SHOW.nosotros ? `<section class="w o-sec" data-sec="nosotros" style="padding-t
   ${REVIEWS.length ? `<div class="o-revs">${REVIEWS.map((r) => `<figure><span class="st" aria-label="${r.rating} de 5">${stars(r.rating)}</span>${r.text ? `<blockquote>“${r.text}”</blockquote>` : ''}<figcaption>${r.name}${r.date ? ` · ${r.date}` : ''}</figcaption></figure>`).join('')}</div>` : `<p class="o-empty">${EMPTY.resenas}</p>`}
 </section>
 <section class="w o-sec" data-sec="libro" style="padding-top:0"><div class="o-hd"><div><p class="o-eb">Transparencia</p><h2 class="o-h2" style="margin-top:16px">Libro <em>público</em></h2><p class="o-sub">${COPY.ledgerText}</p></div><button type="button" class="o-lnk" data-ledger>Ver libro completo ${ic.arrow}</button></div>
-  <p class="o-empty">${EMPTY.libro}</p>
+  ${ledgerBlock(m, 'o-empty')}
 </section>
 ${SHOW.contacto ? `<section class="w o-sec" data-sec="contacto" style="padding-top:0"><div class="o-contact${map ? '' : ' nomap'}"><div class="info"><p class="o-eb">Visítanos</p><h2 class="o-h2" style="margin-top:16px;font-size:clamp(40px,4.4vw,64px)">Información de contacto</h2>${KIT.contactRows()}${mapLink(m, 'o-lnk')}</div>${map ? `<div class="map">${map}</div>` : ''}</div></section>` : ''}
 <footer class="w o-ftr"><p class="big">${ORG.short}<em>.</em></p>

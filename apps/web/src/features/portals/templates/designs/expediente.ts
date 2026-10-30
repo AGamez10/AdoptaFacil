@@ -221,8 +221,8 @@ ${KIT.revs(KIT.hd('07 · Reseñas', 'Lo que dicen las familias', `<button type="
 <section class="x-sec" id="x-libro" data-sec="libro"><div class="w">
   <div class="x-sh"><span class="c x-lab">08 · Transparencia · libro público</span><h2>Ingresos y gastos</h2></div>
   <p style="color:var(--soft);margin:-10px 0 20px">${COPY.ledgerText} <button type="button" class="k-lnk" data-ledger>Ver libro completo ${ic.arrow}</button></p>
-  <div class="x-table" style="overflow-x:auto"><table style="min-width:600px"><thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th style="text-align:right">Monto</th><th>Responsable</th></tr></thead>
-    <tbody><tr class="x-empty"><td colspan="5">${EMPTY.libro}</td></tr></tbody></table></div>
+  <div class="x-table" style="overflow-x:auto"><table style="min-width:600px"><thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th style="text-align:right">Monto</th><th>Soporte</th></tr></thead>
+    <tbody>${m.LEDGER.rows.length ? m.LEDGER.rows.map((r) => `<tr${r.voided ? ' style="opacity:.55;text-decoration:line-through"' : ''}><td>${r.date}</td><td>${r.concept}${r.voided ? `<br><small>Anulado: ${r.voidReason}</small>` : ''}</td><td>${r.income ? 'Ingreso' : 'Gasto'}${r.category ? ` · ${r.category}` : ''}</td><td style="text-align:right;white-space:nowrap">${r.amount}</td><td>${r.online ? 'Pago en línea' : r.support ? 'Sí' : '—'}</td></tr>`).join('') : `<tr class="x-empty"><td colspan="5">${EMPTY.libro}</td></tr>`}</tbody></table></div>
 </div></section>
 ${KIT.contact()}
 </main>

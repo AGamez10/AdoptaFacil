@@ -1,3 +1,4 @@
+import { ledgerBlock } from '../engine/ledger';
 import { COPY, EMPTY, type TplAnimal } from '../engine/model';
 import {
   availLine,
@@ -391,7 +392,7 @@ ${SHOW.nosotros ? `<section class="w k-sec k-about" data-sec="nosotros"><div><p 
   ${REVIEWS.length ? `<div class="k-revs">${REVIEWS.map((r) => `<figure><span class="st" aria-label="${r.rating} de 5">${stars(r.rating)}</span>${r.text ? `<blockquote class="k-serif">“${r.text}”</blockquote>` : ''}<figcaption>${r.name}${r.date ? ` · ${r.date}` : ''}</figcaption></figure>`).join('')}</div>` : `<p class="k-empty">${EMPTY.resenas}</p>`}
 </section>
 <section class="w k-sec k-box" id="k-libro" data-sec="libro" style="padding-top:0"><div class="hd"><div><p class="k-eb">Taquilla pública · Transparencia</p><h2 class="k-h2" style="margin-top:16px">Libro público</h2><p class="k-sub">${COPY.ledgerText}</p></div><button type="button" class="k-lnk" data-ledger>Ver libro completo ${ic.arrow}</button></div>
-  <p class="k-empty">${EMPTY.libro}</p>
+  ${ledgerBlock(m, 'k-empty')}
 </section>
 ${SHOW.contacto ? `<section class="w k-sec k-hall" data-sec="contacto" style="padding-top:0"><div class="in${map ? '' : ' nomap'}"><div><p class="k-eb">La sala</p><h2 class="k-h2" style="margin-top:16px">Información de contacto</h2>${KIT.contactRows()}${mapLink(m, 'k-lnk', 'Cómo llegar')}</div>${map ? `<div class="map">${map}</div>` : ''}</div></section>` : ''}
 <footer class="w k-end"><p class="k-eb">Una producción de</p><h2 class="k-h2" style="margin-top:16px">${ORG.name}</h2>

@@ -6,6 +6,9 @@ import { AuditModule } from './core/audit/audit.module';
 import { BotsModule } from './core/bots/bots.module';
 import { CspReportModule } from './core/http/csp-report.module';
 import { AuthModule } from './core/auth/auth.module';
+import { PublicCacheModule } from './core/cache/public-cache.module';
+import { RateLimitModule } from './core/rate-limit/rate-limit.module';
+import { ObservabilityModule } from './core/observability/observability.module';
 import { FeaturesModule } from './core/features/features.module';
 import { PlansModule } from './core/plans/plans.module';
 import { IdentityModule } from './core/identity/identity.module';
@@ -33,6 +36,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PlatformWorkspaceModule } from './modules/platform-workspace/platform-workspace.module';
 import { PortalsModule } from './modules/portals/portals.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { SponsorshipsModule } from './modules/sponsorships/sponsorships.module';
 import { VolunteeringModule } from './modules/volunteering/volunteering.module';
@@ -59,6 +63,12 @@ import { RedisModule } from './redis/redis.module';
     TenantModule,
     PrismaModule,
     RedisModule,
+    // Plan de escala (B5): caché de lecturas públicas anónimas (@PublicCache).
+    PublicCacheModule,
+    // Plan de escala (B6): límites por IP en lecturas públicas y por refugio en escrituras.
+    RateLimitModule,
+    // Plan de escala (B9): GET /metrics (Prometheus, con token).
+    ObservabilityModule,
     QueueModule,
     NotificationModule,
     // Superadmin-editable email templates + public bulk-email opt-out.
@@ -111,6 +121,7 @@ import { RedisModule } from './redis/redis.module';
     VolunteeringModule,
     // M12 · reputación: reseñas, calificación e indicadores públicos (RF23, S-7).
     ReputationModule,
+    LedgerModule,
     // M13 · dashboards por audiencia — PlatformAdmin/PlatformSuperAdmin (RF24, S-8).
     DashboardsModule,
     // M13 · reportes sellados de donaciones y servicio social (firmas por estatutos).

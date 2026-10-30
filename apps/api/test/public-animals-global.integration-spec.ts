@@ -197,6 +197,27 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
     expect(capped.body.limit).toBe(50);
   });
 
+  it('walks the whole catalog with the keyset cursor, without repeats or gaps', async () => {
+    const all = await publicListAll('?limit=50').expect(200);
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const res = await publicListAll(
+        `?limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      ).expect(200);
+      seen.push(...res.body.data.map((a: { id: string }) => a.id));
+      cursor = res.body.nextCursor;
+    } while (cursor && seen.length < all.body.data.length);
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(seen).toEqual(all.body.data.map((a: { id: string }) => a.id).slice(0, seen.length));
+    expect(seen.length).toBe(all.body.data.length);
+  });
+
+  it('ignores a malformed cursor (first page, never a 500)', async () => {
+    const res = await publicListAll('?limit=1&cursor=no-es-un-cursor').expect(200);
+    expect(res.body.data).toHaveLength(1);
+  });
+
   it('rejects an invalid species filter (400)', async () => {
     await publicListAll('?species=dragon').expect(400);
   });

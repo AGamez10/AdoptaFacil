@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nest
 import { ConfigService } from '@nestjs/config';
 import { UnrecoverableError, Worker, type Job } from 'bullmq';
 import { parseRedisUrl, type Env } from '../../../config/env.validation';
+import { runsQueueWorkers } from '../../../config/app-role';
 import type { NotificationPort } from '../notification.port';
 import {
   EMAIL_DELIVERY_QUEUE,
@@ -34,6 +35,8 @@ export class EmailDeliveryWorker implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
+    // Plan de escala (B7): in the `api` role the e-mail queue is only produced.
+    if (!runsQueueWorkers()) return;
     this.worker = new Worker<EmailDeliveryJobData>(
       EMAIL_DELIVERY_QUEUE,
       (job) => this.process(job),

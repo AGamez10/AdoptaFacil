@@ -66,6 +66,8 @@ const APPEND_ONLY_TABLES = [
   // third_party_consents (M13): historial inmutable; el trigger bloquea DELETE.
   'third_party_consents',
   'org_reports',
+  // ledger_entries (libro público): inmutable, el trigger bloquea DELETE.
+  'ledger_entries',
   // F19 · decisions before their requests, events before their tickets (FKs).
   'platform_sensitive_action_decisions',
   'platform_sensitive_actions',

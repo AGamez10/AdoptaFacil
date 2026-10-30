@@ -225,8 +225,9 @@ export function OrgSignersPage() {
             <CardHeader>
               <CardTitle className="text-base">Quién firma</CardTitle>
               <CardDescription>
-                Cada firmante aprueba cada documento con su propia cuenta: nadie firma por otro, y
-                quien redacta un documento no lo firma.
+                El representante legal firma con la cuenta principal al generar el documento. El
+                contador y el revisor fiscal reciben un correo y autorizan cada documento con su
+                propia cuenta: nadie firma por otro.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

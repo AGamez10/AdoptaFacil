@@ -8,6 +8,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { PortalThemeService } from './portal-theme.service';
 import { updatePortalThemeSchema } from './portals.schemas';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * M14 portal personalization endpoints (T-027). The owner reads/edits their org's
@@ -41,6 +42,7 @@ export class PortalThemeController {
   /** PUBLIC portal theme by slug — no auth; only the safe, validated tokens, never
    *  another org's private data (single-slug lookup via SECURITY DEFINER fn). */
   @Get('public/organizations/:slug/theme')
+  @PublicCache()
   getPublic(@Param('slug') slug: string): Promise<PortalThemeConfig> {
     return this.themes.getPublicBySlug(slug);
   }
