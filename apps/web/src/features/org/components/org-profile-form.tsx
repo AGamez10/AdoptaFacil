@@ -371,11 +371,16 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
     const client = useApiClient();
     const { toast } = useToast();
     const [searchParams] = useSearchParams();
-    // `?tab=pagos` (avisos "Cobros pendientes de conexión") abre la pestaña
-    // "Medios de pago" directamente.
+    // `?tab=<pestaña>` abre esa pestaña directamente: los avisos "Cobros
+    // pendientes de conexión" (`pagos`) y la lista "Qué falta para publicar tu
+    // portal" (institucional, ubicación, contacto…).
+    const tabParam = searchParams.get('tab');
     const [activeTab, setActiveTab] = useState<string>(() =>
-      searchParams.get('tab') === 'pagos' ? 'pagos' : TABS[0].value,
+      TABS.some((tab) => tab.value === tabParam) ? (tabParam as string) : TABS[0].value,
     );
+    useEffect(() => {
+      if (tabParam && TABS.some((tab) => tab.value === tabParam)) setActiveTab(tabParam);
+    }, [tabParam]);
     const epayco = isEpaycoProvider();
     const [form, setForm] = useState<FormState>(() => initialState(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});

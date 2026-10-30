@@ -43,6 +43,32 @@
   color: #14202e;
 }
 
+.tile__link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: inherit;
+}
+
+.tile__link:focus-visible {
+  outline: 3px solid #1f7a6d;
+  outline-offset: 2px;
+}
+
+.tile__link .tile__name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tile__cta {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f7a6d;
+  white-space: nowrap;
+}
+
 .tile--text {
   display: grid;
   place-items: center;
