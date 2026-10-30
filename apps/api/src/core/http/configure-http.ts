@@ -1,11 +1,14 @@
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { securityHeaders } from './security-headers';
+import { requestContext } from '../observability/request-context.middleware';
 
 export interface HttpHardeningOptions {
   production: boolean;
   /** Reverse-proxy hops in front of the API (TRUST_PROXY_HOPS). */
   trustProxyHops: number;
+  /** One JSON access-log line per request (HTTP_ACCESS_LOG). */
+  accessLog?: boolean;
 }
 
 /**
@@ -22,4 +25,6 @@ export function applyHttpHardening(app: INestApplication, options: HttpHardening
   express.disable('x-powered-by');
   express.set('trust proxy', options.trustProxyHops);
   express.use(securityHeaders({ hsts: options.production }));
+  // Plan de escala (B9): request id + latency by route template (+ access log).
+  express.use(requestContext({ accessLog: options.accessLog ?? false }));
 }

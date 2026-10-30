@@ -15,6 +15,7 @@ import type { Redis } from 'ioredis';
 import type { Env } from '../../config/env.validation';
 import { REDIS_CLIENT } from '../../redis/redis.service';
 import { RedisThrottlerStorage } from '../auth/redis-throttler.storage';
+import { rateLimitRejections } from '../observability/metrics';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
 const WINDOW_MS = 60_000;
@@ -82,12 +83,21 @@ export class ScaleRateLimitGuard implements CanActivate {
     try {
       record = await this.storage.increment(key, WINDOW_MS, limit, WINDOW_MS, name);
     } catch (error) {
-      this.logger.warn(`counter store unavailable, letting the request through: ${(error as Error).message}`);
+      this.logger.warn(
+        `counter store unavailable, letting the request through: ${(error as Error).message}`,
+      );
       return true;
     }
     if (record.isBlocked || record.totalHits > limit) {
-      res.setHeader('Retry-After', String(Math.max(1, Math.ceil(record.timeToBlockExpire || record.timeToExpire))));
-      throw new HttpException('Demasiadas peticiones; intenta de nuevo en un momento.', HttpStatus.TOO_MANY_REQUESTS);
+      rateLimitRejections.inc({ budget: name === 'scale-public' ? 'public' : 'org_write' });
+      res.setHeader(
+        'Retry-After',
+        String(Math.max(1, Math.ceil(record.timeToBlockExpire || record.timeToExpire))),
+      );
+      throw new HttpException(
+        'Demasiadas peticiones; intenta de nuevo en un momento.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
     return true;
   }

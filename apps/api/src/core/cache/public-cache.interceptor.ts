@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { from, of, type Observable, switchMap, tap } from 'rxjs';
+import { publicCacheResults } from '../observability/metrics';
 import { PublicCacheService } from './public-cache.service';
 
 /** Seconds a CDN may keep serving a stale copy while it refreshes in the background. */
@@ -51,9 +52,11 @@ export class PublicCacheInterceptor implements NestInterceptor {
       switchMap((hit) => {
         if (hit !== null) {
           res.setHeader('X-Cache', 'HIT');
+          publicCacheResults.inc({ result: 'hit' });
           return of(JSON.parse(hit) as unknown);
         }
         res.setHeader('X-Cache', 'MISS');
+        publicCacheResults.inc({ result: 'miss' });
         return next.handle().pipe(
           tap((body) => {
             if (body !== undefined && body !== null) void this.cache.set(key, JSON.stringify(body));

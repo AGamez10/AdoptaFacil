@@ -25,6 +25,7 @@ async function bootstrap(): Promise<void> {
   applyHttpHardening(app, {
     production: config.get('NODE_ENV', { infer: true }) === 'production',
     trustProxyHops: config.get('TRUST_PROXY_HOPS', { infer: true }) ?? 0,
+    accessLog: config.get('HTTP_ACCESS_LOG', { infer: true }),
   });
 
   const origins = config

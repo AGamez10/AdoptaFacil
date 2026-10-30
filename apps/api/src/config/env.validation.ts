@@ -51,6 +51,11 @@ export const envSchema = z.object({
   // debe contar también el salto de Cloudflare para ver la IP real.
   PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(600),
   ORG_WRITE_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(300),
+  // Plan de escala (B9): token del scrape de Prometheus (GET /metrics con
+  // Authorization: Bearer). Sin valor, /metrics responde 404.
+  METRICS_TOKEN: z.string().min(24).optional(),
+  // Una línea JSON por petición (id, método, ruta plantilla, estado, ms).
+  HTTP_ACCESS_LOG: featureFlag(),
   // T-110 (auth/RF05): base URL of the web app, used to build the clickable
   // password-reset link emailed to users ({WEB_BASE_URL}/reset-password?token=…).
   // Defaults to the Vite dev server so local dev works without extra config; set
