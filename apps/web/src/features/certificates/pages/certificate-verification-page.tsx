@@ -23,6 +23,7 @@ import {
   isReportCode,
 } from '../api/donation-certificate';
 import { formatBogota, formatCop } from '../model/certificate-format';
+import { useNoIndex } from '../../../seo/seo';
 import styles from './certificate-verification-page.module.scss';
 
 type VerifyState = 'idle' | 'loading' | 'valid' | 'invalid' | 'error';
@@ -65,6 +66,7 @@ function formatDay(ymd: string): string {
  * inventados ni una comparación local contra un código de muestra.
  */
 export function CertificateVerificationPage() {
+  useNoIndex();
   const { code: codeParam } = useParams<{ code: string }>();
   const [code, setCode] = useState(codeParam ?? '');
   const [state, setState] = useState<VerifyState>('idle');

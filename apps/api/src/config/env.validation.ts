@@ -229,6 +229,12 @@ export const envSchema = z.object({
   // integration suite uses it so each app instance starts with a clean
   // budget). Production must use 'redis'.
   THROTTLER_STORAGE: z.enum(['memory', 'redis']).default('redis'),
+  // Plan SEO (P0): shared budget per client IP for every anonymous /public/*
+  // route, per minute. High enough for many people behind one carrier NAT.
+  PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).max(10_000).default(300),
+  // Same budget for a search crawler proven by reverse + forward DNS, shared
+  // by ALL of that operator's IPs (see core/bots/verified-bots.ts).
+  PUBLIC_RATE_LIMIT_BOT_PER_MINUTE: z.coerce.number().int().min(10).max(100_000).default(1200),
   // Platform staff security (F19): TOTP for every session that uses a platform
   // role. Fails closed — only the exact string "false" turns it off, and
   // production refuses that (assertProductionSafety). The rest of the staff

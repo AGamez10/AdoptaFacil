@@ -25,6 +25,7 @@
     "seed:demo": "pnpm --filter @adoptafacil/api run seed:demo",
     "seed:breeds": "pnpm --filter @adoptafacil/api run seed:breeds",
     "seed:trafico": "pnpm --filter @adoptafacil/api run seed:trafico",
+    "seed:volumen": "pnpm --filter @adoptafacil/api run seed:volumen",
     "db:deploy": "prisma migrate deploy",
     "smoke": "node scripts/smoke/smoke-by-role.mjs",
     "doctor": "node scripts/doctor.mjs",
