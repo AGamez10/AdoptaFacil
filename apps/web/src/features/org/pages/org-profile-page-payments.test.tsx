@@ -4,8 +4,8 @@ import { Role } from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
 
 /**
- * Pestaña "Medios de pago" (ADR-PAG-002): "QR de donaciones" de la
- * organización y "Conectar ePayco" (la única pasarela; Mercado Pago se retiró
+ * Pestañas "Código QR" (QR fijo de la organización) y "Medios de pago"
+ * (ADR-PAG-002): "Conectar ePayco" (la única pasarela; Mercado Pago se retiró
  * el 2026-10-17).
  */
 function ownerSession() {
@@ -57,61 +57,83 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('Medios de pago — QR de donaciones', () => {
-  it('shows the QR, the stable /o/:slug/donar URL and copies it', async () => {
+const QR = {
+  code: 'abcd2345',
+  target: { kind: 'donate', id: null },
+  effectiveTarget: { kind: 'donate', id: null },
+  campaigns: [{ id: '11111111-1111-4111-8111-111111111111', label: 'Cirugía de Luna' }],
+  animals: [],
+  scansLast30Days: 7,
+};
+
+async function openQrTab() {
+  fireEvent.click(await screen.findByRole('tab', { name: 'Código QR' }));
+}
+
+describe('Código QR — QR fijo de la organización', () => {
+  it('shows the fixed /q/<code> URL, its destination and copies it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-    stubFetch((url) =>
-      url.includes('/org/epayco/status') ? { body: { connected: false } } : { body: BASE_ORG },
-    );
+    stubFetch((url) => (url.endsWith('/org/qr') ? { body: QR } : { body: BASE_ORG }));
     renderShell({ route: '/organizacion', ...ownerSession() });
 
-    await openPaymentsTab();
-    const card = await screen.findByTestId('donation-qr-card');
-    const expected = `${window.location.origin}/o/patitas-felices/donar`;
-    expect(within(card).getByTestId('donation-qr-url')).toHaveTextContent(expected);
-    expect(await within(card).findByTestId('donation-qr-image')).toHaveAttribute(
+    await openQrTab();
+    const card = await screen.findByTestId('org-qr-card');
+    const expected = `${window.location.origin}/q/abcd2345`;
+    expect(await within(card).findByTestId('qr-share-url')).toHaveTextContent(expected);
+    expect(await within(card).findByTestId('qr-share-image')).toHaveAttribute(
       'src',
       expect.stringMatching(/^data:image\/png/),
     );
-    expect(await within(card).findByTestId('donation-qr-download')).toHaveAttribute(
-      'download',
-      'qr-donaciones-patitas-felices.png',
+    expect(within(card).getByTestId('org-qr-effective')).toHaveTextContent(
+      'donar a la organización',
     );
-    expect(within(card).getByText(/Nequi, Daviplata/)).toBeInTheDocument();
+    expect(within(card).getByText('Escaneos en los últimos 30 días: 7')).toBeInTheDocument();
 
     fireEvent.click(within(card).getByRole('button', { name: 'Copiar enlace' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expected));
-    expect(await screen.findByText('Enlace copiado')).toBeInTheDocument();
   });
 
-  it('uses the real subdomain URL when the org has one and the portal domain is configured', async () => {
-    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.org');
+  it('changes the destination to a campaign without changing the code', async () => {
+    const calls = stubFetch((url, init) => {
+      if (url.endsWith('/org/qr/target')) {
+        const body = JSON.parse(String(init?.body));
+        return { body: { ...QR, target: body, effectiveTarget: body } };
+      }
+      return url.endsWith('/org/qr') ? { body: QR } : { body: BASE_ORG };
+    });
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openQrTab();
+    const card = await screen.findByTestId('org-qr-card');
+    fireEvent.click(await within(card).findByRole('radio', { name: 'Una campaña' }));
+    fireEvent.change(within(card).getByLabelText('Campaña activa'), {
+      target: { value: QR.campaigns[0].id },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Guardar destino' }));
+
+    await waitFor(() =>
+      expect(within(card).getByTestId('org-qr-effective')).toHaveTextContent(
+        'la campaña «Cirugía de Luna»',
+      ),
+    );
+    const put = calls.find((c) => c.url.endsWith('/org/qr/target'));
+    expect(put?.init?.method).toBe('PUT');
+    expect(JSON.parse(String(put?.init?.body))).toEqual({
+      kind: 'campaign',
+      id: QR.campaigns[0].id,
+    });
+    expect(within(card).getByTestId('qr-share-url')).toHaveTextContent('/q/abcd2345');
+  });
+
+  it('asks to set the portal link first when there is no slug', async () => {
     stubFetch((url) =>
-      url.includes('/org/epayco/status')
-        ? { body: { connected: false } }
-        : { body: { ...BASE_ORG, subdomain: 'patitas' } },
+      url.endsWith('/org/qr') ? { body: QR } : { body: { id: 'org-1', name: 'Refugio Patitas' } },
     );
     renderShell({ route: '/organizacion', ...ownerSession() });
 
-    await openPaymentsTab();
-    expect(await screen.findByTestId('donation-qr-url')).toHaveTextContent(
-      'https://patitas.adoptafacil.org/donar',
-    );
-  });
-
-  it('shows an empty state that takes the manager to set the portal link when there is no slug', async () => {
-    stubFetch((url) =>
-      url.includes('/org/epayco/status')
-        ? { body: { connected: false } }
-        : { body: { id: 'org-1', name: 'Refugio Patitas' } },
-    );
-    renderShell({ route: '/organizacion', ...ownerSession() });
-
-    await openPaymentsTab();
-    expect(await screen.findByTestId('donation-qr-empty')).toBeInTheDocument();
-    expect(screen.queryByTestId('donation-qr-url')).not.toBeInTheDocument();
-
+    await openQrTab();
+    expect(await screen.findByTestId('org-qr-needs-link')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Definir el enlace del portal' }));
     expect(screen.getByRole('tab', { name: 'Datos institucionales' })).toHaveAttribute(
       'aria-selected',

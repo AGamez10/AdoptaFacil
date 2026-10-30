@@ -246,6 +246,19 @@ export function PublicAnimalDetailPage() {
               title="Animal no encontrado"
               description="Este animal ya no está disponible para adopción o el enlace no es válido."
             />
+            {/* El QR del carnet de un animal adoptado sigue impreso: quien lo
+                escanea llega a la organización en vez de a un callejón. */}
+            {slug && (
+              <div className="mt-4 flex justify-center">
+                <Link
+                  to={`/o/${encodeURIComponent(slug)}`}
+                  className={cn(buttonVariants({ variant: 'outline' }))}
+                  data-testid="animal-not-found-org-link"
+                >
+                  Conocer la organización y sus otros animales
+                </Link>
+              </div>
+            )}
           </div>
         )}
         {state === 'error' && (
