@@ -22,6 +22,7 @@
     "setup:env": "node scripts/setup-env.mjs",
     "docs:manuals": "node scripts/generate-docx-manuals.mjs",
     "seed:admin": "pnpm --filter @adoptafacil/api run seed:admin",
+    "mail:test": "pnpm --filter @adoptafacil/api run mail:test",
     "seed:demo": "pnpm --filter @adoptafacil/api run seed:demo",
     "seed:breeds": "pnpm --filter @adoptafacil/api run seed:breeds",
     "seed:trafico": "pnpm --filter @adoptafacil/api run seed:trafico",
