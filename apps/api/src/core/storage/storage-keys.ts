@@ -151,7 +151,11 @@ export function parseByteRange(
  * is configured (plan de escala, B2); private keys ALWAYS go to the API, where
  * JWT + RBAC + audit run before any byte leaves.
  */
-export function resolveServeUrl(apiBaseUrl: string, cdnBaseUrl: string | undefined, key: string): string {
+export function resolveServeUrl(
+  apiBaseUrl: string,
+  cdnBaseUrl: string | undefined,
+  key: string,
+): string {
   const isPublic = key.startsWith('public/');
   const base = isPublic && cdnBaseUrl ? cdnBaseUrl : apiBaseUrl;
   return `${base}/storage/${isPublic ? 'public' : 'private'}?key=${encodeURIComponent(key)}`;
