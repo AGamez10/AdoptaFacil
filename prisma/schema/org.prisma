@@ -45,8 +45,6 @@ model Organization {
   workspaceTicketEvents    PlatformWorkspaceTicketEvent[]
   sensitiveActions         PlatformSensitiveAction[]
   sensitiveActionDecisions PlatformSensitiveActionDecision[]
-  // RETIRADA: pending drop migration (owner approval). See payments.prisma.
-  epaycoAccount            OrganizationEpaycoAccount?
   // Comunidad, primer corte del ecosistema. See community.prisma.
   serviceListings          ServiceListing[]
   serviceListingReviews    ServiceListingReview[]
