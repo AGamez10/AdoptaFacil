@@ -271,6 +271,8 @@ export interface InvitationPreview {
   organizationName: string;
   email: string;
   role: Role;
+  /** Aditivo: cargo de firmante (contador / revisor fiscal) si la invitación es para firmar. */
+  signerRole?: 'accountant' | 'fiscal_reviewer';
   /** ISO-8601 UTC. */
   expiresAt: string;
 }
@@ -281,6 +283,11 @@ export interface AcceptInvitationInput {
   token: string;
   displayName: string;
   password: string;
+  /** Documentos legales aceptados en la pantalla de la invitación (versión
+   *  vista). Como en el registro, la API exige los obligatorios de una cuenta
+   *  de organización en su versión vigente y responde 400 si faltan
+   *  (Ley 1581, autorización previa). */
+  legalAcceptances?: LegalAcceptanceItem[];
 }
 
 /** Assign a role to a user in the caller's organization. */

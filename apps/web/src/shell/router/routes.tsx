@@ -37,6 +37,7 @@ import {
   LoginPage,
   RegisterPage,
   ResetPasswordPage,
+  AcceptInvitationPage,
 } from '../../features/auth';
 import { PublicAnimalDetailPage } from '../../features/portals/pages/public-animal-detail-page';
 import { usePortalSubdomainSlug } from '../../features/portals/use-portal-subdomain-slug';
@@ -244,6 +245,9 @@ export function AppRoutes() {
           HANDOFF(@fabian): minimal shell route for the auth reset page (the page
           itself lives in features/auth). Cross-review this single line. */}
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Enlace del correo de invitación a un equipo ({WEB_BASE_URL}/invitacion#token=…):
+          pública, la persona invitada aún no tiene cuenta. */}
+          <Route path="/invitacion" element={<AcceptInvitationPage />} />
           {/* Legal (Ley 1581): términos, política de datos, cookies y alcance de la
             plataforma, públicos y versionados — `/legal/:slug/:version` muestra
             exactamente la versión que alguien aceptó. */}

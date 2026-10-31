@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { OrganizationStatus } from '@adoptafacil/contracts';
 import { newPasswordSchema } from '../../../core/auth/auth.schemas';
+import { legalAcceptancesSchema } from '../../../core/legal/legal.schemas';
 import { orgRoleSchema } from '../../../core/rbac/rbac.schemas';
 
 /** `POST /platform/organizations/:organizationId/status` (R2-1). The reason is
@@ -36,5 +37,7 @@ export const acceptInvitationSchema = z
     token: invitationTokenSchema,
     displayName: z.string().trim().min(1).max(120),
     password: newPasswordSchema,
+    // Opcional en la forma (contrato aditivo); el servicio exige los obligatorios.
+    legalAcceptances: legalAcceptancesSchema.optional(),
   })
   .strict();
