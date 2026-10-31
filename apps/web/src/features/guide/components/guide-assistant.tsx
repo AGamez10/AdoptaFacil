@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@adoptafacil/ui';
 import { useSession } from '../../../shell/auth';
-import { featureForPath, useCapabilities } from '../../../shell/capabilities';
+import { featureForPath, useCapabilities, useFeature } from '../../../shell/capabilities';
 import { navItems, ORG_MEMBER_ROLES, PLATFORM_DOCUMENTS_ROLES } from '../../../shell/navigation';
 import {
   GUIDE_FLOWS,
@@ -11,9 +11,18 @@ import {
   helpForPath,
   type GuideAudience,
   type GuideFlow,
+  type GuideLink,
   type MapEntry,
+  type PageHelp,
 } from '../model/guide-content';
-import { OfficialContactButtons } from './official-contact-buttons';
+import { useCurrentGuideContext, type GuideContext } from '../model/guide-context';
+import {
+  organizationContact,
+  portalHelp,
+  reportProblemUrl,
+  templateDemoHelp,
+} from '../model/context-help';
+import { ContactButtons, OfficialContactButtons } from './official-contact-buttons';
 import styles from './guide-assistant.module.scss';
 
 type Tab = 'page' | 'flows' | 'map';
@@ -69,11 +78,116 @@ function useSiteMap(isVisitor: boolean): MapEntry[] {
   }, [isVisitor, capabilities, hasAnyRole, user]);
 }
 
+/** Rutas que un visitante sin cuenta puede abrir (el resto lo manda a ingresar). */
+const PUBLIC_PATH =
+  /^\/($|#|adoptar|campanas|recursos|marketplace|servicios|register|login|guias|verificar)/;
+
+/** Un enlace "Dónde se gestiona" solo se ofrece si la cuenta de verdad puede abrirlo. */
+function useLinkFilter(isVisitor: boolean): (link: GuideLink) => boolean {
+  const { hasAnyRole } = useSession();
+  const { capabilities } = useCapabilities();
+  return (link) => {
+    const feature = featureForPath(link.to.split('#')[0] || '/');
+    if (feature && !capabilities.features[feature]) return false;
+    if (isVisitor) return !link.roles && PUBLIC_PATH.test(link.to);
+    return !link.roles || hasAnyRole(...link.roles);
+  };
+}
+
+function PageHelpView({ help, canOpen }: { help: PageHelp; canOpen: (l: GuideLink) => boolean }) {
+  const related = (help.related ?? []).filter(canOpen);
+  return (
+    <div data-testid="guide-page-help">
+      <h3 className={styles.section__title}>{help.title}</h3>
+      <ul className={styles.tips}>
+        {help.tips.map((tip) =>
+          typeof tip === 'string' ? (
+            <li key={tip}>{tip}</li>
+          ) : (
+            <li key={tip.text}>
+              {tip.text}
+              {tip.to && (
+                <>
+                  {' '}
+                  <Link to={tip.to} className={styles.step__link}>
+                    {tip.linkLabel ?? 'Ir'}
+                  </Link>
+                </>
+              )}
+            </li>
+          ),
+        )}
+      </ul>
+      {related.length > 0 && (
+        <nav aria-label="Dónde se gestiona" className={styles.related}>
+          <p className={styles.related__title}>Dónde se gestiona</p>
+          <ul className={styles.related__list}>
+            {related.map((link) => (
+              <li key={link.to}>
+                <Link to={link.to} className={styles.related__link}>
+                  {link.label}
+                  <span aria-hidden="true"> →</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Contacto dentro del portal de una organización: quien está aquí vino por
+ * ella, así que WhatsApp y correo son los SUYOS. AdoptaFácil queda solo como
+ * un enlace pequeño para reportar una falla de la página.
+ */
+function PortalContact({ context }: { context: Extract<GuideContext, { kind: 'portal' }> }) {
+  const { organization, animalName } = context;
+  const contact = organizationContact(organization, animalName);
+  const hasContact = Boolean(contact.whatsapp || contact.email);
+  return (
+    <>
+      {hasContact ? (
+        <>
+          <p>
+            {animalName
+              ? `¿Preguntas sobre ${animalName}? Escríbele a ${organization.name}.`
+              : `¿Dudas sobre una adopción o una visita? Escríbele a ${organization.name}.`}
+          </p>
+          <ContactButtons
+            whatsappHref={contact.whatsapp}
+            emailHref={contact.email}
+            whatsappLabel={`WhatsApp de ${organization.name}`}
+            emailLabel="Correo de la organización"
+          />
+        </>
+      ) : (
+        <p data-testid="guide-org-no-contact">
+          {organization.name} todavía no publicó WhatsApp ni correo.{' '}
+          {animalName
+            ? 'Envía tu solicitud desde esta ficha y la organización te contactará.'
+            : 'Elige un animal y envía tu solicitud: la organización te contactará.'}
+        </p>
+      )}
+      <p className={styles.panel__note}>
+        ¿Algo de esta página no funciona?{' '}
+        <a href={reportProblemUrl(organization.name)} className={styles.step__link}>
+          Avísale a AdoptaFácil
+        </a>
+      </p>
+    </>
+  );
+}
+
 /**
  * Asistente de guía (Ola 3, R3-8; decisión D14). Un botón fijo "Ayuda" abre un
  * panel con tres vistas: ayuda de la página actual, guías paso a paso y el mapa
  * de lo que la cuenta puede hacer, más el contacto oficial por WhatsApp y
- * correo. Todo es contenido fijo elegido por la ruta, la sesión y los módulos
+ * correo. Dentro del portal de una organización (o de una plantilla de
+ * ejemplo) la página le pasa su contexto (`useGuideContext`): el botón se
+ * vuelve discreto, la ayuda habla de esa página y el WhatsApp es el de la
+ * organización. Todo es contenido fijo elegido por la ruta, la sesión y los módulos
  * encendidos: no usa inteligencia artificial, no hace llamadas a la red y no
  * lee lo que la persona escribe en los formularios.
  */
@@ -92,7 +206,19 @@ export function GuideAssistant() {
   const toggleRef = useRef<HTMLButtonElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  const pageHelp = helpForPath(location.pathname);
+  const context = useCurrentGuideContext();
+  const payments = useFeature('payments');
+  const sponsorships = useFeature('sponsorships');
+  const canOpen = useLinkFilter(isVisitor);
+  // Dentro de un portal o de una plantilla de ejemplo la ayuda se enfoca en
+  // esa página: sin pestañas ni mapa de AdoptaFácil, y con un botón discreto.
+  const focused = context !== null;
+  const pageHelp =
+    context?.kind === 'portal'
+      ? portalHelp(context, { payments, sponsorships })
+      : context?.kind === 'template-demo'
+        ? templateDemoHelp(context.templateName)
+        : helpForPath(location.pathname, audiences);
   const flows = useMemo(
     () =>
       GUIDE_FLOWS.filter(
@@ -128,7 +254,7 @@ export function GuideAssistant() {
   };
 
   return (
-    <div className={styles.assistant}>
+    <div className={cn(styles.assistant, focused && styles['assistant--subtle'])}>
       {open && (
         <section
           id={panelId}
@@ -152,36 +278,29 @@ export function GuideAssistant() {
             </button>
           </header>
 
-          <div className={styles.tabs} role="group" aria-label="Tipo de ayuda">
-            {TABS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={cn(styles.tab, tab === item.id && styles['tab--active'])}
-                aria-pressed={tab === item.id}
-                onClick={() => {
-                  setTab(item.id);
-                  setFlowId(null);
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          {!focused && (
+            <div className={styles.tabs} role="group" aria-label="Tipo de ayuda">
+              {TABS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={cn(styles.tab, tab === item.id && styles['tab--active'])}
+                  aria-pressed={tab === item.id}
+                  onClick={() => {
+                    setTab(item.id);
+                    setFlowId(null);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className={styles.panel__body}>
-            {tab === 'page' && (
-              <div data-testid="guide-page-help">
-                <h3 className={styles.section__title}>{pageHelp.title}</h3>
-                <ul className={styles.tips}>
-                  {pageHelp.tips.map((tip) => (
-                    <li key={tip}>{tip}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {(focused || tab === 'page') && <PageHelpView help={pageHelp} canOpen={canOpen} />}
 
-            {tab === 'flows' && !activeFlow && (
+            {!focused && tab === 'flows' && !activeFlow && (
               <ul className={styles.flows} aria-label="Guías disponibles">
                 {flows.map((flow) => (
                   <li key={flow.id}>
@@ -198,7 +317,7 @@ export function GuideAssistant() {
               </ul>
             )}
 
-            {tab === 'flows' && activeFlow && (
+            {!focused && tab === 'flows' && activeFlow && (
               <div data-testid="guide-flow">
                 <button type="button" className={styles.back} onClick={() => setFlowId(null)}>
                   ← Todas las guías
@@ -227,7 +346,7 @@ export function GuideAssistant() {
               </div>
             )}
 
-            {tab === 'map' && (
+            {!focused && tab === 'map' && (
               <ul className={styles.map} aria-label="Lugares a los que puedes ir">
                 {siteMap.map((entry) => (
                   <li key={entry.to}>
@@ -244,11 +363,25 @@ export function GuideAssistant() {
           </div>
 
           <footer className={styles.panel__footer}>
-            <p>¿Prefieres hablar con una persona?</p>
-            <OfficialContactButtons
-              whatsappMessage="Hola, estoy usando AdoptaFácil y necesito ayuda."
-              emailSubject="Necesito ayuda con AdoptaFácil"
-            />
+            {context?.kind === 'portal' ? (
+              <PortalContact context={context} />
+            ) : (
+              <>
+                <p>
+                  {context?.kind === 'template-demo'
+                    ? '¿Dudas sobre las plantillas? Habla con el equipo de AdoptaFácil.'
+                    : '¿Prefieres hablar con una persona?'}
+                </p>
+                <OfficialContactButtons
+                  whatsappMessage={
+                    context?.kind === 'template-demo'
+                      ? `Hola, estoy viendo la plantilla ${context.templateName} de AdoptaFácil y tengo una pregunta.`
+                      : 'Hola, estoy usando AdoptaFácil y necesito ayuda.'
+                  }
+                  emailSubject="Necesito ayuda con AdoptaFácil"
+                />
+              </>
+            )}
             <p className={styles.panel__note}>
               Esta guía no usa inteligencia artificial ni lee lo que escribes en los formularios:
               muestra ayuda fija según la página.
@@ -260,8 +393,10 @@ export function GuideAssistant() {
       <button
         ref={toggleRef}
         type="button"
-        className={styles.toggle}
+        className={cn(styles.toggle, focused && styles['toggle--subtle'])}
         aria-expanded={open}
+        aria-label={focused ? (open ? 'Cerrar ayuda' : 'Ayuda') : undefined}
+        title={focused && !open ? 'Ayuda' : undefined}
         aria-controls={open ? panelId : undefined}
         onClick={() => (open ? close() : setOpen(true))}
         data-testid="guide-toggle"
