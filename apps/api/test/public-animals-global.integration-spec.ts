@@ -55,7 +55,10 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
   }
 
   const createAnimal = (token: string, body: Record<string, unknown>) =>
-    request(server).post('/animals').set('Authorization', `Bearer ${token}`).send(body);
+    request(server)
+      .post('/animals')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ approximateAgeMonths: 12, ...body });
 
   const publicListAll = (query = '') => request(server).get(`/public/animals${query}`);
 
@@ -129,7 +132,7 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
   });
 
   it('merges adoptable animals from MULTIPLE organizations, with org id/name/slug/city attached', async () => {
-    const res = await publicListAll().expect(200);
+    const res = await publicListAll('?limit=50').expect(200);
     const names = res.body.data.map((a: { name: string }) => a.name);
     expect(names).toEqual(expect.arrayContaining(['PerroA', 'GatoA', 'PerroB']));
 
@@ -195,6 +198,27 @@ describe('Public adoption catalog — GLOBAL (S1-07)', () => {
 
     const capped = await publicListAll('?limit=999').expect(200);
     expect(capped.body.limit).toBe(50);
+  });
+
+  it('walks the whole catalog with the keyset cursor, without repeats or gaps', async () => {
+    const all = await publicListAll('?limit=50').expect(200);
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const res = await publicListAll(
+        `?limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      ).expect(200);
+      seen.push(...res.body.data.map((a: { id: string }) => a.id));
+      cursor = res.body.nextCursor;
+    } while (cursor && seen.length < all.body.data.length);
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(seen).toEqual(all.body.data.map((a: { id: string }) => a.id).slice(0, seen.length));
+    expect(seen.length).toBe(all.body.data.length);
+  });
+
+  it('ignores a malformed cursor (first page, never a 500)', async () => {
+    const res = await publicListAll('?limit=1&cursor=no-es-un-cursor').expect(200);
+    expect(res.body.data).toHaveLength(1);
   });
 
   it('rejects an invalid species filter (400)', async () => {

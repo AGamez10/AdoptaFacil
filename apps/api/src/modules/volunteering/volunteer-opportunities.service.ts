@@ -1,8 +1,14 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { VolunteerOpportunity as OpportunityRow } from '@prisma/client';
 import {
   type CreateVolunteerOpportunityInput,
+  dateOrderError,
   type Paginated,
   type UpdateVolunteerOpportunityInput,
   type VolunteerOpportunity,
@@ -94,6 +100,16 @@ export class VolunteerOpportunitiesService {
       const existing = await tx.volunteerOpportunity.findUnique({ where: { id } });
       if (!existing || existing.organizationId !== organizationId) {
         throw new NotFoundException('Volunteer opportunity not found');
+      }
+      // Cambiar SOLO una de las dos fechas no puede dejar el fin antes del inicio.
+      if (input.startDate || input.endDate) {
+        const error = dateOrderError(
+          input.startDate ?? existing.startDate.toISOString(),
+          input.endDate ?? existing.endDate.toISOString(),
+          { start: 'La fecha de inicio', end: 'La fecha de fin' },
+          { strict: true },
+        );
+        if (error) throw new BadRequestException(error);
       }
       const row = await tx.volunteerOpportunity.update({
         where: { id },

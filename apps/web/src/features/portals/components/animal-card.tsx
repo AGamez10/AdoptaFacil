@@ -64,7 +64,7 @@ function PawPlaceholder() {
 export function AnimalCard({ slug, animal, organization, onOpenDetail }: AnimalCardProps) {
   const age = ageLabel(animal.computedAge);
   const isNew = isRecentlyPublished(animal.createdAt);
-  const detailHref = publicAnimalDetailHref(slug, animal.id);
+  const detailHref = publicAnimalDetailHref(slug, animal);
   // La foto pública puede apuntar a un storage-ref roto/expirado (StoragePort
   // stub en Ola 1) — si `<img>` falla, cae al mismo placeholder que "sin foto",
   // en vez de dejar un hueco de color sólido sin ícono.

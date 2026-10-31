@@ -17,6 +17,7 @@ import {
   ORG_PLAN_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
+  ORG_LEDGER_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
@@ -36,6 +37,7 @@ import {
   LoginPage,
   RegisterPage,
   ResetPasswordPage,
+  AcceptInvitationPage,
 } from '../../features/auth';
 import { PublicAnimalDetailPage } from '../../features/portals/pages/public-animal-detail-page';
 import { usePortalSubdomainSlug } from '../../features/portals/use-portal-subdomain-slug';
@@ -57,9 +59,17 @@ const PortalThemePage = lazyPage(
   () => import('../../features/portals/pages/portal-theme-page'),
   'PortalThemePage',
 );
+const TemplateDemoPage = lazyPage(
+  () => import('../../features/portals/pages/template-demo-page'),
+  'TemplateDemoPage',
+);
 const OrgDonateRedirectPage = lazyPage(
   () => import('../../features/portals/pages/org-donate-redirect-page'),
   'OrgDonateRedirectPage',
+);
+const OrgQrRedirectPage = lazyPage(
+  () => import('../../features/portals/pages/org-qr-redirect-page'),
+  'OrgQrRedirectPage',
 );
 const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
@@ -146,6 +156,8 @@ const VolunteerOpportunitiesPage = lazyPage(loadVolunteering, 'VolunteerOpportun
 const VolunteerOpportunityDetailPage = lazyPage(loadVolunteering, 'VolunteerOpportunityDetailPage');
 const loadReputation = () => import('../../features/reputation');
 const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
+const loadLedger = () => import('../../features/ledger');
+const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -232,6 +244,9 @@ export function AppRoutes() {
           HANDOFF(@fabian): minimal shell route for the auth reset page (the page
           itself lives in features/auth). Cross-review this single line. */}
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Enlace del correo de invitación a un equipo ({WEB_BASE_URL}/invitacion#token=…):
+          pública, la persona invitada aún no tiene cuenta. */}
+          <Route path="/invitacion" element={<AcceptInvitationPage />} />
           {/* Legal (Ley 1581): términos, política de datos, cookies y alcance de la
             plataforma, públicos y versionados — `/legal/:slug/:version` muestra
             exactamente la versión que alguien aceptó. */}
@@ -241,6 +256,9 @@ export function AppRoutes() {
           {/* Public rich organization portal (§M14, T-026) — no auth, public fields
           only: real profile + placeholder sections wired per docs/TASKS.md. */}
           <Route path="/o/:slug" element={<OrgPublicPage />} />
+          {/* Vista de ejemplo de cada plantilla con datos de demostración (noindex,
+          sin API): desde aquí se va al registro con la plantilla elegida. */}
+          <Route path="/plantillas/:id" element={<TemplateDemoPage />} />
           {/* Public animal detail within the org portal (§M14/M03, T-052) — public,
           AnimalSummary fields only (no clinical data). The "Solicitar adopción"
           button links to the /adopciones/solicitar flow, itself under RequireAuth. */}
@@ -250,6 +268,10 @@ export function AppRoutes() {
           `/donaciones`. `/donar` solo tiene sentido en un subdominio real de
           organización; en el dominio principal lleva a `/donaciones`. */}
           <Route path="/o/:slug/donar" element={<OrgDonateRedirectPage />} />
+          {/* QR FIJO por organización: la etiqueta impresa no cambia; la org
+          elige desde su panel si lleva a su perfil, a donar, a una campaña o a
+          apadrinar un animal. La API valida el destino en cada escaneo. */}
+          <Route path="/q/:code" element={<OrgQrRedirectPage />} />
           <Route
             path="/donar"
             element={
@@ -607,6 +629,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
                       <ProductDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* RF14 · libro público de la organización (registrar/anular solo
+              Owner/Administrator; la API vuelve a exigirlo). */}
+                <Route
+                  path="organizacion/libro-publico"
+                  element={
+                    <RequireRoles roles={ORG_LEDGER_ROLES}>
+                      <OrgLedgerPage />
                     </RequireRoles>
                   }
                 />

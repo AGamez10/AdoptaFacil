@@ -5,6 +5,7 @@ import {
   type Paginated,
 } from '@adoptafacil/contracts';
 import { PublicCampaignsService } from './public-campaigns.service';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * PUBLIC campaign portal (M14) — NO authentication, public columns only, served
@@ -16,6 +17,7 @@ export class PublicCampaignsController {
   constructor(private readonly service: PublicCampaignsService) {}
 
   @Get()
+  @PublicCache()
   list(
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
@@ -24,6 +26,7 @@ export class PublicCampaignsController {
   }
 
   @Get(':id')
+  @PublicCache()
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<CampaignPublic> {
     const campaign = await this.service.get(id);
     if (!campaign) {
@@ -37,6 +40,7 @@ export class PublicCampaignsController {
    * with the evidences. No session; cancelled campaigns → 404.
    */
   @Get(':id/accountability')
+  @PublicCache()
   async accountability(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<CampaignAccountabilityReport> {

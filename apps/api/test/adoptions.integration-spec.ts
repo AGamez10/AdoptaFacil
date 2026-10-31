@@ -85,7 +85,13 @@ describe('Adoptions (M04: request + evaluation)', () => {
     const animalRes = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${refugeToken}`)
-      .send({ name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Firulais',
+        species: 'dog',
+        sex: 'male',
+        size: 'medium',
+      })
       .expect(201);
     animalId = animalRes.body.id;
     animalSpecies = animalRes.body.species;

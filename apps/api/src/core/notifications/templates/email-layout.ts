@@ -29,6 +29,7 @@ interface ThemeStyle {
 // bubble); text and the button keep AA contrast on white.
 const THEMES: Record<EmailTheme, ThemeStyle> = {
   security: { accent: '#202D3E', soft: '#E8ECF2', icon: '🔒', kicker: 'Seguridad de tu cuenta' },
+  team: { accent: '#25BAA6', soft: '#E6F7F4', icon: '👥', kicker: 'Invitación a un equipo' },
   donation: { accent: '#FF8F66', soft: '#FFF0EA', icon: '💛', kicker: 'Donaciones' },
   sponsorship: { accent: '#F2B84B', soft: '#FDF4E2', icon: '🐾', kicker: 'Apadrinamientos' },
   adoption: { accent: '#25BAA6', soft: '#E6F7F4', icon: '🏡', kicker: 'Adopciones' },
@@ -54,6 +55,23 @@ const MUTED = '#5B6878';
 const BUTTON = '#198072';
 const PAGE_BG = '#F2F5F4';
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+// Modo oscuro (Apple Mail, iOS, Outlook.com/app, Thunderbird): los clientes que
+// respetan `prefers-color-scheme` usan esta paleta; Gmail invierte los colores
+// por su cuenta. Las clases `af-*` son el único enganche: los estilos en línea
+// siguen siendo la versión clara que ve cualquier cliente sin soporte.
+const DARK_CSS = `
+  .af-bg{background:#0E1621 !important;}
+  .af-card{background:#16202B !important;box-shadow:none !important;}
+  .af-ink{color:#E7EDF2 !important;}
+  .af-muted{color:#A7B3BF !important;}
+  .af-soft{background:#1E2B37 !important;color:#E7EDF2 !important;}
+  .af-link{color:#5FD3C1 !important;}
+  .af-rule{border-color:#2A3846 !important;}
+  .af-accent{color:#5FD3C1 !important;}`;
+
+/** Una línea de la lista con viñeta (`• texto`). */
+const BULLET_LINE = /^\s*[•·\-–]\s+/;
 
 export interface LayoutInput {
   theme: EmailTheme;
@@ -107,35 +125,48 @@ export function renderLayout(input: LayoutInput): string {
   const buttonText = branded ? color(input.brand?.buttonText, '#ffffff') : '#ffffff';
 
   const sender = branded
-    ? `<span style="font-size:13px;color:${MUTED};">a través de AdoptaFácil</span>`
+    ? `<span class="af-muted" style="font-size:13px;color:${MUTED};">a través de AdoptaFácil</span>`
     : org
-      ? `<span style="font-size:13px;color:${MUTED};">${org} <span style="color:#9AA5B1;">·</span> a través de AdoptaFácil</span>`
-      : `<span style="font-size:13px;color:${MUTED};">Infraestructura digital para el rescate animal</span>`;
+      ? `<span class="af-muted" style="font-size:13px;color:${MUTED};">${org} <span style="color:#9AA5B1;">·</span> a través de AdoptaFácil</span>`
+      : `<span class="af-muted" style="font-size:13px;color:${MUTED};">Infraestructura digital para el rescate animal</span>`;
   const masthead = branded
-    ? `<td style="font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${INK};word-break:break-word;">${org}</td>`
-    : `<td style="font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${INK};">🐾 Adopta<span style="color:${BUTTON};">Fácil</span></td>`;
+    ? `<td class="af-ink" style="font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${INK};word-break:break-word;">${org}</td>`
+    : `<td class="af-ink" style="font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${INK};">🐾 Adopta<span class="af-accent" style="color:${BUTTON};">Fácil</span></td>`;
 
   const paragraphs = input.paragraphsHtml
-    .map(
-      (p) => `<p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;color:${INK};">${p}</p>`,
-    )
+    .map((p) => {
+      // Un párrafo en el que TODAS las líneas empiezan con viñeta se dibuja como
+      // lista en un recuadro (p. ej. las funciones de un cargo).
+      const lines = p.split('<br>');
+      if (lines.length > 0 && lines.every((line) => BULLET_LINE.test(line))) {
+        const items = lines
+          .map(
+            (line) =>
+              `<tr><td valign="top" width="22" class="af-accent" style="width:22px;padding:5px 0;font-size:16px;line-height:1.5;color:${BUTTON};font-weight:700;">✓</td>` +
+              `<td class="af-ink" style="padding:5px 0;font-size:15px;line-height:1.5;color:${INK};">${line.replace(BULLET_LINE, '')}</td></tr>`,
+          )
+          .join('');
+        return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px 0;"><tr><td class="af-soft" style="background:${theme.soft};border-radius:12px;padding:12px 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${items}</table></td></tr></table>`;
+      }
+      return `<p class="af-ink" style="margin:0 0 16px 0;font-size:16px;line-height:1.6;color:${INK};">${p}</p>`;
+    })
     .join('\n');
 
   const button =
     input.ctaLabelHtml && input.ctaUrl
       ? `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px 0;">
+<table role="presentation" class="af-btn" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px 0;">
   <tr>
     <td align="center" bgcolor="${buttonBg}" style="border-radius:10px;">
       <a href="${escapeHtml(input.ctaUrl)}" target="_blank" rel="noopener" style="display:inline-block;padding:14px 28px;font-family:${FONT};font-size:16px;font-weight:700;line-height:1.2;color:${buttonText};text-decoration:none;border-radius:10px;">${input.ctaLabelHtml}</a>
     </td>
   </tr>
 </table>
-<p style="margin:0 0 16px 0;font-size:13px;line-height:1.5;color:${MUTED};">Si el botón no funciona, copia y pega este enlace en tu navegador:<br><a href="${escapeHtml(input.ctaUrl)}" style="color:${BUTTON};word-break:break-all;">${escapeHtml(input.ctaUrl)}</a></p>`
+<p class="af-muted" style="margin:0 0 16px 0;font-size:13px;line-height:1.5;color:${MUTED};">Si el botón no funciona, copia y pega este enlace en tu navegador:<br><a class="af-link" href="${escapeHtml(input.ctaUrl)}" style="color:${BUTTON};word-break:break-all;">${escapeHtml(input.ctaUrl)}</a></p>`
       : '';
 
   const note = input.footerNoteHtml
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;"><tr><td style="background:${theme.soft};border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.5;color:${INK};word-break:break-word;">${input.footerNoteHtml}</td></tr></table>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;"><tr><td class="af-soft" style="background:${theme.soft};border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.5;color:${INK};word-break:break-word;">${input.footerNoteHtml}</td></tr></table>`
     : '';
 
   const legal =
@@ -143,7 +174,7 @@ export function renderLayout(input: LayoutInput): string {
       ? `Recibes este correo porque te relacionaste con ${org || 'AdoptaFácil'} en AdoptaFácil. ` +
         `Tratamos tus datos conforme a la Ley 1581 de 2012. ` +
         (input.unsubscribeUrl
-          ? `<a href="${escapeHtml(input.unsubscribeUrl)}" style="color:${MUTED};text-decoration:underline;">No quiero recibir más correos como este</a>.`
+          ? `<a class="af-muted" href="${escapeHtml(input.unsubscribeUrl)}" style="color:${MUTED};text-decoration:underline;">No quiero recibir más correos como este</a>.`
           : '')
       : 'Este es un correo de servicio sobre tu actividad en AdoptaFácil; no es publicidad. ' +
         'Tratamos tus datos conforme a la Ley 1581 de 2012.';
@@ -154,16 +185,23 @@ export function renderLayout(input: LayoutInput): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>${input.headingHtml}</title>
 <style>
-  @media (max-width:620px){ .af-card{width:100% !important;border-radius:0 !important;} .af-pad{padding-left:22px !important;padding-right:22px !important;} }
+  :root{color-scheme:light dark;supported-color-schemes:light dark;}
+  @media (max-width:620px){ .af-card{width:100% !important;border-radius:0 !important;} .af-pad{padding-left:22px !important;padding-right:22px !important;} .af-h1{font-size:23px !important;} .af-btn a{display:block !important;text-align:center !important;} .af-btn{width:100% !important;} }
+  @media (prefers-color-scheme: dark){${DARK_CSS}
+  }
+  /* Outlook.com / app de Outlook en modo oscuro. */
+  [data-ogsc] .af-ink{color:#E7EDF2 !important;}
+  [data-ogsc] .af-muted{color:#A7B3BF !important;}
+  [data-ogsc] .af-link,[data-ogsc] .af-accent{color:#5FD3C1 !important;}
 </style>
 </head>
-<body style="margin:0;padding:0;background:${PAGE_BG};-webkit-text-size-adjust:100%;">
+<body class="af-bg" style="margin:0;padding:0;background:${PAGE_BG};-webkit-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all;">${input.preheaderHtml}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${PAGE_BG};">
+<table role="presentation" class="af-bg" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${PAGE_BG};">
   <tr>
     <td align="center" style="padding:28px 12px;">
       <table role="presentation" class="af-card" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;font-family:${FONT};box-shadow:0 2px 12px rgba(32,45,62,0.06);">
@@ -182,15 +220,15 @@ export function renderLayout(input: LayoutInput): string {
           <td class="af-pad" style="padding:20px 40px 0 40px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td width="48" height="48" align="center" valign="middle" style="width:48px;height:48px;border-radius:24px;background:${theme.soft};font-size:24px;line-height:48px;">${theme.icon}</td>
-                <td style="padding-left:12px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${MUTED};">${theme.kicker}</td>
+                <td width="48" height="48" align="center" valign="middle" class="af-soft" style="width:48px;height:48px;border-radius:24px;background:${theme.soft};font-size:24px;line-height:48px;">${theme.icon}</td>
+                <td class="af-muted" style="padding-left:12px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${MUTED};">${theme.kicker}</td>
               </tr>
             </table>
           </td>
         </tr>
         <tr>
           <td class="af-pad" style="padding:16px 40px 8px 40px;">
-            <h1 style="margin:0 0 18px 0;font-size:26px;line-height:1.25;font-weight:800;color:${INK};">${input.headingHtml}</h1>
+            <h1 class="af-ink af-h1" style="margin:0 0 18px 0;font-size:26px;line-height:1.25;font-weight:800;color:${INK};">${input.headingHtml}</h1>
             ${paragraphs}
             ${button}
             ${note}
@@ -198,12 +236,12 @@ export function renderLayout(input: LayoutInput): string {
         </tr>
         <tr>
           <td class="af-pad" style="padding:24px 40px 28px 40px;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #E3E8EC;">
+            <table role="presentation" class="af-rule" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #E3E8EC;">
               <tr>
-                <td style="padding-top:18px;font-size:12px;line-height:1.6;color:${MUTED};">
-                  <strong style="color:${INK};">AdoptaFácil</strong> · Transparencia y confianza para el rescate animal en Colombia.<br>
+                <td class="af-muted" style="padding-top:18px;font-size:12px;line-height:1.6;color:${MUTED};">
+                  <strong class="af-ink" style="color:${INK};">AdoptaFácil</strong> · Transparencia y confianza para el rescate animal en Colombia.<br>
                   ${legal}<br>
-                  <a href="${web}" style="color:${BUTTON};text-decoration:none;">${web.replace(/^https?:\/\//, '')}</a>
+                  <a class="af-link" href="${web}" style="color:${BUTTON};text-decoration:none;">${web.replace(/^https?:\/\//, '')}</a>
                 </td>
               </tr>
             </table>

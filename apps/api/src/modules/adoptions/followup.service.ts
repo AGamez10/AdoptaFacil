@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Inject,
@@ -27,6 +28,7 @@ import {
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { canSubmitFollowUp, checkFollowUpTransition } from './followup-status';
+import { optimizeImage } from '../../core/storage/image-optimizer';
 
 /** Row shape returned by the SECURITY DEFINER milestone functions (snake_case). */
 interface MilestoneRow {
@@ -233,7 +235,18 @@ export class FollowUpService {
       contentType: file.mimetype,
       visibility: 'private',
     });
-    await this.storage.saveObject(stored.key, file.buffer, file.mimetype, {
+    // Las fotos de seguimiento se recomprimen a WebP; los videos se guardan tal cual.
+    let body = file.buffer;
+    let contentType = file.mimetype;
+    if (media.kind === 'photo') {
+      const optimized = await optimizeImage(file.buffer, file.mimetype);
+      if (!optimized) {
+        throw new BadRequestException('La foto no se pudo procesar.');
+      }
+      body = optimized.buffer;
+      contentType = optimized.contentType;
+    }
+    await this.storage.saveObject(stored.key, body, contentType, {
       maxBytes: media.maxBytes,
     });
     return this.recordSubmission(

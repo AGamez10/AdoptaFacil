@@ -24,6 +24,7 @@ import { DonationsActivatingNotice } from '../components/donations-activating-no
 import { formatCop } from '../model/donation-breakdown-view';
 import { isEpaycoProvider } from '../../payments/lib/payment-provider';
 import { openEpaycoCheckout } from '../../payments/lib/epayco-checkout';
+import { useNoIndex } from '../../../seo/seo';
 import styles from './donate-page.module.scss';
 
 interface DonationTarget {
@@ -37,6 +38,11 @@ interface DonationTarget {
   /** Slug del portal público (`/o/<slug>`), para ofrecer alternativas si la
    *  organización aún no recibe donaciones en línea. Solo navegación. */
   organizationSlug?: string;
+  /** Donación a UNA campaña de la organización (botón "Donar a esta campaña"
+   *  o el QR fijo apuntando a una campaña). Viaja como `concept`; la API
+   *  rechaza una campaña que no sea de la organización o no esté activa. */
+  campaignId?: string;
+  campaignTitle?: string;
 }
 
 /**
@@ -61,6 +67,8 @@ function useDonationTarget(): DonationTarget | null {
         organizationCity: params.get('organizationCity') ?? undefined,
         organizationNit: params.get('organizationNit') ?? undefined,
         organizationSlug: params.get('organizationSlug') ?? undefined,
+        campaignId: params.get('campaignId') ?? undefined,
+        campaignTitle: params.get('campaignTitle') ?? undefined,
       };
     }
     return null;
@@ -82,6 +90,7 @@ function useDonationTarget(): DonationTarget | null {
  * (invitado). `POST /donations` acepta ambos casos (`OptionalJwtAuthGuard`).
  */
 export function DonatePage() {
+  useNoIndex();
   const client = useApiClient();
   const { status, user } = useSession();
   const hasSession = status === 'authenticated';
@@ -190,6 +199,7 @@ export function DonatePage() {
     try {
       const donation = await createDonation(client, {
         organizationId: target.organizationId,
+        ...(target.campaignId ? { concept: { kind: 'campaign', id: target.campaignId } } : {}),
         intendedAmount,
         commissionPayer,
         anonymous,
@@ -269,7 +279,14 @@ export function DonatePage() {
       <PublicNavbar />
       <main className="flex-1">
         <PageContainer>
-          <PageHeader title="Donar" description={`Tu aporte para ${target.organizationName}.`} />
+          <PageHeader
+            title="Donar"
+            description={
+              target.campaignId && target.campaignTitle
+                ? `Tu aporte para la campaña «${target.campaignTitle}» de ${target.organizationName}.`
+                : `Tu aporte para ${target.organizationName}.`
+            }
+          />
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

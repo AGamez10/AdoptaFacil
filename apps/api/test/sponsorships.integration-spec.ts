@@ -115,7 +115,13 @@ describe('Sponsorships base (RF17 · T-056)', () => {
     const animal = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ name: 'Firu', species: 'dog', sex: 'unknown', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Firu',
+        species: 'dog',
+        sex: 'unknown',
+        size: 'medium',
+      })
       .expect(201);
     animalId = animal.body.id;
   });
@@ -392,6 +398,188 @@ describe('Sponsorships base (RF17 · T-056)', () => {
         where: { sponsorshipId: createdRows[0].id, toStatus: 'cancelled' },
       });
       expect(history?.reason).toBe('Pago inicial rechazado.');
+    });
+  });
+
+  describe('necesita apadrinamiento (monto sugerido editable por animal)', () => {
+    let needyAnimalId = '';
+
+    beforeAll(async () => {
+      const animal = await request(server)
+        .post('/animals')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          name: 'Canela',
+          species: 'dog',
+          sex: 'female',
+          size: 'small',
+          approximateAgeMonths: 24,
+        })
+        .expect(201);
+      needyAnimalId = animal.body.id;
+    });
+
+    it('starts unmarked, with the 50.000 COP suggested amount echoed', async () => {
+      const res = await request(server)
+        .get(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .expect(200);
+      expect(res.body).toMatchObject({
+        animalId: needyAnimalId,
+        needsSponsorship: false,
+        plan: null,
+        activeSponsorsCount: 0,
+        suggestedAmount: 50_000,
+      });
+    });
+
+    it('marking without an amount opens ONE active monthly plan at 50.000 COP, idempotently', async () => {
+      const marks = await Promise.all(
+        [1, 2, 3].map(() =>
+          request(server)
+            .put(`/sponsorship-plans/animal/${needyAnimalId}`)
+            .set('Authorization', `Bearer ${tokenA}`)
+            .send({})
+            .expect(200),
+        ),
+      );
+      for (const res of marks) {
+        expect(res.body.needsSponsorship).toBe(true);
+        expect(res.body.plan).toMatchObject({
+          amount: 50_000,
+          periodicity: 'monthly',
+          isActive: true,
+          name: 'Apadrinamiento mensual',
+        });
+      }
+      const plans = await admin.sponsorshipPlan.findMany({ where: { animalId: needyAnimalId } });
+      expect(plans).toHaveLength(1);
+
+      const audit = await admin.auditLog.findFirst({
+        where: { entityId: plans[0].id, action: 'sponsorship_plan.created' },
+      });
+      expect(audit).not.toBeNull();
+    });
+
+    it('editing the amount with no sponsors yet updates the same plan in place', async () => {
+      const before = await admin.sponsorshipPlan.findFirstOrThrow({
+        where: { animalId: needyAnimalId, isActive: true },
+      });
+      const res = await request(server)
+        .put(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ amount: 60_000 })
+        .expect(200);
+      expect(res.body.plan.id).toBe(before.id);
+      expect(res.body.plan.amount).toBe(60_000);
+    });
+
+    it('rejects invalid amounts (decimals, zero, absurd typos) with 400', async () => {
+      for (const amount of [1000.5, 0, -5, 100_000_000]) {
+        await request(server)
+          .put(`/sponsorship-plans/animal/${needyAnimalId}`)
+          .set('Authorization', `Bearer ${tokenA}`)
+          .send({ amount })
+          .expect(400);
+      }
+    });
+
+    it('with sponsors, a new amount applies ONLY to new sponsors: current ones keep their price', async () => {
+      const settings = await request(server)
+        .get(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .expect(200);
+      const firstPlanId = settings.body.plan.id as string;
+
+      const sub = await request(server)
+        .post('/sponsorships')
+        .set('Authorization', `Bearer ${personBToken}`)
+        .send({ planId: firstPlanId })
+        .expect(201);
+
+      // The generic PATCH refuses to re-price a plan that already has sponsors.
+      await request(server)
+        .patch(`/sponsorship-plans/${firstPlanId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ amount: 80_000 })
+        .expect(409);
+
+      const res = await request(server)
+        .put(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ amount: 80_000 })
+        .expect(200);
+      expect(res.body.plan.id).not.toBe(firstPlanId);
+      expect(res.body.plan.amount).toBe(80_000);
+      expect(res.body.activeSponsorsCount).toBe(1);
+
+      const oldPlan = await admin.sponsorshipPlan.findUniqueOrThrow({ where: { id: firstPlanId } });
+      expect(oldPlan.isActive).toBe(false);
+      expect(oldPlan.amount).toBe(60_000);
+      const sponsorship = await admin.sponsorship.findUniqueOrThrow({
+        where: { id: sub.body.id },
+        include: { plan: true },
+      });
+      expect(sponsorship.status).toBe('active');
+      expect(sponsorship.plan.amount).toBe(60_000);
+
+      const audit = await admin.auditLog.findFirst({
+        where: { entityId: res.body.plan.id, action: 'sponsorship_plan.repriced' },
+      });
+      expect(audit).not.toBeNull();
+
+      // The public page offers only the new amount.
+      const summary = await request(server)
+        .get(`/public/sponsorships/animals/${needyAnimalId}`)
+        .expect(200);
+      expect(summary.body.activePlans.map((p: { amount: number }) => p.amount)).toEqual([80_000]);
+    });
+
+    it('unmarking stops new sponsors but leaves current sponsorships running (idempotent)', async () => {
+      for (let i = 0; i < 2; i++) {
+        const res = await request(server)
+          .delete(`/sponsorship-plans/animal/${needyAnimalId}`)
+          .set('Authorization', `Bearer ${tokenA}`)
+          .expect(200);
+        expect(res.body.needsSponsorship).toBe(false);
+        expect(res.body.plan).toBeNull();
+        expect(res.body.activeSponsorsCount).toBe(1);
+      }
+      const summary = await request(server)
+        .get(`/public/sponsorships/animals/${needyAnimalId}`)
+        .expect(200);
+      expect(summary.body.activePlans).toEqual([]);
+    });
+
+    it('marking again reopens sponsorship with the amount given', async () => {
+      const res = await request(server)
+        .put(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ amount: 55_000 })
+        .expect(200);
+      expect(res.body.needsSponsorship).toBe(true);
+      expect(res.body.plan.amount).toBe(55_000);
+    });
+
+    it("deny-by-default and tenant isolation: a Person gets 403, Org B gets 404 on Org A's animal", async () => {
+      await request(server)
+        .put(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${personToken}`)
+        .send({})
+        .expect(403);
+      await request(server)
+        .put(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .send({})
+        .expect(404);
+      await request(server)
+        .get(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
+      await request(server)
+        .delete(`/sponsorship-plans/animal/${needyAnimalId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
     });
   });
 });

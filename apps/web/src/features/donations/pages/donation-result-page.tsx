@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { buttonVariants, Card, CardContent, CardHeader, CardTitle, cn } from '@adoptafacil/ui';
 import { PageContainer } from '../../_layout';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
+import { useNoIndex } from '../../../seo/seo';
 
 /**
  * `/donaciones/resultado` — página a la que vuelve el navegador tras el
@@ -14,6 +15,7 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
  * y que el comprobante le llega por correo.
  */
 export function DonationResultPage() {
+  useNoIndex();
   return (
     <div className="flex min-h-screen flex-col">
       <PublicNavbar />

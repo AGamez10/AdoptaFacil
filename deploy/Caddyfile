@@ -32,6 +32,15 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Frame-Options "DENY"
 		Permissions-Policy "camera=(), microphone=(), payment=(), usb=()"
+		# CSP (plan SEO · P0) en modo SOLO REPORTE: no bloquea nada todavía; el
+		# navegador avisa cada violación a /api/public/security/csp-report y la
+		# API la registra (directiva, origen bloqueado y ruta, sin query strings).
+		# Tras dos semanas sin violaciones legítimas se cambia el nombre de la
+		# cabecera a Content-Security-Policy. Orígenes permitidos, todos usados
+		# hoy por la web: Google Identity (inicio de sesión), Google Fonts
+		# (plantillas de portal), mapas de Google y OpenStreetMap (portal). Sin
+		# pasarelas de pago: ninguna está aprobada en este momento.
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://accounts.google.com https://maps.google.com https://www.google.com https://www.openstreetmap.org; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/public/security/csp-report"
 		-Server
 		-X-Powered-By
 	}

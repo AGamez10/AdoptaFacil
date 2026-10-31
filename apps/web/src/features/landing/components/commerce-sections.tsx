@@ -1,94 +1,32 @@
-import { useEffect, useState, type ComponentType, type SVGProps } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { CampaignPublic } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
-import { useFeature } from '../../../shell/capabilities';
+import { usePublicModules } from '../../../shell/layout/public-nav-model';
 import { listPublicCampaigns } from '../../campaigns/api/public-campaigns';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
-import { BoneSticker, CatMascot, DogMascot, HeartSticker, Sparkle } from './illustrations';
-import { IconArrowRight, IconBox, IconHeart, IconMegaphone, IconPaw } from './landing-icons';
+import { CatMascot, DogMascot, Sparkle } from './illustrations';
+import { IconArrowRight } from './landing-icons';
 import styles from './commerce.module.scss';
 
 /** Ancla de "Formas de ayudar" (la usa el hero). */
 export const LANDING_HELP_ID = 'ayudar';
 
-interface HelpWay {
-  key: string;
-  Icon: ComponentType<SVGProps<SVGSVGElement>>;
-  title: string;
-  text: string;
-  cta: string;
-  to: string;
-  tone: 'teal' | 'gold' | 'coral' | 'navy';
-}
-
 /**
- * Las formas de ayudar que el producto puede cumplir HOY: adoptar y apoyar
- * campañas siempre; donar y el banco de recursos solo con su módulo encendido
- * (Ola 1, R1-1). Nunca se promete un botón que lleve a un 404.
+ * "Todo AdoptaFácil": cada módulo público en una cuadrícula tipo bento, con la
+ * misma lista y los mismos grupos del menú (`usePublicModules`), así lo que
+ * ves en el menú y en la página nunca se contradice. Los módulos apagados se
+ * muestran como "muy pronto", sin enlace: nunca un botón que lleve a un 404.
+ * Colores institucionales del logo: azul noche y verde azulado.
  */
-export function useHelpWays(): HelpWay[] {
-  const payments = useFeature('payments');
-  const resources = useFeature('resources');
-  return [
-    {
-      key: 'adoptar',
-      Icon: IconPaw,
-      title: 'Adopta',
-      text: 'Conoce su historia, solicita en línea y firma un contrato claro con la organización.',
-      cta: 'Ver animales',
-      to: '/adoptar',
-      tone: 'teal',
-    },
-    ...(payments
-      ? [
-          {
-            key: 'donar',
-            Icon: IconHeart,
-            title: 'Dona',
-            text: 'Elige la organización, mira el desglose antes de pagar y guarda tu comprobante.',
-            cta: 'Donar ahora',
-            to: '/donaciones',
-            tone: 'coral' as const,
-          },
-        ]
-      : []),
-    {
-      key: 'campanas',
-      Icon: IconMegaphone,
-      title: 'Apoya una campaña',
-      text: 'Cirugías, alimento, esterilizaciones: metas concretas con evidencia de en qué se usó la ayuda.',
-      cta: 'Ver campañas',
-      to: '/campanas',
-      tone: 'gold',
-    },
-    ...(resources
-      ? [
-          {
-            key: 'recursos',
-            Icon: IconBox,
-            title: 'Comparte recursos',
-            text: 'Ofrece lo que te sobra (cobijas, guacales, alimento) a quien lo necesita hoy.',
-            cta: 'Ir al banco de recursos',
-            to: '/recursos',
-            tone: 'navy' as const,
-          },
-        ]
-      : []),
-  ];
-}
-
-/** Ilustración de cada bloque de color (decorativa). */
-function WayArt({ tone }: { tone: HelpWay['tone'] }) {
-  if (tone === 'teal') return <DogMascot className={styles.way__art} />;
-  if (tone === 'gold') return <CatMascot className={styles.way__art} />;
-  if (tone === 'coral') return <HeartSticker className={styles.way__art} color="#ff7a59" />;
-  return <BoneSticker className={styles.way__art} color="#ffffff" />;
-}
-
-/** Bloque "Hay muchas formas de ayudar": una tarjeta grande por camino. */
 export function WaysToHelpSection() {
-  const ways = useHelpWays();
+  const groups = usePublicModules();
+  const byKey = new Map(groups.flatMap((group) => group.modules).map((m) => [m.key, m]));
+  const adopt = byKey.get('adoptar');
+  const tiles = groups
+    .filter((group) => group.key === 'ayudar' || group.key === 'comunidad')
+    .flatMap((group) => group.modules.map((module) => ({ ...module, group: group.label })));
+
   return (
     <section
       id={LANDING_HELP_ID}
@@ -97,27 +35,91 @@ export function WaysToHelpSection() {
       data-testid="landing-ways"
     >
       <div className={styles.container}>
-        <div className={styles.head}>
-          <p className={styles.eyebrow}>Elige cómo ayudar</p>
+        <div className={cn(styles.head, 'af-reveal')}>
+          <p className={styles.eyebrow}>Todo AdoptaFácil</p>
           <h2 id="landing-ways-title" className={styles.head__title}>
             Hay más de una forma de cambiar una vida.
           </h2>
+          <p className={styles.head__lead}>
+            Adoptar, donar, apoyar campañas, compartir recursos o encontrar quién cuide a tu
+            mascota: todo en un mismo lugar, con las mismas reglas claras.
+          </p>
         </div>
-        <ul className={styles.ways__grid} data-count={ways.length}>
-          {ways.map(({ key, Icon, title, text, cta, to, tone }) => (
-            <li key={key} className={styles.way} data-tone={tone} data-testid={`way-${key}`}>
-              <WayArt tone={tone} />
-              <span className={styles.way__icon} aria-hidden="true">
-                <Icon />
-              </span>
-              <h3 className={styles.way__title}>{title}</h3>
-              <p className={styles.way__text}>{text}</p>
-              <Link to={to} className={styles.way__cta}>
-                {cta}
-                <IconArrowRight aria-hidden="true" />
+        <ul className={styles.bento}>
+          {adopt && (
+            <li
+              className={cn(styles.tile, styles['tile--hero'], 'af-reveal')}
+              data-testid="way-adoptar"
+            >
+              <Link to={adopt.to} className={styles.tile__link}>
+                <DogMascot className={styles.tile__art} />
+                <span className={styles.tile__icon} aria-hidden="true">
+                  <adopt.Icon />
+                </span>
+                <span className={styles.tile__group}>Adoptar</span>
+                <strong className={styles.tile__title}>Encuentra a quien te espera</strong>
+                <span className={styles.tile__text}>
+                  Conoce su historia, solicita en línea y firma un contrato claro con la
+                  organización.
+                </span>
+                <span className={styles.tile__cta}>
+                  Ver animales
+                  <IconArrowRight aria-hidden="true" />
+                </span>
               </Link>
             </li>
-          ))}
+          )}
+          {tiles.map((module) => {
+            const body = (
+              <>
+                <span className={styles.tile__icon} aria-hidden="true">
+                  <module.Icon />
+                </span>
+                <span className={styles.tile__group}>{module.group}</span>
+                <strong className={styles.tile__title}>{module.label}</strong>
+                <span className={styles.tile__text}>{module.description}</span>
+                {module.enabled ? (
+                  <IconArrowRight className={styles.tile__arrow} aria-hidden="true" />
+                ) : (
+                  <span className={styles.tile__soon}>Muy pronto</span>
+                )}
+              </>
+            );
+            return (
+              <li
+                key={module.key}
+                className={cn(styles.tile, 'af-reveal', !module.enabled && styles['tile--soon'])}
+                data-testid={module.enabled ? `way-${module.key}` : `way-soon-${module.key}`}
+              >
+                {module.enabled ? (
+                  <Link to={module.to} className={styles.tile__link}>
+                    {body}
+                  </Link>
+                ) : (
+                  <div className={styles.tile__link}>{body}</div>
+                )}
+              </li>
+            );
+          })}
+          <li
+            className={cn(styles.tile, styles['tile--org'], 'af-reveal')}
+            data-testid="way-organizaciones"
+          >
+            <a href="#organizaciones" className={styles.tile__link}>
+              <CatMascot className={styles.tile__art} />
+              <span className={styles.tile__group}>Organizaciones</span>
+              <strong className={styles.tile__title}>
+                ¿Rescatas animales? Tu casa digital es gratis.
+              </strong>
+              <span className={styles.tile__text}>
+                Portal propio, animales con ficha clínica y adopciones con contrato y seguimiento.
+              </span>
+              <span className={styles.tile__cta}>
+                Conocer cómo funciona
+                <IconArrowRight aria-hidden="true" />
+              </span>
+            </a>
+          </li>
         </ul>
       </div>
     </section>
@@ -127,21 +129,25 @@ export function WaysToHelpSection() {
 /** Campañas activas reales (`GET /public/campaigns`). Sin campañas, la sección
  *  no se monta: nunca un bloque vacío en la página de entrada. */
 export function ActiveCampaignsSection() {
-  const [items, setItems] = useState<CampaignPublic[]>([]);
+  const [state, setState] = useState<{ status: 'loading' | 'ready'; items: CampaignPublic[] }>({
+    status: 'loading',
+    items: [],
+  });
   useEffect(() => {
     const controller = new AbortController();
     listPublicCampaigns({ limit: 3, signal: controller.signal })
-      .then((page) => setItems(page.items.slice(0, 3)))
+      .then((page) => setState({ status: 'ready', items: page.items.slice(0, 3) }))
       .catch(() => {
-        // Best-effort: sin datos la sección simplemente no aparece.
+        // Sin datos: el mismo mensaje que sin campañas, nunca un error técnico.
+        if (!controller.signal.aborted) setState({ status: 'ready', items: [] });
       });
     return () => controller.abort();
   }, []);
-
-  if (items.length === 0) return null;
+  const { status, items } = state;
 
   return (
     <section
+      id="campanas"
       className={styles.campaigns}
       aria-labelledby="landing-campaigns-title"
       data-testid="landing-campaigns"
@@ -159,13 +165,28 @@ export function ActiveCampaignsSection() {
             <IconArrowRight aria-hidden="true" />
           </Link>
         </div>
-        <ul className={styles.campaigns__grid}>
-          {items.map((campaign) => (
-            <li key={campaign.id}>
-              <CampaignCard campaign={campaign} variant="brand" />
-            </li>
-          ))}
-        </ul>
+        {status === 'loading' ? (
+          <ul className={styles.campaigns__grid} aria-busy="true" aria-label="Cargando campañas">
+            {[0, 1, 2].map((index) => (
+              <li key={index} className={styles.campaigns__skeleton} aria-hidden="true" />
+            ))}
+          </ul>
+        ) : items.length === 0 ? (
+          <div className={styles.campaigns__empty} data-testid="landing-campaigns-empty">
+            <p className={styles.campaigns__emptyTitle}>Hoy no hay campañas abiertas</p>
+            <p className={styles.campaigns__emptyText}>
+              Cuando una organización abra una campaña, la verás aquí con su meta y su avance.
+            </p>
+          </div>
+        ) : (
+          <ul className={styles.campaigns__grid}>
+            {items.map((campaign) => (
+              <li key={campaign.id} className="af-reveal">
+                <CampaignCard campaign={campaign} variant="brand" />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
@@ -176,7 +197,7 @@ export function FinalCtaSection() {
   return (
     <section className={styles.final} aria-labelledby="landing-final-title">
       <div className={styles.container}>
-        <div className={styles.final__card}>
+        <div className={cn(styles.final__card, 'af-reveal')}>
           <div className={styles.final__art} aria-hidden="true">
             <DogMascot className={styles.final__dog} />
             <CatMascot className={styles.final__cat} />

@@ -1,25 +1,39 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import type { PublicHeroBanner } from '@adoptafacil/contracts';
 import { useSession } from '../../../shell/auth';
 import { FullPageLoading, PublicFooter, PublicNavbar } from '../../../shell/layout';
-import { STATIC_PAGES } from '../../../seo/page-meta.js';
-import { organizationLd, useSeo, websiteLd } from '../../../seo/seo';
+import { HOME_FAQ, STATIC_PAGES } from '../../../seo/page-meta.js';
+import { faqLd, organizationLd, useSeo, websiteLd } from '../../../seo/seo';
 import {
   ActiveCampaignsSection,
   AdoptionStepsSection,
+  CoffeeSection,
   CommunitySection,
+  FaqSection,
   FinalCtaSection,
   ForOrganizationsSection,
   ImpactSection,
   LANDING_CATALOG_ID,
   LandingHero,
   PromisesSection,
+  TemplateGallerySection,
   WaitingAnimalsSection,
   WaysToHelpSection,
   useCatalogSnapshot,
 } from '../../landing';
 import { buildAdoptPath } from '../model/adopt-filters';
+
+/** Necesidades, voluntariados, libro público y guías: bajo el pliegue, en su
+ *  propio chunk para que la primera carga no pague su código. */
+const loadNetwork = () => import('../../landing/components/network-sections');
+const NetworkNeedsSection = lazy(() =>
+  loadNetwork().then((m) => ({ default: m.NetworkNeedsSection })),
+);
+const PublicLedgerSection = lazy(() =>
+  loadNetwork().then((m) => ({ default: m.PublicLedgerSection })),
+);
+const GuidesSection = lazy(() => loadNetwork().then((m) => ({ default: m.GuidesSection })));
 
 const LEGACY_SPECIES: Record<string, 'dog' | 'cat'> = { perros: 'dog', gatos: 'cat' };
 
@@ -81,7 +95,7 @@ export function GeneralPortalPage() {
     title: STATIC_PAGES['/'].title,
     description: STATIC_PAGES['/'].description,
     path: '/',
-    jsonLd: [organizationLd(), websiteLd()],
+    jsonLd: [organizationLd(), websiteLd(), faqLd(HOME_FAQ)],
   });
   useScrollToHash();
 
@@ -119,9 +133,19 @@ export function GeneralPortalPage() {
         <ImpactSection snapshot={snapshot} />
 
         <ActiveCampaignsSection />
+        <Suspense fallback={null}>
+          <NetworkNeedsSection />
+          <PublicLedgerSection snapshot={snapshot} />
+        </Suspense>
+        <CoffeeSection />
         <CommunitySection />
         <ForOrganizationsSection />
+        <TemplateGallerySection />
         <PromisesSection />
+        <Suspense fallback={null}>
+          <GuidesSection />
+        </Suspense>
+        <FaqSection />
         <FinalCtaSection />
       </main>
 

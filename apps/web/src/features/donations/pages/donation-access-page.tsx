@@ -17,6 +17,7 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { fetchGuestDonationAccess } from '../api/donations-api';
 import { formatBogota, formatCop } from '../model/donation-breakdown-view';
 import { DONATION_STATUS_BADGE_VARIANT, DONATION_STATUS_LABELS } from '../model/my-donations-view';
+import { useNoIndex } from '../../../seo/seo';
 import styles from './donation-access-page.module.scss';
 
 type AccessState = 'loading' | 'found' | 'invalid' | 'error';
@@ -36,6 +37,7 @@ type AccessState = 'loading' | 'found' | 'invalid' | 'error';
  * never imply whether a donation with that data might exist.
  */
 export function DonationAccessPage() {
+  useNoIndex();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
   const [state, setState] = useState<AccessState>('loading');

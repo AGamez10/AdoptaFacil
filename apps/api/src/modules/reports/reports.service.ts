@@ -35,6 +35,10 @@ import {
   type SocialServiceReportFilters,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import {
+  NOTIFICATION_PORT,
+  type NotificationPort,
+} from '../../core/notifications/notification.port';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -170,6 +174,7 @@ export class ReportsService {
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     private readonly legalRepresentatives: LegalRepresentativeService,
+    @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     @Inject(ConfigService) config: ConfigService,
   ) {
     this.signaturesEnabled = config.get('REPORTS_SIGNATURES_ENABLED') === true;
@@ -324,14 +329,15 @@ export class ReportsService {
     // devuelve; si fue un choque de folio, el reintento sortea otro.
     for (let attempt = 1; ; attempt++) {
       try {
-        const { row, reused } = await this.generateOnce(
+        const { row, reused, approvals, notify } = await this.generateOnce(
           organizationId,
           actorUserId,
           input,
           period,
           filters,
         );
-        return toContract(row, reused);
+        if (!reused) await this.requestSignatures(row, notify);
+        return toContract(row, reused, approvals);
       } catch (error) {
         if (isUniqueConstraintViolation(error) && attempt < CODE_MAX_ATTEMPTS) continue;
         throw error;
@@ -345,7 +351,12 @@ export class ReportsService {
     input: GenerateOrgReportInput,
     period: ReportPeriod,
     filters: SocialServiceReportFilters,
-  ): Promise<{ row: OrgReportRow; reused: boolean }> {
+  ): Promise<{
+    row: OrgReportRow;
+    reused: boolean;
+    approvals: ApprovalRecord[];
+    notify: Array<{ email: string; role: LegalRepresentativeRole }>;
+  }> {
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const [{ snapshot, rteVigente }, available] = await Promise.all([
         this.organizationSnapshot(tx, organizationId),
@@ -393,8 +404,12 @@ export class ReportsService {
           ? []
           : roles.map((r) => available.get(r)).filter((s): s is SealedSigner => !!s);
 
-      // Quien redacta no firma lo que redacta: la firma la aprueba otra cuenta.
-      if (signers.some((signer) => signer.signerUserId === actorUserId)) {
+      // La cuenta principal (Owner) emite con la firma del representante legal
+      // que ella misma registró: generar ES su autorización. El contador y el
+      // revisor fiscal nunca generan (no tienen ese rol), así que nadie más
+      // puede quedar como firmante y redactor a la vez.
+      const selfSigner = signers.find((signer) => signer.signerUserId === actorUserId);
+      if (selfSigner && selfSigner.role !== 'legal_representative') {
         throw new BadRequestException(
           'Quien redacta el documento no puede ser también su firmante. Pide a un administrador que lo redacte, o genéralo como comprobante informativo.',
         );
@@ -419,7 +434,13 @@ export class ReportsService {
         },
       });
       if (existing) {
-        return { row: existing, reused: true };
+        const approvals = await this.approvalsByReport(tx, organizationId, [existing.id]);
+        return {
+          row: existing,
+          reused: true,
+          approvals: approvals.get(existing.id) ?? [],
+          notify: [],
+        };
       }
 
       const summary = summarize(payload);
@@ -454,8 +475,102 @@ export class ReportsService {
           rowCount: summary.rowCount,
         },
       });
-      return { row: created, reused: false };
+
+      const approvals: ApprovalRecord[] = [];
+      if (selfSigner) {
+        approvals.push(
+          await tx.orgReportApproval.create({
+            data: {
+              organizationId,
+              reportId: created.id,
+              signerRole: selfSigner.role,
+              signerUserId: actorUserId,
+              legalRepresentativeId: selfSigner.legalRepresentativeId,
+              signatureHash: selfSigner.signatureHash,
+              contentHash: created.contentHash,
+              decision: 'approved',
+            },
+          }),
+        );
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'report.approved',
+          entityType: 'org_report',
+          entityId: created.id,
+          metadata: { code: created.code, signerRole: selfSigner.role, onGenerate: true },
+        });
+      }
+      if (signers.length > 0 && statusFor(signers, approvals) === 'issued') {
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'report.issued',
+          entityType: 'org_report',
+          entityId: created.id,
+          metadata: {
+            code: created.code,
+            requestedByUserId: actorUserId,
+            signerRoles: signers.map((s) => s.role),
+          },
+        });
+      }
+
+      // Las demás firmas (contador, revisor fiscal, o el representante legal si
+      // redactó un administrador) se piden por correo a cada persona.
+      const others = signers.filter((s) => s.signerUserId !== actorUserId);
+      const users =
+        others.length > 0
+          ? await tx.user.findMany({
+              where: { id: { in: others.map((s) => s.signerUserId) } },
+              select: { id: true, email: true },
+            })
+          : [];
+      const emailOf = new Map(users.map((u) => [u.id, u.email]));
+      const notify = others.flatMap((s) => {
+        const email = emailOf.get(s.signerUserId);
+        return email ? [{ email, role: s.role }] : [];
+      });
+      return { row: created, reused: false, approvals, notify };
     });
+  }
+
+  /**
+   * Correo a cada firmante pendiente con el enlace a "Documentos por firmar".
+   * El correo solo avisa: la autorización se da con la propia cuenta de la
+   * persona (sesión iniciada), que es lo que la identifica (Ley 527, art. 7).
+   * Nunca bloquea la generación: si el correo falla, el pendiente sigue en la
+   * bandeja de la persona.
+   */
+  private async requestSignatures(
+    row: OrgReportRow,
+    notify: Array<{ email: string; role: LegalRepresentativeRole }>,
+  ): Promise<void> {
+    if (notify.length === 0) return;
+    const payload = row.payload as unknown as OrgReportPayload;
+    const orgName = payload.organization?.name ?? 'Tu organización';
+    const kindLabel =
+      row.kind === 'donations' ? 'el informe de donaciones' : 'el reporte de servicio social';
+    const link = `${this.webBaseUrl}/organizacion/documentos-por-firmar`;
+    await Promise.all(
+      notify.map(({ email, role }) =>
+        this.notifications
+          .send({
+            to: email,
+            subject: `${orgName} necesita tu firma como ${SIGNER_ROLE_LABEL[role].toLowerCase()}`,
+            body:
+              'Hola,\n\n' +
+              `${orgName} generó ${kindLabel} con folio ${row.code} y necesita tu firma como ` +
+              `${SIGNER_ROLE_LABEL[role].toLowerCase()}.\n\n` +
+              'Revísalo y autorízalo (o recházalo) con tu propia cuenta aquí:\n\n' +
+              `${link}\n\n` +
+              'Mientras no lo autorices, el documento queda pendiente de firma y no se emite. ' +
+              'Si no esperabas este correo, ignóralo.',
+            idempotencyKey: `report.signature_request:${row.id}:${role}`,
+          })
+          .catch(() => undefined),
+      ),
+    );
   }
 
   private async insertReport(

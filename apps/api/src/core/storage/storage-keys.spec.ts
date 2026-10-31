@@ -3,6 +3,7 @@ import {
   buildStorageKey,
   contentTypeFromKey,
   parseStorageKey,
+  resolveServeUrl,
   safeName,
 } from './storage-keys';
 
@@ -57,6 +58,29 @@ describe('storage-keys (T-108)', () => {
       expect(contentTypeFromKey('a/b/c-x.jpg')).toBe('image/jpeg');
       expect(contentTypeFromKey('a/b/c-x.pdf')).toBe('application/pdf');
       expect(contentTypeFromKey('a/b/c-x.bin')).toBe('application/octet-stream');
+    });
+  });
+
+  describe('resolveServeUrl (plan de escala, B2)', () => {
+    const api = 'https://adoptafacil.org/api';
+    const cdn = 'https://img.adoptafacil.org/api';
+
+    it('sends public keys to the CDN host when one is configured', () => {
+      expect(resolveServeUrl(api, cdn, `public/${ORG}/a-x.jpg`)).toBe(
+        `${cdn}/storage/public?key=${encodeURIComponent(`public/${ORG}/a-x.jpg`)}`,
+      );
+    });
+
+    it('never sends private keys to the CDN', () => {
+      expect(resolveServeUrl(api, cdn, `private/${ORG}/a-x.pdf`)).toMatch(
+        /^https:\/\/adoptafacil\.org\/api\/storage\/private\?key=/,
+      );
+    });
+
+    it('keeps the API host when there is no CDN', () => {
+      expect(resolveServeUrl(api, undefined, `public/${ORG}/a-x.jpg`)).toMatch(
+        /^https:\/\/adoptafacil\.org\/api\/storage\/public\?key=/,
+      );
     });
   });
 });

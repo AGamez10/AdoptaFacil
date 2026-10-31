@@ -262,7 +262,13 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
     await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${org.token}`)
-      .send({ name: 'Firulais S8', species: 'dog', sex: 'male', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Firulais S8',
+        species: 'dog',
+        sex: 'male',
+        size: 'medium',
+      })
       .expect(201);
     await request(server)
       .post('/campaigns')

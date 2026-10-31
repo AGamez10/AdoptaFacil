@@ -7,6 +7,7 @@ import type { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import type { Env } from '../src/config/env.validation';
 import { DiskStorageAdapter } from '../src/core/storage/disk-storage.adapter';
@@ -59,7 +60,8 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
   let docKey = '';
   let photoKey = '';
   const docBytes = Buffer.from('%PDF-1.4 fake legal document bytes');
-  const photoBytes = Buffer.from('\x89PNG fake photo bytes');
+  // Las fotos se recomprimen a WebP, así que la prueba usa una imagen real.
+  let photoBytes: Buffer = Buffer.alloc(0);
 
   const upload = (
     token: string,
@@ -82,6 +84,11 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
   };
 
   beforeAll(async () => {
+    photoBytes = await sharp({
+      create: { width: 64, height: 48, channels: 3, background: { r: 200, g: 40, b: 40 } },
+    })
+      .png()
+      .toBuffer();
     const diskConfig = {
       get: (key: string) =>
         (
@@ -126,6 +133,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .post('/animals')
       .set('Authorization', `Bearer ${ownerA.token}`)
       .send({
+        approximateAgeMonths: 12,
         name: 'Firu',
         species: 'dog',
         sex: 'male',
@@ -186,7 +194,11 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .buffer()
       .parse(binaryParser)
       .expect(200);
-    expect((res.body as Buffer).equals(photoBytes)).toBe(true);
+    const body = res.body as Buffer;
+    expect(res.headers['content-type']).toMatch(/^image\//);
+    // Plan de escala (B2): la CDN puede guardarla; la clave no cambia de contenido.
+    expect(res.headers['cache-control']).toBe('public, max-age=2592000, immutable');
+    expect((await sharp(body).metadata()).width).toBe(64);
   });
 
   it('does not serve a private document through the public endpoint (404)', async () => {
@@ -206,6 +218,14 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
     await upload(ownerB.token, docKey, docBytes, 'demanda.pdf', 'application/pdf').expect(403);
     // Disallowed content type → rejected.
     await upload(ownerA.token, photoKey, Buffer.from('hi'), 'note.txt', 'text/plain').expect(400);
+    // Bytes declared as an image that are not one → rejected (la foto no se puede procesar).
+    await upload(
+      ownerA.token,
+      photoKey,
+      Buffer.from('not an image'),
+      'fake.png',
+      'image/png',
+    ).expect(400);
   });
 
   it('accepts a public video (Historias cover), serves byte ranges, and never a video to a private key', async () => {
