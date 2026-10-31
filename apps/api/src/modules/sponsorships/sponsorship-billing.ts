@@ -32,13 +32,14 @@ export function elapsedDays(from: Date, to: Date): number {
 }
 
 /** UTC month arithmetic (no dependency) — used to advance a sponsorship's
- *  `nextBillingAt` by one period once it has been billed. */
+ *  `nextBillingAt` by one period once it has been billed. The day is clamped to
+ *  the last day of the target month: 31 Oct + 1 month is 30 Nov, not 1 Dec
+ *  (`setUTCMonth` alone overflows into the next month). */
 export function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getTime());
   const day = result.getUTCDate();
   result.setUTCDate(1);
   result.setUTCMonth(result.getUTCMonth() + months);
-  // Un 31 de octubre pasa al 30 de noviembre, no al 1 de diciembre: no se salta un mes.
   const lastDay = new Date(
     Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0),
   ).getUTCDate();

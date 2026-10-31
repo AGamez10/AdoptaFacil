@@ -50,16 +50,22 @@ describe('GeneralPortalPage (landing)', () => {
     await settle();
   });
 
-  it('the primary CTA leads to the adoption listing and the secondary one to the ways to help', async () => {
+  it('the hero offers three clear paths: adopt, help (donar apagado → formas de ayudar) and organizations', async () => {
     renderLanding();
     const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
-    expect(within(hero).getByRole('link', { name: /Quiero adoptar/ })).toHaveAttribute(
+    const paths = within(hero).getByRole('navigation', { name: '¿Qué quieres hacer?' });
+    expect(within(paths).getAllByRole('link')).toHaveLength(3);
+    expect(within(paths).getByRole('link', { name: /Quiero adoptar/ })).toHaveAttribute(
       'href',
       '/adoptar',
     );
-    expect(within(hero).getByRole('link', { name: 'Otras formas de ayudar' })).toHaveAttribute(
+    expect(within(paths).getByRole('link', { name: /Quiero ayudar/ })).toHaveAttribute(
       'href',
       '#ayudar',
+    );
+    expect(within(paths).getByRole('link', { name: /Soy una organización/ })).toHaveAttribute(
+      'href',
+      '#organizaciones',
     );
     expect(document.getElementById('ayudar')).not.toBeNull();
     expect(document.getElementById('organizaciones')).not.toBeNull();
@@ -93,6 +99,10 @@ describe('GeneralPortalPage (landing)', () => {
       </MemoryRouter>,
     );
     await settle();
+    expect(within(screen.getByTestId('hero-path-donar')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/donaciones',
+    );
     expect(within(screen.getByTestId('way-donar')).getByRole('link')).toHaveAttribute(
       'href',
       '/donaciones',
@@ -206,6 +216,17 @@ describe('GeneralPortalPage (landing)', () => {
         .getAllByRole('option')
         .map((o) => o.textContent),
     ).toEqual(['Todo Colombia', 'Bogotá', 'Cali']);
+  });
+
+  it('shows the FAQ that also travels as FAQPage JSON-LD', async () => {
+    renderLanding();
+    const faq = screen.getByTestId('landing-faq');
+    expect(within(faq).getByRole('heading', { name: '¿Qué es AdoptaFácil?' })).toBeInTheDocument();
+    const ld = [...document.head.querySelectorAll('script[data-seo="ld"]')].map((node) =>
+      JSON.parse(node.textContent ?? '{}'),
+    );
+    expect(ld.map((block) => block['@type'])).toEqual(['Organization', 'WebSite', 'FAQPage']);
+    await settle();
   });
 
   it('without animals, hides the rail and the live figures instead of showing zeros', async () => {

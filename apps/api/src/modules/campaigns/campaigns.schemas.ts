@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { CampaignCategory, CampaignStatus } from '@adoptafacil/contracts';
+import { ruledDate } from '../../core/validation/date-rules';
+import { CampaignCategory, CampaignStatus, DATE_RULES } from '@adoptafacil/contracts';
 
 /** Create a campaign. `.strict()` rejects unknown keys. Money is integer COP > 0. */
 export const createCampaignSchema = z
@@ -8,7 +9,7 @@ export const createCampaignSchema = z
     description: z.string().trim().max(5000).optional(),
     category: z.nativeEnum(CampaignCategory),
     goalAmount: z.number().int().positive(),
-    deadline: z.string().datetime({ offset: true }),
+    deadline: ruledDate(DATE_RULES.campaignDeadline),
   })
   .strict();
 
@@ -19,7 +20,9 @@ export const updateCampaignSchema = z
     description: z.string().trim().max(5000).optional(),
     category: z.nativeEnum(CampaignCategory).optional(),
     goalAmount: z.number().int().positive().optional(),
-    deadline: z.string().datetime({ offset: true }).optional(),
+    /** Sin `notPast` aquí: el formulario reenvía la fecha guardada al editar
+     *  otros campos. El servicio exige que NO sea pasada solo si cambia. */
+    deadline: ruledDate({ ...DATE_RULES.campaignDeadline, notPast: false }).optional(),
     status: z.nativeEnum(CampaignStatus).optional(),
   })
   .strict()

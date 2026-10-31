@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   OrganizationStatus,
   Role,
@@ -231,6 +232,10 @@ export function PortalThemePage() {
   const { hasAnyRole } = useSession();
   const canEdit = hasAnyRole(Role.Owner, Role.Administrator);
   const { toast } = useToast();
+  // `?plantilla=<id>` (botón "Probar en mi portal" de la vista de ejemplo):
+  // se preselecciona en el editor, sin guardar nada hasta que la organización lo decida.
+  const [searchParams] = useSearchParams();
+  const tryTemplate = searchParams.get('plantilla');
 
   const [form, setForm] = useState<FormState>({});
   const [logoPosition, setLogoPosition] = useState<PortalLogoPosition>('left');
@@ -274,10 +279,22 @@ export function PortalThemePage() {
         setForm(safePortalTheme(config.tokens) as FormState);
         setLogoPosition(config.logoPosition ?? 'left');
         setSocialNavPosition(config.socialNavPosition ?? 'right');
-        setTemplate(safeTemplate(config.template));
+        const saved = safeTemplate(config.template);
+        const tried =
+          tryTemplate && safeTemplate(tryTemplate) === tryTemplate
+            ? safeTemplate(tryTemplate)
+            : saved;
+        setTemplate(tried);
         setTemplateOptions(
-          resolveTemplateOptions(safeTemplate(config.template), config.templateOptions),
+          resolveTemplateOptions(tried, tried === saved ? config.templateOptions : {}),
         );
+        if (tried !== saved) {
+          setTemplateTouched(true);
+          toast({
+            title: 'Estás probando otra plantilla',
+            description: 'Tu portal no cambia hasta que pulses "Guardar".',
+          });
+        }
         setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
         setPremiumAvailable(config.premiumDesignsAvailable !== false);
         setLockedTemplate(config.lockedTemplate);
@@ -296,6 +313,7 @@ export function PortalThemePage() {
     return () => {
       active = false;
     };
+    // `toast` y `tryTemplate` solo se leen al cargar.
   }, [client, canEdit]);
 
   const previewTokens = useMemo(() => tokensFromForm(form), [form]);

@@ -7,6 +7,8 @@ export const OFFICIAL_WHATSAPP_DISPLAY = '302 852 8926';
 export const OFFICIAL_EMAIL = 'adoptafacil.oficial@gmail.com';
 
 const WHATSAPP_NUMBER = '573028528926';
+/** El mismo número en formato internacional (datos estructurados). */
+export const OFFICIAL_PHONE_E164 = `+${WHATSAPP_NUMBER}`;
 
 /** Enlace `wa.me` con un mensaje prellenado opcional (lo edita la persona antes de enviar). */
 export function officialWhatsappUrl(message?: string): string {

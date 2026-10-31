@@ -21,6 +21,7 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { VolunteerOpportunityManageCard } from '../components/volunteer-opportunity-manage-card';
+import { dateBounds, dateError } from '../../../lib/date-rules';
 
 /**
  * `/organizacion/voluntariado` (RF18, M08) — gestión de oportunidades de
@@ -92,6 +93,12 @@ export function VolunteerOpportunitiesPage() {
         description: 'Título, categoría, rango de fechas y ubicación son obligatorios.',
         variant: 'warning',
       });
+      return;
+    }
+    const rangeError =
+      dateError('opportunityStart', startDate) ?? dateError('opportunityEnd', endDate);
+    if (rangeError) {
+      toast({ title: 'Fechas inválidas', description: rangeError, variant: 'warning' });
       return;
     }
     if (new Date(endDate).getTime() <= new Date(startDate).getTime()) {
@@ -226,6 +233,7 @@ export function VolunteerOpportunitiesPage() {
                   id="vo-start"
                   type="date"
                   value={startDate}
+                  {...dateBounds('opportunityStart')}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
@@ -237,6 +245,7 @@ export function VolunteerOpportunitiesPage() {
                   id="vo-end"
                   type="date"
                   value={endDate}
+                  {...dateBounds('opportunityEnd')}
                   onChange={(e) => setEndDate(e.target.value)}
                 />
               </div>

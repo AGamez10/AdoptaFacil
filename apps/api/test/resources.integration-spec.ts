@@ -219,10 +219,24 @@ describe('Resources (M09, F-6: needs → offers → deliveries → evidence, RBA
   });
 
   it('the org schedules the delivery method/date', async () => {
+    // Una entrega no se programa en el pasado ni en un día que no existe.
+    const past = await request(server)
+      .patch(`/resources/deliveries/${deliveryId}`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ method: 'dropoff', scheduledAt: '2020-09-01T15:00:00.000Z' })
+      .expect(400);
+    expect(JSON.stringify(past.body.message)).toMatch(/no puede ser anterior a hoy/);
+    await request(server)
+      .patch(`/resources/deliveries/${deliveryId}`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ method: 'dropoff', scheduledAt: '2031-02-30T15:00:00.000Z' })
+      .expect(400);
+
+    const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
     const res = await request(server)
       .patch(`/resources/deliveries/${deliveryId}`)
       .set('Authorization', `Bearer ${org.token}`)
-      .send({ method: 'dropoff', scheduledAt: '2026-09-01T15:00:00.000Z' })
+      .send({ method: 'dropoff', scheduledAt: nextWeek })
       .expect(200);
     expect(res.body).toMatchObject({ method: 'dropoff', status: 'scheduled' });
   });

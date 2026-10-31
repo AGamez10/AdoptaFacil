@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { ClinicalEventType } from '@adoptafacil/contracts';
+import { ruledDate } from '../../core/validation/date-rules';
+import { ClinicalEventType, DATE_RULES, dateOrderError } from '@adoptafacil/contracts';
 
 /** Free-form clinical detail (no invented medical schema). Capped to a sane size. */
 const details = z.record(z.string(), z.unknown());
@@ -27,19 +28,27 @@ export const createAttachmentUploadSchema = z
 export const createClinicalEventSchema = z
   .object({
     type: z.nativeEnum(ClinicalEventType),
-    occurredAt: z.string().datetime({ offset: true }),
-    nextDueDate: z.string().datetime({ offset: true }).optional(),
+    occurredAt: ruledDate(DATE_RULES.clinicalOccurred),
+    nextDueDate: ruledDate(DATE_RULES.clinicalNextDue).optional(),
     details: details.optional(),
     attachments: z.array(attachment).max(20).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (!value.nextDueDate) return;
+    const error = dateOrderError(value.occurredAt, value.nextDueDate, {
+      start: 'La fecha del evento clínico',
+      end: 'La próxima fecha',
+    });
+    if (error) ctx.addIssue({ code: 'custom', message: error, path: ['nextDueDate'] });
+  });
 
 /** Edit a clinical event → next version. At least one field must be present. */
 export const editClinicalEventSchema = z
   .object({
     type: z.nativeEnum(ClinicalEventType).optional(),
-    occurredAt: z.string().datetime({ offset: true }).optional(),
-    nextDueDate: z.string().datetime({ offset: true }).optional(),
+    occurredAt: ruledDate(DATE_RULES.clinicalOccurred).optional(),
+    nextDueDate: ruledDate(DATE_RULES.clinicalNextDue).optional(),
     details: details.optional(),
     attachments: z.array(attachment).max(20).optional(),
   })

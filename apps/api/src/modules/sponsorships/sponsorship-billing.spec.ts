@@ -57,12 +57,18 @@ describe('addMonths', () => {
     );
   });
 
-  it('clamps to the last day of a shorter month instead of skipping it', () => {
-    expect(addMonths(new Date('2026-10-31T12:00:00.000Z'), 1).toISOString()).toBe(
-      '2026-11-30T12:00:00.000Z',
+  it('clamps the day to the last day of the target month (31 Oct → 30 Nov, not 1 Dec)', () => {
+    expect(addMonths(new Date('2026-10-31T10:00:00.000Z'), 1).toISOString()).toBe(
+      '2026-11-30T10:00:00.000Z',
     );
+  });
+
+  it('clamps 31 Jan to 28 Feb (or 29 Feb in a leap year)', () => {
     expect(addMonths(new Date('2027-01-31T00:00:00.000Z'), 1).toISOString()).toBe(
       '2027-02-28T00:00:00.000Z',
+    );
+    expect(addMonths(new Date('2028-01-31T00:00:00.000Z'), 1).toISOString()).toBe(
+      '2028-02-29T00:00:00.000Z',
     );
   });
 });

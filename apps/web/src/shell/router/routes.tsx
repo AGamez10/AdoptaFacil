@@ -58,6 +58,10 @@ const PortalThemePage = lazyPage(
   () => import('../../features/portals/pages/portal-theme-page'),
   'PortalThemePage',
 );
+const TemplateDemoPage = lazyPage(
+  () => import('../../features/portals/pages/template-demo-page'),
+  'TemplateDemoPage',
+);
 const OrgDonateRedirectPage = lazyPage(
   () => import('../../features/portals/pages/org-donate-redirect-page'),
   'OrgDonateRedirectPage',
@@ -249,6 +253,9 @@ export function AppRoutes() {
           {/* Public rich organization portal (§M14, T-026) — no auth, public fields
           only: real profile + placeholder sections wired per docs/TASKS.md. */}
           <Route path="/o/:slug" element={<OrgPublicPage />} />
+          {/* Vista de ejemplo de cada plantilla con datos de demostración (noindex,
+          sin API): desde aquí se va al registro con la plantilla elegida. */}
+          <Route path="/plantillas/:id" element={<TemplateDemoPage />} />
           {/* Public animal detail within the org portal (§M14/M03, T-052) — public,
           AnimalSummary fields only (no clinical data). The "Solicitar adopción"
           button links to the /adopciones/solicitar flow, itself under RequireAuth. */}

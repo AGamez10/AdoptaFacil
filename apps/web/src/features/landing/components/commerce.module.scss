@@ -44,6 +44,8 @@
 }
 
 .link {
+  /* Zona táctil cómoda (44 px) en celulares. */
+  min-height: 2.75rem;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -237,6 +239,8 @@
 }
 
 .way__cta {
+  /* Zona táctil cómoda (44 px) en celulares. */
+  min-height: 2.75rem;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;

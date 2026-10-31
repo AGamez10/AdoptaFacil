@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "budget": "node scripts/check-budget.mjs"
   },
   "dependencies": {
     "@adoptafacil/contracts": "workspace:*",
