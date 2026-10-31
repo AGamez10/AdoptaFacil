@@ -81,6 +81,9 @@
 }
 
 .footer__link {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
   justify-self: start;
   font-size: 0.9375rem;
   color: rgb(255 255 255 / 0.82);

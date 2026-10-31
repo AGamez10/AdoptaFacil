@@ -1,4 +1,11 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useId,
+  useState,
+  type ComponentType,
+  type FormEvent,
+  type ReactNode,
+  type SVGProps,
+} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LAUNCH_PRO_PROMO_MONTHS,
@@ -13,7 +20,7 @@ import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-c
 import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filters';
 import { OfficialContactButtons } from '../../guide/components/official-contact-buttons';
 import { officialWhatsappUrl } from '../../../lib/contact';
-import { publicAnimalPath } from '../../../seo/page-meta.js';
+import { HOME_FAQ, publicAnimalPath } from '../../../seo/page-meta.js';
 import { useFeature } from '../../../shell/capabilities/capabilities-context';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
 import { HeroVisual } from './hero-visual';
@@ -31,6 +38,7 @@ import {
   IconCheck,
   IconDocument,
   IconGlobe,
+  IconHeart,
   IconHome,
   IconLock,
   IconMegaphone,
@@ -66,6 +74,7 @@ function SectionHeading({
     <div
       className={cn(
         styles.heading,
+        'af-reveal',
         tone === 'dark' && styles['heading--dark'],
         align === 'center' && styles['heading--center'],
       )}
@@ -211,6 +220,94 @@ function HeroAvatars({ animals, total }: { animals: PublicAnimalSummary[]; total
   );
 }
 
+interface HeroPath {
+  key: 'adoptar' | 'donar' | 'organizacion';
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  title: string;
+  text: string;
+  to: string;
+}
+
+/**
+ * Los tres caminos del primer pantallazo: quien llega quiere adoptar, quiere
+ * ayudar con dinero o es una organización. Cada uno es una tarjeta grande con
+ * verbo en primera persona, así se reconoce en un vistazo sin leer el resto.
+ * "Donar" lleva al checkout solo con pagos encendidos; si no, a las campañas
+ * y demás formas de ayudar de la misma página (nunca a un 404).
+ */
+function useHeroPaths(): HeroPath[] {
+  const payments = useFeature('payments');
+  return [
+    {
+      key: 'adoptar',
+      Icon: IconPaw,
+      title: 'Quiero adoptar',
+      text: 'Perros y gatos de refugios de todo el país',
+      to: ADOPT_BASE_PATH,
+    },
+    payments
+      ? {
+          key: 'donar',
+          Icon: IconHeart,
+          title: 'Quiero donar',
+          text: 'Elige a quién ayudas y ve el desglose',
+          to: '/donaciones',
+        }
+      : {
+          key: 'donar',
+          Icon: IconHeart,
+          title: 'Quiero ayudar',
+          text: 'Campañas con evidencia y otras formas',
+          to: '#ayudar',
+        },
+    {
+      key: 'organizacion',
+      Icon: IconPeople,
+      title: 'Soy una organización',
+      text: 'Tu portal y tus adopciones, gratis',
+      to: `#${LANDING_ORGS_ID}`,
+    },
+  ];
+}
+
+function HeroPaths() {
+  const paths = useHeroPaths();
+  return (
+    <nav className={styles.paths} aria-label="¿Qué quieres hacer?">
+      <p className={styles.paths__label}>¿Qué quieres hacer hoy?</p>
+      <ul className={styles.paths__list}>
+        {paths.map(({ key, Icon, title, text, to }) => {
+          const content = (
+            <>
+              <span className={styles.path__icon} aria-hidden="true">
+                <Icon />
+              </span>
+              <span className={styles.path__body}>
+                <strong className={styles.path__title}>{title}</strong>
+                <span className={styles.path__text}>{text}</span>
+              </span>
+              <IconArrowRight className={styles.path__arrow} aria-hidden="true" />
+            </>
+          );
+          return (
+            <li key={key} className={styles.path} data-path={key} data-testid={`hero-path-${key}`}>
+              {to.startsWith('#') ? (
+                <a href={to} className={styles.path__link}>
+                  {content}
+                </a>
+              ) : (
+                <Link to={to} className={styles.path__link}>
+                  {content}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
 export function LandingHero({ snapshot }: { snapshot: CatalogSnapshot }) {
   const { total, animals, cities } = snapshot;
   return (
@@ -224,20 +321,14 @@ export function LandingHero({ snapshot }: { snapshot: CatalogSnapshot }) {
           <h1 id="landing-hero-title" className={styles.hero__title}>
             Adopta un amigo. <span className={styles.hero__accent}>Cambia dos vidas.</span>
           </h1>
+          {/* Los tres caminos van justo bajo el titular: en un celular de 320 px
+              caben en el primer pantallazo sin hacer scroll. */}
+          <HeroPaths />
           <HeroAvatars animals={animals} total={total} />
           <p className={styles.hero__lead}>
-            Perros y gatos de refugios, fundaciones y rescatistas de todo Colombia te están
-            esperando. Conoce su historia, solicita en línea y firma un contrato claro.
+            Refugios, fundaciones y rescatistas de todo Colombia en un solo lugar: adopta con
+            contrato firmado, dona con desglose claro o suma gratis tu organización.
           </p>
-          <div className={styles.hero__actions}>
-            <Link to={ADOPT_BASE_PATH} className={cn(styles.btn, styles['btn--primary'])}>
-              Quiero adoptar
-              <IconArrowRight className={styles.btn__icon} />
-            </Link>
-            <a href="#ayudar" className={cn(styles.btn, styles['btn--ghost'])}>
-              Otras formas de ayudar
-            </a>
-          </div>
           <HeroSearch cities={cities} />
           <ul className={styles.hero__facts} aria-label="En AdoptaFácil">
             {total > 0 && (
@@ -328,7 +419,7 @@ export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
         </SectionHeading>
         <dl className={styles.stats}>
           {stats.map((stat) => (
-            <div key={stat.label} className={styles.stat}>
+            <div key={stat.label} className={cn(styles.stat, 'af-reveal')}>
               <dt className={styles.stat__label}>{stat.label}</dt>
               <dd className={styles.stat__value}>{stat.value.toLocaleString('es-CO')}</dd>
             </div>
@@ -409,7 +500,7 @@ export function AdoptionStepsSection({ photos = [] }: AdoptionStepsSectionProps)
         </SectionHeading>
         <ol className={styles.steps}>
           {ADOPTION_STEPS.map(({ Icon, title, text, tone }, index) => (
-            <li key={title} className={styles.step} data-tone={tone}>
+            <li key={title} className={cn(styles.step, 'af-reveal')} data-tone={tone}>
               <span className={styles.step__icon} aria-hidden="true">
                 <Icon />
               </span>
@@ -493,7 +584,7 @@ export function CommunitySection() {
         </div>
         <ul className={styles.ecosystem}>
           {ECOSYSTEM.map(({ title, text, tone }) => (
-            <li key={title} className={styles.eco} data-tone={tone}>
+            <li key={title} className={cn(styles.eco, 'af-reveal')} data-tone={tone}>
               <h3 className={styles.eco__title}>{title}</h3>
               <p className={styles.eco__text}>{text}</p>
             </li>
@@ -593,7 +684,7 @@ export function ForOrganizationsSection() {
           </div>
           <ul className={styles.features}>
             {ORG_FEATURES.map(({ Icon, title, text }) => (
-              <li key={title} className={styles.feature}>
+              <li key={title} className={cn(styles.feature, 'af-reveal')}>
                 <span className={styles.feature__icon} aria-hidden="true">
                   <Icon />
                 </span>
@@ -617,7 +708,7 @@ export function ForOrganizationsSection() {
             {PLAN_KEYS.map((key) => (
               <li
                 key={key}
-                className={cn(styles.plan, key === 'free' && styles['plan--featured'])}
+                className={cn(styles.plan, 'af-reveal', key === 'free' && styles['plan--featured'])}
                 data-testid={`plan-${key}`}
               >
                 <p className={styles.plan__name}>{PLAN_CATALOG[key].name}</p>
@@ -679,7 +770,7 @@ export function PromisesSection() {
         />
         <ul className={styles.promises}>
           {PROMISES.map(({ Icon, title, text }) => (
-            <li key={title} className={styles.promise}>
+            <li key={title} className={cn(styles.promise, 'af-reveal')}>
               <span className={styles.promise__icon} aria-hidden="true">
                 <Icon />
               </span>
@@ -688,6 +779,49 @@ export function PromisesSection() {
             </li>
           ))}
         </ul>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Preguntas frecuentes (mismas que el JSON-LD `FAQPage` de la portada). Con
+ * `<details>` nativo: se abre con teclado y lector de pantalla sin JavaScript.
+ */
+export function FaqSection() {
+  return (
+    <section
+      className={cn(styles.section, styles['section--cream'])}
+      aria-labelledby="landing-faq-title"
+      data-testid="landing-faq"
+    >
+      <div className={cn(styles.container, styles.faq)}>
+        <div>
+          <SectionHeading
+            eyebrow="Preguntas frecuentes"
+            title="Lo que más nos preguntan"
+            id="landing-faq-title"
+          >
+            ¿Te queda alguna duda? Escríbenos por WhatsApp o correo y te responde una persona del
+            equipo.
+          </SectionHeading>
+          <OfficialContactButtons
+            className={styles.faq__contact}
+            whatsappMessage="Hola, tengo una pregunta sobre AdoptaFácil."
+            emailSubject="Pregunta sobre AdoptaFácil"
+          />
+        </div>
+        <div className={styles.faq__list}>
+          {HOME_FAQ.map(({ q, a }) => (
+            <details key={q} className={cn(styles.faq__item, 'af-reveal')}>
+              <summary className={styles.faq__question}>
+                <h3 className={styles.faq__questionText}>{q}</h3>
+                <span className={styles.faq__toggle} aria-hidden="true" />
+              </summary>
+              <p className={styles.faq__answer}>{a}</p>
+            </details>
+          ))}
+        </div>
       </div>
     </section>
   );

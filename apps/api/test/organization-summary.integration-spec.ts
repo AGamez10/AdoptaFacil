@@ -85,7 +85,7 @@ describe('Organization summary (S2-08, M13)', () => {
     request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${token}`)
-      .send({ species: 'dog', sex: 'unknown', size: 'medium', ...body });
+      .send({ approximateAgeMonths: 12, species: 'dog', sex: 'unknown', size: 'medium', ...body });
 
   const upload = (token: string, type: string, expiresAt?: string) =>
     request(server)

@@ -314,7 +314,13 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     const bareAnimal = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${bareToken}`)
-      .send({ name: 'Luna', species: 'cat', sex: 'female', size: 'small' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Luna',
+        species: 'cat',
+        sex: 'female',
+        size: 'small',
+      })
       .expect(201);
     const bareReq = await request(server)
       .post('/adoptions')

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { CampaignEvidenceType } from '@adoptafacil/contracts';
+import { ruledDate } from '../../core/validation/date-rules';
+import { CampaignEvidenceType, DATE_RULES } from '@adoptafacil/contracts';
 
 /**
  * Create a spending evidence. `.strict()` rejects unknown keys. `amount` is
@@ -11,7 +12,7 @@ export const createCampaignEvidenceSchema = z
     type: z.nativeEnum(CampaignEvidenceType),
     concept: z.string().trim().min(1).max(500),
     amount: z.number().int().positive().optional(),
-    spentAt: z.string().datetime({ offset: true }),
+    spentAt: ruledDate(DATE_RULES.campaignSpent),
     filename: z.string().trim().min(1).max(255),
     contentType: z.string().trim().min(1).max(150).optional(),
     order: z.number().int().min(0).optional(),

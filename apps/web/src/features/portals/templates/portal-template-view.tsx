@@ -17,7 +17,13 @@ export interface PortalTemplateViewProps {
   /** Tokens de marca ya saneados como custom properties (`brandTokensToStyle`). */
   themeStyle: CSSProperties;
   /** Una reseña recién creada (para mostrarla sin recargar, como el clásico). */
-  onReviewCreated: (review: Review) => void;
+  onReviewCreated?: (review: Review) => void;
+  /**
+   * Vista de ejemplo con datos de demostración (`/plantillas/:id`): los enlaces
+   * que saldrían de la página no navegan y los diálogos de reseña y libro no se
+   * montan, así nunca se consulta a la API con el slug de ejemplo.
+   */
+  demo?: boolean;
 }
 
 function hasWebGL(): boolean {
@@ -42,6 +48,7 @@ export function PortalTemplateView({
   source,
   themeStyle,
   onReviewCreated,
+  demo = false,
 }: PortalTemplateViewProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -100,7 +107,7 @@ export function PortalTemplateView({
         brand: () =>
           hslStringToHex(getComputedStyle(root).getPropertyValue('--primary').trim(), '#1F7A6D'),
         go: (href) => {
-          if (href.startsWith('/') && !href.startsWith('//')) navigate(href);
+          if (!demo && href.startsWith('/') && !href.startsWith('//')) navigate(href);
         },
       });
       kit.init(root, motion);
@@ -124,7 +131,7 @@ export function PortalTemplateView({
       ctl.abort();
       root.innerHTML = '';
     };
-  }, [design, model, three, navigate, reputation]);
+  }, [design, model, three, navigate, reputation, demo]);
 
   // Delegación de clics: enlaces internos por el router, anclas dentro de la
   // plantilla, y los diálogos de reseña y libro público.
@@ -137,12 +144,12 @@ export function PortalTemplateView({
       if (!target) return;
       if (target.closest('[data-review]')) {
         event.preventDefault();
-        setReviewOpen(true);
+        if (!demo) setReviewOpen(true);
         return;
       }
       if (target.closest('[data-ledger]')) {
         event.preventDefault();
-        setLedgerOpen(true);
+        if (!demo) setLedgerOpen(true);
         return;
       }
       const a = target.closest('a');
@@ -159,6 +166,11 @@ export function PortalTemplateView({
         }
         return;
       }
+      // En la vista de ejemplo nada sale de la página: los datos son inventados.
+      if (demo) {
+        event.preventDefault();
+        return;
+      }
       if (a.target === '_blank' || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
         return;
       if (href.startsWith('/') && !href.startsWith('//')) {
@@ -168,7 +180,7 @@ export function PortalTemplateView({
     };
     root.addEventListener('click', onClick);
     return () => root.removeEventListener('click', onClick);
-  }, [navigate]);
+  }, [navigate, demo]);
 
   return (
     <>
@@ -179,7 +191,7 @@ export function PortalTemplateView({
         data-testid="portal-template"
         data-template={design.id}
       />
-      {source.animalTotal > source.animals.length && (
+      {!demo && source.animalTotal > source.animals.length && (
         <p className="mx-auto w-full max-w-[1320px] px-4 py-6 text-center text-sm">
           Aquí ves {source.animals.length} de los {source.animalTotal} animales en adopción.{' '}
           <Link
@@ -191,7 +203,7 @@ export function PortalTemplateView({
           </Link>
         </p>
       )}
-      {reputation && (
+      {reputation && !demo && onReviewCreated && (
         <RegisterReviewDialog
           slug={source.slug}
           open={reviewOpen}
@@ -199,7 +211,9 @@ export function PortalTemplateView({
           onSubmitted={onReviewCreated}
         />
       )}
-      <PublicLedgerDialog slug={source.slug} open={ledgerOpen} onOpenChange={setLedgerOpen} />
+      {!demo && (
+        <PublicLedgerDialog slug={source.slug} open={ledgerOpen} onOpenChange={setLedgerOpen} />
+      )}
     </>
   );
 }

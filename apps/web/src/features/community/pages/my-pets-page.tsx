@@ -6,6 +6,7 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { PET_SEX_LABELS, PET_SPECIES_LABELS, petAgeLabel } from '../model/directory-view';
+import { dateBounds } from '../../../lib/date-rules';
 
 interface PetForm {
   name: string;
@@ -218,7 +219,7 @@ export function MyPetsPage() {
             <Input
               type="date"
               value={form.birthDate}
-              max={new Date().toISOString().slice(0, 10)}
+              {...dateBounds('petBirth')}
               onChange={(event) => setForm({ ...form, birthDate: event.target.value })}
             />
           </label>
