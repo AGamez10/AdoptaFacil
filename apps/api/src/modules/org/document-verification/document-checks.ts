@@ -523,3 +523,100 @@ export function buildVerificationReport(
     links: partial.links,
   };
 }
+
+// ---------------------------------------------------------------------------
+// ¿El archivo es el documento que dice ser? (al subirlo, del lado de la org)
+// ---------------------------------------------------------------------------
+
+/** Nombre del documento como lo dice la organización, para los mensajes. */
+const KIND_NAMES: Record<DocumentType, string> = {
+  [DocumentType.Rut]: 'el RUT',
+  [DocumentType.ExistenceRepresentationCertificate]: 'el certificado de Cámara de Comercio',
+  [DocumentType.LegalRepresentativeId]: 'la cédula del representante legal',
+  [DocumentType.Other]: 'otro documento',
+};
+
+/** Las búsquedas van sobre el texto normalizado (sin tildes): los PDF de la DIAN
+ *  a veces traen las tildes como caracteres sueltos. */
+export function looksLikeRut(text: string): boolean {
+  const s = normalize(text);
+  return /registro unico tributario/.test(s) || /formulario del rut/.test(s);
+}
+
+export function looksLikeChamberCertificate(text: string): boolean {
+  const s = normalize(text);
+  const certificate = /existencia y representacion/.test(s) || /inscripcion de documentos/.test(s);
+  return certificate && /camara de comercio/.test(s);
+}
+
+function looksLikeIdentityDocument(text: string): boolean {
+  const s = normalize(text);
+  return /\b(cedula|pasaporte|extranjeria|registraduria|tarjeta de identidad|documento de identidad)\b/.test(
+    s,
+  );
+}
+
+/** Qué parece ser el texto, de lo más específico a lo menos. */
+function detectKind(text: string): DocumentType | null {
+  if (looksLikeRut(text)) return DocumentType.Rut;
+  if (looksLikeChamberCertificate(text)) return DocumentType.ExistenceRepresentationCertificate;
+  if (looksLikeIdentityDocument(text)) return DocumentType.LegalRepresentativeId;
+  return null;
+}
+
+export type DocumentKindVerdict =
+  | { result: 'match' | 'unreadable' | 'not_checked'; message: string }
+  | { result: 'mismatch'; message: string; looksLike?: DocumentType };
+
+/**
+ * Compara el tipo que eligió la organización con lo que dice el texto del PDF.
+ * `text === null` es una foto o un escaneo: no se puede afirmar nada y lo revisa
+ * una persona. Solo un archivo LEGIBLE que claramente no es lo pedido da
+ * `mismatch` (y la API lo rechaza), para no frenar a nadie por un falso positivo.
+ * TODO(client): calibrar los patrones con 10-20 documentos reales del piloto.
+ */
+export function checkDocumentKind(type: DocumentType, text: string | null): DocumentKindVerdict {
+  if (type === DocumentType.Other) {
+    return {
+      result: 'not_checked',
+      message: 'Recibimos tu documento. El equipo de AdoptaFácil lo revisará.',
+    };
+  }
+  if (text === null) {
+    return {
+      result: 'unreadable',
+      message:
+        'Recibimos tu archivo, pero es una foto o un escaneo y no lo podemos leer solos: el equipo lo revisa a mano y puede tardar más. Si tienes el PDF original que descargas de la DIAN o de la Cámara, súbelo y lo validamos al instante.',
+    };
+  }
+  const expected =
+    type === DocumentType.Rut
+      ? looksLikeRut(text)
+      : type === DocumentType.ExistenceRepresentationCertificate
+        ? looksLikeChamberCertificate(text)
+        : looksLikeIdentityDocument(text) &&
+          !looksLikeRut(text) &&
+          !looksLikeChamberCertificate(text);
+  if (expected) {
+    return {
+      result: 'match',
+      message: `Leímos tu archivo y sí es ${KIND_NAMES[type]}. Quedó en revisión del equipo.`,
+    };
+  }
+  const looksLike = detectKind(text) ?? undefined;
+  const hint =
+    looksLike && looksLike !== type
+      ? ` Parece ${KIND_NAMES[looksLike]}: súbelo en su propia tarjeta.`
+      : '';
+  const where =
+    type === DocumentType.Rut
+      ? ' Descárgalo en el portal de la DIAN (MUISCA), opción "Copia del RUT".'
+      : type === DocumentType.ExistenceRepresentationCertificate
+        ? ' Lo descargas en el RUES o en la página de tu Cámara de Comercio.'
+        : '';
+  return {
+    result: 'mismatch',
+    message: `Este archivo no parece ${KIND_NAMES[type]}, así que no lo guardamos.${hint}${where}`,
+    ...(looksLike ? { looksLike } : {}),
+  };
+}

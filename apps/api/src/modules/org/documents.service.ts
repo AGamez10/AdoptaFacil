@@ -13,7 +13,7 @@ import { AuditService } from '../../core/audit/audit.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
-import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
+import { STORAGE_PORT, type StoragePort, type StoredObject } from '../../core/storage/storage.port';
 import {
   VERIFICATION_LEVELS,
   computeVerificationLevel,
@@ -73,13 +73,18 @@ export class DocumentsService {
   async upload(
     actorUserId: string,
     input: UploadOrganizationDocumentInput,
+    /** Clave ya reservada y con los bytes guardados (subida en el servidor,
+     *  `DocumentUploadService`): así nunca queda una versión sin archivo. */
+    reserved?: StoredObject,
   ): Promise<UploadOrganizationDocumentResult> {
     const organizationId = this.requireOrgId();
-    const stored = await this.storage.createUploadTarget({
-      organizationId,
-      filename: input.filename,
-      contentType: input.contentType,
-    });
+    const stored =
+      reserved ??
+      (await this.storage.createUploadTarget({
+        organizationId,
+        filename: input.filename,
+        contentType: input.contentType,
+      }));
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const latest = await tx.organizationDocument.aggregate({

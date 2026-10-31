@@ -12,9 +12,10 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const OFFER = '22222222-2222-4222-8222-222222222222';
 const DONOR = { id: '33333333-3333-4333-8333-333333333333' } as never;
 const FILE = {
-  buffer: Buffer.from('x'),
+  // Firma PNG real: el tipo se decide por los bytes, no por `mimetype`.
+  buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]),
   mimetype: 'image/png',
-  size: 1,
+  size: 10,
   originalname: 'factura.png',
 };
 
@@ -91,8 +92,9 @@ describe('ResourceOfferProofsService.attach (donante)', () => {
 
   it('rechaza tipo no permitido y prueba ya aprobada sin tocar storage', async () => {
     const h = makeHarness();
+    // Un ZIP no entra aunque el navegador lo declare como PNG.
     await expect(
-      h.service.attach(DONOR, OFFER, { ...FILE, mimetype: 'application/zip' }),
+      h.service.attach(DONOR, OFFER, { ...FILE, buffer: Buffer.from('PK\x03\x04', 'latin1') }),
     ).rejects.toBeInstanceOf(BadRequestException);
     h.queryRaw.mockResolvedValueOnce([
       { organization_id: ORG, status: 'accepted', proof_status: 'approved', proof_count: 1 },
