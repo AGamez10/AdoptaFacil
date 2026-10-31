@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
-import { Role, type PortalTemplateId } from '@adoptafacil/contracts';
+import { Role, type AnimalSummary, type PortalTemplateId } from '@adoptafacil/contracts';
 import { buttonVariants, cn, Skeleton } from '@adoptafacil/ui';
 import { useSeo } from '../../../seo/seo';
 import { useSession } from '../../../shell/auth';
 import { buildPortalView } from '../model/portal-view';
-import { AnimalCard } from '../components/animal-card';
+import { PortalAdoptionSection } from '../components/portal-adoption-section';
 import { PortalAboutSection } from '../components/portal-about-section';
 import { PortalContactInfoSection } from '../components/portal-contact-info-section';
 import { PortalProfileSection } from '../components/portal-profile-section';
@@ -14,6 +14,7 @@ import { PublicFooter } from '../components/public-footer';
 import { PublicHeader } from '../components/public-header';
 import templateStyles from '../components/templates/portal-templates.module.scss';
 import { buildDemoSource } from '../templates/demo/demo-portal';
+import { PreviewAnimalDialog } from '../templates/demo/preview-animal-dialog';
 import { useOwnPortalSource } from '../templates/demo/use-own-portal-source';
 import {
   DEMO_TEMPLATE_IDS,
@@ -207,6 +208,7 @@ const COP = new Intl.NumberFormat('es-CO', {
  */
 function ClassicDemo({ source }: { source: TemplateSourceData }) {
   const organization = source.organization;
+  const [openAnimal, setOpenAnimal] = useState<AnimalSummary | null>(null);
   const profile = useMemo(() => buildPortalView(organization).profile, [organization]);
   // Ningún enlace interno sale del ejemplo; las anclas del menú siguen funcionando.
   const stayHere = (event: MouseEvent) => {
@@ -231,19 +233,15 @@ function ClassicDemo({ source }: { source: TemplateSourceData }) {
           }
         />
         <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-          <section id="portal-section-pets" style={{ scrollMarginTop: '5rem' }}>
-            <h2 className="mb-4 text-2xl font-bold text-foreground">Mascotas en adopción</h2>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {source.animals.slice(0, 6).map((animal) => (
-                <AnimalCard
-                  key={animal.id}
-                  slug={source.slug}
-                  animal={animal}
-                  onOpenDetail={() => undefined}
-                />
-              ))}
-            </div>
-          </section>
+          <div style={{ scrollMarginTop: '5rem' }}>
+            {/* El MISMO catálogo del portal (filtros, orden, "Cargar más" de a 12
+                hasta el último), sobre los animales de la vista previa. */}
+            <PortalAdoptionSection
+              slug={source.slug}
+              animals={source.animals}
+              onOpenDetail={setOpenAnimal}
+            />
+          </div>
           <aside className="space-y-6">
             {source.campaigns.length > 0 && (
               <section className="rounded-2xl border border-border bg-card p-5">
@@ -286,6 +284,13 @@ function ClassicDemo({ source }: { source: TemplateSourceData }) {
       <div className="mx-auto w-full px-4 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0">
         <PublicFooter organization={organization} navItems={CLASSIC_NAV} />
       </div>
+      <PreviewAnimalDialog
+        animal={openAnimal}
+        animals={source.animals}
+        org={organization}
+        slug={source.slug}
+        onOpenAnimal={setOpenAnimal}
+      />
     </div>
   );
 }

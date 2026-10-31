@@ -122,7 +122,7 @@ ${
     <div class="o-ctas" style="margin-top:22px"><a class="o-btn" href="${feat[0].href}" id="o-adopt"><span id="o-adopt-t">Quiero conocer a ${feat[0].name}</span> ${ic.arrow}</a></div>
   </div>
 </div></div></section>
-${rest.length ? `<div class="o-rest"><section class="w k-sec"><div class="k-hd"><div><p class="k-eb">Todos en adopción</p><h2 class="k-h2">${n} en el sistema</h2></div></div>${KIT.grid(rest)}</section></div>` : ''}`
+${rest.length ? `<div class="o-rest"><section class="w k-sec"><div class="k-hd"><div><p class="k-eb">Todos en adopción</p><h2 class="k-h2">${n} en el sistema</h2></div></div>${KIT.grid(ANIMALS)}</section></div>` : ''}`
     : `<div class="o-rest" id="o-pets" data-sec="animales"><section class="w k-sec">${KIT.hd('En adopción', 'Ellos')}<p class="k-empty">${EMPTY.animales}</p></section></div>`
 }
 

@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import type {
-  AnimalSummary,
-  OrganizationPublic,
-  PublicAnimalSummary,
-} from '@adoptafacil/contracts';
+import type { AnimalSummary, PublicAnimalSummary } from '@adoptafacil/contracts';
 import { buttonVariants, cn, EmptyState, Skeleton } from '@adoptafacil/ui';
 import {
   animalDescription,
@@ -22,14 +18,10 @@ import { ADOPT_BASE_PATH, buildAdoptPath } from '../../catalog/model/adopt-filte
 import { fetchPublicAnimal, fetchPublicAnimals } from '../api/public-animals';
 import { AnimalDetailActions } from '../components/animal-detail-actions';
 import {
-  ageLabel,
-  buildAdoptionRequestHref,
-  isRecentlyPublished,
-  SEX_LABELS,
-  SIZE_LABELS,
-  SPECIES_LABELS,
-  STATUS_LABELS,
-} from '../model/animals-catalog';
+  PublicAnimalDetailArticle,
+  type PublicAnimalOrg,
+} from '../components/public-animal-detail-article';
+import { buildAdoptionRequestHref, SPECIES_LABELS } from '../model/animals-catalog';
 import { resolveOrgSubdomain } from '../model/subdomain';
 import { isEngineTemplate, loadDesign } from '../templates/registry';
 import type { TemplateDesign } from '../templates/engine/types';
@@ -42,20 +34,11 @@ const SIMILAR_MAX = 4;
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 type DetailState = 'loading' | 'ready' | 'not-found' | 'error';
-type PublicOrgProfile = Pick<
-  OrganizationPublic,
-  'id' | 'name' | 'logoUrl' | 'description' | 'location' | 'nit'
->;
+type PublicOrgProfile = PublicAnimalOrg;
 
 interface AnimalNavState {
   animal?: AnimalSummary | PublicAnimalSummary;
 }
-
-const ADOPTION_STEPS = [
-  'Envías tu solicitud en línea, con tu cuenta.',
-  'La organización te contacta y conoce tu hogar.',
-  'Firman un contrato claro y empieza su nueva vida.',
-];
 
 /**
  * Detalle PÚBLICO de un animal adoptable en el portal `/o/:slug/animales/:animalId`
@@ -231,16 +214,6 @@ export function PublicAnimalDetailPage() {
     };
   }, [state]);
 
-  const age = animal ? ageLabel(animal.computedAge) : undefined;
-  const facts = animal
-    ? [
-        { label: 'Especie', value: SPECIES_LABELS[animal.species], tone: 'mint' },
-        { label: 'Sexo', value: SEX_LABELS[animal.sex], tone: 'sun' },
-        { label: 'Tamaño', value: SIZE_LABELS[animal.size], tone: 'sky' },
-        ...(age ? [{ label: 'Edad aproximada', value: age, tone: 'coral' }] : []),
-      ]
-    : [];
-
   const toCard = (item: AnimalSummary): PublicAnimalSummary | null =>
     slug && org
       ? {
@@ -309,84 +282,19 @@ export function PublicAnimalDetailPage() {
         )}
 
         {state === 'ready' && animal && (
-          <article className={styles.detail} data-testid="public-animal-detail">
-            <div className={styles.media}>
-              {animal.photoUrl ? (
-                <img
-                  src={animal.photoUrl}
-                  alt={`${animal.name}${animal.breed ? `, ${animal.breed}` : ''}`}
-                  className={styles.media__photo}
-                  {...{ fetchpriority: 'high' }}
-                />
-              ) : (
-                <div className={styles.media__empty}>
-                  <span>Sin foto todavía</span>
-                </div>
-              )}
-              <div className={styles.media__badges}>
-                {isRecentlyPublished(animal.createdAt) && (
-                  <span className={styles.badge}>Nuevo</span>
-                )}
-                <span className={cn(styles.badge, styles['badge--glass'])}>
-                  {STATUS_LABELS[animal.status]}
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.info}>
-              <h1 className={styles.name}>{animal.name}</h1>
-              <p className={styles.subtitle}>
-                {[animal.breed, city].filter(Boolean).join(' · ') ||
-                  'Busca un hogar para toda la vida'}
-              </p>
-
-              <dl className={styles.facts}>
-                {facts.map((fact) => (
-                  <div key={fact.label} className={styles.fact} data-tone={fact.tone}>
-                    <dt>{fact.label}</dt>
-                    <dd>{fact.value}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              <div className={styles.actions}>
-                <AnimalDetailActions
-                  animal={animal}
-                  orgName={orgName ?? undefined}
-                  donateOrganization={org ?? undefined}
-                  layout="hero"
-                />
-              </div>
-
-              {org && (
-                <section className={styles.org} aria-label="Organización responsable">
-                  {org.logoUrl ? (
-                    <img src={org.logoUrl} alt="" className={styles.org__logo} />
-                  ) : (
-                    <span className={styles.org__logo} aria-hidden="true">
-                      {org.name.charAt(0)}
-                    </span>
-                  )}
-                  <div className={styles.org__body}>
-                    <p className={styles.org__eyebrow}>Lo cuida</p>
-                    <p className={styles.org__name}>{org.name}</p>
-                    {org.location?.city && <p className={styles.org__meta}>{org.location.city}</p>}
-                  </div>
-                </section>
-              )}
-
-              <section className={styles.steps} aria-labelledby="adopt-steps-title">
-                <h2 id="adopt-steps-title" className={styles.steps__title}>
-                  Así es adoptar a {animal.name}
-                </h2>
-                <ol className={styles.steps__list}>
-                  {ADOPTION_STEPS.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-              </section>
-            </div>
-          </article>
+          <PublicAnimalDetailArticle
+            animal={animal}
+            org={org}
+            city={city}
+            actions={
+              <AnimalDetailActions
+                animal={animal}
+                orgName={orgName ?? undefined}
+                donateOrganization={org ?? undefined}
+                layout="hero"
+              />
+            }
+          />
         )}
 
         {state === 'ready' && similar.length > 0 && (

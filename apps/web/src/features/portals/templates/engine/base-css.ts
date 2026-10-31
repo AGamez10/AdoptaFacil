@@ -16,6 +16,8 @@ export const BASE_CSS = `
 .af-tpl :focus-visible{outline:3px solid var(--brand);outline-offset:3px}
 .af-tpl table{color:inherit;font-size:inherit}
 .af-tpl [data-sec]{scroll-margin-top:70px}
+/* "Ver más" y similares se ocultan con [hidden]; el display de cada plantilla no lo anula. */
+.af-tpl [hidden]{display:none!important}
 .af-tpl .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .af-tpl .w{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 @media (min-width:900px){.af-tpl .w{padding-left:max(40px,env(safe-area-inset-left,0px));padding-right:max(40px,env(safe-area-inset-right,0px))}}

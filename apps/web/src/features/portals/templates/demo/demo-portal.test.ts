@@ -16,3 +16,12 @@ describe('demo portal data', () => {
     );
   });
 });
+
+describe('demo portal count', () => {
+  it('announces exactly the animals it shows', () => {
+    const src = buildDemoSource(Date.parse('2026-10-30T00:00:00Z'));
+    expect(src.animalTotal).toBe(src.animals.length);
+    // Más de una página de los catálogos (12): se ve "Cargar más" hasta el último.
+    expect(src.animals.length).toBeGreaterThan(12);
+  });
+});
