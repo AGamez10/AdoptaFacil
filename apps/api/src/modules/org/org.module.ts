@@ -7,6 +7,7 @@ import { DianVerificationService } from './dian-verification.service';
 import { DIAN_PORT } from './dian.port';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
+import { DocumentUploadService } from './document-upload.service';
 import { DOCUMENT_TEXT_PORT } from './document-verification/document-text.port';
 import { DocumentVerificationService } from './document-verification/document-verification.service';
 import { PdfTextAdapter } from './document-verification/pdf-text.adapter';
@@ -70,6 +71,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     AnnouncementsService,
     FormalizationService,
     DocumentsService,
+    DocumentUploadService,
     DuplicateDetectionService,
     PlatformDuplicatesService,
     LegalRepresentativeService,

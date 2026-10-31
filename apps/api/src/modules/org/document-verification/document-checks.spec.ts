@@ -1,6 +1,7 @@
 import { DocumentType, FormalizationState } from '@adoptafacil/contracts';
 import {
   buildVerificationReport,
+  checkDocumentKind,
   extractLegalName,
   extractNit,
   parseSpanishDate,
@@ -163,5 +164,56 @@ describe('datos para llenar el perfil', () => {
     expect(extractLegalName(RUT_RTE)).toBe('FUNDACION HUELLITAS DEL VALLE');
     expect(extractLegalName(CERL)).toBe('FUNDACIÓN HUELLITAS DEL VALLE');
     expect(extractLegalName('sin datos')).toBeNull();
+  });
+});
+
+describe('¿el archivo es el documento que dice ser? (al subirlo)', () => {
+  const PET_PHOTO_PDF = 'Fotos de Firulais en el parque, vacunado y desparasitado. Adóptalo ya.';
+  const CEDULA = `REPUBLICA DE COLOMBIA IDENTIFICACION PERSONAL CEDULA DE CIUDADANIA
+NUMERO 52.345.678 PEREZ GOMEZ MARIA`;
+
+  it('acepta el RUT y el certificado cuando el texto lo confirma', () => {
+    expect(checkDocumentKind(DocumentType.Rut, RUT_RTE).result).toBe('match');
+    expect(checkDocumentKind(DocumentType.ExistenceRepresentationCertificate, CERL).result).toBe(
+      'match',
+    );
+    expect(checkDocumentKind(DocumentType.LegalRepresentativeId, CEDULA).result).toBe('match');
+  });
+
+  it('rechaza un PDF legible que no es lo pedido, y dice qué parece', () => {
+    const swapped = checkDocumentKind(DocumentType.Rut, CERL);
+    expect(swapped).toMatchObject({
+      result: 'mismatch',
+      looksLike: DocumentType.ExistenceRepresentationCertificate,
+    });
+    expect(swapped.message).toContain('no parece el RUT');
+    expect(swapped.message).toContain('Parece el certificado de Cámara de Comercio');
+
+    const other = checkDocumentKind(DocumentType.ExistenceRepresentationCertificate, PET_PHOTO_PDF);
+    expect(other.result).toBe('mismatch');
+    expect(other.message).toContain('RUES');
+
+    // El RUT en la tarjeta de la cédula: el RUT trae "cédula" como opción, pero no es una cédula.
+    expect(checkDocumentKind(DocumentType.LegalRepresentativeId, RUT_RTE)).toMatchObject({
+      result: 'mismatch',
+      looksLike: DocumentType.Rut,
+    });
+  });
+
+  it('acepta acentos partidos como los trae la capa de texto de la DIAN', () => {
+    expect(
+      checkDocumentKind(DocumentType.Rut, 'Formulario del Registro U\u0301nico Tributario 001')
+        .result,
+    ).toBe('match');
+  });
+
+  it('una foto o un escaneo no se rechaza: queda para revisión manual con aviso', () => {
+    const verdict = checkDocumentKind(DocumentType.Rut, null);
+    expect(verdict.result).toBe('unreadable');
+    expect(verdict.message).toContain('revisa a mano');
+  });
+
+  it('"Otro documento" no tiene patrón y no se bloquea', () => {
+    expect(checkDocumentKind(DocumentType.Other, PET_PHOTO_PDF).result).toBe('not_checked');
   });
 });

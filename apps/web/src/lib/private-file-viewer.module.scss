@@ -1,0 +1,25 @@
+.viewer {
+  max-width: min(56rem, calc(100vw - 2rem));
+}
+
+.viewer__frame {
+  width: 100%;
+  height: min(70vh, 48rem);
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  background: hsl(var(--muted));
+}
+
+.viewer__image {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 0 auto;
+  border-radius: 0.5rem;
+  object-fit: contain;
+}
+
+.viewer__message {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+}

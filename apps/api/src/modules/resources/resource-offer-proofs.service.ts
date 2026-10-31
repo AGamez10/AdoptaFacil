@@ -23,6 +23,7 @@ import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { ALLOWED_CONTENT_TYPES } from '../../core/storage/storage-keys';
+import { sniffContentType } from '../../core/storage/file-sniff';
 import { canAttachProof, canValidateProof } from './resource-fulfillment';
 
 /** Minimal shape of a multer memory-storage file (no @types/multer installed). */
@@ -119,7 +120,9 @@ export class ResourceOfferProofsService {
     if (file.size > this.maxMb * 1024 * 1024) {
       throw new PayloadTooLargeException(`El archivo supera el límite de ${this.maxMb} MB.`);
     }
-    if (!ALLOWED_CONTENT_TYPES.includes(file.mimetype)) {
+    // El tipo sale de los bytes: el que declara el navegador lo elige quien sube.
+    const contentType = sniffContentType(file.buffer);
+    if (!contentType || !ALLOWED_CONTENT_TYPES.includes(contentType)) {
       throw new BadRequestException('Tipo de archivo no permitido. Sube una imagen o un PDF.');
     }
 
@@ -145,15 +148,15 @@ export class ResourceOfferProofsService {
     const stored = await this.storage.createUploadTarget({
       organizationId: ctx.organization_id,
       filename: file.originalname,
-      contentType: file.mimetype,
+      contentType,
       visibility: 'private',
     });
-    await this.storage.saveObject(stored.key, file.buffer, file.mimetype);
+    await this.storage.saveObject(stored.key, file.buffer, contentType);
 
     const rows = await this.prisma.$queryRaw<ProofSqlRow[]>(Prisma.sql`
       SELECT * FROM add_resource_offer_proof(
         ${offerId}::uuid, ${actor.id}::uuid, ${stored.key}, ${file.originalname.slice(0, 255)},
-        ${file.mimetype}, ${file.size}::int, ${RESOURCE_OFFER_PROOF_MAX_FILES}::int
+        ${contentType}, ${file.size}::int, ${RESOURCE_OFFER_PROOF_MAX_FILES}::int
       )
     `);
     const row = rows[0];
@@ -166,7 +169,7 @@ export class ResourceOfferProofsService {
       action: 'resource_offer.proof_attached',
       entityType: 'resource_offer_proof',
       entityId: row.id,
-      metadata: { offerId, contentType: file.mimetype },
+      metadata: { offerId, contentType },
     });
     return fromSqlRow(row);
   }
