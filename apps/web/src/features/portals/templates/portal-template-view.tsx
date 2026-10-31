@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Review } from '@adoptafacil/contracts';
+import type { AnimalSummary, Review } from '@adoptafacil/contracts';
 import { RegisterReviewDialog } from '../components/register-review-dialog';
 import { PublicLedgerDialog } from '../../ledger/components/public-ledger-dialog';
 import { useFeature } from '../../../shell/capabilities';
+import {
+  buildAdoptionRequestHref,
+  buildSponsorHref,
+  publicAnimalDetailHref,
+} from '../model/animals-catalog';
 import { hslStringToHex } from '../model/color-conversion';
+import { PreviewAnimalDialog } from './demo/preview-animal-dialog';
+import { PreviewLedgerDialog } from './demo/preview-ledger-dialog';
 import { createKit } from './engine/kit';
 import { buildTemplateModel, type TemplateSourceData } from './engine/model';
 import { createCatalog, createMotion } from './engine/runtime';
@@ -19,9 +26,10 @@ export interface PortalTemplateViewProps {
   /** Una reseña recién creada (para mostrarla sin recargar, como el clásico). */
   onReviewCreated?: (review: Review) => void;
   /**
-   * Vista de ejemplo con datos de demostración (`/plantillas/:id`): los enlaces
-   * que saldrían de la página no navegan y los diálogos de reseña y libro no se
-   * montan, así nunca se consulta a la API con el slug de ejemplo.
+   * Vista previa (`/plantillas/:id`, con datos de ejemplo o de una organización
+   * aún sin publicar): los enlaces que saldrían de la página no navegan. La ficha
+   * de cada animal y el libro público se abren en un diálogo con los datos de la
+   * vista previa, así nunca se consulta a la API con el slug de ejemplo.
    */
   demo?: boolean;
 }
@@ -54,11 +62,29 @@ export function PortalTemplateView({
   const navigate = useNavigate();
   const [reviewOpen, setReviewOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [previewAnimal, setPreviewAnimal] = useState<AnimalSummary | null>(null);
   const [three, setThree] = useState<ThreeModule | null | undefined>(
     design.webgl ? undefined : null,
   );
 
   const model = useMemo(() => buildTemplateModel(source), [source]);
+  // Vista previa: cualquier enlace a un animal (ficha, adoptar, apadrinar) abre
+  // su ficha en el diálogo, en TODAS las plantillas (enlace o `env.go`).
+  const animalByHref = useMemo(() => {
+    const map = new Map<string, AnimalSummary>();
+    for (const a of source.animals) {
+      map.set(publicAnimalDetailHref(source.slug, a), a);
+      map.set(buildAdoptionRequestHref(a.organizationId, a), a);
+      map.set(buildSponsorHref(a), a);
+    }
+    return map;
+  }, [source]);
+  const openPreview = useRef<(href: string) => boolean>(() => false);
+  openPreview.current = (href) => {
+    const animal = animalByHref.get(href);
+    if (animal) setPreviewAnimal(animal);
+    return Boolean(animal);
+  };
   // Con el módulo de reseñas apagado, la API responde 404 a "Registrar reseña":
   // la plantilla no muestra ni la sección ni el botón (igual que el clásico).
   const reputation = useFeature('reputation');
@@ -107,7 +133,8 @@ export function PortalTemplateView({
         brand: () =>
           hslStringToHex(getComputedStyle(root).getPropertyValue('--primary').trim(), '#1F7A6D'),
         go: (href) => {
-          if (!demo && href.startsWith('/') && !href.startsWith('//')) navigate(href);
+          if (demo) openPreview.current(href);
+          else if (href.startsWith('/') && !href.startsWith('//')) navigate(href);
         },
       });
       kit.init(root, motion);
@@ -149,7 +176,7 @@ export function PortalTemplateView({
       }
       if (target.closest('[data-ledger]')) {
         event.preventDefault();
-        if (!demo) setLedgerOpen(true);
+        setLedgerOpen(true);
         return;
       }
       const a = target.closest('a');
@@ -166,9 +193,10 @@ export function PortalTemplateView({
         }
         return;
       }
-      // En la vista de ejemplo nada sale de la página: los datos son inventados.
+      // En la vista previa nada sale de la página; un animal abre su ficha aquí.
       if (demo) {
         event.preventDefault();
+        openPreview.current(href);
         return;
       }
       if (a.target === '_blank' || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
@@ -199,7 +227,22 @@ export function PortalTemplateView({
           onSubmitted={onReviewCreated}
         />
       )}
-      {!demo && (
+      {demo ? (
+        <>
+          <PreviewLedgerDialog
+            ledger={source.ledger}
+            open={ledgerOpen}
+            onOpenChange={setLedgerOpen}
+          />
+          <PreviewAnimalDialog
+            animal={previewAnimal}
+            animals={source.animals}
+            org={source.organization}
+            slug={source.slug}
+            onOpenAnimal={setPreviewAnimal}
+          />
+        </>
+      ) : (
         <PublicLedgerDialog slug={source.slug} open={ledgerOpen} onOpenChange={setLedgerOpen} />
       )}
     </>

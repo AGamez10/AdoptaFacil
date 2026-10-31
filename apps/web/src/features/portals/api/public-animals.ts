@@ -85,3 +85,33 @@ export async function fetchPublicAnimal(
   }
   return (await response.json()) as AnimalSummary;
 }
+
+/** La API pública entrega como máximo 50 animales por página. */
+const PUBLIC_ANIMAL_PAGE = 50;
+/** Tope de seguridad (40 páginas): ninguna organización real se acerca. */
+const PUBLIC_ANIMAL_MAX = 2000;
+
+/**
+ * TODOS los animales adoptables de una organización, página por página, hasta
+ * el último. Las plantillas filtran, ordenan y paginan en el navegador, así que
+ * necesitan el conjunto completo: si solo llegara la primera página, el titular
+ * contaría más animales de los que el catálogo deja ver. Solo se conservan los
+ * de `organizationId` (defensa en profundidad: nunca se mezcla otra).
+ */
+export async function fetchAllPublicAnimals({
+  organizationId,
+  ...params
+}: Omit<FetchPublicAnimalsParams, 'limit' | 'offset'> & {
+  organizationId: string;
+}): Promise<AnimalSummary[]> {
+  const items: AnimalSummary[] = [];
+  let offset = 0;
+  while (offset < PUBLIC_ANIMAL_MAX) {
+    const page = await fetchPublicAnimals({ ...params, limit: PUBLIC_ANIMAL_PAGE, offset });
+    items.push(...page.items.filter((a) => a.organizationId === organizationId));
+    // Avanza por lo que de verdad llegó (el servidor puede recortar el límite).
+    offset += page.items.length;
+    if (page.items.length === 0 || offset >= page.total) break;
+  }
+  return items;
+}
