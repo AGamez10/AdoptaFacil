@@ -32,10 +32,18 @@ export function elapsedDays(from: Date, to: Date): number {
 }
 
 /** UTC month arithmetic (no dependency) — used to advance a sponsorship's
- *  `nextBillingAt` by one period once it has been billed. */
+ *  `nextBillingAt` by one period once it has been billed. The day is clamped
+ *  to the target month's last day: a bare `setUTCMonth` turns 31 Oct + 1 into
+ *  1 Dec, and the cron would then never open the November period. */
 export function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getTime());
+  const day = result.getUTCDate();
+  result.setUTCDate(1);
   result.setUTCMonth(result.getUTCMonth() + months);
+  const lastDay = new Date(
+    Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  result.setUTCDate(Math.min(day, lastDay));
   return result;
 }
 

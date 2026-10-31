@@ -56,6 +56,21 @@ describe('addMonths', () => {
       '2027-01-15T00:00:00.000Z',
     );
   });
+
+  it('clamps to the last day of a shorter month instead of skipping it', () => {
+    expect(addMonths(new Date('2026-10-31T00:43:00.000Z'), 1).toISOString()).toBe(
+      '2026-11-30T00:43:00.000Z',
+    );
+    expect(addMonths(new Date('2027-01-31T12:00:00.000Z'), 1).toISOString()).toBe(
+      '2027-02-28T12:00:00.000Z',
+    );
+    expect(addMonths(new Date('2028-01-30T12:00:00.000Z'), 1).toISOString()).toBe(
+      '2028-02-29T12:00:00.000Z',
+    );
+    expect(addMonths(new Date('2026-12-31T23:59:59.000Z'), 2).toISOString()).toBe(
+      '2027-02-28T23:59:59.000Z',
+    );
+  });
 });
 
 describe('nextLadderAction (RF17 tolerant ladder)', () => {
