@@ -36,14 +36,17 @@ describe('email catalog', () => {
     },
   );
 
-  it('only bulk events are bulk; password reset is the required one', () => {
+  it('only bulk events are bulk; password reset and invitations are required', () => {
     expect(
       EMAIL_CATALOG.filter((d) => d.category === 'bulk')
         .map((d) => d.event)
         .sort(),
     ).toEqual(['community.campaign_update', 'org.urgent_announcement', 'platform.announcement']);
+    // Sin estos correos nadie recupera su cuenta ni entra a un equipo.
     expect(EMAIL_CATALOG.filter((d) => d.required).map((d) => d.event)).toEqual([
       'auth.password_reset',
+      'org.invitation',
+      'platform.team_invitation',
     ]);
   });
 

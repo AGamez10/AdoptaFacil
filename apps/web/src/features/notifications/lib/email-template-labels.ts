@@ -13,6 +13,7 @@ export const CATEGORY_LABELS: Record<EmailCategory, { title: string; hint: strin
 
 export const THEME_ICONS: Record<EmailTheme, string> = {
   security: '🔒',
+  team: '👥',
   donation: '💛',
   sponsorship: '🐾',
   adoption: '🏡',

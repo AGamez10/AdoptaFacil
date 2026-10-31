@@ -4,11 +4,15 @@ import {
   Delete,
   Get,
   HttpCode,
+  Inject,
   Param,
   ParseUUIDPipe,
   Post,
+  Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   type AcceptInvitationInput,
@@ -18,7 +22,10 @@ import {
   type OrganizationInvitation,
   Role,
 } from '@adoptafacil/contracts';
+import { AUTH_CONFIG, type AuthConfig } from '../../../core/auth/auth.config';
 import type { RequestUser } from '../../../core/auth/auth.types';
+import { setRefreshCookie } from '../../../core/auth/refresh-cookie.util';
+import { legalContextFrom } from '../../../core/legal';
 import { CurrentUser } from '../../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../../core/auth/zod-validation.pipe';
@@ -68,7 +75,10 @@ export class InvitationsController {
 @UseGuards(ThrottlerGuard)
 @Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class PublicInvitationsController {
-  constructor(private readonly invitations: InvitationsService) {}
+  constructor(
+    private readonly invitations: InvitationsService,
+    @Inject(AUTH_CONFIG) private readonly authConfig: AuthConfig,
+  ) {}
 
   @Post('preview')
   @HttpCode(200)
@@ -79,9 +89,20 @@ export class PublicInvitationsController {
   }
 
   @Post('accept')
-  accept(
+  async accept(
     @Body(new ZodValidationPipe(acceptInvitationSchema)) dto: AcceptInvitationInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<AuthSession> {
-    return this.invitations.accept(dto);
+    const session = await this.invitations.accept(dto, legalContextFrom(req));
+    // Igual que el registro y el login: sin la cookie de refresco, recargar la
+    // página justo después de crear la cuenta obligaba a iniciar sesión otra vez.
+    setRefreshCookie(
+      res,
+      session.tokens.refreshToken,
+      this.authConfig.refreshTtlSeconds,
+      process.env.NODE_ENV === 'production',
+    );
+    return session;
   }
 }
