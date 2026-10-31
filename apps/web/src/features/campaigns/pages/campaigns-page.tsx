@@ -25,6 +25,7 @@ import { useSession } from '../../../shell/auth';
 import { SelectField, TextAreaField } from '../components/campaign-form-fields';
 import { CampaignManageCard } from '../components/campaign-manage-card';
 import { CATEGORY_LABELS } from '../model/campaigns-view';
+import { dateBounds, dateError } from '../../../lib/date-rules';
 
 const CATEGORY_OPTIONS = CAMPAIGN_CATEGORIES.map((value) => ({
   value,
@@ -94,6 +95,11 @@ export function CampaignsPage() {
         description: 'Título, categoría, meta (entero COP > 0) y fecha límite son obligatorios.',
         variant: 'warning',
       });
+      return;
+    }
+    const deadlineError = dateError('campaignDeadline', deadline);
+    if (deadlineError) {
+      toast({ title: 'Fecha no válida', description: deadlineError, variant: 'warning' });
       return;
     }
     setSaving(true);
@@ -218,6 +224,7 @@ export function CampaignsPage() {
                 id="campaign-deadline"
                 type="date"
                 value={deadline}
+                {...dateBounds('campaignDeadline')}
                 onChange={(e) => setDeadline(e.target.value)}
               />
             </div>

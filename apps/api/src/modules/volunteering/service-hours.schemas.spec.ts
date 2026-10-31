@@ -21,6 +21,24 @@ describe('logServiceHoursSchema (RF18/RF19)', () => {
     expect(logServiceHoursSchema.safeParse({ ...BASE_LOG, hours: 30 }).success).toBe(false);
   });
 
+  it('rejects a future date with a clear Spanish message', () => {
+    const future = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+    const result = logServiceHoursSchema.safeParse({
+      ...BASE_LOG,
+      date: `${future}T00:00:00.000Z`,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      'La fecha de la sesión no puede ser posterior a hoy.',
+    );
+  });
+
+  it('rejects dates that do not exist and ambiguous formats', () => {
+    for (const date of ['2026-02-30T00:00:00.000Z', '2026-13-01', '01/07/2026', '2026-7-1']) {
+      expect(logServiceHoursSchema.safeParse({ ...BASE_LOG, date }).success).toBe(false);
+    }
+  });
+
   it('rejects an empty description', () => {
     expect(logServiceHoursSchema.safeParse({ ...BASE_LOG, description: '' }).success).toBe(false);
   });

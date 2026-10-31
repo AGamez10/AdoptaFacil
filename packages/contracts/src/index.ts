@@ -1,6 +1,7 @@
 // Public surface of @adoptafacil/contracts.
 // One module file per domain; each owner edits only their file (see CONTRACTS.md).
 export * from './shared';
+export * from './dates';
 
 export * from './org';
 export * from './auth';
@@ -34,4 +35,5 @@ export * from './legal-capabilities';
 export * from './plans';
 export * from './consents';
 export * from './notifications';
+export * from './invitation-roles';
 export * from './platform-workspace';

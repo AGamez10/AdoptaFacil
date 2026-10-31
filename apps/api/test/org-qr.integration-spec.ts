@@ -63,7 +63,7 @@ describe('QR fijo por organización', () => {
     const res = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name, species: 'dog', sex: 'female', size: 'medium' })
+      .send({ name, species: 'dog', sex: 'female', size: 'medium', approximateAgeMonths: 12 })
       .expect(201);
     return res.body.id;
   }
