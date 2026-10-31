@@ -26,6 +26,7 @@ import type { TemplateDesign } from '../templates/engine/types';
 import type { TemplateSourceData } from '../templates/engine/model';
 import { PortalTemplateView } from '../templates/portal-template-view';
 import { isEngineTemplate, loadDesign, type EngineTemplateId } from '../templates/registry';
+import { useGuideContext } from '../../guide/model/guide-context';
 
 /**
  * Vista previa PÚBLICA de una plantilla (`/plantillas/:id`): el portal completo
@@ -58,6 +59,9 @@ export function TemplateDemoPage() {
     description: `Así se ve un portal de AdoptaFácil con la plantilla ${name}, lleno con datos de ejemplo.`,
     noindex: true,
   });
+
+  // La ayuda explica el ejemplo y se ve tan discreta como en un portal real.
+  useGuideContext(template ? { kind: 'template-demo', templateName: name } : null);
 
   if (!template) return <Navigate to="/#plantillas" replace />;
 
