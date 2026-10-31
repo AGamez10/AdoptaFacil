@@ -20,3 +20,4 @@ export { OrgPlanPage } from './pages/org-plan-page';
 export { OrgAnnouncementsPage } from './pages/org-announcements-page';
 export { OrgProfileForm, type OrgProfileFormProps } from './components/org-profile-form';
 export * from './validation';
+export { SignatureRequestPage } from './pages/signature-request-page';

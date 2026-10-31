@@ -216,3 +216,76 @@ export interface OrgReportPendingSignature {
   /** Cargo con el que la persona debe firmar este documento. */
   role: LegalRepresentativeRole;
 }
+
+/** `POST /org/signers` (Owner): vincula al contador o revisor fiscal por su
+ *  correo. No crea contraseña ni cuenta para iniciar sesión: cada documento le
+ *  llega por correo con un enlace de un solo uso. Si ya hay alguien vigente en
+ *  ese cargo, queda revocado (cambio de contador / revisor). */
+export interface AddOrgSignerInput {
+  email: string;
+  fullName: string;
+  role: AdditionalSignerRole;
+  /** La organización declara que, según SUS estatutos, esta persona ocupa el
+   *  cargo y está facultada para firmar. AdoptaFácil no lo valida: lo registra. */
+  statutoryDeclaration: true;
+}
+
+/** Declaración de la organización al vincular un firmante (versionada: la
+ *  versión y el texto quedan en la auditoría con fecha y usuario). */
+export const SIGNER_DECLARATION_VERSION = '2026-10-31';
+export const SIGNER_DECLARATION_TEXT =
+  'Declaro, en nombre de la organización, que según nuestros estatutos esta persona ocupa ' +
+  'el cargo indicado y está facultada para firmar nuestros documentos. La organización es ' +
+  'responsable de esta designación; AdoptaFácil no verifica la facultad del firmante.';
+
+/** Texto del consentimiento que acepta el firmante (versionado: la versión
+ *  queda en la auditoría de cada aprobación). */
+export const SIGNATURE_CONSENT_VERSION = '2026-10-30';
+export const SIGNATURE_CONSENT_TEXT =
+  'Autorizo que mi firma quede guardada cifrada en esta organización y que se estampe ' +
+  'únicamente en los documentos que yo apruebe, uno por uno, desde el enlace que me llega ' +
+  'por correo. Cada aprobación queda registrada con fecha, hora y la huella del documento.';
+
+/** Lo que ve quien abre el enlace de firma (sin sesión). */
+export interface SignatureRequestPreview {
+  organizationName: string;
+  role: AdditionalSignerRole | 'legal_representative';
+  signerName: string;
+  /** `true` la primera vez: aún no hay firma suya guardada en esta organización. */
+  needsSignature: boolean;
+  /** ISO-8601 UTC. */
+  expiresAt: string;
+  report: Pick<
+    OrgReport,
+    'kind' | 'code' | 'periodStart' | 'periodEnd' | 'legalEffect' | 'summary' | 'contentHash'
+  >;
+  consentText: string;
+  consentVersion: string;
+}
+
+/** `POST /public/signature-requests/decision`. */
+export interface DecideSignatureRequestInput {
+  token: string;
+  decision: 'approved' | 'rejected';
+  /** Obligatorio para aprobar: acepta `consentText`. */
+  consent?: boolean;
+  /** Su número de documento: confirma que es la persona a quien se le pidió. */
+  documentNumber: string;
+  /** Solo la primera vez (`needsSignature`). */
+  signature?: {
+    fullName: string;
+    documentType: 'cedula_ciudadania' | 'cedula_extranjeria' | 'pasaporte';
+    position: string;
+    signatureBase64: string;
+    signatureContentType: string;
+    /** `photo`: foto de la firma en papel blanco (se limpia el fondo). Por defecto `drawn`. */
+    method?: 'drawn' | 'photo';
+  };
+}
+
+export interface SignatureRequestDecisionResult {
+  decision: 'approved' | 'rejected';
+  /** Estado del documento después de tu decisión. */
+  status: OrgReportStatus;
+  code: string;
+}

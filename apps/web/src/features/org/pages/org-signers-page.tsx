@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Role,
+  SIGNER_DECLARATION_TEXT,
   type AdditionalSignerRole,
   type LegalRepresentativeRole,
   type OrgReportKind,
@@ -140,6 +141,8 @@ export function OrgSignersPage() {
   const [email, setEmail] = useState('');
   const [seat, setSeat] = useState<AdditionalSignerRole>('fiscal_reviewer');
   const [busy, setBusy] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [declared, setDeclared] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -163,20 +166,28 @@ export function OrgSignersPage() {
     event.preventDefault();
     setBusy(true);
     try {
-      await client.request('/org/invitations', {
+      await client.request<OrgSigner>('/org/signers', {
         method: 'POST',
-        json: { email: email.trim(), role: Role.ReadOnlyAuditor, signerRole: seat },
+        json: {
+          email: email.trim(),
+          fullName: fullName.trim(),
+          role: seat,
+          statutoryDeclaration: true,
+        },
       });
       toast({
-        title: 'Invitación enviada',
-        description: 'La persona crea su propia cuenta y contraseña con el enlace del correo.',
+        title: 'Firmante vinculado',
+        description:
+          'Con el primer documento que necesite su firma le llega un correo para registrarla y aprobarlo.',
         variant: 'success',
       });
       setEmail('');
+      setFullName('');
+      setDeclared(false);
       await load();
     } catch (error) {
       toast({
-        title: 'No se pudo invitar',
+        title: 'No se pudo vincular',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -204,7 +215,7 @@ export function OrgSignersPage() {
     <PageContainer>
       <PageHeader
         title="Firmantes"
-        description="Las personas que firman contigo (contador, revisor fiscal). Tú las vinculas y tú las revocas: ellas crean su propia cuenta y contraseña."
+        description="El contador y el revisor fiscal que firman con tu organización. Los vinculas por su correo; no necesitan crear cuenta."
       />
 
       {loadError && (
@@ -225,9 +236,11 @@ export function OrgSignersPage() {
             <CardHeader>
               <CardTitle className="text-base">Quién firma</CardTitle>
               <CardDescription>
-                El representante legal firma con la cuenta principal al generar el documento. El
-                contador y el revisor fiscal reciben un correo y autorizan cada documento con su
-                propia cuenta: nadie firma por otro.
+                El representante legal firma con la cuenta principal al generar el documento. Al
+                contador y al revisor fiscal les llega un correo por cada documento: la primera vez
+                registran su firma y autorizan guardarla; después aprueban cada documento con su
+                cédula. Su firma nunca se usa sin esa aprobación. Si cambias de contador o revisor,
+                vincula al nuevo: el anterior queda revocado y su historial se conserva.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -267,7 +280,7 @@ export function OrgSignersPage() {
               </ul>
 
               {isOwner ? (
-                <form className="grid gap-3 sm:grid-cols-[1fr_auto_auto]" onSubmit={invite}>
+                <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto]" onSubmit={invite}>
                   <label className="space-y-1 text-sm" htmlFor="signer-email">
                     <span>Correo de la persona</span>
                     <Input
@@ -277,6 +290,15 @@ export function OrgSignersPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="contador@ejemplo.com"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm" htmlFor="signer-name">
+                    <span>Nombre completo</span>
+                    <Input
+                      id="signer-name"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
                     />
                   </label>
                   <label className="space-y-1 text-sm" htmlFor="signer-seat">
@@ -292,10 +314,19 @@ export function OrgSignersPage() {
                     </select>
                   </label>
                   <div className="flex items-end">
-                    <Button type="submit" disabled={busy || !email}>
-                      {busy ? 'Enviando…' : 'Invitar'}
+                    <Button type="submit" disabled={busy || !email || !fullName || !declared}>
+                      {busy ? 'Guardando…' : 'Vincular'}
                     </Button>
                   </div>
+                  <label className="flex items-start gap-2 text-sm sm:col-span-4">
+                    <input
+                      type="checkbox"
+                      checked={declared}
+                      onChange={(e) => setDeclared(e.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>{SIGNER_DECLARATION_TEXT}</span>
+                  </label>
                 </form>
               ) : (
                 <p className="text-sm text-muted-foreground">

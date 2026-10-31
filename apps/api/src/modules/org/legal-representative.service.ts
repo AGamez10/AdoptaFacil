@@ -154,8 +154,11 @@ export class LegalRepresentativeService {
   async register(
     actorUserId: string,
     input: RegisterLegalRepresentativeInput,
+    /** Solo para el enlace de firma por correo (sin sesión): la organización
+     *  sale del token, no del JWT. Las mismas reglas de `assertMayRegister`. */
+    organizationIdFromToken?: string,
   ): Promise<LegalRepresentative> {
-    const organizationId = this.requireOrgId();
+    const organizationId = organizationIdFromToken ?? this.requireOrgId();
 
     // Antes de escribir nada en el almacenamiento: quien no puede firmar bajo
     // este cargo no deja ni un archivo huérfano.

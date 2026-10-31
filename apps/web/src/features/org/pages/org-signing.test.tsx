@@ -129,24 +129,32 @@ const SIGNERS: OrgSigner[] = [
 describe('OrgSignersPage (M13)', () => {
   const READY = { policies: [], signers: [], nextSteps: [], schools: [] };
 
-  it('the Owner invites by email with the auditor role and a seat; the platform never sees a password', async () => {
-    stubApi({ '/org/signers': SIGNERS, '/org/reports/readiness': READY, '/org/invitations': {} });
+  it('the Owner links by email with a name and role, only after the statutory declaration; no password', async () => {
+    stubApi({ '/org/reports/readiness': READY, '/org/signers': SIGNERS });
     renderShell({ route: '/organizacion/firmantes', ...sessionWith([Role.Owner]) });
 
     expect(await screen.findByText('Diana Revisora')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Correo de la persona'), {
       target: { value: 'contador@firma.co' },
     });
+    fireEvent.change(screen.getByLabelText('Nombre completo'), {
+      target: { value: 'Carlos Contador' },
+    });
     fireEvent.change(screen.getByLabelText('Cargo'), { target: { value: 'accountant' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Invitar' }));
+    const link = screen.getByRole('button', { name: 'Vincular' });
+    expect(link).toBeDisabled();
+    fireEvent.click(screen.getByLabelText(/según nuestros estatutos/));
+    expect(link).toBeEnabled();
+    fireEvent.click(link);
 
     await waitFor(() => {
-      const invite = calls.find((c) => c.url.endsWith('/org/invitations'));
-      const body = JSON.parse(String(invite?.init?.body));
+      const post = calls.find((c) => c.url.endsWith('/org/signers') && c.init?.method === 'POST');
+      const body = JSON.parse(String(post?.init?.body));
       expect(body).toEqual({
         email: 'contador@firma.co',
-        role: 'read_only_auditor',
-        signerRole: 'accountant',
+        fullName: 'Carlos Contador',
+        role: 'accountant',
+        statutoryDeclaration: true,
       });
       expect(JSON.stringify(body)).not.toMatch(/password/i);
     });
@@ -156,7 +164,7 @@ describe('OrgSignersPage (M13)', () => {
     stubApi({ '/org/signers': SIGNERS, '/org/reports/readiness': READY });
     renderShell({ route: '/organizacion/firmantes', ...sessionWith([Role.Administrator]) });
     expect(await screen.findByText('Diana Revisora')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Invitar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vincular' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Revocar' })).not.toBeInTheDocument();
     expect(screen.getByText(/Solo el propietario de la organización vincula/)).toBeInTheDocument();
   });

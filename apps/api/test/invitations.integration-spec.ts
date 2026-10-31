@@ -150,6 +150,9 @@ describe('Member invitations (R2-3, AF-017)', () => {
       invitedByUserId: owner.userId,
     });
     expect(JSON.stringify(res.body)).not.toMatch(/token/i);
+    // Sin proveedor de correo real se avisa; el enlace solo se devuelve en desarrollo.
+    expect(res.body.emailDelivery).toBe('simulated');
+    expect(res.body.simulatedInviteLink).toBeUndefined();
     const token = lastTokenFor(email);
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
 

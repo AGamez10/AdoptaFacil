@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../core/auth/auth.module';
 import { OrgModule } from '../org/org.module';
-import { ReportsController, ReportsPublicController } from './reports.controller';
+import {
+  ReportsController,
+  ReportsPublicController,
+  SignatureRequestsPublicController,
+} from './reports.controller';
 import { ReportsService } from './reports.service';
 
 /**
@@ -12,7 +16,7 @@ import { ReportsService } from './reports.service';
  */
 @Module({
   imports: [AuthModule, OrgModule],
-  controllers: [ReportsController, ReportsPublicController],
+  controllers: [ReportsController, ReportsPublicController, SignatureRequestsPublicController],
   providers: [ReportsService],
 })
 export class ReportsModule {}
