@@ -1,6 +1,7 @@
 import { BrowserRouter } from 'react-router-dom';
 import { AppProviders } from './app-providers';
 import { AppRoutes } from './router/routes';
+import { ScrollToTop } from './router/scroll-to-top';
 import { GuideAssistant } from '../features/guide/components/guide-assistant';
 
 /**
@@ -20,6 +21,7 @@ export function Shell() {
   return (
     <AppProviders session={{ mode: AUTH_MODE }}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ScrollToTop />
         <AppRoutes />
         {/* Ola 3 (R3-8): ayuda fija por página, sin IA (D14). */}
         <GuideAssistant />
