@@ -13,6 +13,8 @@
 /** Every email event the platform can send. Fixed in code (catalog). */
 export const EMAIL_EVENT_KEYS = [
   'auth.password_reset',
+  'org.invitation',
+  'platform.team_invitation',
   'donation.thanks',
   'sponsorship.welcome',
   'sponsorship.charge',
@@ -49,7 +51,14 @@ export type EmailCategory = 'transactional' | 'bulk';
 
 /** Visual family of the email (accent color + header icon). */
 export type EmailTheme =
-  'security' | 'donation' | 'sponsorship' | 'adoption' | 'volunteering' | 'community' | 'alert';
+  | 'security'
+  | 'team'
+  | 'donation'
+  | 'sponsorship'
+  | 'adoption'
+  | 'volunteering'
+  | 'community'
+  | 'alert';
 
 export type EmailVariableKind = 'text' | 'money' | 'date' | 'number' | 'url';
 
