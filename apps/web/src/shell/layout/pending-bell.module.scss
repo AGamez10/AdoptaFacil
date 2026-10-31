@@ -228,3 +228,26 @@
     transform: none;
   }
 }
+
+/* Móvil: la campana no está pegada al borde derecho (le siguen el avatar y
+   salir), así que un panel anclado a ella se salía por la izquierda. Aquí el
+   panel y el mensaje se anclan a la pantalla, justo bajo el encabezado (4rem),
+   con el mismo margen a ambos lados. */
+@media (max-width: 639px) {
+  .bell__panel,
+  .bell__kudos {
+    position: fixed;
+    top: calc(4rem + env(safe-area-inset-top, 0px) + 0.5rem);
+    left: 0.75rem;
+    right: 0.75rem;
+    width: auto;
+  }
+
+  .bell__panel {
+    max-height: calc(100dvh - 6rem);
+  }
+
+  .bell__head {
+    flex-wrap: wrap;
+  }
+}
