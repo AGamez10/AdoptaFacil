@@ -129,60 +129,42 @@ const SIGNERS: OrgSigner[] = [
 describe('OrgSignersPage (M13)', () => {
   const READY = { policies: [], signers: [], nextSteps: [], schools: [] };
 
-  it('the Owner invites by email with the auditor role and a seat; the platform never sees a password', async () => {
-    stubApi({ '/org/signers': SIGNERS, '/org/reports/readiness': READY, '/org/invitations': {} });
+  it('the Owner links by email with a name and role, only after the statutory declaration; no password', async () => {
+    stubApi({ '/org/reports/readiness': READY, '/org/signers': SIGNERS });
     renderShell({ route: '/organizacion/firmantes', ...sessionWith([Role.Owner]) });
 
     expect(await screen.findByText('Diana Revisora')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Correo de la persona'), {
       target: { value: 'contador@firma.co' },
     });
+    fireEvent.change(screen.getByLabelText('Nombre completo'), {
+      target: { value: 'Carlos Contador' },
+    });
     fireEvent.change(screen.getByLabelText('Cargo'), { target: { value: 'accountant' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Invitar' }));
+    const link = screen.getByRole('button', { name: 'Vincular' });
+    expect(link).toBeDisabled();
+    fireEvent.click(screen.getByLabelText(/según nuestros estatutos/));
+    expect(link).toBeEnabled();
+    fireEvent.click(link);
 
     await waitFor(() => {
-      const invite = calls.find((c) => c.url.endsWith('/org/invitations'));
-      const body = JSON.parse(String(invite?.init?.body));
+      const post = calls.find((c) => c.url.endsWith('/org/signers') && c.init?.method === 'POST');
+      const body = JSON.parse(String(post?.init?.body));
       expect(body).toEqual({
         email: 'contador@firma.co',
-        role: 'read_only_auditor',
-        signerRole: 'accountant',
+        fullName: 'Carlos Contador',
+        role: 'accountant',
+        statutoryDeclaration: true,
       });
       expect(JSON.stringify(body)).not.toMatch(/password/i);
     });
-  });
-
-  it('when the server sends no real email, it says so and offers the link to copy', async () => {
-    stubApi({
-      '/org/signers': SIGNERS,
-      '/org/reports/readiness': READY,
-      '/org/invitations': {
-        email: 'contador@firma.co',
-        emailDelivery: 'simulated',
-        simulatedInviteLink: 'http://localhost:5173/invitacion#token=abc',
-      },
-    });
-    renderShell({ route: '/organizacion/firmantes', ...sessionWith([Role.Owner]) });
-
-    await screen.findByText('Diana Revisora');
-    fireEvent.change(screen.getByLabelText('Correo de la persona'), {
-      target: { value: 'contador@firma.co' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Invitar' }));
-
-    expect(
-      await screen.findByText('El correo de invitación a contador@firma.co no se envió.'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('http://localhost:5173/invitacion#token=abc')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copiar enlace' })).toBeInTheDocument();
-    expect(screen.getByText('Invitación creada, pero el correo no salió')).toBeInTheDocument();
   });
 
   it('an Administrator can see the signers but gets no invite form nor revoke buttons', async () => {
     stubApi({ '/org/signers': SIGNERS, '/org/reports/readiness': READY });
     renderShell({ route: '/organizacion/firmantes', ...sessionWith([Role.Administrator]) });
     expect(await screen.findByText('Diana Revisora')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Invitar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vincular' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Revocar' })).not.toBeInTheDocument();
     expect(screen.getByText(/Solo el propietario de la organización vincula/)).toBeInTheDocument();
   });

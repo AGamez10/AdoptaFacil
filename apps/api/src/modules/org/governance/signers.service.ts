@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role, type AdditionalSignerRole, type OrgSigner } from '@adoptafacil/contracts';
+import {
+  Role,
+  type AddOrgSignerInput,
+  type AdditionalSignerRole,
+  type OrgSigner,
+  SIGNER_DECLARATION_TEXT,
+  SIGNER_DECLARATION_VERSION,
+} from '@adoptafacil/contracts';
 import { AuditService } from '../../../core/audit/audit.service';
 import { TenantContextService } from '../../../core/tenant/tenant-context.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -76,6 +83,98 @@ export class SignersService {
           ...(d.revokedAt ? { revokedAt: d.revokedAt.toISOString() } : {}),
         })),
       ];
+    });
+  }
+
+  /**
+   * Vincula al contador o revisor fiscal por su correo, sin contraseña ni
+   * cuenta para iniciar sesión: la persona queda como perfil de la
+   * organización (sin roles) y firma desde el enlace que le llega con cada
+   * documento. Si ya había alguien vigente en ese cargo, se revoca (cambio de
+   * contador / revisor); su historial y lo que ya firmó se conservan.
+   */
+  async add(actorUserId: string, input: AddOrgSignerInput): Promise<OrgSigner> {
+    const organizationId = this.requireOrgId();
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      const actorIsOwner = await tx.userRole.findFirst({
+        where: { organizationId, userId: actorUserId, role: Role.Owner },
+      });
+      if (!actorIsOwner) {
+        throw new ForbiddenException('Solo el propietario vincula firmantes.');
+      }
+      const email = input.email.trim().toLowerCase();
+      const user =
+        (await tx.user.findFirst({ where: { organizationId, email } })) ??
+        (await tx.user.create({
+          data: {
+            organizationId,
+            accountType: 'organization',
+            email,
+            displayName: input.fullName.trim(),
+          },
+        }));
+      if (user.id === actorUserId) {
+        throw new ConflictException(
+          'El representante legal no puede ser también contador o revisor fiscal.',
+        );
+      }
+      const otherSeat = await tx.orgSignerDesignation.findFirst({
+        where: { organizationId, userId: user.id, revokedAt: null, role: { not: input.role } },
+      });
+      if (otherSeat) {
+        throw new ConflictException('Esa persona ya firma en otro cargo de la organización.');
+      }
+      const now = new Date();
+      const previous = await tx.orgSignerDesignation.findMany({
+        where: { organizationId, role: input.role, revokedAt: null },
+      });
+      for (const p of previous) {
+        if (p.userId === user.id) {
+          throw new ConflictException('Esa persona ya está vinculada en ese cargo.');
+        }
+        await tx.orgSignerDesignation.update({
+          where: { id: p.id },
+          data: { revokedAt: now, revokedByUserId: actorUserId },
+        });
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'signer.revoked',
+          entityType: 'org_signer_designation',
+          entityId: p.id,
+          metadata: { signerRole: p.role, signerUserId: p.userId, replaced: true },
+        });
+      }
+      const created = await tx.orgSignerDesignation.create({
+        data: {
+          organizationId,
+          userId: user.id,
+          role: input.role,
+          designatedByUserId: actorUserId,
+        },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId,
+        action: 'signer.designated',
+        entityType: 'org_signer_designation',
+        entityId: created.id,
+        metadata: {
+          signerRole: input.role,
+          signerUserId: user.id,
+          channel: 'email_link',
+          declarationVersion: SIGNER_DECLARATION_VERSION,
+          declarationText: SIGNER_DECLARATION_TEXT,
+        },
+      });
+      return {
+        id: created.id,
+        role: input.role,
+        status: 'active',
+        email,
+        displayName: user.displayName,
+        createdAt: created.createdAt.toISOString(),
+      };
     });
   }
 

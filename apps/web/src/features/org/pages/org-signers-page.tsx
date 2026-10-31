@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Role,
+  SIGNER_DECLARATION_TEXT,
   type AdditionalSignerRole,
   type LegalRepresentativeRole,
   type OrgReportKind,
   type OrgReportPolicy,
   type OrgReportsReadiness,
   type OrgSigner,
-  type OrganizationInvitation,
 } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -141,9 +141,8 @@ export function OrgSignersPage() {
   const [email, setEmail] = useState('');
   const [seat, setSeat] = useState<AdditionalSignerRole>('fiscal_reviewer');
   const [busy, setBusy] = useState(false);
-  // Invitación cuyo correo NO salió (servidor sin proveedor de correo): se
-  // avisa en pantalla en vez de decir "enviada" sin que llegue nada.
-  const [unsent, setUnsent] = useState<OrganizationInvitation | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [declared, setDeclared] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -167,30 +166,28 @@ export function OrgSignersPage() {
     event.preventDefault();
     setBusy(true);
     try {
-      const created = await client.request<OrganizationInvitation>('/org/invitations', {
+      await client.request<OrgSigner>('/org/signers', {
         method: 'POST',
-        json: { email: email.trim(), role: Role.ReadOnlyAuditor, signerRole: seat },
+        json: {
+          email: email.trim(),
+          fullName: fullName.trim(),
+          role: seat,
+          statutoryDeclaration: true,
+        },
       });
-      if (created?.emailDelivery === 'simulated') {
-        setUnsent(created);
-        toast({
-          title: 'Invitación creada, pero el correo no salió',
-          description: 'Este servidor no tiene configurado el envío de correos.',
-          variant: 'warning',
-        });
-      } else {
-        setUnsent(null);
-        toast({
-          title: 'Invitación enviada',
-          description: 'La persona crea su propia cuenta y contraseña con el enlace del correo.',
-          variant: 'success',
-        });
-      }
+      toast({
+        title: 'Firmante vinculado',
+        description:
+          'Con el primer documento que necesite su firma le llega un correo para registrarla y aprobarlo.',
+        variant: 'success',
+      });
       setEmail('');
+      setFullName('');
+      setDeclared(false);
       await load();
     } catch (error) {
       toast({
-        title: 'No se pudo invitar',
+        title: 'No se pudo vincular',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -218,7 +215,7 @@ export function OrgSignersPage() {
     <PageContainer>
       <PageHeader
         title="Firmantes"
-        description="Las personas que firman contigo (contador, revisor fiscal). Tú las vinculas y tú las revocas: ellas crean su propia cuenta y contraseña."
+        description="El contador y el revisor fiscal que firman con tu organización. Los vinculas por su correo; no necesitan crear cuenta."
       />
 
       {loadError && (
@@ -239,9 +236,11 @@ export function OrgSignersPage() {
             <CardHeader>
               <CardTitle className="text-base">Quién firma</CardTitle>
               <CardDescription>
-                El representante legal firma con la cuenta principal al generar el documento. El
-                contador y el revisor fiscal reciben un correo y autorizan cada documento con su
-                propia cuenta: nadie firma por otro.
+                El representante legal firma con la cuenta principal al generar el documento. Al
+                contador y al revisor fiscal les llega un correo por cada documento: la primera vez
+                registran su firma y autorizan guardarla; después aprueban cada documento con su
+                cédula. Su firma nunca se usa sin esa aprobación. Si cambias de contador o revisor,
+                vincula al nuevo: el anterior queda revocado y su historial se conserva.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -281,7 +280,7 @@ export function OrgSignersPage() {
               </ul>
 
               {isOwner ? (
-                <form className="grid gap-3 sm:grid-cols-[1fr_auto_auto]" onSubmit={invite}>
+                <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto]" onSubmit={invite}>
                   <label className="space-y-1 text-sm" htmlFor="signer-email">
                     <span>Correo de la persona</span>
                     <Input
@@ -291,6 +290,15 @@ export function OrgSignersPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="contador@ejemplo.com"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm" htmlFor="signer-name">
+                    <span>Nombre completo</span>
+                    <Input
+                      id="signer-name"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
                     />
                   </label>
                   <label className="space-y-1 text-sm" htmlFor="signer-seat">
@@ -306,57 +314,24 @@ export function OrgSignersPage() {
                     </select>
                   </label>
                   <div className="flex items-end">
-                    <Button type="submit" disabled={busy || !email}>
-                      {busy ? 'Enviando…' : 'Invitar'}
+                    <Button type="submit" disabled={busy || !email || !fullName || !declared}>
+                      {busy ? 'Guardando…' : 'Vincular'}
                     </Button>
                   </div>
+                  <label className="flex items-start gap-2 text-sm sm:col-span-4">
+                    <input
+                      type="checkbox"
+                      checked={declared}
+                      onChange={(e) => setDeclared(e.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>{SIGNER_DECLARATION_TEXT}</span>
+                  </label>
                 </form>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Solo el propietario de la organización vincula o revoca firmantes.
                 </p>
-              )}
-              {unsent && (
-                <div
-                  role="alert"
-                  className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-                >
-                  <p className="font-medium">
-                    El correo de invitación a {unsent.email} no se envió.
-                  </p>
-                  <p>
-                    Este servidor no tiene configurado un proveedor de correo
-                    (NOTIFICATION_DRIVER=smtp y los datos SMTP). La invitación sí quedó creada.
-                  </p>
-                  {unsent.simulatedInviteLink ? (
-                    <>
-                      <p>
-                        Mientras tanto, copia este enlace y envíaselo solo a esa persona. Sirve una
-                        sola vez y caduca en 7 días.
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <code className="break-all rounded bg-white px-2 py-1 text-xs">
-                          {unsent.simulatedInviteLink}
-                        </code>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            void navigator.clipboard
-                              ?.writeText(unsent.simulatedInviteLink ?? '')
-                              .then(() => toast({ title: 'Enlace copiado', variant: 'success' }))
-                              .catch(() => undefined);
-                          }}
-                        >
-                          Copiar enlace
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <p>Configura el correo y vuelve a invitar a la persona.</p>
-                  )}
-                </div>
               )}
             </CardContent>
           </Card>

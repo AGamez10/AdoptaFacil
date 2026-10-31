@@ -37,6 +37,7 @@ model Organization {
   reports                  OrgReport[]
   ledgerEntries            LedgerEntry[]
   signerDesignations       OrgSignerDesignation[]
+  signatureRequests        OrgSignatureRequest[]
   thirdPartyConsents       ThirdPartyConsent[]
   reportApprovals          OrgReportApproval[]
   reportPolicies           OrgReportPolicy[]
@@ -250,6 +251,7 @@ model User {
   signerDesignationsRevoked OrgSignerDesignation[] @relation("SignerDesignationRevokedBy")
   thirdPartyConsents        ThirdPartyConsent[]    @relation("ThirdPartyConsentSubject")
   reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
+  signatureRequests         OrgSignatureRequest[]  @relation("SignatureRequestSigner")
   reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
   mfaFactor                 AuthMfaFactor?
 

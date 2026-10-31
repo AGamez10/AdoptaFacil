@@ -77,6 +77,7 @@ const OrgProfilePage = lazyPage(loadOrg, 'OrgProfilePage');
 const OrgReportsPage = lazyPage(loadOrg, 'OrgReportsPage');
 const OrgSignersPage = lazyPage(loadOrg, 'OrgSignersPage');
 const OrgSigningInboxPage = lazyPage(loadOrg, 'OrgSigningInboxPage');
+const SignatureRequestPage = lazyPage(loadOrg, 'SignatureRequestPage');
 const PlatformAdminDashboardPage = lazyPage(loadOrg, 'PlatformAdminDashboardPage');
 const PlatformBannerPage = lazyPage(loadOrg, 'PlatformBannerPage');
 const PlatformDocumentsReviewPage = lazyPage(loadOrg, 'PlatformDocumentsReviewPage');
@@ -273,6 +274,8 @@ export function AppRoutes() {
           />
           {/* Public certificate VERIFICATION, REAL (§M05/RF14, F-3) — no session,
           queries `GET /public/donations/certificates/:code`. */}
+          {/* M13 · firma por enlace de correo (contador / revisor fiscal, sin sesión). */}
+          <Route path="/firmar" element={<SignatureRequestPage />} />
           <Route path="/verificar" element={<CertificateVerificationPage />} />
           <Route path="/verificar/:code" element={<CertificateVerificationPage />} />
           {/* Public campaigns portal (§M14/M06, T-055) — no auth, active campaigns from
