@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType, type SVGProps } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type {
   CampaignPublic,
@@ -7,6 +7,7 @@ import type {
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
+import { usePublicModules } from '../../../shell/layout/public-nav-model';
 import { listPublicCampaigns } from '../../campaigns/api/public-campaigns';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
 import { listPublicNeeds } from '../../resources/api/public-resources';
@@ -17,90 +18,28 @@ import {
 } from '../../resources/model/resources-view';
 import { listPublicOpportunities } from '../../volunteering/api/public-volunteering';
 import { formatBogota, volunteerSignupHref } from '../../volunteering/model/volunteering-view';
-import { BoneSticker, CatMascot, DogMascot, HeartSticker, Sparkle } from './illustrations';
-import { IconArrowRight, IconBox, IconHeart, IconMegaphone, IconPaw } from './landing-icons';
+import { CatMascot, DogMascot, Sparkle } from './illustrations';
+import { IconArrowRight } from './landing-icons';
 import styles from './commerce.module.scss';
 
 /** Ancla de "Formas de ayudar" (la usa el hero). */
 export const LANDING_HELP_ID = 'ayudar';
 
-interface HelpWay {
-  key: string;
-  Icon: ComponentType<SVGProps<SVGSVGElement>>;
-  title: string;
-  text: string;
-  cta: string;
-  to: string;
-  tone: 'teal' | 'gold' | 'coral' | 'navy';
-}
-
 /**
- * Las formas de ayudar que el producto puede cumplir HOY: adoptar y apoyar
- * campañas siempre; donar y el banco de recursos solo con su módulo encendido
- * (Ola 1, R1-1). Nunca se promete un botón que lleve a un 404.
+ * "Todo AdoptaFácil": cada módulo público en una cuadrícula tipo bento, con la
+ * misma lista y los mismos grupos del menú (`usePublicModules`), así lo que
+ * ves en el menú y en la página nunca se contradice. Los módulos apagados se
+ * muestran como "muy pronto", sin enlace: nunca un botón que lleve a un 404.
+ * Colores institucionales del logo: azul noche y verde azulado.
  */
-export function useHelpWays(): HelpWay[] {
-  const payments = useFeature('payments');
-  const resources = useFeature('resources');
-  return [
-    {
-      key: 'adoptar',
-      Icon: IconPaw,
-      title: 'Adopta',
-      text: 'Conoce su historia, solicita en línea y firma un contrato claro con la organización.',
-      cta: 'Ver animales',
-      to: '/adoptar',
-      tone: 'teal',
-    },
-    ...(payments
-      ? [
-          {
-            key: 'donar',
-            Icon: IconHeart,
-            title: 'Dona',
-            text: 'Elige la organización, mira el desglose antes de pagar y guarda tu comprobante.',
-            cta: 'Donar ahora',
-            to: '/donaciones',
-            tone: 'coral' as const,
-          },
-        ]
-      : []),
-    {
-      key: 'campanas',
-      Icon: IconMegaphone,
-      title: 'Apoya una campaña',
-      text: 'Cirugías, alimento, esterilizaciones: metas concretas con evidencia de en qué se usó la ayuda.',
-      cta: 'Ver campañas',
-      to: '/campanas',
-      tone: 'gold',
-    },
-    ...(resources
-      ? [
-          {
-            key: 'recursos',
-            Icon: IconBox,
-            title: 'Comparte recursos',
-            text: 'Ofrece lo que te sobra (cobijas, guacales, alimento) a quien lo necesita hoy.',
-            cta: 'Ir al banco de recursos',
-            to: '/recursos',
-            tone: 'navy' as const,
-          },
-        ]
-      : []),
-  ];
-}
-
-/** Ilustración de cada bloque de color (decorativa). */
-function WayArt({ tone }: { tone: HelpWay['tone'] }) {
-  if (tone === 'teal') return <DogMascot className={styles.way__art} />;
-  if (tone === 'gold') return <CatMascot className={styles.way__art} />;
-  if (tone === 'coral') return <HeartSticker className={styles.way__art} color="#ff7a59" />;
-  return <BoneSticker className={styles.way__art} color="#ffffff" />;
-}
-
-/** Bloque "Hay muchas formas de ayudar": una tarjeta grande por camino. */
 export function WaysToHelpSection() {
-  const ways = useHelpWays();
+  const groups = usePublicModules();
+  const byKey = new Map(groups.flatMap((group) => group.modules).map((m) => [m.key, m]));
+  const adopt = byKey.get('adoptar');
+  const tiles = groups
+    .filter((group) => group.key === 'ayudar' || group.key === 'comunidad')
+    .flatMap((group) => group.modules.map((module) => ({ ...module, group: group.label })));
+
   return (
     <section
       id={LANDING_HELP_ID}
@@ -110,31 +49,90 @@ export function WaysToHelpSection() {
     >
       <div className={styles.container}>
         <div className={cn(styles.head, 'af-reveal')}>
-          <p className={styles.eyebrow}>Elige cómo ayudar</p>
+          <p className={styles.eyebrow}>Todo AdoptaFácil</p>
           <h2 id="landing-ways-title" className={styles.head__title}>
             Hay más de una forma de cambiar una vida.
           </h2>
+          <p className={styles.head__lead}>
+            Adoptar, donar, apoyar campañas, compartir recursos o encontrar quién cuide a tu
+            mascota: todo en un mismo lugar, con las mismas reglas claras.
+          </p>
         </div>
-        <ul className={styles.ways__grid} data-count={ways.length}>
-          {ways.map(({ key, Icon, title, text, cta, to, tone }) => (
+        <ul className={styles.bento}>
+          {adopt && (
             <li
-              key={key}
-              className={cn(styles.way, 'af-reveal')}
-              data-tone={tone}
-              data-testid={`way-${key}`}
+              className={cn(styles.tile, styles['tile--hero'], 'af-reveal')}
+              data-testid="way-adoptar"
             >
-              <WayArt tone={tone} />
-              <span className={styles.way__icon} aria-hidden="true">
-                <Icon />
-              </span>
-              <h3 className={styles.way__title}>{title}</h3>
-              <p className={styles.way__text}>{text}</p>
-              <Link to={to} className={styles.way__cta}>
-                {cta}
-                <IconArrowRight aria-hidden="true" />
+              <Link to={adopt.to} className={styles.tile__link}>
+                <DogMascot className={styles.tile__art} />
+                <span className={styles.tile__icon} aria-hidden="true">
+                  <adopt.Icon />
+                </span>
+                <span className={styles.tile__group}>Adoptar</span>
+                <strong className={styles.tile__title}>Encuentra a quien te espera</strong>
+                <span className={styles.tile__text}>
+                  Conoce su historia, solicita en línea y firma un contrato claro con la
+                  organización.
+                </span>
+                <span className={styles.tile__cta}>
+                  Ver animales
+                  <IconArrowRight aria-hidden="true" />
+                </span>
               </Link>
             </li>
-          ))}
+          )}
+          {tiles.map((module) => {
+            const body = (
+              <>
+                <span className={styles.tile__icon} aria-hidden="true">
+                  <module.Icon />
+                </span>
+                <span className={styles.tile__group}>{module.group}</span>
+                <strong className={styles.tile__title}>{module.label}</strong>
+                <span className={styles.tile__text}>{module.description}</span>
+                {module.enabled ? (
+                  <IconArrowRight className={styles.tile__arrow} aria-hidden="true" />
+                ) : (
+                  <span className={styles.tile__soon}>Muy pronto</span>
+                )}
+              </>
+            );
+            return (
+              <li
+                key={module.key}
+                className={cn(styles.tile, 'af-reveal', !module.enabled && styles['tile--soon'])}
+                data-testid={module.enabled ? `way-${module.key}` : `way-soon-${module.key}`}
+              >
+                {module.enabled ? (
+                  <Link to={module.to} className={styles.tile__link}>
+                    {body}
+                  </Link>
+                ) : (
+                  <div className={styles.tile__link}>{body}</div>
+                )}
+              </li>
+            );
+          })}
+          <li
+            className={cn(styles.tile, styles['tile--org'], 'af-reveal')}
+            data-testid="way-organizaciones"
+          >
+            <a href="#organizaciones" className={styles.tile__link}>
+              <CatMascot className={styles.tile__art} />
+              <span className={styles.tile__group}>Organizaciones</span>
+              <strong className={styles.tile__title}>
+                ¿Rescatas animales? Tu casa digital es gratis.
+              </strong>
+              <span className={styles.tile__text}>
+                Portal propio, animales con ficha clínica y adopciones con contrato y seguimiento.
+              </span>
+              <span className={styles.tile__cta}>
+                Conocer cómo funciona
+                <IconArrowRight aria-hidden="true" />
+              </span>
+            </a>
+          </li>
         </ul>
       </div>
     </section>

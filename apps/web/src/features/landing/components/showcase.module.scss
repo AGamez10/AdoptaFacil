@@ -18,7 +18,9 @@
   overflow: hidden;
   border-radius: 20px;
   background: #fff;
-  box-shadow: 0 1px 2px rgb(20 32 46 / 0.06), 0 14px 34px -14px rgb(20 32 46 / 0.22);
+  box-shadow:
+    0 1px 2px rgb(20 32 46 / 0.06),
+    0 14px 34px -14px rgb(20 32 46 / 0.22);
   transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 

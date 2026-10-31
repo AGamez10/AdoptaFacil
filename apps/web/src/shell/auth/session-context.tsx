@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type {
+  AcceptInvitationInput,
   FormalizationState,
   FormalizationStatus,
   VerificationLevel,
@@ -133,6 +134,11 @@ export interface SessionContextValue {
   signIn: (credentials?: LoginRequest) => Promise<void>;
   /** Create an account (Organization or Person) and establish its session. */
   register: (request: RegisterRequest) => Promise<void>;
+  /**
+   * Accept an organization invitation (emailed link) and establish the new
+   * member's session. Optional so existing test doubles stay valid.
+   */
+  acceptInvitation?: (input: AcceptInvitationInput) => Promise<void>;
   /**
    * Google Sign-In (T-Google-SignIn): logs into an existing account (any
    * account type, matched by email) or creates a lightweight new Person
@@ -398,6 +404,16 @@ export function SessionProvider({
     [api, establish],
   );
 
+  const acceptInvitation = useCallback(
+    async (input: AcceptInvitationInput) => {
+      if (!api.authApi.acceptInvitation) {
+        throw new Error('Este entorno no puede aceptar invitaciones.');
+      }
+      await establish(await api.authApi.acceptInvitation(input));
+    },
+    [api, establish],
+  );
+
   const signInWithGoogle = useCallback(
     async (idToken: string) => {
       await establish(await api.authApi.googleSignIn({ idToken }));
@@ -491,6 +507,7 @@ export function SessionProvider({
       refreshTransparency,
       signIn,
       register,
+      acceptInvitation,
       signInWithGoogle,
       completeProfile,
       requestPasswordReset,
@@ -510,6 +527,7 @@ export function SessionProvider({
       refreshTransparency,
       signIn,
       register,
+      acceptInvitation,
       signInWithGoogle,
       completeProfile,
       requestPasswordReset,

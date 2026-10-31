@@ -123,148 +123,327 @@
   }
 }
 
-.ways__grid {
+.head__lead {
+  margin: 1rem 0 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--af-ink-soft);
+}
+
+/* Colores institucionales del logo (azul noche y verde azulado). */
+$logo-navy: #202c3c;
+$logo-teal: #25baa6;
+
+/* Bento "Todo AdoptaFácil": una celda grande para adoptar, seis módulos y una
+   franja para organizaciones. Celular: una columna; 560 px: dos; 1024 px:
+   cuatro columnas con la celda de adoptar ocupando dos filas. */
+.bento {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
   margin: 2.5rem 0 0;
   padding: 0;
   list-style: none;
 
-  @media (min-width: 768px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  @media (min-width: 560px) {
+    gap: 0.875rem;
   }
 
-  @media (min-width: 1100px) {
-    &[data-count='3'] {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    &[data-count='4'] {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
+  @media (min-width: 1024px) {
+    grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr));
+    gap: 1rem;
   }
 }
 
-/* Bloques de color amplios: cada camino tiene su propio color. */
-.way {
-  --way-bg: var(--af-teal-deep);
-  --way-fg: #fff;
-  --way-soft: rgb(255 255 255 / 0.8);
-  --way-icon-bg: var(--af-teal);
-  --way-icon-fg: var(--af-teal-deep);
+.tile {
+  --tile-bg: #fff;
+  --tile-ink: var(--af-ink);
+  --tile-soft: var(--af-ink-soft);
+  --tile-chip: var(--af-teal-ink);
+  --tile-chip-ink: #fff;
+  min-width: 0;
+}
+
+.tile--hero {
+  --tile-bg: #{$logo-navy};
+  --tile-ink: #fff;
+  --tile-soft: rgb(255 255 255 / 0.78);
+  --tile-chip: #{$logo-teal};
+  --tile-chip-ink: #{$logo-navy};
+
+  grid-column: 1 / -1;
+
+  @media (min-width: 1024px) {
+    grid-column: 1;
+    grid-row: span 2;
+  }
+}
+
+.tile--org {
+  --tile-bg: linear-gradient(120deg, #0b3d37, var(--af-teal-ink) 55%, #16897a);
+  --tile-ink: #fff;
+  --tile-soft: rgb(255 255 255 / 0.88);
+  grid-column: 1 / -1;
+}
+
+.tile__link {
   position: relative;
-  overflow: hidden;
   display: flex;
-  min-height: 19rem;
+  height: 100%;
+  min-height: 9.5rem;
   flex-direction: column;
-  border-radius: var(--af-r-block);
-  background: var(--way-bg);
-  padding: 1.75rem;
-  color: var(--way-fg);
+  align-items: flex-start;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgb(32 44 60 / 0.08);
+  border-radius: 1.5rem;
+  background: var(--tile-bg);
+  padding: 1.25rem;
+  color: var(--tile-ink);
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgb(20 32 46 / 0.04);
+  transition:
+    transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.3s ease;
+
+  /* Brillo que cruza la tarjeta al pasar el cursor (solo transform). */
+  &::after {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      105deg,
+      transparent 35%,
+      rgb(37 186 166 / 0.14) 50%,
+      transparent 65%
+    );
+    content: '';
+    transform: translateX(-100%);
+    transition: transform 0.7s ease;
+  }
 
   @media (min-width: 1024px) {
-    min-height: 23rem;
-    padding: 2.25rem;
+    padding: 1.5rem;
   }
 
-  &[data-tone='gold'] {
-    --way-bg: var(--af-sun);
-    --way-fg: var(--af-ink);
-    --way-soft: var(--af-ink-soft);
-    --way-icon-bg: #fff;
-    --way-icon-fg: var(--af-ink);
+  .tile--hero &,
+  .tile--org & {
+    border-color: transparent;
   }
 
-  &[data-tone='coral'] {
-    --way-bg: var(--af-coral-soft);
-    --way-fg: var(--af-ink);
-    --way-soft: var(--af-ink-soft);
-    --way-icon-bg: var(--af-coral);
-    --way-icon-fg: var(--af-ink);
+  /* Celular: tarjetas compactas de dos en dos (ícono, grupo y nombre). */
+  @media (max-width: 559px) {
+    min-height: 8rem;
+    border-radius: 1.25rem;
+    padding: 1rem;
   }
 
-  &[data-tone='navy'] {
-    --way-bg: var(--af-sky);
-    --way-fg: var(--af-ink);
-    --way-soft: var(--af-ink-soft);
-    --way-icon-bg: #fff;
-    --way-icon-fg: var(--af-ink);
-  }
-}
+  .tile--hero & {
+    min-height: 22rem;
+    justify-content: flex-end;
 
-.way__art {
-  position: absolute;
-  top: 1.25rem;
-  right: 1.25rem;
-  width: 8.5rem;
-  pointer-events: none;
-
-  @media (min-width: 1024px) {
-    top: 1.5rem;
-    right: 1.5rem;
-    width: 10rem;
-  }
-}
-
-.way__icon {
-  display: grid;
-  width: 3.5rem;
-  height: 3.5rem;
-  place-items: center;
-  border-radius: 1.1rem;
-  background: var(--way-icon-bg);
-  color: var(--way-icon-fg);
-
-  svg {
-    width: 1.6rem;
-    height: 1.6rem;
-  }
-}
-
-.way__title {
-  margin: auto 0 0;
-  padding-top: 2.5rem;
-  font-family: var(--font-brand);
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  font-weight: var(--fw-extra);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.way__text {
-  margin: 0.75rem 0 0;
-  font-size: 1rem;
-  line-height: 1.5;
-  color: var(--way-soft);
-}
-
-.way__cta {
-  /* Zona táctil cómoda (44 px) en celulares. */
-  min-height: 2.75rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 1.25rem;
-  font-weight: var(--fw-extra);
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
-
-  svg {
-    width: 1.15rem;
-    height: 1.15rem;
-    transition: transform var(--transition-base);
+    @media (max-width: 559px) {
+      min-height: 0;
+      padding-top: 1rem;
+    }
   }
 
-  &:hover svg {
-    transform: translateX(4px);
+  .tile--org & {
+    min-height: 0;
+
+    @media (min-width: 560px) {
+      padding-right: 12rem;
+    }
+  }
+
+  &:is(a):hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 50px -24px rgb(20 32 46 / 0.4);
+
+    &::after {
+      transform: translateX(100%);
+    }
   }
 
   &:focus-visible {
-    outline: 3px solid currentColor;
+    outline: 3px solid var(--af-teal-ink);
     outline-offset: 3px;
-    border-radius: 4px;
+  }
+}
+
+.tile__art {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+
+  .tile--hero & {
+    top: 1rem;
+    right: 1rem;
+    width: min(34%, 11rem);
+
+    @media (min-width: 560px) {
+      top: 1.25rem;
+      width: min(46%, 11rem);
+    }
+  }
+
+  .tile--org & {
+    right: 2rem;
+    bottom: -0.5rem;
+    width: 9rem;
+
+    @media (max-width: 559px) {
+      display: none;
+    }
+  }
+}
+
+.tile__icon {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.875rem;
+  background: var(--tile-chip);
+  color: var(--tile-chip-ink);
+  font-size: 1.35rem;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  .tile__link:is(a):hover & {
+    transform: rotate(-8deg) scale(1.1);
+  }
+
+  .tile--hero & {
+    margin-bottom: auto;
+
+    @media (max-width: 559px) {
+      margin-bottom: 4.5rem;
+    }
+  }
+}
+
+.tile__group {
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  font-weight: var(--fw-extra);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tile-soft);
+
+  .tile:not(.tile--hero, .tile--org) & {
+    color: var(--af-teal-ink);
+  }
+
+  .tile--org & {
+    margin-top: 0;
+  }
+}
+
+.tile__title {
+  margin-top: 0.25rem;
+  font-family: var(--font-brand);
+  font-size: clamp(1.05rem, 4.2vw, 1.25rem);
+  font-weight: var(--fw-extra);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+
+  .tile--hero & {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    line-height: 1.02;
+  }
+
+  .tile--org & {
+    font-size: clamp(1.35rem, 3vw, 1.875rem);
+  }
+}
+
+.tile__text {
+  margin-top: 0.4rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--tile-soft);
+
+  .tile:not(.tile--hero, .tile--org) & {
+    @media (max-width: 559px) {
+      display: none;
+    }
+  }
+}
+
+.tile__arrow {
+  position: absolute;
+  top: 1.4rem;
+  right: 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--af-teal-ink);
+  transition: transform 0.25s ease;
+
+  .tile__link:hover & {
+    transform: translateX(4px);
+  }
+
+  @media (max-width: 559px) {
+    top: 1.1rem;
+    right: 1rem;
+  }
+}
+
+.tile__cta {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  border-radius: var(--r-full);
+  background: #fff;
+  padding: 0 1.1rem;
+  font-weight: var(--fw-extra);
+  color: #{$logo-navy};
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    transition: transform 0.25s ease;
+  }
+
+  .tile__link:hover & svg {
+    transform: translateX(4px);
+  }
+}
+
+.tile--soon .tile__link {
+  border-style: dashed;
+  background: var(--af-cream);
+
+  .tile__icon {
+    background: rgb(32 44 60 / 0.12);
+    color: #{$logo-navy};
+  }
+}
+
+.tile__soon {
+  position: absolute;
+  top: 1.35rem;
+  right: 1rem;
+  border-radius: var(--r-full);
+  background: #{$logo-navy};
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: var(--fw-bold);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile--hero .tile__art {
+    animation: tile-bob 5s ease-in-out infinite;
+  }
+}
+
+@keyframes tile-bob {
+  50% {
+    transform: translateY(-8px) rotate(-2deg);
   }
 }
 
@@ -519,7 +698,7 @@
   top: 0;
   right: 2.5rem;
   width: 2rem;
-  color: var(--af-sun);
+  color: var(--af-teal);
 }
 
 .final__title {

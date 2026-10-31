@@ -23,7 +23,7 @@
   max-width: var(--af-container);
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: 1rem;
   margin: 0 auto;
   padding: 0 1.25rem;
 
@@ -48,14 +48,19 @@
   gap: 0.25rem;
   white-space: nowrap;
 
-  @media (min-width: 1180px) {
+  @media (min-width: 1024px) {
     display: flex;
   }
 }
 
 .navbar__link {
   border-radius: var(--r-full);
-  padding: 0.5rem 0.85rem;
+  padding: 0.5rem 0.65rem;
+
+  @media (min-width: 1180px) {
+    padding: 0.5rem 0.85rem;
+  }
+
   font-size: 0.9375rem;
   font-weight: var(--fw-semibold);
   color: var(--af-ink);
@@ -141,7 +146,7 @@
     outline-offset: 2px;
   }
 
-  @media (min-width: 1180px) {
+  @media (min-width: 1024px) {
     display: none;
   }
 }
@@ -204,16 +209,16 @@
     display: none;
   }
 
-  @media (min-width: 1180px) {
+  @media (min-width: 1024px) {
     display: none;
   }
 }
 
 .navbar__mobileLink {
   border-radius: 1rem;
-  padding: 0.85rem 0.75rem;
+  padding: 0.7rem 0.75rem;
   font-family: var(--font-brand);
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: var(--fw-extra);
   letter-spacing: -0.02em;
   color: var(--af-ink);
@@ -264,32 +269,151 @@
   color: var(--af-ink);
 }
 
+/* Grupos del menú de escritorio (Ayudar, Comunidad): panel que baja con
+   opacity/transform. `visibility` saca sus enlaces del orden de tabulación
+   mientras está cerrado. */
+.navbar__group {
+  position: relative;
+}
+
+.navbar__link[aria-expanded] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.navbar__link[aria-expanded='true'] {
+  background: var(--af-mint);
+  color: var(--af-teal-deep);
+}
+
+.navbar__chevron {
+  width: 1rem;
+  height: 1rem;
+  transition: transform 0.2s ease;
+
+  [aria-expanded='true'] > & {
+    transform: rotate(180deg);
+  }
+}
+
+.navbar__panel {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 50%;
+  width: 22rem;
+  border: 1px solid rgb(32 44 60 / 0.08);
+  border-radius: 1.25rem;
+  background: #fff;
+  padding: 0.5rem;
+  box-shadow: 0 24px 60px -20px rgb(20 32 46 / 0.35);
+  opacity: 0;
+  transform: translate(-50%, -6px) scale(0.98);
+  transform-origin: top center;
+  visibility: hidden;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    visibility 0s linear 0.18s;
+
+  &[data-open='true'] {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+    visibility: visible;
+    transition:
+      opacity 0.18s ease,
+      transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
+      visibility 0s;
+  }
+}
+
+.navbar__panelList {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navbar__panelLink {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border-radius: 0.9rem;
+  padding: 0.65rem 0.75rem;
+  color: var(--af-ink);
+  text-decoration: none;
+  white-space: normal;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: var(--af-mint-soft);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: -3px;
+  }
+}
+
+.navbar__panelIcon {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  background: var(--af-teal-ink);
+  color: #fff;
+  font-size: 1.1rem;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  .navbar__panelLink:hover & {
+    transform: scale(1.08) rotate(-6deg);
+  }
+}
+
+.navbar__panelTitle {
+  display: block;
+  font-weight: var(--fw-extra);
+  line-height: 1.25;
+}
+
+.navbar__panelText {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--af-ink-soft);
+}
+
+.navbar__mobileGroup {
+  display: grid;
+
+  & + & {
+    margin-top: 0.35rem;
+    border-top: 1px solid rgb(20 32 46 / 0.08);
+    padding-top: 0.35rem;
+  }
+}
+
+.navbar__mobileHeading {
+  margin: 0.5rem 0.75rem 0.1rem;
+  font-size: 0.75rem;
+  font-weight: var(--fw-extra);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--af-teal-ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .navbar__panel,
+  .navbar__chevron,
+  .navbar__panelIcon,
   .navbar__burger,
   .navbar__burger::before,
   .navbar__burger::after {
     transition: none;
-  }
-}
-
-/* Muchos enlaces (todos los módulos encendidos): fila completa solo desde
-   1600px; por debajo, el menú desplegable, igual que en móvil. */
-.navbar[data-crowded='true'] {
-  .navbar__links {
-    @media (min-width: 1024px) and (max-width: 1599.98px) {
-      display: none;
-    }
-  }
-
-  .navbar__toggle {
-    @media (min-width: 1024px) and (max-width: 1599.98px) {
-      display: inline-flex;
-    }
-  }
-
-  .navbar__mobile:not([hidden]) {
-    @media (min-width: 1024px) and (max-width: 1599.98px) {
-      display: flex;
-    }
   }
 }
