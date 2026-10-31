@@ -245,6 +245,26 @@ describe('Signature requests by email link (M13)', () => {
     expect(fresh.body).toMatchObject({ needsSignature: true, signerName: 'Nuevo Revisor' });
   });
 
+  it('resending gives a fresh link and kills the previous one', async () => {
+    const report = (await generate(daysAgo(6))).body;
+    const first = lastLinkFor(lastLinkedEmail);
+    const res = await request(server)
+      .post(`/org/reports/${report.id}/signature-requests`)
+      .set(auth(owner))
+      .expect(200);
+    expect(res.body).toEqual({ sent: 1 });
+    const second = lastLinkFor(lastLinkedEmail);
+    expect(second).not.toBe(first);
+    await request(server)
+      .post('/public/signature-requests/preview')
+      .send({ token: first })
+      .expect(400);
+    await request(server)
+      .post('/public/signature-requests/preview')
+      .send({ token: second })
+      .expect(200);
+  });
+
   it('an expired link no longer works', async () => {
     await generate(daysAgo(2));
     const token = lastLinkFor(lastLinkedEmail);

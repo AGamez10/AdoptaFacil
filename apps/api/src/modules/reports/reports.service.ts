@@ -670,6 +670,27 @@ export class ReportsService {
       const pending = (row.signers as unknown as SealedSigner[]).filter(
         (s) => s.role !== 'legal_representative' && !decided.some((a) => a.signerRole === s.role),
       );
+      // A quien ya no esté vinculado no se le reenvía: el documento se genera de nuevo.
+      const active = await tx.orgSignerDesignation.findMany({
+        where: {
+          organizationId,
+          revokedAt: null,
+          userId: { in: pending.map((s) => s.signerUserId) },
+        },
+        select: { userId: true, role: true },
+      });
+      if (
+        pending.some((s) => !active.some((d) => d.userId === s.signerUserId && d.role === s.role))
+      ) {
+        throw new ConflictException(
+          'Un firmante de este documento ya no está vinculado. Genera el documento de nuevo.',
+        );
+      }
+      // El enlace anterior deja de servir: solo el más reciente es válido.
+      await tx.orgSignatureRequest.updateMany({
+        where: { organizationId, reportId: row.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
       return { row, notify: await this.signatureRequestsFor(tx, row, pending) };
     });
     await this.requestSignatures(row, notify);
