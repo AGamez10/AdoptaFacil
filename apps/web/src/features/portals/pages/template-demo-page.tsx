@@ -14,6 +14,7 @@ import { PublicFooter } from '../components/public-footer';
 import { PublicHeader } from '../components/public-header';
 import templateStyles from '../components/templates/portal-templates.module.scss';
 import { buildDemoSource } from '../templates/demo/demo-portal';
+import { useOwnPortalSource } from '../templates/demo/use-own-portal-source';
 import {
   DEMO_TEMPLATE_IDS,
   isDemoTemplate,
@@ -29,9 +30,13 @@ import { isEngineTemplate, loadDesign, type EngineTemplateId } from '../template
 /**
  * Vista previa PÚBLICA de una plantilla (`/plantillas/:id`): el portal completo
  * pintado con datos de demostración (`demo-portal.ts`) para que quien la elige
- * la vea llena. No consulta la API, no se indexa (noindex) y ningún enlace del
- * portal de ejemplo sale de la página. Desde aquí se va al registro con la
- * plantilla elegida (`/register?plantilla=<id>`).
+ * la vea llena. Para un visitante no consulta la API, no se indexa (noindex) y
+ * ningún enlace del portal de ejemplo sale de la página. Desde aquí se va al
+ * registro con la plantilla elegida (`/register?plantilla=<id>`).
+ *
+ * Quien gestiona una organización que ya registró animales ve la plantilla con
+ * SUS datos (`useOwnPortalSource`); los de ejemplo solo aparecen mientras no
+ * tenga ninguno.
  *
  * `?captura=1` oculta la barra superior: así se generan las miniaturas de
  * `public/template-previews`.
@@ -41,7 +46,11 @@ export function TemplateDemoPage() {
   const [params] = useSearchParams();
   const capture = params.get('captura') === '1';
   const template = isDemoTemplate(id) ? id : null;
-  const source = useMemo(() => buildDemoSource(), []);
+  const { status, hasAnyRole } = useSession();
+  const isOrgEditor = status === 'authenticated' && hasAnyRole(Role.Owner, Role.Administrator);
+  const own = useOwnPortalSource(isOrgEditor && !capture);
+  const demoSource = useMemo(() => buildDemoSource(), []);
+  const source = own.status === 'ready' ? own.data : demoSource;
   const name = template ? templateName(template) : '';
 
   useSeo({
@@ -54,8 +63,12 @@ export function TemplateDemoPage() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="template-demo-page">
-      {!capture && <DemoBar template={template} />}
-      {isEngineTemplate(template) ? (
+      {!capture && <DemoBar template={template} ownData={own.status === 'ready'} />}
+      {own.status === 'loading' ? (
+        <div className="mx-auto w-full max-w-[1320px] px-4 py-10" aria-busy="true">
+          <Skeleton className="h-72 w-full" />
+        </div>
+      ) : isEngineTemplate(template) ? (
         <EngineDemo template={template} source={source} />
       ) : (
         <ClassicDemo source={source} />
@@ -64,7 +77,7 @@ export function TemplateDemoPage() {
   );
 }
 
-function DemoBar({ template }: { template: PortalTemplateId }) {
+function DemoBar({ template, ownData }: { template: PortalTemplateId; ownData: boolean }) {
   const { status, hasAnyRole } = useSession();
   const index = DEMO_TEMPLATE_IDS.indexOf(template);
   const prev = DEMO_TEMPLATE_IDS[(index - 1 + DEMO_TEMPLATE_IDS.length) % DEMO_TEMPLATE_IDS.length];
@@ -111,7 +124,11 @@ function DemoBar({ template }: { template: PortalTemplateId }) {
           <div className="min-w-0 text-center sm:text-left">
             <p className="truncate text-sm font-bold text-foreground">Plantilla {name}</p>
             <p className="truncate text-xs text-muted-foreground">
-              Ejemplo con datos de prueba. Los botones del portal no llevan a ninguna parte.
+              {ownData
+                ? 'Con los datos de tu organización. Los botones del portal no llevan a ninguna parte.'
+                : isOrg
+                  ? 'Datos de ejemplo: cuando registres tu primer animal verás aquí los tuyos.'
+                  : 'Ejemplo con datos de prueba. Los botones del portal no llevan a ninguna parte.'}
             </p>
           </div>
           <Link
@@ -228,25 +245,27 @@ function ClassicDemo({ source }: { source: TemplateSourceData }) {
             </div>
           </section>
           <aside className="space-y-6">
-            <section className="rounded-2xl border border-border bg-card p-5">
-              <h2 className="text-lg font-bold text-foreground">Campañas activas</h2>
-              <ul className="mt-3 space-y-4">
-                {source.campaigns.map((c) => (
-                  <li key={c.id}>
-                    <p className="text-sm font-semibold text-foreground">{c.title}</p>
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.round(c.progress * 100)}%` }}
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {COP.format(c.raisedAmount)} de {COP.format(c.goalAmount)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {source.campaigns.length > 0 && (
+              <section className="rounded-2xl border border-border bg-card p-5">
+                <h2 className="text-lg font-bold text-foreground">Campañas activas</h2>
+                <ul className="mt-3 space-y-4">
+                  {source.campaigns.map((c) => (
+                    <li key={c.id}>
+                      <p className="text-sm font-semibold text-foreground">{c.title}</p>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.round(c.progress * 100)}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {COP.format(c.raisedAmount)} de {COP.format(c.goalAmount)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             <PortalSocialLinks organization={organization} />
           </aside>
         </div>
