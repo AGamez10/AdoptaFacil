@@ -58,6 +58,16 @@
 		}
 	}
 
+	# Enlaces para compartir publicaciones de la comunidad (/c/<id>?s=<red>):
+	# la API responde el HTML con Open Graph para WhatsApp, Facebook, X y
+	# LinkedIn, y manda a la persona a la publicación con parámetros UTM.
+	handle /c/* {
+		rewrite * /public/share{uri}
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
 	# Recursos con hash en el nombre: caché larga e inmutable.
 	@assets path /assets/*
 	header @assets Cache-Control "public, max-age=31536000, immutable"

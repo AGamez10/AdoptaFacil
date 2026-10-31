@@ -14,6 +14,8 @@ import {
 } from './community-directory.controller';
 import { CommunityDirectoryService } from './community-directory.service';
 import { CommunityPetsService } from './community-pets.service';
+import { PublicCommunityController } from './public-community.controller';
+import { PublicCommunityService } from './public-community.service';
 
 /**
  * M11 · Comunidad (Ola 3, F-8): publicaciones, comentarios, likes y
@@ -33,6 +35,7 @@ import { CommunityPetsService } from './community-pets.service';
     CommunityServicesController,
     CommunityPetsController,
     CommunityDirectoryModerationController,
+    PublicCommunityController,
   ],
   providers: [
     CommunityPostsService,
@@ -41,6 +44,7 @@ import { CommunityPetsService } from './community-pets.service';
     CommunityModerationService,
     CommunityDirectoryService,
     CommunityPetsService,
+    PublicCommunityService,
   ],
 })
 export class CommunityModule {}

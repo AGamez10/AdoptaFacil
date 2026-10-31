@@ -55,6 +55,7 @@ model Organization {
   serviceListings          ServiceListing[]
   serviceListingReviews    ServiceListingReview[]
   petProfiles              PetProfile[]
+  resourceOpenOffers       ResourceOpenOffer[]
   emailUsage               OrganizationEmailUsage[]
 
   @@index([status])

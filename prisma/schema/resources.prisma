@@ -170,3 +170,40 @@ model ResourceFulfillmentApplication {
   @@index([organizationId])
   @@map("resource_fulfillment_applications")
 }
+
+/// Ofrecimiento ABIERTO: alguien tiene algo para donar y no hay (o no encontró)
+/// una necesidad publicada. Vive en el tenant de quien ofrece (RLS normal). Las
+/// organizaciones lo ven en un tablero acotado (`resource_open_offers_board`,
+/// SECURITY DEFINER, sin identidad del donante) y lo toman para una necesidad
+/// propia vía `claim_resource_open_offer`, que crea la oferta ya aceptada y su
+/// entrega. Sin medicamentos (CHECK de categoría). Vence en `expiresAt`.
+model ResourceOpenOffer {
+  id                      String    @id @default(uuid()) @db.Uuid
+  organizationId          String    @map("organization_id") @db.Uuid
+  donorUserId             String    @map("donor_user_id") @db.Uuid
+  title                   String
+  description             String?
+  /// ResourceCategory como texto, sin `medicine`.
+  category                String
+  quantity                Int
+  unit                    String
+  department              String
+  city                    String
+  /// ResourceOpenOfferStatus como texto.
+  status                  String    @default("open")
+  claimedByOrganizationId String?   @map("claimed_by_organization_id") @db.Uuid
+  claimedNeedId           String?   @map("claimed_need_id") @db.Uuid
+  claimedOfferId          String?   @map("claimed_offer_id") @db.Uuid
+  claimedAt               DateTime? @map("claimed_at")
+  /// UTC.
+  expiresAt               DateTime  @map("expires_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([donorUserId])
+  @@index([status, expiresAt])
+  @@map("resource_open_offers")
+}

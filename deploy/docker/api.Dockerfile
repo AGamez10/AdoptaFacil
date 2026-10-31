@@ -54,10 +54,13 @@ ENTRYPOINT ["/repo/deploy/scripts/migrate.sh"]
 
 FROM ${NODE_IMAGE} AS runtime
 ARG APT_PACKAGES
+# Fuentes para la tarjeta de redes de la comunidad (sharp/librsvg dibuja el
+# texto con fontconfig; la imagen slim no trae ninguna fuente).
+ARG FONT_PACKAGES="fonts-inter fonts-dejavu-core"
 ENV NODE_ENV=production
-RUN if [ -n "$APT_PACKAGES" ]; then \
+RUN if [ -n "$APT_PACKAGES$FONT_PACKAGES" ]; then \
       apt-get update \
-      && apt-get install -y --no-install-recommends $APT_PACKAGES \
+      && apt-get install -y --no-install-recommends $APT_PACKAGES $FONT_PACKAGES \
       && rm -rf /var/lib/apt/lists/*; \
     fi \
  && mkdir -p /var/lib/adoptafacil/storage \

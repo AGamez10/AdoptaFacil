@@ -12,6 +12,8 @@ import { ResourceDeliveryEvidencesController } from './resource-delivery-evidenc
 import { ResourceDeliveryEvidencesService } from './resource-delivery-evidences.service';
 import { PublicResourceNeedsController } from './public-resource-needs.controller';
 import { PublicResourceNeedsService } from './public-resource-needs.service';
+import { ResourceOpenOffersController } from './resource-open-offers.controller';
+import { ResourceOpenOffersService } from './resource-open-offers.service';
 
 /**
  * M09 · Banco de recursos (Ola 3): una organización publica una NECESIDAD; un
@@ -33,6 +35,7 @@ import { PublicResourceNeedsService } from './public-resource-needs.service';
     ResourceDeliveriesController,
     ResourceDeliveryEvidencesController,
     PublicResourceNeedsController,
+    ResourceOpenOffersController,
   ],
   providers: [
     ResourceNeedsService,
@@ -41,6 +44,7 @@ import { PublicResourceNeedsService } from './public-resource-needs.service';
     ResourceDeliveriesService,
     ResourceDeliveryEvidencesService,
     PublicResourceNeedsService,
+    ResourceOpenOffersService,
   ],
 })
 export class ResourcesModule {}

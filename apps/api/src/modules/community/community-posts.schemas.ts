@@ -18,8 +18,11 @@ export const createPostSchema = z
     title: z.string().trim().min(1).max(200).optional(),
     body: z.string().trim().min(10).max(2000),
     images: z.array(postImageInputSchema).max(6).optional(),
+    shareable: z.boolean().optional(),
   })
   .strict();
+
+export const setPostShareableSchema = z.object({ shareable: z.boolean() }).strict();
 
 export const updatePostSchema = z
   .object({

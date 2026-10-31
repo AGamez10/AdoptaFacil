@@ -489,6 +489,29 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'resources.open_offer_claimed',
+    label: 'Una organización tomó tu ofrecimiento',
+    description:
+      'Se envía cuando una organización toma lo que alguien dejó ofrecido en el banco de recursos.',
+    audience: 'Quien dejó el ofrecimiento abierto',
+    category: 'transactional',
+    theme: 'community',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre de quien ofrece', 'Laura'),
+      v('ofrecimiento', 'Lo que ofreció', '2 cobijas medianas'),
+      ORG,
+    ],
+    defaults: {
+      subject: '{{organizacion}} quiere recibir lo que ofreciste',
+      preheader: 'Coordinarán contigo la entrega.',
+      heading: '¡Tu ofrecimiento ya tiene destino!',
+      body:
+        'Hola {{nombre}},\n\n**{{organizacion}}** tomó tu ofrecimiento **"{{ofrecimiento}}"** en el banco de recursos de AdoptaFácil.\n\n' +
+        'Lo verás en "Mis ofertas" con el estado de la entrega. La organización coordinará contigo cómo y cuándo entregarlo. ¡Gracias por compartir!',
+    },
+  },
+  {
     event: 'community.campaign_update',
     label: 'Novedades de campaña a donantes',
     description:
