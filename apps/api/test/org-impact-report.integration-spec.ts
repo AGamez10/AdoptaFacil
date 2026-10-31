@@ -69,7 +69,7 @@ describe('Org impact report (impactReport: cifras agregadas, período, plan, no-
     const res = await request(server)
       .post('/animals')
       .set(auth(actor.token))
-      .send({ name, species: 'dog', sex: 'female', size: 'small' })
+      .send({ approximateAgeMonths: 12, name, species: 'dog', sex: 'female', size: 'small' })
       .expect(201);
     return res.body.id as string;
   }

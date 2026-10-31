@@ -81,6 +81,35 @@ export function applyDemoFlags(text) {
   return { text: out.join(eol), changes };
 }
 
+/**
+ * Appends to an existing .env the keys the template has and the file lacks, so
+ * a .env from an older checkout gets the new variables. Existing lines are never
+ * changed. Commented-out keys in the template are not added.
+ */
+export function addMissingKeys(text, templateText) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const present = new Set(
+    text
+      .split(/\r?\n/)
+      .map((l) => l.match(/^\s*([A-Z0-9_]+)\s*=/)?.[1])
+      .filter(Boolean),
+  );
+  const added = [];
+  for (const line of templateText.split(/\r?\n/)) {
+    const m = line.match(/^([A-Z0-9_]+)\s*=/);
+    if (m && !present.has(m[1])) {
+      added.push(line);
+      present.add(m[1]);
+    }
+  }
+  if (added.length === 0) return { text, added };
+  const base = text.endsWith('\n') ? text : text + eol;
+  return {
+    text: base + '# --- añadido por pnpm setup:demo-env ---' + eol + added.join(eol) + eol,
+    added,
+  };
+}
+
 function main() {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..');
   const examplePath = join(root, '.env.example');
@@ -102,14 +131,22 @@ function main() {
     console.error(`[setup:demo-env] No se tocó nada: ${error.message}`);
     process.exit(1);
   }
+  const keys = addMissingKeys(result.text, readFileSync(examplePath, 'utf8'));
+  const changes = [
+    ...keys.added.map(
+      (line) =>
+        `${line.split('=')[0]}: (no estaba) → ${line.slice(line.indexOf('=') + 1) || '(vacío)'}`,
+    ),
+    ...result.changes,
+  ];
 
-  if (result.changes.length === 0) {
-    console.log('[setup:demo-env] Todo ya estaba encendido; .env sin cambios.');
+  if (changes.length === 0) {
+    console.log('[setup:demo-env] Todo ya estaba listo; .env sin cambios.');
     return;
   }
-  writeFileSync(targetPath, result.text, { encoding: 'utf8' });
+  writeFileSync(targetPath, keys.text, { encoding: 'utf8' });
   console.log('[setup:demo-env] Cambios en .env:');
-  for (const change of result.changes) console.log(`  - ${change}`);
+  for (const change of changes) console.log(`  - ${change}`);
   console.log('[setup:demo-env] Si `pnpm dev` ya corría, reinícialo para que tome los cambios.');
 }
 

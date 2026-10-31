@@ -62,7 +62,13 @@ describe('Portal preview for the organization owner', () => {
     await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${owner.token}`)
-      .send({ name: 'Luna', species: 'dog', sex: 'female', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Luna',
+        species: 'dog',
+        sex: 'female',
+        size: 'medium',
+      })
       .expect(201);
     await request(server)
       .post('/campaigns')
@@ -98,7 +104,13 @@ describe('Portal preview for the organization owner', () => {
     await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${a.token}`)
-      .send({ name: 'Solo de A', species: 'cat', sex: 'male', size: 'small' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Solo de A',
+        species: 'cat',
+        sex: 'male',
+        size: 'small',
+      })
       .expect(201);
 
     const orgB = await get(b.token, '/org/portal/preview').expect(200);

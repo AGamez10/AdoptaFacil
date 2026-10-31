@@ -60,10 +60,13 @@ describe('Clinical record (M03, RF08: write roles + versioning + author)', () =>
   }
 
   const createAnimal = (token: string) =>
-    request(server)
-      .post('/animals')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' });
+    request(server).post('/animals').set('Authorization', `Bearer ${token}`).send({
+      approximateAgeMonths: 12,
+      name: 'Firulais',
+      species: 'dog',
+      sex: 'male',
+      size: 'medium',
+    });
 
   const createEvent = (token: string, animalId: string, body: Record<string, unknown>) =>
     request(server)

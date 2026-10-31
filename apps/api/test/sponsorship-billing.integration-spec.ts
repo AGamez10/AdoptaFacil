@@ -107,6 +107,7 @@ describe('Sponsorship recurring billing (S-5-REDISEÑO, M07/RF17, T-057)', () =>
       .post('/animals')
       .set('Authorization', `Bearer ${org.token}`)
       .send({
+        approximateAgeMonths: 12,
         name: `Firu-${randomUUID().slice(0, 6)}`,
         species: 'dog',
         sex: 'unknown',

@@ -32,3 +32,5 @@ export declare const STATIC_PAGES: Record<
   '/' | '/campanas' | '/guias',
   { title: string; description: string }
 >;
+export declare const HOME_FAQ: { q: string; a: string }[];
+export declare const ORGANIZATION_DESCRIPTION: string;

@@ -40,6 +40,7 @@ import {
   validateUpload,
 } from '../lib/storage';
 import styles from './org-documents-page.module.scss';
+import { dateBounds, dateError } from '../../../lib/date-rules';
 
 const DOC_TYPES = Object.values(DocumentType) as DocumentType[];
 
@@ -222,6 +223,11 @@ export function OrgDocumentsPage() {
     const invalid = validateUpload(file, DOCUMENT_ACCEPT);
     if (invalid) {
       toast({ title: 'Archivo no válido', description: invalid, variant: 'warning' });
+      return;
+    }
+    const expiresError = dateError('documentExpires', expiresAt);
+    if (expiresError) {
+      toast({ title: 'Fecha no válida', description: expiresError, variant: 'warning' });
       return;
     }
     setSaving(true);
@@ -531,6 +537,7 @@ export function OrgDocumentsPage() {
               label="Vence (opcional)"
               type="date"
               value={expiresAt}
+              {...dateBounds('documentExpires')}
               onChange={setExpiresAt}
             />
           </div>
