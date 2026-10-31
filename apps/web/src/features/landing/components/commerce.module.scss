@@ -469,6 +469,183 @@ $logo-teal: #25baa6;
   }
 }
 
+.campaigns--paper {
+  background: var(--af-paper);
+}
+
+/* Tarjeta de jornada de voluntariado o necesidad del banco de recursos:
+   misma piel que la tarjeta de campaña de la landing. */
+.item {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-radius: var(--af-r-card);
+  background: var(--af-paper);
+  box-shadow: var(--af-shadow-card);
+  padding: 1.35rem;
+  color: var(--af-ink);
+
+  --tone: var(--af-mint);
+
+  &[data-tone='sky'] {
+    --tone: var(--af-sky);
+  }
+
+  &[data-tone='sun'] {
+    --tone: var(--af-sun-soft);
+  }
+
+  .campaigns--paper & {
+    background: var(--af-cream);
+    box-shadow: none;
+  }
+}
+
+.item__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.item__tag {
+  border-radius: var(--r-full);
+  background: var(--tone);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+}
+
+.item__org {
+  font-size: 0.8125rem;
+  color: var(--af-ink-soft);
+}
+
+.item__title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 1.375rem;
+  font-weight: var(--fw-extra);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  a:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.item__text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.9375rem;
+  color: var(--af-ink-soft);
+}
+
+.item__facts {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.875rem;
+
+  div {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  dt {
+    min-width: 4rem;
+    font-weight: var(--fw-bold);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--af-ink-soft);
+    overflow-wrap: anywhere;
+  }
+}
+
+.item__progress {
+  margin-top: auto;
+
+  p {
+    margin: 0.4rem 0 0;
+    font-size: 0.875rem;
+    color: var(--af-ink-soft);
+  }
+
+  strong {
+    color: var(--af-ink);
+  }
+}
+
+.item__bar {
+  height: 0.65rem;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--af-mint-soft);
+
+  > div {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--af-teal-ink);
+  }
+}
+
+.item__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.item__progress + .item__foot {
+  margin-top: 0;
+}
+
+.item__note {
+  border-radius: var(--r-full);
+  background: var(--af-mint-soft);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-teal-ink);
+}
+
+.item__cta {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  border-radius: var(--r-full);
+  background: var(--af-ink);
+  padding: 0 1.15rem;
+  font-weight: var(--fw-bold);
+  color: #fff;
+  text-decoration: none;
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
+}
+
 /* --------------------------------------------------------------- cierre */
 .final {
   background: var(--af-cream);

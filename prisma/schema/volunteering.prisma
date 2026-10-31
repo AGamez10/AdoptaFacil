@@ -41,6 +41,7 @@ model VolunteerOpportunity {
 
   @@index([organizationId])
   @@index([organizationId, status])
+  @@index([status, startDate, id], map: "volunteer_opportunities_status_start_date_idx")
   @@map("volunteer_opportunities")
 }
 

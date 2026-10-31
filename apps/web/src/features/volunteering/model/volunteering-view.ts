@@ -96,3 +96,13 @@ export function parseSessionHours(value: string): number | null {
 export function canIssueCertificate(entries: ServiceHours[]): boolean {
   return entries.length > 0 && entries.every((entry) => entry.status !== 'pending');
 }
+
+/** Query de `/voluntariado` que señala una jornada concreta. */
+export const OPPORTUNITY_QUERY_PARAM = 'oportunidad';
+
+/** Enlace para inscribirse a una jornada desde fuera del panel (la landing).
+ *  `/voluntariado` pide sesión y el inicio de sesión vuelve a esta misma ruta
+ *  con su query intacta, así la jornada sigue señalada. */
+export function volunteerSignupHref(id: string): string {
+  return `/voluntariado?${OPPORTUNITY_QUERY_PARAM}=${encodeURIComponent(id)}`;
+}

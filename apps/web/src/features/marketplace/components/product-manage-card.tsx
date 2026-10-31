@@ -15,6 +15,7 @@ import {
   manageProductHref,
   stockLabel,
 } from '../model/marketplace-view';
+import { ProductThumb } from './product-thumb';
 
 export interface ProductManageCardProps {
   product: Product;
@@ -28,7 +29,8 @@ export interface ProductManageCardProps {
  */
 export function ProductManageCard({ product }: ProductManageCardProps) {
   return (
-    <Card data-testid="product-manage-card">
+    <Card data-testid="product-manage-card" className="overflow-hidden">
+      <ProductThumb url={product.images[0]?.url ?? null} alt={product.name} />
       <CardHeader className="gap-2">
         <CardTitle className="text-base">{product.name}</CardTitle>
         <div className="flex flex-wrap items-center gap-1.5">
