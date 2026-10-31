@@ -42,10 +42,14 @@ const EPAYCO = {
 };
 
 describe('production guard (R0-1)', () => {
+  it('accepts an https WEB_BASE_URL, including the CI stack on https://localhost', () => {
+    expect(() =>
+      validateEnv({ ...SAFE_PRODUCTION, WEB_BASE_URL: 'https://localhost' }),
+    ).not.toThrow();
+  });
+
   it.each([
-    ['the dev default', undefined],
-    ['localhost', 'https://localhost:5173'],
-    ['a loopback IP', 'https://127.0.0.1'],
+    ['the dev default (http://localhost:5173)', undefined],
     ['plain http', 'http://adoptafacil.co'],
   ])('refuses production when WEB_BASE_URL is %s (emailed links would not open)', (_c, url) => {
     const env = url

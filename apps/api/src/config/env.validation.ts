@@ -384,23 +384,22 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     fail('PLATFORM_MFA_REQUIRED', 'platform staff must use two-step verification in production');
   }
   // Every emailed link (invitations, password reset, receipts, contracts) is
-  // built from WEB_BASE_URL: a forgotten dev default would email links to
-  // `localhost` that nobody can open, and plain http would leak the tokens.
-  if (!isPublicHttpsUrl(env.WEB_BASE_URL)) {
+  // built from WEB_BASE_URL: the forgotten dev default (http://localhost:5173)
+  // would email links nobody can open, and plain http would expose the tokens.
+  // `https://localhost` stays allowed: the CI boots this same production
+  // compose on localhost behind Caddy's internal CA.
+  if (!isHttpsUrl(env.WEB_BASE_URL)) {
     fail(
       'WEB_BASE_URL',
-      'WEB_BASE_URL must be the public https origin of the web app in production (not localhost)',
+      'WEB_BASE_URL must be the public https origin of the web app in production',
     );
   }
 }
 
-const LOCAL_HOSTS = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\]|.*\.local|.*\.localhost)$/i;
-
-/** `https://` and a host reachable from the internet (no localhost/loopback). */
-export function isPublicHttpsUrl(raw: string): boolean {
+/** `https://` origin (the dev default and any plain http are refused). */
+export function isHttpsUrl(raw: string): boolean {
   try {
-    const url = new URL(raw);
-    return url.protocol === 'https:' && !LOCAL_HOSTS.test(url.hostname);
+    return new URL(raw).protocol === 'https:';
   } catch {
     return false;
   }
