@@ -1,4 +1,6 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Res, UseGuards } from '@nestjs/common';
+import type { Queue } from 'bullmq';
 import type { Response } from 'express';
 import {
   type AnimalCardInfo,
@@ -17,6 +19,7 @@ import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { CarnetService } from './carnet.service';
 import { ClinicalService } from './clinical.service';
+import { REMINDER_SCAN_JOB, REMINDERS_QUEUE } from './reminders.constants';
 import {
   createAttachmentUploadSchema,
   createClinicalEventSchema,
@@ -55,7 +58,21 @@ export class ClinicalController {
   constructor(
     private readonly service: ClinicalService,
     private readonly carnet: CarnetService,
+    @InjectQueue(REMINDERS_QUEUE) private readonly reminders: Queue,
   ) {}
+
+  /** A "próxima fecha" should show up in /recordatorios right away, not at the
+   *  next daily scan: ask for one extra scan (idempotent, best-effort — the
+   *  daily scan still covers it if Redis is down). */
+  private scanRemindersSoon(event: ClinicalEvent): ClinicalEvent {
+    if (event.nextDueDate) {
+      // Not awaited: a slow or missing Redis never delays the clinical write.
+      void this.reminders
+        .add(REMINDER_SCAN_JOB, {}, { removeOnComplete: true, removeOnFail: true })
+        .catch(() => undefined);
+    }
+    return event;
+  }
 
   @Get()
   @Roles(...VIEW_ROLES)
@@ -103,7 +120,7 @@ export class ClinicalController {
     @Param('animalId', ParseUUIDPipe) animalId: string,
     @Body(new ZodValidationPipe(createClinicalEventSchema)) dto: CreateClinicalEventInput,
   ): Promise<ClinicalEvent> {
-    return this.service.create(actor.id, animalId, dto);
+    return this.service.create(actor.id, animalId, dto).then((e) => this.scanRemindersSoon(e));
   }
 
   /** Reserve a storage target for ONE clinical attachment (fix,
@@ -140,6 +157,8 @@ export class ClinicalController {
     @Param('eventId', ParseUUIDPipe) eventId: string,
     @Body(new ZodValidationPipe(editClinicalEventSchema)) dto: EditClinicalEventInput,
   ): Promise<ClinicalEvent> {
-    return this.service.edit(actor.id, animalId, eventId, dto);
+    return this.service
+      .edit(actor.id, animalId, eventId, dto)
+      .then((e) => this.scanRemindersSoon(e));
   }
 }

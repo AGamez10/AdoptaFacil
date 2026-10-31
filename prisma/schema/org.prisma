@@ -56,6 +56,8 @@ model Organization {
   serviceListingReviews    ServiceListingReview[]
   petProfiles              PetProfile[]
   emailUsage               OrganizationEmailUsage[]
+  // Campana de pendientes: qué avisos leyó cada persona. See notifications.prisma.
+  notificationReads        NotificationRead[]
 
   @@index([status])
   @@map("organizations")
@@ -252,6 +254,7 @@ model User {
   reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
   reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
   mfaFactor                 AuthMfaFactor?
+  notificationReads         NotificationRead[]
 
   @@unique([organizationId, email])
   @@index([organizationId])

@@ -5,6 +5,8 @@ import {
   Role,
   type ClinicalReminder,
   type OrganizationDashboardSummary,
+  type PendingItemKey,
+  type PendingItemRead,
 } from '@adoptafacil/contracts';
 import { Badge, cn } from '@adoptafacil/ui';
 import { DATA_CHANGED_EVENT, useApiClient } from '../api';
@@ -67,11 +69,35 @@ function formatDue(iso: string): string {
 const isOpen = (reminder: ClinicalReminder): boolean =>
   reminder.status !== ReminderStatus.Acknowledged && reminder.status !== ReminderStatus.Dismissed;
 
+const reminderKey = (reminder: ClinicalReminder): PendingItemKey => `reminder:${reminder.id}`;
+
+/** Desde cuándo existe lo más reciente de un aviso agregado (null = sin dato). */
+function sinceOf(key: string, summary: OrganizationDashboardSummary): string | null {
+  if (key === 'adoptions') return summary.adoptionRequestsNewSince ?? null;
+  if (key === 'expiring') return summary.documentsExpiringSoonSince ?? null;
+  if (key === 'rejected') return summary.documentsRejectedSince ?? null;
+  return null;
+}
+
+/**
+ * Un aviso leído deja de contar mientras no llegue nada nuevo: si se marcó
+ * después de lo más reciente que lo origina, sigue oculto; si después llegó
+ * otra solicitud u otro rechazo, vuelve a aparecer. Sin fecha de origen
+ * (API anterior), la marca basta.
+ */
+export function isUnread(readAt: string | undefined, since: string | null): boolean {
+  if (!readAt) return true;
+  if (!since) return false;
+  return new Date(since).getTime() > new Date(readAt).getTime();
+}
+
 /**
  * Campana de pendientes del encabezado (Inicio): muestra cuántos recordatorios
- * clínicos abiertos y acciones por revisar (solicitudes de adopción, documentos
- * por vencer/rechazados) tiene la organización, y al hacer clic los lista con
- * enlace a su pantalla. Reemplaza la entrada "Recordatorios" del menú lateral.
+ * de salud abiertos (vacunas, tratamientos) y acciones por revisar (solicitudes
+ * de adopción, documentos por vencer/rechazados) tiene la organización, y al
+ * hacer clic los lista con enlace a su pantalla. Cada aviso se puede marcar
+ * como leído (al abrirlo o con su botón) y sale del contador de esa persona;
+ * reaparece solo si llega algo nuevo (`isUnread`).
  *
  * Solo consulta lo que el rol puede ver (mismos roles que el backend): un rol sin
  * acceso a ninguno de los dos no ve la campana ni dispara consultas. Fallos de
@@ -85,12 +111,16 @@ export function PendingBell() {
 
   const [reminders, setReminders] = useState<ClinicalReminder[]>([]);
   const [summary, setSummary] = useState<OrganizationDashboardSummary | null>(null);
+  const [reads, setReads] = useState<Record<string, string>>({});
   const [open, setOpen] = useState(false);
   const [kudos, setKudos] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   /** Total del último conteo; null hasta la primera carga (no felicita al entrar). */
   const lastTotalRef = useRef<number | null>(null);
+  /** Avisos que la persona acaba de marcar como leídos: bajan el contador pero
+   *  no son pendientes atendidos, así que no merecen felicitación. */
+  const justMarkedRef = useRef(0);
   const location = useLocation();
 
   const load = useCallback(async () => {
@@ -110,6 +140,16 @@ export function PendingBell() {
           .catch(() => undefined),
       );
     }
+    tasks.push(
+      client
+        .request<PendingItemRead[]>('/org/pending-reads')
+        .then((list) =>
+          setReads(
+            Object.fromEntries((Array.isArray(list) ? list : []).map((r) => [r.key, r.readAt])),
+          ),
+        )
+        .catch(() => undefined),
+    );
     await Promise.all(tasks);
     setLoaded(true);
   }, [client, canSeeReminders, canSeeSummary]);
@@ -171,8 +211,15 @@ export function PendingBell() {
     };
   }, [open]);
 
-  const openReminders = reminders.filter(isOpen).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const actions = summary ? deriveActionItems(summary) : [];
+  const openReminders = reminders
+    .filter(isOpen)
+    .filter((r) => isUnread(reads[reminderKey(r)], null))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const actions = summary
+    ? deriveActionItems(summary).filter((item) =>
+        isUnread(reads[item.key], sinceOf(item.key, summary)),
+      )
+    : [];
   const total = openReminders.length + actions.length;
   const badge = total > 9 ? '9+' : String(total);
 
@@ -181,7 +228,9 @@ export function PendingBell() {
     if (!loaded) return;
     const previous = lastTotalRef.current;
     lastTotalRef.current = total;
-    if (previous !== null && total < previous) setKudos(kudosMessage(previous - total, total));
+    const resolved = previous === null ? 0 : previous - total - justMarkedRef.current;
+    justMarkedRef.current = 0;
+    if (resolved > 0) setKudos(kudosMessage(resolved, total));
   }, [loaded, total]);
 
   useEffect(() => {
@@ -191,6 +240,25 @@ export function PendingBell() {
   }, [kudos]);
 
   if (!canSeeReminders && !canSeeSummary) return null;
+
+  /** Saca los avisos del contador al instante y guarda la marca en el servidor. */
+  const markRead = (keys: PendingItemKey[]) => {
+    if (keys.length === 0) return;
+    const now = new Date().toISOString();
+    justMarkedRef.current += keys.length;
+    setReads((current) => ({ ...current, ...Object.fromEntries(keys.map((k) => [k, now])) }));
+    void client
+      .request<PendingItemRead[]>('/org/pending-reads', {
+        method: 'POST',
+        json: { keys },
+      })
+      .catch(() => undefined);
+  };
+
+  const allKeys: PendingItemKey[] = [
+    ...actions.map((item) => item.key as PendingItemKey),
+    ...openReminders.slice(0, MAX_LISTED).map(reminderKey),
+  ];
 
   const toggle = () => {
     setOpen((value) => {
@@ -242,10 +310,25 @@ export function PendingBell() {
           className={styles.bell__panel}
           data-testid="pending-bell-panel"
         >
-          <p className={styles.bell__title}>Pendientes</p>
+          <div className={styles.bell__head}>
+            <p className={styles.bell__title}>Pendientes</p>
+            {total > 0 && (
+              <button
+                type="button"
+                className={styles.bell__markAll}
+                onClick={() => markRead(allKeys)}
+                data-testid="pending-bell-mark-all"
+              >
+                Marcar todas como leídas
+              </button>
+            )}
+          </div>
 
           {total === 0 && (
-            <p className={styles.bell__empty}>Todo al día. No hay nada por revisar.</p>
+            <p className={styles.bell__empty}>
+              Todo al día. Aquí te avisamos de solicitudes de adopción nuevas, documentos por vencer
+              o rechazados y próximas vacunas o tratamientos.
+            </p>
           )}
 
           {actions.length > 0 && (
@@ -255,13 +338,26 @@ export function PendingBell() {
                 {actions.map((item) => (
                   <li key={item.key} className={styles.bell__item}>
                     <span>{item.label}</span>
-                    <Link
-                      to={item.href}
-                      onClick={() => setOpen(false)}
-                      className={styles.bell__link}
-                    >
-                      {item.linkLabel} →
-                    </Link>
+                    <span className={styles.bell__row}>
+                      <Link
+                        to={item.href}
+                        onClick={() => {
+                          markRead([item.key as PendingItemKey]);
+                          setOpen(false);
+                        }}
+                        className={styles.bell__link}
+                      >
+                        {item.linkLabel} →
+                      </Link>
+                      <button
+                        type="button"
+                        className={styles.bell__read}
+                        onClick={() => markRead([item.key as PendingItemKey])}
+                        aria-label={`Marcar como leída: ${item.label}`}
+                      >
+                        Marcar como leída
+                      </button>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -269,8 +365,8 @@ export function PendingBell() {
           )}
 
           {openReminders.length > 0 && (
-            <section aria-label="Recordatorios clínicos">
-              <p className={styles.bell__section}>Recordatorios</p>
+            <section aria-label="Recordatorios de salud">
+              <p className={styles.bell__section}>Vacunas y tratamientos</p>
               <ul className={styles.bell__list}>
                 {openReminders.slice(0, MAX_LISTED).map((reminder) => (
                   <li key={reminder.id} className={styles.bell__item}>
@@ -283,7 +379,27 @@ export function PendingBell() {
                       )}
                     </span>
                     <span className={cn(styles.bell__meta)}>
-                      Vence: {formatDue(reminder.dueDate)}
+                      Fecha: {formatDue(reminder.dueDate)}
+                    </span>
+                    <span className={styles.bell__row}>
+                      <Link
+                        to={`/animales/${reminder.animalId}`}
+                        onClick={() => {
+                          markRead([reminderKey(reminder)]);
+                          setOpen(false);
+                        }}
+                        className={styles.bell__link}
+                      >
+                        Ver animal →
+                      </Link>
+                      <button
+                        type="button"
+                        className={styles.bell__read}
+                        onClick={() => markRead([reminderKey(reminder)])}
+                        aria-label="Marcar como leída"
+                      >
+                        Marcar como leída
+                      </button>
                     </span>
                   </li>
                 ))}
@@ -298,7 +414,7 @@ export function PendingBell() {
               className={styles.bell__all}
               data-testid="pending-bell-all"
             >
-              Ver todos los recordatorios
+              Ver vacunas y tratamientos
               {openReminders.length > MAX_LISTED ? ` (${openReminders.length})` : ''} →
             </Link>
           )}

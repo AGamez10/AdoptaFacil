@@ -10,7 +10,9 @@ import { approveTestOrganization } from './support/organization-status';
 
 /**
  * T-029 public adoption catalog: GET /public/organizations/:slug/animals (no
- * auth) exposes ONLY adoptable animals (active + status=available) of one org,
+ * auth) exposes ONLY publishable animals (active + status available or
+ * in_process — decision 2026-10-30: an animal in process may still find a home
+ * with another applicant) of one org,
  * via the bounded SECURITY DEFINER function. Verifies exclusions (adopted /
  * inactive / other org), pagination + cap, species filter, 404, and that no
  * clinical/internal/DOB field leaks.
@@ -151,6 +153,39 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
           a.organizationId === orgA.orgId && a.status === 'available',
       ),
     ).toBe(true);
+  });
+
+  it('shows in-process animals (list, count and detail) but never adopted or unavailable ones', async () => {
+    const orgC = await registerOrgWithSlug();
+    const inProcess = await createAnimal(orgC.token, {
+      name: 'EnProceso',
+      species: 'dog',
+      sex: 'male',
+      size: 'medium',
+      status: 'in_process',
+    }).expect(201);
+    await createAnimal(orgC.token, {
+      name: 'NoDisponible',
+      species: 'dog',
+      sex: 'male',
+      size: 'medium',
+      status: 'unavailable',
+    }).expect(201);
+    await createAnimal(orgC.token, {
+      name: 'YaAdoptado',
+      species: 'cat',
+      sex: 'female',
+      size: 'small',
+      status: 'adopted',
+    }).expect(201);
+
+    const res = await publicList(orgC.slug).expect(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.items.map((a: { name: string }) => a.name)).toEqual(['EnProceso']);
+    expect(res.body.items[0].status).toBe('in_process');
+    await request(server)
+      .get(`/public/organizations/${orgC.slug}/animals/${inProcess.body.id}`)
+      .expect(200);
   });
 
   it('exposes only public summary fields (computedAge derived; no DOB, no clinical/internal data)', async () => {

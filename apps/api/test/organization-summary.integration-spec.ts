@@ -135,7 +135,7 @@ describe('Organization summary (S2-08, M13)', () => {
     platformAdmin = await actorWithRoles(['owner', 'platform_admin']);
     personA = await registerPerson('donante');
 
-    // --- animalsActive: 2 available/active, 1 adopted, 1 deactivated -----------
+    // --- animalsActive: 2 available/active (+3 in_process below), 1 adopted, 1 deactivated
     await createAnimal(owner.token, { name: 'Activo1' }).expect(201);
     await createAnimal(owner.token, { name: 'Activo2' }).expect(201);
     await createAnimal(owner.token, { name: 'Adoptado', status: 'adopted' }).expect(201);
@@ -330,7 +330,9 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${owner.token}`)
       .expect(200);
 
-    expect(res.body.animalsActive).toBe(2);
+    // 2 available + 3 in process (the ones with requests): both are shown to
+    // the public, so both count. Adopted and deactivated ones don't.
+    expect(res.body.animalsActive).toBe(5);
     expect(res.body.adoptionRequestsPending).toBe(2); // 'new' + 'in_review', not 'rejected'
     expect(res.body.adoptionRequestsNew).toBe(1); // only the one nobody opened yet
     expect(res.body.sponsorshipsActive).toBe(1); // not the suspended one
@@ -382,6 +384,9 @@ describe('Organization summary (S2-08, M13)', () => {
       donationsReceivedTotal: 0,
       formalizationLevel: 0,
       formalizationPercent: 0,
+      adoptionRequestsNewSince: null,
+      documentsExpiringSoonSince: null,
+      documentsRejectedSince: null,
     });
   });
 

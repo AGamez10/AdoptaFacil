@@ -30,18 +30,26 @@ export function AnimalRegistroClinicoSection({ animalId }: { animalId: string })
               </option>
             ))}
           </select>
-          <Input
-            type="date"
-            aria-label="Fecha del evento"
-            value={form.occurredAt}
-            onChange={(e) => form.setOccurredAt(e.target.value)}
-          />
-          <Input
-            type="date"
-            aria-label="Próxima fecha (p. ej. próxima vacuna)"
-            value={form.nextDueDate}
-            onChange={(e) => form.setNextDueDate(e.target.value)}
-          />
+          <label className="block space-y-1 text-sm">
+            <span className="text-muted-foreground">Fecha en que se hizo</span>
+            <Input
+              type="date"
+              aria-label="Fecha del evento"
+              value={form.occurredAt}
+              onChange={(e) => form.setOccurredAt(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="text-muted-foreground">
+              Próxima fecha (opcional): crea un recordatorio de vacuna o tratamiento
+            </span>
+            <Input
+              type="date"
+              aria-label="Próxima fecha (p. ej. próxima vacuna)"
+              value={form.nextDueDate}
+              onChange={(e) => form.setNextDueDate(e.target.value)}
+            />
+          </label>
           <ClinicalAttachmentsField
             id="clinical-attachment-registro"
             files={form.files}

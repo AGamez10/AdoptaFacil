@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import type {
   AnimalSummary,
   Organization,
@@ -131,6 +131,11 @@ export interface OrgPublicPageProps {
 export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const { slug: slugParam } = useParams<{ slug: string }>();
   const slug = slugOverride ?? slugParam;
+  // `?vista=todos`: lista completa y paginada de animales (portal clásico),
+  // aunque la organización use una plantilla. Las plantillas cargan hasta
+  // ANIMAL_CAP animales; si hay más, enlazan aquí para no dejar a nadie fuera.
+  const [searchParams] = useSearchParams();
+  const fullList = searchParams.get('vista') === 'todos';
   const [view, setView] = useState<PortalView | null>(null);
   const [theme, setTheme] = useState<PortalTheme>({});
   const [layout, setLayout] = useState<Layout>(DEFAULT_LAYOUT);
@@ -160,6 +165,14 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // desplazan a la sección real "Mascotas en adopción" (rediseño T-D04, ya
   // sin tabs) donde el visitante elige el animal y sigue la ruta que ya
   // existe (ver `PortalHeaderActions`).
+  useEffect(() => {
+    if (!fullList || state !== 'ready') return;
+    const timer = window.setTimeout(() => {
+      document.getElementById('portal-section-pets')?.scrollIntoView({ block: 'start' });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fullList, state]);
+
   const goToCatalog = () => {
     document
       .getElementById('portal-section-pets')
@@ -580,7 +593,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // Plantillas del motor (14 gratuitas nuevas): pintan el mismo contenido con su
   // propio diseño. Si la plantilla no carga o los datos fallan, se muestra el
   // portal clásico de arriba: nunca queda un portal caído por el diseño elegido.
-  if (state === 'ready' && view && slug && isEngineTemplate(layout.template)) {
+  if (state === 'ready' && view && slug && !fullList && isEngineTemplate(layout.template)) {
     return (
       <TemplatePortal
         template={layout.template}
