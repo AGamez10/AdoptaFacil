@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Product as ProductRow, ProductImage as ProductImageRow } from '@prisma/client';
 import {
+  OrganizationCapability,
   type CreateProductInput,
   type Product,
   type ProductCategory,
@@ -16,6 +17,7 @@ import {
   type UpdateProductInput,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { FormalCapabilitiesService } from '../../core/formalization/formal-capabilities.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
@@ -46,6 +48,7 @@ export class MarketplaceProductsService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
+    private readonly formal: FormalCapabilitiesService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
   ) {}
 
@@ -194,6 +197,15 @@ export class MarketplaceProductsService {
         const existing = await tx.product.findUnique({ where: { id } });
         if (!existing) {
           throw new NotFoundException('Product not found');
+        }
+        // Un producto que queda activo está a la venta: exige estado formal.
+        // Desactivarlo (o editar uno inactivo) siempre se permite.
+        if (input.isActive ?? existing.isActive) {
+          await this.formal.assertCapability(
+            organizationId,
+            OrganizationCapability.MarketplaceSales,
+            tx,
+          );
         }
         const updated = await tx.product.update({
           where: { id },

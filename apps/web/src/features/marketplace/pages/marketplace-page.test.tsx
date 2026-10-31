@@ -1,6 +1,12 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ProductCategory, Role, type Product } from '@adoptafacil/contracts';
+import {
+  FormalizationState,
+  ProductCategory,
+  Role,
+  computeOrganizationCapabilities,
+  type Product,
+} from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
 
 /**
@@ -127,5 +133,36 @@ describe('MarketplacePage — gestión interna del catálogo (F-7)', () => {
       });
     });
     expect(await screen.findByText('Producto publicado')).toBeInTheDocument();
+  });
+  it('una organización Informal ve por qué no puede vender y cómo desbloquearlo, sin botón de publicar', async () => {
+    stubFetch((url) =>
+      url.includes('/org/formalization/capabilities')
+        ? computeOrganizationCapabilities(FormalizationState.Informal, false)
+        : { items: [], total: 0, limit: 50, offset: 0 },
+    );
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    const lock = await screen.findByTestId('formal-state-lock');
+    expect(lock).toHaveTextContent('Vender en la tienda se desbloquea al ser Formalizada');
+    expect(lock).toHaveTextContent('RUT');
+    expect(within(lock).getByRole('link', { name: 'Cargar mis documentos' })).toHaveAttribute(
+      'href',
+      '/organizacion/documentos',
+    );
+    expect(screen.queryByRole('button', { name: /Publicar/ })).not.toBeInTheDocument();
+  });
+
+  it('una organización Formalizada no ve el aviso y puede publicar', async () => {
+    stubFetch((url) =>
+      url.includes('/org/formalization/capabilities')
+        ? computeOrganizationCapabilities(FormalizationState.Formalizada, false)
+        : { items: [], total: 0, limit: 50, offset: 0 },
+    );
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    expect(
+      await screen.findByRole('button', { name: 'Publicar tu primer producto' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('formal-state-lock')).not.toBeInTheDocument();
   });
 });

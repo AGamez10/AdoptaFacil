@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  OrganizationCapability,
   type CreateProductInput,
   PRODUCT_CATEGORIES,
   ProductCategory,
@@ -22,6 +23,7 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { FormalStateLock, useFormalCapability } from '../../org/components/formal-state-lock';
 import { SelectField, TextAreaField } from '../components/product-form-fields';
 import { ProductManageCard } from '../components/product-manage-card';
 import { CATEGORY_LABELS } from '../model/marketplace-view';
@@ -36,11 +38,16 @@ const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
  * de la organización, usando SOLO endpoints ya existentes (`GET`/`POST
  * /marketplace/products`). Crear/editar: Owner/Administrator/Operator; ver:
  * + ReadOnlyAuditor (calcado de `MarketplaceProductsController`'s @Roles).
+ * Vender exige estar Formalizada: antes de eso la página explica cómo
+ * desbloquearlo y no ofrece publicar (la API lo rechaza igual).
  */
 export function MarketplacePage() {
   const client = useApiClient();
   const { hasRole } = useSession();
-  const canManage = hasRole(Role.Owner) || hasRole(Role.Administrator) || hasRole(Role.Operator);
+  const isManager = hasRole(Role.Owner) || hasRole(Role.Administrator) || hasRole(Role.Operator);
+  const sales = useFormalCapability(OrganizationCapability.MarketplaceSales);
+  const locked = sales.decision?.enabled === false;
+  const canManage = isManager && !locked;
   const { toast } = useToast();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -140,12 +147,19 @@ export function MarketplacePage() {
       {loading && <Skeleton className="h-64 w-full" />}
       {!loading && (
         <div className="space-y-6">
+          {locked && sales.decision && (
+            <FormalStateLock decision={sales.decision} data={sales.data} />
+          )}
           {products.length === 0 ? (
             <EmptyState
               icon={<span aria-hidden>🛍️</span>}
               title="Aún no hay productos publicados"
               description={
-                canManage ? 'Publica tu primer producto para empezar a vender.' : undefined
+                canManage
+                  ? 'Publica tu primer producto para empezar a vender.'
+                  : locked
+                    ? 'Cuando tu organización esté Formalizada podrás publicar aquí tus productos.'
+                    : undefined
               }
               action={
                 canManage ? (

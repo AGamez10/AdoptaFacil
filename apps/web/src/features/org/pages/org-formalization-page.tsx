@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FORMALIZATION_SEQUENCE,
   FormalizationState,
@@ -22,6 +23,8 @@ import {
   EmptyState,
   ProgressStepper,
   Skeleton,
+  buttonVariants,
+  cn,
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
@@ -31,6 +34,7 @@ import { useSession } from '../../../shell/auth';
 import { Role } from '@adoptafacil/contracts';
 import { TextField } from '../components/profile-fields';
 import { CapabilitiesPanel } from '../components/capabilities-panel';
+import { DOCUMENTS_PATH } from '../components/formal-state-lock';
 import styles from './org-formalization-page.module.scss';
 
 const STATE_LABELS: Record<FormalizationState, string> = {
@@ -77,6 +81,9 @@ export function OrgFormalizationPage() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [retryingDian, setRetryingDian] = useState(false);
+  // Por qué no se pudo avanzar, visible junto al botón (no solo en un aviso
+  // que se cierra), con el camino directo a cargar los documentos.
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
   // REFACTOR-VISUAL Fase C3: la transición pendiente de confirmar en el modal
   // (null = modal cerrado). `requiresReason` decide si el modal pide motivo.
   const [pendingTransition, setPendingTransition] = useState<{
@@ -137,6 +144,7 @@ export function OrgFormalizationPage() {
       return;
     }
     setSaving(true);
+    setBlockedReason(null);
     try {
       await client.request<TransitionResult>('/org/formalization/transitions', {
         method: 'POST',
@@ -147,9 +155,14 @@ export function OrgFormalizationPage() {
       await load();
       toast({ title: 'Estado actualizado', description: `Ahora: ${STATE_LABELS[targetState]}.` });
     } catch (error) {
+      const description = error instanceof Error ? error.message : 'Inténtalo de nuevo.';
+      if (!requiresReason) {
+        setPendingTransition(null);
+        setBlockedReason(description);
+      }
       toast({
         title: 'No se pudo cambiar el estado',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        description,
         variant: 'destructive',
       });
     } finally {
@@ -242,10 +255,26 @@ export function OrgFormalizationPage() {
                     </p>
                   )}
                   {next && nextNeedsPlatform && (
-                    <p>
+                    <p className={styles.actions__hint}>
                       El paso a {STATE_LABELS[next]} lo aprueba el equipo de AdoptaFácil tras
-                      revisar tus documentos. Súbelos en Documentos para que el equipo los revise.
+                      revisar tus documentos.
                     </p>
+                  )}
+                  {blockedReason && (
+                    <p className={styles.actions__blocked} role="alert">
+                      {blockedReason}
+                    </p>
+                  )}
+                  {next && (next === FormalizationState.Formalizada || nextNeedsPlatform) && (
+                    <Link
+                      to={DOCUMENTS_PATH}
+                      className={cn(
+                        buttonVariants({ variant: blockedReason ? 'default' : 'outline' }),
+                      )}
+                      data-testid="formalization-upload-documents"
+                    >
+                      Cargar mis documentos
+                    </Link>
                   )}
                   {previous && (
                     <Button

@@ -46,6 +46,32 @@ Regla de vigencia: si una ESAL con RTE no tiene el RTE vigente (`rteVigente = fa
 - **Vender** de forma habitual exige RUT y facturar (ET arts. 555-2 y 615). Por eso la tienda se abre desde Formalizada. **Contador:** facturación electrónica de lo que vende cada organización.
 - **El RTE se actualiza cada año** en el registro web de la DIAN (ET art. 364-5; DUR 1625 de 2016, art. 1.2.1.5.1.9). Para 2026 el plazo fue el 30 de junio, y quien no actualiza pasa al régimen ordinario. **Contador:** confirmar el calendario de cada año para programar la reverificación.
 
+## 2.1 Dónde se aplica cada regla (estado formal, plan y rol)
+
+Tres capas independientes deciden si una organización puede usar algo. Todas se aplican en el servidor; la pantalla solo explica.
+
+| Capa                      | Fuente única                                                        | Error del servidor                                                     | Qué ve la organización                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Rol de la persona         | `@Roles` de cada controlador                                        | 403                                                                    | No ve el menú ni el botón                                                                                                 |
+| Estado formal             | `CAPABILITY_RULES` (`packages/contracts/src/legal-capabilities.ts`) | 403 `FORMALIZATION_REQUIRED` con `requiredState` y `requiredDocuments` | Aviso "se desbloquea al ser …" con botones **Cargar mis documentos** y **Ver mi formalización** (`FormalStateLock`)       |
+| Plan (Gratis, Crece, Pro) | `PLAN_CATALOG` (`packages/contracts/src/plans.ts`)                  | 403 `PLAN_REQUIRED`                                                    | Nota con el plan que la incluye; mientras `PLAN_ENFORCEMENT` esté apagado, dice que hoy viene incluida por el lanzamiento |
+
+Los planes **no** dependen del estado formal: un rescatista informal puede pagar Crece y exportar sus datos. Lo que protege al animal, al adoptante y la transparencia nunca se vende (`PLAN_ALWAYS_INCLUDED`).
+
+| Módulo o acción                                                               | Estado formal mínimo                          | Plan   | Dónde se exige                                                                                                                                          |
+| ----------------------------------------------------------------------------- | --------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Animales, adopciones, contrato, seguimientos                                  | Informal                                      | Gratis | Rol                                                                                                                                                     |
+| Recibir donaciones, campañas, apadrinamientos                                 | Informal                                      | Gratis | Rol + interruptor del módulo                                                                                                                            |
+| Comprobante de donación (sin efecto tributario), constancia de voluntariado   | Informal                                      | Gratis | Rol                                                                                                                                                     |
+| Reporte regulatorio y su historial                                            | Informal (dice "informativo" si no es formal) | Gratis | `report-legal-effect.ts`                                                                                                                                |
+| Sello "Verificada" y NIT en el portal                                         | Formalizada                                   | Gratis | `portal-preview.service.ts`                                                                                                                             |
+| **Tienda: publicar, agregar fotos, reactivar**                                | **Formalizada**                               | Gratis | `@RequireFormalState(MarketplaceSales)` + servicio; el catálogo público oculta productos de organizaciones no formalizadas (migración `20261031010000`) |
+| Tienda: ver y desactivar sus productos                                        | Informal                                      | Gratis | Rol (para que nadie quede con algo publicado que no puede bajar)                                                                                        |
+| Certificado de donación con beneficio tributario                              | ESAL con RTE vigente                          | Gratis | `donation-certificates.service.ts`                                                                                                                      |
+| Exportar datos a Excel, reporte de impacto                                    | — (decisión pendiente)                        | Crece  | `@RequirePlan`                                                                                                                                          |
+| Plantillas Pro, personalización avanzada, portal sin sello, correos con marca | —                                             | Crece  | `PlansService.hasCapability`                                                                                                                            |
+| Dominio propio, patrocinio de empresas, soporte prioritario                   | —                                             | Pro    | Próximamente                                                                                                                                            |
+
 ## 3. Cómo se verifica (lectura en el servidor + una persona decide)
 
 1. La organización sube el RUT, el CERL y la cédula del representante legal en "Documentos" (ya existe, con versiones).

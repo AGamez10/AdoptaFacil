@@ -48,3 +48,9 @@
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
+
+.actions__blocked {
+  flex-basis: 100%;
+  font-size: var(--fs-sm);
+  color: hsl(var(--destructive));
+}
