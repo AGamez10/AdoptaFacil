@@ -131,6 +131,33 @@
   border-top: 1px solid var(--border-hairline);
 }
 
+/* Encabezado con "Marcar todas como leídas". */
+.bell__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.bell__markAll,
+.bell__read {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text-dark);
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--brand-light);
+    border-radius: var(--r-sm, 4px);
+  }
+}
+
 /* Ola 3: reconocimiento cuando un pendiente desaparece. */
 .bell__kudos {
   position: absolute;
@@ -199,5 +226,28 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* Móvil: la campana no está pegada al borde derecho (le siguen el avatar y
+   salir), así que un panel anclado a ella se salía por la izquierda. Aquí el
+   panel y el mensaje se anclan a la pantalla, justo bajo el encabezado (4rem),
+   con el mismo margen a ambos lados. */
+@media (max-width: 639px) {
+  .bell__panel,
+  .bell__kudos {
+    position: fixed;
+    top: calc(4rem + env(safe-area-inset-top, 0px) + 0.5rem);
+    left: 0.75rem;
+    right: 0.75rem;
+    width: auto;
+  }
+
+  .bell__panel {
+    max-height: calc(100dvh - 6rem);
+  }
+
+  .bell__head {
+    flex-wrap: wrap;
   }
 }

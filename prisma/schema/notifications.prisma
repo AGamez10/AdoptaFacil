@@ -62,3 +62,25 @@ model EmailSuppression {
   @@id([emailHash, category])
   @@map("email_suppressions")
 }
+
+/// Campana de pendientes del panel: qué aviso marcó como leído cada persona
+/// (por organización). Los avisos no se guardan aquí: se calculan en vivo
+/// (solicitudes sin revisar, documentos, recordatorios de salud). Esta tabla
+/// solo guarda "esta persona ya lo vio" para sacarlo del contador:
+///   * `itemKey` 'adoptions' | 'expiring' | 'rejected' | 'reminder:<uuid>'.
+///   * `readAt`  cuándo lo marcó. Un aviso agregado vuelve a aparecer si llega
+///     algo nuevo después de esa fecha (otra solicitud, otro rechazo).
+/// Tenant-scoped (RLS); cada persona solo lee y escribe las suyas (servicio).
+model NotificationRead {
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  itemKey        String   @map("item_key")
+  readAt         DateTime @default(now()) @map("read_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId, itemKey])
+  @@index([organizationId])
+  @@map("notification_reads")
+}

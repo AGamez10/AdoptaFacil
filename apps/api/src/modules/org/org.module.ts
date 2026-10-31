@@ -26,6 +26,8 @@ import { AnnouncementsService } from './announcements/announcements.service';
 import { OrgController } from './org.controller';
 import { OrgProfileService } from './org-profile.service';
 import { OrganizationSummaryController } from './organization-summary.controller';
+import { PendingReadsController } from './pending-reads.controller';
+import { PendingReadsService } from './pending-reads.service';
 import { OrganizationSummaryService } from './organization-summary.service';
 import { PlatformDocumentsController } from './platform-documents.controller';
 import { PlatformDocumentsService } from './platform-documents.service';
@@ -58,6 +60,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     DocumentsController,
     LegalRepresentativeController,
     OrganizationSummaryController,
+    PendingReadsController,
     PlatformDocumentsController,
     ReviewClaimsController,
     PlatformDuplicatesController,
@@ -75,6 +78,7 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     LegalRepresentativeService,
     { provide: SIGNATURE_ENCRYPTION_CONFIG, useFactory: loadSignatureEncryptionConfig },
     OrganizationSummaryService,
+    PendingReadsService,
     PlatformDocumentsService,
     DocumentVerificationService,
     { provide: DOCUMENT_TEXT_PORT, useClass: PdfTextAdapter },
