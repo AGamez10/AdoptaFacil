@@ -1,7 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type {
-  AnimalSummary,
-  OrganizationPublic,
   PortalLogoPosition,
   PortalTemplateId,
   PortalTemplateOptions,
@@ -9,9 +7,9 @@ import type {
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { brandTokensToStyle } from '../../../../shell/theme';
-import { useApiClient } from '../../../../shell/api';
-import { fetchPublicAnimals } from '../../api/public-animals';
 import { buildPortalView } from '../../model/portal-view';
+import { buildDemoSource } from '../../templates/demo/demo-portal';
+import { useOwnPortalSource } from '../../templates/demo/use-own-portal-source';
 import { isEngineTemplate, loadDesign } from '../../templates/registry';
 import type { TemplateDesign } from '../../templates/engine/types';
 import type { TemplateSourceData } from '../../templates/engine/model';
@@ -40,6 +38,7 @@ const DEVICE_WIDTH: Record<Device, number> = { desktop: 1280, mobile: 390 };
 
 export interface TemplateLivePreviewProps {
   slug?: string;
+  /** Ya no se usa: el nombre sale de la vista previa de la organización. */
   orgName?: string;
   template: PortalTemplateId;
   options: PortalTemplateOptions;
@@ -49,28 +48,16 @@ export interface TemplateLivePreviewProps {
   coverVideoUrl?: string;
 }
 
-/** Perfil de muestra mientras la organización no tiene datos públicos. */
-function sampleOrganization(name: string | undefined): OrganizationPublic {
-  return {
-    id: 'preview',
-    name: name ?? 'Tu organización',
-    slug: 'tu-organizacion',
-    description:
-      'Así se verá la descripción de tu organización: quiénes son, a quién rescatan y cómo ayudar.',
-    location: { city: 'Tu ciudad', department: 'Colombia', country: 'Colombia' },
-  } as OrganizationPublic;
-}
-
 /**
  * Vista previa EN VIVO de la plantilla (Ola 3). Renderiza los mismos
- * componentes del portal público con los datos públicos reales de la
- * organización (perfil + primeros animales) y los cambios aún sin guardar:
+ * componentes del portal público con los datos reales de la organización
+ * (perfil, animales, campañas) o, mientras no tenga ningún animal, con los de
+ * ejemplo; siempre con los cambios aún sin guardar:
  * plantilla, ajustes y colores. Se dibuja a tamaño real (1280 px o 390 px) y
  * se escala para caber en la tarjeta. Es solo para mirar: `inert`.
  */
 export function TemplateLivePreview({
   slug,
-  orgName,
   template,
   options,
   tokens,
@@ -81,38 +68,21 @@ export function TemplateLivePreview({
   const [device, setDevice] = useState<Device>(() =>
     typeof window !== 'undefined' && window.innerWidth < 640 ? 'mobile' : 'desktop',
   );
-  const [organization, setOrganization] = useState<OrganizationPublic | null>(null);
-  const [animals, setAnimals] = useState<AnimalSummary[]>([]);
-  const [total, setTotal] = useState<number | undefined>(undefined);
   const [scale, setScale] = useState(0.5);
   const [height, setHeight] = useState(600);
   const frameRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const client = useApiClient();
 
-  // Reads the organization's OWN portal data (authenticated preview endpoints,
-  // under RLS), so the editor shows real content even before the platform
-  // approves the organization, when the public endpoints still answer 404.
-  useEffect(() => {
-    if (!slug) return;
-    let active = true;
-    client
-      .request<OrganizationPublic>('/org/portal/preview')
-      .then((data) => {
-        if (active && data?.name) setOrganization(data);
-      })
-      .catch(() => undefined);
-    fetchPublicAnimals({ slug, preview: client, limit: 8, offset: 0 })
-      .then((page) => {
-        if (!active) return;
-        setAnimals(page.items);
-        setTotal(page.total);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [slug, client]);
+  // Datos de la vista previa: los REALES de la organización (endpoints de vista
+  // previa autenticados, bajo RLS) en cuanto tiene al menos un animal; mientras
+  // no tenga ninguno, los de ejemplo, para que vea la plantilla llena.
+  const own = useOwnPortalSource(true);
+  const demoSource = useMemo(() => buildDemoSource(), []);
+  const usingDemo = own.status !== 'ready';
+  const source = own.status === 'ready' ? own.data : demoSource;
+  const organization = source.organization;
+  const animals = source.animals;
+  const total = source.animalTotal;
 
   const width = DEVICE_WIDTH[device];
   useLayoutEffect(() => {
@@ -132,12 +102,9 @@ export function TemplateLivePreview({
     return () => observer.disconnect();
   }, [width, device]);
 
-  const profile = useMemo(
-    () => buildPortalView(organization ?? sampleOrganization(orgName)).profile,
-    [organization, orgName],
-  );
+  const profile = useMemo(() => buildPortalView(organization).profile, [organization]);
   const style = useMemo(() => brandTokensToStyle(tokens), [tokens]);
-  const previewSlug = slug ?? 'tu-organizacion';
+  const previewSlug = usingDemo ? (slug ?? 'tu-organizacion') : source.slug;
   const actions = (
     <div className={portalStyles.heroActions}>
       <span className={cn(portalStyles.btn, portalStyles['btn--lg'], portalStyles['btn--primary'])}>
@@ -153,22 +120,8 @@ export function TemplateLivePreview({
     actions,
     options,
   };
-  // Plantillas del motor: se pintan con el mismo componente que el portal público,
-  // con los datos reales de la organización (sin reseñas ni campañas en la vista previa).
+  // Plantillas del motor: el mismo marcado que el portal público, con la fuente de arriba.
   const engine = isEngineTemplate(template) ? template : null;
-  const engineSource = useMemo<TemplateSourceData>(
-    () => ({
-      slug: previewSlug,
-      organization: (organization ?? sampleOrganization(orgName)) as OrganizationPublic,
-      animals,
-      animalTotal: total ?? animals.length,
-      campaigns: [],
-      needs: [],
-      products: [],
-      reviews: [],
-    }),
-    [previewSlug, organization, orgName, animals, total],
-  );
 
   return (
     <div className={styles.preview} data-testid="template-live-preview">
@@ -209,7 +162,8 @@ export function TemplateLivePreview({
           {engine ? (
             <EnginePreview
               template={engine}
-              source={engineSource}
+              source={source}
+              usingDemo={usingDemo}
               themeStyle={style}
               width={width}
               device={device}
@@ -262,7 +216,13 @@ export function TemplateLivePreview({
           )}
         </div>
       </div>
-      <p className={styles.note}>Vista previa con tus datos públicos y los cambios sin guardar.</p>
+      <p className={styles.note} data-testid="template-live-preview-note">
+        {own.status === 'loading'
+          ? 'Cargando tus datos…'
+          : usingDemo
+            ? 'Vista previa con datos de ejemplo y tus cambios sin guardar. Cuando registres tu primer animal verás aquí tus datos.'
+            : 'Vista previa con tus datos y los cambios sin guardar.'}
+      </p>
     </div>
   );
 }
@@ -320,9 +280,12 @@ function EnginePreview({
   themeStyle,
   width,
   device,
+  usingDemo,
 }: {
   template: PortalTemplateId;
   source: TemplateSourceData;
+  /** Con datos reales nunca se muestra la captura de ejemplo: se pinta la plantilla. */
+  usingDemo: boolean;
   themeStyle: CSSProperties;
   width: number;
   device: Device;
@@ -349,7 +312,7 @@ function EnginePreview({
     () => (design ? buildPreviewDoc(design, source, themeStyle) : ''),
     [design, source, themeStyle],
   );
-  if (REFERENCE_PREVIEWS.has(template)) {
+  if (usingDemo && REFERENCE_PREVIEWS.has(template)) {
     return (
       <img
         src={`/template-previews/${template}-${device === 'mobile' ? '390' : '1440'}.jpg`}
