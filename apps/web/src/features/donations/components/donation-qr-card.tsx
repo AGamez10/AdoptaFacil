@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
+import { qrDataUrl } from '../../../lib/qr';
 import { buildOrganizationDonateUrl, type DonationLinkOrg } from '@adoptafacil/contracts';
 import {
   Button,
@@ -60,8 +60,8 @@ export function DonationQrCard({ organization, onConfigureLink }: DonationQrCard
     setPreviewDataUrl(null);
     setPrintDataUrl(null);
     Promise.all([
-      QRCode.toDataURL(url, { width: PREVIEW_SIZE, margin: 1, errorCorrectionLevel: 'M' }),
-      QRCode.toDataURL(url, { width: PRINT_SIZE, margin: 4, errorCorrectionLevel: 'M' }),
+      qrDataUrl(url, { width: PREVIEW_SIZE, margin: 1, errorCorrectionLevel: 'M' }),
+      qrDataUrl(url, { width: PRINT_SIZE, margin: 4, errorCorrectionLevel: 'M' }),
     ])
       .then(([preview, print]) => {
         if (!active) return;

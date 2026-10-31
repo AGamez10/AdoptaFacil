@@ -42,13 +42,14 @@ export function PublicNavbar() {
   }, [open]);
 
   const links: PublicNavLink[] = [
-    { label: 'Animales en adopción', to: '/adoptar' },
-    { label: 'Campañas', to: '/campanas' },
-    { label: 'Guías', to: '/guias' },
+    // Mismo orden que los tres caminos del hero: adoptar, ayudar, organizaciones.
+    { label: 'Adoptar', to: '/adoptar' },
     ...(payments ? [{ label: 'Donar', to: '/donaciones' }] : []),
-    ...(resources ? [{ label: 'Banco de recursos', to: '/recursos' }] : []),
+    { label: 'Campañas', to: '/campanas' },
+    ...(resources ? [{ label: 'Recursos', to: '/recursos' }] : []),
     ...(marketplace ? [{ label: 'Marketplace', to: '/marketplace' }] : []),
-    { label: 'Para organizaciones', to: '/#organizaciones', anchor: true },
+    { label: 'Guías', to: '/guias' },
+    { label: 'Organizaciones', to: '/#organizaciones', anchor: true },
   ];
 
   // Con todos los módulos encendidos, los enlaces no caben en una fila junto a

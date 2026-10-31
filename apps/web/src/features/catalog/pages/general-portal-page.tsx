@@ -3,13 +3,14 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { PublicHeroBanner } from '@adoptafacil/contracts';
 import { useSession } from '../../../shell/auth';
 import { FullPageLoading, PublicFooter, PublicNavbar } from '../../../shell/layout';
-import { STATIC_PAGES } from '../../../seo/page-meta.js';
-import { organizationLd, useSeo, websiteLd } from '../../../seo/seo';
+import { HOME_FAQ, STATIC_PAGES } from '../../../seo/page-meta.js';
+import { faqLd, organizationLd, useSeo, websiteLd } from '../../../seo/seo';
 import {
   ActiveCampaignsSection,
   AdoptionStepsSection,
   CoffeeSection,
   CommunitySection,
+  FaqSection,
   FinalCtaSection,
   ForOrganizationsSection,
   ImpactSection,
@@ -85,7 +86,7 @@ export function GeneralPortalPage() {
     title: STATIC_PAGES['/'].title,
     description: STATIC_PAGES['/'].description,
     path: '/',
-    jsonLd: [organizationLd(), websiteLd()],
+    jsonLd: [organizationLd(), websiteLd(), faqLd(HOME_FAQ)],
   });
   useScrollToHash();
 
@@ -131,6 +132,7 @@ export function GeneralPortalPage() {
         <ForOrganizationsSection />
         <TemplateGallerySection />
         <PromisesSection />
+        <FaqSection />
         <FinalCtaSection />
       </main>
 

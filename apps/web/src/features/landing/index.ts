@@ -1,6 +1,7 @@
 export {
   AdoptionStepsSection,
   CommunitySection,
+  FaqSection,
   ForOrganizationsSection,
   ImpactSection,
   LandingHero,

@@ -85,7 +85,13 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const animal = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${refugeToken}`)
-      .send({ name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Firulais',
+        species: 'dog',
+        sex: 'male',
+        size: 'medium',
+      })
       .expect(201);
     animalId = animal.body.id;
 
@@ -185,12 +191,30 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     expect(future.body.questionnaire[0].id).toBeTruthy();
     futureMilestoneId = future.body.id;
 
-    const overdue = await request(server)
+    // Un hito nuevo nunca se programa en el pasado (ni en un día inexistente)…
+    const past = await request(server)
       .post('/adoptions/followups')
       .set('Authorization', `Bearer ${refugeToken}`)
       .send({ contractId, title: 'Chequeo inicial', dueAt: '2020-01-01T00:00:00.000Z' })
+      .expect(400);
+    expect(JSON.stringify(past.body.message)).toMatch(/no puede ser anterior a hoy/);
+    await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Chequeo inicial', dueAt: '2027-02-29T00:00:00.000Z' })
+      .expect(400);
+
+    // …así que el hito vencido se programa hoy y el tiempo "pasa" en la base.
+    const overdue = await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Chequeo inicial', dueAt: new Date().toISOString() })
       .expect(201);
     overdueMilestoneId = overdue.body.id;
+    await admin.adoptionFollowUpMilestone.update({
+      where: { id: overdueMilestoneId },
+      data: { dueAt: new Date('2020-01-01T00:00:00.000Z') },
+    });
 
     // The T-028a/b trackingRef seam is now materialized on the request.
     const kanban = await request(server)

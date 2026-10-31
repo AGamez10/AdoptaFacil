@@ -109,7 +109,7 @@ export function WaysToHelpSection() {
       data-testid="landing-ways"
     >
       <div className={styles.container}>
-        <div className={styles.head}>
+        <div className={cn(styles.head, 'af-reveal')}>
           <p className={styles.eyebrow}>Elige cómo ayudar</p>
           <h2 id="landing-ways-title" className={styles.head__title}>
             Hay más de una forma de cambiar una vida.
@@ -117,7 +117,12 @@ export function WaysToHelpSection() {
         </div>
         <ul className={styles.ways__grid} data-count={ways.length}>
           {ways.map(({ key, Icon, title, text, cta, to, tone }) => (
-            <li key={key} className={styles.way} data-tone={tone} data-testid={`way-${key}`}>
+            <li
+              key={key}
+              className={cn(styles.way, 'af-reveal')}
+              data-tone={tone}
+              data-testid={`way-${key}`}
+            >
               <WayArt tone={tone} />
               <span className={styles.way__icon} aria-hidden="true">
                 <Icon />
@@ -173,7 +178,7 @@ export function ActiveCampaignsSection() {
         </div>
         <ul className={styles.campaigns__grid}>
           {items.map((campaign) => (
-            <li key={campaign.id}>
+            <li key={campaign.id} className="af-reveal">
               <CampaignCard campaign={campaign} variant="brand" />
             </li>
           ))}
@@ -367,7 +372,7 @@ export function FinalCtaSection() {
   return (
     <section className={styles.final} aria-labelledby="landing-final-title">
       <div className={styles.container}>
-        <div className={styles.final__card}>
+        <div className={cn(styles.final__card, 'af-reveal')}>
           <div className={styles.final__art} aria-hidden="true">
             <DogMascot className={styles.final__dog} />
             <CatMascot className={styles.final__cat} />

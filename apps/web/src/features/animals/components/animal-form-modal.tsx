@@ -8,6 +8,7 @@ import {
   type AnimalSpecies,
   type CreateAnimalInput,
   type UpdateAnimalInput,
+  latestAllowedBirthDate,
 } from '@adoptafacil/contracts';
 import {
   Button,
@@ -27,6 +28,7 @@ import { TagInput } from './tag-input';
 import { AnimalPhotoField } from './animal-photo-field';
 import { MissingSlugBanner } from './missing-slug-banner';
 import { PHOTO_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
+import { type AgeMode, validateAgeInput } from '../lib/age-input';
 
 const SPECIES_OPTIONS: { value: AnimalSpecies; label: string }[] = [
   { value: 'dog', label: 'Perro' },
@@ -100,6 +102,9 @@ export function AnimalFormModal({
   const [sex, setSex] = useState<AnimalSex>('unknown');
   const [size, setSize] = useState<AnimalSize>('medium');
   const [birthDate, setBirthDate] = useState('');
+  const [ageMode, setAgeMode] = useState<AgeMode>('exact');
+  const [approxYears, setApproxYears] = useState('');
+  const [approxMonths, setApproxMonths] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [breeds, setBreeds] = useState<AnimalBreed[]>([]);
@@ -126,6 +131,10 @@ export function AnimalFormModal({
       setSex(animal.sex);
       setSize(animal.size);
       setBirthDate(toDateInputValue(animal.birthDate));
+      const approximate = !animal.birthDate && animal.approximateAgeMonths !== undefined;
+      setAgeMode(approximate ? 'approximate' : 'exact');
+      setApproxYears(approximate ? String(Math.floor(animal.approximateAgeMonths! / 12)) : '');
+      setApproxMonths(approximate ? String(animal.approximateAgeMonths! % 12) : '');
       setDescription(animal.description ?? '');
       setTags(animal.tags ?? []);
       setPhotoPreviewUrl(animal.photos[0] ?? null);
@@ -138,6 +147,9 @@ export function AnimalFormModal({
       setSex('unknown');
       setSize('medium');
       setBirthDate('');
+      setAgeMode('exact');
+      setApproxYears('');
+      setApproxMonths('');
       setDescription('');
       setTags([]);
       setPhotoPreviewUrl(null);
@@ -221,6 +233,11 @@ export function AnimalFormModal({
       toast({ title: 'Nombre requerido', variant: 'warning' });
       return;
     }
+    const age = validateAgeInput({ mode: ageMode, birthDate, approxYears, approxMonths });
+    if (!age.ok) {
+      toast({ title: 'Edad requerida', description: age.message, variant: 'warning' });
+      return;
+    }
     if (photoFile) {
       const invalid = validateUpload(photoFile, PHOTO_ACCEPT);
       if (invalid) {
@@ -242,7 +259,8 @@ export function AnimalFormModal({
           sex,
           size,
           ...breedFields,
-          ...(birthDate ? { birthDate: new Date(birthDate).toISOString() } : {}),
+          // Switching to an approximate age clears a previously stored date.
+          ...(age.fields.birthDate ? age.fields : { ...age.fields, birthDate: null }),
           description: description.trim() || undefined,
           tags,
         };
@@ -255,7 +273,7 @@ export function AnimalFormModal({
           sex,
           size,
           ...breedFields,
-          ...(birthDate ? { birthDate: new Date(birthDate).toISOString() } : {}),
+          ...age.fields,
           ...(description.trim() ? { description: description.trim() } : {}),
           tags,
           ...(photoFile
@@ -282,7 +300,7 @@ export function AnimalFormModal({
     }
   }
 
-  const ageHint = estimateAgeLabel(birthDate);
+  const ageHint = ageMode === 'exact' ? estimateAgeLabel(birthDate) : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -372,15 +390,51 @@ export function AnimalFormModal({
                   htmlFor="animal-birthdate"
                   className="block text-sm font-medium text-foreground"
                 >
-                  Fecha de nacimiento
+                  {ageMode === 'exact' ? 'Fecha de nacimiento' : 'Edad aproximada'}
+                  <span aria-hidden="true"> *</span>
                 </label>
-                <Input
-                  id="animal-birthdate"
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                />
+                {ageMode === 'exact' ? (
+                  <Input
+                    id="animal-birthdate"
+                    type="date"
+                    required
+                    max={latestAllowedBirthDate()}
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                  />
+                ) : (
+                  <div id="animal-birthdate" className="flex gap-2">
+                    <Input
+                      aria-label="Años"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={100}
+                      placeholder="Años"
+                      value={approxYears}
+                      onChange={(e) => setApproxYears(e.target.value)}
+                    />
+                    <Input
+                      aria-label="Meses"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={11}
+                      placeholder="Meses"
+                      value={approxMonths}
+                      onChange={(e) => setApproxMonths(e.target.value)}
+                    />
+                  </div>
+                )}
                 {ageHint && <p className="text-xs text-muted-foreground">{ageHint}</p>}
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={ageMode === 'approximate'}
+                    onChange={(e) => setAgeMode(e.target.checked ? 'approximate' : 'exact')}
+                  />
+                  No conozco la fecha exacta
+                </label>
               </div>
               <SelectField
                 id="animal-size"

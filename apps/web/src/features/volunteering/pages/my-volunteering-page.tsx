@@ -33,6 +33,7 @@ import {
   hoursStatusVariant,
   parseSessionHours,
 } from '../model/volunteering-view';
+import { dateBounds, dateError } from '../../../lib/date-rules';
 
 /**
  * `/voluntariado` (RF18/RF19, M08) — experiencia del voluntario (Persona):
@@ -141,6 +142,11 @@ export function MyVolunteeringPage() {
         description: 'Fecha, horas (hasta 24) y descripción son obligatorios.',
         variant: 'warning',
       });
+      return;
+    }
+    const logDateError = dateError('serviceHoursDate', logDate);
+    if (logDateError) {
+      toast({ title: 'Fecha no válida', description: logDateError, variant: 'warning' });
       return;
     }
     setSaving(true);
@@ -265,6 +271,7 @@ export function MyVolunteeringPage() {
                               <Input
                                 type="date"
                                 value={logDate}
+                                {...dateBounds('serviceHoursDate')}
                                 onChange={(e) => setLogDate(e.target.value)}
                                 aria-label="Fecha de la sesión"
                               />
