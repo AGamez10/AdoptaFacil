@@ -196,6 +196,7 @@ function buildPages(animals) {
       ['Quiero ayudar: campañas activas', '/campanas'],
       ['Soy una organización: crear mi portal gratis', '/register'],
       ['Guías para adoptar', '/guias'],
+      ...guides.map((g) => [g.title, `/guias/${g.slug}`]),
     ],
     faq: HOME_FAQ,
     priority: '1.0',

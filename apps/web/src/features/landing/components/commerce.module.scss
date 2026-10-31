@@ -469,6 +469,45 @@ $logo-teal: #25baa6;
   }
 }
 
+.campaigns__skeleton {
+  height: 14rem;
+  border-radius: 1.5rem;
+  background: rgb(32 44 60 / 0.06);
+  animation: campaigns-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes campaigns-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.campaigns__empty {
+  margin-top: 2rem;
+  border: 1px dashed rgb(32 44 60 / 0.2);
+  border-radius: 1.5rem;
+  background: #fff;
+  padding: 1.5rem;
+}
+
+.campaigns__emptyTitle {
+  margin: 0;
+  font-weight: var(--fw-extra);
+  color: var(--af-ink);
+}
+
+.campaigns__emptyText {
+  margin: 0.35rem 0 0;
+  line-height: 1.5;
+  color: var(--af-ink-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaigns__skeleton {
+    animation: none;
+  }
+}
+
 /* --------------------------------------------------------------- cierre */
 .final {
   background: var(--af-cream);

@@ -129,21 +129,25 @@ export function WaysToHelpSection() {
 /** Campañas activas reales (`GET /public/campaigns`). Sin campañas, la sección
  *  no se monta: nunca un bloque vacío en la página de entrada. */
 export function ActiveCampaignsSection() {
-  const [items, setItems] = useState<CampaignPublic[]>([]);
+  const [state, setState] = useState<{ status: 'loading' | 'ready'; items: CampaignPublic[] }>({
+    status: 'loading',
+    items: [],
+  });
   useEffect(() => {
     const controller = new AbortController();
     listPublicCampaigns({ limit: 3, signal: controller.signal })
-      .then((page) => setItems(page.items.slice(0, 3)))
+      .then((page) => setState({ status: 'ready', items: page.items.slice(0, 3) }))
       .catch(() => {
-        // Best-effort: sin datos la sección simplemente no aparece.
+        // Sin datos: el mismo mensaje que sin campañas, nunca un error técnico.
+        if (!controller.signal.aborted) setState({ status: 'ready', items: [] });
       });
     return () => controller.abort();
   }, []);
-
-  if (items.length === 0) return null;
+  const { status, items } = state;
 
   return (
     <section
+      id="campanas"
       className={styles.campaigns}
       aria-labelledby="landing-campaigns-title"
       data-testid="landing-campaigns"
@@ -161,13 +165,28 @@ export function ActiveCampaignsSection() {
             <IconArrowRight aria-hidden="true" />
           </Link>
         </div>
-        <ul className={styles.campaigns__grid}>
-          {items.map((campaign) => (
-            <li key={campaign.id} className="af-reveal">
-              <CampaignCard campaign={campaign} variant="brand" />
-            </li>
-          ))}
-        </ul>
+        {status === 'loading' ? (
+          <ul className={styles.campaigns__grid} aria-busy="true" aria-label="Cargando campañas">
+            {[0, 1, 2].map((index) => (
+              <li key={index} className={styles.campaigns__skeleton} aria-hidden="true" />
+            ))}
+          </ul>
+        ) : items.length === 0 ? (
+          <div className={styles.campaigns__empty} data-testid="landing-campaigns-empty">
+            <p className={styles.campaigns__emptyTitle}>Hoy no hay campañas abiertas</p>
+            <p className={styles.campaigns__emptyText}>
+              Cuando una organización abra una campaña, la verás aquí con su meta y su avance.
+            </p>
+          </div>
+        ) : (
+          <ul className={styles.campaigns__grid}>
+            {items.map((campaign) => (
+              <li key={campaign.id} className="af-reveal">
+                <CampaignCard campaign={campaign} variant="brand" />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
