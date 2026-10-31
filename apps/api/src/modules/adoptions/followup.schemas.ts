@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
+import { DATE_RULES } from '@adoptafacil/contracts';
 import { z } from 'zod';
+import { ruledDate } from '../../core/validation/date-rules';
 
 /** Runtime validation for M04 post-adoption follow-up (T-028c). `.strict()` rejects
  *  unknown keys so no extra field can be smuggled in. */
@@ -20,7 +22,7 @@ export const scheduleFollowUpSchema = z
     contractId: uuid,
     title: z.string().trim().min(1).max(200),
     /** ISO-8601 UTC del vencimiento. */
-    dueAt: z.string().datetime(),
+    dueAt: ruledDate(DATE_RULES.followupDue),
     questionnaire: z.array(questionSchema).max(50).optional(),
   })
   .strict();

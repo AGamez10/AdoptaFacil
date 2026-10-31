@@ -53,7 +53,10 @@ describe('Public adoption catalog (T-029, RF07 public projection)', () => {
   }
 
   const createAnimal = (token: string, body: Record<string, unknown>) =>
-    request(server).post('/animals').set('Authorization', `Bearer ${token}`).send(body);
+    request(server)
+      .post('/animals')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ approximateAgeMonths: 12, ...body });
 
   const publicList = (slug: string, query = '') =>
     request(server).get(`/public/organizations/${slug}/animals${query}`);

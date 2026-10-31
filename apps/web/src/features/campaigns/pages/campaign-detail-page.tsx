@@ -45,6 +45,7 @@ import {
   parseOptionalEvidenceAmount,
 } from '../model/campaigns-view';
 import { EVIDENCE_ACCEPT, uploadEvidenceFile, validateEvidenceUpload } from '../lib/storage';
+import { dateBounds, dateError } from '../../../lib/date-rules';
 
 const CATEGORY_OPTIONS = CAMPAIGN_CATEGORIES.map((value) => ({
   value,
@@ -220,6 +221,11 @@ export function CampaignDetailPage() {
         description: 'El monto (si lo indicas) debe ser un entero COP mayor a 0.',
         variant: 'warning',
       });
+      return;
+    }
+    const spentError = dateError('campaignSpent', evSpentAt);
+    if (spentError) {
+      toast({ title: 'Fecha no válida', description: spentError, variant: 'warning' });
       return;
     }
     setSavingEvidence(true);
@@ -478,6 +484,7 @@ export function CampaignDetailPage() {
                         id="evidence-spent-at"
                         type="date"
                         value={evSpentAt}
+                        {...dateBounds('campaignSpent')}
                         onChange={(e) => setEvSpentAt(e.target.value)}
                       />
                     </div>

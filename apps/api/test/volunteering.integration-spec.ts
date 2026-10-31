@@ -9,6 +9,12 @@ import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
 
+/** Día `n` de una convocatoria que empezó hace 60 días (siempre en el pasado,
+ *  dentro de sus fechas): las horas nunca pueden ser futuras. */
+const daysFromToday = (offset: number): string =>
+  `${new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)}T00:00:00.000Z`;
+const sessionDay = (n: number): string => daysFromToday(n - 61);
+
 /**
  * M08 volunteering (RF18/RF19) end-to-end: publish an opportunity → public
  * listing → enroll → org accepts/rejects → log hours → org approves/rejects
@@ -75,14 +81,17 @@ describe('Volunteering (M08, RF18/RF19)', () => {
   }
 
   const publishOpportunity = (token: string, appliesToStudentService: boolean) =>
-    request(server).post('/volunteer-opportunities').set('Authorization', `Bearer ${token}`).send({
-      title: 'Jornada de esterilización',
-      category: 'sterilizations',
-      startDate: '2026-09-01T00:00:00.000Z',
-      endDate: '2026-09-30T00:00:00.000Z',
-      location: 'Refugio Patitas',
-      appliesToStudentService,
-    });
+    request(server)
+      .post('/volunteer-opportunities')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Jornada de esterilización',
+        category: 'sterilizations',
+        startDate: sessionDay(1),
+        endDate: daysFromToday(30),
+        location: 'Refugio Patitas',
+        appliesToStudentService,
+      });
 
   const enroll = (token: string, opportunityId: string, extra: Record<string, unknown> = {}) =>
     request(server)
@@ -192,7 +201,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // Log hours.
     const hoursLogged = await logHours(volunteer.token, {
       enrollmentId,
-      date: '2026-09-05T00:00:00.000Z',
+      date: sessionDay(5),
       hours: 4,
       description: 'Apoyo logístico',
     }).expect(201);
@@ -233,7 +242,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
 
     const firstSession = await logHours(volunteer.token, {
       enrollmentId,
-      date: '2026-09-06T00:00:00.000Z',
+      date: sessionDay(6),
       hours: 3,
       description: 'Primera jornada',
     }).expect(201);
@@ -242,7 +251,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
 
     const blocked = await logHours(volunteer.token, {
       enrollmentId,
-      date: '2026-09-07T00:00:00.000Z',
+      date: sessionDay(7),
       hours: 2,
       description: 'Intento tardío',
     }).expect(400);
@@ -274,7 +283,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // New gate: at least one decided hour entry is required before issuance.
     const logged = await logHours(volunteer.token, {
       enrollmentId: enrolled.body.id,
-      date: '2026-09-18T00:00:00.000Z',
+      date: sessionDay(18),
       hours: 2,
       description: 'Jornada de apoyo',
     }).expect(201);
@@ -307,7 +316,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     await decideEnrollment(org.token, enrollmentId, { decision: 'accept' }).expect(200);
 
     // Two approved sessions of 20h each — 40h total, below the 80h minimum.
-    for (const date of ['2026-09-05T00:00:00.000Z', '2026-09-06T00:00:00.000Z']) {
+    for (const date of [sessionDay(5), sessionDay(6)]) {
       const logged = await logHours(volunteer.token, {
         enrollmentId,
         date,
@@ -315,7 +324,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
         description: 'Jornada de apoyo',
       }).expect(201);
       // Reject hours with no reason → 400 (only exercised once).
-      if (date === '2026-09-05T00:00:00.000Z') {
+      if (date === sessionDay(5)) {
         await decideHours(org.token, logged.body.id, { decision: 'reject' }).expect(400);
       }
       await decideHours(org.token, logged.body.id, { decision: 'approve' }).expect(200);
@@ -329,7 +338,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // Log a THIRD session, reject it — must NOT count toward the minimum.
     const rejectedHours = await logHours(volunteer.token, {
       enrollmentId,
-      date: '2026-09-07T00:00:00.000Z',
+      date: sessionDay(7),
       hours: 20,
       description: 'Sesión con datos inconsistentes',
     }).expect(201);
@@ -342,7 +351,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     expect(stillBlocked.body.message).toMatch(/faltan 40 horas/i);
 
     // Log and approve TWO more sessions that reach the 80h minimum.
-    for (const date of ['2026-09-08T00:00:00.000Z', '2026-09-09T00:00:00.000Z']) {
+    for (const date of [sessionDay(8), sessionDay(9)]) {
       const finalHours = await logHours(volunteer.token, {
         enrollmentId,
         date,
@@ -417,12 +426,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     const enrollmentId = enrolled.body.id;
     await decideEnrollment(org.token, enrollmentId, { decision: 'accept' }).expect(200);
 
-    for (const date of [
-      '2026-09-10T00:00:00.000Z',
-      '2026-09-11T00:00:00.000Z',
-      '2026-09-12T00:00:00.000Z',
-      '2026-09-13T00:00:00.000Z',
-    ]) {
+    for (const date of [sessionDay(10), sessionDay(11), sessionDay(12), sessionDay(13)]) {
       const logged = await logHours(volunteer.token, {
         enrollmentId,
         date,
@@ -452,10 +456,10 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     await decideEnrollment(org.token, enrollmentId, { decision: 'accept' }).expect(200);
 
     const sessions = [
-      { date: '2026-09-12T00:00:00.000Z', hours: 20, description: 'Jornada de higiene' },
-      { date: '2026-09-13T00:00:00.000Z', hours: 20, description: 'Apoyo logístico' },
-      { date: '2026-09-14T00:00:00.000Z', hours: 20, description: 'Feria de adopción' },
-      { date: '2026-09-15T00:00:00.000Z', hours: 20, description: 'Bodega de donaciones' },
+      { date: sessionDay(22), hours: 20, description: 'Jornada de higiene' },
+      { date: sessionDay(23), hours: 20, description: 'Apoyo logístico' },
+      { date: sessionDay(24), hours: 20, description: 'Feria de adopción' },
+      { date: sessionDay(25), hours: 20, description: 'Bodega de donaciones' },
     ];
     for (const session of sessions) {
       const logged = await logHours(volunteer.token, { enrollmentId, ...session }).expect(201);
@@ -504,7 +508,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // hour is now required (new gate) before issuance is allowed at all.
     const logged = await logHours(volunteer.token, {
       enrollmentId: enrolled.body.id,
-      date: '2026-09-20T00:00:00.000Z',
+      date: sessionDay(20),
       hours: 2,
       description: 'Jornada de apoyo',
     }).expect(201);
@@ -534,7 +538,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // New gate: at least one decided hour entry is required before issuance.
     const logged = await logHours(volunteer.token, {
       enrollmentId,
-      date: '2026-09-21T00:00:00.000Z',
+      date: sessionDay(21),
       hours: 1,
       description: 'Apoyo puntual',
     }).expect(201);
@@ -557,7 +561,7 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // Still pending — hours rejected (400), not silently accepted.
     await logHours(volunteer.token, {
       enrollmentId: enrolled.body.id,
-      date: '2026-09-05T00:00:00.000Z',
+      date: sessionDay(5),
       hours: 2,
       description: 'Intento temprano',
     }).expect(400);
@@ -567,9 +571,54 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     // A different person cannot log hours on someone else's enrollment.
     await logHours(other.token, {
       enrollmentId: enrolled.body.id,
-      date: '2026-09-05T00:00:00.000Z',
+      date: sessionDay(5),
       hours: 2,
       description: 'No es mi inscripción',
     }).expect(400);
+  });
+
+  it('reglas de horas en el servidor: sin fechas futuras ni fuera de la convocatoria, máximo 24 h por día', async () => {
+    const opportunity = await publishOpportunity(org.token, false).expect(201);
+    const enrolled = await enroll(volunteer.token, opportunity.body.id).expect(201);
+    const enrollmentId = enrolled.body.id;
+    await decideEnrollment(org.token, enrollmentId, { decision: 'accept' }).expect(200);
+    const log = (date: string, hours: number) =>
+      logHours(volunteer.token, { enrollmentId, date, hours, description: 'Sesión' });
+
+    const future = await log(daysFromToday(2), 2).expect(400);
+    expect(JSON.stringify(future.body.message)).toMatch(/no puede ser posterior a hoy/);
+
+    const beforeStart = await log(sessionDay(-3), 2).expect(400);
+    expect(beforeStart.body.message).toMatch(/dentro de las fechas de la convocatoria/);
+
+    const nonexistent = await log('2026-02-30T00:00:00.000Z', 2).expect(400);
+    expect(JSON.stringify(nonexistent.body.message)).toMatch(/no existe en el calendario/);
+
+    await log(sessionDay(40), -1).expect(400);
+    await log(sessionDay(40), 25).expect(400);
+
+    // Solapes: 20 h + 5 h el mismo día suman 25 h → rechazado; 4 h más sí cabe.
+    await log(sessionDay(40), 20).expect(201);
+    const overlap = await log(sessionDay(40), 5).expect(400);
+    expect(overlap.body.message).toMatch(/superarías 24 horas en un mismo día/);
+    await log(sessionDay(40), 4).expect(201);
+
+    // Las horas rechazadas no cuentan para el tope del día.
+    const rejected = await log(sessionDay(41), 20).expect(201);
+    await decideHours(org.token, rejected.body.id, {
+      decision: 'reject',
+      reason: 'No asistió',
+    }).expect(200);
+    await log(sessionDay(41), 20).expect(201);
+  });
+
+  it('las fechas de una convocatoria se validan también al editar solo una de ellas', async () => {
+    const opportunity = await publishOpportunity(org.token, false).expect(201);
+    const res = await request(server)
+      .patch(`/volunteer-opportunities/${opportunity.body.id}`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ endDate: sessionDay(0) })
+      .expect(400);
+    expect(res.body.message).toMatch(/fecha de fin debe ser posterior a la fecha de inicio/);
   });
 });

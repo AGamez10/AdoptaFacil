@@ -121,12 +121,24 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
     const animal = await request(server)
       .post('/animals')
       .set(auth(orgA.token))
-      .send({ name: 'Firulais Exportado', species: 'dog', sex: 'male', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Firulais Exportado',
+        species: 'dog',
+        sex: 'male',
+        size: 'medium',
+      })
       .expect(201);
     await request(server)
       .post('/animals')
       .set(auth(orgB.token))
-      .send({ name: 'Solo De B', species: 'cat', sex: 'female', size: 'small' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Solo De B',
+        species: 'cat',
+        sex: 'female',
+        size: 'small',
+      })
       .expect(201);
 
     await request(server)

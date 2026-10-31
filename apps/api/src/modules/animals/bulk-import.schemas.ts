@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AnimalSex, AnimalSize, AnimalSpecies } from '@adoptafacil/contracts';
-import { sex, size, species, tags } from './animals.schemas';
+import { birthDate, sex, size, species, tags } from './animals.schemas';
 
 /**
  * Column headers of the bulk-import template (S2-04B-1), matched
@@ -101,7 +101,7 @@ export const bulkImportRowSchema = z
     sex,
     size,
     breedName: z.string().trim().max(80).optional(),
-    birthDate: z.string().datetime({ offset: true }).optional(),
+    birthDate: birthDate.optional(),
     description: z.string().trim().max(5000).optional(),
     tags: tags.optional(),
   })
