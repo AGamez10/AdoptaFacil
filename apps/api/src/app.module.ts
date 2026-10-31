@@ -11,6 +11,7 @@ import { RateLimitModule } from './core/rate-limit/rate-limit.module';
 import { ObservabilityModule } from './core/observability/observability.module';
 import { FeaturesModule } from './core/features/features.module';
 import { PlansModule } from './core/plans/plans.module';
+import { FormalizationGateModule } from './core/formalization';
 import { IdentityModule } from './core/identity/identity.module';
 import { EmailTemplatesModule } from './core/notifications/email-templates.module';
 import { LegalModule } from './core/legal/legal.module';
@@ -92,6 +93,7 @@ import { RedisModule } from './redis/redis.module';
     // Receives Content-Security-Policy violation reports (deploy/Caddyfile).
     CspReportModule,
     PlansModule,
+    FormalizationGateModule,
     // Feature modules (registered last; core modules above are unchanged).
     OrgModule,
     // Ola 1 · organization review status/suspension + member invitations.

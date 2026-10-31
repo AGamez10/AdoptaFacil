@@ -6,7 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG } from './support/legal';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * M10 (F-7, Ola 3) — marketplace simplificado: catálogo de productos por
@@ -30,7 +30,7 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
     userId: string;
   }
 
-  async function registerOrg(tag: string): Promise<Actor> {
+  async function registerOrg(tag: string, formalize = true): Promise<Actor> {
     const res = await request(server)
       .post('/auth/register/organization')
       .send({
@@ -42,6 +42,8 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       })
       .expect(201);
     await approveTestOrganization(admin, res.body.user.organizationId);
+    // Vender exige estar Formalizada (MarketplaceSales); el bloqueo se prueba abajo.
+    if (formalize) await formalizeTestOrganization(admin, res.body.user.organizationId);
     orgIds.push(res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
@@ -266,5 +268,79 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       .get(`/marketplace/products/${productId}`)
       .set('Authorization', `Bearer ${orgB.token}`)
       .expect(404);
+  });
+  describe('vender exige estar Formalizada (MarketplaceSales)', () => {
+    let informal: Actor;
+    let legacyId = '';
+
+    beforeAll(async () => {
+      informal = await registerOrg('informal', false);
+      // Un producto creado antes del bloqueo (o antes de retroceder de estado).
+      const legacy = await admin.product.create({
+        data: {
+          organizationId: informal.orgId,
+          name: 'Producto anterior',
+          category: 'food',
+          price: 10000,
+        },
+      });
+      legacyId = legacy.id;
+    });
+
+    it('una organización Informal no puede publicar: 403 FORMALIZATION_REQUIRED con lo que falta', async () => {
+      const res = await createProduct(informal.token).expect(403);
+      expect(res.body).toMatchObject({
+        code: 'FORMALIZATION_REQUIRED',
+        capability: 'marketplace_sales',
+        currentState: 'informal',
+        requiredState: 'formalizada',
+        requiredDocuments: ['rut', 'existence_representation_certificate'],
+      });
+      expect(res.body.message).toContain('Formalizada');
+    });
+
+    it('tampoco En proceso; ni agregar fotos ni reactivar un producto', async () => {
+      await formalizeTestOrganization(admin, informal.orgId, 'en_proceso');
+      await createProduct(informal.token).expect(403);
+      await request(server)
+        .post(`/marketplace/products/${legacyId}/images`)
+        .set('Authorization', `Bearer ${informal.token}`)
+        .send({ filename: 'foto.jpg', contentType: 'image/jpeg' })
+        .expect(403);
+      await request(server)
+        .patch(`/marketplace/products/${legacyId}`)
+        .set('Authorization', `Bearer ${informal.token}`)
+        .send({ price: 12000 })
+        .expect(403);
+    });
+
+    it('su producto anterior no aparece en el catálogo público, pero sigue en su panel y lo puede desactivar', async () => {
+      await request(server).get(`/public/marketplace/products/${legacyId}`).expect(404);
+      const catalog = await request(server)
+        .get(`/public/marketplace/products?organizationId=${informal.orgId}`)
+        .expect(200);
+      expect(catalog.body).toMatchObject({ items: [], total: 0 });
+      const own = await request(server)
+        .get('/marketplace/products')
+        .set('Authorization', `Bearer ${informal.token}`)
+        .expect(200);
+      expect(own.body.items.map((p: { id: string }) => p.id)).toContain(legacyId);
+      await request(server)
+        .patch(`/marketplace/products/${legacyId}`)
+        .set('Authorization', `Bearer ${informal.token}`)
+        .send({ isActive: false })
+        .expect(200);
+    });
+
+    it('al formalizarse publica y su catálogo vuelve a ser público', async () => {
+      await formalizeTestOrganization(admin, informal.orgId, 'formalizada');
+      await request(server)
+        .patch(`/marketplace/products/${legacyId}`)
+        .set('Authorization', `Bearer ${informal.token}`)
+        .send({ isActive: true })
+        .expect(200);
+      await request(server).get(`/public/marketplace/products/${legacyId}`).expect(200);
+      await createProduct(informal.token, { name: 'Nuevo producto' }).expect(201);
+    });
   });
 });

@@ -35,6 +35,7 @@ import { useApiClient, type ApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { DataExportCard } from '../components/data-export-card';
 import { ImpactReportCard } from '../components/impact-report-card';
+import { useOrgPlan } from '../components/plan-feature-note';
 
 /**
  * `/organizacion/reportes` (M13) — el dueño del refugio genera en un clic el
@@ -509,6 +510,7 @@ export function OrgReportsPage() {
   const { hasRole } = useSession();
   const { toast } = useToast();
   const canGenerate = hasRole(Role.Owner) || hasRole(Role.Administrator);
+  const plan = useOrgPlan();
 
   const [readiness, setReadiness] = useState<OrgReportsReadiness | null>(null);
   const [history, setHistory] = useState<OrgReport[]>([]);
@@ -596,8 +598,8 @@ export function OrgReportsPage() {
 
           {canGenerate && (
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <ImpactReportCard />
-              <DataExportCard />
+              <ImpactReportCard plan={plan} />
+              <DataExportCard plan={plan} />
             </div>
           )}
 

@@ -149,4 +149,53 @@ describe('OrgFormalizationPage', () => {
     expect(await screen.findByText('Reintento iniciado')).toBeInTheDocument();
     expect(await screen.findByText('Reintentando verificación DIAN')).toBeInTheDocument();
   });
+  it('junto al aviso de Avanzar ofrece ir directo a cargar los documentos', async () => {
+    stubFetch((url) => {
+      if (url.includes('/org/formalization/history')) return [];
+      if (url.includes('/org/formalization')) {
+        return { state: FormalizationState.EnProceso, rteVigente: false };
+      }
+      return {};
+    });
+    renderShell({ route: '/organizacion/formalizacion', ...ownerSession() });
+
+    const link = await screen.findByRole('link', { name: 'Cargar mis documentos' });
+    expect(link).toHaveAttribute('href', '/organizacion/documentos');
+  });
+
+  it('si el servidor no deja avanzar, el motivo queda visible junto al botón de Documentos', async () => {
+    const reason = 'Para pasar a Formalizada falta que la plataforma apruebe: RUT.';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const fail = init?.method === 'POST' && url.includes('/org/formalization/transitions');
+        const body = fail
+          ? { statusCode: 400, message: reason }
+          : url.includes('/org/formalization/history')
+            ? []
+            : url.includes('/org/formalization')
+              ? { state: FormalizationState.EnProceso, rteVigente: false }
+              : {};
+        return Promise.resolve({
+          ok: !fail,
+          status: fail ? 400 : 200,
+          headers: { get: () => null },
+          json: async () => body,
+        });
+      }),
+    );
+    renderShell({ route: '/organizacion/formalizacion', ...ownerSession() });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Avanzar a Formalizada' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /Avanzar a Formalizada/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(reason);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cargar mis documentos' })).toHaveAttribute(
+      'href',
+      '/organizacion/documentos',
+    );
+  });
 });

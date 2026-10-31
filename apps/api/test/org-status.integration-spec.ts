@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PasswordService } from '../src/core/auth/password.service';
 import { TokenService } from '../src/core/auth/token.service';
 import { purgeOrganizations } from './support/cleanup';
+import { formalizeTestOrganization } from './support/organization-status';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
 /**
@@ -115,6 +116,8 @@ describe('Organization status, approval and suspension (R2-1, AF-023)', () => {
 
     slug = `estado-${randomUUID().slice(0, 8)}`;
     await request(server).put('/org/profile').set(auth(owner)).send({ slug }).expect(200);
+    // Vender exige estar Formalizada (MarketplaceSales).
+    await formalizeTestOrganization(admin, owner.orgId);
     const product = await request(server)
       .post('/marketplace/products')
       .set(auth(owner))

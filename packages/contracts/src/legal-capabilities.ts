@@ -259,6 +259,49 @@ export function computeOrganizationCapabilities(
   };
 }
 
+/** 403 cuando una acción exige un estado formal que la organización aún no
+ *  tiene. La web lo reconoce por `code` y ofrece el camino para avanzar. */
+export const FORMALIZATION_REQUIRED_CODE = 'FORMALIZATION_REQUIRED';
+export interface FormalizationRequiredError {
+  code: typeof FORMALIZATION_REQUIRED_CODE;
+  capability: OrganizationCapability;
+  /** Estado actual de la organización. */
+  currentState: FormalizationState;
+  /** Primer estado que habilita la función. */
+  requiredState: FormalizationState;
+  /** Documentos que la plataforma debe aprobar para llegar a ese estado. */
+  requiredDocuments: DocumentType[];
+  message: string;
+}
+
+const STATE_DISPLAY: Record<FormalizationState, string> = {
+  [S.Informal]: 'Informal',
+  [S.EnProceso]: 'En proceso',
+  [S.Formalizada]: 'Formalizada',
+  [S.ESAL]: 'ESAL',
+  [S.ESAL_RTE]: 'ESAL con RTE',
+};
+
+/** Cuerpo del 403 `FORMALIZATION_REQUIRED` para una función bloqueada: el
+ *  mismo texto en la API y en la web. */
+export function formalizationRequiredError(
+  capability: OrganizationCapability,
+  currentState: FormalizationState,
+): FormalizationRequiredError {
+  const rule = CAPABILITY_RULES.find((r) => r.capability === capability);
+  const requiredState = rule?.minState ?? S.ESAL_RTE;
+  return {
+    code: FORMALIZATION_REQUIRED_CODE,
+    capability,
+    currentState,
+    requiredState,
+    requiredDocuments: [...STATE_REQUIRED_DOCUMENTS[requiredState]],
+    message:
+      `Esta función se desbloquea cuando tu organización avance a ${STATE_DISPLAY[requiredState]}. ` +
+      'Sube tus documentos en Documentos y el equipo de AdoptaFácil los revisa.',
+  };
+}
+
 // ============================================================================
 // Verificación automática de documentos (lectura en el servidor + chequeos).
 // La máquina propone; una persona de plataforma decide. Nunca aprueba sola.

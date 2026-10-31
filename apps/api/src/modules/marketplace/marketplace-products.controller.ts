@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  OrganizationCapability,
   ProductCategory,
   Role,
   type CreateProductInput,
@@ -33,6 +34,7 @@ import {
   updateProductSchema,
 } from './marketplace-products.schemas';
 import { RequireFeature } from '../../core/features';
+import { FormalStateGuard, RequireFormalState } from '../../core/formalization';
 
 /** Roles that may PUBLISH/EDIT a product (M10). */
 export const MARKETPLACE_WRITE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
@@ -56,15 +58,21 @@ function parseCategory(value?: string): ProductCategory | undefined {
  * Tenant-scoped (RLS). Publicar/editar = Owner/Administrator/Operator; ver =
  * + ReadOnlyAuditor; el resto, denegado (deny-by-default). Exposición pública
  * en un controller separado.
+ *
+ * Vender exige estar Formalizada (matriz `CAPABILITY_RULES`, ET arts. 555-2 y
+ * 615): publicar o agregar fotos pasa por {@link FormalStateGuard}; editar un
+ * producto que queda activo lo verifica el servicio. Ver y desactivar siempre
+ * se permite, para que nadie quede con un producto publicado que no puede bajar.
  */
 @RequireFeature('marketplace')
 @Controller('marketplace/products')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, FormalStateGuard)
 export class MarketplaceProductsController {
   constructor(private readonly service: MarketplaceProductsService) {}
 
   @Post()
   @Roles(...MARKETPLACE_WRITE_ROLES)
+  @RequireFormalState(OrganizationCapability.MarketplaceSales)
   create(
     @CurrentUser() actor: RequestUser,
     @Body(new ZodValidationPipe(createProductSchema)) dto: CreateProductInput,
@@ -106,6 +114,7 @@ export class MarketplaceProductsController {
 
   @Post(':id/images')
   @Roles(...MARKETPLACE_WRITE_ROLES)
+  @RequireFormalState(OrganizationCapability.MarketplaceSales)
   addImage(
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
