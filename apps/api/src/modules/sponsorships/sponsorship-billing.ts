@@ -35,7 +35,14 @@ export function elapsedDays(from: Date, to: Date): number {
  *  `nextBillingAt` by one period once it has been billed. */
 export function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getTime());
+  const day = result.getUTCDate();
+  result.setUTCDate(1);
   result.setUTCMonth(result.getUTCMonth() + months);
+  // Un 31 de octubre pasa al 30 de noviembre, no al 1 de diciembre: no se salta un mes.
+  const lastDay = new Date(
+    Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  result.setUTCDate(Math.min(day, lastDay));
   return result;
 }
 
