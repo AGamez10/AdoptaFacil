@@ -59,6 +59,7 @@ import { ownerPreviewOrganization } from '../model/owner-preview';
 import { PortalPreviewContext } from '../model/portal-preview-context';
 import { TemplatePortal } from '../templates/template-portal';
 import { isEngineTemplate } from '../templates/registry';
+import { useGuideContext } from '../../guide/model/guide-context';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -327,6 +328,22 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // formalización que hoy declara la propia organización (SEC-003). Los
   // documentos revisados se muestran como sellos en el hero.
   useDocumentTitle(view?.profile.organization.name);
+
+  // El botón de Ayuda se vuelve discreto y su WhatsApp lleva a ESTA organización.
+  const guideOrg = state === 'ready' ? view?.profile.organization : undefined;
+  useGuideContext(
+    guideOrg
+      ? {
+          kind: 'portal',
+          organization: {
+            name: guideOrg.name,
+            whatsapp: guideOrg.whatsapp,
+            contactEmail: guideOrg.contactEmail,
+          },
+          ownerPreview,
+        }
+      : null,
+  );
 
   // Secciones agregadas AÚN sin módulo dueño (transparencia) nacen en
   // status:'placeholder' — ocultarlas evita el "Próximamente" vacío frente al

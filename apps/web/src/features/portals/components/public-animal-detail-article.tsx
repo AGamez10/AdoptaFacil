@@ -13,7 +13,7 @@ import styles from '../pages/public-animal-detail-page.module.scss';
 
 export type PublicAnimalOrg = Pick<
   OrganizationPublic,
-  'id' | 'name' | 'logoUrl' | 'description' | 'location' | 'nit'
+  'id' | 'name' | 'logoUrl' | 'description' | 'location' | 'nit' | 'whatsapp' | 'contactEmail'
 >;
 
 export const ADOPTION_STEPS = [

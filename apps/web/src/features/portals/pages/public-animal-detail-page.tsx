@@ -27,6 +27,7 @@ import { isEngineTemplate, loadDesign } from '../templates/registry';
 import type { TemplateDesign } from '../templates/engine/types';
 import { usePublicTheme } from '../templates/use-public-theme';
 import { useTemplateAssets } from '../templates/use-template-assets';
+import { useGuideContext } from '../../guide/model/guide-context';
 import styles from './public-animal-detail-page.module.scss';
 
 const SIMILAR_MAX = 4;
@@ -203,6 +204,17 @@ export function PublicAnimalDetailPage() {
         ]
       : [],
   });
+
+  // Ayuda de la ficha: habla de este animal y su WhatsApp es el de la organización.
+  useGuideContext(
+    org && animal
+      ? {
+          kind: 'portal',
+          organization: { name: org.name, whatsapp: org.whatsapp, contactEmail: org.contactEmail },
+          animalName: animal.name,
+        }
+      : null,
+  );
 
   // El llamado fijo de celular ocupa el borde inferior: el botón de Ayuda sube.
   useEffect(() => {
