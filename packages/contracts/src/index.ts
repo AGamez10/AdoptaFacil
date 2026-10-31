@@ -34,4 +34,5 @@ export * from './legal-capabilities';
 export * from './plans';
 export * from './consents';
 export * from './notifications';
+export * from './invitation-roles';
 export * from './platform-workspace';

@@ -383,6 +383,27 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   if (!env.PLATFORM_MFA_REQUIRED) {
     fail('PLATFORM_MFA_REQUIRED', 'platform staff must use two-step verification in production');
   }
+  // Every emailed link (invitations, password reset, receipts, contracts) is
+  // built from WEB_BASE_URL: a forgotten dev default would email links to
+  // `localhost` that nobody can open, and plain http would leak the tokens.
+  if (!isPublicHttpsUrl(env.WEB_BASE_URL)) {
+    fail(
+      'WEB_BASE_URL',
+      'WEB_BASE_URL must be the public https origin of the web app in production (not localhost)',
+    );
+  }
+}
+
+const LOCAL_HOSTS = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\]|.*\.local|.*\.localhost)$/i;
+
+/** `https://` and a host reachable from the internet (no localhost/loopback). */
+export function isPublicHttpsUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' && !LOCAL_HOSTS.test(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 /** The validated schema + cross-field rules (fail-fast for smtp/ePayco split credentials). */
