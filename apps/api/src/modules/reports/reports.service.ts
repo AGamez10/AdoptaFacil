@@ -67,6 +67,11 @@ import { resolveReportPeriod, type ReportPeriod } from './report-period';
 import { renderReportPdf } from './report-pdf';
 import { renderReportXlsx } from './report-xlsx';
 import { REPORT_CODE_PATTERN, generateReportCode, sealHash } from './report-seal';
+import {
+  normalizeSignatureImage,
+  SignatureImageError,
+  type SignatureMethod,
+} from './signature-image';
 
 /** Firmante sellado en la fila (identificadores + hash, nunca la imagen). */
 interface SealedSigner extends OrgReportSigner {
@@ -806,6 +811,7 @@ export class ReportsService {
     const signerUserId = request.signerUserId;
     const role = request.signerRole as LegalRepresentativeRole;
     const normalizedDoc = normalizeDocument(input.documentNumber);
+    let signatureMethod: SignatureMethod | undefined;
 
     if (input.decision === 'approved') {
       if (input.consent !== true) {
@@ -815,6 +821,17 @@ export class ReportsService {
         if (!input.signature) {
           throw new BadRequestException('Es tu primera firma: dibújala o sube una imagen.');
         }
+        signatureMethod = input.signature.method ?? 'drawn';
+        let image: Buffer;
+        try {
+          image = await normalizeSignatureImage(
+            Buffer.from(input.signature.signatureBase64, 'base64'),
+            signatureMethod,
+          );
+        } catch (error) {
+          if (error instanceof SignatureImageError) throw new BadRequestException(error.message);
+          throw error;
+        }
         await this.legalRepresentatives.register(
           signerUserId,
           {
@@ -823,8 +840,8 @@ export class ReportsService {
             documentType: input.signature.documentType,
             documentNumber: input.documentNumber,
             position: input.signature.position,
-            signatureBase64: input.signature.signatureBase64,
-            signatureContentType: input.signature.signatureContentType,
+            signatureBase64: image.toString('base64'),
+            signatureContentType: 'image/png',
           },
           organizationId,
         );
@@ -851,6 +868,8 @@ export class ReportsService {
           ip: evidence.ip,
           userAgent: evidence.userAgent?.slice(0, 200),
           contentHash: row.contentHash,
+          // Solo la primera vez: cómo registró la firma (dibujada o foto).
+          signatureMethod,
         };
         const current = (await this.currentSigners(tx, organizationId)).get(role);
         if (!current?.legalRepresentativeId) {

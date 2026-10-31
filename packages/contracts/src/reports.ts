@@ -278,6 +278,8 @@ export interface DecideSignatureRequestInput {
     position: string;
     signatureBase64: string;
     signatureContentType: string;
+    /** `photo`: foto de la firma en papel blanco (se limpia el fondo). Por defecto `drawn`. */
+    method?: 'drawn' | 'photo';
   };
 }
 

@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { SIGNER_DECLARATION_TEXT, SIGNER_DECLARATION_VERSION } from '@adoptafacil/contracts';
 import { PrismaClient } from '@prisma/client';
+import sharp from 'sharp';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
@@ -340,6 +341,73 @@ describe('Signature requests by email link (M13)', () => {
       where: { memberId: { in: profiles.map((u) => u.id) } },
     });
     expect(signatures.map((s) => s.organizationId)).toEqual([owner.orgId]);
+
+    // Aquí registra su firma con una FOTO de su firma en papel. Un archivo
+    // falso con tipo "image/png" se rechaza; uno demasiado grande, también.
+    const firstTime = (signatureBase64: string) =>
+      request(server)
+        .post('/public/signature-requests/decision')
+        .send({
+          token: lastLinkFor(reviewerEmail),
+          decision: 'approved',
+          consent: true,
+          documentNumber: '79000111',
+          signature: {
+            fullName: 'Diana Revisora',
+            documentType: 'cedula_ciudadania',
+            position: 'Revisora fiscal',
+            signatureBase64,
+            signatureContentType: 'image/png',
+            method: 'photo',
+          },
+        });
+    const fake = await firstTime(Buffer.from('<svg onload="x()"></svg>').toString('base64'));
+    expect(fake.status).toBe(400);
+    expect(fake.body.message).toMatch(/PNG o JPG/);
+    await firstTime('A'.repeat(1_500_000)).expect(413);
+    const photo = await sharp(
+      Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">' +
+          '<rect width="640" height="480" fill="#ecece6"/>' +
+          '<path d="M120 300 C 220 160, 320 400, 420 250 S 520 220, 560 320" stroke="#20202a" stroke-width="9" fill="none"/>' +
+          '</svg>',
+      ),
+    )
+      .jpeg({ quality: 80 })
+      .withExif({ IFD0: { Artist: 'no-debe-guardarse' } })
+      .toBuffer();
+    const signed = await firstTime(photo.toString('base64')).expect(200);
+    expect(signed.body.status).toBe('issued');
+    const otherReport = await admin.orgReport.findFirstOrThrow({
+      where: { organizationId: other.orgId },
+    });
+    const evidence = await admin.auditLog.findFirstOrThrow({
+      where: { organizationId: other.orgId, action: 'report.approved', entityId: otherReport.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(evidence.metadata).toMatchObject({ channel: 'email_link', signatureMethod: 'photo' });
+
+    // Cada organización guarda SU copia; ninguna ve la de la otra.
+    const perOrg = await admin.legalRepresentative.findMany({
+      where: { memberId: { in: profiles.map((u) => u.id) } },
+      select: { organizationId: true, signatureFileRef: true },
+    });
+    expect(new Set(perOrg.map((s) => s.organizationId))).toEqual(
+      new Set([owner.orgId, other.orgId]),
+    );
+    expect(new Set(perOrg.map((s) => s.signatureFileRef)).size).toBe(2);
+    const seenByOther = await request(server)
+      .get('/org/legal-representative')
+      .set(auth(other))
+      .expect(200);
+    expect(JSON.stringify(seenByOther.body)).not.toContain('Rep Enlace');
+
+    // Un documento nuevo, pendiente, para probar la revocación.
+    await request(server)
+      .post('/org/reports')
+      .set(auth(other))
+      .send({ kind: 'social_service', periodStart: daysAgo(3), periodEnd: today })
+      .expect(201);
 
     // Revocar a la firmante deja sin efecto su enlace pendiente en esa organización.
     const pendingToken = lastLinkFor(reviewerEmail);

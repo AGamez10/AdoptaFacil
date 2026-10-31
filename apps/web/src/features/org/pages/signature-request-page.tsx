@@ -27,6 +27,43 @@ function tokenFromHash(): string {
   return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token') ?? '';
 }
 
+const PHOTO_MAX_EDGE = 900;
+const PHOTO_MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Prepara en el navegador la foto de una firma en papel blanco: la reduce y
+ * vuelve transparente el papel, para que viaje liviana (PNG sin metadatos).
+ * El servidor igual valida el archivo real y la vuelve a limpiar.
+ */
+async function prepareSignaturePhoto(file: File): Promise<string> {
+  if (!['image/png', 'image/jpeg'].includes(file.type)) {
+    throw new Error('Sube una foto en PNG o JPG.');
+  }
+  if (file.size > PHOTO_MAX_FILE_BYTES) throw new Error('La foto pesa más de 10 MB.');
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Tu navegador no pudo procesar la foto.');
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = pixels.data;
+  const levels: number[] = [];
+  for (let i = 0; i < d.length; i += 4)
+    levels.push((d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000);
+  const paper = [...levels].sort((a, b) => a - b)[Math.floor(levels.length / 2)];
+  const cut = paper * 0.75;
+  levels.forEach((level, p) => {
+    d[p * 4] = d[p * 4 + 1] = d[p * 4 + 2] = 0;
+    d[p * 4 + 3] =
+      level >= cut ? 0 : Math.min(255, Math.round(((cut - level) * 255) / (cut * 0.5)));
+  });
+  ctx.putImageData(pixels, 0, 0);
+  return canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}/public/signature-requests/${path}`, {
     method: 'POST',
@@ -60,6 +97,25 @@ export function SignatureRequestPage() {
   const [position, setPosition] = useState('');
   const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
+  const [method, setMethod] = useState<'drawn' | 'photo'>('drawn');
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  async function onPhoto(file: File | undefined) {
+    setSignatureBase64(null);
+    setPhotoError(null);
+    if (!file) return;
+    try {
+      setSignatureBase64(await prepareSignaturePhoto(file));
+    } catch (e) {
+      setPhotoError((e as Error).message);
+    }
+  }
+
+  function chooseMethod(next: 'drawn' | 'photo') {
+    setMethod(next);
+    setSignatureBase64(null);
+    setPhotoError(null);
+  }
 
   useEffect(() => {
     if (!token) {
@@ -103,6 +159,7 @@ export function SignatureRequestPage() {
               position: position.trim(),
               signatureBase64,
               signatureContentType: 'image/png',
+              method,
             },
           }
         : {}),
@@ -196,7 +253,54 @@ export function SignatureRequestPage() {
                     value={position}
                     onChange={setPosition}
                   />
-                  <SignaturePad onChange={setSignatureBase64} />
+                  <div className="flex gap-2" role="group" aria-label="Cómo registrar tu firma">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={method === 'drawn' ? 'default' : 'outline'}
+                      onClick={() => chooseMethod('drawn')}
+                    >
+                      Dibujar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={method === 'photo' ? 'default' : 'outline'}
+                      onClick={() => chooseMethod('photo')}
+                    >
+                      Subir foto
+                    </Button>
+                  </div>
+                  {method === 'drawn' ? (
+                    <SignaturePad onChange={setSignatureBase64} />
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="block space-y-1 text-sm" htmlFor="sig-photo">
+                        <span>
+                          Foto de tu firma sobre papel blanco, con tinta oscura y buena luz (PNG o
+                          JPG)
+                        </span>
+                        <input
+                          id="sig-photo"
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          onChange={(event) => void onPhoto(event.target.files?.[0])}
+                        />
+                      </label>
+                      {photoError && (
+                        <p role="alert" className="text-sm text-destructive">
+                          {photoError}
+                        </p>
+                      )}
+                      {signatureBase64 && (
+                        <img
+                          src={`data:image/png;base64,${signatureBase64}`}
+                          alt="Vista previa de tu firma"
+                          className="max-h-32 rounded-md border bg-white p-2"
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               <TextField

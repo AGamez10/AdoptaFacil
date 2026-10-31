@@ -58,6 +58,7 @@ export const decideSignatureRequestSchema = z
         position: z.string().trim().min(1).max(120),
         signatureBase64: z.string().min(1).max(2_000_000),
         signatureContentType: z.string().trim().min(1).max(100),
+        method: z.enum(['drawn', 'photo']).optional(),
       })
       .strict()
       .optional(),
