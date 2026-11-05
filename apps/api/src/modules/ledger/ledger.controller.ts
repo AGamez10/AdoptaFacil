@@ -34,6 +34,7 @@ import {
   createLedgerEntrySchema,
   voidLedgerEntrySchema,
 } from './ledger.schemas';
+import { setServeHeaders } from '../../core/storage/serve-headers';
 
 /** Registran y anulan movimientos (es dinero: solo quien administra). */
 const WRITE_ROLES = [Role.Owner, Role.Administrator] as const;
@@ -86,8 +87,8 @@ export class OrgLedgerController {
     @Res() res: Response,
   ): Promise<void> {
     const file = await this.service.downloadSupport(actor.id, id);
-    res.setHeader('Content-Type', file.contentType);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Tipo real por los bytes, en línea si es PDF o imagen, aislado con `sandbox`.
+    setServeHeaders(res, file.filename, file.data);
     res.setHeader('Cache-Control', 'private, no-store');
     res.send(file.data);
   }

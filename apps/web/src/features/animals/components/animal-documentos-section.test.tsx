@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClinicalEventType, Role, type ClinicalEvent } from '@adoptafacil/contracts';
 import { AppProviders } from '../../../shell/app-providers';
 import { AnimalDocumentosSection } from './animal-documentos-section';
-import * as storage from '../lib/storage';
 
 /**
  * Fix (T-ANIMALS-ATTACHMENTS-AUDIT): el tab "Documentos" dejó de ser un
  * `ComingSoon` — ahora es la galería consolidada de los adjuntos reales del
- * expediente clínico (fotos, exámenes, carnet), cada uno descargable.
+ * expediente clínico (fotos, exámenes, carnet), cada uno visible en la misma
+ * página sin descargarlo.
  */
 function providers(children: React.ReactNode) {
   return (
@@ -47,21 +47,21 @@ function event(overrides: Partial<ClinicalEvent> = {}): ClinicalEvent {
   };
 }
 
-function stubFetch(events: ClinicalEvent[]) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      let body: unknown = [];
-      if (url.includes('/clinical-events')) body = events;
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        headers: { get: () => null },
-        json: async () => body,
-      });
-    }),
-  );
+function stubFetch(events: ClinicalEvent[], file: BlobPart = '%PDF-1.4 carnet') {
+  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    let body: unknown = [];
+    if (url.includes('/clinical-events')) body = events;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => body,
+      blob: async () => new Blob([file], { type: 'text/html' }),
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -97,27 +97,58 @@ describe('AnimalDocumentosSection (fix, T-ANIMALS-ATTACHMENTS-AUDIT)', () => {
 
     expect(await screen.findByText('Vacuna')).toBeInTheDocument();
     expect(screen.getByText('Cirugía')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Descargar' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Ver' })).toHaveLength(2);
   });
 
-  it('downloads the attachment (private, authenticated) when "Descargar" is clicked', async () => {
-    stubFetch([
+  it('shows the attachment in place (no download), typed by its bytes', async () => {
+    const fetchMock = stubFetch([
       event({
         attachments: [
           { id: 'att-1', storageRef: 'private/org-1/uuid-carnet.pdf', order: 0, url: 'x' },
         ],
       }),
     ]);
-    const spy = vi.spyOn(storage, 'downloadPrivateFile').mockResolvedValue();
+    const created: Blob[] = [];
+    URL.createObjectURL = vi.fn((blob: Blob) => {
+      created.push(blob);
+      return 'blob:carnet';
+    });
+    URL.revokeObjectURL = vi.fn();
     render(providers(<AnimalDocumentosSection animalId="animal-1" />));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Descargar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver' }));
 
-    expect(spy).toHaveBeenCalledWith(
-      expect.anything(),
-      'private/org-1/uuid-carnet.pdf',
-      'uuid-carnet.pdf',
+    const frame = await screen.findByTitle('Vacuna');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame).toHaveAttribute('src', 'blob:carnet');
+    // Aunque el servidor dijera text/html, el blob se rehace como PDF por sus bytes.
+    expect(created[0].type).toBe('application/pdf');
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes(
+          `/storage/private?key=${encodeURIComponent('private/org-1/uuid-carnet.pdf')}`,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('refuses to open a file that is not a PDF or an image', async () => {
+    stubFetch(
+      [
+        event({
+          attachments: [
+            { id: 'att-1', storageRef: 'private/org-1/uuid-carnet.pdf', order: 0, url: 'x' },
+          ],
+        }),
+      ],
+      '<html><script>alert(1)</script></html>',
     );
-    spy.mockRestore();
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    render(providers(<AnimalDocumentosSection animalId="animal-1" />));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('no lo abrimos por seguridad');
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
 });

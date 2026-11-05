@@ -31,6 +31,7 @@ import {
   type UploadedProofFile,
 } from './resource-offer-proofs.service';
 import { RequireFeature } from '../../core/features';
+import { setServeHeaders } from '../../core/storage/serve-headers';
 
 /**
  * M09 — prueba del donante y su validación, anidadas bajo la oferta.
@@ -73,8 +74,9 @@ export class ResourceOfferProofsController {
     @Res() res: Response,
   ): Promise<void> {
     const proof = await this.service.download(actor.id, offerId, proofId);
-    res.setHeader('Content-Type', proof.contentType);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Tipo real por los bytes, en línea si es PDF o imagen, aislado con `sandbox`.
+    setServeHeaders(res, proof.filename, proof.data);
+    res.setHeader('Cache-Control', 'private, no-store');
     res.send(proof.data);
   }
 
