@@ -25,6 +25,7 @@ import {
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
   PLATFORM_TEAM_ROLES,
   RESOURCE_VIEW_ROLES,
+  RESOURCE_MANAGE_ROLES,
   SPONSORSHIP_VIEW_ROLES,
   VOLUNTEERING_VIEW_ROLES,
 } from '../navigation';
@@ -96,6 +97,8 @@ const PublicCampaignsPage = lazyPage(loadCampaigns, 'PublicCampaignsPage');
 const loadResources = () => import('../../features/resources');
 const MyResourceOffersPage = lazyPage(loadResources, 'MyResourceOffersPage');
 const OfferResourcePage = lazyPage(loadResources, 'OfferResourcePage');
+const OpenOfferPage = lazyPage(loadResources, 'OpenOfferPage');
+const OpenOffersBoardPage = lazyPage(loadResources, 'OpenOffersBoardPage');
 const PublicResourceDetailPage = lazyPage(loadResources, 'PublicResourceDetailPage');
 const PublicResourcesPage = lazyPage(loadResources, 'PublicResourcesPage');
 const ResourceNeedDetailPage = lazyPage(loadResources, 'ResourceNeedDetailPage');
@@ -107,6 +110,7 @@ const PublicMarketplacePage = lazyPage(loadMarketplace, 'PublicMarketplacePage')
 const PublicProductDetailPage = lazyPage(loadMarketplace, 'PublicProductDetailPage');
 const loadCommunity = () => import('../../features/community');
 const CommunityFeedPage = lazyPage(loadCommunity, 'CommunityFeedPage');
+const PublicPostPage = lazyPage(loadCommunity, 'PublicPostPage');
 const CommunityModerationPage = lazyPage(loadCommunity, 'CommunityModerationPage');
 const MyPostsPage = lazyPage(loadCommunity, 'MyPostsPage');
 const PostDetailPage = lazyPage(loadCommunity, 'PostDetailPage');
@@ -302,6 +306,9 @@ export function AppRoutes() {
           {/* Comunidad · directorio PÚBLICO de servicios del ecosistema (sin
           sesión): solo perfiles aprobados por la plataforma. Gestión propia en
           /mi-negocio y ficha privada en /mis-mascotas, abajo (RequireAuth). */}
+          {/* Comunidad · publicación PÚBLICA que su autora marcó como compartible
+          (sin sesión): destino de los enlaces compartidos en redes (`/c/:id`). */}
+          <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
           <Route path="/servicios/:id" element={<ServiceDetailPage />} />
           {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
@@ -467,6 +474,9 @@ export function AppRoutes() {
               detalle público de una necesidad (/recursos/:id). */}
                 <Route path="ofrecer" element={<OfferResourcePage />} />
                 <Route path="mis-ofertas" element={<MyResourceOffersPage />} />
+                {/* Ofrecimiento abierto: cuando no hay una necesidad que calce, la
+              persona deja lo que tiene (cualquier autenticado, sin @Roles). */}
+                <Route path="tengo-para-donar" element={<OpenOfferPage />} />
                 {/* M11 · comunidad (F-8). Ninguna de estas rutas lleva `@Roles` en el
               backend (`POST/GET /community/posts`, comentarios, likes son
               cualquier autenticado), así que ninguna lleva <RequireRoles> —
@@ -598,6 +608,14 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={RESOURCE_VIEW_ROLES}>
                       <ResourcesPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="organizacion/recursos/ofrecimientos"
+                  element={
+                    <RequireRoles roles={RESOURCE_MANAGE_ROLES}>
+                      <OpenOffersBoardPage />
                     </RequireRoles>
                   }
                 />

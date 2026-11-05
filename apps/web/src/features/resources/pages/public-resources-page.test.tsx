@@ -79,17 +79,33 @@ describe('PublicResourcesPage', () => {
     stub({ items: [], total: 0, limit: 24, offset: 0 });
     renderList();
     expect(
-      await screen.findByText('No hay necesidades publicadas ahora. Vuelve pronto.'),
+      await screen.findByText('Hoy no hay necesidades publicadas, pero lo que tienes sí sirve'),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('need-card')).not.toBeInTheDocument();
+    // Nadie se va sin un siguiente paso: ofrecimiento abierto + otras formas de ayudar.
+    expect(screen.getByRole('link', { name: 'Ofrecer lo que tengo' })).toHaveAttribute(
+      'href',
+      '/tengo-para-donar',
+    );
+    expect(screen.getByRole('link', { name: 'Conocer animales' })).toHaveAttribute(
+      'href',
+      '/adoptar',
+    );
+    expect(screen.getByRole('link', { name: 'Ver campañas' })).toHaveAttribute('href', '/campanas');
   });
 
   it('a NON-array body normalizes to [] → empty state, never throws', async () => {
     stub({ items: null, total: 0 });
     renderList();
     expect(
-      await screen.findByText('No hay necesidades publicadas ahora. Vuelve pronto.'),
+      await screen.findByText('Hoy no hay necesidades publicadas, pero lo que tienes sí sirve'),
     ).toBeInTheDocument();
+  });
+
+  it('with needs listed, still invites to offer something that is not on the list', async () => {
+    stub({ items: [need('n1', 'Alimento para gatos')], total: 1, limit: 24, offset: 0 });
+    renderList();
+    expect(await screen.findByText('¿Tienes algo que no está en la lista?')).toBeInTheDocument();
   });
 
   it('shows the progress read straight from the contract', async () => {
