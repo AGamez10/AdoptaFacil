@@ -44,8 +44,8 @@ describe('marketplace product validation (M10)', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('rejects more than 10 images', () => {
-    const images = Array.from({ length: 11 }, (_, i) => ({ filename: `img-${i}.jpg` }));
+  it('rejects more than 2 images', () => {
+    const images = Array.from({ length: 3 }, (_, i) => ({ filename: `img-${i}.jpg` }));
     expect(createProductSchema.safeParse({ ...valid, images }).success).toBe(false);
   });
 

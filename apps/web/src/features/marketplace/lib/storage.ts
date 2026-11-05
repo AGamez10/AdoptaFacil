@@ -2,10 +2,14 @@ import type { Product } from '@adoptafacil/contracts';
 import type { ApiClient } from '../../../shell/api';
 
 /**
- * Foto del producto (M10). Cada producto lleva UNA sola foto, que se sube en
- * un paso (`PUT /marketplace/products/:id/image`): la API la recomprime a WebP
- * liviano, revisa la cuota de espacio del plan y reemplaza la anterior.
+ * Fotos del producto (M10). Cada producto lleva hasta 2 fotos, que se suben en
+ * un paso (`POST /marketplace/products/:id/images/file` para agregar,
+ * `PUT .../images/:imageId/file` para cambiar): la API las recomprime a WebP
+ * liviano y revisa la cuota de espacio del plan antes de guardarlas.
  */
+
+/** Coherente con MAX_PRODUCT_IMAGES del backend. */
+export const MAX_PRODUCT_PHOTOS = 2;
 
 /** Coherente con STORAGE_MAX_FILE_MB del backend (T-108). */
 export const MAX_UPLOAD_MB = 15;
@@ -67,8 +71,8 @@ export async function shrinkImageForUpload(file: File): Promise<File> {
   }
 }
 
-/** Sube (o reemplaza) la foto del producto y devuelve el producto actualizado. */
-export async function uploadProductImage(
+/** Agrega una foto al producto y devuelve el producto actualizado. */
+export async function addProductImage(
   client: ApiClient,
   productId: string,
   file: File,
@@ -76,13 +80,29 @@ export async function uploadProductImage(
   const prepared = await shrinkImageForUpload(file);
   const form = new FormData();
   form.append('file', prepared, prepared.name);
-  return client.request<Product>(`/marketplace/products/${encodeURIComponent(productId)}/image`, {
-    method: 'PUT',
-    body: form,
-  });
+  return client.request<Product>(
+    `/marketplace/products/${encodeURIComponent(productId)}/images/file`,
+    { method: 'POST', body: form },
+  );
 }
 
-/** La foto principal (la única) de un producto, si tiene. */
+/** Cambia una de las fotos del producto y devuelve el producto actualizado. */
+export async function replaceProductImage(
+  client: ApiClient,
+  productId: string,
+  imageId: string,
+  file: File,
+): Promise<Product> {
+  const prepared = await shrinkImageForUpload(file);
+  const form = new FormData();
+  form.append('file', prepared, prepared.name);
+  return client.request<Product>(
+    `/marketplace/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}/file`,
+    { method: 'PUT', body: form },
+  );
+}
+
+/** La foto principal (la primera) de un producto, si tiene. */
 export function primaryImageUrl(product: { images: readonly { url: string }[] }): string | null {
   return product.images[0]?.url ?? null;
 }

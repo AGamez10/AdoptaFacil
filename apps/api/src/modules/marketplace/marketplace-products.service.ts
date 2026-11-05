@@ -9,7 +9,11 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Product as ProductRow, ProductImage as ProductImageRow } from '@prisma/client';
+import type {
+  Prisma,
+  Product as ProductRow,
+  ProductImage as ProductImageRow,
+} from '@prisma/client';
 import {
   type CreateProductInput,
   type Product,
@@ -40,13 +44,15 @@ export function clampLimit(limit: number | undefined): number {
 
 type ProductWithImages = ProductRow & { images: ProductImageRow[] };
 
-/** Un producto lleva UNA sola foto: es lo que se ve en la tarjeta y en el detalle. */
-export const MAX_PRODUCT_IMAGES = 1;
+/** Un producto lleva hasta 2 fotos: la primera es la de la tarjeta; ambas se ven en el detalle. */
+export const MAX_PRODUCT_IMAGES = 2;
 /** Tipos de foto que se aceptan, comprobados por sus bytes (no por la extensión). */
 const PRODUCT_IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp'];
 /** Las fotos de producto se ven en tarjetas pequeñas: más livianas que el resto. */
 export const PRODUCT_IMAGE_MAX_EDGE_PX = 1200;
 export const PRODUCT_IMAGE_TARGET_MAX_BYTES = 250 * 1024;
+
+const TOO_MANY_IMAGES_MESSAGE = `Un producto lleva hasta ${MAX_PRODUCT_IMAGES} fotos. Quita una o usa "Cambiar" para reemplazarla.`;
 
 /** Archivo de multer en memoria (sin @types/multer). */
 export interface UploadedProductImage {
@@ -283,9 +289,7 @@ export class MarketplaceProductsService {
         throw new NotFoundException('Product not found');
       }
       if ((await tx.productImage.count({ where: { productId } })) >= MAX_PRODUCT_IMAGES) {
-        throw new ConflictException(
-          'Este producto ya tiene foto. Usa "Cambiar foto" para reemplazarla.',
-        );
+        throw new ConflictException(TOO_MANY_IMAGES_MESSAGE);
       }
       const order =
         input.order ??
@@ -306,7 +310,8 @@ export class MarketplaceProductsService {
     });
   }
 
-  /** Quitar una foto de un producto; auditado. */
+  /** Quitar una foto de un producto; auditado. Si queda una sola, esa pasa a ser la principal
+   *  (las fotos se ordenan por `order`, no hace falta renumerarlas). */
   async removeImage(actorUserId: string, productId: string, imageId: string): Promise<void> {
     const organizationId = this.requireOrgId();
     const removedRef = await this.prisma.withOrgContext(organizationId, async (tx) => {
@@ -329,10 +334,9 @@ export class MarketplaceProductsService {
   }
 
   /**
-   * Pone (o reemplaza) LA foto del producto en un solo paso: valida el archivo,
-   * lo recomprime a WebP liviano, revisa la cuota de espacio del plan, guarda
-   * los bytes y solo entonces cambia la fila. Si algo falla antes, el producto
-   * conserva la foto que tenía; la anterior se borra del almacenamiento después.
+   * Foto principal del producto en un solo paso: reemplaza la primera foto o,
+   * si el producto no tiene ninguna, la agrega. Es el endpoint de la primera
+   * versión; las dos fotos se manejan con `addImageFile` y `replaceImageFile`.
    */
   async setImage(
     actorUserId: string,
@@ -340,6 +344,124 @@ export class MarketplaceProductsService {
     file: UploadedProductImage | undefined,
   ): Promise<Product> {
     const organizationId = this.requireOrgId();
+    const primary = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.productImage.findFirst({ where: { productId }, orderBy: { order: 'asc' } }),
+    );
+    return primary
+      ? this.replaceImageFile(actorUserId, productId, primary.id, file)
+      : this.addImageFile(actorUserId, productId, file);
+  }
+
+  /**
+   * Agrega una foto (hasta `MAX_PRODUCT_IMAGES`): valida el archivo, lo
+   * recomprime a WebP liviano, revisa la cuota de espacio del plan, guarda los
+   * bytes y solo entonces crea la fila. Si algo falla, el producto queda como
+   * estaba y los bytes recién guardados se borran.
+   */
+  async addImageFile(
+    actorUserId: string,
+    productId: string,
+    file: UploadedProductImage | undefined,
+  ): Promise<Product> {
+    const organizationId = this.requireOrgId();
+    const sniffed = this.validateUpload(file);
+    // Falla rápido, antes de gastar CPU y espacio en comprimir.
+    await this.prisma.withOrgContext(organizationId, async (tx) => {
+      await this.assertProductExists(tx, productId);
+      if ((await tx.productImage.count({ where: { productId } })) >= MAX_PRODUCT_IMAGES) {
+        throw new ConflictException(TOO_MANY_IMAGES_MESSAGE);
+      }
+    });
+
+    const stored = await this.storeOptimized(organizationId, file as UploadedProductImage, sniffed);
+    try {
+      await this.prisma.withOrgContext(organizationId, async (tx) => {
+        // Serializa dos subidas a la vez del mismo producto: sin esto podrían
+        // pasar las dos la cuenta y dejar más fotos que el tope.
+        await tx.$queryRaw`SELECT id FROM "products" WHERE id = ${productId}::uuid FOR UPDATE`;
+        const existing = await tx.productImage.aggregate({
+          where: { productId },
+          _count: true,
+          _max: { order: true },
+        });
+        if (existing._count >= MAX_PRODUCT_IMAGES) {
+          throw new ConflictException(TOO_MANY_IMAGES_MESSAGE);
+        }
+        // Siempre después de la última: la foto nueva nunca se cuela como principal.
+        const order = (existing._max.order ?? -1) + 1;
+        await tx.productImage.create({
+          data: { organizationId, productId, storageRef: stored.key, order },
+        });
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'product.image_added',
+          entityType: 'product',
+          entityId: productId,
+          metadata: { order, bytes: stored.bytes },
+        });
+      });
+    } catch (error) {
+      await this.deleteStoredBytes([stored.key]);
+      throw error;
+    }
+    return this.get(productId);
+  }
+
+  /**
+   * Cambia una de las fotos del producto por otra: la nueva se guarda primero
+   * y solo entonces se reemplaza la fila; los bytes de la anterior se borran
+   * después, así que nunca queda una foto rota ni bytes huérfanos.
+   */
+  async replaceImageFile(
+    actorUserId: string,
+    productId: string,
+    imageId: string,
+    file: UploadedProductImage | undefined,
+  ): Promise<Product> {
+    const organizationId = this.requireOrgId();
+    const sniffed = this.validateUpload(file);
+    await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const image = await tx.productImage.findUnique({ where: { id: imageId } });
+      if (!image || image.productId !== productId) {
+        throw new NotFoundException('Image not found');
+      }
+    });
+
+    const stored = await this.storeOptimized(organizationId, file as UploadedProductImage, sniffed);
+    let replacedRef: string;
+    try {
+      replacedRef = await this.prisma.withOrgContext(organizationId, async (tx) => {
+        const image = await tx.productImage.findUnique({ where: { id: imageId } });
+        if (!image || image.productId !== productId) {
+          throw new NotFoundException('Image not found');
+        }
+        // El rol de la app no puede actualizar filas de fotos: se borra la fila y se
+        // crea otra en el mismo lugar, dentro de la misma transacción.
+        await tx.productImage.delete({ where: { id: imageId } });
+        await tx.productImage.create({
+          data: { organizationId, productId, storageRef: stored.key, order: image.order },
+        });
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId,
+          action: 'product.image_replaced',
+          entityType: 'product',
+          entityId: productId,
+          metadata: { imageId, bytes: stored.bytes },
+        });
+        return image.storageRef;
+      });
+    } catch (error) {
+      await this.deleteStoredBytes([stored.key]);
+      throw error;
+    }
+    await this.deleteStoredBytes([replacedRef]);
+    return this.get(productId);
+  }
+
+  /** Valida el archivo recibido (presencia, peso y tipo por sus bytes) y devuelve su tipo real. */
+  private validateUpload(file: UploadedProductImage | undefined): string {
     if (!file?.buffer || file.size === 0) {
       throw new BadRequestException('Elige una foto para subir.');
     }
@@ -350,12 +472,21 @@ export class MarketplaceProductsService {
     if (!sniffed || !PRODUCT_IMAGE_TYPES.includes(sniffed)) {
       throw new BadRequestException('La foto debe ser JPG, PNG o WebP.');
     }
-    await this.prisma.withOrgContext(organizationId, async (tx) => {
-      if (!(await tx.product.findUnique({ where: { id: productId }, select: { id: true } }))) {
-        throw new NotFoundException('Product not found');
-      }
-    });
+    return sniffed;
+  }
 
+  private async assertProductExists(tx: Prisma.TransactionClient, productId: string) {
+    if (!(await tx.product.findUnique({ where: { id: productId }, select: { id: true } }))) {
+      throw new NotFoundException('Product not found');
+    }
+  }
+
+  /** Recomprime la foto, revisa la cuota del plan y guarda los bytes. Devuelve su clave y su peso. */
+  private async storeOptimized(
+    organizationId: string,
+    file: UploadedProductImage,
+    sniffed: string,
+  ): Promise<{ key: string; bytes: number }> {
     const optimized = await optimizeImage(file.buffer, sniffed, {
       maxEdgePx: PRODUCT_IMAGE_MAX_EDGE_PX,
       targetMaxBytes: PRODUCT_IMAGE_TARGET_MAX_BYTES,
@@ -363,40 +494,17 @@ export class MarketplaceProductsService {
     if (!optimized) {
       throw new BadRequestException('No pudimos leer esa foto. Prueba con otra imagen.');
     }
+    // Cada foto cuenta contra el almacenamiento del plan de la organización.
     await this.plans.assertStorageAvailable(organizationId, optimized.buffer.length);
     const extension = optimized.contentType === 'image/webp' ? 'webp' : sniffed.split('/')[1];
-    const stored = await this.storage.createUploadTarget({
+    const target = await this.storage.createUploadTarget({
       organizationId,
       filename: `producto.${extension}`,
       contentType: optimized.contentType,
       visibility: 'public',
     });
-    await this.storage.saveObject(stored.key, optimized.buffer, optimized.contentType);
-
-    let replaced: string[] = [];
-    try {
-      replaced = await this.prisma.withOrgContext(organizationId, async (tx) => {
-        const previous = await tx.productImage.findMany({ where: { productId } });
-        await tx.productImage.deleteMany({ where: { productId } });
-        await tx.productImage.create({
-          data: { organizationId, productId, storageRef: stored.key, order: 0 },
-        });
-        await this.audit.recordWithTx(tx, {
-          organizationId,
-          actorUserId,
-          action: previous.length > 0 ? 'product.image_replaced' : 'product.image_added',
-          entityType: 'product',
-          entityId: productId,
-          metadata: { bytes: optimized.buffer.length },
-        });
-        return previous.map((row) => row.storageRef);
-      });
-    } catch (error) {
-      await this.deleteStoredBytes([stored.key]);
-      throw error;
-    }
-    await this.deleteStoredBytes(replaced);
-    return this.get(productId);
+    await this.storage.saveObject(target.key, optimized.buffer, optimized.contentType);
+    return { key: target.key, bytes: optimized.buffer.length };
   }
 
   /** Borra bytes que ya nada referencia. Best-effort: un fallo aquí no deshace

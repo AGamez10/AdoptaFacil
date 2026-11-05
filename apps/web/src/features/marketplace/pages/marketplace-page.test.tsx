@@ -154,14 +154,14 @@ describe('MarketplacePage — gestión interna del catálogo (F-7)', () => {
     expect(await screen.findByText('Concentrado Premium')).toBeInTheDocument();
     expect(screen.queryByTestId('marketplace-missing-whatsapp')).not.toBeInTheDocument();
   });
-  it('publishes a product WITH its photo in one go: create, then PUT the image', async () => {
+  it('publishes a product WITH two photos: create, then one upload per photo', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     stubFetch((url, init) => {
       calls.push({ url, init });
       if (init?.method === 'POST' && url.endsWith('/marketplace/products')) {
         return product('p9', 'Collar reflectivo');
       }
-      if (init?.method === 'PUT' && url.includes('/marketplace/products/p9/image')) {
+      if (init?.method === 'POST' && url.includes('/marketplace/products/p9/images/file')) {
         return product('p9', 'Collar reflectivo', {
           images: [{ id: 'i1', storageRef: 'k', order: 0, url: 'https://cdn.test/k.webp' }],
         });
@@ -178,20 +178,22 @@ describe('MarketplacePage — gestión interna del catálogo (F-7)', () => {
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Collar reflectivo' } });
     fireEvent.change(screen.getByLabelText('Precio (COP)'), { target: { value: '25000' } });
-    const file = new File([new Uint8Array(2048)], 'collar.jpg', { type: 'image/jpeg' });
-    fireEvent.change(dialog.querySelector('input[type="file"]') as HTMLInputElement, {
-      target: { files: [file] },
-    });
-    expect(within(dialog).getByTestId('product-photo-image')).toHaveAttribute(
-      'src',
-      'blob:preview',
-    );
+    const fileInput = () => dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    for (const name of ['collar.jpg', 'collar-lado.jpg']) {
+      const file = new File([new Uint8Array(2048)], name, { type: 'image/jpeg' });
+      fireEvent.change(fileInput(), { target: { files: [file] } });
+    }
+    expect(within(dialog).getAllByTestId('product-photo-image')).toHaveLength(2);
+    // With two photos chosen there is no slot left to add a third.
+    expect(within(dialog).queryByTestId('product-photo-add')).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Publicar producto' }));
 
     await waitFor(() => {
-      const put = calls.find((c) => c.init?.method === 'PUT');
-      expect(put?.url).toContain('/marketplace/products/p9/image');
-      expect(put?.init?.body).toBeInstanceOf(FormData);
+      const uploads = calls.filter(
+        (c) => c.init?.method === 'POST' && c.url.includes('/images/file'),
+      );
+      expect(uploads).toHaveLength(2);
+      expect(uploads[0]?.init?.body).toBeInstanceOf(FormData);
     });
     expect((await screen.findAllByText('Producto publicado')).length).toBeGreaterThan(0);
   });

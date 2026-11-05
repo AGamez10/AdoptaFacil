@@ -115,7 +115,7 @@ export class MarketplaceProductsController {
     return this.service.update(actor.id, id, dto);
   }
 
-  /** La foto del producto (una sola): se sube aquí en un paso y reemplaza la anterior. */
+  /** La foto principal del producto: se sube en un paso y reemplaza la primera (o se agrega si no hay). */
   @Put(':id/image')
   @Roles(...MARKETPLACE_WRITE_ROLES)
   @UseInterceptors(
@@ -127,6 +127,35 @@ export class MarketplaceProductsController {
     @UploadedFile() file: UploadedProductImage | undefined,
   ): Promise<Product> {
     return this.service.setImage(actor.id, id, file);
+  }
+
+  /** Agrega una foto (hasta 2 por producto): se sube en un paso, ya recomprimida. */
+  @Post(':id/images/file')
+  @Roles(...MARKETPLACE_WRITE_ROLES)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
+  )
+  addImageFile(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: UploadedProductImage | undefined,
+  ): Promise<Product> {
+    return this.service.addImageFile(actor.id, id, file);
+  }
+
+  /** Cambia una de las fotos del producto por otra. */
+  @Put(':id/images/:imageId/file')
+  @Roles(...MARKETPLACE_WRITE_ROLES)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
+  )
+  replaceImageFile(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @UploadedFile() file: UploadedProductImage | undefined,
+  ): Promise<Product> {
+    return this.service.replaceImageFile(actor.id, id, imageId, file);
   }
 
   @Post(':id/images')
