@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import type { PublicHeroBanner } from '@adoptafacil/contracts';
 import { useSession } from '../../../shell/auth';
@@ -16,15 +16,24 @@ import {
   ImpactSection,
   LANDING_CATALOG_ID,
   LandingHero,
-  OpenVolunteeringSection,
   PromisesSection,
-  ResourceNeedsSection,
   TemplateGallerySection,
   WaitingAnimalsSection,
   WaysToHelpSection,
   useCatalogSnapshot,
 } from '../../landing';
 import { buildAdoptPath } from '../model/adopt-filters';
+
+/** Necesidades, voluntariados, libro público y guías: bajo el pliegue, en su
+ *  propio chunk para que la primera carga no pague su código. */
+const loadNetwork = () => import('../../landing/components/network-sections');
+const NetworkNeedsSection = lazy(() =>
+  loadNetwork().then((m) => ({ default: m.NetworkNeedsSection })),
+);
+const PublicLedgerSection = lazy(() =>
+  loadNetwork().then((m) => ({ default: m.PublicLedgerSection })),
+);
+const GuidesSection = lazy(() => loadNetwork().then((m) => ({ default: m.GuidesSection })));
 
 const LEGACY_SPECIES: Record<string, 'dog' | 'cat'> = { perros: 'dog', gatos: 'cat' };
 
@@ -114,8 +123,7 @@ export function GeneralPortalPage() {
         {/* Landing marca v3 (rediseño 2026-10): primero animales reales y
             "Quiero adoptar", luego las formas de ayudar (donar y recursos
             solo con su módulo encendido), cómo adoptar, la red en cifras
-            reales, campañas, jornadas de voluntariado abiertas y
-            necesidades del banco de recursos, comunidad, la propuesta
+            reales, campañas, comunidad, la propuesta
             para organizaciones y el cierre. Ninguna cifra que no salga de
             la API. */}
         <LandingHero snapshot={snapshot} />
@@ -125,13 +133,18 @@ export function GeneralPortalPage() {
         <ImpactSection snapshot={snapshot} />
 
         <ActiveCampaignsSection />
-        <OpenVolunteeringSection />
-        <ResourceNeedsSection />
+        <Suspense fallback={null}>
+          <NetworkNeedsSection />
+          <PublicLedgerSection snapshot={snapshot} />
+        </Suspense>
         <CoffeeSection />
         <CommunitySection />
         <ForOrganizationsSection />
         <TemplateGallerySection />
         <PromisesSection />
+        <Suspense fallback={null}>
+          <GuidesSection />
+        </Suspense>
         <FaqSection />
         <FinalCtaSection />
       </main>

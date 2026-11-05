@@ -8,7 +8,7 @@ import type {
 import { useApiClient } from '../../../../shell/api';
 import { listPublicProducts } from '../../../marketplace/api/public-marketplace';
 import { listPublicNeeds } from '../../../resources/api/public-resources';
-import { fetchPublicAnimals } from '../../api/public-animals';
+import { fetchAllPublicAnimals } from '../../api/public-animals';
 import { fetchPublicOrgCampaigns } from '../../api/public-campaigns';
 import type { TemplateSourceData } from '../engine/model';
 
@@ -47,14 +47,15 @@ export function useOwnPortalSource(enabled: boolean): OwnPortalSource {
       });
       if (!organization?.id) return null;
       const slug = organization.slug || 'tu-organizacion';
-      const animals = await fetchPublicAnimals({
+      // Todos sus animales, hasta el último: el titular, el catálogo y "ver más"
+      // de cada plantilla cuentan exactamente los mismos.
+      const animals = await fetchAllPublicAnimals({
         slug,
+        organizationId: organization.id,
         preview: client,
-        limit: 50,
-        offset: 0,
         signal,
       });
-      if (animals.total === 0 || animals.items.length === 0) return null;
+      if (animals.length === 0) return null;
       const [campaigns, needs, products] = await Promise.all([
         fetchPublicOrgCampaigns({ slug, preview: client, limit: 12, offset: 0, signal })
           .then((page) => page.items)
@@ -72,8 +73,8 @@ export function useOwnPortalSource(enabled: boolean): OwnPortalSource {
       const data: TemplateSourceData = {
         slug,
         organization,
-        animals: animals.items.filter(own),
-        animalTotal: animals.total,
+        animals,
+        animalTotal: animals.length,
         campaigns: campaigns.filter(own),
         needs: needs.filter(own),
         products: products.filter(own),

@@ -7,18 +7,13 @@ import type {
   PublicReview,
   ResourceNeedPublic,
 } from '@adoptafacil/contracts';
-import { fetchPublicAnimals } from '../api/public-animals';
+import { fetchAllPublicAnimals } from '../api/public-animals';
 import { fetchPublicOrgCampaigns } from '../api/public-campaigns';
 import { fetchPublicReviews } from '../api/public-reviews';
 import { fetchPublicLedger } from '../../ledger/api/public-ledger';
 import { listPublicNeeds } from '../../resources/api/public-resources';
 import { listPublicProducts } from '../../marketplace/api/public-marketplace';
 import type { TemplateSourceData } from './engine/model';
-
-/** La API pública entrega como máximo 50 animales por página. */
-const ANIMAL_PAGE = 50;
-/** Tope de animales que una plantilla carga de una vez (rendimiento). */
-const ANIMAL_CAP = 200;
 
 export type TemplateSourceState =
   { status: 'loading' } | { status: 'error' } | { status: 'ready'; data: TemplateSourceData };
@@ -41,18 +36,9 @@ export function useTemplateSource(
     const { signal } = ctl;
     setState({ status: 'loading' });
 
-    const animals = (async () => {
-      const items: AnimalSummary[] = [];
-      let total = 0;
-      for (let offset = 0; offset < ANIMAL_CAP; offset += ANIMAL_PAGE) {
-        const page = await fetchPublicAnimals({ slug, limit: ANIMAL_PAGE, offset, signal });
-        total = page.total;
-        // Defensa en profundidad: solo animales de ESTA organización.
-        items.push(...page.items.filter((a) => a.organizationId === organization.id));
-        if (page.items.length < ANIMAL_PAGE || items.length >= total) break;
-      }
-      return { items, total };
-    })().catch(() => ({ items: [] as AnimalSummary[], total: 0 }));
+    const animals = fetchAllPublicAnimals({ slug, organizationId: organization.id, signal })
+      .then((items) => ({ items, total: items.length }))
+      .catch(() => ({ items: [] as AnimalSummary[], total: 0 }));
 
     const campaigns = fetchPublicOrgCampaigns({ slug, limit: 12, offset: 0, signal })
       .then((p) => p.items.filter((c) => c.organizationId === organization.id))
