@@ -51,6 +51,13 @@ export interface PortalAdoptionSectionProps {
   /** Para el botón "Donar" de cada tarjeta (`buildDonateHref` es por
    *  organización, no por animal). Sin este prop, la tarjeta omite ese botón. */
   organization?: Pick<OrganizationPublic, 'id' | 'name' | 'logoUrl' | 'nit' | 'location'>;
+  /**
+   * Catálogo ya cargado (vista de ejemplo de la plantilla): no se consulta la
+   * API y "Cargar más" pagina sobre esta lista, de a 12, igual que el portal.
+   */
+  animals?: AnimalSummary[];
+  /** Abre la ficha del animal en vez de navegar (ver `AnimalCard`). */
+  onOpenDetail?: (animal: AnimalSummary) => void;
 }
 
 function SkeletonGrid() {
@@ -80,7 +87,12 @@ function SkeletonGrid() {
  * y sin inventar params que el backend no entiende (rechazo explícito de
  * "no inventar lógica de backend").
  */
-export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSectionProps) {
+export function PortalAdoptionSection({
+  slug,
+  organization,
+  animals,
+  onOpenDetail,
+}: PortalAdoptionSectionProps) {
   const preview = usePortalPreviewClient();
   const [rawItems, setRawItems] = useState<AnimalSummary[]>([]);
   const [rawTotal, setRawTotal] = useState(0);
@@ -100,6 +112,12 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
   // Un único fetch (sin `species`) al cambiar de organización — los filtros
   // ya no re-consultan el backend, ver doc comment de arriba.
   useEffect(() => {
+    if (animals) {
+      setRawItems(animals.slice(0, PAGE_SIZE));
+      setRawTotal(animals.length);
+      setState('ready');
+      return;
+    }
     let active = true;
     setState('loading');
     fetchPublicAnimals({ slug, preview, limit: PAGE_SIZE, offset: 0 })
@@ -115,9 +133,13 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
     return () => {
       active = false;
     };
-  }, [slug, preview]);
+  }, [slug, preview, animals]);
 
   const loadMore = async () => {
+    if (animals) {
+      setRawItems(animals.slice(0, rawItems.length + PAGE_SIZE));
+      return;
+    }
     setLoadingMore(true);
     try {
       const page = await fetchPublicAnimals({
@@ -449,7 +471,13 @@ export function PortalAdoptionSection({ slug, organization }: PortalAdoptionSect
         <div className="space-y-4">
           <div className={styles.grid}>
             {filteredItems.map((animal) => (
-              <AnimalCard key={animal.id} slug={slug} animal={animal} organization={organization} />
+              <AnimalCard
+                key={animal.id}
+                slug={slug}
+                animal={animal}
+                organization={organization}
+                onOpenDetail={onOpenDetail}
+              />
             ))}
           </div>
           {rawItems.length < rawTotal && (
