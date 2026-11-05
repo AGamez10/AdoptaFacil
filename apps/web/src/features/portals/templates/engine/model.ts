@@ -44,7 +44,7 @@ export interface TemplateSourceData {
   slug: string;
   organization: OrganizationPublic;
   animals: AnimalSummary[];
-  /** Total real reportado por la API (puede superar `animals.length`). */
+  /** Total reportado por la API. La plantilla anuncia `animals.length` (lo que puede mostrar). */
   animalTotal: number;
   campaigns: CampaignPublic[];
   needs: ResourceNeedPublic[];
@@ -624,9 +624,11 @@ export function buildTemplateModel(src: TemplateSourceData, now: Date = new Date
     CAMPAIGN: { ...(campaigns[0] ?? EMPTY_CAMPAIGN), active: campaigns.length > 0 },
     CAMPAIGNS: campaigns,
     ANIMALS: animals,
-    animalTotal: Math.max(src.animalTotal, animals.length),
+    // El total que anuncia la plantilla es EXACTAMENTE el de los animales que
+    // puede mostrar (catálogo, "ver más", filtros): nunca un número mayor.
+    animalTotal: animals.length,
     COUNTS: {
-      total: Math.max(src.animalTotal, animals.length),
+      total: animals.length,
       perros: animals.filter((a) => a.sp === 'perro').length,
       gatos: animals.filter((a) => a.sp === 'gato').length,
       otros: animals.filter((a) => a.sp === 'otro').length,
