@@ -215,6 +215,10 @@ describe('GeneralPortalPage (landing)', () => {
     expect(await within(volunteering).findByText('Jornada de baño')).toBeVisible();
     expect(volunteering).toHaveTextContent('Servicio social');
     expect(volunteering).toHaveTextContent('12 cupos');
+    expect(within(volunteering).getByRole('link', { name: /Jornada de baño/ })).toHaveAttribute(
+      'href',
+      '/voluntariado?oportunidad=v1',
+    );
     const ledger = await screen.findByTestId('landing-ledger');
     expect(await within(ledger).findByRole('link', { name: /Huellas Felices/ })).toHaveAttribute(
       'href',

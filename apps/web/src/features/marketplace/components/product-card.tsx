@@ -7,6 +7,7 @@ import {
   publicProductHref,
   stockLabel,
 } from '../model/marketplace-view';
+import { ProductThumb } from './product-thumb';
 
 export interface ProductCardProps {
   product: ProductPublic;
@@ -19,7 +20,10 @@ export interface ProductCardProps {
  */
 export function ProductCard({ product }: ProductCardProps) {
   return (
-    <Card data-testid="product-card">
+    <Card data-testid="product-card" className="overflow-hidden">
+      <Link to={publicProductHref(product.id)} tabIndex={-1} aria-hidden="true">
+        <ProductThumb url={product.images[0]?.url ?? null} alt="" />
+      </Link>
       <CardHeader className="gap-2">
         <CardTitle className="text-base">{product.name}</CardTitle>
         <p className="text-sm text-muted-foreground">{product.organizationName}</p>
