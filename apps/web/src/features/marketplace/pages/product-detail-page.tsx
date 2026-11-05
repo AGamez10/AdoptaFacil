@@ -24,8 +24,8 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { SelectField, TextAreaField } from '../components/product-form-fields';
 import { CATEGORY_LABELS, formatCop } from '../model/marketplace-view';
-import { ProductPhotoField } from '../components/product-photo-field';
-import { uploadProductImage, validateImageUpload } from '../lib/storage';
+import { ProductPhotosField } from '../components/product-photos-field';
+import { addProductImage, replaceProductImage, validateImageUpload } from '../lib/storage';
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
   value,
@@ -169,7 +169,8 @@ export function ProductDetailPage() {
     }
   };
 
-  const submitImage = async (file: File): Promise<void> => {
+  /** Sube una foto nueva (`imageId` ausente) o cambia la indicada. */
+  const submitImage = async (file: File, imageId?: string): Promise<void> => {
     if (!id) return;
     const invalid = validateImageUpload(file);
     if (invalid) {
@@ -178,7 +179,11 @@ export function ProductDetailPage() {
     }
     setUploadingImage(true);
     try {
-      applyProduct(await uploadProductImage(client, id, file));
+      applyProduct(
+        imageId
+          ? await replaceProductImage(client, id, imageId, file)
+          : await addProductImage(client, id, file),
+      );
       toast({ title: 'Foto guardada', variant: 'success' });
     } catch (error) {
       toast({
@@ -213,7 +218,7 @@ export function ProductDetailPage() {
     <PageContainer>
       <PageHeader
         title="Detalle de producto"
-        description="Edita el producto, actívalo o desactívalo y cambia su foto."
+        description="Edita el producto, actívalo o desactívalo y cambia sus fotos."
       />
       <Link
         to="/organizacion/marketplace"
@@ -257,20 +262,17 @@ export function ProductDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Foto del producto</CardTitle>
+              <CardTitle>Fotos del producto</CardTitle>
             </CardHeader>
             <CardContent>
-              <ProductPhotoField
-                imageUrl={product.images[0]?.url ?? null}
+              <ProductPhotosField
+                photos={product.images.map((image) => ({ key: image.id, url: image.url }))}
                 alt={product.name}
                 canManage={canManage}
                 busy={uploadingImage}
-                onSelect={(file) => void submitImage(file)}
-                onRemove={
-                  product.images[0]
-                    ? () => void removeImage((product.images[0] as { id: string }).id)
-                    : undefined
-                }
+                onAdd={(file) => void submitImage(file)}
+                onReplace={(key, file) => void submitImage(file, key)}
+                onRemove={(key) => void removeImage(key)}
               />
             </CardContent>
           </Card>

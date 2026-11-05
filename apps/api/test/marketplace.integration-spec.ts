@@ -269,7 +269,7 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       .set('Authorization', `Bearer ${orgB.token}`)
       .expect(404);
   });
-  describe('la foto del producto (una sola, subida en un paso)', () => {
+  describe('las fotos del producto (hasta 2, subidas en un paso)', () => {
     const photo = (width: number, height: number) =>
       sharp({ create: { width, height, channels: 3, background: { r: 200, g: 150, b: 90 } } })
         .jpeg({ quality: 95 })
@@ -281,6 +281,27 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
         .set('Authorization', `Bearer ${token}`)
         .attach('file', file, name);
 
+    const addPhoto = (token: string, id: string, file: Buffer, name = 'foto.jpg') =>
+      request(server)
+        .post(`/marketplace/products/${id}/images/file`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', file, name);
+
+    const replacePhoto = (
+      token: string,
+      id: string,
+      imageId: string,
+      file: Buffer,
+      name = 'foto.jpg',
+    ) =>
+      request(server)
+        .put(`/marketplace/products/${id}/images/${imageId}/file`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', file, name);
+
+    const rowsOf = (productId: string) =>
+      admin.productImage.findMany({ where: { productId }, orderBy: { order: 'asc' } });
+
     let photoProductId = '';
 
     beforeAll(async () => {
@@ -288,20 +309,20 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       photoProductId = res.body.id;
     });
 
-    it('RBAC: a ReadOnlyAuditor cannot set the photo (403)', async () => {
+    it('RBAC: a ReadOnlyAuditor cannot upload a photo (403)', async () => {
       const auditor = await actorWithRoles('photo-auditor', ['read_only_auditor']);
       await putImage(auditor.token, photoProductId, await photo(50, 50)).expect(403);
+      await addPhoto(auditor.token, photoProductId, await photo(50, 50)).expect(403);
     });
 
-    it('stores ONE photo, recompressed to a light WebP, and shows it publicly', async () => {
-      const res = await putImage(org.token, photoProductId, await photo(3000, 2000)).expect(200);
+    it('stores the first photo recompressed to a light WebP and shows it publicly', async () => {
+      const res = await addPhoto(org.token, photoProductId, await photo(3000, 2000)).expect(201);
       expect(res.body.images).toHaveLength(1);
+      expect(res.body.images[0]).toMatchObject({ order: 0 });
 
       const storage = app.get<StoragePort>(STORAGE_PORT);
-      const ref = (
-        await admin.productImage.findFirstOrThrow({ where: { productId: photoProductId } })
-      ).storageRef;
-      const stored = await storage.readObject(ref);
+      const [row] = await rowsOf(photoProductId);
+      const stored = await storage.readObject(row.storageRef);
       expect(stored).not.toBeNull();
       const meta = await sharp(stored!.data).metadata();
       expect(meta.format).toBe('webp');
@@ -314,21 +335,21 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       expect(publicDetail.body.images).toHaveLength(1);
     });
 
-    it('a new photo REPLACES the previous one and frees its bytes', async () => {
-      const storage = app.get<StoragePort>(STORAGE_PORT);
-      const before = (
-        await admin.productImage.findFirstOrThrow({ where: { productId: photoProductId } })
-      ).storageRef;
+    it('accepts a second photo, shows both in order, and refuses a third (409)', async () => {
+      const res = await addPhoto(org.token, photoProductId, await photo(900, 600)).expect(201);
+      expect(res.body.images.map((i: { order: number }) => i.order)).toEqual([0, 1]);
 
-      const res = await putImage(org.token, photoProductId, await photo(800, 800)).expect(200);
-      expect(res.body.images).toHaveLength(1);
-      const rows = await admin.productImage.findMany({ where: { productId: photoProductId } });
-      expect(rows).toHaveLength(1);
-      expect(rows[0].storageRef).not.toBe(before);
-      expect(await storage.readObject(before)).toBeNull();
+      const publicDetail = await request(server)
+        .get(`/public/marketplace/products/${photoProductId}`)
+        .expect(200);
+      expect(publicDetail.body.images).toHaveLength(2);
+
+      const third = await addPhoto(org.token, photoProductId, await photo(500, 500)).expect(409);
+      expect(third.body.message).toContain('hasta 2 fotos');
+      expect(await rowsOf(photoProductId)).toHaveLength(2);
     });
 
-    it('the old two-step endpoint refuses a second photo (409)', async () => {
+    it('the old two-step endpoint also respects the cap of 2 (409)', async () => {
       await request(server)
         .post(`/marketplace/products/${photoProductId}/images`)
         .set('Authorization', `Bearer ${org.token}`)
@@ -336,8 +357,50 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
         .expect(409);
     });
 
+    it('concurrent uploads never leave more than 2 photos', async () => {
+      const created = await createProduct(org.token, { name: `Cama ${randomUUID()}` }).expect(201);
+      const file = await photo(400, 400);
+      const results = await Promise.all(
+        [1, 2, 3].map(() => addPhoto(org.token, created.body.id, file)),
+      );
+      expect(results.filter((r) => r.status === 201)).toHaveLength(2);
+      expect(results.filter((r) => r.status === 409)).toHaveLength(1);
+      expect(await rowsOf(created.body.id)).toHaveLength(2);
+    });
+
+    it('replacing a photo keeps its place and frees the old bytes', async () => {
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const [first, second] = await rowsOf(photoProductId);
+
+      const res = await replacePhoto(
+        org.token,
+        photoProductId,
+        second.id,
+        await photo(800, 800),
+      ).expect(200);
+      expect(res.body.images).toHaveLength(2);
+      const rows = await rowsOf(photoProductId);
+      expect(rows.map((r) => r.order)).toEqual([0, 1]);
+      expect(rows[0].id).toBe(first.id);
+      expect(rows[0].storageRef).toBe(first.storageRef);
+      expect(rows[1].storageRef).not.toBe(second.storageRef);
+      expect(await storage.readObject(second.storageRef)).toBeNull();
+      expect(await storage.readObject(rows[1].storageRef)).not.toBeNull();
+    });
+
+    it('PUT /image replaces the main photo', async () => {
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const [first] = await rowsOf(photoProductId);
+      const res = await putImage(org.token, photoProductId, await photo(700, 700)).expect(200);
+      expect(res.body.images).toHaveLength(2);
+      const [after] = await rowsOf(photoProductId);
+      expect(after.order).toBe(0);
+      expect(after.storageRef).not.toBe(first.storageRef);
+      expect(await storage.readObject(first.storageRef)).toBeNull();
+    });
+
     it('rejects a file that is not a JPG, PNG or WebP photo, in Spanish', async () => {
-      const res = await putImage(
+      const res = await addPhoto(
         org.token,
         photoProductId,
         Buffer.from('%PDF-1.4 no es una foto'),
@@ -346,20 +409,29 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       expect(res.body.message).toBe('La foto debe ser JPG, PNG o WebP.');
     });
 
-    it('another organization cannot set the photo of this product (404)', async () => {
+    it('another organization cannot touch the photos of this product (404)', async () => {
+      const [row] = await rowsOf(photoProductId);
       await putImage(orgB.token, photoProductId, await photo(50, 50)).expect(404);
+      await addPhoto(orgB.token, photoProductId, await photo(50, 50)).expect(404);
+      await replacePhoto(orgB.token, photoProductId, row.id, await photo(50, 50)).expect(404);
     });
 
-    it('removing the photo also deletes its bytes', async () => {
+    it('removing the main photo deletes its bytes; the other becomes the main and stays first', async () => {
       const storage = app.get<StoragePort>(STORAGE_PORT);
-      const row = await admin.productImage.findFirstOrThrow({
-        where: { productId: photoProductId },
-      });
+      const [first, second] = await rowsOf(photoProductId);
       await request(server)
-        .delete(`/marketplace/products/${photoProductId}/images/${row.id}`)
+        .delete(`/marketplace/products/${photoProductId}/images/${first.id}`)
         .set('Authorization', `Bearer ${org.token}`)
         .expect(204);
-      expect(await storage.readObject(row.storageRef)).toBeNull();
+      expect(await storage.readObject(first.storageRef)).toBeNull();
+      const rows = await rowsOf(photoProductId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(second.id);
+
+      // A new photo goes AFTER the remaining one: it never takes over as the main photo.
+      const res = await addPhoto(org.token, photoProductId, await photo(600, 400)).expect(201);
+      expect(res.body.images[0].id).toBe(second.id);
+      expect(res.body.images).toHaveLength(2);
     });
   });
 });

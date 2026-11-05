@@ -26,8 +26,8 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { SelectField, TextAreaField } from '../components/product-form-fields';
 import { ProductManageCard } from '../components/product-manage-card';
-import { ProductPhotoField } from '../components/product-photo-field';
-import { uploadProductImage, validateImageUpload } from '../lib/storage';
+import { ProductPhotosField } from '../components/product-photos-field';
+import { addProductImage, MAX_PRODUCT_PHOTOS, validateImageUpload } from '../lib/storage';
 import { CATEGORY_LABELS } from '../model/marketplace-view';
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
@@ -57,8 +57,8 @@ export function MarketplacePage() {
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
   const [saving, setSaving] = useState(false);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   // El comprador contacta a la organización por el WhatsApp de su perfil: sin
   // él, el producto se ve en el marketplace pero nadie puede pedirlo.
   const [missingWhatsapp, setMissingWhatsapp] = useState(false);
@@ -73,22 +73,24 @@ export function MarketplacePage() {
   };
 
   useEffect(() => {
-    if (!photo) {
-      setPhotoPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(photo);
-    setPhotoPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo]);
+    const urls = photos.map((file) => URL.createObjectURL(file));
+    setPhotoPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [photos]);
 
-  const choosePhoto = (file: File): void => {
+  /** Valida la foto elegida y la deja en la posición `index` (o al final). */
+  const choosePhoto = (file: File, index?: number): void => {
     const invalid = validateImageUpload(file);
     if (invalid) {
       toast({ title: 'Foto no válida', description: invalid, variant: 'warning' });
       return;
     }
-    setPhoto(file);
+    setPhotos((current) => {
+      if (index !== undefined && index < current.length) {
+        return current.map((existing, i) => (i === index ? file : existing));
+      }
+      return current.length < MAX_PRODUCT_PHOTOS ? [...current, file] : current;
+    });
   };
 
   useEffect(() => {
@@ -130,7 +132,7 @@ export function MarketplacePage() {
     setCategory(ProductCategory.Food);
     setPrice('');
     setStock('');
-    setPhoto(null);
+    setPhotos([]);
   };
 
   const submit = async (): Promise<void> => {
@@ -164,11 +166,12 @@ export function MarketplacePage() {
         json: body,
       });
       let photoError: string | null = null;
-      if (photo) {
+      for (const photo of photos) {
         try {
-          await uploadProductImage(client, created.id, photo);
+          await addProductImage(client, created.id, photo);
         } catch (error) {
           photoError = error instanceof Error ? error.message : 'Inténtalo de nuevo.';
+          break;
         }
       }
       resetForm();
@@ -176,7 +179,7 @@ export function MarketplacePage() {
       await load();
       if (photoError) {
         toast({
-          title: 'Producto publicado, pero la foto no se pudo subir',
+          title: 'Producto publicado, pero una foto no se pudo subir',
           description: `${photoError} Puedes subirla desde "Ver detalle".`,
           variant: 'warning',
         });
@@ -306,14 +309,17 @@ export function MarketplacePage() {
               />
             </div>
             <div className="space-y-1.5">
-              <p className="text-sm font-medium text-foreground">Foto (opcional)</p>
-              <ProductPhotoField
-                imageUrl={photoPreview}
+              <p className="text-sm font-medium text-foreground">Fotos (opcional, hasta 2)</p>
+              <ProductPhotosField
+                photos={photoPreviews.map((url, index) => ({ key: String(index), url }))}
                 alt="Vista previa de la foto del producto"
                 canManage
                 busy={saving}
-                onSelect={choosePhoto}
-                onRemove={() => setPhoto(null)}
+                onAdd={(file) => choosePhoto(file)}
+                onReplace={(key, file) => choosePhoto(file, Number(key))}
+                onRemove={(key) =>
+                  setPhotos((current) => current.filter((_, i) => i !== Number(key)))
+                }
               />
             </div>
           </div>

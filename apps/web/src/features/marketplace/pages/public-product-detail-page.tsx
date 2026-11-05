@@ -102,12 +102,13 @@ export function PublicProductDetailPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {product.images.length > 0 && (
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {product.images.map((image) => (
                       <img
                         key={image.id}
                         src={image.url}
                         alt={product.name}
+                        loading="lazy"
                         className="aspect-square w-full rounded-md border object-cover"
                       />
                     ))}

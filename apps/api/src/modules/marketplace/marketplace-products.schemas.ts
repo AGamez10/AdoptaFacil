@@ -28,7 +28,7 @@ export const createProductSchema = z
     category: z.nativeEnum(ProductCategory),
     price,
     stock: stock.optional(),
-    images: z.array(productImageInputSchema).max(10).optional(),
+    images: z.array(productImageInputSchema).max(2, 'Un producto lleva hasta 2 fotos.').optional(),
   })
   .strict();
 
