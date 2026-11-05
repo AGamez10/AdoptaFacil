@@ -27,6 +27,7 @@ import {
   animalDescription,
   animalTitle,
   buildAdoptPath,
+  citySlug,
   publicAnimalPath,
 } from '../src/seo/page-meta.js';
 
@@ -98,10 +99,49 @@ async function fetchAnimals() {
  *  faq?: { q: string; a: string }[];
  *  priority: string }} Page */
 
-function adoptPage(species, city, animals) {
-  const list = animals.filter(
-    (a) => (species === 'all' || a.species === species) && (!city || a.organization?.city === city),
+/** Ciudades con animales publicados, agrupadas por su slug ("Bogotá" y
+ *  "Bogota" son la misma página), de la que más tiene a la que menos. */
+function cityIndex(animals) {
+  const bySlug = new Map();
+  for (const a of animals) {
+    const city = a.organization?.city?.trim();
+    const key = city ? citySlug(city) : '';
+    if (!key) continue;
+    if (!bySlug.has(key)) bySlug.set(key, { city, animals: [] });
+    bySlug.get(key).animals.push(a);
+  }
+  return [...bySlug.values()].sort(
+    (x, y) => y.animals.length - x.animals.length || x.city.localeCompare(y.city, 'es'),
   );
+}
+
+const sameCity = (a, city) =>
+  Boolean(a.organization?.city) && citySlug(a.organization.city) === citySlug(city);
+const ofSpecies = (a, species) => species === 'all' || a.species === species;
+
+/** Fecha del animal publicado más reciente (YYYY-MM-DD) para `lastmod`. */
+function lastmodOf(list) {
+  const dates = list
+    .map((a) => (typeof a.createdAt === 'string' ? a.createdAt.slice(0, 10) : ''))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort();
+  return dates.at(-1);
+}
+
+/** "A", "A y B", "A, B y C". */
+function joinNames(names) {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} y ${names.at(-1)}`;
+}
+
+/**
+ * Página de adopción por especie y, si hay, ciudad. Su contenido sale solo de
+ * datos reales (cuántos animales, qué organizaciones los publican, en qué
+ * ciudades hay) para que cada ciudad sea una página útil y distinta, no una
+ * plantilla repetida con otro nombre.
+ */
+function adoptPage(species, city, animals, cities) {
+  const list = animals.filter((a) => ofSpecies(a, species) && (!city || sameCity(a, city)));
   const path = buildAdoptPath(species, city);
   const title = adoptTitle(species, city);
   const crumbs = [
@@ -116,10 +156,51 @@ function adoptPage(species, city, animals) {
       `${a.name}${a.breed ? `, ${a.breed}` : ''}${a.organization?.city ? ` (${a.organization.city})` : ''}`,
       publicAnimalPath(a.organization.slug, a),
     ]);
+
+  const organizations = [
+    ...new Map(
+      list.filter((a) => a.organization?.slug).map((a) => [a.organization.slug, a.organization]),
+    ).values(),
+  ];
+  const cityLinks = city
+    ? []
+    : cities
+        .map((entry) => [entry.city, entry.animals.filter((a) => ofSpecies(a, species)).length])
+        .filter(([, count]) => count > 0)
+        .map(([name, count]) => [
+          `${adoptTitle(species, name)} (${count})`,
+          buildAdoptPath(species, name),
+        ]);
+  const related = city
+    ? [
+        ...organizations.map((org) => [`${org.name}, organización en ${city}`, `/o/${org.slug}`]),
+        ...['all', 'dog', 'cat']
+          .filter(
+            (other) =>
+              other !== species && animals.some((a) => ofSpecies(a, other) && sameCity(a, city)),
+          )
+          .map((other) => [adoptTitle(other, city), buildAdoptPath(other, city)]),
+        [adoptTitle(species, null), buildAdoptPath(species)],
+      ]
+    : [];
+
+  const description = adoptDescription(species, city, API_URL ? list.length : null);
+  const facts = [];
+  if (city && organizations.length) {
+    facts.push(
+      `${organizations.length === 1 ? 'Los publica' : 'Los publican'} ${joinNames(organizations.map((org) => org.name))}.`,
+    );
+  }
+  if (!city && cityLinks.length) {
+    facts.push(
+      `Hay ${SPECIES_PLURAL[species].toLowerCase()} en adopción en ${cityLinks.length} ${cityLinks.length === 1 ? 'ciudad' : 'ciudades'}.`,
+    );
+  }
+
   return {
     path,
     title,
-    description: adoptDescription(species, city, API_URL ? list.length : null),
+    description,
     jsonLd: [
       breadcrumb(crumbs),
       ...(items.length
@@ -138,8 +219,9 @@ function adoptPage(species, city, animals) {
         : []),
     ],
     heading: title,
-    text: adoptDescription(species, city, API_URL ? list.length : null),
-    links: items,
+    text: [description, ...facts].join(' '),
+    links: [...items, ...cityLinks, ...related],
+    lastmod: lastmodOf(list),
     priority: city ? '0.7' : '0.9',
   };
 }
@@ -197,19 +279,23 @@ function buildPages(animals) {
       ['Soy una organización: crear mi portal gratis', '/register'],
       ['Guías para adoptar', '/guias'],
       ...guides.map((g) => [g.title, `/guias/${g.slug}`]),
+      ...cityIndex(animals)
+        .filter((entry) => entry.animals.some((a) => a.species === 'dog'))
+        .slice(0, 12)
+        .map((entry) => [adoptTitle('dog', entry.city), buildAdoptPath('dog', entry.city)]),
     ],
     faq: HOME_FAQ,
     priority: '1.0',
   });
 
-  for (const species of ['all', 'dog', 'cat']) pages.push(adoptPage(species, null, animals));
-  const cities = [...new Set(animals.map((a) => a.organization?.city).filter(Boolean))];
-  for (const city of cities) {
+  const cities = cityIndex(animals);
+  for (const species of ['all', 'dog', 'cat'])
+    pages.push(adoptPage(species, null, animals, cities));
+  // Una página por ciudad y especie, solo donde hay animales publicados de verdad.
+  for (const { city, animals: here } of cities) {
     for (const species of ['all', 'dog', 'cat']) {
-      const has = animals.some(
-        (a) => a.organization?.city === city && (species === 'all' || a.species === species),
-      );
-      if (has) pages.push(adoptPage(species, city, animals));
+      if (here.some((a) => ofSpecies(a, species)))
+        pages.push(adoptPage(species, city, animals, cities));
     }
   }
 
@@ -384,6 +470,8 @@ const PRIVATE_PATHS = [
 function llmsTxt(pages) {
   const link = (label, path, note) => `- [${label}](${abs(path)})${note ? `: ${note}` : ''}`;
   const guidesList = pages.filter((p) => p.path.startsWith('/guias/'));
+  // Ciudades con perros y la página general de cada ciudad (sin repetir gatos).
+  const cityPages = pages.filter((p) => /^\/adoptar\/(perros|animales)\/[^/]+$/.test(p.path));
   return [
     `# ${SITE_NAME}`,
     '',
@@ -400,6 +488,13 @@ function llmsTxt(pages) {
     ),
     link('Perros en adopción', '/adoptar/perros'),
     link('Gatos en adopción', '/adoptar/gatos'),
+    ...(cityPages.length
+      ? [
+          '',
+          '## Adopción por ciudad',
+          ...cityPages.map((p) => link(p.title, p.path, p.description.split('. ')[0] + '.')),
+        ]
+      : []),
     '',
     '## Para quien quiere ayudar',
     link('Campañas', '/campanas', STATIC_PAGES['/campanas'].description),

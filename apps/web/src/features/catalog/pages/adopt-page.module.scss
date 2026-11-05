@@ -249,6 +249,67 @@
   font-size: 1.25rem;
 }
 
+.cityLinks {
+  margin-top: 1rem;
+  border-radius: var(--af-r-block);
+  background: var(--af-paper);
+  box-shadow: var(--af-shadow-card);
+  padding: 1.25rem;
+}
+
+.cityLinks__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.cityLinks__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cityLinks__link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: var(--r-full);
+  background: var(--af-cream);
+  padding: 0 0.85rem;
+  font-size: 0.9rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-ink);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--af-mint);
+  }
+
+  &[aria-current='page'] {
+    background: var(--af-teal-ink);
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
+}
+
+.cityLinks__count {
+  border-radius: var(--r-full);
+  background: rgb(32 44 60 / 0.08);
+  padding: 0.05rem 0.45rem;
+  font-size: 0.75rem;
+
+  [aria-current='page'] > & {
+    background: rgb(255 255 255 / 0.2);
+  }
+}
+
 .results {
   min-width: 0;
 }

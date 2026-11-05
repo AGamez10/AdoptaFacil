@@ -81,7 +81,11 @@ describe('page-meta (shared with the build prerender)', () => {
   it('writes natural titles and descriptions by species and city', () => {
     expect(adoptTitle('dog', 'Bogotá')).toBe('Perros en adopción en Bogotá');
     expect(adoptTitle('all', null)).toBe('Perros y gatos en adopción en Colombia');
-    expect(adoptDescription('dog', 'Cali', 3)).toMatch(/^3 animales esperan hogar en Cali\./);
+    expect(adoptDescription('dog', 'Cali', 3)).toMatch(/^3 perros esperan hogar en Cali\./);
+    expect(adoptDescription('cat', 'Cali', 1)).toMatch(/^1 gato espera hogar en Cali\./);
+    expect(adoptDescription('all', null, 2)).toMatch(
+      /^2 animales esperan hogar en toda Colombia\./,
+    );
     expect(adoptDescription('cat', null, 0)).toMatch(
       /^Encuentra gatos en adopción en toda Colombia\./,
     );
