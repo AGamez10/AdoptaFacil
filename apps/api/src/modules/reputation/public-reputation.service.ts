@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   type CreatePublicReviewInput,
@@ -8,6 +8,7 @@ import {
   type Review,
   ReviewStatus,
 } from '@adoptafacil/contracts';
+import type { RequestUser } from '../../core/auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /** Raw row from `create_public_review(...)` — snake_case, real Date object. */
@@ -90,25 +91,64 @@ export class PublicReputationService {
   }
 
   /**
-   * Reseña del portal público (S7-b, botón "Registrar reseña") — sin sesión,
-   * siempre anónima, visible de inmediato (nace `approved`; el cliente pidió
-   * "cuando se registre, este se debe mostrar en el portal público", sin cola
-   * de PlatformAdmin de por medio). Su único moderador es el Owner de la
-   * organización, vía `ReviewsService.markSpam`.
+   * Reseña del portal público (S7-b, botón "Registrar reseña") — visible de
+   * inmediato (nace `approved`, sin cola de PlatformAdmin) y moderada por el
+   * Owner vía `ReviewsService.markSpam`.
+   *
+   * La sesión es OPCIONAL (2026-11-05): `actor` lo pone `OptionalJwtAuthGuard`
+   * desde el token, nunca el cuerpo. Con `actor` la reseña queda ligada a la
+   * cuenta (sello "Miembro de la comunidad") y por defecto anónima; sin él es
+   * de un visitante, que puede firmar con `authorName`.
    */
-  async createPublicReview(slug: string, input: CreatePublicReviewInput): Promise<Review> {
+  async createPublicReview(
+    slug: string,
+    input: CreatePublicReviewInput,
+    actor?: RequestUser,
+  ): Promise<Review> {
+    if (actor && input.authorName) {
+      throw new BadRequestException(
+        'Con tu sesión iniciada la reseña usa el nombre de tu cuenta; no escribas otro nombre.',
+      );
+    }
+    if (!actor && input.isAnonymous !== undefined) {
+      throw new BadRequestException(
+        'Sin sesión, la reseña es anónima salvo que escribas un nombre.',
+      );
+    }
+
     const organizationId = await this.resolveOrgId(slug);
     if (!organizationId) {
       throw new NotFoundException('Organization not found');
     }
 
-    const rows = await this.prisma.$queryRaw<PublicReviewRawRow[]>(
-      Prisma.sql`SELECT * FROM create_public_review(
-        ${organizationId}::uuid,
-        ${input.rating}::int,
-        ${input.comment ?? null}
-      )`,
-    );
+    let rows: PublicReviewRawRow[];
+    try {
+      rows = await this.prisma.$queryRaw<PublicReviewRawRow[]>(
+        Prisma.sql`SELECT * FROM create_public_review(
+          ${organizationId}::uuid,
+          ${input.rating}::int,
+          ${input.comment ?? null},
+          ${actor?.id ?? null}::uuid,
+          ${actor ? null : (input.authorName ?? null)},
+          ${actor ? (input.isAnonymous ?? true) : null}::boolean
+        )`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Un miembro solo deja UNA reseña por organización
+      // (`reviews_organization_id_author_user_id_key`), por cualquiera de las
+      // dos vías.
+      if (/23505|already exists/i.test(message)) {
+        throw new BadRequestException('Ya reseñaste esta organización.');
+      }
+      if (/cannot review your own organization/i.test(message)) {
+        throw new BadRequestException('No puedes reseñar tu propia organización.');
+      }
+      if (/display name not allowed/i.test(message)) {
+        throw new BadRequestException('Ese nombre no está permitido.');
+      }
+      throw error;
+    }
     const row = rows[0];
     if (!row) {
       throw new NotFoundException('Organization not found');
@@ -137,6 +177,7 @@ function toPublicReview(row: PublicReview): PublicReview {
     rating: row.rating,
     comment: row.comment ?? undefined,
     authorName: row.authorName ?? undefined,
+    isCommunityMember: row.isCommunityMember === true,
     createdAt: row.createdAt,
   };
 }

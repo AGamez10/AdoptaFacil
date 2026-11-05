@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { PublicReview } from '@adoptafacil/contracts';
+import type { CreatePublicReviewInput, PublicReview, Review } from '@adoptafacil/contracts';
 import { Skeleton } from '@adoptafacil/ui';
 import { fetchPublicReviews } from '../api/public-reviews';
-import { RegisterReviewDialog } from './register-review-dialog';
+import { RegisterReviewDialog, type ReviewMember } from './register-review-dialog';
 import { ReviewCarousel } from './review-carousel';
 import catalogStyles from '../styles/public-catalog.module.scss';
 import styles from '../styles/public-reviews.module.scss';
@@ -14,16 +14,21 @@ type SectionState = 'loading' | 'ready' | 'error';
 
 export interface PortalReviewsSectionProps {
   slug: string;
+  /** Hay sesión de AdoptaFácil: la reseña lleva el sello de comunidad. */
+  member?: ReviewMember;
+  /** Envío con el token de la sesión (solo junto a `member`). */
+  submitAsMember?: (slug: string, input: CreatePublicReviewInput) => Promise<Review>;
 }
 
 /**
  * Sección "Reseñas" del portal público (§M14/M12, S7-b — pedido directo del
- * cliente): reseñas anónimas, sin sesión, visibles debajo de "Nosotros", en
+ * cliente): reseñas sin cuenta obligatoria (nombre opcional; con sesión
+ * llevan el sello "Miembro de la comunidad"), visibles debajo de "Nosotros", en
  * fila (carrusel condicional, `ReviewCarousel`) con el botón "Registrar
  * reseña" al final. Mismo patrón EXACTO que `PortalCampaignsSection`: fetch
  * por slug, `.items` ya normalizado a `[]`, estado vacío explícito.
  */
-export function PortalReviewsSection({ slug }: PortalReviewsSectionProps) {
+export function PortalReviewsSection({ slug, member, submitAsMember }: PortalReviewsSectionProps) {
   const [items, setItems] = useState<PublicReview[]>([]);
   const [state, setState] = useState<SectionState>('loading');
 
@@ -73,14 +78,17 @@ export function PortalReviewsSection({ slug }: PortalReviewsSectionProps) {
       <div className={styles.footer}>
         <RegisterReviewDialog
           slug={slug}
-          onSubmitted={(created) =>
+          member={member}
+          submit={submitAsMember}
+          onSubmitted={({ review, authorName, isCommunityMember }) =>
             setItems((current) => [
               {
-                id: created.id,
-                rating: created.rating,
-                comment: created.comment,
-                authorName: undefined,
-                createdAt: created.createdAt,
+                id: review.id,
+                rating: review.rating,
+                comment: review.comment,
+                authorName,
+                isCommunityMember,
+                createdAt: review.createdAt,
               },
               ...current,
             ])

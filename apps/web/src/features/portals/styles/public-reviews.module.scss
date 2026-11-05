@@ -188,3 +188,81 @@ $border-subtle: hsl(var(--border) / 0.35);
   font-size: var(--fs-xs);
   color: hsl(var(--muted-foreground));
 }
+
+// ---------------------------------------------------------------------------
+// Nombre opcional y sello "Miembro de la comunidad" (2026-11-05)
+// ---------------------------------------------------------------------------
+
+.input {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border-radius: $radius-sm;
+  border: 1px solid $border-subtle;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: var(--fs-sm);
+  font-family: inherit;
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25);
+}
+
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: var(--fs-sm);
+  color: hsl(var(--foreground));
+  cursor: pointer;
+
+  input {
+    margin-top: 0.2rem;
+    accent-color: hsl(var(--primary));
+  }
+}
+
+.memberNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--fs-sm);
+  color: hsl(var(--muted-foreground));
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--r-full);
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: '✓';
+  font-size: 0.7em;
+}
+
+.visitorTag {
+  font-size: var(--fs-xs);
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.card__author {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
