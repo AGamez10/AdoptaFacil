@@ -86,6 +86,23 @@ describe('S3StorageAdapter (Cloudflare R2 / Backblaze B2 / S3)', () => {
     await expect(adapter.readObject('../etc/passwd')).rejects.toThrow();
   });
 
+  it('deletes a key with a signed DELETE, accepts a missing key and fails on errors', async () => {
+    const { adapter, calls } = setup([
+      () => new Response(null, { status: 204 }),
+      () => new Response(null, { status: 404 }),
+      () => new Response(null, { status: 403 }),
+    ]);
+    await adapter.deleteObject(`public/${ORG}/a1-producto.webp`);
+    expect(calls[0].init.method).toBe('DELETE');
+    expect(calls[0].url).toBe(
+      `https://acc.r2.cloudflarestorage.com/media/public/${ORG}/a1-producto.webp`,
+    );
+    expect(header(calls[0].init, 'authorization')).toMatch(/^AWS4-HMAC-SHA256 /);
+    await expect(adapter.deleteObject(`public/${ORG}/gone.webp`)).resolves.toBeUndefined();
+    await expect(adapter.deleteObject(`public/${ORG}/x.webp`)).rejects.toThrow('403');
+    await expect(adapter.deleteObject('../etc/passwd')).rejects.toThrow();
+  });
+
   it('serves through the API, never a bucket URL', async () => {
     const { adapter } = setup([]);
     const target = await adapter.createUploadTarget({ organizationId: ORG, filename: 'x.jpg' });

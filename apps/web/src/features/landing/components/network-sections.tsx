@@ -12,6 +12,7 @@ import { fetchPublicLedger } from '../../ledger/api/public-ledger';
 import { formatCop } from '../../ledger/model/ledger-view';
 import { listPublicNeeds } from '../../resources/api/public-resources';
 import { CATEGORY_LABELS, publicResourceNeedHref } from '../../resources/model/resources-view';
+import { volunteerSignupHref } from '../../volunteering/model/volunteering-view';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
 import { IconArrowRight, IconBox, IconDocument, IconPeople, IconShield } from './landing-icons';
 import styles from './network.module.scss';
@@ -226,8 +227,9 @@ function VolunteeringPanel({ near }: { near: boolean }) {
         <ul className={styles.list}>
           {items.map((opportunity, index) => (
             <li key={opportunity.id} style={{ '--i': index } as CSSProperties}>
-              {/* Inscribirse pide cuenta: /voluntariado lleva al ingreso y vuelve. */}
-              <Link to="/voluntariado" className={styles.row}>
+              {/* Inscribirse pide cuenta: /voluntariado lleva al ingreso, vuelve y
+                  resalta esta jornada. */}
+              <Link to={volunteerSignupHref(opportunity.id)} className={styles.row}>
                 {opportunity.appliesToStudentService ? (
                   <span className={styles.row__chip}>Servicio social</span>
                 ) : (
