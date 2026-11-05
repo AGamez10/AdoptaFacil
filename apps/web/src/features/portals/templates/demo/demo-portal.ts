@@ -53,6 +53,18 @@ const ANIMALS: readonly DemoAnimal[] = [
   ['Tigre', 'cat', 'male', 'medium', 40, 'Atigrado'],
   ['Lola', 'dog', 'female', 'small', 9, 'Criolla'],
   ['Pelusa', 'cat', 'female', 'small', 96, 'Persa mestiza'],
+  ['Bruno', 'dog', 'male', 'large', 36, 'Golden mestizo'],
+  ['Mía', 'cat', 'female', 'small', 3, 'Carey'],
+  ['Coco', 'dog', 'male', 'small', 110, 'Poodle mestizo'],
+  ['Frida', 'cat', 'female', 'medium', 22, 'Común europeo'],
+  ['Zeus', 'dog', 'male', 'large', 28, 'Criollo'],
+  ['Oreo', 'cat', 'male', 'small', 11, 'Bicolor'],
+  ['Maya', 'dog', 'female', 'medium', 5, 'Criolla'],
+  ['Milo', 'cat', 'male', 'medium', 54, 'Naranja atigrado'],
+  ['Sasha', 'dog', 'female', 'medium', 84, 'Beagle mestiza'],
+  ['Nube', 'cat', 'female', 'small', 16, 'Blanca angora'],
+  ['Tango', 'dog', 'male', 'medium', 13, 'Criollo'],
+  ['Kiwi', 'cat', 'male', 'small', 6, 'Común europeo'],
 ];
 
 function demoAnimals(now: number): AnimalSummary[] {
@@ -71,7 +83,7 @@ function demoAnimals(now: number): AnimalSummary[] {
       totalMonths: months,
       approximate: i % 4 === 0,
     },
-    createdAt: new Date(now - ((i * 5) % 40) * DAY).toISOString(),
+    createdAt: new Date(now - ((i * 9) % 150) * DAY).toISOString(),
   }));
 }
 
@@ -136,7 +148,7 @@ function demoCampaigns(now: number): CampaignPublic[] {
       ...base,
       id: 'demo-camp-3',
       title: 'Concentrado para el invierno',
-      description: 'Alimento para los 38 animales del hogar de paso durante tres meses.',
+      description: 'Alimento para todos los animales del hogar de paso durante tres meses.',
       category: CampaignCategory.Food,
       goalAmount: 1_800_000,
       raisedAmount: 1_530_000,
@@ -262,7 +274,9 @@ export function buildDemoSource(now: number = Date.now()): TemplateSourceData {
     slug: DEMO_SLUG,
     organization: ORGANIZATION,
     animals,
-    animalTotal: 38,
+    // Mismo número que las tarjetas: el titular nunca promete más animales de
+    // los que el catálogo de la plantilla deja ver.
+    animalTotal: animals.length,
     campaigns: demoCampaigns(now),
     needs: demoNeeds(now),
     products: demoProducts(now),
