@@ -318,3 +318,102 @@ export interface ValidateResourceOfferProofInput {
   decision: 'approve' | 'reject';
   reason?: string;
 }
+
+// ============================================================================
+// Ofrecimiento ABIERTO — alguien tiene algo para donar y no encontró una
+// necesidad publicada. Lo deja en el banco (vence a los 60 días); una
+// organización lo "toma" para una necesidad propia de la misma categoría y
+// unidad, y desde ahí sigue el flujo normal (oferta aceptada + entrega).
+// Medicamentos NO: solo se reciben cuando una organización los pide.
+// ============================================================================
+
+/** Categorías válidas para un ofrecimiento abierto (sin medicamentos). */
+export const OPEN_OFFER_CATEGORIES: readonly ResourceCategory[] = [
+  ResourceCategory.Food,
+  ResourceCategory.Supplies,
+  ResourceCategory.Equipment,
+  ResourceCategory.Other,
+];
+
+/** Días que un ofrecimiento abierto sigue visible para las organizaciones. */
+export const OPEN_OFFER_TTL_DAYS = 60;
+
+/** Máximo de ofrecimientos abiertos simultáneos por persona. */
+export const MAX_OPEN_OFFERS_PER_DONOR = 5;
+
+/** `open` → `claimed` (una organización lo tomó) | `withdrawn` (lo retiró su
+ *  dueño). Vencido = `open` con `expiresAt` pasado (derivado, sin job). */
+export enum ResourceOpenOfferStatus {
+  Open = 'open',
+  Claimed = 'claimed',
+  Withdrawn = 'withdrawn',
+}
+
+/** Lo que ve quien ofrece en "Mis ofertas". */
+export interface ResourceOpenOffer {
+  id: string;
+  title: string;
+  description?: string;
+  category: ResourceCategory;
+  quantity: number;
+  unit: string;
+  department: string;
+  city: string;
+  status: ResourceOpenOfferStatus;
+  /** Derivado: sigue `open` pero ya venció. */
+  expired: boolean;
+  /** Presente cuando una organización lo tomó. */
+  claimedByOrganizationName?: string;
+  claimedAt?: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/** Lo que ve una organización en el tablero (sin identidad del donante). */
+export interface ResourceOpenOfferBoardItem {
+  id: string;
+  title: string;
+  description?: string;
+  category: ResourceCategory;
+  quantity: number;
+  unit: string;
+  department: string;
+  city: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface ResourceOpenOffersBoardPage {
+  items: ResourceOpenOfferBoardItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Dejar un ofrecimiento abierto (cualquier cuenta autenticada). */
+export interface CreateResourceOpenOfferInput {
+  title: string;
+  description?: string;
+  category: ResourceCategory;
+  quantity: number;
+  unit: string;
+  department: string;
+  city: string;
+}
+
+/**
+ * Tomar un ofrecimiento (Owner/Administrator/Operator). Con `needId` se asocia
+ * a una necesidad activa propia de la misma categoría y unidad; sin él se
+ * publica una necesidad nueva con `needTitle` (o el título del ofrecimiento)
+ * y la cantidad ofrecida.
+ */
+export interface ClaimResourceOpenOfferInput {
+  needId?: string;
+  needTitle?: string;
+}
+
+/** Resultado de tomarlo: la oferta aceptada que ya aparece en la necesidad. */
+export interface ClaimResourceOpenOfferResult {
+  needId: string;
+  offerId: string;
+}

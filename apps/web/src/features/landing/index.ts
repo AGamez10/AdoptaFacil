@@ -13,6 +13,7 @@ export {
 export { HeroVisual } from './components/hero-visual';
 export {
   ActiveCampaignsSection,
+  CommunityPulseSection,
   FinalCtaSection,
   LANDING_HELP_ID,
   WaysToHelpSection,

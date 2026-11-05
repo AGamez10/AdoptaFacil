@@ -212,6 +212,10 @@ export const RESOURCE_VIEW_ROLES = [
   Role.ReadOnlyAuditor,
 ] as const;
 
+/** Tomar ofrecimientos abiertos: los roles que publican necesidades
+ *  (`RESOURCE_WRITE_ROLES` del backend), sin el auditor de solo lectura. */
+export const RESOURCE_MANAGE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
+
 /**
  * F-7 (M10, marketplace simplificado) — "Marketplace" (gestión de org).
  * Copiado VERBATIM de `MARKETPLACE_VIEW_ROLES` en
@@ -527,6 +531,12 @@ export const navItems: NavItem[] = [
         label: 'Necesidades recibidas',
         icon: BoxIcon,
         roles: RESOURCE_VIEW_ROLES,
+      },
+      {
+        path: '/organizacion/recursos/ofrecimientos',
+        label: 'Ofrecimientos de la comunidad',
+        icon: BoxIcon,
+        roles: RESOURCE_MANAGE_ROLES,
       },
     ],
   },

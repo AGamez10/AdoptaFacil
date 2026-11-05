@@ -47,6 +47,7 @@ export function CommunityFeedPage() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [shareable, setShareable] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = async (activeFilter: PostType | 'all'): Promise<void> => {
@@ -75,6 +76,7 @@ export function CommunityFeedPage() {
     setTitle('');
     setBody('');
     setFiles([]);
+    setShareable(false);
   };
 
   const onPickFiles = (fileList: FileList | null): void => {
@@ -104,6 +106,7 @@ export function CommunityFeedPage() {
         type,
         ...(title.trim() ? { title: title.trim() } : {}),
         body: body.trim(),
+        ...(shareable ? { shareable: true } : {}),
         ...(files.length > 0
           ? {
               images: files.map((file, index) => ({
@@ -247,6 +250,23 @@ export function CommunityFeedPage() {
                 className="block w-full text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
               />
             </div>
+            <label className="flex items-start gap-2 text-sm" htmlFor="post-shareable">
+              <input
+                id="post-shareable"
+                type="checkbox"
+                className="mt-1 h-4 w-4"
+                checked={shareable}
+                onChange={(e) => setShareable(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Hacerla pública y compartible en redes.</span>{' '}
+                <span className="text-muted-foreground">
+                  Cualquiera podrá verla sin cuenta y compartirla en WhatsApp, Facebook, X o
+                  LinkedIn. Si publicas como persona, solo se muestra tu primer nombre. Puedes
+                  cambiarlo cuando quieras.
+                </span>
+              </span>
+            </label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>

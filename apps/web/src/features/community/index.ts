@@ -11,3 +11,5 @@ export { ServiceDetailPage } from './pages/service-detail-page';
 export { MyServicesPage } from './pages/my-services-page';
 export { MyPetsPage } from './pages/my-pets-page';
 export { ServicesModerationPage } from './pages/services-moderation-page';
+// Publicación PÚBLICA (sin sesión), a donde llegan los enlaces compartidos en redes.
+export { PublicPostPage } from './pages/public-post-page';

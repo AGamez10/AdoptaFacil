@@ -54,6 +54,7 @@ interface RawPost {
   commentCount: number;
   likeCount: number;
   moderationReason?: string | null;
+  shareable?: boolean;
   images: Array<{ id: string; storageRef: string; order: number }>;
   createdAt: string;
   updatedAt: string;
@@ -100,6 +101,7 @@ export class CommunityPostsService {
       likeCount: row.likeCount,
       status: row.status as Post['status'],
       moderationReason: row.moderationReason ?? undefined,
+      shareable: row.shareable,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -127,6 +129,7 @@ export class CommunityPostsService {
       likeCount: raw.likeCount,
       status: raw.status as Post['status'],
       moderationReason: raw.moderationReason ?? undefined,
+      shareable: raw.shareable ?? false,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
     };
@@ -147,7 +150,10 @@ export class CommunityPostsService {
   async create(actor: RequestUser, input: CreatePostInput): Promise<CreatePostResult> {
     const authorName = await this.resolveAuthorName(actor);
     if (actor.accountType === 'person') {
-      const post = await this.createPlatformPost(actor, authorName, input);
+      let post = await this.createPlatformPost(actor, authorName, input);
+      if (input.shareable) {
+        post = { ...post, shareable: await this.setShareable(actor, post.id, true) };
+      }
       return { post, imageUploads: [] };
     }
     return this.createOrgPost(actor, authorName, input);
@@ -185,6 +191,7 @@ export class CommunityPostsService {
           type: input.type,
           title: input.title ?? null,
           body: input.body,
+          shareable: input.shareable ?? false,
           images:
             reserved.length > 0
               ? {
@@ -344,6 +351,18 @@ export class CommunityPostsService {
       throw new NotFoundException('Post not found');
     }
     return this.fromRaw(raw);
+  }
+
+  /** La autora decide si su publicación se ve sin sesión y se comparte en
+   *  redes. Por identidad de autora (una Persona no tiene tenant que la cubra). */
+  async setShareable(actor: RequestUser, id: string, shareable: boolean): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ ok: boolean }>>(
+      Prisma.sql`SELECT community_post_set_shareable(${id}::uuid, ${actor.id}::uuid, ${shareable}::boolean) AS ok`,
+    );
+    if (!rows[0]?.ok) {
+      throw new NotFoundException('Post not found');
+    }
+    return shareable;
   }
 
   /** Editar la publicación propia (solo título/cuerpo). */

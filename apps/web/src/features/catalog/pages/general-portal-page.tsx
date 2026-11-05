@@ -10,6 +10,7 @@ import {
   AdoptionStepsSection,
   CoffeeSection,
   CommunitySection,
+  CommunityPulseSection,
   FaqSection,
   FinalCtaSection,
   ForOrganizationsSection,
@@ -139,6 +140,7 @@ export function GeneralPortalPage() {
         </Suspense>
         <CoffeeSection />
         <CommunitySection />
+        <CommunityPulseSection />
         <ForOrganizationsSection />
         <TemplateGallerySection />
         <PromisesSection />

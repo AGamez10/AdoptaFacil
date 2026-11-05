@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { CampaignPublic } from '@adoptafacil/contracts';
+import {
+  PostType,
+  type CampaignPublic,
+  type PublicCommunityPost,
+  type ResourceNeedPublic,
+} from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
+import { useFeature } from '../../../shell/capabilities';
 import { usePublicModules } from '../../../shell/layout/public-nav-model';
 import { listPublicCampaigns } from '../../campaigns/api/public-campaigns';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
+import { listPublicPosts } from '../../community/api/public-community';
+import { publicPostPath } from '../../community/lib/share';
+import { listPublicNeeds } from '../../resources/api/public-resources';
 import { CatMascot, DogMascot, Sparkle } from './illustrations';
 import { IconArrowRight } from './landing-icons';
 import styles from './commerce.module.scss';
@@ -187,6 +196,144 @@ export function ActiveCampaignsSection() {
             ))}
           </ul>
         )}
+      </div>
+    </section>
+  );
+}
+
+const POST_TYPE_LABEL: Record<PostType, string> = {
+  [PostType.General]: 'Comunidad',
+  [PostType.Campaign]: 'Campaña',
+  [PostType.Notice]: 'Aviso',
+  [PostType.Event]: 'Evento',
+};
+
+function clip(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 1).replace(/\s+\S*$/, '')}…` : flat;
+}
+
+/**
+ * "Lo que está pasando hoy": las últimas publicaciones PÚBLICAS de la
+ * comunidad y las necesidades que registran las organizaciones. Sutil: solo
+ * pide datos cuando el visitante se acerca a la sección (no compite con el
+ * hero ni con el LCP) y, sin nada que mostrar, no se monta.
+ */
+export function CommunityPulseSection() {
+  const wallOn = useFeature('communityWall');
+  const resourcesOn = useFeature('resources');
+  const sentinel = useRef<HTMLDivElement | null>(null);
+  const [near, setNear] = useState(false);
+  const [posts, setPosts] = useState<PublicCommunityPost[]>([]);
+  const [needs, setNeeds] = useState<ResourceNeedPublic[]>([]);
+
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || near) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setNear(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
+      },
+      { rootMargin: '600px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [near]);
+
+  useEffect(() => {
+    if (!near) return;
+    const controller = new AbortController();
+    if (wallOn) {
+      listPublicPosts(3, controller.signal)
+        .then((page) => setPosts(page.items.slice(0, 3)))
+        .catch(() => undefined);
+    }
+    if (resourcesOn) {
+      listPublicNeeds({ limit: 3, offset: 0, signal: controller.signal })
+        .then((page) => setNeeds(page.items.slice(0, 3)))
+        .catch(() => undefined);
+    }
+    return () => controller.abort();
+  }, [near, wallOn, resourcesOn]);
+
+  if (posts.length === 0 && needs.length === 0) {
+    return <div ref={sentinel} aria-hidden="true" data-testid="landing-pulse-sentinel" />;
+  }
+
+  return (
+    <section
+      className={styles.pulse}
+      aria-labelledby="landing-pulse-title"
+      data-testid="landing-pulse"
+    >
+      <div className={styles.container}>
+        <div className={cn(styles.head, styles['head--row'])}>
+          <div>
+            <p className={styles.eyebrow}>Hoy en AdoptaFácil</p>
+            <h2 id="landing-pulse-title" className={styles.head__title}>
+              Una comunidad que se mueve.
+            </h2>
+          </div>
+          <Link to="/register" className={styles.link}>
+            Únete gratis
+            <IconArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+        <div
+          className={styles.pulse__cols}
+          data-single={posts.length === 0 || needs.length === 0 ? 'true' : 'false'}
+        >
+          {posts.length > 0 && (
+            <div className={styles.pulse__col}>
+              <h3 className={styles.pulse__subtitle}>Lo último de la comunidad</h3>
+              <ul className={styles.pulse__list}>
+                {posts.map((post) => (
+                  <li key={post.id}>
+                    <Link to={publicPostPath(post.id)} className={styles.pulse__item}>
+                      <span className={styles.pulse__meta}>
+                        {POST_TYPE_LABEL[post.type] ?? 'Comunidad'} · {post.authorDisplayName}
+                      </span>
+                      <span className={styles.pulse__title}>
+                        {clip(post.title ?? post.body, 90)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {needs.length > 0 && (
+            <div className={styles.pulse__col}>
+              <h3 className={styles.pulse__subtitle}>Lo que necesitan hoy</h3>
+              <ul className={styles.pulse__list}>
+                {needs.map((need) => (
+                  <li key={need.id}>
+                    <Link
+                      to={`/recursos/${encodeURIComponent(need.id)}`}
+                      className={styles.pulse__item}
+                    >
+                      <span className={styles.pulse__meta}>{need.organizationName}</span>
+                      <span className={styles.pulse__title}>
+                        {clip(need.title, 80)} · {need.quantityNeeded} {need.unit}
+                      </span>
+                      <span className={styles.pulse__bar} aria-hidden="true">
+                        <span style={{ width: `${Math.round(need.progress * 100)}%` }} />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <Link to="/recursos" className={styles.link}>
+                Ver el banco de recursos
+                <IconArrowRight aria-hidden="true" />
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
