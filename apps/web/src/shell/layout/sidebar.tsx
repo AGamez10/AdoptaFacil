@@ -169,7 +169,9 @@ function SidebarGroup({
                 cn(
                   styles['org-sidebar__link'],
                   styles['org-sidebar__link--child'],
-                  isActive && styles['org-sidebar__link--active'],
+                  isActive &&
+                    !shadowedBySibling(child.path, childItems, location.pathname) &&
+                    styles['org-sidebar__link--active'],
                 )
               }
             >
@@ -397,5 +399,21 @@ export function MobileNavDrawer() {
         <SidebarFooter />
       </div>
     </div>
+  );
+}
+
+/** Un hijo cuya ruta es prefijo de la de un hermano (p. ej. /organizacion/recursos
+ *  y /organizacion/recursos/ofrecimientos) no se marca activo cuando estás en el
+ *  hermano más específico: solo una entrada del grupo queda resaltada. */
+function shadowedBySibling(
+  path: string,
+  siblings: readonly { path: string }[],
+  pathname: string,
+): boolean {
+  return siblings.some(
+    (s) =>
+      s.path !== path &&
+      s.path.startsWith(`${path}/`) &&
+      (pathname === s.path || pathname.startsWith(`${s.path}/`)),
   );
 }

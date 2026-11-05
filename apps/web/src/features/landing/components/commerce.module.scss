@@ -314,6 +314,18 @@
   min-width: 0;
 }
 
+/* Con una sola columna (solo publicaciones o solo necesidades), las tarjetas
+   ocupan el ancho en fila para no dejar media sección vacía. */
+.pulse__cols[data-single='true'] {
+  grid-template-columns: minmax(0, 1fr);
+
+  .pulse__list {
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+}
+
 .pulse__subtitle {
   margin: 0 0 0.75rem;
   font-size: 1.0625rem;

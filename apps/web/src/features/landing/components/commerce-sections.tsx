@@ -266,7 +266,10 @@ export function CommunityPulseSection() {
             <IconArrowRight aria-hidden="true" />
           </Link>
         </div>
-        <div className={styles.pulse__cols}>
+        <div
+          className={styles.pulse__cols}
+          data-single={posts.length === 0 || needs.length === 0 ? 'true' : 'false'}
+        >
           {posts.length > 0 && (
             <div className={styles.pulse__col}>
               <h3 className={styles.pulse__subtitle}>Lo último de la comunidad</h3>
