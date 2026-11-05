@@ -164,6 +164,21 @@ describe('AdoptPage (/adoptar)', () => {
     expect(names()).toEqual(['Luna', 'Nieve']);
   });
 
+  it('links every city with animals as a real link (people and search engines)', async () => {
+    stubApi();
+    renderAt('/adoptar/perros/bogota');
+    await screen.findByTestId('adopt-results');
+    const nav = screen.getByRole('navigation', { name: 'Ciudades con animales' });
+    expect(within(nav).getByRole('link', { name: /^Bogotá\s*2$/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(nav).getByRole('link', { name: /^Medellín\s*1$/ })).toHaveAttribute(
+      'href',
+      '/adoptar/perros/medellin',
+    );
+  });
+
   it('when nothing matches, says so kindly and offers to clear the filters', async () => {
     stubApi();
     renderAt('/adoptar/gatos/cali');
