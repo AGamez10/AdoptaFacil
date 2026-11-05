@@ -145,6 +145,10 @@ function toInvitation(row: InvitationRow): OrganizationInvitation {
 @Injectable()
 export class InvitationsService {
   private readonly webBaseUrl: string;
+  /** Sin proveedor de correo real (`NOTIFICATION_DRIVER=log`) nada llega. */
+  private readonly emailSimulated: boolean;
+  /** Solo en desarrollo local el enlace simulado se devuelve para copiarlo a mano. */
+  private readonly exposeSimulatedLink: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -158,6 +162,8 @@ export class InvitationsService {
     private readonly legal: LegalService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
+    this.emailSimulated = config.get('NOTIFICATION_DRIVER', { infer: true }) !== 'smtp';
+    this.exposeSimulatedLink = config.get('NODE_ENV', { infer: true }) === 'development';
   }
 
   private requireOrgId(): string {
@@ -302,7 +308,16 @@ export class InvitationsService {
       // Cada invitación es un correo distinto (reinvitar crea otra y anula la anterior).
       idempotencyKey: `org.invitation:${row.id}`,
     });
-    return toInvitation(row);
+    if (!this.emailSimulated) {
+      return { ...toInvitation(row), emailDelivery: 'sent' };
+    }
+    return {
+      ...toInvitation(row),
+      emailDelivery: 'simulated',
+      ...(this.exposeSimulatedLink
+        ? { simulatedInviteLink: buildInvitationLink(this.webBaseUrl, token) }
+        : {}),
+    };
   }
 
   async revoke(actorUserId: string, invitationId: string): Promise<void> {

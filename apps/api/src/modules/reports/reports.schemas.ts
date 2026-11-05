@@ -39,3 +39,28 @@ export const setOrgReportPolicySchema = z
       }),
   })
   .strict();
+
+const signatureToken = z.string().min(20).max(200);
+
+/** Enlace de firma por correo: el token viaja en el cuerpo, nunca en la URL. */
+export const signatureRequestTokenSchema = z.object({ token: signatureToken }).strict();
+
+export const decideSignatureRequestSchema = z
+  .object({
+    token: signatureToken,
+    decision: z.enum(['approved', 'rejected']),
+    consent: z.boolean().optional(),
+    documentNumber: z.string().trim().min(3).max(50),
+    signature: z
+      .object({
+        fullName: z.string().trim().min(1).max(200),
+        documentType: z.enum(['cedula_ciudadania', 'cedula_extranjeria', 'pasaporte']),
+        position: z.string().trim().min(1).max(120),
+        signatureBase64: z.string().min(1).max(2_000_000),
+        signatureContentType: z.string().trim().min(1).max(100),
+        method: z.enum(['drawn', 'photo']).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();

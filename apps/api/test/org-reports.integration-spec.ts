@@ -722,7 +722,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     const mail = notifications.sent.find(
       (m) => m.to === reviewerA.email && m.body.includes(donations.body.code),
     );
-    expect(mail?.body).toContain('/organizacion/documentos-por-firmar');
+    expect(mail?.body).toContain('/firmar#token=');
     expect(
       notifications.sent.some(
         (m) => m.to !== reviewerA.email && m.body.includes(donations.body.code),

@@ -239,6 +239,18 @@ export interface OrganizationInvitation {
   expiresAt: string;
   /** ISO-8601 UTC. */
   createdAt: string;
+  /**
+   * Solo en la respuesta de `POST /org/invitations` (aditivo): `simulated`
+   * cuando el servidor no envía correos reales (`NOTIFICATION_DRIVER=log`), así
+   * la pantalla avisa en vez de decir "enviada" sin que llegue nada.
+   */
+  emailDelivery?: 'sent' | 'simulated';
+  /**
+   * Solo con `emailDelivery: 'simulated'` y `NODE_ENV=development`: el enlace de
+   * la invitación, para copiarlo a mano en desarrollo local. En producción el
+   * enlace solo existe en el correo.
+   */
+  simulatedInviteLink?: string;
 }
 
 /** `POST /org/invitations` (Owner, Administrator; only an Owner invites an

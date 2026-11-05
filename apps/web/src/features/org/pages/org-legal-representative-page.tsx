@@ -71,9 +71,10 @@ function fileToBase64(file: File): Promise<string> {
  *  nadie registra la firma de otra persona desde su propia cuenta. */
 const WHO_REGISTERS: Record<LegalRepresentativeRole, string> = {
   legal_representative: 'La registra el propietario de la cuenta de la organización.',
-  accountant: 'La registra el propio contador, con su cuenta. Nadie puede registrarla por él.',
+  accountant:
+    'La registra el propio contador desde el primer correo de firma. Nadie puede registrarla por él.',
   fiscal_reviewer:
-    'La registra el propio revisor fiscal, con su cuenta. Nadie puede registrarla por él.',
+    'La registra el propio revisor fiscal desde el primer correo de firma. Nadie puede registrarla por él.',
 };
 
 /** Qué firma pide cada documento y qué camino sigue al emitirse, tal como lo
@@ -84,7 +85,7 @@ const DOCUMENT_SIGNERS: { document: string; signers: string; path: string }[] = 
     document: 'Informe de donaciones',
     signers:
       'Representante legal y revisor fiscal (o contador si no hay revisor). Ajusta lo que exigen tus estatutos en Firmantes.',
-    path: 'Le llega un correo al revisor fiscal o al contador; se emite cuando lo autoriza con su cuenta.',
+    path: 'Le llega un correo al revisor fiscal o al contador; se emite cuando lo aprueba desde ese enlace.',
   },
   {
     document: 'Reporte de servicio social',
@@ -348,7 +349,7 @@ export function OrgLegalRepresentativePage() {
               </dl>
               <p className="text-xs text-muted-foreground">
                 {signaturesEnabled
-                  ? 'Si solo firma el representante legal, el documento se emite al generarlo desde la cuenta principal. Si además pide contador o revisor fiscal, esa persona recibe un correo y lo autoriza con su propia cuenta en "Documentos por firmar"; mientras falte su firma, queda pendiente de firma y no se emite.'
+                  ? 'Si solo firma el representante legal, el documento se emite al generarlo desde la cuenta principal. Si además pide contador o revisor fiscal, esa persona recibe un correo con un enlace de un solo uso y lo aprueba desde ahí, sin crear cuenta; mientras falte su firma, queda pendiente de firma y no se emite.'
                   : 'Por ahora los reportes salen como comprobantes informativos, sin firmas: la firma de cada persona se estampará solo cuando ella misma apruebe el documento con su cuenta.'}
               </p>
             </CardContent>

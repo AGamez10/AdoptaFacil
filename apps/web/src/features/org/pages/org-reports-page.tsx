@@ -540,6 +540,20 @@ export function OrgReportsPage() {
     setHistory((current) => [report, ...current.filter((r) => r.id !== report.id)]);
   }
 
+  /** Reenvía a quien falte por firmar un enlace nuevo (el anterior deja de servir). */
+  async function handleResend(report: OrgReport) {
+    try {
+      await client.request(`/org/reports/${report.id}/signature-requests`, { method: 'POST' });
+      toast({ title: 'Enlace de firma reenviado', variant: 'success' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo reenviar',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+    }
+  }
+
   async function handleDownload(report: OrgReport, format: 'pdf' | 'xlsx') {
     try {
       await downloadReport(client, report, format);
@@ -656,6 +670,15 @@ export function OrgReportsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-right">
+                            {canGenerate && report.status === 'pending_signatures' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void handleResend(report)}
+                              >
+                                Reenviar firma
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"
