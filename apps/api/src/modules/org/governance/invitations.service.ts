@@ -14,12 +14,16 @@ import {
   type AuthSession,
   type CreateInvitationInput,
   type InvitationPreview,
+  invitationRoleCopy,
+  type LegalAcceptanceItem,
   type OrganizationInvitation,
   OrganizationStatus,
+  requiredLegalDocuments,
   Role,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../../config/env.validation';
 import { AuditService } from '../../../core/audit/audit.service';
+import { LegalService, type LegalRequestContext } from '../../../core/legal';
 import { PlansService } from '../../../core/plans/plans.service';
 import { PasswordService } from '../../../core/auth/password.service';
 import { TokenService } from '../../../core/auth/token.service';
@@ -55,6 +59,56 @@ export function hashInvitationToken(token: string): string {
  *  reaches a server log, a proxy or a Referer header. */
 export function buildInvitationLink(webBaseUrl: string, token: string): string {
   return `${webBaseUrl.replace(/\/+$/, '')}/invitacion#token=${encodeURIComponent(token)}`;
+}
+
+/** Funciones del cargo como lista con viñetas (el correo la dibuja en un recuadro). */
+export function dutiesAsList(duties: readonly string[]): string {
+  return duties.map((duty) => `• ${duty}`).join('\n');
+}
+
+const DATE_CO = new Intl.DateTimeFormat('es-CO', {
+  dateStyle: 'long',
+  timeStyle: 'short',
+  timeZone: 'America/Bogota',
+});
+
+/**
+ * Correo de invitación de una organización: el cargo y sus funciones salen de
+ * la invitación guardada (rol + cargo de firmante), nunca de texto fijo. El
+ * texto plano es el respaldo si la plantilla no se puede dibujar.
+ */
+export function buildOrgInvitationEmail(input: {
+  organizationName: string;
+  inviterName: string;
+  role: string;
+  signerRole?: string | null;
+  expiresAt: Date;
+  link: string;
+}): { subject: string; body: string; data: Record<string, string> } {
+  const copy = invitationRoleCopy(
+    input.role,
+    input.signerRole as Parameters<typeof invitationRoleCopy>[1],
+  );
+  const funciones = dutiesAsList(copy.duties);
+  const vence = DATE_CO.format(input.expiresAt);
+  return {
+    subject: `${input.organizationName} te invita a su equipo como ${copy.label}`,
+    body:
+      'Hola,\n\n' +
+      `${input.inviterName} te invitó a unirte a ${input.organizationName} en AdoptaFácil ` +
+      `con el cargo de ${copy.label}.\n\n` +
+      `Con este cargo podrás:\n${funciones}\n\n` +
+      `Crea tu cuenta con este enlace (caduca el ${vence} y sirve una sola vez):\n\n` +
+      `${input.link}\n\n` +
+      'Si no esperabas esta invitación, ignora este correo: sin abrir el enlace no se crea ninguna cuenta.',
+    data: {
+      cargo: copy.label,
+      funciones,
+      invitado_por: input.inviterName,
+      vence: input.expiresAt.toISOString(),
+      enlace: input.link,
+    },
+  };
 }
 
 function statusOf(row: InvitationRow, now = Date.now()): OrganizationInvitation['status'] {
@@ -101,6 +155,7 @@ export class InvitationsService {
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     private readonly plans: PlansService,
     config: ConfigService<Env, true>,
+    private readonly legal: LegalService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
   }
@@ -213,22 +268,39 @@ export class InvitationsService {
           ...(input.signerRole ? { signerRole: input.signerRole } : {}),
         },
       });
-      return created;
+      // Quién invita, leído dentro del mismo tenant (RLS): nunca de otra organización.
+      const inviter = await tx.user.findFirst({
+        where: { id: actorUserId, organizationId },
+        select: { displayName: true },
+      });
+      return { ...created, inviterName: inviter?.displayName?.trim() || null };
     });
 
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { name: true },
     });
+    const organizationName = organization?.name ?? 'Una organización';
+    const email_ = buildOrgInvitationEmail({
+      organizationName,
+      inviterName: row.inviterName ?? `El equipo de ${organizationName}`,
+      role: row.role,
+      signerRole: row.signerRole,
+      expiresAt: row.expiresAt,
+      link: buildInvitationLink(this.webBaseUrl, token),
+    });
     await this.notifications.send({
       to: email,
-      subject: `Te invitaron a ${organization?.name ?? 'una organización'} en AdoptaFácil`,
-      body:
-        'Hola,\n\n' +
-        `${organization?.name ?? 'Una organización'} te invitó a unirte a su equipo en AdoptaFácil.\n` +
-        'Abre este enlace para crear tu cuenta (caduca en 7 días y solo sirve una vez):\n\n' +
-        `${buildInvitationLink(this.webBaseUrl, token)}\n\n` +
-        'Si no esperabas esta invitación, ignora este correo.',
+      subject: email_.subject,
+      body: email_.body,
+      template: {
+        event: 'org.invitation',
+        data: email_.data,
+        organizationName,
+        organizationId,
+      },
+      // Cada invitación es un correo distinto (reinvitar crea otra y anula la anterior).
+      idempotencyKey: `org.invitation:${row.id}`,
     });
     return toInvitation(row);
   }
@@ -302,11 +374,23 @@ export class InvitationsService {
       organizationName,
       email: row.email,
       role: row.role as Role,
+      ...(row.signerRole
+        ? { signerRole: row.signerRole as NonNullable<InvitationPreview['signerRole']> }
+        : {}),
       expiresAt: row.expiresAt.toISOString(),
     };
   }
 
-  async accept(input: AcceptInvitationInput): Promise<AuthSession> {
+  async accept(
+    input: AcceptInvitationInput,
+    context: LegalRequestContext = {},
+  ): Promise<AuthSession> {
+    // Autorización previa (Ley 1581 art. 9), igual que el registro: la persona
+    // entra a una cuenta de organización, así que acepta los mismos documentos.
+    const acceptances: LegalAcceptanceItem[] = this.legal.assertAcceptances(
+      input.legalAcceptances,
+      requiredLegalDocuments('organization'),
+    );
     const { row } = await this.resolve(input.token);
     const { organizationId, email } = row;
     const existing = await this.prisma.authCredential.findUnique({ where: { email } });
@@ -367,6 +451,15 @@ export class InvitationsService {
             metadata: { signerRole: row.signerRole, designatedByUserId: row.invitedByUserId },
           });
         }
+        // Prueba de la autorización en la MISMA transacción que la cuenta.
+        await this.legal.recordWithTx(tx, {
+          organizationId,
+          actorUserId: userId,
+          subject: { type: 'user', userId },
+          items: acceptances,
+          channel: 'registration',
+          context,
+        });
         await this.audit.recordWithTx(tx, {
           organizationId,
           actorUserId: userId,
@@ -383,6 +476,7 @@ export class InvitationsService {
       }
       throw error;
     }
+    await this.legal.notifyAcceptance(email, acceptances);
 
     const tokens = await this.tokens.issueTokens({
       userId,

@@ -29,6 +29,7 @@ const SAFE_PRODUCTION = {
   SIGNATURE_DRIVER: 'disabled',
   TRUST_PROXY_HOPS: '1',
   THROTTLER_STORAGE: 'redis',
+  WEB_BASE_URL: 'https://adoptafacil.co',
 };
 
 function omit(env: Record<string, string>, ...keys: string[]): Record<string, string> {
@@ -41,6 +42,22 @@ const EPAYCO = {
 };
 
 describe('production guard (R0-1)', () => {
+  it('accepts an https WEB_BASE_URL, including the CI stack on https://localhost', () => {
+    expect(() =>
+      validateEnv({ ...SAFE_PRODUCTION, WEB_BASE_URL: 'https://localhost' }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['the dev default (http://localhost:5173)', undefined],
+    ['plain http', 'http://adoptafacil.co'],
+  ])('refuses production when WEB_BASE_URL is %s (emailed links would not open)', (_c, url) => {
+    const env = url
+      ? { ...SAFE_PRODUCTION, WEB_BASE_URL: url }
+      : omit(SAFE_PRODUCTION, 'WEB_BASE_URL');
+    expect(() => validateEnv(env)).toThrow(/WEB_BASE_URL must be the public https origin/);
+  });
+
   it('boots a production config with every simulated adapter replaced', () => {
     expect(() => validateEnv(SAFE_PRODUCTION)).not.toThrow();
   });

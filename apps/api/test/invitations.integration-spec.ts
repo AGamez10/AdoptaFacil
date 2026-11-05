@@ -102,7 +102,7 @@ describe('Member invitations (R2-3, AF-017)', () => {
   const accept = (token: string, extra: Record<string, unknown> = {}) =>
     request(server)
       .post('/auth/invitations/accept')
-      .send({ token, displayName: 'Invitada', password, ...extra });
+      .send({ token, displayName: 'Invitada', password, ...LEGAL_ORG, ...extra });
 
   /** The raw token lives ONLY in the emailed link, in its fragment. */
   function lastTokenFor(email: string): string {
@@ -161,6 +161,49 @@ describe('Member invitations (R2-3, AF-017)', () => {
     // 7-day expiry (TODO(client) to confirm), stored in UTC.
     const days = (row.expiresAt.getTime() - row.createdAt.getTime()) / 86_400_000;
     expect(days).toBeCloseTo(7, 2);
+
+    // The email speaks of THIS invitation: its role, who sent it, when it expires.
+    const message = [...notifications.sent].reverse().find((m) => m.to === email)!;
+    expect(message.subject).toBe('Refugio Invita te invita a su equipo como Veterinario/a');
+    expect(message.idempotencyKey).toBe(`org.invitation:${row.id}`);
+    expect(message.template).toMatchObject({
+      event: 'org.invitation',
+      organizationId: owner.orgId,
+      organizationName: 'Refugio Invita',
+      data: {
+        cargo: 'Veterinario/a',
+        invitado_por: 'Owner',
+        vence: row.expiresAt.toISOString(),
+        enlace: `${process.env.WEB_BASE_URL ?? 'http://localhost:5173'}/invitacion#token=${token}`,
+      },
+    });
+    expect(String(message.template?.data.funciones)).toMatch(/^• .*historia clínica/m);
+    // Plain-text fallback carries the same role and duties.
+    expect(message.body).toContain('con el cargo de Veterinario/a');
+    expect(message.body).toContain('• Registrar y actualizar la historia clínica');
+    expect(message.body).not.toMatch(/Refugio Ajeno/);
+  });
+
+  it('the email names the person who invited and the signer seat, never another tenant', async () => {
+    const email = `invitee-${randomUUID()}@test.local`;
+    await invite(administrator, email, Role.ReadOnlyAuditor).expect(201);
+    const byAdmin = [...notifications.sent].reverse().find((m) => m.to === email)!;
+    expect(byAdmin.template?.data).toMatchObject({
+      cargo: 'Auditor/a de solo lectura',
+      invitado_por: Role.Administrator,
+    });
+
+    const signerEmail = `signer-${randomUUID()}@test.local`;
+    await request(server)
+      .post('/org/invitations')
+      .set(auth(owner))
+      .send({ email: signerEmail, role: Role.ReadOnlyAuditor, signerRole: 'accountant' })
+      .expect(201);
+    const toSigner = [...notifications.sent].reverse().find((m) => m.to === signerEmail)!;
+    expect(toSigner.subject).toBe('Refugio Invita te invita a su equipo como Contador/a');
+    expect(String(toSigner.template?.data.funciones)).toContain('firma');
+    const seen = await preview(lastTokenFor(signerEmail)).expect(200);
+    expect(seen.body).toMatchObject({ role: Role.ReadOnlyAuditor, signerRole: 'accountant' });
   });
 
   it('deny-by-default: who may invite, and with which role', async () => {
@@ -205,9 +248,24 @@ describe('Member invitations (R2-3, AF-017)', () => {
     await preview('short').expect(400);
   });
 
+  it('accepting without the legal authorization creates nothing (Ley 1581)', async () => {
+    const inv = await invited();
+    const res = await accept(inv.token, { legalAcceptances: undefined }).expect(400);
+    expect(res.body.code).toBe('LEGAL_ACCEPTANCE_REQUIRED');
+    expect(await admin.authCredential.count({ where: { email: inv.email } })).toBe(0);
+  });
+
   it('accepting creates the account INSIDE the inviting organization with the invited role', async () => {
     const inv = await invited(Role.Volunteer);
     const res = await accept(inv.token).expect(201);
+    // Same as sign-up: the refresh cookie lets a reload keep the new session.
+    expect(String(res.headers['set-cookie'])).toMatch(/af_refresh=.+HttpOnly/i);
+    const legal = await admin.legalAcceptance.findMany({
+      where: { subjectType: 'user', subjectId: res.body.user.id },
+    });
+    expect(legal.map((r) => r.documentKey).sort()).toEqual(
+      LEGAL_ORG.legalAcceptances.map((i) => i.key).sort(),
+    );
     expect(res.body.user).toMatchObject({
       email: inv.email,
       accountType: 'organization',

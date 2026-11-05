@@ -5,6 +5,7 @@ import { CLOSED_CAPABILITIES, Role, type PublicCapabilities } from '@adoptafacil
 import { AppProviders, type AppProvidersProps } from '../../../shell/app-providers';
 import { OPEN_CAPABILITIES } from '../../../test-utils';
 import { helpForPath } from '../model/guide-content';
+import { useGuideContext, type GuideContext } from '../model/guide-context';
 import { GuideAssistant } from './guide-assistant';
 
 function renderGuide(
@@ -20,6 +21,30 @@ function renderGuide(
         initialEntries={[route]}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
+        <GuideAssistant />
+      </MemoryRouter>
+    </AppProviders>,
+  );
+}
+
+/** Lo que hace una página (portal, ficha, plantilla) al montarse. */
+function PageWithContext({ context }: { context: GuideContext }) {
+  useGuideContext(context);
+  return null;
+}
+
+function renderWithContext(
+  route: string,
+  context: GuideContext,
+  { session }: { session?: AppProvidersProps['session'] } = {},
+) {
+  return render(
+    <AppProviders session={session} capabilities={OPEN_CAPABILITIES}>
+      <MemoryRouter
+        initialEntries={[route]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <PageWithContext context={context} />
         <GuideAssistant />
       </MemoryRouter>
     </AppProviders>,
@@ -162,5 +187,145 @@ describe('GuideAssistant (R3-8, D14)', () => {
     fireEvent.change(screen.getByLabelText('Correo'), { target: { value: 'secreto@x.co' } });
     expect(screen.getByRole('dialog').innerHTML).toBe(before);
     expect(container.textContent).not.toContain('secreto@x.co');
+  });
+});
+
+describe('GuideAssistant · ayuda según el contexto de la página', () => {
+  const organization = {
+    name: 'Huellitas',
+    whatsapp: '300 123 4567',
+    contactEmail: 'hola@huellitas.org',
+  };
+
+  it('en el portal de una organización: botón discreto, sin pestañas, y WhatsApp de ESA organización', () => {
+    renderWithContext('/o/huellitas', { kind: 'portal', organization });
+    const toggle = screen.getByTestId('guide-toggle');
+    expect(toggle.className).toMatch(/toggle--subtle/);
+    expect(toggle).toHaveAccessibleName('Ayuda');
+
+    fireEvent.click(toggle);
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).getByText('Estás en el portal de Huellitas')).toBeInTheDocument();
+    expect(within(panel).queryByRole('group', { name: 'Tipo de ayuda' })).toBeNull();
+
+    const whatsapp = within(panel).getByTestId('contact-whatsapp');
+    expect(whatsapp).toHaveAttribute('href', expect.stringContaining('wa.me/573001234567'));
+    expect(whatsapp).not.toHaveAttribute('href', expect.stringContaining('573028528926'));
+    expect(whatsapp).toHaveTextContent('WhatsApp de Huellitas');
+    expect(within(panel).getByTestId('contact-email')).toHaveAttribute(
+      'href',
+      expect.stringContaining('mailto:hola@huellitas.org'),
+    );
+    // AdoptaFácil queda solo para reportar fallas de la página, por correo.
+    expect(within(panel).getByRole('link', { name: 'Avísale a AdoptaFácil' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('mailto:adoptafacil.oficial@gmail.com'),
+    );
+  });
+
+  it('en la ficha de un animal el mensaje de WhatsApp ya nombra al animal', () => {
+    renderWithContext('/o/huellitas/animales/a1', {
+      kind: 'portal',
+      organization,
+      animalName: 'Toby',
+    });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    expect(screen.getByText('Ficha de Toby')).toBeInTheDocument();
+    const href = screen.getByTestId('contact-whatsapp').getAttribute('href') ?? '';
+    expect(decodeURIComponent(href)).toContain('Vi a Toby en su portal de AdoptaFácil');
+  });
+
+  it('si la organización no publicó WhatsApp ni correo, lo dice y no manda al WhatsApp de AdoptaFácil', () => {
+    renderWithContext('/o/sin-datos', { kind: 'portal', organization: { name: 'Sin Datos' } });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    expect(screen.getByTestId('guide-org-no-contact')).toHaveTextContent(
+      'Sin Datos todavía no publicó WhatsApp ni correo.',
+    );
+    expect(screen.queryByTestId('contact-whatsapp')).toBeNull();
+  });
+
+  it('un número inválido no se convierte en enlace', () => {
+    renderWithContext('/o/x', {
+      kind: 'portal',
+      organization: { name: 'X', whatsapp: 'javascript:alert(1)' },
+    });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    expect(screen.queryByTestId('contact-whatsapp')).toBeNull();
+    expect(screen.getByTestId('guide-org-no-contact')).toBeInTheDocument();
+  });
+
+  it('en la plantilla de ejemplo explica que los datos son de prueba y dónde se carga cada cosa', () => {
+    renderWithContext('/plantillas/cartel', { kind: 'template-demo', templateName: 'Cartel' });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).getByText('Plantilla Cartel: así se vería tu portal')).toBeInTheDocument();
+    expect(
+      within(panel).getByText(/su WhatsApp lleva al número de tu organización/),
+    ).toBeInTheDocument();
+    // Un visitante no ve enlaces a pantallas del panel que no puede abrir.
+    expect(within(panel).queryByRole('navigation', { name: 'Dónde se gestiona' })).toBeNull();
+  });
+
+  it('la misma plantilla, vista por una organización, enlaza a donde se carga cada dato', () => {
+    renderWithContext(
+      '/plantillas/cartel',
+      { kind: 'template-demo', templateName: 'Cartel' },
+      { session: orgSession([Role.Owner]) },
+    );
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    const related = screen.getByRole('navigation', { name: 'Dónde se gestiona' });
+    expect(within(related).getByRole('link', { name: /Mi organización/ })).toHaveAttribute(
+      'href',
+      '/organizacion',
+    );
+    expect(within(related).getByRole('link', { name: /Personalización/ })).toHaveAttribute(
+      'href',
+      '/organizacion/portal',
+    );
+  });
+});
+
+describe('GuideAssistant · "Dónde se gestiona" respeta el rol', () => {
+  it('formalización enlaza a Documentos para el propietario', () => {
+    renderGuide('/organizacion/formalizacion', { session: orgSession([Role.Owner]) });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    expect(screen.getByText('Formalización')).toBeInTheDocument();
+    const related = screen.getByRole('navigation', { name: 'Dónde se gestiona' });
+    expect(within(related).getByRole('link', { name: /Documentos/ })).toHaveAttribute(
+      'href',
+      '/organizacion/documentos',
+    );
+  });
+
+  it('un operador no recibe el enlace a Documentos (no es su rol)', () => {
+    renderGuide('/organizacion/formalizacion', { session: orgSession([Role.Operator]) });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    expect(screen.queryByRole('link', { name: /Documentos/ })).toBeNull();
+  });
+
+  it('el inicio cambia según la cuenta', () => {
+    expect(helpForPath('/inicio', new Set(['org'])).title).toBe('Inicio de tu organización');
+    expect(helpForPath('/inicio', new Set(['person'])).title).toBe('Tu inicio');
+    expect(helpForPath('/', new Set(['visitor'])).tips[0]).toMatch(/animales disponibles/);
+    expect(helpForPath('/', new Set(['person'])).tips[0]).toMatch(/página pública/);
+  });
+
+  it('cada página del panel tiene su propia ayuda (no la genérica)', () => {
+    for (const path of [
+      '/organizacion',
+      '/organizacion/firmantes',
+      '/organizacion/reportes',
+      '/organizacion/campanas',
+      '/organizacion/recursos',
+      '/organizacion/voluntariado',
+      '/donaciones-recibidas',
+      '/mis-donaciones',
+      '/voluntariado',
+      '/comunidad',
+      '/recursos',
+      '/plataforma/organizaciones',
+    ]) {
+      expect(helpForPath(path).title, path).not.toBe('Ayuda');
+    }
   });
 });

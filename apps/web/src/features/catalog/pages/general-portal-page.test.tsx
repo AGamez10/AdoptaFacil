@@ -122,10 +122,149 @@ describe('GeneralPortalPage (landing)', () => {
     ).toHaveAttribute('href', '/mi-negocio');
   });
 
-  it('hides the campaigns block when there are no active campaigns', async () => {
+  it("with real data, lists open needs, volunteering and each organization's public ledger", async () => {
+    const org = { id: 'o1', name: 'Huellas Felices', slug: 'huellas', city: 'Cali' };
+    const animal = {
+      id: 'a1',
+      name: 'Toby',
+      species: 'dog',
+      organization: org,
+      photos: [],
+      city: 'Cali',
+    };
+    const bodies: Record<string, unknown> = {
+      '/public/resources/needs': {
+        items: [
+          {
+            id: 'n1',
+            organizationId: 'o1',
+            organizationName: 'Huellas Felices',
+            title: 'Concentrado para cachorros',
+            category: 'food',
+            quantityNeeded: 10,
+            unit: 'bultos',
+            quantityFulfilled: 4,
+            progress: 0.4,
+            status: 'partially_fulfilled',
+            createdAt: '2026-10-01T00:00:00Z',
+          },
+        ],
+        total: 1,
+        limit: 3,
+        offset: 0,
+      },
+      '/public/volunteer-opportunities': {
+        items: [
+          {
+            id: 'v1',
+            organizationId: 'o1',
+            organizationName: 'Huellas Felices',
+            title: 'Jornada de baño',
+            category: 'Cuidado',
+            startDate: '2026-11-08T00:00:00Z',
+            endDate: '2026-11-09T00:00:00Z',
+            capacity: 12,
+            location: 'Cali',
+            appliesToStudentService: true,
+          },
+        ],
+        total: 1,
+      },
+      '/public/organizations/huellas/ledger': {
+        items: [],
+        total: 3,
+        limit: 1,
+        offset: 0,
+        totals: {
+          incomeCop: 250000,
+          expenseCop: 120000,
+          balanceCop: 130000,
+          entryCount: 3,
+          lastEntryOn: '2026-10-20',
+        },
+      },
+      '/public/animals': { data: [animal], total: 1 },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) => {
+        const path = new URL(String(input), 'http://x').pathname;
+        const body = bodies[path] ?? { data: [], total: 0 };
+        return Promise.resolve({ ok: true, status: 200, json: async () => body });
+      }),
+    );
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <CapabilitiesProvider value={OPEN_CAPABILITIES}>
+          <SessionProvider initialStatus="unauthenticated">
+            <GeneralPortalPage />
+          </SessionProvider>
+        </CapabilitiesProvider>
+      </MemoryRouter>,
+    );
+    const needs = await screen.findByTestId('landing-needs');
+    expect(
+      await within(needs).findByRole('link', { name: /Concentrado para cachorros/ }),
+    ).toHaveAttribute('href', '/recursos/n1');
+    expect(needs).toHaveTextContent('4 de 10 bultos · 40% cubierto');
+    expect(within(needs).getByRole('link', { name: 'Ver el banco de recursos' })).toHaveAttribute(
+      'href',
+      '/recursos',
+    );
+    const volunteering = await screen.findByTestId('landing-volunteering');
+    expect(await within(volunteering).findByText('Jornada de baño')).toBeVisible();
+    expect(volunteering).toHaveTextContent('Servicio social');
+    expect(volunteering).toHaveTextContent('12 cupos');
+    const ledger = await screen.findByTestId('landing-ledger');
+    expect(await within(ledger).findByRole('link', { name: /Huellas Felices/ })).toHaveAttribute(
+      'href',
+      '/o/huellas#portal-section-public-ledger',
+    );
+    expect(ledger.textContent?.replace(/\s/g, ' ')).toMatch(/Ingresos.*250\.000/);
+  });
+
+  it('keeps the campaigns block with a clear message when there are no active campaigns', async () => {
+    renderLanding();
+    expect(await screen.findByTestId('landing-campaigns-empty')).toHaveTextContent(
+      'Hoy no hay campañas abiertas',
+    );
+    expect(
+      within(screen.getByTestId('landing-campaigns')).getByRole('link', {
+        name: 'Ver todas las campañas',
+      }),
+    ).toHaveAttribute('href', '/campanas');
+  });
+
+  it('shows what shelters ask for: resource needs (module off → "Muy pronto") and volunteering', async () => {
     renderLanding();
     await settle();
-    expect(screen.queryByTestId('landing-campaigns')).not.toBeInTheDocument();
+    const needs = await screen.findByTestId('landing-needs');
+    expect(needs).toHaveTextContent('Muy pronto');
+    expect(within(needs).queryByRole('link')).not.toBeInTheDocument();
+    const volunteering = await screen.findByTestId('landing-volunteering');
+    expect(
+      await within(volunteering).findByText('Hoy no hay voluntariados abiertos'),
+    ).toBeVisible();
+    expect(
+      within(volunteering).getByRole('link', { name: 'Inscribirme como voluntario' }),
+    ).toHaveAttribute('href', '/voluntariado');
+  });
+
+  it('links every guide (SEO) and the public ledger of the organizations', async () => {
+    renderLanding();
+    const guides = await screen.findByTestId('landing-guides');
+    expect(
+      await within(guides).findByRole('link', { name: /Cómo adoptar un perro en Colombia/ }),
+    ).toHaveAttribute('href', '/guias/como-adoptar-un-perro-en-colombia');
+    expect(within(guides).getByRole('link', { name: 'Ver todas las guías' })).toHaveAttribute(
+      'href',
+      '/guias',
+    );
+    expect(
+      await within(await screen.findByTestId('landing-ledger')).findByText(
+        'Todavía no hay libros para mostrar',
+      ),
+    ).toBeVisible();
   });
 
   it('shows the live total from the API and never a fabricated counter', async () => {
@@ -142,13 +281,12 @@ describe('GeneralPortalPage (landing)', () => {
     expect(screen.queryByTestId('hero-live-total')).not.toBeInTheDocument();
   });
 
-  it('does not promise modules that are off in the MVP (dispersión, libro público, catálogo verificado)', async () => {
+  // El libro público (RF14) ya existe en cada portal; lo demás sigue apagado.
+  it('does not promise modules that are off in the MVP (dispersión, catálogo verificado)', async () => {
     renderLanding();
     await settle();
     const text = document.body.textContent ?? '';
-    expect(text).not.toMatch(
-      /se dispersa|Libro público|Catálogo verificado|Apadrinamiento mensual/i,
-    );
+    expect(text).not.toMatch(/se dispersa|Catálogo verificado|Apadrinamiento mensual/i);
   });
 
   it('offers the official WhatsApp and e-mail help to organizations without RUT (F20, D10)', async () => {

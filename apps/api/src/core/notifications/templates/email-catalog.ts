@@ -70,6 +70,94 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'org.invitation',
+    label: 'Invitación al equipo de una organización',
+    description:
+      'Se envía cuando una organización invita a alguien a su equipo con un cargo (administración, operación, veterinaria, auditoría, contador o revisor fiscal…).',
+    audience: 'La persona invitada (aún no tiene cuenta)',
+    category: 'transactional',
+    theme: 'team',
+    // Sin este correo nadie puede entrar al equipo: no se puede apagar.
+    required: true,
+    variables: [
+      ORG,
+      v('cargo', 'Cargo que le dan', 'Veterinario/a'),
+      v(
+        'funciones',
+        'Qué podrá hacer con ese cargo (lista)',
+        '• Registrar y actualizar la historia clínica, vacunas y tratamientos\n• Atender los recordatorios de salud de cada animal',
+      ),
+      v('invitado_por', 'Quién envía la invitación', 'Ana Gómez'),
+      v('vence', 'Fecha y hora en que caduca el enlace', '2026-11-07T22:12:00.000Z', 'date'),
+      v(
+        'enlace',
+        'Enlace para crear la cuenta (un solo uso)',
+        'https://adoptafacil.co/invitacion#token=demo',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: '{{organizacion}} te invita a su equipo como {{cargo}}',
+      preheader:
+        'Crea tu cuenta en AdoptaFácil. El enlace caduca el {{vence}} y sirve una sola vez.',
+      heading: 'Únete al equipo de {{organizacion}}',
+      body:
+        'Hola,\n\n**{{invitado_por}}** te invitó a unirte a **{{organizacion}}** en AdoptaFácil ' +
+        'con el cargo de **{{cargo}}**.\n\n' +
+        'Con este cargo podrás:\n\n' +
+        '{{funciones}}\n\n' +
+        'Crea tu cuenta con el botón: te pediremos tu nombre, una contraseña y aceptar los términos ' +
+        'y la autorización de tratamiento de datos. **El enlace caduca el {{vence}} y sirve una sola vez.**',
+      ctaLabel: 'Crear mi cuenta',
+      footerNote:
+        'Si no esperabas esta invitación, ignora este correo: sin abrir el enlace no se crea ninguna cuenta. ' +
+        'AdoptaFácil nunca te pedirá tu contraseña por correo.',
+    },
+  },
+  {
+    event: 'platform.team_invitation',
+    label: 'Invitación al equipo de plataforma',
+    description:
+      'Se envía cuando el equipo de plataforma aprueba sumar a una persona como administradora de AdoptaFácil.',
+    audience: 'La persona invitada al equipo de plataforma',
+    category: 'transactional',
+    theme: 'security',
+    required: true,
+    variables: [
+      v('cargo', 'Cargo que le dan', 'Administrador/a de plataforma'),
+      v(
+        'funciones',
+        'Qué podrá hacer con ese cargo (lista)',
+        '• Revisar y aprobar organizaciones y sus documentos\n• Moderar la comunidad y atender reportes',
+      ),
+      v('vence', 'Fecha y hora en que caduca el enlace', '2026-11-07T22:12:00.000Z', 'date'),
+      v(
+        'enlace',
+        'Enlace para crear la cuenta (un solo uso)',
+        'https://adoptafacil.co/invitacion#token=demo',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Te invitaron al equipo de plataforma de AdoptaFácil',
+      preheader: 'Crea tu cuenta. El enlace caduca el {{vence}} y sirve una sola vez.',
+      heading: 'Únete al equipo de AdoptaFácil',
+      body:
+        'Hola,\n\nTe invitaron a unirte al equipo que opera la plataforma AdoptaFácil con el cargo de ' +
+        '**{{cargo}}**.\n\n' +
+        'Con este cargo podrás:\n\n' +
+        '{{funciones}}\n\n' +
+        'Al entrar por primera vez te pediremos activar la verificación en dos pasos con una app de ' +
+        'autenticación en tu celular. **El enlace caduca el {{vence}} y sirve una sola vez.**',
+      ctaLabel: 'Crear mi cuenta',
+      footerNote:
+        'Si no esperabas esta invitación, ignora este correo: sin abrir el enlace no se crea ninguna cuenta. ' +
+        'AdoptaFácil nunca te pedirá tu contraseña ni tus códigos por correo.',
+    },
+  },
+  {
     event: 'donation.thanks',
     label: 'Agradecimiento por donación',
     description: 'Se envía cuando el pago de una donación queda confirmado.',
