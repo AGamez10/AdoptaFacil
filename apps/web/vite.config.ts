@@ -8,6 +8,23 @@ export default defineConfig({
   // Without this, VITE_* vars set only at the root (e.g. VITE_GOOGLE_CLIENT_ID)
   // are silently invisible to the browser bundle — no error, just undefined.
   envDir: '../..',
+  css: {
+    preprocessorOptions: {
+      scss: {
+        // Vite 5 defaults to Sass's legacy JS API, which Dart Sass deprecated:
+        // it prints a "legacy-js-api" warning for every .scss module (~100 per
+        // cold page load here) and spins up a fresh compiler per file.
+        // 'modern-compiler' keeps one long-lived compiler for the whole dev
+        // session — no warnings and much cheaper per file, which matters on
+        // slower filesystems such as WSL.
+        api: 'modern-compiler',
+        // `@import` is also deprecated (Dart Sass 3). Our shared tokens still
+        // use it; migrating to @use is a separate change, so keep the dev log
+        // readable until then.
+        silenceDeprecations: ['import'],
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: false,
