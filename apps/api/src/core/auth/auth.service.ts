@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Inject,
   Injectable,
   Logger,
@@ -295,7 +296,10 @@ export class AuthService {
     let claims: Awaited<ReturnType<IdentityPort['verifyGoogleIdToken']>>;
     try {
       claims = await this.identity.verifyGoogleIdToken(dto.idToken);
-    } catch {
+    } catch (error) {
+      // Keep deliberate HTTP answers as-is (the `disabled` adapter answers
+      // 404 so production looks like the route does not exist).
+      if (error instanceof HttpException) throw error;
       // A forged, expired or malformed token is the caller's problem (401),
       // not a server fault: answering 500 hides real outages in the error
       // rate and tells the client to retry something that will never pass.
