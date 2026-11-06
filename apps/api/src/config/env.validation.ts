@@ -455,6 +455,21 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     if (env.MERCADOPAGO_OAUTH_REDIRECT_URI && !isHttpsUrl(env.MERCADOPAGO_OAUTH_REDIRECT_URI)) {
       fail('MERCADOPAGO_OAUTH_REDIRECT_URI', 'the OAuth redirect URI must be https in production');
     }
+    // The client secret, the OAuth codes and every org token go to these
+    // hosts: in production they are pinned to Mercado Pago's own (the
+    // overrides exist only for tests), so a typo can never ship them elsewhere.
+    if (!isMercadoPagoApiBase(env.MERCADOPAGO_BASE_URL)) {
+      fail('MERCADOPAGO_BASE_URL', 'must be https://api.mercadopago.com in production');
+    }
+    if (
+      env.MERCADOPAGO_AUTHORIZE_URL !== undefined &&
+      !isMercadoPagoAuthorizeUrl(env.MERCADOPAGO_AUTHORIZE_URL)
+    ) {
+      fail(
+        'MERCADOPAGO_AUTHORIZE_URL',
+        "must be Mercado Pago's own https://auth.mercadopago.com[.xx]/authorization in production",
+      );
+    }
   }
   // Every emailed link (invitations, password reset, receipts, contracts) is
   // built from WEB_BASE_URL: the forgotten dev default (http://localhost:5173)
@@ -466,6 +481,26 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
       'WEB_BASE_URL',
       'WEB_BASE_URL must be the public https origin of the web app in production',
     );
+  }
+}
+
+/** `https://api.mercadopago.com` (trailing slash tolerated). Pure. */
+export function isMercadoPagoApiBase(value: string | undefined): boolean {
+  return value !== undefined && value.replace(/\/+$/, '') === 'https://api.mercadopago.com';
+}
+
+/** Mercado Pago's own OAuth authorize page (any country site). Pure. */
+export function isMercadoPagoAuthorizeUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      /^auth\.mercadopago\.com(\.[a-z]{2})?$/.test(url.hostname) &&
+      url.port === '' &&
+      url.pathname === '/authorization'
+    );
+  } catch {
+    return false;
   }
 }
 

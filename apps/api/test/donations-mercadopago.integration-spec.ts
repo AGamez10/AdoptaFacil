@@ -9,7 +9,7 @@ import {
   planSubscriptionReference,
 } from '@adoptafacil/contracts';
 import { mercadoPagoSignatureV1 } from '../src/core/payments/mercadopago-payment.adapter';
-import { planMonthlyAmount } from '../src/core/plans/plan-billing.service';
+import { addOneMonth, planMonthlyAmount } from '../src/core/plans/plan-billing.service';
 import { PlansService } from '../src/core/plans/plans.service';
 import { MercadoPagoConnectionsService } from '../src/modules/payments/mercadopago-connections.service';
 import { purgeOrganizations } from './support/cleanup';
@@ -174,12 +174,18 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     (await request(server).get(`/public/donations/organizations/${orgId}/availability`).expect(200))
       .body.canReceiveDonations;
 
+  /** The authorize URL plus the browser-binding cookie `/connect` sets. */
   const connectUrl = async (token: string) => {
     const res = await request(server)
       .get('/org/mercadopago/connect')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
-    return new URL(res.body.authorizeUrl);
+    const setCookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []);
+    const cookie = setCookie.find((c) => c.startsWith('af_mp_oauth='));
+    expect(cookie).toMatch(/HttpOnly/i);
+    return Object.assign(new URL(res.body.authorizeUrl), {
+      cookie: (cookie as string).split(';')[0],
+    });
   };
 
   const grant = (over: Record<string, unknown> = {}) => ({
@@ -221,9 +227,36 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     const tampered = state.slice(0, -2) + (state.endsWith('AA') ? 'BB' : 'AA');
     const res = await request(server)
       .get(`/org/mercadopago/callback?code=TG-code&state=${tampered}`)
+      .set('Cookie', url.cookie)
       .expect(302);
     expect(res.headers.location).toMatch(/mercadopago=expired$/);
     await request(server).get('/org/mercadopago/callback?code=TG-code').expect(302);
+    expect(tokenRequests).toHaveLength(0);
+  });
+
+  it('a leaked authorize URL is useless in another browser, and a state works only once', async () => {
+    const url = await connectUrl(orgToken);
+    const state = url.searchParams.get('state') as string;
+    // Another browser: no binding cookie, or someone else's.
+    const other = await connectUrl(orgToken);
+    for (const cookie of [undefined, other.cookie]) {
+      const req = request(server).get(`/org/mercadopago/callback?code=TG-code&state=${state}`);
+      const res = await (cookie ? req.set('Cookie', cookie) : req).expect(302);
+      expect(res.headers.location).toMatch(/mercadopago=expired$/);
+    }
+    expect(tokenRequests).toHaveLength(0);
+    // The right browser, used twice: only the first callback is honored.
+    const first = await request(server)
+      .get(`/org/mercadopago/callback?error=access_denied&state=${state}`)
+      .set('Cookie', url.cookie)
+      .expect(302);
+    expect(first.headers.location).toMatch(/mercadopago=denied$/);
+    expect(first.headers['set-cookie']?.toString()).toMatch(/af_mp_oauth=;/);
+    const replay = await request(server)
+      .get(`/org/mercadopago/callback?code=TG-code&state=${state}`)
+      .set('Cookie', url.cookie)
+      .expect(302);
+    expect(replay.headers.location).toMatch(/mercadopago=expired$/);
     expect(tokenRequests).toHaveLength(0);
   });
 
@@ -231,6 +264,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     const url = await connectUrl(orgToken);
     const res = await request(server)
       .get(`/org/mercadopago/callback?error=access_denied&state=${url.searchParams.get('state')}`)
+      .set('Cookie', url.cookie)
       .expect(302);
     expect(res.headers.location).toMatch(/mercadopago=denied$/);
   });
@@ -240,6 +274,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     tokenResponse = { status: 200, body: grant({ live_mode: false }) };
     const res = await request(server)
       .get(`/org/mercadopago/callback?code=TG-code-test&state=${url.searchParams.get('state')}`)
+      .set('Cookie', url.cookie)
       .expect(302);
     expect(res.headers.location).toMatch(/mercadopago=error$/);
     const stored = await admin.organizationMercadoPagoConnection.findUnique({
@@ -258,6 +293,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     tokenResponse = { status: 200, body: grant() };
     const res = await request(server)
       .get(`/org/mercadopago/callback?code=TG-code-1&state=${url.searchParams.get('state')}`)
+      .set('Cookie', url.cookie)
       .expect(302);
     expect(res.headers.location).toBe(
       'http://localhost:5173/organizacion?tab=pagos&mercadopago=connected'.replace(
@@ -299,6 +335,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     tokenResponse = { status: 200, body: grant() };
     const res = await request(server)
       .get(`/org/mercadopago/callback?code=TG-code-2&state=${url.searchParams.get('state')}`)
+      .set('Cookie', url.cookie)
       .expect(302);
     expect(res.headers.location).toMatch(/mercadopago=already_linked$/);
   });
@@ -393,6 +430,16 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
   });
 
   it('a valid notification approves the donation once and issues one receipt', async () => {
+    // ESAL with RTE, so the approval also issues a tax certificate.
+    await request(server)
+      .put('/org/profile')
+      .set('Authorization', `Bearer ${orgToken}`)
+      .send({ nit: `9${String(Date.now()).slice(-8)}-1` })
+      .expect(200);
+    await admin.organizationProfile.update({
+      where: { organizationId: orgId },
+      data: { formalizationState: 'esal_rte', rteVigente: true },
+    });
     const res = await notify('900001').expect(200);
     expect(res.body).toEqual({ applied: true, status: 'approved', donationId });
     const again = await notify('900001').expect(200);
@@ -434,6 +481,26 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
       where: { organizationId_mpPaymentId: { organizationId: orgId, mpPaymentId: '900001' } },
     });
     expect(row?.status).toBe('refunded');
+    // The certificate is now ANNULLED: one reversal row, the public check says so,
+    // and the organization can no longer (re)generate it.
+    const reversals = await admin.donationReversal.findMany({ where: { donationId } });
+    expect(reversals).toHaveLength(1);
+    expect(reversals[0].reason).toBe('refunded');
+    const certificate = await admin.donationCertificate.findUnique({ where: { donationId } });
+    expect(certificate).not.toBeNull();
+    const verification = await request(server)
+      .get(`/public/donations/certificates/${certificate!.code}`)
+      .expect(200);
+    expect(verification.body.revokedAt).toEqual(reversals[0].reversedAt.toISOString());
+    expect(
+      await admin.auditLog.count({
+        where: { organizationId: orgId, action: 'donation.certificate_revoked' },
+      }),
+    ).toBe(1);
+    await request(server)
+      .post(`/donations/${donationId}/certificate`)
+      .set('Authorization', `Bearer ${orgToken}`)
+      .expect(422);
     // The mismatched payment is kept too: reconciliation must see it.
     const mismatch = await admin.mercadoPagoPayment.findUnique({
       where: { organizationId_mpPaymentId: { organizationId: orgId, mpPaymentId: '900003' } },
@@ -469,6 +536,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     tokenResponse = { status: 200, body: grant() };
     await request(server)
       .get(`/org/mercadopago/callback?code=TG-code-3&state=${url.searchParams.get('state')}`)
+      .set('Cookie', url.cookie)
       .expect(302);
     await admin.organizationMercadoPagoConnection.update({
       where: { organizationId: orgId },
@@ -557,7 +625,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
       ).toBeNull();
     });
 
-    it('an authorized subscription activates the plan; a confirmed charge extends it', async () => {
+    it('an authorized subscription alone activates nothing; an APPROVED charge does', async () => {
       const next = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       preapprovals.set(preapprovalId, {
         ...preapprovals.get(preapprovalId)!,
@@ -565,21 +633,27 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
         next_payment_date: next.toISOString(),
       });
       const res = await notifyBilling(preapprovalId, 'subscription_preapproval').expect(200);
-      expect(res.body.applied).toBe(true);
+      expect(res.body.applied).toBe(false);
       let sub = await admin.organizationSubscription.findUnique({
         where: { organizationId: orgId },
       });
-      expect(sub).toMatchObject({
-        plan: 'crece',
-        status: 'active',
-        provider: 'mercadopago',
-        providerReference: preapprovalId,
-      });
-      // Repeated delivery: same row, no new audit.
-      const again = await notifyBilling(preapprovalId, 'subscription_preapproval').expect(200);
-      expect(again.body.applied).toBe(false);
+      expect(sub?.status === 'active' && sub.plan === 'crece').toBe(false);
 
-      const chargedAt = new Date(Date.now() + 29 * 24 * 60 * 60 * 1000);
+      // A charge that is not approved changes nothing either.
+      authorizedPayments.set('ap-0', {
+        id: 'ap-0',
+        preapproval_id: preapprovalId,
+        status: 'recycling',
+        payment: { id: 0, status: 'rejected' },
+        transaction_amount: planMonthlyAmount('crece', 0),
+        currency_id: 'COP',
+        debit_date: new Date().toISOString(),
+      });
+      await notifyBilling('ap-0', 'subscription_authorized_payment').expect(200);
+      sub = await admin.organizationSubscription.findUnique({ where: { organizationId: orgId } });
+      expect(sub?.status === 'active' && sub.plan === 'crece').toBe(false);
+
+      const chargedAt = new Date();
       authorizedPayments.set('ap-1', {
         id: 'ap-1',
         preapproval_id: preapprovalId,
@@ -589,9 +663,19 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
         currency_id: 'COP',
         debit_date: chargedAt.toISOString(),
       });
-      await notifyBilling('ap-1', 'subscription_authorized_payment').expect(200);
+      const charged = await notifyBilling('ap-1', 'subscription_authorized_payment').expect(200);
+      expect(charged.body.applied).toBe(true);
       sub = await admin.organizationSubscription.findUnique({ where: { organizationId: orgId } });
-      expect(sub?.currentPeriodEnd?.getTime()).toBeGreaterThan(next.getTime());
+      expect(sub).toMatchObject({
+        plan: 'crece',
+        status: 'active',
+        provider: 'mercadopago',
+        providerReference: preapprovalId,
+      });
+      expect(sub?.currentPeriodEnd?.getTime()).toBe(addOneMonth(chargedAt).getTime());
+      // Repeated delivery: same row, no new audit.
+      const again = await notifyBilling('ap-1', 'subscription_authorized_payment').expect(200);
+      expect(again.body.applied).toBe(false);
     });
 
     it('a subscription with a tampered amount never activates a plan (audited)', async () => {

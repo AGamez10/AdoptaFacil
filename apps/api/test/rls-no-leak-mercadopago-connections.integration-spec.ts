@@ -181,6 +181,17 @@ describe('RLS (organization_mercadopago_connections)', () => {
       ).rejects.toThrow();
     });
 
+    it('no-leak: the ledger survives: deleting the org or the rows is refused even for a superuser', async () => {
+      await expect(admin.organization.delete({ where: { id: orgA } })).rejects.toThrow();
+      await expect(
+        admin.$executeRawUnsafe(
+          `DELETE FROM mercadopago_payments WHERE organization_id = $1::uuid`,
+          orgA,
+        ),
+      ).rejects.toThrow(/reconciliation ledger/);
+      expect(await admin.mercadoPagoPayment.count({ where: { organizationId: orgA } })).toBe(1);
+    });
+
     it('no-leak: the app role cannot delete reconciliation rows (append/update only)', async () => {
       await expect(
         withOrgContext(prisma, orgA, (tx) => tx.mercadoPagoPayment.deleteMany()),

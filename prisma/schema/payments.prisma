@@ -155,7 +155,7 @@ model MercadoPagoPayment {
   firstSeenAt               DateTime  @default(now()) @map("first_seen_at")
   updatedAt                 DateTime  @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@unique([organizationId, mpPaymentId])
   @@index([organizationId, dateApproved])

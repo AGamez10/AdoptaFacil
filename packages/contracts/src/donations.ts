@@ -230,6 +230,12 @@ export interface DonationCertificate {
   currency: PaymentCurrency;
   issuedAt: string;
   contentHash: string;
+  /**
+   * ADR-PAG-003: fecha (UTC) en que el certificado quedó ANULADO porque el pago
+   * se reembolsó, se contracargó o se canceló en la pasarela. `null`/ausente =
+   * vigente. El documento sellado no cambia; solo deja de valer.
+   */
+  revokedAt?: string | null;
 }
 
 /**
@@ -247,6 +253,8 @@ export interface DonationCertificateVerification {
   currency: PaymentCurrency;
   issuedAt: string;
   contentHash: string;
+  /** Anulado por reembolso o contracargo (ver `DonationCertificate.revokedAt`). */
+  revokedAt?: string | null;
 }
 
 /**

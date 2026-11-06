@@ -218,6 +218,25 @@ describe('module feature flags (R1-1)', () => {
         MERCADOPAGO_OAUTH_REDIRECT_URI: 'http://api.adoptafacil.co/org/mercadopago/callback',
       }),
     ).toThrow(/MERCADOPAGO_OAUTH_REDIRECT_URI/);
+    // Mercado Pago's hosts are pinned in production (test overrides only).
+    expect(() =>
+      validateEnv({ ...SAFE_PRODUCTION, ...mp, MERCADOPAGO_BASE_URL: 'https://api.mp.test' }),
+    ).toThrow(/MERCADOPAGO_BASE_URL/);
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        MERCADOPAGO_AUTHORIZE_URL: 'https://auth.mercadopago.com.evil.co/authorization',
+      }),
+    ).toThrow(/MERCADOPAGO_AUTHORIZE_URL/);
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        MERCADOPAGO_BASE_URL: 'https://api.mercadopago.com/',
+        MERCADOPAGO_AUTHORIZE_URL: 'https://auth.mercadopago.com.ar/authorization',
+      }),
+    ).not.toThrow();
     // Still needs the written approval reference.
     expect(() => validateEnv({ ...SAFE_PRODUCTION, ...mp, FEATURE_PAYMENTS: 'true' })).toThrow(
       /PAYMENTS_PRODUCTION_APPROVAL_REF/,

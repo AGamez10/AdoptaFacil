@@ -26,6 +26,13 @@
 2. El `state` es un sobre sellado con AES-256-GCM. La llave se deriva con HKDF de
    `SIGNATURE_ENCRYPTION_KEY`. El sobre lleva la organización, el usuario, un nonce, el verificador PKCE y un
    vencimiento de 10 minutos. Si alguien lo altera o expira, no se conecta nada (anti-CSRF).
+   - **Ligado al navegador:** `/connect` deja una cookie HttpOnly (`af_mp_oauth`) y el `state` lleva su hash.
+     El callback solo acepta el `state` en el navegador que lo pidió, así que un enlace de autorización
+     filtrado (pantalla compartida, historial, reenviado) no sirve en otro equipo.
+   - **Un solo uso:** el nonce del `state` se consume en Redis en el primer callback. Una repetición responde
+     `expired`.
+   - **Rol vigente:** al volver, la persona que inició la conexión debe seguir siendo Owner o Administrator de
+     la organización.
 3. PKCE (S256) se activa con `MERCADOPAGO_OAUTH_PKCE=true`. Hay que activarlo **también** en la app de
    Mercado Pago.
 4. Mercado Pago vuelve a `GET /org/mercadopago/callback`. La API cambia el `code` por el par de tokens en
@@ -71,24 +78,34 @@
      `donation.payment_mismatch` y no aprueba.
   5. Aprueba la donación una sola vez y emite un solo recibo. La idempotencia es por organización y
      `mercadopago:<id>:<status>`.
-- **Reembolsos y contracargos** (`refunded`, `charged_back`, `cancelled`): se auditan una vez como
-  `donation.reversed_at_gateway`. La donación aprobada y su recibo no se reescriben.
-  🧾 Pendiente de definir con el contador: un estado propio `refunded`/`charged_back` en la donación (sería
-  un PR de seguimiento).
+- **Reembolsos y contracargos** (`refunded`, `charged_back`, `cancelled`): quedan una vez en
+  `donation_reversals` (append-only, con RLS) y se auditan como `donation.reversed_at_gateway`. La donación
+  aprobada y su recibo no se reescriben, porque son el registro de lo que pasó. Pero:
+  - el **certificado** de esa donación queda **anulado** (`donation.certificate_revoked`): la verificación
+    pública y las vistas del donante lo muestran como "Anulado", con la fecha;
+  - no se emiten certificados nuevos para esa donación, ni automáticos ni a pedido de la organización.
+    🧾 Pendiente de definir con el contador: un estado propio `refunded`/`charged_back` en la donación (sería
+    un PR de seguimiento).
 
 ## 4. Planes (cuenta de AdoptaFácil)
 
 - `POST /org/plan/checkout` (Owner/Admin) crea un preapproval mensual en COP, IVA incluido, con el
   descuento de fundador si aplica. Usa `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`.
 - `POST /billing/webhooks/mercadopago` valida la firma y vuelve a consultar con el token de la plataforma.
-  Comprueba el monto, que la moneda sea COP y que la frecuencia sea mensual. Con eso activa, extiende o
-  cancela `organization_subscriptions` (provider `mercadopago`) y lo audita.
+  Comprueba el monto, que la moneda sea COP y que la frecuencia sea mensual. El plan se **activa y extiende
+  solo con un cobro aprobado** (`subscription_authorized_payment`): un preapproval autorizado sin cobro no
+  activa nada, así que si el primer cobro falla no hay mes gratis. La cancelación o pausa del preapproval
+  marca el plan como cancelado. Todo se audita.
+- Mientras `PLAN_ENFORCEMENT` está apagado (piloto: todas las organizaciones tienen Pro gratis),
+  `POST /org/plan/checkout` responde 409 y la web no muestra el botón de pago.
 - Una cancelación solo afecta la suscripción que creó ese preapproval.
 
 ## 5. Conciliación: `mercadopago_payments`
 
 Hay una fila por organización y pago de Mercado Pago, y se actualiza en cada notificación. La tabla tiene
-RLS. El rol de la app puede SELECT, INSERT y UPDATE, pero no DELETE.
+RLS. El rol de la app puede SELECT, INSERT y UPDATE. DELETE y TRUNCATE se rechazan para todo rol (trigger),
+y la FK hacia `organizations` es `RESTRICT`: no se puede borrar una organización que tenga pagos
+registrados, para conservar el soporte contable.
 
 Campos: `mp_payment_id`, `collector_id`, `external_reference`, `donation_id` (si cuadra con una donación
 de la misma organización), `status`, `status_detail`, `currency`, `transaction_amount`,
@@ -102,23 +119,23 @@ la conciliación tiene que ver.
 
 Nunca van en el repositorio. Se cargan como secretos del despliegue.
 
-| Variable                                     | Obligatoria             | Para qué                                                           |
-| -------------------------------------------- | ----------------------- | ------------------------------------------------------------------ |
-| `PAYMENT_DRIVER=mercadopago`                 | sí                      | Activa el adaptador                                                |
-| `MERCADOPAGO_CLIENT_ID`                      | sí 👤                   | App ID de la aplicación de AdoptaFácil en Mercado Pago             |
-| `MERCADOPAGO_CLIENT_SECRET`                  | sí 👤                   | Client secret de esa aplicación                                    |
-| `MERCADOPAGO_WEBHOOK_SECRET`                 | sí 👤                   | "Clave secreta" de Webhooks de la aplicación (firma `x-signature`) |
-| `SIGNATURE_ENCRYPTION_KEY`                   | sí (ya existe)          | De ella se derivan la llave del `state` y la del cifrado de tokens |
-| `API_PUBLIC_BASE_URL`                        | sí 👤                   | URL pública de la API, por ejemplo `https://api.adoptafacil.co`    |
-| `WEB_BASE_URL`                               | sí (ya existe)          | Destino de `back_urls` y del regreso del OAuth                     |
-| `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`          | para cobrar planes 👤   | Access token de producción de la cuenta de **AdoptaFácil**         |
-| `MERCADOPAGO_OAUTH_REDIRECT_URI`             | no                      | Por defecto `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`      |
-| `MERCADOPAGO_OAUTH_PKCE`                     | no (recomendado `true`) | Activa PKCE; debe coincidir con la app                             |
-| `MERCADOPAGO_TEST`                           | no                      | `true` = sandbox: pide `test_token` y usa `sandbox_init_point`     |
-| `MERCADOPAGO_STATEMENT_DESCRIPTOR`           | no                      | Texto en el extracto (hasta 22 caracteres)                         |
-| `MERCADOPAGO_BASE_URL` / `_AUTHORIZE_URL`    | no                      | Solo para pruebas                                                  |
-| `MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS`      | no                      | 30 por defecto                                                     |
-| `MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS` | no                      | Una vez al día por defecto                                         |
+| Variable                                     | Obligatoria             | Para qué                                                             |
+| -------------------------------------------- | ----------------------- | -------------------------------------------------------------------- |
+| `PAYMENT_DRIVER=mercadopago`                 | sí                      | Activa el adaptador                                                  |
+| `MERCADOPAGO_CLIENT_ID`                      | sí 👤                   | App ID de la aplicación de AdoptaFácil en Mercado Pago               |
+| `MERCADOPAGO_CLIENT_SECRET`                  | sí 👤                   | Client secret de esa aplicación                                      |
+| `MERCADOPAGO_WEBHOOK_SECRET`                 | sí 👤                   | "Clave secreta" de Webhooks de la aplicación (firma `x-signature`)   |
+| `SIGNATURE_ENCRYPTION_KEY`                   | sí (ya existe)          | De ella se derivan la llave del `state` y la del cifrado de tokens   |
+| `API_PUBLIC_BASE_URL`                        | sí 👤                   | URL pública de la API, por ejemplo `https://api.adoptafacil.co`      |
+| `WEB_BASE_URL`                               | sí (ya existe)          | Destino de `back_urls` y del regreso del OAuth                       |
+| `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`          | para cobrar planes 👤   | Access token de producción de la cuenta de **AdoptaFácil**           |
+| `MERCADOPAGO_OAUTH_REDIRECT_URI`             | no                      | Por defecto `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`        |
+| `MERCADOPAGO_OAUTH_PKCE`                     | no (recomendado `true`) | Activa PKCE; debe coincidir con la app                               |
+| `MERCADOPAGO_TEST`                           | no                      | `true` = sandbox: pide `test_token` y usa `sandbox_init_point`       |
+| `MERCADOPAGO_STATEMENT_DESCRIPTOR`           | no                      | Texto en el extracto (hasta 22 caracteres)                           |
+| `MERCADOPAGO_BASE_URL` / `_AUTHORIZE_URL`    | no                      | Solo para pruebas; en producción solo se aceptan los de Mercado Pago |
+| `MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS`      | no                      | 30 por defecto                                                       |
+| `MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS` | no                      | Una vez al día por defecto                                           |
 
 Web: `VITE_PAYMENT_PROVIDER=mercadopago` (es el valor por defecto; `epayco` u `off` cambian la pasarela).
 

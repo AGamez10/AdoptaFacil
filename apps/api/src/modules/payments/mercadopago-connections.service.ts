@@ -7,12 +7,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import type {
-  MercadoPagoCollectorCredentials,
-  MercadoPagoConnectionStatus,
-  MercadoPagoConnectResult,
-  MercadoPagoConnectStatusView,
-  MercadoPagoConnectUrlView,
+import type { Redis } from 'ioredis';
+import {
+  Role,
+  type MercadoPagoCollectorCredentials,
+  type MercadoPagoConnectionStatus,
+  type MercadoPagoConnectResult,
+  type MercadoPagoConnectStatusView,
+  type MercadoPagoConnectUrlView,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { AuditService } from '../../core/audit/audit.service';
@@ -24,11 +26,17 @@ import {
 } from '../../core/payments/mercadopago-oauth.client';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { REDIS_CLIENT } from '../../redis/redis.service';
 import {
   MERCADOPAGO_CONNECT_STATE_TTL_SECONDS,
   MERCADOPAGO_CONNECTION_ENTITY,
 } from './mercadopago-connect.constants';
-import { openOAuthState, sealOAuthState } from './mercadopago-oauth-state';
+import {
+  createOAuthBinding,
+  oauthBindingMatches,
+  openOAuthState,
+  sealOAuthState,
+} from './mercadopago-oauth-state';
 import {
   decryptMercadoPagoSecret,
   encryptMercadoPagoSecret,
@@ -37,6 +45,12 @@ import {
 
 /** A token this close to expiry is renewed before charging with it. */
 const INLINE_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+/** Roles that may (still) connect the org's account when the callback lands. */
+const CONNECT_ROLES: string[] = [Role.Owner, Role.Administrator];
+
+/** Redis key that burns an OAuth `state` nonce on first use. */
+const stateNonceKey = (nonce: string) => `mercadopago:oauth:state:${nonce}`;
 
 type ConnectionRow = Prisma.OrganizationMercadoPagoConnectionGetPayload<Record<string, never>>;
 
@@ -71,6 +85,7 @@ export class MercadoPagoConnectionsService {
     private readonly oauth: MercadoPagoOAuthClient,
     private readonly config: ConfigService<Env, true>,
     @Inject(MERCADOPAGO_TOKENS_ENCRYPTION_KEY) private readonly key: Buffer,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {
     this.webBaseUrl = (config.get('WEB_BASE_URL', { infer: true }) as string).replace(/\/+$/, '');
   }
@@ -83,8 +98,12 @@ export class MercadoPagoConnectionsService {
     return organizationId;
   }
 
-  /** `GET /org/mercadopago/connect` (Owner/Administrator). */
-  getConnectUrl(actorUserId: string): MercadoPagoConnectUrlView {
+  /**
+   * `GET /org/mercadopago/connect` (Owner/Administrator). Also returns the
+   * browser-binding secret the controller sets as an HttpOnly cookie: the
+   * authorize URL only works in the browser that asked for it.
+   */
+  getConnectUrl(actorUserId: string): { view: MercadoPagoConnectUrlView; bindingSecret: string } {
     const organizationId = this.requireOrgId();
     if (!this.oauth.isConfigured()) {
       throw new ServiceUnavailableException(
@@ -92,12 +111,21 @@ export class MercadoPagoConnectionsService {
       );
     }
     const pkce = this.oauth.usesPkce() ? createPkcePair() : undefined;
+    const binding = createOAuthBinding();
     const state = sealOAuthState(
-      { organizationId, actorUserId, ...(pkce ? { codeVerifier: pkce.verifier } : {}) },
+      {
+        organizationId,
+        actorUserId,
+        bindingHash: binding.hash,
+        ...(pkce ? { codeVerifier: pkce.verifier } : {}),
+      },
       this.key,
       MERCADOPAGO_CONNECT_STATE_TTL_SECONDS,
     );
-    return { authorizeUrl: this.oauth.buildAuthorizeUrl(state, pkce?.challenge) };
+    return {
+      view: { authorizeUrl: this.oauth.buildAuthorizeUrl(state, pkce?.challenge) },
+      bindingSecret: binding.secret,
+    };
   }
 
   /** Where the callback sends the browser back (the "Medios de pago" tab). */
@@ -113,10 +141,32 @@ export class MercadoPagoConnectionsService {
     code?: string;
     state?: string;
     error?: string;
+    /** The HttpOnly binding cookie sent by the browser. */
+    binding?: string;
   }): Promise<MercadoPagoConnectResult> {
     const claims = params.state ? openOAuthState(params.state, this.key) : null;
     if (!claims) {
       this.logger.warn('Mercado Pago callback with an invalid or expired state');
+      return 'expired';
+    }
+    // A leaked authorize URL (shared screen, history, forwarded link) is
+    // useless in another browser: the binding cookie must match.
+    if (!oauthBindingMatches(claims, params.binding)) {
+      this.logger.warn(
+        `Mercado Pago callback for org ${claims.organizationId} from another browser`,
+      );
+      return 'expired';
+    }
+    // One use per state: a replayed callback never connects twice.
+    const fresh = await this.redis.set(
+      stateNonceKey(claims.nonce),
+      '1',
+      'EX',
+      MERCADOPAGO_CONNECT_STATE_TTL_SECONDS,
+      'NX',
+    );
+    if (fresh !== 'OK') {
+      this.logger.warn(`Mercado Pago callback replayed for org ${claims.organizationId}`);
       return 'expired';
     }
     if (params.error || !params.code) {
@@ -124,6 +174,14 @@ export class MercadoPagoConnectionsService {
       return 'denied';
     }
     if (!/^[A-Za-z0-9_-]{1,512}$/.test(params.code)) {
+      return 'error';
+    }
+    // The actor must STILL be Owner/Administrator of that org when the
+    // grant lands (a role removed during the 10-minute window counts).
+    if (!(await this.actorMayConnect(claims.organizationId, claims.actorUserId))) {
+      this.logger.warn(
+        `Mercado Pago callback for org ${claims.organizationId}: actor no longer Owner/Administrator`,
+      );
       return 'error';
     }
 
@@ -192,6 +250,16 @@ export class MercadoPagoConnectionsService {
       return 'error';
     }
     return 'connected';
+  }
+
+  private async actorMayConnect(organizationId: string, userId: string): Promise<boolean> {
+    const role = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.userRole.findFirst({
+        where: { organizationId, userId, role: { in: CONNECT_ROLES } },
+        select: { id: true },
+      }),
+    );
+    return role !== null;
   }
 
   /** `GET /org/mercadopago/status` — never a token. */

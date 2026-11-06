@@ -62,7 +62,8 @@ export interface PlanWebhookOutcome {
  * Flow: Owner/Administrator starts a checkout → Mercado Pago asks the payer to
  * authorize the monthly charge → signed notifications (`subscription_preapproval`
  * and `subscription_authorized_payment`) → read back with the PLATFORM token →
- * the org's subscription row is activated/extended/cancelled, audited.
+ * the org's subscription row is activated/extended ONLY by an approved charge,
+ * and cancelled/paused by the preapproval status; audited.
  * Idempotent: every write is derived from Mercado Pago's own dates, so a
  * repeated notification yields the same row.
  */
@@ -212,6 +213,13 @@ export class PlanBillingService {
         });
         return { applied: false };
       }
+      // An authorized subscription is a promise, not a payment: the plan is
+      // activated (and extended) only by an APPROVED charge
+      // (`subscription_authorized_payment`). If the first charge fails, the
+      // org never gets a free month.
+      if (status === 'active' && !paidThrough) {
+        return { applied: false };
+      }
       // Cancelling/pausing only touches the subscription THIS preapproval made.
       if (
         status !== 'active' &&
@@ -220,14 +228,9 @@ export class PlanBillingService {
         return { applied: false };
       }
 
-      const now = new Date();
-      const candidates = [
-        previous?.currentPeriodEnd ?? null,
-        paidThrough,
-        status === 'active' && !previous?.currentPeriodEnd && !paidThrough
-          ? (preapproval.nextPaymentDate ?? addOneMonth(now))
-          : null,
-      ].filter((d): d is Date => d instanceof Date);
+      const candidates = [previous?.currentPeriodEnd ?? null, paidThrough].filter(
+        (d): d is Date => d instanceof Date,
+      );
       const currentPeriodEnd =
         candidates.length > 0 ? new Date(Math.max(...candidates.map((d) => d.getTime()))) : null;
 
