@@ -53,6 +53,13 @@ cuota: un límite comercial no detiene un proceso de protección.
 
 ## Lo que falta para cobrar planes de verdad
 
+> **Actualización (2026-11-06):** el PR #88 (Mercado Pago por OAuth, ADR-PAG-003) agrega el cobro
+> mensual de planes con la cuenta de Mercado Pago de AdoptaFácil (`POST /org/plan/checkout` y
+> `POST /billing/webhooks/mercadopago`). Cuando se fusione, el punto 1 queda cubierto en código; sigue
+> sin probarse con dinero real. Mientras `PLAN_ENFORCEMENT` esté apagado, el botón de pagar el plan
+> sigue visible, así que no conviene cargar `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` hasta encender los
+> planes: si no, una organización podría pagar por Pro, que ya tiene gratis.
+
 1. **No hay cobro automático.** No existe integración de suscripciones con ePayco ni Mercado
    Pago para la cuenta de AdoptaFácil; el proveedor es `manual`. El precio, el IVA y el
    descuento se guardan pero nada los cobra ni factura.
