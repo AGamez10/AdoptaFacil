@@ -7,6 +7,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as nodemailer from 'nodemailer';
+import { smtpTransportOptions } from '../src/core/notifications/smtp-notification.adapter';
 
 /** Mismo cargador que `seed-platform-admin.ts`: no pisa variables del shell. */
 function loadRootEnv(): void {
@@ -54,9 +55,7 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const missing = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'].filter(
-    (key) => !process.env[key],
-  );
+  const missing = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_FROM'].filter((key) => !process.env[key]);
   if (missing.length > 0) {
     console.error(`Faltan en tu .env: ${missing.join(', ')}.`);
     console.error('Llénalas (ver .env.example) y vuelve a intentarlo.');
@@ -70,12 +69,13 @@ async function main(): Promise<void> {
   }
 
   const port = Number(process.env.SMTP_PORT);
-  const transport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: { user: process.env.SMTP_USER as string, pass: process.env.SMTP_PASS as string },
-  });
+  // Las mismas opciones que usa la API (TLS, autenticación y firma DKIM).
+  const options = smtpTransportOptions(process.env);
+  const transport = nodemailer.createTransport(options);
+  console.log(
+    `Servidor ${process.env.SMTP_HOST}:${port} · ${options.auth ? 'con usuario' : 'sin usuario (relay interno)'} · ` +
+      `${options.dkim ? `firma DKIM ${options.dkim.keySelector}._domainkey.${options.dkim.domainName}` : 'sin firma DKIM propia'}`,
+  );
 
   try {
     await transport.verify();

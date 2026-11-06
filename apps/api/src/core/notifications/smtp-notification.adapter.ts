@@ -24,10 +24,55 @@ export type MailTransportFactory = (options: {
   host: string;
   port: number;
   secure: boolean;
-  auth: { user: string; pass: string };
+  requireTLS?: boolean;
+  auth?: { user: string; pass: string };
+  dkim?: { domainName: string; keySelector: string; privateKey: string };
   pool?: boolean;
   maxConnections?: number;
 }) => MailTransport;
+
+/** Lo que el adaptador y `pnpm mail:test` necesitan para armar el transporte. */
+export interface SmtpEnv {
+  SMTP_HOST?: string;
+  SMTP_PORT?: number | string;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
+  SMTP_DKIM_DOMAIN?: string;
+  SMTP_DKIM_SELECTOR?: string;
+  SMTP_DKIM_PRIVATE_KEY?: string;
+}
+
+/**
+ * Opciones de nodemailer a partir del entorno, compartidas por la API y por
+ * `pnpm mail:test` para que la prueba use exactamente la misma conexión.
+ * - 465: TLS implícito. 587: STARTTLS OBLIGATORIO (sin él la contraseña podría
+ *   viajar en claro si alguien quita el STARTTLS en el camino). Otro puerto
+ *   (relay interno, 25): STARTTLS si el servidor lo ofrece.
+ * - Sin SMTP_USER/SMTP_PASS no hay AUTH (solo un relay propio en la red de Docker).
+ * - Con SMTP_DKIM_* la API firma cada correo con la clave del dominio.
+ */
+export function smtpTransportOptions(env: SmtpEnv): Parameters<MailTransportFactory>[0] {
+  const port = Number(env.SMTP_PORT);
+  return {
+    host: env.SMTP_HOST as string,
+    port,
+    secure: port === 465,
+    ...(port === 587 ? { requireTLS: true } : {}),
+    ...(env.SMTP_USER && env.SMTP_PASS
+      ? { auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } }
+      : {}),
+    ...(env.SMTP_DKIM_DOMAIN && env.SMTP_DKIM_SELECTOR && env.SMTP_DKIM_PRIVATE_KEY
+      ? {
+          dkim: {
+            domainName: env.SMTP_DKIM_DOMAIN,
+            keySelector: env.SMTP_DKIM_SELECTOR,
+            // En un .env la clave PEM va en una línea con los saltos como \n.
+            privateKey: env.SMTP_DKIM_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          },
+        }
+      : {}),
+  };
+}
 
 /**
  * Real SMTP NotificationPort (T-109). Credentials come EXCLUSIVELY from env
@@ -50,21 +95,23 @@ export class SmtpNotificationAdapter implements NotificationPort {
     config: ConfigService<Env, true>,
     createTransport: MailTransportFactory = nodemailer.createTransport,
   ) {
-    // Non-null: env validation (fail-fast) guarantees these when driver=smtp.
-    const host = config.get('SMTP_HOST', { infer: true }) as string;
-    const port = config.get('SMTP_PORT', { infer: true }) as number;
-    const user = config.get('SMTP_USER', { infer: true }) as string;
-    const pass = config.get('SMTP_PASS', { infer: true }) as string;
+    // Env validation (fail-fast) guarantees host/port/from when driver=smtp.
+    const env = (key: keyof SmtpEnv) => config.get(key as keyof Env, { infer: true }) as never;
     this.from = config.get('SMTP_FROM', { infer: true }) as string;
     // `"AdoptaFácil" <no-reply@adoptafacil.org>` or a bare address: a branded
     // email keeps this ADDRESS (no SPF/DKIM per organization) and only changes
     // the display name.
     this.fromAddress = /<([^>]+)>/.exec(this.from)?.[1]?.trim() ?? this.from.trim();
     this.transport = createTransport({
-      host,
-      port,
-      secure: port === 465, // implicit TLS on 465; STARTTLS otherwise
-      auth: { user, pass },
+      ...smtpTransportOptions({
+        SMTP_HOST: env('SMTP_HOST'),
+        SMTP_PORT: env('SMTP_PORT'),
+        SMTP_USER: env('SMTP_USER'),
+        SMTP_PASS: env('SMTP_PASS'),
+        SMTP_DKIM_DOMAIN: env('SMTP_DKIM_DOMAIN'),
+        SMTP_DKIM_SELECTOR: env('SMTP_DKIM_SELECTOR'),
+        SMTP_DKIM_PRIVATE_KEY: env('SMTP_DKIM_PRIVATE_KEY'),
+      }),
       // Reuse SMTP connections across queued sends (one per worker slot).
       pool: true,
       maxConnections: config.get('EMAIL_QUEUE_CONCURRENCY', { infer: true }) ?? 5,

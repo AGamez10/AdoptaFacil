@@ -30,6 +30,36 @@ describe('validateEnv — NOTIFICATION_DRIVER fail-fast (T-109)', () => {
       }),
     ).not.toThrow();
   });
+
+  const SMTP_MIN = {
+    ...BASE,
+    NOTIFICATION_DRIVER: 'smtp',
+    SMTP_HOST: 'postfix',
+    SMTP_PORT: '25',
+    SMTP_FROM: 'no-reply@example.test',
+  };
+
+  it('accepts an internal relay without SMTP_USER/SMTP_PASS (both absent)', () => {
+    expect(() => validateEnv(SMTP_MIN)).not.toThrow();
+  });
+
+  it('refuses SMTP_USER without SMTP_PASS (they go together)', () => {
+    expect(() => validateEnv({ ...SMTP_MIN, SMTP_USER: 'u' })).toThrow(/SMTP_PASS/);
+  });
+
+  it('refuses a partial DKIM config and accepts the full one', () => {
+    expect(() => validateEnv({ ...SMTP_MIN, SMTP_DKIM_DOMAIN: 'example.test' })).toThrow(
+      /SMTP_DKIM_SELECTOR[\s\S]*SMTP_DKIM_PRIVATE_KEY|SMTP_DKIM_PRIVATE_KEY[\s\S]*SMTP_DKIM_SELECTOR/,
+    );
+    expect(() =>
+      validateEnv({
+        ...SMTP_MIN,
+        SMTP_DKIM_DOMAIN: 'example.test',
+        SMTP_DKIM_SELECTOR: 'af1',
+        SMTP_DKIM_PRIVATE_KEY: 'pem-line-1\\npem-line-2',
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe('validateEnv — PAYMENT_DRIVER fail-fast (T-052)', () => {

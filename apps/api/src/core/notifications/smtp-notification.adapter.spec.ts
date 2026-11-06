@@ -4,6 +4,7 @@ import {
   type MailTransport,
   type MailTransportFactory,
   SmtpNotificationAdapter,
+  smtpTransportOptions,
 } from './smtp-notification.adapter';
 
 const ENV: Record<string, unknown> = {
@@ -108,5 +109,42 @@ describe('SmtpNotificationAdapter (T-109)', () => {
       adapter.send({ to: 'user@dest.test', subject: 'Hola', body: 'x' }),
     ).rejects.toThrow('SMTP connection refused');
     expect(sendMail).toHaveBeenCalledTimes(1);
+  });
+
+  describe('smtpTransportOptions', () => {
+    it('587 requires STARTTLS so the password never travels in clear text', () => {
+      expect(
+        smtpTransportOptions({ SMTP_HOST: 'h', SMTP_PORT: '587', SMTP_USER: 'u', SMTP_PASS: 'p' }),
+      ).toEqual({
+        host: 'h',
+        port: 587,
+        secure: false,
+        requireTLS: true,
+        auth: { user: 'u', pass: 'p' },
+      });
+    });
+
+    it('internal relay: no AUTH when SMTP_USER/SMTP_PASS are absent', () => {
+      expect(smtpTransportOptions({ SMTP_HOST: 'postfix', SMTP_PORT: 25 })).toEqual({
+        host: 'postfix',
+        port: 25,
+        secure: false,
+      });
+    });
+
+    it('signs with DKIM and turns the escaped \\n of a one-line PEM into newlines', () => {
+      const options = smtpTransportOptions({
+        SMTP_HOST: 'h',
+        SMTP_PORT: 465,
+        SMTP_DKIM_DOMAIN: 'adoptafacil.org',
+        SMTP_DKIM_SELECTOR: 'af1',
+        SMTP_DKIM_PRIVATE_KEY: 'pem-line-1\\npem-line-2',
+      });
+      expect(options.dkim).toEqual({
+        domainName: 'adoptafacil.org',
+        keySelector: 'af1',
+        privateKey: 'pem-line-1\npem-line-2',
+      });
+    });
   });
 });
