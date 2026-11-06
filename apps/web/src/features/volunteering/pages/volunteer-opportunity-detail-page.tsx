@@ -22,7 +22,10 @@ import {
   Skeleton,
   useToast,
 } from '@adoptafacil/ui';
+import { formatDayEs } from '@adoptafacil/contracts';
 import { PageContainer, PageHeader } from '../../_layout';
+import { SessionDaysPicker } from '../components/session-days-picker';
+import { ServiceHoursPhotoThumbs } from '../components/service-hours-photos';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import {
@@ -66,6 +69,31 @@ export function VolunteerOpportunityDetailPage() {
   const [rejectingHoursId, setRejectingHoursId] = useState<string | null>(null);
   const [rejectHoursReason, setRejectHoursReason] = useState('');
   const [certificates, setCertificates] = useState<Record<string, VolunteerCertificate>>({});
+  const [editingDays, setEditingDays] = useState(false);
+  const [draftDays, setDraftDays] = useState<string[]>([]);
+  const [savingDays, setSavingDays] = useState(false);
+
+  const saveDays = async (): Promise<void> => {
+    if (!opportunity) return;
+    setSavingDays(true);
+    try {
+      const updated = await client.request<VolunteerOpportunity>(
+        `/volunteer-opportunities/${encodeURIComponent(opportunity.id)}`,
+        { method: 'PATCH', json: { sessionDates: draftDays } },
+      );
+      setOpportunity(updated);
+      setEditingDays(false);
+      toast({ title: 'Días de jornada guardados', variant: 'success' });
+    } catch (error) {
+      toast({
+        title: 'No se pudieron guardar los días',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingDays(false);
+    }
+  };
 
   const fetchHoursFor = async (enrollmentId: string): Promise<ServiceHours[]> => {
     const page = await client.request<Partial<Paginated<ServiceHours>>>(
@@ -226,6 +254,49 @@ export function VolunteerOpportunityDetailPage() {
               </p>
               <p>{opportunity.location}</p>
               {opportunity.requirements && <p>Requisitos: {opportunity.requirements}</p>}
+              <div className="pt-2" data-testid="opportunity-session-days">
+                <p className="font-medium text-foreground">Días de jornada</p>
+                {opportunity.sessionDates && opportunity.sessionDates.length > 0 ? (
+                  <p>{opportunity.sessionDates.map(formatDayEs).join(' · ')}</p>
+                ) : (
+                  <p className="text-amber-700">
+                    Sin días definidos: los voluntarios pueden registrar horas en cualquier día de
+                    la convocatoria. Habilita los días de jornada para controlarlo.
+                  </p>
+                )}
+                {canManage && !editingDays && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    onClick={() => {
+                      setDraftDays(opportunity.sessionDates ?? []);
+                      setEditingDays(true);
+                    }}
+                  >
+                    Editar días de jornada
+                  </Button>
+                )}
+                {canManage && editingDays && (
+                  <div className="mt-3 space-y-3 rounded-md border p-3">
+                    <SessionDaysPicker
+                      id="vo-detail-session-days"
+                      value={draftDays}
+                      onChange={setDraftDays}
+                      start={opportunity.startDate.slice(0, 10)}
+                      end={opportunity.endDate.slice(0, 10)}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" disabled={savingDays} onClick={() => void saveDays()}>
+                        {savingDays ? 'Guardando…' : 'Guardar días'}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditingDays(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -333,6 +404,9 @@ export function VolunteerOpportunityDetailPage() {
                                             <p className="text-xs text-muted-foreground">
                                               {entry.description}
                                             </p>
+                                            <div className="mt-1">
+                                              <ServiceHoursPhotoThumbs entry={entry} />
+                                            </div>
                                           </div>
                                           <div className="flex items-center gap-2">
                                             <Badge variant={hoursStatusVariant(entry.status)}>

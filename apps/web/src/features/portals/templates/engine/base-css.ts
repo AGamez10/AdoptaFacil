@@ -31,6 +31,18 @@ export const BASE_CSS = `
 .af-tpl .tpl-more{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:8px}
 .af-tpl .tpl-more a{display:flex;flex-direction:column;gap:2px;padding:12px 16px;border-radius:14px;background:rgba(127,127,127,.1);text-decoration:none;color:inherit}
 .af-tpl .tpl-more span{font-size:13px;opacity:.75}
+.af-tpl .tpl-vol{padding-block:clamp(48px,6vw,90px)}
+.af-tpl .tpl-vol .k-hd{margin-bottom:24px}
+.af-tpl .tpl-vol .k-eb{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--brand)}
+.af-tpl .tpl-vol .k-h2{font-size:clamp(28px,3.2vw,44px);font-weight:800;line-height:1.1}
+.af-tpl .tpl-vol-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))}
+.af-tpl .tpl-vol-card{display:flex;flex-direction:column;gap:8px;padding:20px;border-radius:18px;background:rgba(127,127,127,.08);border:1px solid rgba(127,127,127,.2)}
+.af-tpl .tpl-vol-card b{font-size:18px;line-height:1.25}
+.af-tpl .tpl-vol-card p{font-size:14px;opacity:.85}
+.af-tpl .tpl-vol-meta,.af-tpl .tpl-vol-days{font-size:13px;opacity:.75}
+.af-tpl .tpl-vol-tag{align-self:flex-start;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--brand);color:var(--brand-ink)}
+.af-tpl .tpl-vol-btn{margin-top:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;background:var(--brand);color:var(--brand-ink);font-weight:700;text-decoration:none}
+.af-tpl .tpl-vol-btn svg{width:16px;height:16px}
 .af-tpl .tpl-enter{animation:afTplIn .6s ease}
 @keyframes afTplIn{from{opacity:0}to{opacity:1}}
 

@@ -1,8 +1,24 @@
 import { z } from 'zod';
-import { DATE_RULES, VolunteerOpportunityStatus } from '@adoptafacil/contracts';
+import {
+  DATE_RULES,
+  isCalendarDate,
+  MAX_VOLUNTEER_SESSION_DATES,
+  VolunteerOpportunityStatus,
+} from '@adoptafacil/contracts';
 import { ruledDate } from '../../core/validation/date-rules';
 
 const startDate = ruledDate(DATE_RULES.opportunityStart);
+
+/** Días de jornada habilitados para registrar horas (`AAAA-MM-DD`). Que caigan
+ *  dentro de las fechas de la convocatoria lo revisa el servicio (al editar,
+ *  las fechas pueden venir de lo ya guardado). */
+const sessionDates = z
+  .array(
+    z
+      .string()
+      .refine(isCalendarDate, { message: 'Cada día de jornada debe ser una fecha válida.' }),
+  )
+  .max(MAX_VOLUNTEER_SESSION_DATES, 'Demasiados días de jornada.');
 /** Al editar, el fin puede quedar en el pasado (cerrar una convocatoria vieja). */
 const endDateOnUpdate = ruledDate({ ...DATE_RULES.opportunityEnd, notPast: false });
 
@@ -20,6 +36,7 @@ export const createVolunteerOpportunitySchema = z
     location: z.string().trim().min(1).max(300),
     requirements: z.string().trim().max(2000).optional(),
     appliesToStudentService: z.boolean().optional(),
+    sessionDates: sessionDates.optional(),
   })
   .strict()
   .refine((value) => new Date(value.endDate).getTime() > new Date(value.startDate).getTime(), {
@@ -39,6 +56,7 @@ export const updateVolunteerOpportunitySchema = z
     location: z.string().trim().min(1).max(300).optional(),
     requirements: z.string().trim().max(2000).optional(),
     status: z.nativeEnum(VolunteerOpportunityStatus).optional(),
+    sessionDates: sessionDates.optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

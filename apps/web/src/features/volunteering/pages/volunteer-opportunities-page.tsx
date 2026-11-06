@@ -22,6 +22,7 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { VolunteerOpportunityManageCard } from '../components/volunteer-opportunity-manage-card';
 import { dateBounds, dateError } from '../../../lib/date-rules';
+import { SessionDaysPicker } from '../components/session-days-picker';
 
 /**
  * `/organizacion/voluntariado` (RF18, M08) — gestión de oportunidades de
@@ -48,6 +49,7 @@ export function VolunteerOpportunitiesPage() {
   const [location, setLocation] = useState('');
   const [requirements, setRequirements] = useState('');
   const [appliesToStudentService, setAppliesToStudentService] = useState(false);
+  const [sessionDates, setSessionDates] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const load = async (): Promise<void> => {
@@ -84,6 +86,7 @@ export function VolunteerOpportunitiesPage() {
     setLocation('');
     setRequirements('');
     setAppliesToStudentService(false);
+    setSessionDates([]);
   };
 
   const submit = async (): Promise<void> => {
@@ -109,6 +112,25 @@ export function VolunteerOpportunitiesPage() {
       });
       return;
     }
+    // La organización coordina la jornada: sin días habilitados, nadie podría
+    // registrar horas en un día concreto.
+    if (sessionDates.length === 0) {
+      toast({
+        title: 'Faltan los días de jornada',
+        description: 'Habilita al menos un día en que se hará la jornada.',
+        variant: 'warning',
+      });
+      return;
+    }
+    if (sessionDates.some((d) => d < startDate || d > endDate)) {
+      toast({
+        title: 'Días de jornada inválidos',
+        description:
+          'Todos los días de jornada deben estar dentro de las fechas de la convocatoria.',
+        variant: 'warning',
+      });
+      return;
+    }
     setSaving(true);
     try {
       const body: CreateVolunteerOpportunityInput = {
@@ -121,6 +143,7 @@ export function VolunteerOpportunitiesPage() {
         location: location.trim(),
         ...(requirements.trim() ? { requirements: requirements.trim() } : {}),
         appliesToStudentService,
+        sessionDates,
       };
       await client.request<VolunteerOpportunity>('/volunteer-opportunities', {
         method: 'POST',
@@ -250,6 +273,13 @@ export function VolunteerOpportunitiesPage() {
                 />
               </div>
             </div>
+            <SessionDaysPicker
+              id="vo-session-days"
+              value={sessionDates}
+              onChange={setSessionDates}
+              start={startDate}
+              end={endDate}
+            />
             <div className="space-y-1.5">
               <label htmlFor="vo-location" className="block text-sm font-medium text-foreground">
                 Ubicación

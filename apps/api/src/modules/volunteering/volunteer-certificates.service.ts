@@ -442,7 +442,12 @@ export class VolunteerCertificatesService {
     const row = sanitizeCertificateForPdf(stored);
 
     const [rawSigner, rawCity] = await Promise.all([
-      this.legalRepresentatives.getCurrentSignerForOrg(row.organizationId).catch(() => null),
+      this.legalRepresentatives.getCurrentSignerForOrg(row.organizationId).catch((error) => {
+        this.logger.warn(
+          `No se pudo leer la firma del representante legal: ${(error as Error).message}`,
+        );
+        return null;
+      }),
       this.getOrgCity(row.organizationId),
     ]);
     const signer = rawSigner
@@ -463,9 +468,17 @@ export class VolunteerCertificatesService {
     // Embebido ANTES de dibujar (pdf-lib es async aquí) — nunca dentro de la
     // función de dibujo, que debe quedar síncrona. Una firma corrupta/no-PNG
     // nunca rompe la generación: se sigue sin imagen (fallback de texto).
-    const signatureImage = signer
-      ? await pdf.embedPng(signer.signatureImage).catch(() => null)
-      : null;
+    // La firma puede venir dibujada (PNG) o subida como foto (JPG): antes solo
+    // se intentaba PNG y una firma en JPG se descartaba en silencio, dejando
+    // el certificado sin firma aunque el representante sí la hubiera registrado.
+    const signatureImage = signer ? await embedSignatureImage(pdf, signer.signatureImage) : null;
+    if (!signer) {
+      this.logger.warn(
+        `Certificado ${row.id}: la organización no tiene firma vigente de representante legal.`,
+      );
+    } else if (!signatureImage) {
+      this.logger.warn(`Certificado ${row.id}: la firma registrada no es una imagen PNG/JPG.`);
+    }
 
     drawCertificatePage(pdf, {
       font: { serif, serifBold, serifItalic, sans, sansBold },
@@ -483,6 +496,31 @@ export class VolunteerCertificatesService {
     const bytes = await pdf.save();
     return Buffer.from(bytes);
   }
+}
+
+/** Incrusta una firma PNG o JPG según sus bytes; `null` si no es ninguna de
+ *  las dos o está dañada (una firma rota nunca impide generar el documento). */
+export async function embedSignatureImage(
+  pdf: PDFDocument,
+  bytes: Buffer | Uint8Array,
+): Promise<PDFImage | null> {
+  if (!bytes || bytes.length < 4) return null;
+  // Copia en un arreglo propio: el lector JPEG de pdf-lib lee `bytes.buffer`
+  // desde el inicio e ignora `byteOffset`, así que un Buffer que es una vista
+  // dentro de otro (lo normal tras descifrar) se leía como basura y la firma
+  // JPG desaparecía en silencio.
+  bytes = Uint8Array.from(bytes);
+  try {
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+      return await pdf.embedPng(bytes);
+    }
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+      return await pdf.embedJpg(bytes);
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 /** Copia del certificado con todo texto variable apto para WinAnsi (ver
@@ -646,13 +684,17 @@ function drawCertificatePage(
   drawCenteredRule(page, PAGE_WIDTH, y, 220, GOLD, 1);
   y -= 40;
 
-  drawCentered(
+  // Quien certifica es la ORGANIZACIÓN (por medio de su representante
+  // legal), nunca AdoptaFácil: la plataforma solo genera el documento.
+  drawCenteredParagraph(
     page,
     PAGE_WIDTH,
-    'Se otorga el presente reconocimiento a:',
+    `${row.organizationName}, por medio de su representante legal, certifica que:`,
     y,
     font.serifItalic,
     13,
+    contentWidth - 160,
+    16,
     MUTED,
   );
   y -= 36;
@@ -708,6 +750,22 @@ function drawCertificatePage(
     font: font.sans,
     color: MUTED,
   });
+  // Quién emite y quién firma, dicho sin ambigüedad.
+  for (const [i, line] of wrapText(
+    `Expide: ${row.organizationName}. Firma: su representante legal. AdoptaFácil genera el ` +
+      'documento con la información que registró la organización; no lo certifica ni lo firma.',
+    font.sans,
+    8,
+    300,
+  ).entries()) {
+    page.drawText(line, {
+      x: leftX,
+      y: footerY - 32 - i * 10,
+      size: 8,
+      font: font.sans,
+      color: MUTED,
+    });
+  }
 
   const signatureBlockWidth = 220;
   const signatureBlockX = PAGE_WIDTH - innerMargin - 20 - signatureBlockWidth;
@@ -731,6 +789,21 @@ function drawCertificatePage(
   }
 
   drawCenteredRuleAt(page, signatureBlockX, signatureBlockWidth, signatureLineY, INK, 0.75);
+  if (!signer || !signatureImage) {
+    // Sin firma registrada no se simula una: el documento lo dice de frente.
+    drawCenteredIn(
+      page,
+      signatureBlockX,
+      signatureBlockWidth,
+      signer
+        ? 'Firma registrada ilegible: vuelve a registrarla'
+        : 'SIN FIRMA: falta registrar la del representante legal',
+      signatureLineY + 14,
+      font.sansBold,
+      8,
+      rgb(0.7, 0.1, 0.1),
+    );
+  }
   const signerName = signer?.fullName ?? '________________________';
   const signerPosition = signer?.position ?? 'Representante Legal';
   drawCenteredIn(
@@ -753,6 +826,26 @@ function drawCertificatePage(
     9.5,
     MUTED,
   );
+  drawCenteredIn(
+    page,
+    signatureBlockX,
+    signatureBlockWidth,
+    fitWidth(`Representante legal de ${row.organizationName}`, font.sans, 8, signatureBlockWidth),
+    signatureLineY - 43,
+    font.sans,
+    8,
+    MUTED,
+  );
+}
+
+/** Recorta un texto con "…" para que quepa en `maxWidth`. */
+function fitWidth(text: string, font: PDFFont, size: number, maxWidth: number): string {
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text;
+  let cut = text;
+  while (cut.length > 1 && font.widthOfTextAtSize(`${cut}…`, size) > maxWidth) {
+    cut = cut.slice(0, -1);
+  }
+  return `${cut.trimEnd()}…`;
 }
 
 function drawCenteredRuleAt(

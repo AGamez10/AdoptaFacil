@@ -45,6 +45,9 @@ export interface RenderReportInput {
    * sin firmas y con un aviso de que NO tiene valor mientras no se emita.
    */
   draft?: 'pending_signatures' | 'rejected';
+  /** Bytes de las fotos de la jornada que cita el payload (ya verificadas por
+   *  SHA-256). Una foto que falte simplemente no se dibuja. */
+  photos?: ReadonlyMap<string, Buffer>;
 }
 
 export const PAGE_W = 841.89;
@@ -616,6 +619,9 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
   c.kpis([
     { label: 'Voluntarios con horas en el período', value: String(p.totals.volunteers) },
     { label: 'Horas aprobadas en el período', value: hours(p.totals.hoursInPeriod) },
+    ...(p.totals.pendingHoursInPeriod
+      ? [{ label: 'Horas por aprobar', value: hours(p.totals.pendingHoursInPeriod) }]
+      : []),
     { label: `Cumplen el mínimo de ${p.minHours} h`, value: String(p.totals.completed) },
     { label: 'Certificados emitidos', value: String(p.totals.certificates) },
   ]);
@@ -650,15 +656,17 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
   c.sectionTitle('Detalle por voluntario');
   c.table(
     [
-      { header: 'Voluntario', width: 17 },
-      { header: 'Actividad', width: 16 },
-      { header: 'Tipo', width: 9 },
-      { header: 'Institución', width: 15 },
-      { header: 'Convenio', width: 8 },
-      { header: 'En período', width: 8, align: 'right' },
-      { header: 'Acumuladas', width: 8, align: 'right' },
-      { header: 'Estado', width: 13 },
-      { header: 'Certificado', width: 8 },
+      { header: 'Voluntario', width: 16 },
+      { header: 'Actividad', width: 14 },
+      { header: 'Tipo', width: 8 },
+      { header: 'Institución', width: 13 },
+      { header: 'Convenio', width: 7 },
+      { header: 'Jornadas', width: 6, align: 'right' },
+      { header: 'Aprobadas', width: 7, align: 'right' },
+      { header: 'Por aprobar', width: 7, align: 'right' },
+      { header: 'Acumuladas', width: 7, align: 'right' },
+      { header: 'Estado', width: 9 },
+      { header: 'Certificado', width: 6 },
     ],
     p.rows.map((r) => [
       pdfText(r.volunteerName, 80),
@@ -666,13 +674,27 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
       r.studentService ? 'Serv. social' : 'Voluntariado',
       pdfText(r.school, 80) || '-',
       pdfText(r.agreementCode, 30) || '-',
+      r.sessionsInPeriod === undefined ? '-' : String(r.sessionsInPeriod),
       hours(r.hoursInPeriod),
+      r.pendingHoursInPeriod === undefined ? '-' : hours(r.pendingHoursInPeriod),
       hours(r.hoursTotal),
       pdfText(r.status, 40) + (r.pendingSessions > 0 ? ` · ${r.pendingSessions} pend.` : ''),
       pdfText(r.certificateNo, 12) || '-',
     ]),
-    { emptyText: 'No hay horas aprobadas ni certificados en este período.' },
+    { emptyText: 'Nadie registró horas ni recibió certificado en este período.' },
   );
+  if (p.anonymizedWithoutConsent && p.anonymizedWithoutConsent > 0) {
+    c.y -= 4;
+    c.paragraph(
+      `${p.anonymizedWithoutConsent} persona(s) figuran sin nombre, institución ni fotos porque no han autorizado el uso de sus datos en este tipo de documentos; sus horas sí se cuentan.`,
+      MARGIN,
+      8,
+      PAGE_W - MARGIN * 2,
+      11,
+      c.font.italic,
+      MUTED,
+    );
+  }
   c.y -= 4;
   if (p.omittedWithoutConsent && p.omittedWithoutConsent > 0) {
     c.paragraph(
@@ -687,7 +709,7 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
     c.y -= 2;
   }
   c.paragraph(
-    `Solo se cuentan horas APROBADAS por la organización; las horas pendientes o rechazadas no suman. El servicio social estudiantil exige un mínimo de ${p.minHours} horas efectivas (Resolución 4210 de 1996, art. 6). El número de certificado permite consultar la constancia individual de cada estudiante.`,
+    `"Aprobadas" son las horas que la organización ya verificó; "Por aprobar" son horas registradas por el voluntario que aún no se deciden y no suman al total acumulado. Las rechazadas no figuran. El servicio social estudiantil exige un mínimo de ${p.minHours} horas efectivas (Resolución 4210 de 1996, art. 6). El número de certificado permite consultar la constancia individual de cada estudiante.`,
     MARGIN,
     8,
     PAGE_W - MARGIN * 2,
@@ -697,8 +719,11 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
   );
 }
 
-async function embedImage(pdf: PDFDocument, bytes: Buffer | null): Promise<PDFImage | null> {
-  if (!bytes) return null;
+async function embedImage(pdf: PDFDocument, raw: Buffer | null): Promise<PDFImage | null> {
+  if (!raw) return null;
+  // Copia propia: el lector JPEG de pdf-lib ignora el `byteOffset` de un Buffer
+  // que es vista de otro (firmas descifradas, archivos leídos del almacenamiento).
+  const bytes = Uint8Array.from(raw);
   try {
     return await pdf.embedPng(bytes);
   } catch {
@@ -832,6 +857,47 @@ function drawFooters(c: ReportCanvas, input: RenderReportInput): void {
   });
 }
 
+/** Registro fotográfico: hasta 4 fotos por persona, en una cuadrícula. */
+async function drawSocialServicePhotos(
+  c: ReportCanvas,
+  p: SocialServiceReportPayload,
+  photos: ReadonlyMap<string, Buffer> | undefined,
+): Promise<void> {
+  const withPhotos = p.rows.filter((r) => (r.photos ?? []).some((ph) => photos?.has(ph.id)));
+  if (withPhotos.length === 0) return;
+  c.sectionTitle('Registro fotográfico de las jornadas');
+  const cellW = 170;
+  const cellH = 120;
+  const gap = 12;
+  for (const r of withPhotos) {
+    c.ensure(cellH + 40);
+    c.text(`${pdfText(r.volunteerName, 80)} · ${pdfText(r.opportunity, 80)}`, MARGIN, 9.5, {
+      font: c.font.bold,
+    });
+    c.y -= 8;
+    let x = MARGIN;
+    const top = c.y;
+    for (const ph of r.photos ?? []) {
+      const bytes = photos?.get(ph.id);
+      if (!bytes) continue;
+      const image = await embedImage(c.pdf, bytes);
+      if (!image) continue;
+      const ratio = Math.min(cellW / image.width, cellH / image.height, 1);
+      const w = image.width * ratio;
+      const h = image.height * ratio;
+      c.page.drawImage(image, { x: x + (cellW - w) / 2, y: top - h, width: w, height: h });
+      c.text(formatDayLabel(ph.date), x, 7.5, { color: MUTED, y: top - cellH - 10 });
+      x += cellW + gap;
+    }
+    c.y = top - cellH - 24;
+  }
+}
+
+function formatDayLabel(day: string): string {
+  const [y, m, d] = day.split('-');
+  return `Jornada del ${d}/${m}/${y}`;
+}
+
 export async function renderReportPdf(input: RenderReportInput): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   const kindTitle =
@@ -857,7 +923,10 @@ export async function renderReportPdf(input: RenderReportInput): Promise<Buffer>
   drawHeader(c, input, kindTitle);
   if (input.payload.kind === 'donations') drawDonations(c, input.payload);
   else if (input.payload.kind === 'accounting') drawAccounting(c, input.payload);
-  else drawSocialService(c, input.payload);
+  else {
+    drawSocialService(c, input.payload);
+    await drawSocialServicePhotos(c, input.payload, input.photos);
+  }
   await drawSignatures(c, input);
   drawFooters(c, input);
   await stampPlatformDocumentNotice(pdf);

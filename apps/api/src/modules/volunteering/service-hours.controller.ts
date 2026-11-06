@@ -7,15 +7,22 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import {
   type DecideServiceHoursInput,
   type LogServiceHoursInput,
   type Paginated,
   Role,
   type ServiceHours,
+  type ServiceHoursPhoto,
 } from '@adoptafacil/contracts';
+import { setServeHeaders } from '../../core/storage/serve-headers';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
@@ -23,6 +30,11 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ServiceHoursService } from './service-hours.service';
+import {
+  SERVICE_HOURS_PHOTO_MAX_UPLOAD_BYTES,
+  ServiceHoursPhotosService,
+  type UploadedPhotoFile,
+} from './service-hours-photos.service';
 import { decideServiceHoursSchema, logServiceHoursSchema } from './service-hours.schemas';
 
 /** Roles that may decide a service-hours entry (RF18/RF19). */
@@ -39,7 +51,39 @@ const VIEW_ROLES = [...MANAGE_ROLES, Role.ReadOnlyAuditor] as const;
 @Controller('service-hours')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ServiceHoursController {
-  constructor(private readonly service: ServiceHoursService) {}
+  constructor(
+    private readonly service: ServiceHoursService,
+    private readonly photos: ServiceHoursPhotosService,
+  ) {}
+
+  /** El voluntario adjunta una foto de la jornada a SU sesión (cualquier
+   *  persona autenticada; la propiedad la valida la base de datos). */
+  @Post(':id/photos')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: SERVICE_HOURS_PHOTO_MAX_UPLOAD_BYTES } }),
+  )
+  attachPhoto(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: UploadedPhotoFile | undefined,
+  ): Promise<ServiceHoursPhoto> {
+    return this.photos.attach(actor, id, file);
+  }
+
+  /** La organización descarga una foto de la jornada (su tenant, auditado). */
+  @Get(':id/photos/:photoId/file')
+  @Roles(...VIEW_ROLES)
+  async photoFile(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('photoId', ParseUUIDPipe) photoId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const photo = await this.photos.download(actor.id, id, photoId);
+    setServeHeaders(res, photo.filename, photo.data);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(photo.data);
+  }
 
   /** Log a session — any authenticated Person (no @Roles gate). */
   @Post()

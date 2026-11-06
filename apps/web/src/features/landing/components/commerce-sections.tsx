@@ -5,6 +5,8 @@ import {
   type CampaignPublic,
   type PublicCommunityPost,
   type ResourceNeedPublic,
+  type VolunteerOpportunityPublic,
+  formatDayEs,
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
@@ -14,6 +16,9 @@ import { CampaignCard } from '../../campaigns/components/campaign-card';
 import { listPublicPosts } from '../../community/api/public-community';
 import { publicPostPath } from '../../community/lib/share';
 import { listPublicNeeds } from '../../resources/api/public-resources';
+import { volunteerSignupHref } from '../../volunteering/model/volunteering-view';
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 import { CatMascot, DogMascot, Sparkle } from './illustrations';
 import { IconArrowRight } from './landing-icons';
 import styles from './commerce.module.scss';
@@ -192,6 +197,112 @@ export function ActiveCampaignsSection() {
             {items.map((campaign) => (
               <li key={campaign.id} className="af-reveal">
                 <CampaignCard campaign={campaign} variant="brand" />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * "Voluntariados abiertos": el voluntariado tiene el mismo lugar que las
+ * campañas en la página de inicio (antes solo aparecía como una lista corta
+ * dentro de "Lo que piden los refugios"). Datos reales del listado nacional:
+ * convocatorias activas cuya fecha de fin no ha pasado, de organizaciones
+ * aprobadas. Sin convocatorias, un mensaje claro, nunca una tarjeta inventada.
+ */
+export function OpenVolunteeringSection() {
+  const [state, setState] = useState<{
+    status: 'loading' | 'ready';
+    items: VolunteerOpportunityPublic[];
+  }>({ status: 'loading', items: [] });
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${API_BASE}/public/volunteer-opportunities?limit=3`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { items?: unknown } | null) => {
+        const items = Array.isArray(body?.items)
+          ? (body.items as VolunteerOpportunityPublic[])
+          : [];
+        setState({ status: 'ready', items: items.slice(0, 3) });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setState({ status: 'ready', items: [] });
+      });
+    return () => controller.abort();
+  }, []);
+  const { status, items } = state;
+
+  return (
+    <section
+      id="voluntariado"
+      className={styles.campaigns}
+      aria-labelledby="landing-volunteering-title"
+      data-testid="landing-open-volunteering"
+    >
+      <div className={styles.container}>
+        <div className={cn(styles.head, styles['head--row'])}>
+          <div>
+            <p className={styles.eyebrow}>Ayuda con tu tiempo</p>
+            <h2 id="landing-volunteering-title" className={styles.head__title}>
+              Voluntariados abiertos
+            </h2>
+          </div>
+          <Link to="/voluntariado" className={styles.link}>
+            Ver todos los voluntariados
+            <IconArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+        {status === 'loading' ? (
+          <ul
+            className={styles.campaigns__grid}
+            aria-busy="true"
+            aria-label="Cargando voluntariados"
+          >
+            {[0, 1, 2].map((index) => (
+              <li key={index} className={styles.campaigns__skeleton} aria-hidden="true" />
+            ))}
+          </ul>
+        ) : items.length === 0 ? (
+          <div className={styles.campaigns__empty}>
+            <p className={styles.campaigns__emptyTitle}>Hoy no hay voluntariados abiertos</p>
+            <p className={styles.campaigns__emptyText}>
+              Cuando una organización publique una jornada, la verás aquí con sus fechas.
+            </p>
+          </div>
+        ) : (
+          <ul className={styles.campaigns__grid}>
+            {items.map((v) => (
+              <li key={v.id} className="af-reveal">
+                <article className="flex h-full flex-col gap-2 rounded-3xl border border-black/10 bg-white p-5 text-left shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--af-brand,#1F7A6D)]">
+                    {v.organizationName}
+                  </p>
+                  <h3 className="text-lg font-bold leading-snug">{v.title}</h3>
+                  <p className="text-sm text-muted-foreground">{v.location}</p>
+                  {v.sessionDates && v.sessionDates.length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Jornadas: {v.sessionDates.slice(0, 3).map(formatDayEs).join(' · ')}
+                      {v.sessionDates.length > 3 ? ` y ${v.sessionDates.length - 3} más` : ''}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Del {formatDayEs(v.startDate.slice(0, 10))} al{' '}
+                      {formatDayEs(v.endDate.slice(0, 10))}
+                    </p>
+                  )}
+                  {v.appliesToStudentService && (
+                    <p className="text-xs font-semibold">Cuenta como servicio social estudiantil</p>
+                  )}
+                  <Link
+                    to={volunteerSignupHref(v.id)}
+                    className="mt-auto inline-flex items-center gap-1 pt-2 text-sm font-semibold underline-offset-4 hover:underline"
+                  >
+                    Inscribirme <IconArrowRight aria-hidden="true" />
+                  </Link>
+                </article>
               </li>
             ))}
           </ul>

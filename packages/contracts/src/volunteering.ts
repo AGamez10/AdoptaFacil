@@ -47,6 +47,11 @@ export interface VolunteerOpportunity {
    *  time, so a later edit here never reclassifies an existing enrollment. */
   appliesToStudentService: boolean;
   status: VolunteerOpportunityStatus;
+  /** Días de jornada que la organización habilita para registrar horas
+   *  (`AAAA-MM-DD`, ordenados, todos dentro de `startDate`–`endDate`). Vacío o
+   *  ausente = cualquier día de la convocatoria (convocatorias anteriores a
+   *  esta regla). Ver {@link volunteerEnabledDays}. */
+  sessionDates?: string[];
   /** ISO-8601 UTC. */
   createdAt: string;
 }
@@ -66,6 +71,8 @@ export interface VolunteerOpportunityPublic {
   location: string;
   requirements?: string;
   appliesToStudentService: boolean;
+  /** Ver {@link VolunteerOpportunity.sessionDates}. */
+  sessionDates?: string[];
 }
 
 export interface CreateVolunteerOpportunityInput {
@@ -80,6 +87,9 @@ export interface CreateVolunteerOpportunityInput {
   location: string;
   requirements?: string;
   appliesToStudentService?: boolean;
+  /** Días de jornada habilitados (`AAAA-MM-DD`), dentro de las fechas de la
+   *  convocatoria. Ver {@link VolunteerOpportunity.sessionDates}. */
+  sessionDates?: string[];
 }
 
 /** Patch an opportunity. All fields optional; only provided fields change. */
@@ -93,6 +103,9 @@ export interface UpdateVolunteerOpportunityInput {
   location?: string;
   requirements?: string;
   status?: VolunteerOpportunityStatus;
+  /** Reemplaza la lista completa de días habilitados (`[]` = todos los días de
+   *  la convocatoria). */
+  sessionDates?: string[];
 }
 
 // ============================================================================
@@ -159,6 +172,11 @@ export interface VolunteerEnrollment {
 export interface VolunteerEnrollmentMine extends VolunteerEnrollment {
   organizationName: string;
   opportunityTitle: string;
+  /** Fechas de la convocatoria y días habilitados, para que el voluntario solo
+   *  elija días en los que puede registrar horas (la API aplica la misma regla). */
+  opportunityStartDate?: string;
+  opportunityEndDate?: string;
+  sessionDates?: string[];
 }
 
 /** Enroll in an opportunity — any authenticated Person. The guardian/school
@@ -209,6 +227,56 @@ export interface ServiceHours {
   decidedAt?: string;
   /** ISO-8601 UTC. */
   createdAt: string;
+  /** Fotos de la jornada adjuntas a esta sesión (solo metadatos; los bytes se
+   *  descargan por su propio endpoint). */
+  photos?: ServiceHoursPhoto[];
+}
+
+/** Foto de la jornada que el voluntario adjunta a UNA sesión de horas. Privada:
+ *  la ve la organización (y entra a su reporte), nunca el público. */
+export interface ServiceHoursPhoto {
+  id: string;
+  serviceHoursId: string;
+  contentType: string;
+  sizeBytes: number;
+  /** ISO-8601 UTC. */
+  createdAt: string;
+}
+
+/** Máximo de fotos por sesión de horas. */
+export const SERVICE_HOURS_MAX_PHOTOS = 4;
+
+/** Máximo de días de jornada que una convocatoria puede habilitar. */
+export const MAX_VOLUNTEER_SESSION_DATES = 366;
+
+/**
+ * Días en los que un voluntario puede registrar horas: los días de jornada que
+ * habilitó la organización (o, si no habilitó ninguno, todos los de la
+ * convocatoria), siempre dentro de `startDate`–`endDate` y nunca posteriores a
+ * `today` (`AAAA-MM-DD`, hora de Colombia). La API aplica exactamente esta
+ * regla en la base de datos (`create_service_hours`).
+ */
+export function volunteerEnabledDays(
+  opportunity: { startDate: string; endDate: string; sessionDates?: string[] },
+  today: string,
+): string[] {
+  const start = opportunity.startDate.slice(0, 10);
+  const end = opportunity.endDate.slice(0, 10);
+  const last = end < today ? end : today;
+  if (opportunity.sessionDates && opportunity.sessionDates.length > 0) {
+    return [...new Set(opportunity.sessionDates)]
+      .filter((day) => day >= start && day <= last)
+      .sort();
+  }
+  const days: string[] = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  while (days.length <= MAX_VOLUNTEER_SESSION_DATES) {
+    const day = cursor.toISOString().slice(0, 10);
+    if (day > last) break;
+    days.push(day);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
 }
 
 export interface LogServiceHoursInput {

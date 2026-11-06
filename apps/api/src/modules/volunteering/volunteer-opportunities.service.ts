@@ -27,6 +27,35 @@ export function clampLimit(limit: number | undefined): number {
   return Math.min(Math.max(Math.trunc(limit), 1), MAX_PAGE);
 }
 
+/** `Date` de una columna `DATE` (medianoche UTC) → `AAAA-MM-DD`. */
+export function toDay(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+/**
+ * Normaliza los días de jornada (únicos, ordenados) y exige que todos caigan
+ * dentro de las fechas de la convocatoria. Lanza 400 con el primer día fuera.
+ */
+export function normalizeSessionDates(
+  days: readonly string[],
+  startDate: string,
+  endDate: string,
+): string[] {
+  // Mismo día que ve la base de datos (`start_date::date` sobre UTC).
+  const start = new Date(startDate).toISOString().slice(0, 10);
+  const end = new Date(endDate).toISOString().slice(0, 10);
+  const unique = [...new Set(days)].sort();
+  const outside = unique.find((day) => day < start || day > end);
+  if (outside) {
+    throw new BadRequestException(
+      `El día de jornada ${outside} está fuera de las fechas de la convocatoria (${start} a ${end}).`,
+    );
+  }
+  return unique;
+}
+
+const asDates = (days: readonly string[]): Date[] => days.map((d) => new Date(`${d}T00:00:00Z`));
+
 function toOpportunity(row: OpportunityRow): VolunteerOpportunity {
   return {
     id: row.id,
@@ -41,6 +70,7 @@ function toOpportunity(row: OpportunityRow): VolunteerOpportunity {
     requirements: row.requirements ?? undefined,
     appliesToStudentService: row.appliesToStudentService,
     status: row.status as VolunteerOpportunityStatus,
+    sessionDates: row.sessionDates.map(toDay),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -75,6 +105,11 @@ export class VolunteerOpportunitiesService {
 
   async create(input: CreateVolunteerOpportunityInput): Promise<VolunteerOpportunity> {
     const organizationId = this.requireOrgId();
+    const sessionDates = normalizeSessionDates(
+      input.sessionDates ?? [],
+      input.startDate,
+      input.endDate,
+    );
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const row = await tx.volunteerOpportunity.create({
         data: {
@@ -88,6 +123,7 @@ export class VolunteerOpportunitiesService {
           location: input.location,
           requirements: input.requirements,
           appliesToStudentService: input.appliesToStudentService ?? false,
+          sessionDates: asDates(sessionDates),
         },
       });
       return toOpportunity(row);
@@ -111,6 +147,17 @@ export class VolunteerOpportunitiesService {
         );
         if (error) throw new BadRequestException(error);
       }
+      // Los días de jornada siempre quedan dentro de las fechas (las nuevas o
+      // las guardadas): mover el inicio o el fin no deja días habilitados
+      // fuera de la convocatoria.
+      const sessionDates =
+        input.sessionDates || input.startDate || input.endDate
+          ? normalizeSessionDates(
+              input.sessionDates ?? existing.sessionDates.map(toDay),
+              input.startDate ?? existing.startDate.toISOString(),
+              input.endDate ?? existing.endDate.toISOString(),
+            )
+          : undefined;
       const row = await tx.volunteerOpportunity.update({
         where: { id },
         data: {
@@ -123,6 +170,7 @@ export class VolunteerOpportunitiesService {
           location: input.location,
           requirements: input.requirements,
           status: input.status,
+          sessionDates: sessionDates ? asDates(sessionDates) : undefined,
         },
       });
       return toOpportunity(row);
@@ -170,7 +218,13 @@ export class VolunteerOpportunitiesService {
     const take = clampLimit(limit);
     const skip = Math.max(offset || 0, 0);
     return this.prisma.withOrgContext(org.id, async (tx) => {
-      const where = { organizationId: org.id, status: VolunteerOpportunityStatus.Active };
+      // Igual que el listado nacional: solo jornadas abiertas (activas y cuya
+      // fecha de fin no ha pasado), nunca convocatorias ya terminadas.
+      const where = {
+        organizationId: org.id,
+        status: VolunteerOpportunityStatus.Active,
+        endDate: { gte: new Date() },
+      };
       const [rows, total] = await Promise.all([
         tx.volunteerOpportunity.findMany({ where, orderBy: { startDate: 'asc' }, take, skip }),
         tx.volunteerOpportunity.count({ where }),
@@ -189,6 +243,7 @@ export class VolunteerOpportunitiesService {
           location: row.location,
           requirements: row.requirements ?? undefined,
           appliesToStudentService: row.appliesToStudentService,
+          sessionDates: row.sessionDates.map(toDay),
         })),
         total,
         limit: take,

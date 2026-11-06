@@ -16,6 +16,7 @@ export {
   CommunityPulseSection,
   FinalCtaSection,
   LANDING_HELP_ID,
+  OpenVolunteeringSection,
   WaysToHelpSection,
 } from './components/commerce-sections';
 export {

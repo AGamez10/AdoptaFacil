@@ -99,6 +99,17 @@ describe('VolunteerOpportunitiesPage (RF18)', () => {
     });
     fireEvent.change(screen.getByLabelText('Fecha de fin'), { target: { value: inDays(40) } });
     fireEvent.change(screen.getByLabelText('Ubicación'), { target: { value: 'Refugio Patitas' } });
+
+    // Sin días de jornada habilitados no se publica: la organización coordina
+    // en qué días se pueden registrar horas.
+    fireEvent.click(screen.getByRole('button', { name: 'Publicar oportunidad' }));
+    expect(await screen.findByText('Faltan los días de jornada')).toBeInTheDocument();
+    expect(calls.some((c) => c.init?.method === 'POST')).toBe(false);
+
+    fireEvent.change(screen.getByLabelText('Días de jornada'), { target: { value: inDays(12) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar día' }));
+    fireEvent.change(screen.getByLabelText('Días de jornada'), { target: { value: inDays(20) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar día' }));
     fireEvent.click(screen.getByRole('button', { name: 'Publicar oportunidad' }));
 
     expect(await screen.findByText('Oportunidad publicada')).toBeInTheDocument();
@@ -107,6 +118,7 @@ describe('VolunteerOpportunitiesPage (RF18)', () => {
     const body = JSON.parse(String(post?.init?.body));
     expect(body.title).toBe('Jornada de esterilización');
     expect(body.appliesToStudentService).toBe(false);
+    expect(body.sessionDates).toEqual([inDays(12), inDays(20)]);
   });
 
   it('does not publish an opportunity that already ended (same rule as the API)', async () => {

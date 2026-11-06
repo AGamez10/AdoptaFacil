@@ -39,6 +39,7 @@ import { PortalAdoptionSection } from '../components/portal-adoption-section';
 import { PortalProductsSection } from '../components/portal-products-section';
 import { PortalNeedsSection } from '../components/portal-needs-section';
 import { PortalCampaignsSection } from '../components/portal-campaigns-section';
+import { PortalVolunteeringSection } from '../components/portal-volunteering-section';
 import { PortalAboutSection } from '../components/portal-about-section';
 import { PortalReviewsSection } from '../components/portal-reviews-section';
 import { PortalContactInfoSection } from '../components/portal-contact-info-section';
@@ -534,6 +535,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                   {hasActiveCampaignSection && (
                     <PortalCampaignsSection key="activeCampaign" slug={slug as string} />
                   )}
+                  <PortalVolunteeringSection slug={slug as string} />
                   <PortalSocialLinks organization={view.profile.organization} />
                 </aside>
               </div>

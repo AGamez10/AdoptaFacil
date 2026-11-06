@@ -6,6 +6,10 @@ import {
   type VolunteerCertificate,
   type VolunteerEnrollmentMine,
   type VolunteerOpportunityPublic,
+  formatDayEs,
+  SERVICE_HOURS_MAX_PHOTOS,
+  todayInColombia,
+  volunteerEnabledDays,
 } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -34,6 +38,22 @@ import {
   parseSessionHours,
 } from '../model/volunteering-view';
 import { dateBounds, dateError } from '../../../lib/date-rules';
+import { AddServiceHoursPhotos, uploadServiceHoursPhoto } from '../components/service-hours-photos';
+
+/** Días en que el voluntario puede registrar horas en ESTA inscripción (la API
+ *  aplica la misma regla). `null` = la API no informó las fechas: se usa el
+ *  calendario con la regla general (nunca futuro). */
+function loggableDays(enrollment: VolunteerEnrollmentMine): string[] | null {
+  if (!enrollment.opportunityStartDate || !enrollment.opportunityEndDate) return null;
+  return volunteerEnabledDays(
+    {
+      startDate: enrollment.opportunityStartDate,
+      endDate: enrollment.opportunityEndDate,
+      sessionDates: enrollment.sessionDates,
+    },
+    todayInColombia(),
+  ).reverse();
+}
 
 /**
  * `/voluntariado` (RF18/RF19, M08) — experiencia del voluntario (Persona):
@@ -64,6 +84,7 @@ export function MyVolunteeringPage() {
   const [logDate, setLogDate] = useState('');
   const [logHoursValue, setLogHoursValue] = useState('');
   const [logDescription, setLogDescription] = useState('');
+  const [logPhotos, setLogPhotos] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
 
   const loadAll = async (): Promise<void> => {
@@ -132,6 +153,7 @@ export function MyVolunteeringPage() {
     setLogDate('');
     setLogHoursValue('');
     setLogDescription('');
+    setLogPhotos([]);
   };
 
   const submitHours = async (enrollmentId: string): Promise<void> => {
@@ -149,9 +171,20 @@ export function MyVolunteeringPage() {
       toast({ title: 'Fecha no válida', description: logDateError, variant: 'warning' });
       return;
     }
+    const enrollment = enrollments.find((e) => e.id === enrollmentId);
+    const allowed = enrollment ? loggableDays(enrollment) : null;
+    if (allowed && !allowed.includes(logDate)) {
+      toast({
+        title: 'Día no habilitado',
+        description:
+          'Solo puedes registrar horas en los días de jornada que habilitó la organización.',
+        variant: 'warning',
+      });
+      return;
+    }
     setSaving(true);
     try {
-      await client.request('/service-hours', {
+      const created = await client.request<ServiceHours>('/service-hours', {
         method: 'POST',
         json: {
           enrollmentId,
@@ -160,9 +193,24 @@ export function MyVolunteeringPage() {
           description: logDescription.trim(),
         },
       });
+      let failedPhotos = 0;
+      for (const file of logPhotos.slice(0, SERVICE_HOURS_MAX_PHOTOS)) {
+        try {
+          await uploadServiceHoursPhoto(client, created.id, file);
+        } catch {
+          failedPhotos += 1;
+        }
+      }
       resetLogForm();
       await loadAll();
-      toast({ title: 'Horas registradas', variant: 'success' });
+      toast({
+        title: 'Horas registradas',
+        description:
+          failedPhotos > 0
+            ? `${failedPhotos} foto(s) no se pudieron subir; puedes agregarlas desde "Mis horas".`
+            : undefined,
+        variant: failedPhotos > 0 ? 'warning' : 'success',
+      });
     } catch (error) {
       toast({
         title: 'No se pudieron registrar las horas',
@@ -268,13 +316,44 @@ export function MyVolunteeringPage() {
                             </p>
                           ) : logForEnrollmentId === enrollment.id ? (
                             <div className="grid gap-2 sm:grid-cols-3">
-                              <Input
-                                type="date"
-                                value={logDate}
-                                {...dateBounds('serviceHoursDate')}
-                                onChange={(e) => setLogDate(e.target.value)}
-                                aria-label="Fecha de la sesión"
-                              />
+                              {(() => {
+                                const days = loggableDays(enrollment);
+                                if (days === null) {
+                                  return (
+                                    <Input
+                                      type="date"
+                                      value={logDate}
+                                      {...dateBounds('serviceHoursDate')}
+                                      onChange={(e) => setLogDate(e.target.value)}
+                                      aria-label="Fecha de la sesión"
+                                    />
+                                  );
+                                }
+                                if (days.length === 0) {
+                                  return (
+                                    <p className="text-xs text-muted-foreground sm:col-span-3">
+                                      Aún no hay un día de jornada habilitado que ya haya ocurrido.
+                                      Podrás registrar tus horas el mismo día de la jornada o
+                                      después.
+                                    </p>
+                                  );
+                                }
+                                return (
+                                  <select
+                                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                    value={logDate}
+                                    onChange={(e) => setLogDate(e.target.value)}
+                                    aria-label="Día de la jornada"
+                                  >
+                                    <option value="">Elige el día de la jornada</option>
+                                    {days.map((day) => (
+                                      <option key={day} value={day}>
+                                        {formatDayEs(day)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                );
+                              })()}
                               <Input
                                 type="number"
                                 min={0.5}
@@ -291,6 +370,23 @@ export function MyVolunteeringPage() {
                                 onChange={(e) => setLogDescription(e.target.value)}
                                 aria-label="Descripción de la sesión"
                               />
+                              <label className="text-xs text-muted-foreground sm:col-span-3">
+                                Fotos de la jornada (opcional, hasta {SERVICE_HOURS_MAX_PHOTOS}):{' '}
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  multiple
+                                  aria-label="Fotos de la jornada"
+                                  onChange={(e) =>
+                                    setLogPhotos(
+                                      Array.from(e.target.files ?? []).slice(
+                                        0,
+                                        SERVICE_HOURS_MAX_PHOTOS,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </label>
                               <div className="flex gap-2 sm:col-span-3">
                                 <Button
                                   size="sm"
@@ -341,6 +437,13 @@ export function MyVolunteeringPage() {
                           {formatBogota(entry.date)} · {formatHours(entry.hours)}
                         </p>
                         <p className="text-xs text-muted-foreground">{entry.description}</p>
+                        <div className="mt-1">
+                          <AddServiceHoursPhotos
+                            entry={entry}
+                            disabled={certifiedEnrollmentIds.has(entry.enrollmentId)}
+                            onUploaded={() => void loadAll()}
+                          />
+                        </div>
                       </div>
                       <Badge variant={hoursStatusVariant(entry.status)}>
                         {HOURS_STATUS_LABELS[entry.status]}
