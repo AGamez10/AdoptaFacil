@@ -155,6 +155,17 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
     pre.status = 'authorized';
     pre.nextPaymentDate = inDays(30);
     await notify('subscription_preapproval', id).expect(200);
+    // Autorizar no activa el plan (#92): solo un cobro aprobado lo hace.
+    const first = `ch${randomUUID().slice(0, 8)}`;
+    fake.charges.set(first, {
+      id: first,
+      preapprovalId: id,
+      paymentStatus: 'approved',
+      amount: pre.amount,
+      currency: 'COP',
+      chargedAt: new Date(),
+    });
+    await notify('subscription_authorized_payment', first).expect(200);
     return id;
   }
 
@@ -199,7 +210,7 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
       .expect(409);
   });
 
-  it('contratar: la suscripción autorizada activa el plan con el monto con IVA', async () => {
+  it('contratar: el primer cobro aprobado activa el plan con el monto con IVA', async () => {
     const org = await registerOrg('Refugio Contrata');
     const id = await checkoutAndAuthorize(org, 'crece');
     expect(fake.preapprovals.get(id)?.amount).toBe(
@@ -214,7 +225,7 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
     });
   });
 
-  it('una firma inválida se rechaza y no cambia nada', async () => {
+  it('una firma inválida se rechaza; autorizar sin cobro aprobado no activa el plan', async () => {
     const org = await registerOrg('Refugio Firma');
     const res = await request(server)
       .post('/org/plan/checkout')
@@ -225,6 +236,9 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
     (fake.preapprovals.get(id) as MercadoPagoPreapproval).status = 'authorized';
     await notify('subscription_preapproval', id, false).expect(403);
     expect(await row(org.orgId)).toBeNull();
+    // Con firma válida, autorizar sin un cobro aprobado tampoco activa el plan (sin mes gratis).
+    await notify('subscription_preapproval', id).expect(200);
+    expect((await planOf(org)).effectivePlan).toBe('free');
   });
 
   it('renovación: cada cobro aprobado extiende el periodo un mes', async () => {
