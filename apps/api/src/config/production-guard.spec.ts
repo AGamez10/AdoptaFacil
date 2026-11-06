@@ -193,6 +193,7 @@ describe('module feature flags (R1-1)', () => {
       MERCADOPAGO_CLIENT_ID: '123',
       MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
       MERCADOPAGO_WEBHOOK_SECRET: 'webhook-secret-dummy',
+      API_PUBLIC_BASE_URL: 'https://api.adoptafacil.co',
     };
     expect(() =>
       validateEnv({
@@ -202,6 +203,21 @@ describe('module feature flags (R1-1)', () => {
         PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-11-06',
       }),
     ).not.toThrow();
+    // The OAuth code and every notification travel to the API: https only.
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        API_PUBLIC_BASE_URL: 'http://api.adoptafacil.co',
+      }),
+    ).toThrow(/API_PUBLIC_BASE_URL/);
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        MERCADOPAGO_OAUTH_REDIRECT_URI: 'http://api.adoptafacil.co/org/mercadopago/callback',
+      }),
+    ).toThrow(/MERCADOPAGO_OAUTH_REDIRECT_URI/);
     // Still needs the written approval reference.
     expect(() => validateEnv({ ...SAFE_PRODUCTION, ...mp, FEATURE_PAYMENTS: 'true' })).toThrow(
       /PAYMENTS_PRODUCTION_APPROVAL_REF/,

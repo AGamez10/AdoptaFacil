@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MERCADOPAGO_RESOURCE_ID_PATTERN, isMercadoPagoCheckoutUrl } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
+import { mercadoPagoTimeoutSignal } from './mercadopago-http';
 
 /** Injectable fetch surface so tests run with ZERO network. */
 export type MercadoPagoBillingFetch = typeof fetch;
@@ -113,6 +114,7 @@ export class MercadoPagoBillingClient {
           currency_id: 'COP',
         },
       }),
+      signal: mercadoPagoTimeoutSignal(),
     });
     if (!response.ok) {
       throw new Error(`Mercado Pago preapproval create failed (${response.status})`);
@@ -132,6 +134,7 @@ export class MercadoPagoBillingClient {
     }
     const response = await this.fetchFn(`${this.baseUrl}/preapproval/${encodeURIComponent(id)}`, {
       headers: this.headers(),
+      signal: mercadoPagoTimeoutSignal(),
     });
     if (!response.ok) {
       throw new Error(`Mercado Pago preapproval read-back failed (${response.status})`);
@@ -157,7 +160,7 @@ export class MercadoPagoBillingClient {
     }
     const response = await this.fetchFn(
       `${this.baseUrl}/authorized_payments/${encodeURIComponent(id)}`,
-      { headers: this.headers() },
+      { headers: this.headers(), signal: mercadoPagoTimeoutSignal() },
     );
     if (!response.ok) {
       throw new Error(`Mercado Pago authorized payment read-back failed (${response.status})`);

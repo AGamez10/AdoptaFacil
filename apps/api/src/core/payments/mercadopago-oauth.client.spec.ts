@@ -111,6 +111,20 @@ describe('MercadoPagoOAuthClient (ADR-PAG-003)', () => {
     expect((error as Error).message).not.toContain('echo of something');
   });
 
+  it('expects live grants in production and test grants in sandbox; every call has a timeout', async () => {
+    expect(new MercadoPagoOAuthClient(makeConfig(), jest.fn()).expectedLiveMode()).toBe(true);
+    expect(
+      new MercadoPagoOAuthClient(
+        makeConfig({ MERCADOPAGO_TEST: true }),
+        jest.fn(),
+      ).expectedLiveMode(),
+    ).toBe(false);
+    const fetchFn = jest.fn(async () => json(GRANT));
+    await new MercadoPagoOAuthClient(makeConfig(), fetchFn).refreshToken('TG-refresh');
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('refuses to call Mercado Pago when the app is not configured', async () => {
     const fetchFn = jest.fn();
     const client = new MercadoPagoOAuthClient(

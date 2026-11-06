@@ -430,6 +430,22 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   if (!env.PLATFORM_MFA_REQUIRED) {
     fail('PLATFORM_MFA_REQUIRED', 'platform staff must use two-step verification in production');
   }
+  // ADR-PAG-003: Mercado Pago sends the OAuth `code` to the redirect URI and
+  // every payment notification to the API's public origin. Over plain http
+  // (or the localhost default) the code could be intercepted and no
+  // notification would ever settle a donation.
+  if (env.PAYMENT_DRIVER === 'mercadopago') {
+    const apiBase = env.API_PUBLIC_BASE_URL ?? env.STORAGE_PUBLIC_BASE_URL;
+    if (!isHttpsUrl(apiBase)) {
+      fail(
+        'API_PUBLIC_BASE_URL',
+        'PAYMENT_DRIVER=mercadopago needs the public https origin of the API in production',
+      );
+    }
+    if (env.MERCADOPAGO_OAUTH_REDIRECT_URI && !isHttpsUrl(env.MERCADOPAGO_OAUTH_REDIRECT_URI)) {
+      fail('MERCADOPAGO_OAUTH_REDIRECT_URI', 'the OAuth redirect URI must be https in production');
+    }
+  }
   // Every emailed link (invitations, password reset, receipts, contracts) is
   // built from WEB_BASE_URL: the forgotten dev default (http://localhost:5173)
   // would email links nobody can open, and plain http would expose the tokens.

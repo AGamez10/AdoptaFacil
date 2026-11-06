@@ -43,6 +43,12 @@
    revocación, así que la UI le dice al refugio que también puede quitar la app desde Seguridad →
    Aplicaciones conectadas.
 8. Los tokens nunca se registran en logs ni en auditoría, ni se devuelven a la web.
+9. **Modo real o sandbox.** La concesión debe traer `live_mode` acorde a `MERCADOPAGO_TEST`: con
+   `MERCADOPAGO_TEST=false` solo se aceptan cuentas reales y con `true` solo usuarios de prueba. Si no
+   coincide, el callback responde `error` y no guarda nada. Una conexión guardada en el otro modo no cobra
+   hasta que el refugio reconecta. En producción, la API pública (`API_PUBLIC_BASE_URL`, o
+   `STORAGE_PUBLIC_BASE_URL` como respaldo) y `MERCADOPAGO_OAUTH_REDIRECT_URI` deben ser `https`.
+10. Toda llamada a Mercado Pago tiene un límite de 10 s (`mercadopago-http.ts`).
 
 ## 3. Donaciones
 
@@ -58,7 +64,8 @@
   1. Valida `x-signature` con HMAC-SHA256 sobre `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`. Si
      falla, responde 403.
   2. Vuelve a consultar `GET /v1/payments/:id` con el token **de esa organización**. Exige que
-     `collector_id` sea la cuenta conectada.
+     `collector_id` sea la cuenta conectada y que `live_mode` coincida con `MERCADOPAGO_TEST`: un pago de
+     prueba nunca aprueba una donación real.
   3. Guarda el pago en `mercadopago_payments` (sección 5).
   4. Compara monto, moneda, organización y colector con la donación. Si algo no cuadra, audita
      `donation.payment_mismatch` y no aprueba.

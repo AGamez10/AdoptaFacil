@@ -138,6 +138,14 @@ export class MercadoPagoConnectionsService {
     }
 
     const { organizationId, actorUserId } = claims;
+    if (grant.liveMode !== this.oauth.expectedLiveMode()) {
+      // A sandbox test user in production (or a real account in sandbox)
+      // would turn test payments into "real" donations and certificates.
+      this.logger.warn(
+        `Mercado Pago grant for org ${organizationId} refused: live_mode=${grant.liveMode} does not match MERCADOPAGO_TEST`,
+      );
+      return 'error';
+    }
     const data = {
       mpUserId: grant.userId,
       accessTokenEnc: encryptMercadoPagoSecret(grant.accessToken, this.key),
@@ -259,6 +267,9 @@ export class MercadoPagoConnectionsService {
   ): Promise<MercadoPagoCollectorCredentials | undefined> {
     let row = await this.findRow(organizationId);
     if (!row || row.status !== 'active') return undefined;
+    // A row stored under the other mode (e.g. before MERCADOPAGO_TEST was
+    // flipped) never collects: the org must reconnect in this mode.
+    if (row.liveMode !== this.oauth.expectedLiveMode()) return undefined;
     if (row.expiresAt.getTime() - Date.now() <= INLINE_REFRESH_MARGIN_MS) {
       if (!row.refreshTokenEnc) return undefined;
       await this.refreshOne(organizationId).catch(() => undefined);
@@ -340,7 +351,7 @@ export class MercadoPagoConnectionsService {
       }
       throw error;
     }
-    if (grant.userId !== row.mpUserId) {
+    if (grant.userId !== row.mpUserId || grant.liveMode !== row.liveMode) {
       // The grant now names another account: never switch collectors silently.
       await this.markNeedsReconnect(organizationId, usedEnc, 'account_changed');
       throw new Error('Mercado Pago refresh returned another account');
