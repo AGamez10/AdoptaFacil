@@ -54,7 +54,8 @@ function makeFetch(payment: Record<string, unknown> = {}, preference: unknown = 
   return jest.fn(async (url: string | URL | Request, _init?: RequestInit) => {
     const u = String(url);
     if (u === 'https://api.mp.test/checkout/preferences') return json(preference);
-    if (u.startsWith('https://api.mp.test/v1/payments/')) return json(payment);
+    if (u.startsWith('https://api.mp.test/v1/payments/'))
+      return json({ live_mode: true, ...payment });
     return json({}, 404);
   });
 }
@@ -205,6 +206,45 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     await expect(adapter.verifyAndNormalizeWebhook({}, signature, context)).rejects.toThrow(
       /another collector/,
     );
+  });
+
+  it('rejects a payment whose live_mode does not match MERCADOPAGO_TEST', async () => {
+    const sandboxPayment = {
+      id: 7,
+      status: 'approved',
+      live_mode: false,
+      collector_id: 123456789,
+      external_reference: 'af-ref',
+      transaction_amount: 50000,
+      currency_id: 'COP',
+    };
+    const prod = new MercadoPagoPaymentAdapter(makeConfig(), makeFetch(sandboxPayment));
+    const signed7 = signedContext('7');
+    await expect(
+      prod.verifyAndNormalizeWebhook({}, signed7.signature, signed7.context),
+    ).rejects.toThrow(/live_mode/);
+    const sandbox = new MercadoPagoPaymentAdapter(
+      makeConfig({ MERCADOPAGO_TEST: true }),
+      makeFetch({ ...sandboxPayment, live_mode: true }),
+    );
+    await expect(
+      sandbox.verifyAndNormalizeWebhook({}, signed7.signature, signed7.context),
+    ).rejects.toThrow(/live_mode/);
+  });
+
+  it('every call to Mercado Pago carries a timeout signal', async () => {
+    const fetchFn = makeFetch({
+      id: 8,
+      status: 'approved',
+      collector_id: 123456789,
+      external_reference: 'af-ref',
+      transaction_amount: 50000,
+      currency_id: 'COP',
+    });
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+    const signed8 = signedContext('8');
+    await adapter.verifyAndNormalizeWebhook({}, signed8.signature, signed8.context);
+    expect(fetchFn.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('rejects a notification when the org has no grant', async () => {

@@ -21,6 +21,7 @@ import {
   type WebhookVerificationContext,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
+import { mercadoPagoTimeoutSignal } from './mercadopago-http';
 
 /** Injectable fetch surface so tests run with ZERO network. */
 export type MercadoPagoFetch = typeof fetch;
@@ -328,6 +329,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
         'X-Idempotency-Key': reference,
       },
       body: JSON.stringify(body),
+      signal: mercadoPagoTimeoutSignal(),
     });
     if (!response.ok) {
       throw new Error(`Mercado Pago preference create failed (${response.status})`);
@@ -380,7 +382,10 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     // payment of another account is not readable with it (404) and is rejected.
     const response = await this.fetchFn(
       `${this.baseUrl}/v1/payments/${encodeURIComponent(dataId as string)}`,
-      { headers: { Authorization: `Bearer ${collector.accessToken}`, Accept: 'application/json' } },
+      {
+        headers: { Authorization: `Bearer ${collector.accessToken}`, Accept: 'application/json' },
+        signal: mercadoPagoTimeoutSignal(),
+      },
     );
     if (!response.ok) {
       throw new Error(`Mercado Pago payment read-back failed (${response.status})`);
@@ -392,6 +397,13 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
         : undefined;
     if (collectorId !== collector.userId) {
       throw new Error('Mercado Pago webhook rejected: payment belongs to another collector.');
+    }
+    // A sandbox (test user) payment must never settle a real donation, nor a
+    // real payment a sandbox one: `live_mode` has to match this deployment.
+    if (payment?.live_mode !== !this.test) {
+      throw new Error(
+        'Mercado Pago webhook rejected: payment live_mode does not match MERCADOPAGO_TEST.',
+      );
     }
     const reference =
       typeof payment?.external_reference === 'string' ? payment.external_reference : '';

@@ -91,7 +91,11 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
       if (pay) {
         const found = payments.get(pay[1]);
         // Mercado Pago scopes reads to the token owner: another token ⇒ 404.
-        return found && auth === `Bearer ${found.token}` ? json(found.body) : json({}, 404);
+        // Production deployment (MERCADOPAGO_TEST=false): real payments carry
+        // live_mode=true unless a test sets it explicitly.
+        return found && auth === `Bearer ${found.token}`
+          ? json({ live_mode: true, ...found.body })
+          : json({}, 404);
       }
       if (u === 'https://api.mp.test/preapproval' && init?.method === 'POST') {
         if (auth !== `Bearer ${PLATFORM_TOKEN}`) return json({}, 401);
@@ -183,7 +187,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     expires_in: 15_552_000,
     user_id: Number(mpUserId),
     public_key: 'APP_USR-public',
-    live_mode: false,
+    live_mode: true,
     ...over,
   });
 
@@ -230,6 +234,20 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     expect(res.headers.location).toMatch(/mercadopago=denied$/);
   });
 
+  it('a sandbox test-user grant is refused when MERCADOPAGO_TEST is off (never stored)', async () => {
+    const url = await connectUrl(orgToken);
+    tokenResponse = { status: 200, body: grant({ live_mode: false }) };
+    const res = await request(server)
+      .get(`/org/mercadopago/callback?code=TG-code-test&state=${url.searchParams.get('state')}`)
+      .expect(302);
+    expect(res.headers.location).toMatch(/mercadopago=error$/);
+    const stored = await admin.organizationMercadoPagoConnection.findUnique({
+      where: { organizationId: orgId },
+    });
+    expect(stored).toBeNull();
+    expect(await availability()).toBe(false);
+  });
+
   it('Owner connects by OAuth: tokens encrypted at rest, never echoed nor audited', async () => {
     const url = await connectUrl(orgToken);
     expect(url.origin).toBe('https://auth.mercadopago.com.co');
@@ -258,7 +276,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
       connected: true,
       status: 'active',
       mpUserId,
-      liveMode: false,
+      liveMode: true,
     });
     expect(JSON.stringify(status.body)).not.toContain(orgAccess);
 
@@ -330,6 +348,22 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
       body: { id: 900002, status: 'approved', collector_id: 1, external_reference: reference },
     });
     await notify('900002').expect(403);
+  });
+
+  it('a sandbox payment (live_mode=false) never settles a real donation (403)', async () => {
+    payments.set('900004', {
+      token: orgAccess,
+      body: {
+        id: 900004,
+        status: 'approved',
+        live_mode: false,
+        collector_id: Number(mpUserId),
+        external_reference: reference,
+        transaction_amount: amountCharged,
+        currency_id: 'COP',
+      },
+    });
+    await notify('900004').expect(403);
   });
 
   it('non-payment notifications are acknowledged without effect', async () => {

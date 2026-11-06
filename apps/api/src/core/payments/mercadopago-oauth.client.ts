@@ -3,6 +3,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MERCADOPAGO_USER_ID_PATTERN } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
+import { mercadoPagoTimeoutSignal } from './mercadopago-http';
 
 /** Injectable fetch surface so tests run with ZERO network. */
 export type MercadoPagoOAuthFetch = typeof fetch;
@@ -139,6 +140,15 @@ export class MercadoPagoOAuthClient {
     return this.pkce;
   }
 
+  /**
+   * `live_mode` every grant must carry in this deployment: sandbox
+   * (`MERCADOPAGO_TEST=true`) accepts only test users, production only real
+   * accounts. A mismatched grant is refused (never stored or used).
+   */
+  expectedLiveMode(): boolean {
+    return !this.testToken;
+  }
+
   getRedirectUri(): string {
     return this.redirectUri;
   }
@@ -195,6 +205,7 @@ export class MercadoPagoOAuthClient {
         Accept: 'application/json',
       },
       body: new URLSearchParams(body).toString(),
+      signal: mercadoPagoTimeoutSignal(),
     });
     if (!response.ok) {
       // Only the error CODE, never the body (it can echo request context).
