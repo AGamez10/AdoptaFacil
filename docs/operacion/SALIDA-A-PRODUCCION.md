@@ -8,16 +8,16 @@
 
 ## 0. Cómo queda por defecto
 
-| Qué | Valor de salida | Cuándo cambia |
-| --- | --- | --- |
-| Pagos y apadrinamientos | **Apagados** (`FEATURE_PAYMENTS`/`FEATURE_SPONSORSHIPS` ausentes, `PAYMENT_DRIVER=disabled`) | Paso 7, después de la prueba sandbox de Mercado Pago |
-| Certificados de donación | Apagados | Con contador y pagos encendidos |
-| Planes | Sin cobro: `PLAN_ENFORCEMENT` ausente, así que todas las organizaciones tienen Pro | Decisión del dueño |
-| Identidad Google | `AUTH_IDENTITY_DRIVER=disabled`: solo correo y contraseña | Cuando haya `GOOGLE_OAUTH_CLIENT_ID` de producción |
-| DIAN y firma externa | `disabled` | Sin fecha |
-| Voluntariado con menores | Prohibido en producción (la API no arranca) | Con el concepto del abogado |
-| Archivos | Cloudflare R2 (`STORAGE_DRIVER=s3`) | — |
-| Correo | Relay SMTP (Brevo recomendado) | Postfix propio en una fase 2 |
+| Qué                      | Valor de salida                                                                              | Cuándo cambia                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Pagos y apadrinamientos  | **Apagados** (`FEATURE_PAYMENTS`/`FEATURE_SPONSORSHIPS` ausentes, `PAYMENT_DRIVER=disabled`) | Paso 7, después de la prueba sandbox de Mercado Pago |
+| Certificados de donación | Apagados                                                                                     | Con contador y pagos encendidos                      |
+| Planes                   | Sin cobro: `PLAN_ENFORCEMENT` ausente, así que todas las organizaciones tienen Pro           | Decisión del dueño                                   |
+| Identidad Google         | `AUTH_IDENTITY_DRIVER=disabled`: solo correo y contraseña                                    | Cuando haya `GOOGLE_OAUTH_CLIENT_ID` de producción   |
+| DIAN y firma externa     | `disabled`                                                                                   | Sin fecha                                            |
+| Voluntariado con menores | Prohibido en producción (la API no arranca)                                                  | Con el concepto del abogado                          |
+| Archivos                 | Cloudflare R2 (`STORAGE_DRIVER=s3`)                                                          | —                                                    |
+| Correo                   | Relay SMTP (Brevo recomendado)                                                               | Postfix propio en una fase 2                         |
 
 ## 1. Lo que solo puede hacer el dueño (cuentas, compras y tokens)
 
@@ -30,6 +30,7 @@ Hazlo en este orden. Guarda cada clave en tu gestor de contraseñas y **no la en
    - `A * → IP`
 
    Luego ve a My Profile → API Tokens → Create Token → plantilla "Edit zone DNS", limitada a la zona `adoptafacil.org`. Ese es el `CLOUDFLARE_API_TOKEN`.
+
 3. **R2 (archivos):** en Cloudflare → R2 → Create bucket `adoptafacil-media`, privado. Luego Manage API tokens → **Object Read & Write** solo sobre ese bucket. Anota el Account ID, el Access Key ID y el Secret.
 4. **Correo:** [Brevo](https://app.brevo.com) → Senders, Domains & Dedicated IPs → Domains → agrega `adoptafacil.org` y crea en Cloudflare los registros que te pida (SPF, DKIM, DMARC). Después ve a SMTP & API → SMTP → genera la clave SMTP. Detalle en [CORREO.md](./CORREO.md).
 5. **Respaldos off-site:** [Backblaze B2](https://secure.backblaze.com/b2_buckets.htm) → bucket privado `adoptafacil-backups` → Application Keys → clave limitada a ese bucket. Anota el keyID y la applicationKey.
@@ -71,18 +72,18 @@ sudo deploy/scripts/backup.sh && sudo deploy/scripts/restore-test.sh
 
 ### `deploy/.env`
 
-| Variable | Valor |
-| --- | --- |
-| `APP_DOMAIN` | `adoptafacil.org` |
-| `ACME_EMAIL` | tu correo |
-| `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `JWT_SECRET`, `SIGNATURE_ENCRYPTION_KEY` | generados en el punto 4 |
-| `PORTALS_TLS` | `cloudflare` |
-| `CLOUDFLARE_API_TOKEN` | paso 1.2 |
-| `VITE_PORTAL_BASE_DOMAIN` | `adoptafacil.org` |
-| `VITE_PAYMENT_PROVIDER` | `off` hasta el paso 3 |
-| `BACKUP_AGE_RECIPIENT` | `age1…` (clave pública) |
-| `BACKUP_RCLONE_REMOTE` | `b2:adoptafacil-backups` |
-| `ALERT_WEBHOOK_URL`, `BACKUP_HEALTHCHECK_URL` | paso 1.6 |
+| Variable                                                                         | Valor                    |
+| -------------------------------------------------------------------------------- | ------------------------ |
+| `APP_DOMAIN`                                                                     | `adoptafacil.org`        |
+| `ACME_EMAIL`                                                                     | tu correo                |
+| `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `JWT_SECRET`, `SIGNATURE_ENCRYPTION_KEY` | generados en el punto 4  |
+| `PORTALS_TLS`                                                                    | `cloudflare`             |
+| `CLOUDFLARE_API_TOKEN`                                                           | paso 1.2                 |
+| `VITE_PORTAL_BASE_DOMAIN`                                                        | `adoptafacil.org`        |
+| `VITE_PAYMENT_PROVIDER`                                                          | `off` hasta el paso 3    |
+| `BACKUP_AGE_RECIPIENT`                                                           | `age1…` (clave pública)  |
+| `BACKUP_RCLONE_REMOTE`                                                           | `b2:adoptafacil-backups` |
+| `ALERT_WEBHOOK_URL`, `BACKUP_HEALTHCHECK_URL`                                    | paso 1.6                 |
 
 ### `deploy/api.env`
 
