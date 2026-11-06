@@ -45,6 +45,7 @@ const SEAT_LABEL: Record<LegalRepresentativeRole, string> = {
 const KIND_LABEL: Record<OrgReportKind, string> = {
   donations: 'Informe de donaciones',
   social_service: 'Reporte de servicio social',
+  accounting: 'Libro auxiliar de donaciones (cierre de mes)',
 };
 
 const STATUS_UI: Record<
@@ -59,6 +60,7 @@ const STATUS_UI: Record<
 const DEFAULT_POLICY: Record<OrgReportKind, LegalRepresentativeRole[]> = {
   donations: ['legal_representative', 'fiscal_reviewer'],
   social_service: ['legal_representative'],
+  accounting: ['legal_representative', 'fiscal_reviewer'],
 };
 
 function PolicyCard({
@@ -345,7 +347,7 @@ export function OrgSignersPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
-              {(['donations', 'social_service'] as const).map((kind) => (
+              {(['donations', 'social_service', 'accounting'] as const).map((kind) => (
                 <PolicyCard
                   key={`${kind}-${policies.find((p) => p.kind === kind)?.requiredRoles.join()}`}
                   kind={kind}

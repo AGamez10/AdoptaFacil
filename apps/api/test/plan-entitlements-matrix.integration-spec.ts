@@ -182,6 +182,65 @@ describe('Plan entitlements matrix (free / crece / pro, enforced)', () => {
       }
     });
 
+    it(`contabilidad: libro, conciliación y exporte básico → 200 en todos los planes`, async () => {
+      const month = ymd(new Date()).slice(0, 7);
+      await request(server).get('/org/accounting').set(auth(org.token)).expect(200);
+      await request(server)
+        .get(`/org/accounting/periods/${month}/reconciliation`)
+        .set(auth(org.token))
+        .expect(200);
+      await request(server)
+        .get(`/org/accounting/periods/${month}/export?format=csv&detail=basic`)
+        .set(auth(org.token))
+        .expect(200);
+    });
+
+    it(`accountingFullExport → ${def.capabilities.accountingFullExport ? '200' : '403'}`, async () => {
+      const month = ymd(new Date()).slice(0, 7);
+      const res = await request(server)
+        .get(`/org/accounting/periods/${month}/export?format=xlsx&detail=full`)
+        .set(auth(org.token));
+      if (def.capabilities.accountingFullExport) {
+        expect(res.status).toBe(200);
+      } else {
+        expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({
+          code: 'PLAN_REQUIRED',
+          capability: 'accountingFullExport',
+        });
+      }
+    });
+
+    it(`accountingClose → ${def.capabilities.accountingClose ? 'pasa el plan' : '403'}`, async () => {
+      // Mes anterior: con plan, el cierre pasa la puerta del plan (200 sin descuadres).
+      const prev = ymd(inDays(-40)).slice(0, 7);
+      const res = await request(server)
+        .post(`/org/accounting/periods/${prev}/close`)
+        .set(auth(org.token))
+        .send({});
+      if (def.capabilities.accountingClose) {
+        expect(res.status).toBe(200);
+      } else {
+        expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({ code: 'PLAN_REQUIRED', capability: 'accountingClose' });
+      }
+    });
+
+    it(`accountantPackage (compartir con el revisor) → ${def.capabilities.accountantPackage ? 'pasa el plan' : '403'}`, async () => {
+      const month = ymd(new Date()).slice(0, 7);
+      const res = await request(server)
+        .post(`/org/accounting/periods/${month}/shares`)
+        .set(auth(org.token))
+        .send({ signerRole: 'fiscal_reviewer' });
+      if (def.capabilities.accountantPackage) {
+        // Pasa el plan; sin revisor vinculado responde 409 con el paso a seguir.
+        expect(res.status).toBe(409);
+      } else {
+        expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({ code: 'PLAN_REQUIRED', capability: 'accountantPackage' });
+      }
+    });
+
     it(`portalPremiumDesigns (plantilla "historias") → ${def.capabilities.portalPremiumDesigns ? '200' : '403'}`, async () => {
       const res = await request(server)
         .put('/portals/theme')

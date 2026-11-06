@@ -22,7 +22,14 @@ export interface OrgReportApprovalInfo {
   decidedAt: string;
 }
 
-export type OrgReportKind = 'donations' | 'social_service';
+/**
+ * - `donations`: informe de donaciones del período.
+ * - `social_service`: horas de voluntariado / servicio social.
+ * - `accounting` (aditivo, plan de pago `accountantPackage`): libro auxiliar de
+ *   donaciones de un MES CERRADO, que revisa y firma el contador o revisor
+ *   fiscal. Solo lo genera el cierre de mes (`POST /org/accounting/...`).
+ */
+export type OrgReportKind = 'donations' | 'social_service' | 'accounting';
 
 /**
  * Qué valor tiene el documento según el nivel de formalidad de la

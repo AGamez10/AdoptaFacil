@@ -8,6 +8,7 @@ import {
   Logger,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -514,6 +515,58 @@ export class DonationsService {
       return noop;
     }
     return this.settle(event);
+  }
+
+  /**
+   * Monthly reconciliation (sección 2A): re-read with the org's OWN token
+   * every payment of its Mercado Pago account in [from, to) that AdoptaFácil
+   * originated, and apply each one exactly like a verified notification
+   * (record for reconciliation; settle a pending donation Mercado Pago already
+   * approved — e.g. a lost notification —; audit a reversal). Read-only on
+   * Mercado Pago: nothing is charged, refunded or moved.
+   */
+  async rereadMercadoPagoPayments(
+    organizationId: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ fetched: number; settled: number }> {
+    const adapter = this.payment as PaymentPort & {
+      searchOrganizationPayments?: (
+        collector: MercadoPagoCollectorCredentials,
+        from: Date,
+        to: Date,
+      ) => Promise<NormalizedWebhookEvent[]>;
+    };
+    if (!this.mercadopago || typeof adapter.searchOrganizationPayments !== 'function') {
+      throw new ConflictException('Mercado Pago no está habilitado como pasarela.');
+    }
+    const collector = await this.resolveMercadoPagoCollector(organizationId);
+    if (!collector) {
+      throw new ConflictException(
+        'Conecta la cuenta de Mercado Pago de la organización para conciliar contra ella.',
+      );
+    }
+    let events: NormalizedWebhookEvent[];
+    try {
+      events = await adapter.searchOrganizationPayments(collector, from, to);
+    } catch (error) {
+      this.logger.warn(`Relectura de Mercado Pago falló: ${(error as Error).message}`);
+      throw new ServiceUnavailableException(
+        'Mercado Pago no respondió. Intenta de nuevo en unos minutos.',
+      );
+    }
+    let settled = 0;
+    for (const event of events) {
+      await this.recordMercadoPagoPayment(organizationId, event);
+      if (!(await this.matchesExpectedPayment(event, organizationId, collector.userId))) continue;
+      if (event.status === 'voided') {
+        await this.recordGatewayReversal(event);
+        continue;
+      }
+      const outcome = await this.settle(event);
+      if (outcome.applied && outcome.status === 'approved') settled++;
+    }
+    return { fetched: events.length, settled };
   }
 
   /**

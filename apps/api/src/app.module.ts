@@ -27,6 +27,7 @@ import { CommunityModule } from './modules/community/community.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { ConsentsModule } from './modules/consents/consents.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { AccountingModule } from './modules/accounting/accounting.module';
 import { OrgExportsModule } from './modules/org-exports/org-exports.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
@@ -126,6 +127,9 @@ import { RedisModule } from './redis/redis.module';
     DashboardsModule,
     // M13 · reportes sellados de donaciones y servicio social (firmas por estatutos).
     ReportsModule,
+    // Contabilidad de donaciones por detrás: libro auxiliar, conciliación con
+    // Mercado Pago, cierre de mes y paquete para el contador / revisor fiscal.
+    AccountingModule,
     OrgExportsModule,
     ConsentsModule,
     // F19 · espacio de trabajo del equipo de plataforma (tareas, doble aprobación, bitácora).

@@ -8,6 +8,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@ado
 import { useNoIndex } from '../../../seo/seo';
 import { TextField } from '../components/profile-fields';
 import { SignaturePad } from '../components/signature-pad';
+import { downloadPublicAccounting } from './accounting-share-page';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -20,6 +21,7 @@ const ROLE_LABEL: Record<SignatureRequestPreview['role'], string> = {
 const KIND_LABEL: Record<SignatureRequestPreview['report']['kind'], string> = {
   donations: 'Informe de donaciones',
   social_service: 'Reporte de servicio social',
+  accounting: 'Libro auxiliar de donaciones (cierre de mes)',
 };
 
 /** El token viaja en el fragmento (#token=…): nunca llega a los registros del servidor. */
@@ -227,9 +229,28 @@ export function SignatureRequestPage() {
               <p className="break-all text-xs text-muted-foreground">
                 Huella del documento: {preview.report.contentHash}
               </p>
-              <Button type="button" variant="outline" size="sm" onClick={() => void openPdf()}>
-                Ver el documento (PDF)
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => void openPdf()}>
+                  Ver el documento (PDF)
+                </Button>
+                {preview.report.kind === 'accounting' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void downloadPublicAccounting(
+                        'signature-package',
+                        token,
+                        'xlsx',
+                        `soportes-${preview.report.code}.xlsx`,
+                      ).catch((e: Error) => setError(e.message))
+                    }
+                  >
+                    Descargar los soportes del mes (Excel)
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 

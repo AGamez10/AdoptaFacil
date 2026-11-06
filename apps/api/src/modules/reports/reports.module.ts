@@ -18,5 +18,7 @@ import { ReportsService } from './reports.service';
   imports: [AuthModule, OrgModule],
   controllers: [ReportsController, ReportsPublicController, SignatureRequestsPublicController],
   providers: [ReportsService],
+  // Contabilidad: el cierre de mes genera el libro auxiliar firmable.
+  exports: [ReportsService],
 })
 export class ReportsModule {}

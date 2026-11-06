@@ -54,7 +54,9 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
   const title =
     payload.kind === 'donations'
       ? 'Informe de donaciones recibidas'
-      : 'Reporte de servicio social y voluntariado';
+      : payload.kind === 'accounting'
+        ? 'Libro auxiliar de donaciones'
+        : 'Reporte de servicio social y voluntariado';
   summary.addRow([title]).font = { bold: true, size: 14 };
   summary.addRow([]);
   const info: Array<[string, string | number]> = [
@@ -85,6 +87,21 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       ['Valor donado (COP)', payload.totals.amountCharged],
       ['Comisiones e IVA (COP)', payload.totals.fees],
       ['Neto recibido (COP)', payload.totals.net],
+    );
+  } else if (payload.kind === 'accounting') {
+    const t = payload.totals;
+    info.push(
+      ['Mes contable', payload.month],
+      ['Donaciones del mes', t.donationCount],
+      ['Donaciones brutas (COP)', t.donationsGrossCop],
+      ['Reembolsos (COP)', t.refundsCop],
+      ['Contracargos (COP)', t.chargebacksCop],
+      ['Saldo bruto neto de reversos (COP)', t.balanceCop],
+      ['Comisiones de la pasarela (COP)', t.feesCop],
+      ['Neto informado por la pasarela (COP)', t.netCop],
+      ['Conciliación al cerrar', payload.reconciliation.balanced ? 'Cuadra' : 'Con descuadres'],
+      ['Huella SHA-256 de los renglones', payload.close.entriesHash],
+      ['Último folio del libro', payload.close.lastSeq],
     );
   } else {
     info.push(
@@ -141,6 +158,37 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     for (const r of payload.byConcept) {
       byConcept.addRow({ concept: sheetText(r.concept), count: r.count, net: r.net });
     }
+  } else if (payload.kind === 'accounting') {
+    const detail = wb.addWorksheet('Libro auxiliar');
+    detail.columns = [
+      { header: 'Folio', key: 'seq', width: 8 },
+      { header: 'Fecha', key: 'date', width: 18, style: { numFmt: 'yyyy-mm-dd hh:mm' } },
+      { header: 'Tipo', key: 'type', width: 14 },
+      { header: 'Destinación', key: 'destination', width: 30 },
+      { header: 'Forma de pago', key: 'paymentType', width: 18 },
+      { header: 'Pago en pasarela', key: 'payment', width: 18 },
+      { header: 'Bruto', key: 'gross', width: 14, style: { numFmt: MONEY } },
+      { header: 'Comisión', key: 'fee', width: 12, style: { numFmt: MONEY } },
+      { header: 'Neto', key: 'net', width: 14, style: { numFmt: MONEY } },
+      { header: 'Ajuste', key: 'adjustment', width: 18 },
+    ];
+    styleHeader(detail.getRow(1));
+    for (const r of payload.rows) {
+      detail.addRow({
+        seq: r.seq,
+        date: colombiaDate(r.occurredAt),
+        type: sheetText(r.type),
+        destination: sheetText(r.destination),
+        paymentType: sheetText(r.paymentType),
+        payment: sheetText(r.gatewayPaymentId),
+        gross: r.gross,
+        fee: r.fee,
+        net: r.net,
+        adjustment: sheetText(r.adjustment),
+      });
+    }
+    detail.views = [{ state: 'frozen', ySplit: 1 }];
+    detail.autoFilter = { from: 'A1', to: 'J1' };
   } else {
     const detail = wb.addWorksheet('Voluntarios');
     detail.columns = [

@@ -58,6 +58,7 @@ import {
   nextStepsFor,
 } from './report-legal-effect';
 import {
+  type AccountingReportPayload,
   type OrgReportPayload,
   type ReportOrganizationSnapshot,
   buildDonationsPayload,
@@ -151,6 +152,13 @@ function toContract(row: OrgReportRow, reused?: boolean, approvals: ApprovalRow[
 }
 
 function summarize(payload: OrgReportPayload): OrgReportSummary {
+  if (payload.kind === 'accounting') {
+    return {
+      rowCount: payload.rows.length,
+      grossTotal: payload.totals.balanceCop,
+      netTotal: payload.totals.netCop,
+    };
+  }
   if (payload.kind === 'donations') {
     return {
       rowCount: payload.rows.length,
@@ -393,12 +401,94 @@ export class ReportsService {
     }
   }
 
+  /**
+   * Libro auxiliar de un mes CERRADO (contabilidad, plan `accountantPackage`).
+   * Solo lo invoca el cierre de mes con el snapshot ya sellado; sigue las
+   * mismas reglas que cualquier reporte: firmantes por política o por defecto
+   * (revisor fiscal, o contador si no hay revisor, + representante legal si
+   * registró firma), idempotente por contenido y solicitudes de firma por
+   * correo con enlace de un solo uso.
+   */
+  async generateAccounting(
+    actorUserId: string,
+    month: string,
+    payload: Omit<AccountingReportPayload, 'organization' | 'period'>,
+  ): Promise<OrgReport> {
+    const organizationId = this.requireOrgId();
+    const [y, m] = month.split('-').map(Number) as [number, number];
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const input: GenerateOrgReportInput = {
+      kind: 'accounting',
+      periodStart: `${month}-01`,
+      periodEnd: `${month}-${String(lastDay).padStart(2, '0')}`,
+    };
+    const period = resolveReportPeriod(input.periodStart, input.periodEnd);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const { row, reused, approvals, notify } = await this.generateOnce(
+          organizationId,
+          actorUserId,
+          input,
+          period,
+          {},
+          payload,
+        );
+        if (!reused) await this.requestSignatures(row, notify);
+        return toContract(row, reused, approvals);
+      } catch (error) {
+        if (isUniqueConstraintViolation(error) && attempt < CODE_MAX_ATTEMPTS) continue;
+        throw error;
+      }
+    }
+  }
+
+  /** Informe contable de un mes ya generado (el más reciente), con su estado. */
+  async accountingReportFor(
+    organizationId: string,
+    month: string,
+  ): Promise<{ id: string; code: string; status: OrgReportStatus } | null> {
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      const row = await tx.orgReport.findFirst({
+        where: {
+          organizationId,
+          kind: 'accounting',
+          periodStart: new Date(`${month}-01T00:00:00.000Z`),
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!row) return null;
+      const approvals = await this.approvalsByReport(tx, organizationId, [row.id]);
+      return {
+        id: row.id,
+        code: row.code,
+        status: statusFor(row.signers as unknown as SealedSigner[], approvals.get(row.id) ?? []),
+      };
+    });
+  }
+
+  /** Mes y organización del informe contable al que apunta un enlace de firma. */
+  async accountingMonthForSignatureToken(
+    token: string,
+  ): Promise<{ organizationId: string; month: string; signerUserId: string; signerRole: string }> {
+    const { request, report } = await this.resolveSignatureRequest(token);
+    if (report.kind !== 'accounting') {
+      throw new BadRequestException(INVALID_SIGNATURE_LINK);
+    }
+    return {
+      organizationId: request.organizationId,
+      month: report.periodStart.toISOString().slice(0, 7),
+      signerUserId: request.signerUserId,
+      signerRole: request.signerRole,
+    };
+  }
+
   private generateOnce(
     organizationId: string,
     actorUserId: string,
     input: GenerateOrgReportInput,
     period: ReportPeriod,
     filters: SocialServiceReportFilters,
+    accountingPayload?: Omit<AccountingReportPayload, 'organization' | 'period'>,
   ): Promise<{
     row: OrgReportRow;
     reused: boolean;
@@ -463,10 +553,21 @@ export class ReportsService {
         );
       }
 
-      const payload =
-        input.kind === 'donations'
-          ? await this.donationsPayload(tx, organizationId, snapshot, period)
-          : await this.socialServicePayload(tx, organizationId, snapshot, period, filters);
+      let payload: OrgReportPayload;
+      if (input.kind === 'accounting') {
+        if (!accountingPayload) {
+          throw new BadRequestException('El libro auxiliar se genera al cerrar el mes.');
+        }
+        payload = {
+          ...accountingPayload,
+          organization: snapshot,
+          period: { start: period.startDate, end: period.endDate },
+        };
+      } else if (input.kind === 'donations') {
+        payload = await this.donationsPayload(tx, organizationId, snapshot, period);
+      } else {
+        payload = await this.socialServicePayload(tx, organizationId, snapshot, period, filters);
+      }
       const contentHash = sealHash({
         kind: input.kind,
         period: { start: period.startDate, end: period.endDate },
@@ -587,7 +688,11 @@ export class ReportsService {
     const payload = row.payload as unknown as OrgReportPayload;
     const orgName = payload.organization?.name ?? 'Tu organización';
     const kindLabel =
-      row.kind === 'donations' ? 'el informe de donaciones' : 'el reporte de servicio social';
+      row.kind === 'donations'
+        ? 'el informe de donaciones'
+        : row.kind === 'accounting'
+          ? 'el libro auxiliar de donaciones del mes (cierre contable)'
+          : 'el reporte de servicio social';
     await Promise.all(
       notify.map(({ email, role, token, firstTime }) => {
         const how = token
