@@ -65,6 +65,9 @@ import {
 
 type Tx = Prisma.TransactionClient;
 type EntryRow = Prisma.AccountingEntryGetPayload<object>;
+/** Clave del candado por organización (folio secuencial del libro). */
+const lockKey = (organizationId: string): string => 'accounting:' + organizationId;
+
 type CloseRow = Prisma.AccountingPeriodCloseGetPayload<object>;
 
 const INVALID_SHARE_LINK =
@@ -177,7 +180,7 @@ export class AccountingService {
    */
   async sync(organizationId: string, now = new Date()): Promise<number> {
     return this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`accounting:${organizationId}`}, 0))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey(organizationId)}, 0))`;
       const [existing, closes, donations, payments] = await Promise.all([
         tx.accountingEntry.findMany({
           where: { organizationId },
@@ -580,7 +583,7 @@ export class AccountingService {
     }
 
     const close = await this.prisma.withOrgContext(organizationId, async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`accounting:${organizationId}`}, 0))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey(organizationId)}, 0))`;
       const already = await tx.accountingPeriodClose.findUnique({
         where: { organizationId_period: { organizationId, period } },
       });
