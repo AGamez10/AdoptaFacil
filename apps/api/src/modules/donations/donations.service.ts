@@ -502,6 +502,10 @@ export class DonationsService {
       throw new ForbiddenException('Webhook verification failed.');
     }
 
+    // Reconciliation record: every verified read-back is kept, even one that
+    // does not match the donation (that is exactly what reconciliation must see).
+    await this.recordMercadoPagoPayment(organizationId, event);
+
     if (!(await this.matchesExpectedPayment(event, organizationId, mercadopagoCollector?.userId))) {
       return noop;
     }
@@ -510,6 +514,60 @@ export class DonationsService {
       return noop;
     }
     return this.settle(event);
+  }
+
+  /**
+   * Upsert the per-account reconciliation row (`mercadopago_payments`, RLS)
+   * from the READ-BACK snapshot. Best-effort: a failure here is logged and
+   * never blocks the settlement (the notification will repeat anyway).
+   */
+  private async recordMercadoPagoPayment(
+    organizationId: string,
+    event: NormalizedWebhookEvent,
+  ): Promise<void> {
+    const p = event.mercadopagoPayment;
+    if (!p) return;
+    try {
+      const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+        SELECT * FROM donation_by_collection_id(${p.externalReference})
+      `);
+      const donationId = rows[0] && rows[0].organization_id === organizationId ? rows[0].id : null;
+      const toDate = (iso: string | null) => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? null : d;
+      };
+      const data = {
+        collectorId: p.collectorId,
+        externalReference: p.externalReference,
+        donationId,
+        status: p.status,
+        statusDetail: p.statusDetail,
+        currency: p.currency,
+        transactionAmount: new Prisma.Decimal(p.transactionAmount),
+        netReceivedAmount: p.netReceivedAmount ? new Prisma.Decimal(p.netReceivedAmount) : null,
+        transactionAmountRefunded: p.transactionAmountRefunded
+          ? new Prisma.Decimal(p.transactionAmountRefunded)
+          : null,
+        feeDetails: p.feeDetails as Prisma.InputJsonValue,
+        refunds: p.refunds as Prisma.InputJsonValue,
+        paymentTypeId: p.paymentTypeId,
+        paymentMethodId: p.paymentMethodId,
+        dateApproved: toDate(p.dateApproved),
+        moneyReleaseDate: toDate(p.moneyReleaseDate),
+      };
+      await this.prisma.withOrgContext(organizationId, (tx) =>
+        tx.mercadoPagoPayment.upsert({
+          where: { organizationId_mpPaymentId: { organizationId, mpPaymentId: p.paymentId } },
+          create: { organizationId, mpPaymentId: p.paymentId, ...data },
+          update: data,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo guardar el pago ${p.paymentId} para conciliación: ${(error as Error).message}`,
+      );
+    }
   }
 
   /**

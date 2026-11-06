@@ -19,6 +19,8 @@
 // Money is ALWAYS integer COP pesos (never float). RNF12: the breakdown is
 // auditable and reconciles to the peso.
 
+import type { MercadoPagoPaymentSnapshot } from './mercadopago';
+
 /** Only currency in Ola 1. */
 export type PaymentCurrency = 'COP';
 
@@ -156,6 +158,9 @@ export interface NormalizedWebhookEvent {
   currency?: string;
   /** Account that received the money, as established by the read-back. */
   receiverAccountId?: string;
+  /** ADR-PAG-003: the full read-back of a Mercado Pago payment, for the
+   *  per-account reconciliation record. Server-only. */
+  mercadopagoPayment?: MercadoPagoPaymentSnapshot;
 }
 
 /**

@@ -4,8 +4,9 @@ import { renderShell } from '../../../test-utils';
 import { loadEpaycoCheckout } from '../../payments/lib/load-epayco-checkout';
 
 /**
- * ADR-PAG-002 — `/donaciones` con ePayco, la única pasarela (Mercado Pago se
- * retiró el 2026-10-17): se crea la donación y se abre el checkout de ePayco
+ * ADR-PAG-002 — `/donaciones` con ePayco (`VITE_PAYMENT_PROVIDER=epayco`; desde
+ * el 2026-11-06 la pasarela por defecto es Mercado Pago, ADR-PAG-003): se crea
+ * la donación y se abre el checkout de ePayco
  * con la sesión que devuelve la API. El cargador del script se MOCKEA: ningún test
  * descarga el script real de ePayco.
  */
@@ -140,25 +141,27 @@ describe('DonatePage — checkout de ePayco (VITE_PAYMENT_PROVIDER=epayco)', () 
     await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
   });
 
-  it('uses ePayco when VITE_PAYMENT_PROVIDER is empty (the default) or a stale "mercadopago"', async () => {
-    for (const value of ['', 'mercadopago']) {
-      vi.stubEnv('VITE_PAYMENT_PROVIDER', value);
-      const configure = vi.fn(() => ({ open: vi.fn() }));
-      vi.mocked(loadEpaycoCheckout).mockResolvedValue({ checkout: { configure } });
-      stubFetch();
-      const { unmount } = renderShell({ route: ROUTE, ...personSession() });
+  it('does NOT use ePayco when VITE_PAYMENT_PROVIDER is empty: Mercado Pago is the default (ADR-PAG-003)', async () => {
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', '');
+    const configure = vi.fn(() => ({ open: vi.fn() }));
+    vi.mocked(loadEpaycoCheckout).mockResolvedValue({ checkout: { configure } });
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    stubFetch({
+      ...DONATION,
+      checkoutSessionId: undefined,
+      paymentLinkUrl: 'https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=p-1',
+    });
+    renderShell({ route: ROUTE, ...personSession() });
 
-      await fillAndDonate();
+    await fillAndDonate();
 
-      await waitFor(() =>
-        expect(configure).toHaveBeenCalledWith(
-          expect.objectContaining({ sessionId: 'sess-epayco-123' }),
-        ),
-      );
-      expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
-      unmount();
-      vi.mocked(loadEpaycoCheckout).mockReset();
-    }
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(
+        'https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=p-1',
+      ),
+    );
+    expect(configure).not.toHaveBeenCalled();
   });
 
   it('kill switch (VITE_PAYMENT_PROVIDER=off): a calm notice, no form, no checkout, no API call', async () => {

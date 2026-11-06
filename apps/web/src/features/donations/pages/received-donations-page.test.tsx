@@ -171,10 +171,12 @@ describe('ReceivedDonationsPage', () => {
 
   it('never fabricates a donor name for a pending donation (no receipt yet)', async () => {
     stubFetch((url) => {
-      // ePayco is the default provider since Mercado Pago was retired: a
-      // connected account keeps the "Cobros pendientes" banner (and its own
+      // Mercado Pago is the default provider (ADR-PAG-003): a connected
+      // account keeps the "Cobros pendientes" banner (and its own
       // "Pendiente" badge) out of this donation-status assertion.
-      if (url.includes('/org/epayco/status')) return { connected: true };
+      if (url.includes('/org/mercadopago/status') || url.includes('/org/epayco/status')) {
+        return { connected: true };
+      }
       if (url.includes('/donations/received')) {
         return [
           {

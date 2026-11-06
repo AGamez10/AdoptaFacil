@@ -12,6 +12,7 @@ import {
   type CreateCollectionInput,
   type CreatePayoutInput,
   type MercadoPagoCollectorCredentials,
+  type MercadoPagoPaymentSnapshot,
   type NormalizedPayoutWebhookEvent,
   type NormalizedWebhookEvent,
   type PaymentPort,
@@ -131,6 +132,59 @@ export function mercadoPagoNotificationType(
 function integerAmount(value: unknown): number {
   const n = typeof value === 'string' ? Number(value) : value;
   return typeof n === 'number' && Number.isFinite(n) && Number.isInteger(n) ? n : Number.NaN;
+}
+
+/** Decimal as reported, kept as a string (never rounded here). */
+function decimalString(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) return value;
+  return null;
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/**
+ * Reconciliation record of a read-back payment (ADR-PAG-003). Only what the
+ * ledger needs: ids, status, amounts, fees, dates, method and refunds — never
+ * the payer (name, email, document, card).
+ */
+export function mercadoPagoPaymentSnapshot(
+  payment: Record<string, unknown>,
+  paymentId: string,
+  collectorId: string,
+  reference: string,
+): MercadoPagoPaymentSnapshot {
+  const details = (payment.transaction_details ?? {}) as Record<string, unknown>;
+  const fees = Array.isArray(payment.fee_details) ? payment.fee_details : [];
+  const refunds = Array.isArray(payment.refunds) ? payment.refunds : [];
+  return {
+    paymentId,
+    collectorId,
+    externalReference: reference,
+    status: optionalString(payment.status) ?? 'unknown',
+    statusDetail: optionalString(payment.status_detail),
+    currency: optionalString(payment.currency_id) ?? '',
+    transactionAmount: decimalString(payment.transaction_amount) ?? '0',
+    netReceivedAmount: decimalString(details.net_received_amount),
+    feeDetails: fees.map((f: Record<string, unknown>) => ({
+      type: optionalString(f?.type),
+      amount: decimalString(f?.amount),
+      fee_payer: optionalString(f?.fee_payer),
+    })),
+    paymentTypeId: optionalString(payment.payment_type_id),
+    paymentMethodId: optionalString(payment.payment_method_id),
+    dateApproved: optionalString(payment.date_approved),
+    moneyReleaseDate: optionalString(payment.money_release_date),
+    refunds: refunds.map((r: Record<string, unknown>) => ({
+      id: r?.id === undefined ? null : String(r.id),
+      amount: decimalString(r?.amount),
+      status: optionalString(r?.status),
+      date_created: optionalString(r?.date_created),
+    })),
+    transactionAmountRefunded: decimalString(payment.transaction_amount_refunded),
+  };
 }
 
 const NO_CUSTODY_ERROR =
@@ -349,6 +403,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       typeof payment?.status === 'string' ? payment.status : undefined,
     );
     const paymentId = String(payment?.id ?? dataId);
+    const snapshot = mercadoPagoPaymentSnapshot(payment ?? {}, paymentId, collectorId, reference);
     return {
       eventId: paymentId,
       collectionId: reference,
@@ -357,6 +412,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       amountCharged: integerAmount(payment?.transaction_amount),
       currency: typeof payment?.currency_id === 'string' ? payment.currency_id : '',
       receiverAccountId: collectorId,
+      mercadopagoPayment: snapshot,
     };
   }
 

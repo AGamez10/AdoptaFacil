@@ -159,3 +159,35 @@ export function mercadoPagoPreapprovalStatus(
       return null; // pending: the payer has not authorized yet
   }
 }
+
+// ----------------------------------------------------------------------------
+// Reconciliation: what each read-back payment leaves on record
+// ----------------------------------------------------------------------------
+
+/**
+ * One Mercado Pago payment exactly as READ BACK with the organization's token
+ * (never from the notification body). Stored per connected account so the
+ * accounting ledger and the monthly reconciliation are built on what Mercado
+ * Pago reported, without AdoptaFácil ever holding the money. No payer data.
+ * Decimal amounts are strings (pesos, as Mercado Pago reports them).
+ */
+export interface MercadoPagoPaymentSnapshot {
+  paymentId: string;
+  collectorId: string;
+  externalReference: string;
+  status: string;
+  statusDetail: string | null;
+  currency: string;
+  transactionAmount: string;
+  /** `transaction_details.net_received_amount`. */
+  netReceivedAmount: string | null;
+  /** `fee_details` as reported (type, amount, fee_payer). */
+  feeDetails: unknown[];
+  paymentTypeId: string | null;
+  paymentMethodId: string | null;
+  dateApproved: string | null;
+  moneyReleaseDate: string | null;
+  /** `refunds` as reported (id, amount, date_created, status). */
+  refunds: unknown[];
+  transactionAmountRefunded: string | null;
+}

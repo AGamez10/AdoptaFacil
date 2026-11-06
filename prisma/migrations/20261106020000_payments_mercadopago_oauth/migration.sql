@@ -99,3 +99,53 @@ ALTER TABLE "organization_subscriptions" DROP CONSTRAINT "organization_subscript
 ALTER TABLE "organization_subscriptions"
   ADD CONSTRAINT "organization_subscriptions_provider_check"
   CHECK ("provider" IN ('manual', 'epayco', 'mercadopago'));
+
+-- ============================================================================
+-- CONCILIACIÓN: cada pago de Mercado Pago de una cuenta conectada, tal como se
+-- RELEE con el token de esa organización (nunca desde el cuerpo de la
+-- notificación). Una fila por (organización, pago), actualizada con cada
+-- notificación nueva (estado, reembolsos…). Es la base del libro auxiliar y
+-- de la conciliación mensual; AdoptaFácil nunca tiene el dinero. Sin datos
+-- del pagador (nombre, correo, documento, tarjeta).
+-- ============================================================================
+CREATE TABLE "mercadopago_payments" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "mp_payment_id" TEXT NOT NULL,
+    "collector_id" TEXT NOT NULL,
+    "external_reference" TEXT NOT NULL,
+    "donation_id" UUID,
+    "status" TEXT NOT NULL,
+    "status_detail" TEXT,
+    "currency" TEXT NOT NULL,
+    "transaction_amount" DECIMAL(14,2) NOT NULL,
+    "net_received_amount" DECIMAL(14,2),
+    "transaction_amount_refunded" DECIMAL(14,2),
+    "fee_details" JSONB NOT NULL DEFAULT '[]',
+    "refunds" JSONB NOT NULL DEFAULT '[]',
+    "payment_type_id" TEXT,
+    "payment_method_id" TEXT,
+    "date_approved" TIMESTAMP(3),
+    "money_release_date" TIMESTAMP(3),
+    "first_seen_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "mercadopago_payments_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "mercadopago_payments_organization_id_mp_payment_id_key" ON "mercadopago_payments"("organization_id", "mp_payment_id");
+CREATE INDEX "mercadopago_payments_organization_id_date_approved_idx" ON "mercadopago_payments"("organization_id", "date_approved");
+CREATE INDEX "mercadopago_payments_external_reference_idx" ON "mercadopago_payments"("external_reference");
+
+ALTER TABLE "mercadopago_payments"
+  ADD CONSTRAINT "mercadopago_payments_organization_id_fkey"
+  FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "mercadopago_payments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "mercadopago_payments" FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON "mercadopago_payments"
+  USING ("organization_id" = NULLIF(current_setting('app.current_org_id', true), '')::uuid)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('app.current_org_id', true), '')::uuid);
+
+-- Registro de lo que reporta la pasarela: se inserta y se actualiza, nunca se borra.
+GRANT SELECT, INSERT, UPDATE ON "mercadopago_payments" TO adoptafacil_app;

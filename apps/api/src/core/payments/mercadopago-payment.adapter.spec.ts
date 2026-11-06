@@ -11,6 +11,7 @@ import {
   MERCADOPAGO_REFERENCE_MAX_LENGTH,
   MercadoPagoPaymentAdapter,
   mercadoPagoNotificationDataId,
+  mercadoPagoPaymentSnapshot,
   mercadoPagoReferenceFor,
   mercadoPagoSignatureV1,
 } from './mercadopago-payment.adapter';
@@ -175,6 +176,12 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
       amountCharged: 50000,
       currency: 'COP',
       receiverAccountId: '123456789',
+      mercadopagoPayment: expect.objectContaining({
+        paymentId: '987654321',
+        collectorId: '123456789',
+        externalReference: 'af-ref',
+        transactionAmount: '50000',
+      }),
     });
     const [url, init] = fetchFn.mock.calls[0];
     expect(String(url)).toBe('https://api.mp.test/v1/payments/987654321');
@@ -260,5 +267,39 @@ describe('Mercado Pago notification helpers', () => {
     const v1 = mercadoPagoSignatureV1(SECRET, 'abc', 'r', '1');
     expect(() => assertMercadoPagoSignature(SECRET, `ts=1,v1=${v1}`, 'r', 'ABC')).not.toThrow();
     expect(() => assertMercadoPagoSignature(undefined, `ts=1,v1=${v1}`, 'r', 'abc')).toThrow();
+  });
+
+  it('keeps a payer-free reconciliation snapshot of the read-back (fees, net, refunds)', () => {
+    const snap = mercadoPagoPaymentSnapshot(
+      {
+        status: 'refunded',
+        status_detail: 'refunded',
+        currency_id: 'COP',
+        transaction_amount: 52500,
+        transaction_amount_refunded: 52500,
+        transaction_details: { net_received_amount: 50000.5 },
+        fee_details: [{ type: 'mercadopago_fee', amount: 2499.5, fee_payer: 'collector' }],
+        refunds: [{ id: 77, amount: 52500, status: 'approved', date_created: '2026-11-06' }],
+        payment_type_id: 'credit_card',
+        payment_method_id: 'visa',
+        date_approved: '2026-11-05T10:00:00.000-05:00',
+        money_release_date: '2026-11-19T10:00:00.000-05:00',
+        payer: { email: 'someone@example.com', identification: { number: '123' } },
+      },
+      '987654321',
+      '123456789',
+      'af-ref',
+    );
+    expect(snap).toMatchObject({
+      paymentId: '987654321',
+      collectorId: '123456789',
+      status: 'refunded',
+      transactionAmount: '52500',
+      netReceivedAmount: '50000.5',
+      transactionAmountRefunded: '52500',
+      feeDetails: [{ type: 'mercadopago_fee', amount: '2499.5', fee_payer: 'collector' }],
+      refunds: [{ id: '77', amount: '52500', status: 'approved' }],
+    });
+    expect(JSON.stringify(snap)).not.toContain('someone@example.com');
   });
 });

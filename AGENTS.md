@@ -12,9 +12,10 @@ Plataforma web **multi-tenant** para el ecosistema de rescate animal en Colombia
 organizaciones y personas conviven en un mismo sistema para adopciones, donaciones, campañas,
 apadrinamientos, voluntariado y más. Sello distintivo: **transparencia y confianza**. Gratis para
 organizaciones; ingreso por comisión sobre transacciones (4% con desglose transparente; IVA solo
-sobre la comisión). Pasarela **ePayco** (única desde el 2026-10-17; Mercado Pago y antes Wompi fueron
-retirados por decisión del dueño): cada cobro es un checkout v2 creado con las llaves de la propia
-organización, así que el dinero llega directo a su cuenta (ADR-PAG-002, `docs/pagos/epayco.md`). No hay
+sobre la comisión). Pasarela **Mercado Pago por OAuth** (desde el 2026-11-06, ADR-PAG-003,
+`docs/pagos/mercadopago-oauth.md`): cada refugio conecta su propia cuenta y cada donación se cobra con su
+token, así que el dinero llega directo a su cuenta; AdoptaFácil cobra sus planes con su propia cuenta
+(suscripción). Sin split. ePayco (ADR-PAG-002) sigue disponible con `PAYMENT_DRIVER=epayco`. No hay
 adaptador de payouts real: `createPayout` no está implementado.
 
 **Jerarquía de fuentes de verdad** (gana el de más arriba): (1) Documento base (requisitos y

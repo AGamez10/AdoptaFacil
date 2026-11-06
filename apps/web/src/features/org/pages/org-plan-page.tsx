@@ -6,7 +6,9 @@ import {
   PLAN_CAPABILITY_INFO,
   PLAN_LIMIT_LABELS,
   formatPlanLimit,
+  isMercadoPagoCheckoutUrl,
   priceWithIva,
+  type PlanCheckoutView,
   type OrganizationPlanView,
   type PlanDefinition,
   type PlanKey,
@@ -22,12 +24,15 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  Button,
   ErrorState,
   Skeleton,
+  useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { officialWhatsappUrl } from '../../../lib/contact';
+import { isMercadoPagoProvider } from '../../payments/lib/payment-provider';
 
 /** Labels, limits and the always-free list come from the plan catalog in
  *  `@adoptafacil/contracts`, the same one the landing uses. */
@@ -62,8 +67,49 @@ function planRequestUrl(plan: PlanDefinition): string {
   );
 }
 
+/**
+ * ADR-PAG-003: pagar el plan cada mes con Mercado Pago. Es ingreso de
+ * AdoptaFácil por el software, así que se cobra con la cuenta de Mercado Pago
+ * de AdoptaFácil (nunca con la del refugio ni con sus donaciones). Si el pago
+ * en línea aún no está activo, se ofrece pedirlo por WhatsApp.
+ */
+function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
+  const client = useApiClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const pay = async () => {
+    setBusy(true);
+    try {
+      const view = await client.request<PlanCheckoutView>('/org/plan/checkout', {
+        method: 'POST',
+        json: { plan: plan.key },
+      });
+      if (!isMercadoPagoCheckoutUrl(view.checkoutUrl)) throw new Error('bad checkout url');
+      window.location.assign(view.checkoutUrl);
+    } catch {
+      setBusy(false);
+      toast({
+        title: 'El pago en línea del plan aún no está disponible',
+        description: 'Escríbenos por WhatsApp y lo activamos contigo.',
+        variant: 'destructive',
+      });
+    }
+  };
+  return (
+    <Button
+      className="w-full"
+      onClick={pay}
+      disabled={busy}
+      data-testid={`plan-pay-mercadopago-${plan.key}`}
+    >
+      {busy ? 'Abriendo Mercado Pago…' : `Pagar ${plan.name} con Mercado Pago`}
+    </Button>
+  );
+}
+
 function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean }) {
   const paid = plan.monthlyPriceCop > 0;
+  const onlineBilling = isMercadoPagoProvider();
   const included = PLAN_CAPABILITIES.filter((capability) => plan.capabilities[capability]);
   return (
     <Card className={current ? 'border-primary ring-2 ring-primary/30' : undefined}>
@@ -115,15 +161,19 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
         )}
       </CardContent>
       {paid && !current && (
-        <CardFooter>
+        <CardFooter className="flex flex-col gap-2">
+          {onlineBilling && <PayWithMercadoPagoButton plan={plan} />}
           <a
-            className={cn(buttonVariants(), 'w-full')}
+            className={cn(
+              buttonVariants({ variant: onlineBilling ? 'outline' : 'default' }),
+              'w-full',
+            )}
             href={planRequestUrl(plan)}
             target="_blank"
             rel="noreferrer"
             data-testid={`plan-request-${plan.key}`}
           >
-            Quiero el plan {plan.name}
+            {onlineBilling ? 'Prefiero pagar por transferencia' : `Quiero el plan ${plan.name}`}
           </a>
         </CardFooter>
       )}

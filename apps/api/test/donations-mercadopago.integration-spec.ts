@@ -364,6 +364,20 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     expect(again.body.applied).toBe(false);
     const receipts = await admin.donationReceipt.findMany({ where: { donationId } });
     expect(receipts).toHaveLength(1);
+
+    // Reconciliation row from the read-back (one per org + MP payment id).
+    const rows = await admin.mercadoPagoPayment.findMany({
+      where: { organizationId: orgId, mpPaymentId: '900001' },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      collectorId: mpUserId,
+      externalReference: reference,
+      donationId,
+      status: 'approved',
+      currency: 'COP',
+    });
+    expect(Number(rows[0].transactionAmount)).toBe(amountCharged);
   });
 
   it('a later refund is audited on the org log (the receipt is never rewritten)', async () => {
@@ -380,6 +394,16 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     expect(audits).toHaveLength(1);
     const donation = await admin.donation.findUnique({ where: { id: donationId } });
     expect(donation?.status).toBe('approved');
+
+    const row = await admin.mercadoPagoPayment.findUnique({
+      where: { organizationId_mpPaymentId: { organizationId: orgId, mpPaymentId: '900001' } },
+    });
+    expect(row?.status).toBe('refunded');
+    // The mismatched payment is kept too: reconciliation must see it.
+    const mismatch = await admin.mercadoPagoPayment.findUnique({
+      where: { organizationId_mpPaymentId: { organizationId: orgId, mpPaymentId: '900003' } },
+    });
+    expect(Number(mismatch?.transactionAmount)).toBe(1000);
   });
 
   it('a grant Mercado Pago no longer honors blocks donations until the org reconnects', async () => {

@@ -17,15 +17,15 @@
 model OrganizationBankAccount {
   organizationId        String   @id @map("organization_id") @db.Uuid
   /// Código del banco en el catálogo de Wompi.
-  bankCode               String   @map("bank_code")
+  bankCode              String   @map("bank_code")
   /// BankAccountType: 'savings' | 'checking'.
-  accountType            String   @map("account_type")
-  accountNumber          String   @map("account_number")
-  accountHolderName      String   @map("account_holder_name")
+  accountType           String   @map("account_type")
+  accountNumber         String   @map("account_number")
+  accountHolderName     String   @map("account_holder_name")
   /// Cédula/NIT del titular (SARLAFT/KYC).
-  accountHolderDocument  String   @map("account_holder_document")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  accountHolderDocument String   @map("account_holder_document")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   @@map("organization_bank_accounts")
 }
@@ -125,4 +125,40 @@ model OrganizationMercadoPagoConnection {
 
   @@index([status, expiresAt])
   @@map("organization_mercadopago_connections")
+}
+
+/// ADR-PAG-003 — reconciliation record: each Mercado Pago payment of a
+/// connected account, exactly as READ BACK with that org's token (never from
+/// the notification body). One row per (org, payment), updated on every new
+/// notification (status, refunds…). Base for the accounting ledger and the
+/// monthly reconciliation; AdoptaFácil never holds the money. No payer data.
+model MercadoPagoPayment {
+  id                        String    @id @default(uuid()) @db.Uuid
+  organizationId            String    @map("organization_id") @db.Uuid
+  mpPaymentId               String    @map("mp_payment_id")
+  collectorId               String    @map("collector_id")
+  /// Our donation reference (`donations.collection_id`).
+  externalReference         String    @map("external_reference")
+  donationId                String?   @map("donation_id") @db.Uuid
+  status                    String
+  statusDetail              String?   @map("status_detail")
+  currency                  String
+  transactionAmount         Decimal   @map("transaction_amount") @db.Decimal(14, 2)
+  netReceivedAmount         Decimal?  @map("net_received_amount") @db.Decimal(14, 2)
+  transactionAmountRefunded Decimal?  @map("transaction_amount_refunded") @db.Decimal(14, 2)
+  feeDetails                Json      @default("[]") @map("fee_details")
+  refunds                   Json      @default("[]")
+  paymentTypeId             String?   @map("payment_type_id")
+  paymentMethodId           String?   @map("payment_method_id")
+  dateApproved              DateTime? @map("date_approved")
+  moneyReleaseDate          DateTime? @map("money_release_date")
+  firstSeenAt               DateTime  @default(now()) @map("first_seen_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, mpPaymentId])
+  @@index([organizationId, dateApproved])
+  @@index([externalReference])
+  @@map("mercadopago_payments")
 }

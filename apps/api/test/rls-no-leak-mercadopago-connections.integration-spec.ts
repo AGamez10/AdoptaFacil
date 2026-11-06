@@ -146,4 +146,45 @@ describe('RLS (organization_mercadopago_connections)', () => {
     expect(rows[0].proconfig).toEqual(['search_path=public, pg_temp']);
     expect(rows[0].public_exec).toBe(false);
   });
+
+  describe('mercadopago_payments (reconciliation rows)', () => {
+    const payment = (organizationId: string, mpPaymentId: string, collectorId: string) => ({
+      organizationId,
+      mpPaymentId,
+      collectorId,
+      externalReference: `af-${mpPaymentId}`,
+      status: 'approved',
+      currency: 'COP',
+      transactionAmount: new Prisma.Decimal(10000),
+    });
+
+    beforeAll(async () => {
+      await withOrgContext(prisma, orgA, (tx) =>
+        tx.mercadoPagoPayment.create({ data: payment(orgA, '81001', userA) }),
+      );
+      await withOrgContext(prisma, orgB, (tx) =>
+        tx.mercadoPagoPayment.create({ data: payment(orgB, '81002', userB) }),
+      );
+    });
+
+    it("no-leak: Org A reads only its own payments, never Org B's", async () => {
+      const rows = await withOrgContext(prisma, orgA, (tx) => tx.mercadoPagoPayment.findMany());
+      expect(rows.map((r) => r.mpPaymentId)).toEqual(['81001']);
+      expect(await prisma.mercadoPagoPayment.findMany()).toHaveLength(0);
+    });
+
+    it('no-leak: WITH CHECK blocks writing a payment row for another org', async () => {
+      await expect(
+        withOrgContext(prisma, orgA, (tx) =>
+          tx.mercadoPagoPayment.create({ data: payment(orgB, '81003', userB) }),
+        ),
+      ).rejects.toThrow();
+    });
+
+    it('no-leak: the app role cannot delete reconciliation rows (append/update only)', async () => {
+      await expect(
+        withOrgContext(prisma, orgA, (tx) => tx.mercadoPagoPayment.deleteMany()),
+      ).rejects.toThrow();
+    });
+  });
 });
