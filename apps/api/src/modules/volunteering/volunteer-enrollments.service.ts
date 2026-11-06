@@ -61,6 +61,8 @@ interface EnrollmentMineRow {
   id: string;
   organizationId: string;
   organizationName: string;
+  opportunityStartDate: string;
+  opportunityEndDate: string;
   opportunityId: string;
   opportunityTitle: string;
   volunteerUserId: string;
@@ -128,6 +130,8 @@ function toMine(row: EnrollmentMineRow): VolunteerEnrollmentMine {
     organizationName: row.organizationName,
     opportunityId: row.opportunityId,
     opportunityTitle: row.opportunityTitle,
+    opportunityStartDate: row.opportunityStartDate,
+    opportunityEndDate: row.opportunityEndDate,
     volunteerUserId: row.volunteerUserId,
     volunteerName: '',
     volunteerEmail: '',

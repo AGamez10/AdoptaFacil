@@ -453,6 +453,11 @@ export class VolunteerCertificatesService {
         }
       : null;
     const city = rawCity ? pdfText(rawCity, 80) : undefined;
+    if (!signer) {
+      this.logger.warn(
+        `Certificado ${row.id}: la organización ${row.organizationId} no tiene una firma vigente de representante legal; se emite con "firma pendiente".`,
+      );
+    }
 
     const pdf = await PDFDocument.create();
     const serif = await pdf.embedFont(StandardFonts.TimesRoman);
@@ -673,6 +678,18 @@ function drawCertificatePage(
     `desarrollada del ${formatCO(row.periodStart)} al ${formatCO(row.periodEnd)}, durante la cual ` +
     `completó un total de ${row.totalApprovedHours} horas de servicio efectivamente verificadas.`;
   y = drawCenteredParagraph(page, PAGE_WIDTH, body, y, font.serif, 13, bodyMaxWidth, 20);
+  // Quién certifica: la organización (con su representante legal). AdoptaFácil
+  // solo genera el documento a partir de los registros que la organización aprobó.
+  y -= 22;
+  drawCentered(
+    page,
+    PAGE_WIDTH,
+    `Horas certificadas por ${row.organizationName}. AdoptaFácil generó este documento a partir de los registros aprobados por la organización.`,
+    y,
+    font.serifItalic,
+    9.5,
+    MUTED,
+  );
 
   if (row.appliesToStudentService) {
     y -= 8;
@@ -733,6 +750,20 @@ function drawCertificatePage(
   drawCenteredRuleAt(page, signatureBlockX, signatureBlockWidth, signatureLineY, INK, 0.75);
   const signerName = signer?.fullName ?? '________________________';
   const signerPosition = signer?.position ?? 'Representante Legal';
+  if (!signer) {
+    // Sin firma registrada, la constancia NO se presenta como firmada: se marca
+    // de forma explícita para que nadie la acepte como válida sin firma.
+    drawCenteredIn(
+      page,
+      signatureBlockX,
+      signatureBlockWidth,
+      'FIRMA PENDIENTE — sin firma de representante legal',
+      signatureLineY - 44,
+      font.sansBold,
+      8,
+      MUTED,
+    );
+  }
   drawCenteredIn(
     page,
     signatureBlockX,
