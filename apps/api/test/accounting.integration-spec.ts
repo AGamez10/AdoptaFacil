@@ -283,7 +283,15 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
       .set(auth(owner))
       .expect(200);
     const state = new URL(connect.body.authorizeUrl).searchParams.get('state');
-    await request(server).get(`/org/mercadopago/callback?code=TG-acc&state=${state}`).expect(302);
+    // El mismo navegador que inició la conexión (cookie de enlace del OAuth).
+    const binding = ([] as string[])
+      .concat(connect.headers['set-cookie'] ?? [])
+      .find((c) => c.startsWith('af_mp_oauth='));
+    const done = await request(server)
+      .get(`/org/mercadopago/callback?code=TG-acc&state=${state}`)
+      .set('Cookie', String(binding).split(';')[0])
+      .expect(302);
+    expect(done.headers.location).toMatch(/mercadopago=connected$/);
   });
 
   beforeEach(() => {
