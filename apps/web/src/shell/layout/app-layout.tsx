@@ -1,6 +1,6 @@
 import { Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { PlatformMfaGate } from '../../features/platform-team';
+import { PlatformMfaGate } from '../../features/platform-team/components/platform-mfa-gate';
 import { useNav } from '../navigation/nav-context';
 import { LayoutErrorBoundary } from './error-boundary';
 import { Header } from './header';
