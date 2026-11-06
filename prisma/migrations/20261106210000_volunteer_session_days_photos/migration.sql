@@ -124,10 +124,7 @@ CREATE INDEX "service_hours_photos_service_hours_id_idx" ON "service_hours_photo
 
 ALTER TABLE "service_hours_photos" ADD CONSTRAINT "service_hours_photos_service_hours_id_fkey"
   FOREIGN KEY ("service_hours_id") REFERENCES "service_hours"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "service_hours_photos" ADD CONSTRAINT "service_hours_photos_organization_id_fkey"
-  FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "service_hours_photos" ADD CONSTRAINT "service_hours_photos_volunteer_user_id_fkey"
-  FOREIGN KEY ("volunteer_user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
 
 ALTER TABLE "service_hours_photos" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "service_hours_photos" FORCE ROW LEVEL SECURITY;
