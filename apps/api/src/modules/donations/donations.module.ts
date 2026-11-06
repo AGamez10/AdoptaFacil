@@ -11,6 +11,7 @@ import {
   EPAYCO_KEYS_ENCRYPTION_KEY,
   loadEpaycoKeysEncryptionKey,
 } from '../payments/epayco-keys-crypto';
+import { MercadoPagoAccountsModule } from '../payments/mercadopago-accounts.module';
 
 /**
  * M05 · Donations (T-050, P1). A Person donates to an organization, sees the
@@ -50,7 +51,8 @@ import {
  * amount/org name only, no auth, generic 404 on an unknown reference.
  */
 @Module({
-  imports: [AuthModule, CampaignsModule],
+  // ADR-PAG-003: MercadoPagoAccountsModule resolves the org's OAuth grant.
+  imports: [AuthModule, CampaignsModule, MercadoPagoAccountsModule],
   controllers: [
     DonationsController,
     DonationCertificatePublicController,

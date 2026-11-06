@@ -1,5 +1,8 @@
 # ADR-PAG-002 · ePayco como pasarela principal, QR por refugio y planes
 
+> **2026-11-06:** el dueño volvió a Mercado Pago, ahora por OAuth (cada refugio conecta su cuenta) y sin split.
+> Ver [ADR-PAG-003](./mercadopago-oauth.md). ePayco queda como alternativa (`PAYMENT_DRIVER=epayco`).
+
 > Estado: **decidido por el dueño** (2026-10-15). Implementado detrás de flag, apagado. No activa dinero real.
 > Complementa a [ADR-PAG-001](./pasarelas-multiples.md) (sin custodia), que sigue mandando.
 > No es asesoría jurídica ni tributaria: lo marcado ⚖️ va al abogado y lo marcado 🧾 al contador.

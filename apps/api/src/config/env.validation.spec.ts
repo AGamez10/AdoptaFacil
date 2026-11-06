@@ -38,12 +38,35 @@ describe('validateEnv — PAYMENT_DRIVER fail-fast (T-052)', () => {
     expect(validateEnv({ ...BASE }).PAYMENT_DRIVER).toBe('fake');
   });
 
-  // Mercado Pago retired from the product on 2026-10-17 (owner decision).
-  it("rejects PAYMENT_DRIVER='mercadopago' (Mercado Pago retired)", () => {
-    expect(() => validateEnv({ ...BASE, PAYMENT_DRIVER: 'mercadopago' })).toThrow(/PAYMENT_DRIVER/);
+  // ADR-PAG-003 (2026-11-06): Mercado Pago is back, with each org's OAuth grant.
+  it("PAYMENT_DRIVER='mercadopago' fails fast without the application credentials", () => {
+    expect(() => validateEnv({ ...BASE, PAYMENT_DRIVER: 'mercadopago' })).toThrow(
+      /MERCADOPAGO_CLIENT_ID/,
+    );
+    expect(() =>
+      validateEnv({
+        ...BASE,
+        PAYMENT_DRIVER: 'mercadopago',
+        MERCADOPAGO_CLIENT_ID: '123',
+        MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
+      }),
+    ).toThrow(/MERCADOPAGO_WEBHOOK_SECRET/);
   });
 
-  it('ignores leftover MERCADOPAGO_* vars in an old .env (not part of the schema any more)', () => {
+  it("boots PAYMENT_DRIVER='mercadopago' with client id, secret and webhook secret (no platform token needed)", () => {
+    const env = validateEnv({
+      ...BASE,
+      PAYMENT_DRIVER: 'mercadopago',
+      MERCADOPAGO_CLIENT_ID: '123',
+      MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
+      MERCADOPAGO_WEBHOOK_SECRET: 'webhook-secret-dummy',
+    });
+    expect(env.PAYMENT_DRIVER).toBe('mercadopago');
+    expect(env.MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS).toBe(30);
+    expect(env.MERCADOPAGO_OAUTH_PKCE).toBe(false);
+  });
+
+  it('ignores the vars of the retired integration (MERCADOPAGO_ACCESS_TOKEN/PUBLIC_KEY)', () => {
     const env = validateEnv({
       ...BASE,
       PAYMENT_DRIVER: 'epayco',
@@ -51,7 +74,8 @@ describe('validateEnv — PAYMENT_DRIVER fail-fast (T-052)', () => {
       MERCADOPAGO_ACCESS_TOKEN: 'TEST-token-dummy',
     }) as Record<string, unknown>;
     expect(env.PAYMENT_DRIVER).toBe('epayco');
-    expect(Object.keys(env).some((k) => k.startsWith('MERCADOPAGO_'))).toBe(false);
+    expect(env.MERCADOPAGO_ACCESS_TOKEN).toBeUndefined();
+    expect(env.MERCADOPAGO_PUBLIC_KEY).toBeUndefined();
   });
 });
 

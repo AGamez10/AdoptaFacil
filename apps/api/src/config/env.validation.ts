@@ -136,7 +136,47 @@ export const envSchema = z.object({
   // platform credential is needed to boot in the default direct mode.
   // Mercado Pago was retired from the product on 2026-10-17 (owner decision):
   // 'mercadopago' is no longer an accepted value (Wompi was retired earlier).
-  PAYMENT_DRIVER: z.enum(['fake', 'epayco', 'disabled']).default('fake'),
+  // 'mercadopago' (ADR-PAG-003, 2026-11-06, decisión del dueño): each
+  // organization connects ITS OWN Mercado Pago account through OAuth
+  // (`organization_mercadopago_connections`, tokens encrypted) and every
+  // donation is a Checkout Pro preference created with ITS access token.
+  // No split, no platform fee, no custody.
+  PAYMENT_DRIVER: z.enum(['fake', 'epayco', 'mercadopago', 'disabled']).default('fake'),
+  // Public origin of THIS API (OAuth redirect and notification URLs). Optional:
+  // falls back to STORAGE_PUBLIC_BASE_URL, the same fallback ePayco uses.
+  API_PUBLIC_BASE_URL: z.string().url().optional(),
+  // Mercado Pago (ADR-PAG-003). Credentials of AdoptaFácil's application in
+  // "Tus integraciones" (developers panel). Optional at the schema level so
+  // the other drivers boot without them; required when
+  // PAYMENT_DRIVER=mercadopago (REQUIRED_MERCADOPAGO_KEYS). Never logged.
+  MERCADOPAGO_BASE_URL: z.string().url().default('https://api.mercadopago.com'),
+  MERCADOPAGO_AUTHORIZE_URL: z.string().url().optional(),
+  MERCADOPAGO_CLIENT_ID: z.string().min(1).optional(),
+  MERCADOPAGO_CLIENT_SECRET: z.string().min(1).optional(),
+  // Secret signature of the application's webhooks ("Tus integraciones" →
+  // Webhooks → Clave secreta). Verifies `x-signature` on every notification.
+  MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  // Exact redirect URI registered in the application. Optional: falls back to
+  // `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`.
+  MERCADOPAGO_OAUTH_REDIRECT_URI: z.string().url().optional(),
+  // PKCE (S256) on the OAuth flow. Turn on ONLY after enabling PKCE in the
+  // application's settings in Mercado Pago (otherwise the exchange fails).
+  MERCADOPAGO_OAUTH_PKCE: featureFlag(),
+  // Sandbox: ask for test tokens and open `sandbox_init_point`. OFF unless "true".
+  MERCADOPAGO_TEST: featureFlag(),
+  // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
+  // AdoptaFácil's plans (subscriptions); never used for a donation.
+  MERCADOPAGO_PLATFORM_ACCESS_TOKEN: z.string().min(1).optional(),
+  // Optional statement descriptor shown on the donor's card statement.
+  MERCADOPAGO_STATEMENT_DESCRIPTOR: z.string().min(1).max(22).optional(),
+  // Token renewal: scan interval (default daily) and how many days before
+  // expiry a token is renewed (tokens last ~180 days).
+  MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(86_400_000),
+  MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS: z.coerce.number().int().positive().max(170).default(30),
   // ePayco (ADR-PAG-002). Base URLs are overridable only for tests/mocks.
   EPAYCO_APIFY_BASE_URL: z.string().url().default('https://apify.epayco.co'),
   EPAYCO_SECURE_BASE_URL: z.string().url().default('https://secure.epayco.co'),
@@ -308,7 +348,14 @@ const REQUIRED_EPAYCO_SPLIT_KEYS = [
 ] as const;
 
 /** Real gateways allowed to back the money modules in production. */
-const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['epayco'];
+const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['epayco', 'mercadopago'];
+
+/** Mercado Pago vars required when PAYMENT_DRIVER=mercadopago (fail-fast at boot). */
+const REQUIRED_MERCADOPAGO_KEYS = [
+  'MERCADOPAGO_CLIENT_ID',
+  'MERCADOPAGO_CLIENT_SECRET',
+  'MERCADOPAGO_WEBHOOK_SECRET',
+] as const;
 
 /** Google OAuth vars required when AUTH_IDENTITY_DRIVER=google (fail-fast at boot). */
 const REQUIRED_GOOGLE_IDENTITY_KEYS = ['GOOGLE_OAUTH_CLIENT_ID'] as const;
@@ -353,7 +400,7 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     if (!REAL_PAYMENT_DRIVERS.includes(env.PAYMENT_DRIVER)) {
       fail(
         'PAYMENT_DRIVER',
-        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=epayco in production',
+        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=mercadopago or epayco in production',
       );
     }
     if (!env.PAYMENTS_PRODUCTION_APPROVAL_REF) {
@@ -425,6 +472,17 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} is required when EPAYCO_COLLECTION_MODE=platform_split`,
+        });
+      }
+    }
+  }
+  if (env.PAYMENT_DRIVER === 'mercadopago') {
+    for (const key of REQUIRED_MERCADOPAGO_KEYS) {
+      if (env[key] === undefined || env[key] === null || env[key] === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when PAYMENT_DRIVER=mercadopago`,
         });
       }
     }

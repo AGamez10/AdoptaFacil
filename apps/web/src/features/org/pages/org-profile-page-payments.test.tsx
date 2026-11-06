@@ -211,7 +211,8 @@ describe('Medios de pago — asistente "Conectar ePayco" (VITE_PAYMENT_PROVIDER=
     expect(screen.queryByLabelText('P_KEY')).not.toBeInTheDocument();
   });
 
-  it('shows the ePayco card by default (VITE_PAYMENT_PROVIDER unset) and never Mercado Pago', async () => {
+  it('shows ePayco only with VITE_PAYMENT_PROVIDER=epayco, never Mercado Pago', async () => {
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', 'epayco');
     const calls = stubFetch(statusStub());
     renderShell({ route: '/organizacion', ...ownerSession() });
 
@@ -488,5 +489,96 @@ describe('Medios de pago — asistente "Conectar ePayco" (VITE_PAYMENT_PROVIDER=
     expect(screen.getByLabelText('P_CUST_ID_CLIENTE')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('heading', { name: 'Tu número de cliente' })).toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith('/org/epayco/connect'))).toBe(false);
+  });
+});
+
+describe('Medios de pago — "Conectar Mercado Pago" por OAuth (por defecto, ADR-PAG-003)', () => {
+  function mpStub(
+    status: Record<string, unknown>,
+    onCall?: (url: string, init?: RequestInit) => void,
+  ) {
+    return (url: string, init?: RequestInit) => {
+      onCall?.(url, init);
+      if (url.includes('/org/mercadopago/status')) return { body: status };
+      if (url.includes('/org/mercadopago/connect') && init?.method === 'DELETE') {
+        return { body: { ok: true } };
+      }
+      if (url.includes('/org/mercadopago/connect')) {
+        return {
+          body: {
+            authorizeUrl: 'https://auth.mercadopago.com.co/authorization?client_id=1&state=s',
+          },
+        };
+      }
+      return { body: BASE_ORG };
+    };
+  }
+
+  it('by default shows the Mercado Pago card; "Conectar" navigates to Mercado Pago (no secrets asked)', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const calls = stubFetch(mpStub({ connected: false }));
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByRole('heading', { name: 'Mercado Pago' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ePayco' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/PRIVATE_KEY|P_KEY|contraseña/i)).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('mercadopago-connect'));
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(
+        'https://auth.mercadopago.com.co/authorization?client_id=1&state=s',
+      ),
+    );
+    expect(calls.some((c) => c.url.includes('/org/epayco'))).toBe(false);
+  });
+
+  it('connected: shows the account, flags a test account and disconnects after confirming', async () => {
+    const calls = stubFetch(
+      mpStub({
+        connected: true,
+        status: 'active',
+        mpUserId: '123456789',
+        liveMode: false,
+        connectedAt: '2026-11-06T15:00:00.000Z',
+      }),
+    );
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByTestId('mercadopago-user-id')).toHaveTextContent('123456789');
+    expect(screen.getByTestId('mercadopago-test-mode')).toBeInTheDocument();
+    expect(screen.getByTestId('payments-active-status')).toHaveTextContent('Mercado Pago');
+    fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sí, desconectar' }));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (c) => c.url.includes('/org/mercadopago/connect') && c.init?.method === 'DELETE',
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('needs_reconnect: says donations are paused and offers to reconnect', async () => {
+    stubFetch(mpStub({ connected: false, status: 'needs_reconnect', mpUserId: '1' }));
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByTestId('mercadopago-needs-reconnect')).toHaveTextContent(
+      'Tus donaciones en línea están en pausa',
+    );
+    expect(screen.getByTestId('mercadopago-connect')).toHaveTextContent('Reconectar Mercado Pago');
+  });
+
+  it('back from Mercado Pago with an account already linked elsewhere: a clear message', async () => {
+    stubFetch(mpStub({ connected: false }));
+    renderShell({
+      route: '/organizacion?tab=pagos&mercadopago=already_linked',
+      ...ownerSession(),
+    });
+    expect(
+      await screen.findByText('Esa cuenta ya está conectada a otra organización'),
+    ).toBeInTheDocument();
   });
 });

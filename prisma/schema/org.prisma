@@ -31,8 +31,8 @@ model Organization {
   documents                OrganizationDocument[]
   legalRepresentatives     LegalRepresentative[]
   dianVerificationAttempts DianVerificationAttempt[]
-  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsFlagged")
-  duplicateFlagsAsMatched  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsMatched")
+  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsFlagged")
+  duplicateFlagsAsMatched  OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsMatched")
   invitations              OrganizationInvitation[]
   reports                  OrgReport[]
   ledgerEntries            LedgerEntry[]
@@ -52,6 +52,8 @@ model Organization {
   // ePayco (ADR-PAG-002): the organization's own connected merchant account.
   // See payments.prisma.
   epaycoAccount            OrganizationEpaycoAccount?
+  mercadopagoConnection    OrganizationMercadoPagoConnection?
+  mercadopagoPayments      MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.
   serviceListings          ServiceListing[]
   serviceListingReviews    ServiceListingReview[]

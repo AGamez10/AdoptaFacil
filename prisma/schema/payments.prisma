@@ -17,15 +17,15 @@
 model OrganizationBankAccount {
   organizationId        String   @id @map("organization_id") @db.Uuid
   /// Código del banco en el catálogo de Wompi.
-  bankCode               String   @map("bank_code")
+  bankCode              String   @map("bank_code")
   /// BankAccountType: 'savings' | 'checking'.
-  accountType            String   @map("account_type")
-  accountNumber          String   @map("account_number")
-  accountHolderName      String   @map("account_holder_name")
+  accountType           String   @map("account_type")
+  accountNumber         String   @map("account_number")
+  accountHolderName     String   @map("account_holder_name")
   /// Cédula/NIT del titular (SARLAFT/KYC).
-  accountHolderDocument  String   @map("account_holder_document")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  accountHolderDocument String   @map("account_holder_document")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   @@map("organization_bank_accounts")
 }
@@ -86,4 +86,79 @@ model OrganizationEpaycoAccount {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("organization_epayco_accounts")
+}
+
+/// ADR-PAG-003 (Mercado Pago con OAuth del refugio, sin custodia): the org's
+/// OWN Mercado Pago account, connected through OAuth. Checkout Pro preferences
+/// are created with its access token, so the organization is the collector
+/// and the money lands in its own Mercado Pago account. One row per
+/// organization; `mpUserId` is globally unique (one Mercado Pago account never
+/// backs two organizations). `accessTokenEnc`/`refreshTokenEnc` are AES-256-GCM
+/// ciphertexts (apps/api/src/modules/payments/mercadopago-token-crypto.ts) —
+/// never returned by any endpoint, logged or audited (audit carries at most
+/// `mpUserId`).
+model OrganizationMercadoPagoConnection {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @unique @map("organization_id") @db.Uuid
+  /// Mercado Pago user id (collector id). Not a secret.
+  mpUserId          String    @unique @map("mp_user_id")
+  /// OAuth access token, encrypted (base64 iv||tag||ciphertext).
+  accessTokenEnc    String    @map("access_token_enc")
+  /// OAuth refresh token, encrypted. NULL when the grant came without one.
+  refreshTokenEnc   String?   @map("refresh_token_enc")
+  /// Public key of the seller (not a secret; unused by Checkout Pro).
+  publicKey         String?   @map("public_key")
+  /// false = test user / sandbox grant.
+  liveMode          Boolean   @default(false) @map("live_mode")
+  scope             String?
+  /// MercadoPagoConnectionStatus: 'active' | 'needs_reconnect'.
+  status            String    @default("active")
+  expiresAt         DateTime  @map("expires_at")
+  lastRefreshedAt   DateTime? @map("last_refreshed_at")
+  /// Last refresh failure (diagnosis only; never a token or a response body).
+  lastError         String?   @map("last_error")
+  connectedByUserId String?   @map("connected_by_user_id") @db.Uuid
+  connectedAt       DateTime  @default(now()) @map("connected_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@map("organization_mercadopago_connections")
+}
+
+/// ADR-PAG-003 — reconciliation record: each Mercado Pago payment of a
+/// connected account, exactly as READ BACK with that org's token (never from
+/// the notification body). One row per (org, payment), updated on every new
+/// notification (status, refunds…). Base for the accounting ledger and the
+/// monthly reconciliation; AdoptaFácil never holds the money. No payer data.
+model MercadoPagoPayment {
+  id                        String    @id @default(uuid()) @db.Uuid
+  organizationId            String    @map("organization_id") @db.Uuid
+  mpPaymentId               String    @map("mp_payment_id")
+  collectorId               String    @map("collector_id")
+  /// Our donation reference (`donations.collection_id`).
+  externalReference         String    @map("external_reference")
+  donationId                String?   @map("donation_id") @db.Uuid
+  status                    String
+  statusDetail              String?   @map("status_detail")
+  currency                  String
+  transactionAmount         Decimal   @map("transaction_amount") @db.Decimal(14, 2)
+  netReceivedAmount         Decimal?  @map("net_received_amount") @db.Decimal(14, 2)
+  transactionAmountRefunded Decimal?  @map("transaction_amount_refunded") @db.Decimal(14, 2)
+  feeDetails                Json      @default("[]") @map("fee_details")
+  refunds                   Json      @default("[]")
+  paymentTypeId             String?   @map("payment_type_id")
+  paymentMethodId           String?   @map("payment_method_id")
+  dateApproved              DateTime? @map("date_approved")
+  moneyReleaseDate          DateTime? @map("money_release_date")
+  firstSeenAt               DateTime  @default(now()) @map("first_seen_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, mpPaymentId])
+  @@index([organizationId, dateApproved])
+  @@index([externalReference])
+  @@map("mercadopago_payments")
 }

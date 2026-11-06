@@ -153,4 +153,26 @@ export class DonationsController {
     };
     return this.service.applyWebhook(payload, signature ?? '', context);
   }
+
+  /**
+   * ADR-PAG-003 — Mercado Pago notification for a payment of ONE
+   * organization (PUBLIC — no JWT). Each Checkout Pro preference carries this
+   * URL as `notification_url`. `x-signature` is verified with the
+   * application's secret and the payment is read back with THAT org's token;
+   * settlement is idempotent per payment and status.
+   */
+  @Post('webhook/mercadopago/:organizationId')
+  @HttpCode(200)
+  applyMercadoPagoWebhook(
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
+    @Body() payload: unknown,
+    @Headers('x-signature') signature: string | undefined,
+    @Headers('x-request-id') requestId: string | undefined,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<WebhookOutcome> {
+    return this.service.applyMercadoPagoWebhook(organizationId, payload, signature ?? '', {
+      headers: { 'x-request-id': requestId },
+      query,
+    });
+  }
 }
