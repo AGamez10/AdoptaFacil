@@ -27,12 +27,19 @@ import type { PaymentCurrency } from './payments';
 // ----------------------------------------------------------------------------
 
 /**
- * Gateways an organization can connect. Since 2026-10-15 ePayco is the main
- * gateway (owner's decision, ADR-PAG-002); the order here is historical and
- * carries no meaning. Mercado Pago was retired from the product on 2026-10-17
- * and removed from this list by the owner's decision.
+ * Gateways an organization can connect. The order is historical and carries
+ * no meaning. 2026-11-06 (owner's decision, ADR-PAG-003): Mercado Pago is back
+ * as the main gateway, with each organization connecting its OWN account
+ * through OAuth (direct collection, no split). ePayco (ADR-PAG-002) stays
+ * available behind its own driver.
  */
-export const GATEWAY_PROVIDERS = ['wompi', 'epayco', 'bold', 'external_link'] as const;
+export const GATEWAY_PROVIDERS = [
+  'wompi',
+  'epayco',
+  'mercadopago',
+  'bold',
+  'external_link',
+] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 /**
@@ -132,6 +139,35 @@ export const GATEWAY_CATALOG: readonly GatewayCapability[] = [
       'https://docs.epayco.com/docs/split-descripcion',
       'https://epayco.com/pagos-divididos/',
     ],
+  },
+  {
+    provider: 'mercadopago',
+    mode: 'direct_to_org',
+    credentialKind: 'oauth',
+    verifiable: true,
+    platformFeeAtSource: false,
+    // The org connects ITS account through OAuth; Checkout Pro preferences
+    // are created with ITS access token, so the org is the collector. Signed
+    // notification + read-back of the payment with the org's token.
+    status: 'documented',
+    checkedAt: '2026-11-06',
+    sources: [
+      'https://www.mercadopago.com.co/developers/es/docs/security/oauth/introduction',
+      'https://www.mercadopago.com.co/developers/es/docs/checkout-pro/overview',
+      'https://www.mercadopago.com.co/developers/es/docs/your-integrations/notifications/webhooks',
+    ],
+  },
+  {
+    provider: 'mercadopago',
+    mode: 'platform_split',
+    credentialKind: 'oauth',
+    verifiable: true,
+    platformFeeAtSource: true,
+    // Split 1:1 (`marketplace_fee`): Mercado Pago answered in writing on
+    // 2026-10-01 that it is not active for Colombia (ADR-PAG-001 §1).
+    status: 'not_available',
+    checkedAt: '2026-11-06',
+    sources: ['https://www.mercadopago.com.co/developers/es/docs/split-payments/landing'],
   },
   {
     provider: 'bold',

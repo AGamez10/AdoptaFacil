@@ -277,8 +277,9 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
  *  AdoptaFácil's own account + electronic invoice, activated by the platform.
  *  `epayco` = recurring charge with ePayco on AdoptaFácil's OWN merchant
  *  account (ADR-PAG-002): it is AdoptaFácil's revenue for the software, so it
- *  never touches a donation. */
-export const BILLING_PROVIDERS = ['manual', 'epayco'] as const;
+ *  never touches a donation. `mercadopago` = monthly subscription
+ *  (preapproval) on AdoptaFácil's OWN Mercado Pago account (ADR-PAG-003). */
+export const BILLING_PROVIDERS = ['manual', 'epayco', 'mercadopago'] as const;
 export type BillingProvider = (typeof BILLING_PROVIDERS)[number];
 
 /** The stored subscription of one organization (at most one per org). */

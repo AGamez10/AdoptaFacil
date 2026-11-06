@@ -52,6 +52,7 @@ model Organization {
   // ePayco (ADR-PAG-002): the organization's own connected merchant account.
   // See payments.prisma.
   epaycoAccount            OrganizationEpaycoAccount?
+  mercadopagoConnection    OrganizationMercadoPagoConnection?
   // Comunidad, primer corte del ecosistema. See community.prisma.
   serviceListings          ServiceListing[]
   serviceListingReviews    ServiceListingReview[]

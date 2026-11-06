@@ -6,8 +6,8 @@
 // the real gateway adapter (that is M15 implementation, a later task).
 //
 // CLOSED decisions reflected here (do NOT reopen):
-//   - Gateway: ePayco, cobro directo a la organización (ADR-PAG-002; Mercado
-//     Pago se retiró el 2026-10-17). NO split at checkout — the port never
+//   - Gateway: cobro directo a la organización. Mercado Pago con OAuth del
+//     refugio (ADR-PAG-003, 2026-11-06) o ePayco con sus llaves (ADR-PAG-002). NO split at checkout — the port never
 //     models a split; `breakdown` is informational/accounting only.
 //   - Platform commission 4% on gross; gateway commission 2.65% + 700 (fixed);
 //     IVA 19% ONLY over commissions; no custody of third-party balances; COP.
@@ -81,6 +81,26 @@ export interface CreateCollectionInput {
    * without it.
    */
   epaycoCollector?: EpaycoCollectorCredentials;
+  /**
+   * ADR-PAG-003 (Mercado Pago OAuth): the BENEFICIARY organization's own
+   * access token, obtained through OAuth and decrypted SERVER-SIDE. Server-only:
+   * never serialized, logged or audited. The Mercado Pago driver refuses to
+   * charge without it (no fallback to the platform account: that is custody).
+   */
+  mercadopagoCollector?: MercadoPagoCollectorCredentials;
+}
+
+/**
+ * The organization's own Mercado Pago grant (ADR-PAG-003). `userId` is the
+ * collector id (not a secret); `accessToken` is, and is stored encrypted.
+ */
+export interface MercadoPagoCollectorCredentials {
+  /** The organization id the grant belongs to (routes the notification). */
+  organizationId: string;
+  /** Mercado Pago user id of the organization (= `collector_id`). */
+  userId: string;
+  /** OAuth access token of the organization. Secret. */
+  accessToken: string;
 }
 
 /**
@@ -151,6 +171,8 @@ export interface WebhookVerificationContext {
   query?: Record<string, string | undefined>;
   /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
   epaycoCollector?: EpaycoCollectorCredentials;
+  /** ADR-PAG-003: Mercado Pago grant of the organization that owns the payment. */
+  mercadopagoCollector?: MercadoPagoCollectorCredentials;
 }
 
 /** Colombian bank account type (RF26 payouts — ahorros/corriente). */

@@ -187,15 +187,25 @@ describe('module feature flags (R1-1)', () => {
     ).not.toThrow();
   });
 
-  it("refuses PAYMENT_DRIVER='mercadopago' in production (Mercado Pago retired 2026-10-17)", () => {
+  it("accepts PAYMENT_DRIVER='mercadopago' for money modules in production (ADR-PAG-003)", () => {
+    const mp = {
+      PAYMENT_DRIVER: 'mercadopago',
+      MERCADOPAGO_CLIENT_ID: '123',
+      MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
+      MERCADOPAGO_WEBHOOK_SECRET: 'webhook-secret-dummy',
+    };
     expect(() =>
       validateEnv({
         ...SAFE_PRODUCTION,
-        PAYMENT_DRIVER: 'mercadopago',
+        ...mp,
         FEATURE_PAYMENTS: 'true',
-        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-10-01',
+        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-11-06',
       }),
-    ).toThrow(/PAYMENT_DRIVER/);
+    ).not.toThrow();
+    // Still needs the written approval reference.
+    expect(() => validateEnv({ ...SAFE_PRODUCTION, ...mp, FEATURE_PAYMENTS: 'true' })).toThrow(
+      /PAYMENTS_PRODUCTION_APPROVAL_REF/,
+    );
   });
 
   it('accepts ePayco as the real gateway for money modules in production (ADR-PAG-002)', () => {

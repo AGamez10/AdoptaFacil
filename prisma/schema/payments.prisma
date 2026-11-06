@@ -87,3 +87,42 @@ model OrganizationEpaycoAccount {
 
   @@map("organization_epayco_accounts")
 }
+
+/// ADR-PAG-003 (Mercado Pago con OAuth del refugio, sin custodia): the org's
+/// OWN Mercado Pago account, connected through OAuth. Checkout Pro preferences
+/// are created with its access token, so the organization is the collector
+/// and the money lands in its own Mercado Pago account. One row per
+/// organization; `mpUserId` is globally unique (one Mercado Pago account never
+/// backs two organizations). `accessTokenEnc`/`refreshTokenEnc` are AES-256-GCM
+/// ciphertexts (apps/api/src/modules/payments/mercadopago-token-crypto.ts) —
+/// never returned by any endpoint, logged or audited (audit carries at most
+/// `mpUserId`).
+model OrganizationMercadoPagoConnection {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @unique @map("organization_id") @db.Uuid
+  /// Mercado Pago user id (collector id). Not a secret.
+  mpUserId          String    @unique @map("mp_user_id")
+  /// OAuth access token, encrypted (base64 iv||tag||ciphertext).
+  accessTokenEnc    String    @map("access_token_enc")
+  /// OAuth refresh token, encrypted. NULL when the grant came without one.
+  refreshTokenEnc   String?   @map("refresh_token_enc")
+  /// Public key of the seller (not a secret; unused by Checkout Pro).
+  publicKey         String?   @map("public_key")
+  /// false = test user / sandbox grant.
+  liveMode          Boolean   @default(false) @map("live_mode")
+  scope             String?
+  /// MercadoPagoConnectionStatus: 'active' | 'needs_reconnect'.
+  status            String    @default("active")
+  expiresAt         DateTime  @map("expires_at")
+  lastRefreshedAt   DateTime? @map("last_refreshed_at")
+  /// Last refresh failure (diagnosis only; never a token or a response body).
+  lastError         String?   @map("last_error")
+  connectedByUserId String?   @map("connected_by_user_id") @db.Uuid
+  connectedAt       DateTime  @default(now()) @map("connected_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@map("organization_mercadopago_connections")
+}
