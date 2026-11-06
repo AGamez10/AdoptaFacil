@@ -38,6 +38,9 @@ model Organization {
   ledgerEntries            LedgerEntry[]
   signerDesignations       OrgSignerDesignation[]
   signatureRequests        OrgSignatureRequest[]
+  accountingEntries        AccountingEntry[]
+  accountingPeriodCloses   AccountingPeriodClose[]
+  accountingShares         AccountingShare[]
   thirdPartyConsents       ThirdPartyConsent[]
   reportApprovals          OrgReportApproval[]
   reportPolicies           OrgReportPolicy[]
@@ -242,20 +245,23 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization              Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   credential                AuthCredential?
   refreshTokens             RefreshToken[]
   passwordResetTokens       PasswordResetToken[]
   roleAssignments           UserRole[]
   legalRepresentatives      LegalRepresentative[]
   generatedReports          OrgReport[]
-  signerDesignationsOwn     OrgSignerDesignation[] @relation("SignerDesignationUser")
-  signerDesignationsMade    OrgSignerDesignation[] @relation("SignerDesignationBy")
-  signerDesignationsRevoked OrgSignerDesignation[] @relation("SignerDesignationRevokedBy")
-  thirdPartyConsents        ThirdPartyConsent[]    @relation("ThirdPartyConsentSubject")
-  reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
-  signatureRequests         OrgSignatureRequest[]  @relation("SignatureRequestSigner")
-  reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
+  signerDesignationsOwn     OrgSignerDesignation[]  @relation("SignerDesignationUser")
+  signerDesignationsMade    OrgSignerDesignation[]  @relation("SignerDesignationBy")
+  signerDesignationsRevoked OrgSignerDesignation[]  @relation("SignerDesignationRevokedBy")
+  thirdPartyConsents        ThirdPartyConsent[]     @relation("ThirdPartyConsentSubject")
+  reportApprovals           OrgReportApproval[]     @relation("ReportApprovalSigner")
+  signatureRequests         OrgSignatureRequest[]   @relation("SignatureRequestSigner")
+  accountingCloses          AccountingPeriodClose[] @relation("AccountingCloseBy")
+  accountingSharesReceived  AccountingShare[]       @relation("AccountingShareSigner")
+  accountingSharesCreated   AccountingShare[]       @relation("AccountingShareCreatedBy")
+  reportPoliciesUpdated     OrgReportPolicy[]       @relation("ReportPolicyUpdatedBy")
   mfaFactor                 AuthMfaFactor?
 
   @@unique([organizationId, email])

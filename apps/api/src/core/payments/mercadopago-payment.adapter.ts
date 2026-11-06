@@ -29,6 +29,13 @@ export type MercadoPagoFetch = typeof fetch;
 /** Our reference (`external_reference` = donation `collection_id`). */
 export const MERCADOPAGO_REFERENCE_MAX_LENGTH = 32;
 
+/** Prefix of every reference AdoptaFácil sends (`mercadoPagoReferenceFor`). */
+export const MERCADOPAGO_REFERENCE_PREFIX = 'af-';
+
+/** Payment search paging (monthly reconciliation). */
+const SEARCH_PAGE_SIZE = 100;
+const MAX_SEARCH_PAGES = 50;
+
 /** Hours a donation's Checkout Pro link stays payable. */
 const PREFERENCE_TTL_HOURS = 72;
 
@@ -40,7 +47,7 @@ const PREFERENCE_TTL_HOURS = 72;
  */
 export function mercadoPagoReferenceFor(organizationId: string, idempotencyKey: string): string {
   const digest = createHash('sha256').update(`${organizationId}:${idempotencyKey}`).digest('hex');
-  return `af-${digest}`.slice(0, MERCADOPAGO_REFERENCE_MAX_LENGTH);
+  return `${MERCADOPAGO_REFERENCE_PREFIX}${digest}`.slice(0, MERCADOPAGO_REFERENCE_MAX_LENGTH);
 }
 
 /** `x-signature: ts=…,v1=…` → its parts (either may be missing). */
@@ -391,11 +398,25 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       throw new Error(`Mercado Pago payment read-back failed (${response.status})`);
     }
     const payment = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    return this.normalizeReadBack(payment, collector.userId, dataId as string);
+  }
+
+  /**
+   * Trust checks + normalization of a payment READ BACK with the org's own
+   * token (shared by the signed notification and the monthly re-read). Throws
+   * when the payment is of another collector, of the other mode (sandbox vs.
+   * production) or carries no reference.
+   */
+  private normalizeReadBack(
+    payment: Record<string, unknown> | null,
+    expectedCollectorId: string,
+    fallbackId: string,
+  ): NormalizedWebhookEvent {
     const collectorId =
       payment?.collector_id !== undefined && payment?.collector_id !== null
         ? String(payment.collector_id)
         : undefined;
-    if (collectorId !== collector.userId) {
+    if (collectorId !== expectedCollectorId) {
       throw new Error('Mercado Pago webhook rejected: payment belongs to another collector.');
     }
     // A sandbox (test user) payment must never settle a real donation, nor a
@@ -414,7 +435,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     const status = mercadoPagoPaymentStatus(
       typeof payment?.status === 'string' ? payment.status : undefined,
     );
-    const paymentId = String(payment?.id ?? dataId);
+    const paymentId = String(payment?.id ?? fallbackId);
     const snapshot = mercadoPagoPaymentSnapshot(payment ?? {}, paymentId, collectorId, reference);
     return {
       eventId: paymentId,
@@ -426,6 +447,61 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       receiverAccountId: collectorId,
       mercadopagoPayment: snapshot,
     };
+  }
+
+  /**
+   * Monthly reconciliation (sección 2A): re-read, with the ORG's own token,
+   * every payment of its account created in [from, to) and keep only the ones
+   * AdoptaFácil originated (`external_reference` with our `af-` prefix).
+   * Read-only: it never creates, refunds or moves money. Each result passes
+   * the same trust checks as a signed notification (collector + live_mode).
+   * Bounded: at most {@link MAX_SEARCH_PAGES} pages of 100.
+   */
+  async searchOrganizationPayments(
+    collector: MercadoPagoCollectorCredentials,
+    from: Date,
+    to: Date,
+  ): Promise<NormalizedWebhookEvent[]> {
+    if (!collector?.accessToken || !collector.userId) {
+      throw new Error(NO_CUSTODY_ERROR);
+    }
+    const out: NormalizedWebhookEvent[] = [];
+    for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
+      const url = new URL(`${this.baseUrl}/v1/payments/search`);
+      url.searchParams.set('sort', 'date_created');
+      url.searchParams.set('criteria', 'asc');
+      url.searchParams.set('range', 'date_created');
+      url.searchParams.set('begin_date', from.toISOString());
+      url.searchParams.set('end_date', new Date(to.getTime() - 1).toISOString());
+      url.searchParams.set('limit', String(SEARCH_PAGE_SIZE));
+      url.searchParams.set('offset', String(page * SEARCH_PAGE_SIZE));
+      const response = await this.fetchFn(url.toString(), {
+        headers: { Authorization: `Bearer ${collector.accessToken}`, Accept: 'application/json' },
+        signal: mercadoPagoTimeoutSignal(),
+      });
+      if (!response.ok) {
+        throw new Error(`Mercado Pago payment search failed (${response.status})`);
+      }
+      const body = (await response.json().catch(() => null)) as {
+        results?: Array<Record<string, unknown>>;
+        paging?: { total?: number };
+      } | null;
+      const results = Array.isArray(body?.results) ? body.results : [];
+      for (const payment of results) {
+        const reference = payment?.external_reference;
+        if (typeof reference !== 'string' || !reference.startsWith(MERCADOPAGO_REFERENCE_PREFIX)) {
+          continue; // not a donation originated in AdoptaFácil: never stored
+        }
+        try {
+          out.push(this.normalizeReadBack(payment, collector.userId, String(payment.id ?? '')));
+        } catch {
+          // another collector / other mode: ignored, never settles anything
+        }
+      }
+      const total = typeof body?.paging?.total === 'number' ? body.paging.total : 0;
+      if (results.length < SEARCH_PAGE_SIZE || (page + 1) * SEARCH_PAGE_SIZE >= total) break;
+    }
+    return out;
   }
 
   /** No custody: Mercado Pago settles to the organization's own account. */

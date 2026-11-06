@@ -66,5 +66,7 @@ import { MercadoPagoAccountsModule } from '../payments/mercadopago-accounts.modu
     // and the confirmation (same derivation as PaymentsModule).
     { provide: EPAYCO_KEYS_ENCRYPTION_KEY, useFactory: loadEpaycoKeysEncryptionKey },
   ],
+  // Contabilidad: la conciliación mensual relee Mercado Pago con el token del refugio.
+  exports: [DonationsService],
 })
 export class DonationsModule {}

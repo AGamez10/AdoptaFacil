@@ -9,6 +9,7 @@ import {
 import QRCode from 'qrcode';
 import type { LegalRepresentativeRole, OrgReportLegalEffect } from '@adoptafacil/contracts';
 import type {
+  AccountingReportPayload,
   DonationsReportPayload,
   OrgReportPayload,
   SocialServiceReportPayload,
@@ -88,6 +89,10 @@ const EFFECT_STYLE: Record<
 function effectExplanation(kind: OrgReportPayload['kind'], effect: OrgReportLegalEffect): string {
   if (effect === 'informative') {
     return 'Este documento resume información registrada en AdoptaFácil por la organización. No está firmado por un representante legal y no sirve como soporte legal ni tributario.';
+  }
+  if (kind === 'accounting') {
+    // TODO(client) 🧾: texto a validar por un contador público.
+    return 'Libro auxiliar de donaciones preparado por AdoptaFácil con lo que confirmó la pasarela de pagos, revisado y firmado por el contador público o revisor fiscal de la organización. Es un auxiliar de apoyo: no es un estado financiero ni un certificado tributario.';
   }
   if (effect === 'certified') {
     return 'Firmado por el representante legal y por el revisor fiscal o contador público de una ESAL con Régimen Tributario Especial vigente. Sirve como soporte de rendición de cuentas de las donaciones recibidas.';
@@ -514,6 +519,99 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
   );
 }
 
+const PAYMENT_TYPE_LABEL: Record<string, string> = {
+  credit_card: 'Tarjeta de crédito',
+  debit_card: 'Tarjeta débito',
+  bank_transfer: 'PSE / transferencia',
+  ticket: 'Efectivo (Efecty u otro)',
+  account_money: 'Dinero en cuenta MP',
+  atm: 'Cajero',
+  prepaid_card: 'Tarjeta prepago',
+};
+
+export function paymentTypeLabel(value: string): string {
+  return PAYMENT_TYPE_LABEL[value] ?? (value || 'Sin dato');
+}
+
+const signedMoney = (n: number): string => (n < 0 ? `- ${money(-n)}` : money(n));
+
+function drawAccounting(c: ReportCanvas, p: AccountingReportPayload): void {
+  const t = p.totals;
+  c.kpis([
+    { label: 'Donaciones del mes', value: `${t.donationCount} · ${money(t.donationsGrossCop)}` },
+    { label: 'Reembolsos y contracargos', value: signedMoney(t.refundsCop + t.chargebacksCop) },
+    { label: 'Comisiones de la pasarela', value: money(t.feesCop) },
+    { label: 'Neto informado por la pasarela', value: money(t.netCop) },
+  ]);
+
+  c.sectionTitle('Cierre y conciliación');
+  c.paragraph(
+    `Mes cerrado el ${formatDate(p.close.closedAt)}. Último folio del libro: ${p.close.lastSeq}. ` +
+      `Huella SHA-256 de los renglones: ${p.close.entriesHash}. ` +
+      (p.reconciliation.balanced
+        ? 'La conciliación contra Mercado Pago cuadró sin descuadres.'
+        : `La conciliación contra Mercado Pago tenía descuadres al cerrar: ${p.reconciliation.counts.missing_in_gateway} faltan en Mercado Pago, ${p.reconciliation.counts.missing_in_platform} faltan en AdoptaFácil, ${p.reconciliation.counts.status_mismatch} con otro estado y ${p.reconciliation.counts.amount_mismatch} con otro monto.`) +
+      (p.close.note ? ` Nota de la organización: ${pdfText(p.close.note, 500)}` : ''),
+    MARGIN,
+    9,
+    PAGE_W - MARGIN * 2,
+    12,
+  );
+  c.y -= 4;
+
+  c.sectionTitle('Resumen por destinación');
+  c.table(
+    [
+      { header: 'Destinación', width: 70 },
+      { header: 'Valor (bruto, neto de reversos)', width: 30, align: 'right' },
+    ],
+    [
+      ['Libre (sin destinación)', signedMoney(t.byDestination.general)],
+      ['Para un animal', signedMoney(t.byDestination.animal)],
+      ['Para una campaña', signedMoney(t.byDestination.campaign)],
+    ],
+  );
+
+  c.sectionTitle('Libro auxiliar del mes');
+  c.table(
+    [
+      { header: 'Folio', width: 6, align: 'right' },
+      { header: 'Fecha', width: 9 },
+      { header: 'Tipo', width: 10 },
+      { header: 'Destinación', width: 15 },
+      { header: 'Forma de pago', width: 13 },
+      { header: 'Pago en pasarela', width: 12 },
+      { header: 'Bruto', width: 10, align: 'right' },
+      { header: 'Comisión', width: 8, align: 'right' },
+      { header: 'Neto', width: 9, align: 'right' },
+      { header: 'Ajuste', width: 8 },
+    ],
+    p.rows.map((r) => [
+      String(r.seq),
+      formatShortDate(r.occurredAt),
+      pdfText(r.type, 20),
+      pdfText(r.destination, 60),
+      pdfText(paymentTypeLabel(r.paymentType), 30),
+      pdfText(r.gatewayPaymentId, 24) || '-',
+      signedMoney(r.gross),
+      r.fee === null ? '-' : signedMoney(r.fee),
+      r.net === null ? '-' : signedMoney(r.net),
+      pdfText(r.adjustment, 20) || '-',
+    ]),
+    { emptyText: 'No hubo movimientos en este mes.' },
+  );
+  c.y -= 4;
+  c.paragraph(
+    'Montos en pesos colombianos. Las donaciones suman y los reembolsos y contracargos restan. La comisión es la que informó la pasarela y la asume la organización; AdoptaFácil no cobra comisión por donación ni recibe el dinero. "-" significa que la pasarela no informó el dato. Este libro es un auxiliar de apoyo: la contabilidad oficial, los estados financieros y las declaraciones le corresponden al contador o revisor fiscal.',
+    MARGIN,
+    8,
+    PAGE_W - MARGIN * 2,
+    11,
+    c.font.italic,
+    MUTED,
+  );
+}
+
 function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void {
   c.kpis([
     { label: 'Voluntarios con horas en el período', value: String(p.totals.volunteers) },
@@ -656,9 +754,12 @@ async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promis
   }
 
   const statement =
-    input.payload.kind === 'donations'
-      ? 'Los suscritos hacen constar que la información de este informe corresponde a las donaciones recibidas por la entidad en el período indicado, tal como quedaron registradas en AdoptaFácil.'
-      : 'El suscrito hace constar que las horas aquí relacionadas fueron prestadas en la organización y verificadas por ella en el período indicado.';
+    input.payload.kind === 'accounting'
+      ? // TODO(client) 🧾: redacción de la constancia a validar por un contador público.
+        'Los suscritos revisaron este libro auxiliar de donaciones del mes indicado, preparado a partir de los pagos confirmados por la pasarela de la organización, y lo aprueban como soporte de su contabilidad.'
+      : input.payload.kind === 'donations'
+        ? 'Los suscritos hacen constar que la información de este informe corresponde a las donaciones recibidas por la entidad en el período indicado, tal como quedaron registradas en AdoptaFácil.'
+        : 'El suscrito hace constar que las horas aquí relacionadas fueron prestadas en la organización y verificadas por ella en el período indicado.';
   const blockH = 120;
   c.ensure(blockH + 20);
   c.y -= 10;
@@ -736,7 +837,9 @@ export async function renderReportPdf(input: RenderReportInput): Promise<Buffer>
   const kindTitle =
     input.payload.kind === 'donations'
       ? 'Informe de donaciones recibidas'
-      : 'Reporte de servicio social y voluntariado';
+      : input.payload.kind === 'accounting'
+        ? 'Libro auxiliar de donaciones'
+        : 'Reporte de servicio social y voluntariado';
   pdf.setTitle(`${kindTitle} · ${input.code}`);
   pdf.setAuthor(pdfText(input.payload.organization.name));
   pdf.setProducer('AdoptaFácil');
@@ -753,6 +856,7 @@ export async function renderReportPdf(input: RenderReportInput): Promise<Buffer>
   const c = new ReportCanvas(pdf, font);
   drawHeader(c, input, kindTitle);
   if (input.payload.kind === 'donations') drawDonations(c, input.payload);
+  else if (input.payload.kind === 'accounting') drawAccounting(c, input.payload);
   else drawSocialService(c, input.payload);
   await drawSignatures(c, input);
   drawFooters(c, input);

@@ -44,6 +44,19 @@ export const PLAN_CAPABILITIES = [
   'corporateSponsorship',
   /** Priority WhatsApp support. */
   'prioritySupport',
+  /** Month close of the donations ledger: seals the month (hash) and books
+   *  later events as dated adjustments (sección 2B: "libro auxiliar con cierre
+   *  de período y ajustes"). Reconciliation itself is FREE. */
+  'accountingClose',
+  /** Full accounting export for the accountant: fee, net, payment method,
+   *  destination and donor identity (only with the donor's authorization).
+   *  The basic export (period + totals) is FREE. */
+  'accountingFullExport',
+  /** "Listo para firmar": the month's accounting report sent to the linked
+   *  accountant / fiscal reviewer for signature, and a secure link so they
+   *  review the month without an account. AdoptaFácil prepares; the
+   *  professional signs (Ley 43 de 1990 🧾). */
+  'accountantPackage',
 ] as const;
 export type PlanCapability = (typeof PLAN_CAPABILITIES)[number];
 
@@ -80,6 +93,9 @@ const NONE: Record<PlanCapability, boolean> = {
   impactReport: false,
   corporateSponsorship: false,
   prioritySupport: false,
+  accountingClose: false,
+  accountingFullExport: false,
+  accountantPackage: false,
 };
 
 /** The plan catalog: the single source of truth for the landing, the plans
@@ -114,6 +130,9 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       brandedEmails: true,
       dataExport: true,
       impactReport: true,
+      accountingClose: true,
+      accountingFullExport: true,
+      accountantPackage: true,
     },
   },
   pro: {
@@ -134,6 +153,9 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       impactReport: true,
       corporateSponsorship: true,
       prioritySupport: true,
+      accountingClose: true,
+      accountingFullExport: true,
+      accountantPackage: true,
     },
   },
 };
@@ -164,6 +186,19 @@ export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; avail
   impactReport: { label: 'Reporte de impacto en PDF para donantes', available: true },
   corporateSponsorship: { label: 'Patrocinio de empresas', available: false },
   prioritySupport: { label: 'Soporte prioritario por WhatsApp', available: true },
+  accountingClose: {
+    label: 'Cierre mensual del libro de donaciones, con ajustes fechados',
+    available: true,
+  },
+  accountingFullExport: {
+    label: 'Exporte contable completo para tu contador (comisión, neto y destinación)',
+    available: true,
+  },
+  accountantPackage: {
+    label:
+      'Contabilidad de donaciones lista para que tu contador o revisor fiscal la revise y firme',
+    available: true,
+  },
 };
 
 /**

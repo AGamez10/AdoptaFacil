@@ -1,0 +1,100 @@
+// Module: accounting (contabilidad de donaciones por detrás, sección 2A).
+//
+// AdoptaFácil PREPARA la contabilidad de donaciones del refugio a partir de lo
+// que confirma la pasarela (Mercado Pago por OAuth, ADR-PAG-003): libro
+// auxiliar, conciliación mensual, cierre de mes y exporte para el contador.
+// Nunca firma, certifica ni declara: eso es del contador o revisor fiscal.
+//
+// Tenant-scoped (organization_id + RLS). `accounting_entries` y
+// `accounting_period_closes` son de SOLO INSERCIÓN (GRANT + triggers en la
+// migración 20261106120000_accounting_ledger).
+
+/// Renglón del libro auxiliar de donaciones. Montos en pesos enteros con signo:
+/// la donación es positiva; reembolso y contracargo, negativos.
+model AccountingEntry {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  /// Folio consecutivo por organización (1, 2, 3…).
+  seq              Int
+  /// Idempotencia: `donation:<id>`, `refund:<pago>:<reembolso>`, `chargeback:<pago>`…
+  dedupKey         String   @map("dedup_key")
+  /// `AccountingEntryType`: donation | refund | chargeback.
+  entryType        String   @map("entry_type")
+  /// `AccountingSource`: mercadopago | epayco | other.
+  source           String
+  donationId       String?  @map("donation_id") @db.Uuid
+  gatewayPaymentId String?  @map("gateway_payment_id")
+  /// Cuándo ocurrió el hecho (UTC).
+  occurredAt       DateTime @map("occurred_at")
+  /// Mes (hora Colombia) en que ocurrió el hecho, `YYYY-MM`.
+  eventPeriod      String   @map("event_period")
+  /// Mes del libro en que quedó asentado: igual a `eventPeriod`, o el mes
+  /// abierto siguiente si ese ya estaba cerrado (ajuste).
+  period           String
+  isAdjustment     Boolean  @default(false) @map("is_adjustment")
+  grossCop         BigInt   @map("gross_cop")
+  /// Comisión de la pasarela que asume el refugio (null = la pasarela no la informó).
+  feeCop           BigInt?  @map("fee_cop")
+  netCop           BigInt?  @map("net_cop")
+  currency         String   @default("COP")
+  paymentType      String?  @map("payment_type")
+  paymentMethod    String?  @map("payment_method")
+  /// `AccountingDestination`: general | animal | campaign.
+  destination      String
+  destinationId    String?  @map("destination_id") @db.Uuid
+  destinationLabel String?  @map("destination_label")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, seq])
+  @@unique([organizationId, dedupKey])
+  @@index([organizationId, period])
+  @@index([donationId])
+  @@map("accounting_entries")
+}
+
+/// Cierre de un mes del libro auxiliar (sellado, solo inserción).
+model AccountingPeriodClose {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  period         String
+  entryCount     Int      @map("entry_count")
+  lastSeq        Int      @map("last_seq")
+  totals         Json
+  reconciliation Json
+  /// SHA-256 de los renglones del mes al cerrar.
+  entriesHash    String   @map("entries_hash")
+  note           String?
+  closedByUserId String   @map("closed_by_user_id") @db.Uuid
+  closedAt       DateTime @default(now()) @map("closed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  closedBy     User         @relation("AccountingCloseBy", fields: [closedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, period])
+  @@map("accounting_period_closes")
+}
+
+/// Enlace sin cuenta para que el contador / revisor fiscal vinculado vea y
+/// descargue la información contable de un mes. Solo el SHA-256 del token.
+model AccountingShare {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  period          String
+  signerUserId    String    @map("signer_user_id") @db.Uuid
+  /// 'accountant' | 'fiscal_reviewer'.
+  signerRole      String    @map("signer_role")
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  signerUser   User         @relation("AccountingShareSigner", fields: [signerUserId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("AccountingShareCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, period])
+  @@map("accounting_shares")
+}

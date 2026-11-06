@@ -29,7 +29,7 @@ export const decideOrgReportSchema = z
 /** `PUT /org/reports/policy`. El representante legal siempre firma. */
 export const setOrgReportPolicySchema = z
   .object({
-    kind: z.enum(['donations', 'social_service']),
+    kind: z.enum(['donations', 'social_service', 'accounting']),
     requiredRoles: z
       .array(z.enum(LEGAL_REPRESENTATIVE_ROLES))
       .min(1)

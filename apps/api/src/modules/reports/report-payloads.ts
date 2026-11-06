@@ -1,4 +1,8 @@
-import type { SocialServiceReportFilters } from '@adoptafacil/contracts';
+import type {
+  AccountingTotals,
+  ReconciliationStatus,
+  SocialServiceReportFilters,
+} from '@adoptafacil/contracts';
 import { maskDocument } from './report-text';
 
 /**
@@ -292,4 +296,37 @@ export function buildSocialServicePayload(input: {
   };
 }
 
-export type OrgReportPayload = DonationsReportPayload | SocialServiceReportPayload;
+// ---------------------------------------------------------------------------
+// Libro auxiliar de donaciones de un mes cerrado (contabilidad, plan de pago)
+// ---------------------------------------------------------------------------
+
+export interface AccountingReportRow {
+  seq: number;
+  /** ISO-8601 UTC. */
+  occurredAt: string;
+  type: string;
+  destination: string;
+  paymentType: string;
+  gatewayPaymentId: string;
+  gross: number;
+  fee: number | null;
+  net: number | null;
+  /** '' o "Ajuste de AAAA-MM" cuando ocurrió en un mes ya cerrado. */
+  adjustment: string;
+}
+
+export interface AccountingReportPayload {
+  version: 1;
+  kind: 'accounting';
+  organization: ReportOrganizationSnapshot;
+  period: { start: string; end: string };
+  /** Mes contable `YYYY-MM`. */
+  month: string;
+  rows: AccountingReportRow[];
+  totals: AccountingTotals;
+  reconciliation: { balanced: boolean; counts: Record<ReconciliationStatus, number> };
+  close: { closedAt: string; entriesHash: string; lastSeq: number; note: string | null };
+}
+
+export type OrgReportPayload =
+  DonationsReportPayload | SocialServiceReportPayload | AccountingReportPayload;

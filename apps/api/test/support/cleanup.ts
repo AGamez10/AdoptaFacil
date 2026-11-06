@@ -73,6 +73,11 @@ const APPEND_ONLY_TABLES = [
   'org_reports',
   // ledger_entries (libro público): inmutable, el trigger bloquea DELETE.
   'ledger_entries',
+  // Contabilidad: libro auxiliar y cierres son de solo inserción; los enlaces
+  // compartidos referencian usuarios con RESTRICT, así que se van antes.
+  'accounting_entries',
+  'accounting_period_closes',
+  'accounting_shares',
   // F19 · decisions before their requests, events before their tickets (FKs).
   'platform_sensitive_action_decisions',
   'platform_sensitive_actions',

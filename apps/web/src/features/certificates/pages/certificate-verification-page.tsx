@@ -31,6 +31,7 @@ type VerifyState = 'idle' | 'loading' | 'valid' | 'invalid' | 'error';
 const REPORT_KIND_LABEL: Record<OrgReportVerification['kind'], string> = {
   donations: 'Informe de donaciones recibidas',
   social_service: 'Reporte de servicio social y voluntariado',
+  accounting: 'Libro auxiliar de donaciones (cierre de mes)',
 };
 
 const REPORT_EFFECT: Record<
