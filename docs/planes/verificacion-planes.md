@@ -1,10 +1,11 @@
 # Verificación: ¿cada plan habilita lo que promete?
 
-Fecha: 2026-11-06 · Rama base: `claude/templates-on-main` (16bce40)
+Fecha: 2026-11-06 (actualizado tras #87, #88 y #90) · Rama base: `claude/templates-on-main`
 Evidencia: `apps/api/test/plan-entitlements-matrix.integration-spec.ts` (31 pruebas) más
 `plans.integration-spec.ts` y `plans-enforcement.integration-spec.ts` (15 pruebas), corridas
 contra PostgreSQL 16 y Redis reales, con los planes **encendidos** y la promoción terminada.
-Resultado: 58/58 en verde junto con las suites de auditoría y roles.
+Cobro con Mercado Pago: `apps/api/test/plan-billing.integration-spec.ts` (11 pruebas, Mercado Pago
+simulado sin red). Resultado: 105/105 en las suites de planes, portal, exportes y correos.
 
 ## Lo primero: hoy los planes están apagados
 
@@ -18,21 +19,21 @@ suscripción tiene Pro gratis 3 meses desde `PLAN_LAUNCH_DATE` y después queda 
 ✅ = el servidor lo hace cumplir y una prueba lo demuestra · ⚠️ = se vende pero el servidor
 no lo controla · 🕒 = marcado «próximamente» en la oferta (no se promete como disponible)
 
-| Derecho                                 | Gratis    | Crece     | Pro        | Dónde se hace cumplir                                                                  | Estado                                            |
-| --------------------------------------- | --------- | --------- | ---------- | -------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Miembros del equipo                     | 3         | 10        | sin límite | invitaciones (crear y aceptar) y, desde este PR, asignación directa de rol             | ✅ (hueco corregido aquí)                         |
-| Almacenamiento                          | 1 GB      | 10 GB     | 50 GB      | subida genérica (fotos de animales, logo), documentos, marketplace, soportes contables | ✅                                                |
-| Plantillas Pro del portal ("historias") | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                  | ✅                                                |
-| Quitar sello "Hecho con AdoptaFácil"    | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                  | ✅                                                |
-| Correos con la marca de la organización | no        | 5.000/mes | 20.000/mes | cola de correos (pasado el tope sale con marca AdoptaFácil)                            | ✅                                                |
-| Exportar datos a Excel                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/data.xlsx`                                                | ✅                                                |
-| Reporte de impacto PDF                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/impact-report.pdf`                                        | ✅                                                |
-| Todos los diseños gratuitos del portal  | sí        | sí        | sí         | —                                                                                      | ✅                                                |
-| Personalización avanzada del portal     | sí (!)    | sí        | sí         | **ninguna comprobación** en el servidor                                                | ⚠️ se vende en Crece pero Gratis también la tiene |
-| Soporte prioritario por WhatsApp        | —         | —         | sí         | no hay código: es un proceso del equipo                                                | ⚠️ marcado disponible, depende de operación       |
-| Dominio propio                          | —         | —         | sí         | no construido                                                                          | 🕒                                                |
-| Patrocinio de empresas                  | —         | —         | sí         | no construido                                                                          | 🕒                                                |
-| Límite "Diseños de portal" (5)          | 5         | 5         | 5          | ninguno; igual en los tres planes                                                      | sin efecto                                        |
+| Derecho                                 | Gratis    | Crece     | Pro        | Dónde se hace cumplir                                                                  | Estado                                      |
+| --------------------------------------- | --------- | --------- | ---------- | -------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Miembros del equipo                     | 3         | 10        | sin límite | invitaciones (crear y aceptar) y, desde este PR, asignación directa de rol             | ✅ (hueco corregido aquí)                   |
+| Almacenamiento                          | 1 GB      | 10 GB     | 50 GB      | subida genérica (fotos de animales, logo), documentos, marketplace, soportes contables | ✅                                          |
+| Plantillas Pro del portal ("historias") | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                  | ✅                                          |
+| Quitar sello "Hecho con AdoptaFácil"    | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                  | ✅                                          |
+| Correos con la marca de la organización | no        | 5.000/mes | 20.000/mes | cola de correos (pasado el tope sale con marca AdoptaFácil)                            | ✅                                          |
+| Exportar datos a Excel                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/data.xlsx`                                                | ✅                                          |
+| Reporte de impacto PDF                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/impact-report.pdf`                                        | ✅                                          |
+| Todos los diseños gratuitos del portal  | sí        | sí        | sí         | —                                                                                      | ✅                                          |
+| Personalización avanzada del portal     | sí        | sí        | sí         | incluida en todos los planes desde el 2026-11-06 (no se vende como exclusiva)          | ✅                                          |
+| Soporte prioritario por WhatsApp        | —         | —         | sí         | no hay código: es un proceso del equipo                                                | ⚠️ marcado disponible, depende de operación |
+| Dominio propio                          | —         | —         | sí         | no construido                                                                          | 🕒                                          |
+| Patrocinio de empresas                  | —         | —         | sí         | no construido                                                                          | 🕒                                          |
+| Límite "Diseños de portal" (5)          | 5         | 5         | 5          | ninguno; igual en los tres planes                                                      | sin efecto                                  |
 
 Lo que nunca se cobra (contrato, seguimientos, auditoría, documentos legales, comprobantes,
 recaudo de donaciones) no lleva ningún bloqueo de plan, como dice el catálogo. Los archivos
@@ -42,41 +43,50 @@ cuota: un límite comercial no detiene un proceso de protección.
 
 ## Ciclo de vida (probado)
 
-| Situación                                  | Qué pasa                                                                                                                                                                                                       |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Contratar                                  | La organización pulsa «Quiero el plan» → abre WhatsApp/enlace de contacto. Un administrador de plataforma activa el plan con `PUT /platform/organizations/:id/plan`. Rige de inmediato y queda auditado.       |
-| Subir de plan                              | Inmediato.                                                                                                                                                                                                     |
-| Bajar de plan / dejar de pagar             | No se borra nada: la plantilla Pro y el "sin sello" quedan guardados, el portal vuelve a la gratuita con sello, y regresan solos al pagar. Los miembros de más se conservan; solo no se pueden agregar nuevos. |
-| Pago vencido (`past_due` o fecha pasada)   | Sigue funcionando 15 días de gracia; luego Gratis automáticamente, sin tareas programadas.                                                                                                                     |
-| Cancelado                                  | Gratis de inmediato aunque quede periodo.                                                                                                                                                                      |
-| Una organización intenta asignarse un plan | 403.                                                                                                                                                                                                           |
+| Situación                                  | Qué pasa                                                                                                                                                                                                                                                                           |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contratar en línea                         | «Pagar con Mercado Pago» crea una suscripción mensual en la cuenta de AdoptaFácil, con IVA y descuento fundador. Al autorizarla, Mercado Pago avisa (firma verificada) y el plan rige de inmediato. Con los planes apagados responde 409: nadie paga por algo que ya tiene gratis. |
+| Contratar por transferencia                | La plataforma lo activa en **Plataforma → Planes de organizaciones** (`/plataforma/planes`) con fecha, factura y descuento. Queda auditado.                                                                                                                                        |
+| Renovación                                 | Cada cobro mensual aprobado extiende el periodo un mes. Repetir la misma notificación no cambia nada.                                                                                                                                                                              |
+| Cobro rechazado                            | La suscripción pasa a **pago vencido**: sigue funcionando hasta 15 días después del fin de periodo mientras Mercado Pago reintenta. Un cobro aprobado la reactiva. Pasada la gracia, Gratis.                                                                                       |
+| Subir o bajar de plan                      | La suscripción nueva rige al autorizarse y la anterior **se cancela en Mercado Pago** (sin doble cobro).                                                                                                                                                                           |
+| Cancelar                                   | Botón «Cancelar mi plan» (Owner/Administrador). Primero se detiene el cobro en Mercado Pago; si Mercado Pago no responde no se marca nada. El plan sigue hasta el último día pagado, sin gracia, y luego Gratis.                                                                   |
+| Cancelación de la plataforma               | Cancelado sin fecha = Gratis de inmediato; con fecha = hasta ese día. Si la organización pagaba por Mercado Pago, ese cobro se cancela antes de guardar.                                                                                                                           |
+| Dejar de pagar / bajar                     | No se borra nada: plantilla Pro y "sin sello" quedan guardados y vuelven al pagar. Los miembros de más se conservan; solo no se agregan nuevos.                                                                                                                                    |
+| Una organización intenta asignarse un plan | 403.                                                                                                                                                                                                                                                                               |
 
-## Lo que falta para cobrar planes de verdad
+## Avisos por correo (diarios, solo con planes encendidos)
 
-> **Actualización (2026-11-06):** el PR #88 (Mercado Pago por OAuth, ADR-PAG-003) agrega el cobro
-> mensual de planes con la cuenta de Mercado Pago de AdoptaFácil (`POST /org/plan/checkout` y
-> `POST /billing/webhooks/mercadopago`). Cuando se fusione, el punto 1 queda cubierto en código; sigue
-> sin probarse con dinero real. Mientras `PLAN_ENFORCEMENT` esté apagado, el botón de pagar el plan
-> sigue visible, así que no conviene cargar `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` hasta encender los
-> planes: si no, una organización podría pagar por Pro, que ya tiene gratis.
+Al dueño de la organización, una vez por situación:
 
-1. **No hay cobro automático.** No existe integración de suscripciones con ePayco ni Mercado
-   Pago para la cuenta de AdoptaFácil; el proveedor es `manual`. El precio, el IVA y el
-   descuento se guardan pero nada los cobra ni factura.
-2. **No hay pantalla de superadmin para asignar planes.** Hoy se hace llamando la API.
-3. **Nadie pasa una suscripción a `past_due` ni avisa antes del vencimiento.** El vencimiento
-   funciona solo por fecha; no hay correo de "tu plan vence en N días".
-4. **Personalización avanzada** se ofrece como beneficio de Crece pero Gratis también la
-   tiene. Decisión pendiente: o se bloquea en el servidor (definir qué cuenta: orden de
-   secciones, tipografía, galería o video de portada) o se quita de la lista de Crece.
-5. `discountPercent` se guarda y la pantalla del plan muestra "% de descuento fundador", pero
-   no cambia ningún precio calculado ni cobrado.
+- plan pagado por transferencia que vence en 7 días o menos ("Tu plan Crece vence el…");
+- cobro fallido o periodo vencido, con la fecha en que pasa a Gratis;
+- plan cancelado que termina en 7 días o menos.
 
-## Corrección incluida en este PR
+Quien paga con Mercado Pago y renueva normalmente no recibe nada.
 
-**Asignación directa de roles saltaba el límite de miembros.** `POST /rbac/roles` daba un
-rol a alguien de la organización que no tenía ninguno sin contar el tope del plan: revocar
-los roles de alguien, invitar a otra persona y luego devolverle un rol dejaba 4 miembros en
-Gratis. Ahora dar el primer rol cuenta como un miembro nuevo (igual que aceptar una
-invitación); dar un rol adicional a quien ya es miembro no. La prueba falla sin el cambio y
-pasa con él.
+## Para salir mañana
+
+- **Planes apagados** (`PLAN_ENFORCEMENT` sin poner): todas las organizaciones tienen todo gratis
+  y el botón de pagar responde «no hay nada que pagar todavía».
+- Para empezar a cobrar: `PLAN_ENFORCEMENT=true`, `PLAN_LAUNCH_DATE=<fecha>` (3 meses de Pro
+  gratis desde esa fecha) y `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` de la cuenta de AdoptaFácil, más
+  el webhook de **Planes y suscripciones** en la app de Mercado Pago apuntando a
+  `https://<api>/billing/webhooks/mercadopago` (ver `docs/pagos/mercadopago-oauth.md` §7).
+
+## Lo que sigue sin estar
+
+1. **Probado solo con Mercado Pago simulado.** Falta una corrida en el sandbox de Mercado Pago
+   con un usuario de prueba antes de cobrar dinero real.
+2. **Factura electrónica** del plan: no se genera; la emite el contador. 🧾
+3. **Soporte prioritario por WhatsApp** (Pro) depende del equipo, no del código.
+4. **Dominio propio** y **patrocinio de empresas** siguen «próximamente».
+5. El límite "Diseños de portal" (5) es igual en los tres planes y no se aplica.
+
+## Correcciones de esta verificación
+
+- **#87:** asignar un rol directamente se saltaba el límite de miembros. Ahora dar el primer rol
+  cuenta como un miembro nuevo.
+- **Este PR:** cancelación con lo pagado respetado, cancelación del cobro anterior al cambiar de
+  plan, cobro rechazado → pago vencido, avisos por correo, pantalla de superadmin, botón de
+  cancelar y personalización avanzada en todos los planes.

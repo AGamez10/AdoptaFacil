@@ -176,16 +176,19 @@ export class PlansService {
     const lapsing =
       this.enforced &&
       subscription !== null &&
-      subscription.status !== 'canceled' &&
       subscription.currentPeriodEnd !== null &&
       effectivePlan !== 'free';
+    // Cancelado: sigue hasta el fin de lo pagado, sin días de gracia.
+    const fallsBackAt = !lapsing
+      ? null
+      : subscription?.status === 'canceled'
+        ? new Date(subscription.currentPeriodEnd as string)
+        : graceEnd(new Date(subscription?.currentPeriodEnd as string));
     return {
       enforced: this.enforced,
       effectivePlan,
       subscription,
-      graceEndsAt: lapsing
-        ? graceEnd(new Date(subscription.currentPeriodEnd as string)).toISOString()
-        : null,
+      graceEndsAt: fallsBackAt ? fallsBackAt.toISOString() : null,
       launchPromoEndsAt: inPromo ? (this.promoEndsAt as Date).toISOString() : null,
       limits: definition.limits,
       capabilities: definition.capabilities,
@@ -239,10 +242,13 @@ export class PlansService {
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const previous = await tx.organizationSubscription.findUnique({ where: { organizationId } });
+      // Asignar a mano deja la suscripción como `manual`: la plataforma pasa a
+      // ser la fuente del plan (PlanBillingService cancela antes el cobro
+      // recurrente de Mercado Pago, si lo había, para no cobrar dos veces).
       const row = await tx.organizationSubscription.upsert({
         where: { organizationId },
         create: { organizationId, provider: 'manual', ...data },
-        update: data,
+        update: { provider: 'manual', ...data },
       });
       await this.audit.recordWithTx(tx, {
         organizationId,

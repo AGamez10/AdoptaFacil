@@ -154,6 +154,27 @@ export class MercadoPagoBillingClient {
     };
   }
 
+  /**
+   * Cancel a subscription so Mercado Pago stops charging it (upgrade to
+   * another plan, the organization cancels, or the platform takes it over by
+   * hand). Mercado Pago answers 200 for an already cancelled one.
+   * Source: https://www.mercadopago.com.co/developers/es/reference/subscriptions/_preapproval_id/put
+   */
+  async cancelPreapproval(id: string): Promise<void> {
+    if (!MERCADOPAGO_RESOURCE_ID_PATTERN.test(id)) {
+      throw new Error('Mercado Pago preapproval id has an invalid format');
+    }
+    const response = await this.fetchFn(`${this.baseUrl}/preapproval/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ status: 'cancelled' }),
+      signal: mercadoPagoTimeoutSignal(),
+    });
+    if (!response.ok) {
+      throw new Error(`Mercado Pago preapproval cancel failed (${response.status})`);
+    }
+  }
+
   async getAuthorizedPayment(id: string): Promise<MercadoPagoAuthorizedPayment> {
     if (!MERCADOPAGO_RESOURCE_ID_PATTERN.test(id)) {
       throw new Error('Mercado Pago authorized payment id has an invalid format');
