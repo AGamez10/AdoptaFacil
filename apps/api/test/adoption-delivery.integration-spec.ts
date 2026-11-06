@@ -129,7 +129,13 @@ describe('Adoption delivery (ajuste 6: acta de entrega)', () => {
     const animal = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${refugeToken}`)
-      .send({ name: 'Luna', species: 'dog', sex: 'female', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Luna',
+        species: 'dog',
+        sex: 'female',
+        size: 'medium',
+      })
       .expect(201);
     animalId = animal.body.id;
 

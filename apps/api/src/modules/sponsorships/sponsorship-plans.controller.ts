@@ -1,16 +1,20 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import {
+  type AnimalSponsorshipSettings,
   type CreateSponsorshipPlanInput,
+  type MarkAnimalNeedsSponsorshipInput,
   type Paginated,
   Role,
   type SponsorshipPlan,
@@ -23,7 +27,11 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { SponsorshipPlansService } from './sponsorship-plans.service';
-import { createSponsorshipPlanSchema, updateSponsorshipPlanSchema } from './sponsorships.schemas';
+import {
+  createSponsorshipPlanSchema,
+  markAnimalNeedsSponsorshipSchema,
+  updateSponsorshipPlanSchema,
+} from './sponsorships.schemas';
 import { RequireFeature } from '../../core/features';
 
 /** Roles that may CREATE/EDIT/ARCHIVE a sponsorship plan (§13 M07). */
@@ -60,6 +68,37 @@ export class SponsorshipPlansController {
     @Query('animalId') animalId?: string,
   ): Promise<Paginated<SponsorshipPlan>> {
     return this.service.list(Number(limit), Number(offset), animalId);
+  }
+
+  /** Sponsorship settings of one animal (needs sponsorship? amount? sponsors?). */
+  @Get('animal/:animalId')
+  @Roles(...VIEW_ROLES)
+  getForAnimal(
+    @Param('animalId', ParseUUIDPipe) animalId: string,
+  ): Promise<AnimalSponsorshipSettings> {
+    return this.service.getForAnimal(animalId);
+  }
+
+  /** Mark the animal as needing sponsorship and/or change its amount (idempotent). */
+  @Put('animal/:animalId')
+  @Roles(...WRITE_ROLES)
+  markNeedsSponsorship(
+    @CurrentUser() actor: RequestUser,
+    @Param('animalId', ParseUUIDPipe) animalId: string,
+    @Body(new ZodValidationPipe(markAnimalNeedsSponsorshipSchema))
+    dto: MarkAnimalNeedsSponsorshipInput,
+  ): Promise<AnimalSponsorshipSettings> {
+    return this.service.markNeedsSponsorship(actor.id, animalId, dto ?? {});
+  }
+
+  /** The animal no longer needs sponsorship: no new sponsors (idempotent). */
+  @Delete('animal/:animalId')
+  @Roles(...WRITE_ROLES)
+  unmarkNeedsSponsorship(
+    @CurrentUser() actor: RequestUser,
+    @Param('animalId', ParseUUIDPipe) animalId: string,
+  ): Promise<AnimalSponsorshipSettings> {
+    return this.service.unmarkNeedsSponsorship(actor.id, animalId);
   }
 
   @Get(':id')

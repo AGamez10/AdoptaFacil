@@ -77,6 +77,16 @@ describe('OrgPlanPage', () => {
       await screen.findByText('Durante el piloto tienes todas las funciones sin costo.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Tu plan')).not.toBeInTheDocument();
+    // Everyone already has Pro for free: nothing is offered for payment online.
+    expect(screen.queryByText(/con Mercado Pago/)).not.toBeInTheDocument();
+  });
+
+  it('offers to pay a paid plan with Mercado Pago once plans are enforced', async () => {
+    stubPlan(viewFor({ effectivePlan: 'free' }));
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByText('Pagar Crece con Mercado Pago')).toBeInTheDocument();
+    expect(screen.getByText('Pagar Pro con Mercado Pago')).toBeInTheDocument();
   });
 
   it('warns about the grace period when a payment is pending', async () => {
@@ -122,5 +132,59 @@ describe('OrgPlanPage', () => {
     );
     expect(screen.getAllByText(/hasta 5\.000 al mes/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/hasta 20\.000 al mes/).length).toBeGreaterThan(0);
+  });
+});
+
+describe('OrgPlanPage · cancelar el plan', () => {
+  const paid = viewFor({
+    effectivePlan: 'crece',
+    subscription: {
+      organizationId: 'org-self',
+      plan: 'crece',
+      status: 'active',
+      currentPeriodEnd: '2026-12-06T05:00:00.000Z',
+      provider: 'mercadopago',
+      providerReference: 'pre123',
+      discountPercent: 0,
+      updatedAt: '2026-11-06T00:00:00.000Z',
+    },
+  });
+
+  it('pide confirmación y llama POST /org/plan/cancel', async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), method: init?.method ?? 'GET' });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => (String(input).endsWith('/org/plan') ? paid : {}),
+        });
+      }),
+    );
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    (await screen.findByTestId('plan-cancel')).click();
+    (await screen.findByTestId('plan-cancel-confirm')).click();
+    await vi.waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/org/plan/cancel') && c.method === 'POST')).toBe(
+        true,
+      ),
+    );
+  });
+
+  it('un plan cancelado dice hasta cuándo se puede usar y no ofrece cancelar otra vez', async () => {
+    stubPlan({ ...paid, subscription: { ...paid.subscription!, status: 'canceled' } });
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    expect(await screen.findByText(/Cancelaste tu plan/)).toBeInTheDocument();
+    expect(screen.queryByTestId('plan-cancel')).not.toBeInTheDocument();
+  });
+
+  it('sin planes encendidos no se ofrece cancelar', async () => {
+    stubPlan({ ...paid, enforced: false });
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    await screen.findByText('Durante el piloto tienes todas las funciones sin costo.');
+    expect(screen.queryByTestId('plan-cancel')).not.toBeInTheDocument();
   });
 });

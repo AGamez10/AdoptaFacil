@@ -1,10 +1,35 @@
 import { createAnimalSchema, createBreedSchema, updateAnimalSchema } from './animals.schemas';
 
 describe('animal attribute validation (RF07)', () => {
-  const valid = { name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' };
+  const valid = {
+    name: 'Firulais',
+    species: 'dog',
+    sex: 'male',
+    size: 'medium',
+    birthDate: '2024-07-23T00:00:00.000Z',
+  };
+  const tomorrow = new Date(Date.now() + 2 * 86_400_000).toISOString();
 
   it('accepts a minimal valid animal', () => {
     expect(createAnimalSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('requires the age: a birth date or an approximate age', () => {
+    const { birthDate: _omit, ...noAge } = valid;
+    expect(createAnimalSchema.safeParse(noAge).success).toBe(false);
+    expect(createAnimalSchema.safeParse({ ...noAge, approximateAgeMonths: 18 }).success).toBe(true);
+    expect(createAnimalSchema.safeParse({ ...noAge, approximateAgeMonths: 0 }).success).toBe(true);
+  });
+
+  it('rejects a future birth date on create and update', () => {
+    expect(createAnimalSchema.safeParse({ ...valid, birthDate: tomorrow }).success).toBe(false);
+    expect(updateAnimalSchema.safeParse({ birthDate: tomorrow }).success).toBe(false);
+  });
+
+  it('update can clear the birth date (switch to an approximate age)', () => {
+    expect(
+      updateAnimalSchema.safeParse({ birthDate: null, approximateAgeMonths: 12 }).success,
+    ).toBe(true);
   });
 
   it('requires a name', () => {

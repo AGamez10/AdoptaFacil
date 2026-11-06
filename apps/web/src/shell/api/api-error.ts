@@ -1,3 +1,5 @@
+import { NETWORK_ERROR_MESSAGE } from '@adoptafacil/ui';
+
 /**
  * Normalized error thrown by the shell API layer. Carries the HTTP status and a
  * machine-readable `code` so callers (and the session layer) can branch without
@@ -21,11 +23,13 @@ export class ApiError extends Error {
   }
 }
 
-/** Wrap an unknown thrown value as an ApiError (e.g. a network failure). */
+/** Wrap an unknown thrown value as an ApiError (e.g. a network failure). The
+ *  browser's own text ("Failed to fetch") is never shown to the person. */
 export function toApiError(error: unknown, fallbackCode = 'network_error'): ApiError {
   if (ApiError.is(error)) return error;
-  const message = error instanceof Error ? error.message : 'Error de red';
-  return new ApiError(0, fallbackCode, message);
+  return new ApiError(0, fallbackCode, NETWORK_ERROR_MESSAGE, {
+    cause: error instanceof Error ? error.message : String(error),
+  });
 }
 
 /**

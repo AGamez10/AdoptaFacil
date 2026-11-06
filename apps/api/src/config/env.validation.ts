@@ -25,7 +25,37 @@ export const envSchema = z.object({
   // process.env.DATABASE_URL_APP at construction — omitting it here would strip
   // it from process.env and break `pnpm --filter api dev`.
   DATABASE_URL_APP: z.string().url(),
+  // Plan de escala (B4): pool de conexiones de Prisma, explícito. Sin valor,
+  // Prisma usa 2 × CPU + 1 (5 en un VPS de 2 vCPU). Con PgBouncer delante, este
+  // número es por réplica y PgBouncer reparte las conexiones reales.
+  DATABASE_POOL_SIZE: z.coerce.number().int().min(1).max(200).optional(),
+  // Segundos que una petición espera una conexión libre antes de fallar.
+  DATABASE_POOL_TIMEOUT_S: z.coerce.number().int().min(1).max(120).default(10),
+  // true cuando DATABASE_URL_APP apunta a PgBouncer en modo transacción
+  // (Prisma desactiva las sentencias preparadas con nombre).
+  DATABASE_PGBOUNCER: featureFlag(),
+  // Tope por sentencia dentro de las transacciones con tenant (SET LOCAL): una
+  // consulta desbocada no retiene una conexión del pool indefinidamente.
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(600_000).default(15_000),
   REDIS_URL: z.string().url(),
+  // Plan de escala (B7): 'api' sirve HTTP sin workers de colas, 'worker' corre
+  // los workers, 'all' hace ambas cosas (desarrollo local). Ver app-role.ts.
+  APP_ROLE: z.enum(['all', 'api', 'worker']).default('all'),
+  // Plan de escala (B5/B10): Redis APARTE para la caché de lecturas públicas
+  // (allkeys-lru). Vacío = sin caché en Redis (solo cabeceras para la CDN).
+  REDIS_CACHE_URL: z.string().url().optional(),
+  // Segundos que una lectura pública vive en Redis y en la CDN (s-maxage).
+  PUBLIC_CACHE_TTL_S: z.coerce.number().int().min(1).max(3600).default(30),
+  // Plan de escala (B6): presupuesto por minuto de lecturas públicas por IP y
+  // de escrituras por organización. Con Cloudflare delante, TRUST_PROXY_HOPS
+  // debe contar también el salto de Cloudflare para ver la IP real.
+  PUBLIC_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(600),
+  ORG_WRITE_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(300),
+  // Plan de escala (B9): token del scrape de Prometheus (GET /metrics con
+  // Authorization: Bearer). Sin valor, /metrics responde 404.
+  METRICS_TOKEN: z.string().min(24).optional(),
+  // Una línea JSON por petición (id, método, ruta plantilla, estado, ms).
+  HTTP_ACCESS_LOG: featureFlag(),
   // T-110 (auth/RF05): base URL of the web app, used to build the clickable
   // password-reset link emailed to users ({WEB_BASE_URL}/reset-password?token=…).
   // Defaults to the Vite dev server so local dev works without extra config; set
@@ -44,6 +74,16 @@ export const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
   SMTP_FROM: z.string().min(1).optional(),
+  // SMTP_USER/SMTP_PASS van juntas o no van: sin ellas la API habla sin
+  // autenticarse, lo que solo sirve con un relay propio en la red interna de
+  // Docker (Postfix en el mismo VPS). Un proveedor externo siempre las pide.
+  // Firma DKIM hecha por la propia API (nodemailer, código abierto): las tres
+  // van juntas o no van. Sirve cuando el servidor que entrega el correo no firma
+  // por nosotros (Postfix propio). La clave es PEM; en una sola línea, con los
+  // saltos escritos como \n. Ver docs/operacion/CORREO.md.
+  SMTP_DKIM_DOMAIN: z.string().min(1).optional(),
+  SMTP_DKIM_SELECTOR: z.string().min(1).optional(),
+  SMTP_DKIM_PRIVATE_KEY: z.string().min(1).optional(),
   // Email delivery queue (BullMQ on the same Redis). Every email is a job: the
   // request only enqueues it and a worker renders + sends it, with retries.
   // Tune these to the SMTP provider's limits; no code change needed.
@@ -89,6 +129,12 @@ export const envSchema = z.object({
   FOLLOWUP_VIDEO_MAX_MB: z.coerce.number().int().positive().max(100).default(50),
   // Base URL the API is reachable at, used to build upload/serve URLs.
   STORAGE_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3000'),
+  // Plan de escala (B2): host de la CDN para los archivos PÚBLICOS (fotos,
+  // logos). Es la misma API detrás de Cloudflare con un nombre propio (p. ej.
+  // https://img.adoptafacil.org/api): la CDN guarda la respuesta de
+  // /storage/public (Cache-Control largo) y la API solo atiende los fallos de
+  // caché. Los archivos privados nunca usan este host. Vacío = sin CDN.
+  STORAGE_PUBLIC_CDN_BASE_URL: z.string().url().optional(),
   // T-052 (payments): which PaymentPort adapter to bind. 'fake' = deterministic
   // dev/test double (default). Swap happens in PaymentModule, no consumer
   // changes. 'disabled' (Ola 1, R0-1): binds an adapter that refuses every
@@ -100,7 +146,47 @@ export const envSchema = z.object({
   // platform credential is needed to boot in the default direct mode.
   // Mercado Pago was retired from the product on 2026-10-17 (owner decision):
   // 'mercadopago' is no longer an accepted value (Wompi was retired earlier).
-  PAYMENT_DRIVER: z.enum(['fake', 'epayco', 'disabled']).default('fake'),
+  // 'mercadopago' (ADR-PAG-003, 2026-11-06, decisión del dueño): each
+  // organization connects ITS OWN Mercado Pago account through OAuth
+  // (`organization_mercadopago_connections`, tokens encrypted) and every
+  // donation is a Checkout Pro preference created with ITS access token.
+  // No split, no platform fee, no custody.
+  PAYMENT_DRIVER: z.enum(['fake', 'epayco', 'mercadopago', 'disabled']).default('fake'),
+  // Public origin of THIS API (OAuth redirect and notification URLs). Optional:
+  // falls back to STORAGE_PUBLIC_BASE_URL, the same fallback ePayco uses.
+  API_PUBLIC_BASE_URL: z.string().url().optional(),
+  // Mercado Pago (ADR-PAG-003). Credentials of AdoptaFácil's application in
+  // "Tus integraciones" (developers panel). Optional at the schema level so
+  // the other drivers boot without them; required when
+  // PAYMENT_DRIVER=mercadopago (REQUIRED_MERCADOPAGO_KEYS). Never logged.
+  MERCADOPAGO_BASE_URL: z.string().url().default('https://api.mercadopago.com'),
+  MERCADOPAGO_AUTHORIZE_URL: z.string().url().optional(),
+  MERCADOPAGO_CLIENT_ID: z.string().min(1).optional(),
+  MERCADOPAGO_CLIENT_SECRET: z.string().min(1).optional(),
+  // Secret signature of the application's webhooks ("Tus integraciones" →
+  // Webhooks → Clave secreta). Verifies `x-signature` on every notification.
+  MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  // Exact redirect URI registered in the application. Optional: falls back to
+  // `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`.
+  MERCADOPAGO_OAUTH_REDIRECT_URI: z.string().url().optional(),
+  // PKCE (S256) on the OAuth flow. Turn on ONLY after enabling PKCE in the
+  // application's settings in Mercado Pago (otherwise the exchange fails).
+  MERCADOPAGO_OAUTH_PKCE: featureFlag(),
+  // Sandbox: ask for test tokens and open `sandbox_init_point`. OFF unless "true".
+  MERCADOPAGO_TEST: featureFlag(),
+  // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
+  // AdoptaFácil's plans (subscriptions); never used for a donation.
+  MERCADOPAGO_PLATFORM_ACCESS_TOKEN: z.string().min(1).optional(),
+  // Optional statement descriptor shown on the donor's card statement.
+  MERCADOPAGO_STATEMENT_DESCRIPTOR: z.string().min(1).max(22).optional(),
+  // Token renewal: scan interval (default daily) and how many days before
+  // expiry a token is renewed (tokens last ~180 days).
+  MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(86_400_000),
+  MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS: z.coerce.number().int().positive().max(170).default(30),
   // ePayco (ADR-PAG-002). Base URLs are overridable only for tests/mocks.
   EPAYCO_APIFY_BASE_URL: z.string().url().default('https://apify.epayco.co'),
   EPAYCO_SECURE_BASE_URL: z.string().url().default('https://secure.epayco.co'),
@@ -229,6 +315,12 @@ export const envSchema = z.object({
   // integration suite uses it so each app instance starts with a clean
   // budget). Production must use 'redis'.
   THROTTLER_STORAGE: z.enum(['memory', 'redis']).default('redis'),
+  // Plan SEO (P0): shared budget per client IP for every anonymous /public/*
+  // route, per minute. High enough for many people behind one carrier NAT.
+  PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).max(10_000).default(300),
+  // Same budget for a search crawler proven by reverse + forward DNS, shared
+  // by ALL of that operator's IPs (see core/bots/verified-bots.ts).
+  PUBLIC_RATE_LIMIT_BOT_PER_MINUTE: z.coerce.number().int().min(10).max(100_000).default(1200),
   // Platform staff security (F19): TOTP for every session that uses a platform
   // role. Fails closed — only the exact string "false" turns it off, and
   // production refuses that (assertProductionSafety). The rest of the staff
@@ -243,12 +335,12 @@ export const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 /** SMTP vars required when NOTIFICATION_DRIVER=smtp (fail-fast at boot, T-109). */
-const REQUIRED_SMTP_KEYS = [
-  'SMTP_HOST',
-  'SMTP_PORT',
-  'SMTP_USER',
-  'SMTP_PASS',
-  'SMTP_FROM',
+const REQUIRED_SMTP_KEYS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_FROM'] as const;
+
+/** Grupos de variables SMTP que van completos o no van. */
+const SMTP_ALL_OR_NONE_GROUPS = [
+  ['SMTP_USER', 'SMTP_PASS'],
+  ['SMTP_DKIM_DOMAIN', 'SMTP_DKIM_SELECTOR', 'SMTP_DKIM_PRIVATE_KEY'],
 ] as const;
 
 /**
@@ -266,7 +358,14 @@ const REQUIRED_EPAYCO_SPLIT_KEYS = [
 ] as const;
 
 /** Real gateways allowed to back the money modules in production. */
-const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['epayco'];
+const REAL_PAYMENT_DRIVERS: readonly Env['PAYMENT_DRIVER'][] = ['epayco', 'mercadopago'];
+
+/** Mercado Pago vars required when PAYMENT_DRIVER=mercadopago (fail-fast at boot). */
+const REQUIRED_MERCADOPAGO_KEYS = [
+  'MERCADOPAGO_CLIENT_ID',
+  'MERCADOPAGO_CLIENT_SECRET',
+  'MERCADOPAGO_WEBHOOK_SECRET',
+] as const;
 
 /** Google OAuth vars required when AUTH_IDENTITY_DRIVER=google (fail-fast at boot). */
 const REQUIRED_GOOGLE_IDENTITY_KEYS = ['GOOGLE_OAUTH_CLIENT_ID'] as const;
@@ -311,7 +410,7 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     if (!REAL_PAYMENT_DRIVERS.includes(env.PAYMENT_DRIVER)) {
       fail(
         'PAYMENT_DRIVER',
-        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=epayco in production',
+        'FEATURE_PAYMENTS/FEATURE_SPONSORSHIPS require PAYMENT_DRIVER=mercadopago or epayco in production',
       );
     }
     if (!env.PAYMENTS_PRODUCTION_APPROVAL_REF) {
@@ -341,6 +440,77 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   if (!env.PLATFORM_MFA_REQUIRED) {
     fail('PLATFORM_MFA_REQUIRED', 'platform staff must use two-step verification in production');
   }
+  // ADR-PAG-003: Mercado Pago sends the OAuth `code` to the redirect URI and
+  // every payment notification to the API's public origin. Over plain http
+  // (or the localhost default) the code could be intercepted and no
+  // notification would ever settle a donation.
+  if (env.PAYMENT_DRIVER === 'mercadopago') {
+    const apiBase = env.API_PUBLIC_BASE_URL ?? env.STORAGE_PUBLIC_BASE_URL;
+    if (!isHttpsUrl(apiBase)) {
+      fail(
+        'API_PUBLIC_BASE_URL',
+        'PAYMENT_DRIVER=mercadopago needs the public https origin of the API in production',
+      );
+    }
+    if (env.MERCADOPAGO_OAUTH_REDIRECT_URI && !isHttpsUrl(env.MERCADOPAGO_OAUTH_REDIRECT_URI)) {
+      fail('MERCADOPAGO_OAUTH_REDIRECT_URI', 'the OAuth redirect URI must be https in production');
+    }
+    // The client secret, the OAuth codes and every org token go to these
+    // hosts: in production they are pinned to Mercado Pago's own (the
+    // overrides exist only for tests), so a typo can never ship them elsewhere.
+    if (!isMercadoPagoApiBase(env.MERCADOPAGO_BASE_URL)) {
+      fail('MERCADOPAGO_BASE_URL', 'must be https://api.mercadopago.com in production');
+    }
+    if (
+      env.MERCADOPAGO_AUTHORIZE_URL !== undefined &&
+      !isMercadoPagoAuthorizeUrl(env.MERCADOPAGO_AUTHORIZE_URL)
+    ) {
+      fail(
+        'MERCADOPAGO_AUTHORIZE_URL',
+        "must be Mercado Pago's own https://auth.mercadopago.com[.xx]/authorization in production",
+      );
+    }
+  }
+  // Every emailed link (invitations, password reset, receipts, contracts) is
+  // built from WEB_BASE_URL: the forgotten dev default (http://localhost:5173)
+  // would email links nobody can open, and plain http would expose the tokens.
+  // `https://localhost` stays allowed: the CI boots this same production
+  // compose on localhost behind Caddy's internal CA.
+  if (!isHttpsUrl(env.WEB_BASE_URL)) {
+    fail(
+      'WEB_BASE_URL',
+      'WEB_BASE_URL must be the public https origin of the web app in production',
+    );
+  }
+}
+
+/** `https://api.mercadopago.com` (trailing slash tolerated). Pure. */
+export function isMercadoPagoApiBase(value: string | undefined): boolean {
+  return value !== undefined && value.replace(/\/+$/, '') === 'https://api.mercadopago.com';
+}
+
+/** Mercado Pago's own OAuth authorize page (any country site). Pure. */
+export function isMercadoPagoAuthorizeUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      /^auth\.mercadopago\.com(\.[a-z]{2})?$/.test(url.hostname) &&
+      url.port === '' &&
+      url.pathname === '/authorization'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** `https://` origin (the dev default and any plain http are refused). */
+export function isHttpsUrl(raw: string): boolean {
+  try {
+    return new URL(raw).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 /** The validated schema + cross-field rules (fail-fast for smtp/ePayco split credentials). */
@@ -355,6 +525,18 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
         });
       }
     }
+    for (const group of SMTP_ALL_OR_NONE_GROUPS) {
+      const present = group.filter((key) => env[key] !== undefined && env[key] !== '');
+      if (present.length > 0 && present.length < group.length) {
+        for (const key of group.filter((k) => !present.includes(k))) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required together with ${present.join(', ')}`,
+          });
+        }
+      }
+    }
   }
   if (env.PAYMENT_DRIVER === 'epayco' && env.EPAYCO_COLLECTION_MODE === 'platform_split') {
     for (const key of REQUIRED_EPAYCO_SPLIT_KEYS) {
@@ -363,6 +545,17 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} is required when EPAYCO_COLLECTION_MODE=platform_split`,
+        });
+      }
+    }
+  }
+  if (env.PAYMENT_DRIVER === 'mercadopago') {
+    for (const key of REQUIRED_MERCADOPAGO_KEYS) {
+      if (env[key] === undefined || env[key] === null || env[key] === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when PAYMENT_DRIVER=mercadopago`,
         });
       }
     }

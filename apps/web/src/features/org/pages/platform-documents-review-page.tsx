@@ -28,6 +28,7 @@ import { TextField } from '../components/profile-fields';
 import { DocumentVerificationPanel } from '../components/document-verification-panel';
 import { STATE_NAMES } from '../components/legal-labels';
 import styles from './platform-documents-review-page.module.scss';
+import { toViewableFile } from '../../../lib/private-file';
 
 const TYPE_LABELS: Record<string, string> = {
   [DocumentType.ExistenceRepresentationCertificate]: 'Certificado de existencia y representación',
@@ -286,7 +287,13 @@ export function PlatformDocumentsReviewPage() {
       const blob = await client.requestBlob(
         `/storage/private?key=${encodeURIComponent(item.storageRef)}`,
       );
-      const url = URL.createObjectURL(blob);
+      // La pestaña nueva es del origen de la web: el tipo lo deciden los bytes,
+      // así un archivo que no es PDF ni imagen nunca corre como página.
+      const file = await toViewableFile(blob);
+      if (!file) {
+        throw new Error('El archivo no es un PDF ni una imagen; no se abre por seguridad.');
+      }
+      const url = URL.createObjectURL(file.blob);
       if (tab) {
         tab.location.href = url;
       } else {

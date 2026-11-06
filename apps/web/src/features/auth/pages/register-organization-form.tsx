@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { PortalTemplateId } from '@adoptafacil/contracts';
 import { Button, useToast } from '@adoptafacil/ui';
-import { toApiError, type RegisterOrganizationRequest } from '../../../shell/api';
+import { toApiError, useApiClient, type RegisterOrganizationRequest } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import {
   acceptancesFrom,
@@ -10,6 +11,7 @@ import {
   requiredConsentsGiven,
 } from '../../legal';
 import { Field } from '../components/field';
+import { applySignupTemplate, forgetSignupTemplate } from '../lib/signup-template';
 import { FormAlert } from '../components/form-alert';
 import { PasswordRequirements } from '../components/password-requirements';
 import {
@@ -31,8 +33,14 @@ type OrgErrors = Partial<
  * the owner user's `displayName`), email and password. The NIT (and phone)
  * belong to the M01 formalization flow (Ola 1), not to account creation.
  */
-export function RegisterOrganizationForm() {
+export interface RegisterOrganizationFormProps {
+  /** Plantilla elegida en la vista de ejemplo, si llegó con una. */
+  template?: PortalTemplateId | null;
+}
+
+export function RegisterOrganizationForm({ template = null }: RegisterOrganizationFormProps) {
   const { register } = useSession();
+  const client = useApiClient();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -94,18 +102,39 @@ export function RegisterOrganizationForm() {
     setSubmitting(true);
     try {
       await register(request);
-      // Aviso al aceptar: la constancia también llega por correo.
-      toast({
-        title: 'Cuenta creada',
-        description:
-          'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
-      });
-      navigate('/', { replace: true });
     } catch (error) {
       const apiError = toApiError(error);
       setFormError(registerErrorMessage(apiError.status, apiError.code));
       setSubmitting(false);
+      return;
     }
+    // La cuenta ya existe: si la plantilla no se pudo guardar, se avisa y se
+    // sigue (se elige luego en "Diseña tu portal"), nunca se bloquea la entrada.
+    let templateFailed = false;
+    if (template) {
+      try {
+        await applySignupTemplate(client, template);
+      } catch {
+        templateFailed = true;
+      }
+    }
+    forgetSignupTemplate();
+    // Aviso al aceptar: la constancia también llega por correo.
+    toast({
+      title: 'Cuenta creada',
+      description:
+        'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
+    });
+    if (templateFailed) {
+      toast({
+        title: 'No pudimos guardar la plantilla',
+        description: 'Elígela de nuevo en Mi organización → Personalización.',
+        variant: 'warning',
+      });
+    }
+    // Primer paso de una organización nueva: completar su perfil para que el
+    // portal pueda mostrar lo que registre.
+    navigate('/organizacion', { replace: true });
   };
 
   return (

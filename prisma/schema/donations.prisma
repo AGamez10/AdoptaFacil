@@ -60,6 +60,7 @@ model Donation {
 
   receipt     DonationReceipt?
   certificate DonationCertificate?
+  reversal    DonationReversal?
 
   @@unique([organizationId, idempotencyKey])
   @@unique([collectionId])
@@ -150,4 +151,25 @@ model DonationAccessLink {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("donation_access_links")
+}
+
+/// Reverso en la pasarela (reembolso, contracargo o cancelación de un pago ya
+/// aprobado; ADR-PAG-003). Append-only, una fila por donación. La donación y su
+/// recibo no se reescriben (son el registro de lo que pasó), pero un certificado
+/// de una donación reversada queda ANULADO: la verificación pública y las vistas
+/// del donante lo muestran con `revokedAt`, y no se emiten certificados nuevos.
+model DonationReversal {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  donationId     String   @unique @map("donation_id") @db.Uuid
+  /// refunded | charged_back | cancelled | voided (estado de la pasarela).
+  reason         String
+  /// Clave de deduplicación del webhook que lo registró.
+  dedupKey       String   @map("dedup_key")
+  reversedAt     DateTime @default(now()) @map("reversed_at")
+
+  donation Donation @relation(fields: [donationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("donation_reversals")
 }

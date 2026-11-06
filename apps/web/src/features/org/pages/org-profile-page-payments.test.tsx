@@ -4,8 +4,8 @@ import { Role } from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
 
 /**
- * Pestaña "Medios de pago" (ADR-PAG-002): "QR de donaciones" de la
- * organización y "Conectar ePayco" (la única pasarela; Mercado Pago se retiró
+ * Pestañas "Código QR" (QR fijo de la organización) y "Medios de pago"
+ * (ADR-PAG-002): "Conectar ePayco" (la única pasarela; Mercado Pago se retiró
  * el 2026-10-17).
  */
 function ownerSession() {
@@ -57,61 +57,83 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('Medios de pago — QR de donaciones', () => {
-  it('shows the QR, the stable /o/:slug/donar URL and copies it', async () => {
+const QR = {
+  code: 'abcd2345',
+  target: { kind: 'donate', id: null },
+  effectiveTarget: { kind: 'donate', id: null },
+  campaigns: [{ id: '11111111-1111-4111-8111-111111111111', label: 'Cirugía de Luna' }],
+  animals: [],
+  scansLast30Days: 7,
+};
+
+async function openQrTab() {
+  fireEvent.click(await screen.findByRole('tab', { name: 'Código QR' }));
+}
+
+describe('Código QR — QR fijo de la organización', () => {
+  it('shows the fixed /q/<code> URL, its destination and copies it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-    stubFetch((url) =>
-      url.includes('/org/epayco/status') ? { body: { connected: false } } : { body: BASE_ORG },
-    );
+    stubFetch((url) => (url.endsWith('/org/qr') ? { body: QR } : { body: BASE_ORG }));
     renderShell({ route: '/organizacion', ...ownerSession() });
 
-    await openPaymentsTab();
-    const card = await screen.findByTestId('donation-qr-card');
-    const expected = `${window.location.origin}/o/patitas-felices/donar`;
-    expect(within(card).getByTestId('donation-qr-url')).toHaveTextContent(expected);
-    expect(await within(card).findByTestId('donation-qr-image')).toHaveAttribute(
+    await openQrTab();
+    const card = await screen.findByTestId('org-qr-card');
+    const expected = `${window.location.origin}/q/abcd2345`;
+    expect(await within(card).findByTestId('qr-share-url')).toHaveTextContent(expected);
+    expect(await within(card).findByTestId('qr-share-image')).toHaveAttribute(
       'src',
       expect.stringMatching(/^data:image\/png/),
     );
-    expect(await within(card).findByTestId('donation-qr-download')).toHaveAttribute(
-      'download',
-      'qr-donaciones-patitas-felices.png',
+    expect(within(card).getByTestId('org-qr-effective')).toHaveTextContent(
+      'donar a la organización',
     );
-    expect(within(card).getByText(/Nequi, Daviplata/)).toBeInTheDocument();
+    expect(within(card).getByText('Escaneos en los últimos 30 días: 7')).toBeInTheDocument();
 
     fireEvent.click(within(card).getByRole('button', { name: 'Copiar enlace' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expected));
-    expect(await screen.findByText('Enlace copiado')).toBeInTheDocument();
   });
 
-  it('uses the real subdomain URL when the org has one and the portal domain is configured', async () => {
-    vi.stubEnv('VITE_PORTAL_BASE_DOMAIN', 'adoptafacil.org');
+  it('changes the destination to a campaign without changing the code', async () => {
+    const calls = stubFetch((url, init) => {
+      if (url.endsWith('/org/qr/target')) {
+        const body = JSON.parse(String(init?.body));
+        return { body: { ...QR, target: body, effectiveTarget: body } };
+      }
+      return url.endsWith('/org/qr') ? { body: QR } : { body: BASE_ORG };
+    });
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openQrTab();
+    const card = await screen.findByTestId('org-qr-card');
+    fireEvent.click(await within(card).findByRole('radio', { name: 'Una campaña' }));
+    fireEvent.change(within(card).getByLabelText('Campaña activa'), {
+      target: { value: QR.campaigns[0].id },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Guardar destino' }));
+
+    await waitFor(() =>
+      expect(within(card).getByTestId('org-qr-effective')).toHaveTextContent(
+        'la campaña «Cirugía de Luna»',
+      ),
+    );
+    const put = calls.find((c) => c.url.endsWith('/org/qr/target'));
+    expect(put?.init?.method).toBe('PUT');
+    expect(JSON.parse(String(put?.init?.body))).toEqual({
+      kind: 'campaign',
+      id: QR.campaigns[0].id,
+    });
+    expect(within(card).getByTestId('qr-share-url')).toHaveTextContent('/q/abcd2345');
+  });
+
+  it('asks to set the portal link first when there is no slug', async () => {
     stubFetch((url) =>
-      url.includes('/org/epayco/status')
-        ? { body: { connected: false } }
-        : { body: { ...BASE_ORG, subdomain: 'patitas' } },
+      url.endsWith('/org/qr') ? { body: QR } : { body: { id: 'org-1', name: 'Refugio Patitas' } },
     );
     renderShell({ route: '/organizacion', ...ownerSession() });
 
-    await openPaymentsTab();
-    expect(await screen.findByTestId('donation-qr-url')).toHaveTextContent(
-      'https://patitas.adoptafacil.org/donar',
-    );
-  });
-
-  it('shows an empty state that takes the manager to set the portal link when there is no slug', async () => {
-    stubFetch((url) =>
-      url.includes('/org/epayco/status')
-        ? { body: { connected: false } }
-        : { body: { id: 'org-1', name: 'Refugio Patitas' } },
-    );
-    renderShell({ route: '/organizacion', ...ownerSession() });
-
-    await openPaymentsTab();
-    expect(await screen.findByTestId('donation-qr-empty')).toBeInTheDocument();
-    expect(screen.queryByTestId('donation-qr-url')).not.toBeInTheDocument();
-
+    await openQrTab();
+    expect(await screen.findByTestId('org-qr-needs-link')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Definir el enlace del portal' }));
     expect(screen.getByRole('tab', { name: 'Datos institucionales' })).toHaveAttribute(
       'aria-selected',
@@ -189,7 +211,8 @@ describe('Medios de pago — asistente "Conectar ePayco" (VITE_PAYMENT_PROVIDER=
     expect(screen.queryByLabelText('P_KEY')).not.toBeInTheDocument();
   });
 
-  it('shows the ePayco card by default (VITE_PAYMENT_PROVIDER unset) and never Mercado Pago', async () => {
+  it('shows ePayco only with VITE_PAYMENT_PROVIDER=epayco, never Mercado Pago', async () => {
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', 'epayco');
     const calls = stubFetch(statusStub());
     renderShell({ route: '/organizacion', ...ownerSession() });
 
@@ -466,5 +489,96 @@ describe('Medios de pago — asistente "Conectar ePayco" (VITE_PAYMENT_PROVIDER=
     expect(screen.getByLabelText('P_CUST_ID_CLIENTE')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('heading', { name: 'Tu número de cliente' })).toBeInTheDocument();
     expect(calls.some((c) => c.url.endsWith('/org/epayco/connect'))).toBe(false);
+  });
+});
+
+describe('Medios de pago — "Conectar Mercado Pago" por OAuth (por defecto, ADR-PAG-003)', () => {
+  function mpStub(
+    status: Record<string, unknown>,
+    onCall?: (url: string, init?: RequestInit) => void,
+  ) {
+    return (url: string, init?: RequestInit) => {
+      onCall?.(url, init);
+      if (url.includes('/org/mercadopago/status')) return { body: status };
+      if (url.includes('/org/mercadopago/connect') && init?.method === 'DELETE') {
+        return { body: { ok: true } };
+      }
+      if (url.includes('/org/mercadopago/connect')) {
+        return {
+          body: {
+            authorizeUrl: 'https://auth.mercadopago.com.co/authorization?client_id=1&state=s',
+          },
+        };
+      }
+      return { body: BASE_ORG };
+    };
+  }
+
+  it('by default shows the Mercado Pago card; "Conectar" navigates to Mercado Pago (no secrets asked)', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const calls = stubFetch(mpStub({ connected: false }));
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByRole('heading', { name: 'Mercado Pago' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ePayco' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/PRIVATE_KEY|P_KEY|contraseña/i)).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId('mercadopago-connect'));
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith(
+        'https://auth.mercadopago.com.co/authorization?client_id=1&state=s',
+      ),
+    );
+    expect(calls.some((c) => c.url.includes('/org/epayco'))).toBe(false);
+  });
+
+  it('connected: shows the account, flags a test account and disconnects after confirming', async () => {
+    const calls = stubFetch(
+      mpStub({
+        connected: true,
+        status: 'active',
+        mpUserId: '123456789',
+        liveMode: false,
+        connectedAt: '2026-11-06T15:00:00.000Z',
+      }),
+    );
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByTestId('mercadopago-user-id')).toHaveTextContent('123456789');
+    expect(screen.getByTestId('mercadopago-test-mode')).toBeInTheDocument();
+    expect(screen.getByTestId('payments-active-status')).toHaveTextContent('Mercado Pago');
+    fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sí, desconectar' }));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (c) => c.url.includes('/org/mercadopago/connect') && c.init?.method === 'DELETE',
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('needs_reconnect: says donations are paused and offers to reconnect', async () => {
+    stubFetch(mpStub({ connected: false, status: 'needs_reconnect', mpUserId: '1' }));
+    renderShell({ route: '/organizacion', ...ownerSession() });
+
+    await openPaymentsTab();
+    expect(await screen.findByTestId('mercadopago-needs-reconnect')).toHaveTextContent(
+      'Tus donaciones en línea están en pausa',
+    );
+    expect(screen.getByTestId('mercadopago-connect')).toHaveTextContent('Reconectar Mercado Pago');
+  });
+
+  it('back from Mercado Pago with an account already linked elsewhere: a clear message', async () => {
+    stubFetch(mpStub({ connected: false }));
+    renderShell({
+      route: '/organizacion?tab=pagos&mercadopago=already_linked',
+      ...ownerSession(),
+    });
+    expect(
+      await screen.findByText('Esa cuenta ya está conectada a otra organización'),
+    ).toBeInTheDocument();
   });
 });

@@ -17,3 +17,10 @@ export const assignPlanSchema = z
     message: 'currentPeriodEnd is required unless the subscription is canceled.',
     path: ['currentPeriodEnd'],
   });
+
+/** ADR-PAG-003: the org starts paying a plan with Mercado Pago (monthly). */
+export const startPlanCheckoutSchema = z
+  .object({
+    plan: z.enum(['crece', 'pro']),
+  })
+  .strict();

@@ -145,3 +145,18 @@ export function parseByteRange(
   if (start >= size || start > end) return 'invalid';
   return { start, end };
 }
+
+/**
+ * Serve URL for a persisted key. Public keys go through the CDN host when one
+ * is configured (plan de escala, B2); private keys ALWAYS go to the API, where
+ * JWT + RBAC + audit run before any byte leaves.
+ */
+export function resolveServeUrl(
+  apiBaseUrl: string,
+  cdnBaseUrl: string | undefined,
+  key: string,
+): string {
+  const isPublic = key.startsWith('public/');
+  const base = isPublic && cdnBaseUrl ? cdnBaseUrl : apiBaseUrl;
+  return `${base}/storage/${isPublic ? 'public' : 'private'}?key=${encodeURIComponent(key)}`;
+}

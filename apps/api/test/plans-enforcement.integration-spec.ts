@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import { PlansService } from '../src/core/plans/plans.service';
 import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
@@ -214,12 +215,18 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
   it('uploads respect the storage quota of the plan', async () => {
     const storage = app.get<StoragePort>(STORAGE_PORT);
     const key = `public/${owner.orgId}/${randomUUID()}-foto.jpg`;
+    // Las fotos se recomprimen a WebP, así que la prueba usa un JPEG real.
+    const photo = await sharp({
+      create: { width: 64, height: 48, channels: 3, background: { r: 30, g: 120, b: 90 } },
+    })
+      .jpeg()
+      .toBuffer();
     const upload = () =>
       request(server)
         .put('/storage/upload')
         .query({ key })
         .set(auth(owner.token))
-        .attach('file', Buffer.from('fake-jpeg-bytes'), {
+        .attach('file', photo, {
           filename: 'foto.jpg',
           contentType: 'image/jpeg',
         });

@@ -57,8 +57,13 @@ const APPEND_ONLY_TABLES = [
   'campaign_evidences',
   'volunteer_certificates',
   'reviews',
+  // donation_reversals (ADR-PAG-003): append-only, triggers rechazan DELETE.
+  'donation_reversals',
   'sponsorship_payment_attempts',
   'sponsorship_payments',
+  // mercadopago_payments (ADR-PAG-003): libro de conciliación; FK RESTRICT y
+  // triggers que rechazan DELETE/TRUNCATE.
+  'mercadopago_payments',
   // legal_acceptances (prueba de autorización, Ley 1581) es append-only igual.
   'legal_acceptances',
   // org_reports (M13): append-only, mismos triggers que volunteer_certificates.
@@ -66,6 +71,13 @@ const APPEND_ONLY_TABLES = [
   // third_party_consents (M13): historial inmutable; el trigger bloquea DELETE.
   'third_party_consents',
   'org_reports',
+  // ledger_entries (libro público): inmutable, el trigger bloquea DELETE.
+  'ledger_entries',
+  // Contabilidad: libro auxiliar y cierres son de solo inserción; los enlaces
+  // compartidos referencian usuarios con RESTRICT, así que se van antes.
+  'accounting_entries',
+  'accounting_period_closes',
+  'accounting_shares',
   // F19 · decisions before their requests, events before their tickets (FKs).
   'platform_sensitive_action_decisions',
   'platform_sensitive_actions',

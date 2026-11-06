@@ -54,11 +54,13 @@ fi
 
 # 6. Ráfaga de errores de la API en los últimos 5 minutos (solo se cuentan
 #    líneas; nunca se reenvía su contenido, que puede traer datos personales).
-api_id="$(compose ps -q api 2>/dev/null || true)"
-if [ -n "$api_id" ]; then
-  errors="$(docker logs --since 5m "$api_id" 2>&1 | grep -c ' ERROR ' || true)"
-  [ "$errors" -le "$ERRORS_MAX" ] || problems+=("$errors errores de la API en 5 min")
-fi
+#    Suma todas las réplicas de la API y los workers (plan de escala).
+errors=0
+for api_id in $(compose ps -q api worker 2>/dev/null || true); do
+  count="$(docker logs --since 5m "$api_id" 2>&1 | grep -c ' ERROR ' || true)"
+  errors=$((errors + count))
+done
+[ "$errors" -le "$ERRORS_MAX" ] || problems+=("$errors errores de la API en 5 min")
 
 # 7. Vencimiento del dominio (RDAP público). Se consulta como máximo una vez al
 #    día y se guarda la fecha; si RDAP no responde se usa la última conocida.

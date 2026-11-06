@@ -14,6 +14,7 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
+import { SharePost } from '../components/share-post';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import {
@@ -52,6 +53,7 @@ export function PostDetailPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
   const [saving, setSaving] = useState(false);
+  const [togglingShare, setTogglingShare] = useState(false);
 
   const myUserId = user?.id;
   const isAuthor = !!post && !!myUserId && post.authorUserId === myUserId;
@@ -177,6 +179,32 @@ export function PostDetailPage() {
     }
   };
 
+  const toggleShareable = async (shareable: boolean): Promise<void> => {
+    if (!id || !post) return;
+    setTogglingShare(true);
+    try {
+      await client.request(`/community/posts/${encodeURIComponent(id)}/shareable`, {
+        method: 'PATCH',
+        json: { shareable },
+      });
+      setPost({ ...post, shareable });
+      toast({
+        title: shareable
+          ? 'Tu publicación ya se puede compartir'
+          : 'Tu publicación ya no es pública',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'No se pudo cambiar',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTogglingShare(false);
+    }
+  };
+
   const remove = async (): Promise<void> => {
     if (!id) return;
     try {
@@ -281,6 +309,27 @@ export function PostDetailPage() {
                   {commentCountLabel(post.commentCount)}
                 </span>
               </div>
+
+              {isAuthor && (
+                <label className="flex items-start gap-2 text-sm" htmlFor="post-detail-shareable">
+                  <input
+                    id="post-detail-shareable"
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    checked={!!post.shareable}
+                    disabled={togglingShare}
+                    onChange={(e) => void toggleShareable(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium">Pública y compartible en redes.</span>{' '}
+                    <span className="text-muted-foreground">
+                      Sin cuenta se ve tu publicación, sin comentarios y, si publicas como persona,
+                      solo con tu primer nombre.
+                    </span>
+                  </span>
+                </label>
+              )}
+              {post.shareable && <SharePost post={post} />}
 
               {isAuthor && !editing && (
                 <div className="flex gap-2">

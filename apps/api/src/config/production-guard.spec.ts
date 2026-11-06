@@ -29,6 +29,7 @@ const SAFE_PRODUCTION = {
   SIGNATURE_DRIVER: 'disabled',
   TRUST_PROXY_HOPS: '1',
   THROTTLER_STORAGE: 'redis',
+  WEB_BASE_URL: 'https://adoptafacil.co',
 };
 
 function omit(env: Record<string, string>, ...keys: string[]): Record<string, string> {
@@ -41,6 +42,22 @@ const EPAYCO = {
 };
 
 describe('production guard (R0-1)', () => {
+  it('accepts an https WEB_BASE_URL, including the CI stack on https://localhost', () => {
+    expect(() =>
+      validateEnv({ ...SAFE_PRODUCTION, WEB_BASE_URL: 'https://localhost' }),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['the dev default (http://localhost:5173)', undefined],
+    ['plain http', 'http://adoptafacil.co'],
+  ])('refuses production when WEB_BASE_URL is %s (emailed links would not open)', (_c, url) => {
+    const env = url
+      ? { ...SAFE_PRODUCTION, WEB_BASE_URL: url }
+      : omit(SAFE_PRODUCTION, 'WEB_BASE_URL');
+    expect(() => validateEnv(env)).toThrow(/WEB_BASE_URL must be the public https origin/);
+  });
+
   it('boots a production config with every simulated adapter replaced', () => {
     expect(() => validateEnv(SAFE_PRODUCTION)).not.toThrow();
   });
@@ -170,15 +187,60 @@ describe('module feature flags (R1-1)', () => {
     ).not.toThrow();
   });
 
-  it("refuses PAYMENT_DRIVER='mercadopago' in production (Mercado Pago retired 2026-10-17)", () => {
+  it("accepts PAYMENT_DRIVER='mercadopago' for money modules in production (ADR-PAG-003)", () => {
+    const mp = {
+      PAYMENT_DRIVER: 'mercadopago',
+      MERCADOPAGO_CLIENT_ID: '123',
+      MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
+      MERCADOPAGO_WEBHOOK_SECRET: 'webhook-secret-dummy',
+      API_PUBLIC_BASE_URL: 'https://api.adoptafacil.co',
+    };
     expect(() =>
       validateEnv({
         ...SAFE_PRODUCTION,
-        PAYMENT_DRIVER: 'mercadopago',
+        ...mp,
         FEATURE_PAYMENTS: 'true',
-        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-10-01',
+        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-11-06',
       }),
-    ).toThrow(/PAYMENT_DRIVER/);
+    ).not.toThrow();
+    // The OAuth code and every notification travel to the API: https only.
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        API_PUBLIC_BASE_URL: 'http://api.adoptafacil.co',
+      }),
+    ).toThrow(/API_PUBLIC_BASE_URL/);
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        MERCADOPAGO_OAUTH_REDIRECT_URI: 'http://api.adoptafacil.co/org/mercadopago/callback',
+      }),
+    ).toThrow(/MERCADOPAGO_OAUTH_REDIRECT_URI/);
+    // Mercado Pago's hosts are pinned in production (test overrides only).
+    expect(() =>
+      validateEnv({ ...SAFE_PRODUCTION, ...mp, MERCADOPAGO_BASE_URL: 'https://api.mp.test' }),
+    ).toThrow(/MERCADOPAGO_BASE_URL/);
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        MERCADOPAGO_AUTHORIZE_URL: 'https://auth.mercadopago.com.evil.co/authorization',
+      }),
+    ).toThrow(/MERCADOPAGO_AUTHORIZE_URL/);
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        ...mp,
+        MERCADOPAGO_BASE_URL: 'https://api.mercadopago.com/',
+        MERCADOPAGO_AUTHORIZE_URL: 'https://auth.mercadopago.com.ar/authorization',
+      }),
+    ).not.toThrow();
+    // Still needs the written approval reference.
+    expect(() => validateEnv({ ...SAFE_PRODUCTION, ...mp, FEATURE_PAYMENTS: 'true' })).toThrow(
+      /PAYMENTS_PRODUCTION_APPROVAL_REF/,
+    );
   });
 
   it('accepts ePayco as the real gateway for money modules in production (ADR-PAG-002)', () => {

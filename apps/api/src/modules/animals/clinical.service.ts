@@ -1,11 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
   ClinicalEvent as EventRow,
   ClinicalEventAttachment as AttachmentRow,
 } from '@prisma/client';
 import {
+  dateOrderError,
   type ClinicalAttachment,
   type ClinicalAttachmentUploadTarget,
   type ClinicalEvent,
@@ -172,6 +179,17 @@ export class ClinicalService {
       });
       if (!latest) {
         throw new NotFoundException('Clinical event not found');
+      }
+      // Editar solo una de las dos fechas no puede dejar la próxima antes del evento.
+      if (input.occurredAt || input.nextDueDate) {
+        const nextDue = input.nextDueDate ?? latest.nextDueDate?.toISOString();
+        const orderError = nextDue
+          ? dateOrderError(input.occurredAt ?? latest.occurredAt.toISOString(), nextDue, {
+              start: 'La fecha del evento clínico',
+              end: 'La próxima fecha',
+            })
+          : null;
+        if (orderError) throw new BadRequestException(orderError);
       }
 
       const next = buildNextVersion(

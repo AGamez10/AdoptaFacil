@@ -104,7 +104,18 @@ describe('OrgLegalRepresentativePage (M01, S-1)', () => {
     expect(screen.getByText('Aún no se ha registrado un contador.')).toBeInTheDocument();
     expect(screen.getByText('Aún no se ha registrado un revisor fiscal.')).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Registrar representante legal' }),
+      screen.getByRole('heading', { name: 'Registrar tu firma como representante legal' }),
+    ).toBeInTheDocument();
+    // El propietario no elige cargo: solo registra su propia firma.
+    expect(screen.queryByLabelText('Tipo de firmante')).not.toBeInTheDocument();
+    // Contador y revisor fiscal se invitan; la firma la registran ellos mismos.
+    expect(screen.getByRole('link', { name: 'Invitar al contador en Firmantes' })).toHaveAttribute(
+      'href',
+      '/organizacion/firmantes',
+    );
+    expect(screen.getByText('Qué firma pide cada documento')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Le llega un correo al revisor fiscal o al contador/),
     ).toBeInTheDocument();
   });
 
@@ -145,7 +156,7 @@ describe('OrgLegalRepresentativePage (M01, S-1)', () => {
     expect(await screen.findByText('Ana Pérez')).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', {
-        name: /Registrar representante legal|cambio de representante/,
+        name: /Registrar tu firma|cambio de tu firma/,
       }),
     ).not.toBeInTheDocument();
   });
@@ -193,22 +204,28 @@ describe('OrgLegalRepresentativePage (M01, S-1)', () => {
     expect(await screen.findByText('Representante legal registrado')).toBeInTheDocument();
   });
 
-  it('registering the accountant while a legal representative is already vigente does NOT replace it', async () => {
+  it('the linked accountant registers THEIR OWN signature from their account, without replacing the legal representative', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     stubFetch((url, init) => {
       calls.push({ url, init });
       if (init?.method === 'POST') return REGISTERED_ACCOUNTANT;
+      if (url.includes('/org/reports/readiness')) {
+        return { mySignerRole: 'accountant', signaturesEnabled: true };
+      }
       // GET on mount: legal representative already vigente — scoped to this
       // endpoint only, so unrelated shell calls (e.g. `/clinical-reminders`)
       // don't receive a legal-representative payload as their own list.
       return url.includes('/org/legal-representative') ? [REGISTERED] : [];
     });
-    renderShell({ route: '/organizacion/representante-legal', ...sessionWith([Role.Owner]) });
+    renderShell({
+      route: '/organizacion/representante-legal',
+      ...sessionWith([Role.ReadOnlyAuditor]),
+    });
 
     await screen.findByText('Ana Pérez');
-    fireEvent.change(screen.getByLabelText('Tipo de firmante'), {
-      target: { value: 'accountant' },
-    });
+    expect(
+      await screen.findByRole('heading', { name: 'Registrar tu firma como contador' }),
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Nombre completo'), {
       target: { value: 'Carlos Contador' },
     });

@@ -14,6 +14,7 @@ import {
   formatFollowUpAnswer,
   mergedFollowUpAnswers,
 } from '../model/adoptions-followup-view';
+import { dateError } from '../../../lib/date-rules';
 
 export interface AdoptionFollowUpPanelProps {
   contractId: string;
@@ -66,6 +67,11 @@ export function AdoptionFollowUpPanel({ contractId, canManage }: AdoptionFollowU
   const schedule = useCallback(async () => {
     if (!title.trim() || !dueAt) {
       toast({ title: 'Título y fecha son obligatorios', variant: 'warning' });
+      return;
+    }
+    const dueError = dateError('followupDue', new Date(dueAt).toISOString());
+    if (dueError) {
+      toast({ title: 'Fecha no válida', description: dueError, variant: 'warning' });
       return;
     }
     setBusy(true);

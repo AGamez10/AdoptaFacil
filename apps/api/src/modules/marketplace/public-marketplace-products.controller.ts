@@ -6,6 +6,7 @@ import {
 } from '@adoptafacil/contracts';
 import { PublicMarketplaceProductsService } from './public-marketplace-products.service';
 import { RequireFeature } from '../../core/features';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 function parseCategory(value?: string): ProductCategory | undefined {
   return value && (Object.values(ProductCategory) as string[]).includes(value)
@@ -25,6 +26,7 @@ export class PublicMarketplaceProductsController {
   constructor(private readonly service: PublicMarketplaceProductsService) {}
 
   @Get()
+  @PublicCache()
   list(
     @Query('category') category?: string,
     @Query('organizationId') organizationId?: string,
@@ -40,6 +42,7 @@ export class PublicMarketplaceProductsController {
   }
 
   @Get(':id')
+  @PublicCache()
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<ProductPublic> {
     const found = await this.service.get(id);
     if (!found) {

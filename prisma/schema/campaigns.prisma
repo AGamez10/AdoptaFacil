@@ -26,11 +26,13 @@ model Campaign {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  evidences          CampaignEvidence[]
+  evidences           CampaignEvidence[]
   fundingApplications CampaignFundingApplication[]
 
   @@index([organizationId])
   @@index([organizationId, status])
+  /// Listado público nacional (`public_campaigns`): activas, más recientes primero.
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "campaigns_status_created_at_idx")
   @@map("campaigns")
 }
 

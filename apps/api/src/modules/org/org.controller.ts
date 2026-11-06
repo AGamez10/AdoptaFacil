@@ -24,6 +24,7 @@ import { RolesGuard } from '../../core/rbac/roles.guard';
 import { OrgProfileService } from './org-profile.service';
 import { updateOrgProfileSchema, uploadTargetSchema } from './org.schemas';
 import { STORAGE_PORT, type StoragePort, type StoredObject } from '../../core/storage/storage.port';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 interface UploadTargetDto {
   filename: string;
@@ -81,6 +82,7 @@ export class OrgController {
   /** PUBLIC portal view by slug — no auth, only public fields, never private
    *  data and never another org's data (single-slug lookup). */
   @Get('public/organizations/:slug')
+  @PublicCache()
   async getPublic(@Param('slug') slug: string): Promise<OrganizationPublic> {
     const organization = await this.profiles.getPublicBySlug(slug);
     if (!organization) {

@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Role, VolunteerOpportunityStatus } from '@adoptafacil/contracts';
 import { renderShell } from '../../../test-utils';
 
+/** Día relativo a hoy (`AAAA-MM-DD`) para el calendario. */
+const inDays = (offset: number) =>
+  new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
 function sessionWith(roles: Role[]) {
   return {
     session: {
@@ -91,9 +95,9 @@ describe('VolunteerOpportunitiesPage (RF18)', () => {
       target: { value: 'sterilizations' },
     });
     fireEvent.change(screen.getByLabelText('Fecha de inicio'), {
-      target: { value: '2026-09-01' },
+      target: { value: inDays(10) },
     });
-    fireEvent.change(screen.getByLabelText('Fecha de fin'), { target: { value: '2026-09-30' } });
+    fireEvent.change(screen.getByLabelText('Fecha de fin'), { target: { value: inDays(40) } });
     fireEvent.change(screen.getByLabelText('Ubicación'), { target: { value: 'Refugio Patitas' } });
     fireEvent.click(screen.getByRole('button', { name: 'Publicar oportunidad' }));
 
@@ -103,6 +107,26 @@ describe('VolunteerOpportunitiesPage (RF18)', () => {
     const body = JSON.parse(String(post?.init?.body));
     expect(body.title).toBe('Jornada de esterilización');
     expect(body.appliesToStudentService).toBe(false);
+  });
+
+  it('does not publish an opportunity that already ended (same rule as the API)', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      return { items: [], total: 0, limit: 50, offset: 0 };
+    });
+    renderShell({ route: '/organizacion/voluntariado', ...sessionWith([Role.Owner]) });
+    fireEvent.click(await screen.findByRole('button', { name: 'Publicar oportunidad' }));
+    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Jornada' } });
+    fireEvent.change(screen.getByLabelText('Categoría'), { target: { value: 'sterilizations' } });
+    fireEvent.change(screen.getByLabelText('Fecha de inicio'), { target: { value: inDays(-20) } });
+    fireEvent.change(screen.getByLabelText('Fecha de fin'), { target: { value: inDays(-10) } });
+    fireEvent.change(screen.getByLabelText('Ubicación'), { target: { value: 'Refugio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Publicar oportunidad' }));
+    expect(
+      await screen.findByText('La fecha de fin no puede ser anterior a hoy.'),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.init?.method === 'POST')).toBe(false);
   });
 
   it('a person without an org role cannot publish (403, via RequireRoles)', async () => {

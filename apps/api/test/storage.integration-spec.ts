@@ -7,6 +7,7 @@ import type { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import type { Env } from '../src/config/env.validation';
 import { DiskStorageAdapter } from '../src/core/storage/disk-storage.adapter';
@@ -59,7 +60,8 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
   let docKey = '';
   let photoKey = '';
   const docBytes = Buffer.from('%PDF-1.4 fake legal document bytes');
-  const photoBytes = Buffer.from('\x89PNG fake photo bytes');
+  // Las fotos se recomprimen a WebP, así que la prueba usa una imagen real.
+  let photoBytes: Buffer = Buffer.alloc(0);
 
   const upload = (
     token: string,
@@ -82,6 +84,11 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
   };
 
   beforeAll(async () => {
+    photoBytes = await sharp({
+      create: { width: 64, height: 48, channels: 3, background: { r: 200, g: 40, b: 40 } },
+    })
+      .png()
+      .toBuffer();
     const diskConfig = {
       get: (key: string) =>
         (
@@ -126,6 +133,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .post('/animals')
       .set('Authorization', `Bearer ${ownerA.token}`)
       .send({
+        approximateAgeMonths: 12,
         name: 'Firu',
         species: 'dog',
         sex: 'male',
@@ -155,6 +163,44 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .expect(200);
     expect((res.body as Buffer).equals(docBytes)).toBe(true);
     expect(res.headers['content-type']).toContain('application/pdf');
+    // Se ve en el navegador (no se fuerza la descarga), aislado y sin caché.
+    expect(res.headers['content-disposition']).toBe('inline; filename="demanda.pdf"');
+    expect(res.headers['content-security-policy']).toContain('sandbox');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['cache-control']).toBe('private, no-store');
+  });
+
+  it('never replaces the bytes of a private document already uploaded (409)', async () => {
+    await upload(
+      ownerA.token,
+      docKey,
+      Buffer.from('%PDF-1.4 otro contenido'),
+      'demanda.pdf',
+      'application/pdf',
+    ).expect(409);
+  });
+
+  it('decides the type by content: HTML or an executable named .pdf is rejected', async () => {
+    const fresh = await request(server)
+      .post('/org/documents')
+      .set('Authorization', `Bearer ${ownerA.token}`)
+      .send({ type: 'other', filename: 'acta.pdf' })
+      .expect(201);
+    const key: string = fresh.body.upload.key;
+    await upload(
+      ownerA.token,
+      key,
+      Buffer.from('<html><script>alert(1)</script></html>'),
+      'acta.pdf',
+      'application/pdf',
+    ).expect(400);
+    await upload(
+      ownerA.token,
+      key,
+      Buffer.from('MZ\x90\0', 'latin1'),
+      'acta.pdf',
+      'application/pdf',
+    ).expect(400);
   });
 
   it('lets a PlatformAdmin download the private document, but blocks another org (403) and anonymous (401)', async () => {
@@ -186,7 +232,11 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .buffer()
       .parse(binaryParser)
       .expect(200);
-    expect((res.body as Buffer).equals(photoBytes)).toBe(true);
+    const body = res.body as Buffer;
+    expect(res.headers['content-type']).toMatch(/^image\//);
+    // Plan de escala (B2): la CDN puede guardarla; la clave no cambia de contenido.
+    expect(res.headers['cache-control']).toBe('public, max-age=2592000, immutable');
+    expect((await sharp(body).metadata()).width).toBe(64);
   });
 
   it('does not serve a private document through the public endpoint (404)', async () => {
@@ -206,6 +256,14 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
     await upload(ownerB.token, docKey, docBytes, 'demanda.pdf', 'application/pdf').expect(403);
     // Disallowed content type → rejected.
     await upload(ownerA.token, photoKey, Buffer.from('hi'), 'note.txt', 'text/plain').expect(400);
+    // Bytes declared as an image that are not one → rejected (la foto no se puede procesar).
+    await upload(
+      ownerA.token,
+      photoKey,
+      Buffer.from('not an image'),
+      'fake.png',
+      'image/png',
+    ).expect(400);
   });
 
   it('accepts a public video (Historias cover), serves byte ranges, and never a video to a private key', async () => {
@@ -215,7 +273,11 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .send({ filename: 'portada.mp4', contentType: 'video/mp4' })
       .expect(201);
     const videoKey: string = video.body.key;
-    const videoBytes = Buffer.from(Array.from({ length: 100 }, (_, i) => i));
+    // Cabecera `ftyp` real: el tipo se decide por los bytes.
+    const videoBytes = Buffer.concat([
+      Buffer.from('\0\0\0\x18ftypisom', 'latin1'),
+      Buffer.from(Array.from({ length: 88 }, (_, i) => i)),
+    ]);
     await upload(ownerA.token, videoKey, videoBytes, 'portada.mp4', 'video/mp4').expect(200);
 
     const full = await request(server)
@@ -232,7 +294,7 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       .buffer()
       .parse(binaryParser)
       .expect(206);
-    expect(part.headers['content-range']).toBe('bytes 10-19/100');
+    expect(part.headers['content-range']).toBe(`bytes 10-19/${videoBytes.length}`);
     expect((part.body as Buffer).equals(videoBytes.subarray(10, 20))).toBe(true);
 
     await request(server)

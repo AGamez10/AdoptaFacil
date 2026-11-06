@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Controller,
   ForbiddenException,
   Get,
@@ -32,6 +33,16 @@ import {
 import { enforcePlatformMfa } from '../rbac/platform-mfa.policy';
 import { STORAGE_PORT, type StoragePort } from './storage.port';
 import { isAllowedUpload, parseByteRange, parseStorageKey } from './storage-keys';
+import { optimizeImage } from './image-optimizer';
+import { sniffContentType } from './file-sniff';
+import { setServeHeaders } from './serve-headers';
+
+/**
+ * Tope DURO del cuerpo multipart, antes de que multer lo termine de leer en
+ * memoria. `STORAGE_MAX_FILE_MB` (máx. 100) se valida después, con el mensaje
+ * claro; sin este tope un archivo enorme se cargaba entero en RAM primero.
+ */
+const MULTIPART_HARD_LIMIT_BYTES = 100 * 1024 * 1024;
 
 /** Minimal shape of a multer memory-storage file (no @types/multer installed). */
 interface UploadedFileLike {
@@ -78,7 +89,9 @@ export class StorageController {
 
   @Put('upload')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MULTIPART_HARD_LIMIT_BYTES, files: 1 } }),
+  )
   async upload(
     @CurrentUser() user: RequestUser,
     @Query('key') key: string,
@@ -98,13 +111,32 @@ export class StorageController {
     if (file.size > this.maxBytes) {
       throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);
     }
-    if (!isAllowedUpload(file.mimetype, parsed.visibility)) {
-      throw new BadRequestException(`Unsupported content type: ${file.mimetype}`);
+    // El tipo se decide por el CONTENIDO, no por lo que declara el navegador ni
+    // por la extensión: un "rut.pdf" que en realidad es HTML o un ejecutable no
+    // entra, y lo guardado siempre se sirve con su tipo real.
+    const realType = sniffContentType(file.buffer);
+    if (!realType || !isAllowedUpload(realType, parsed.visibility)) {
+      throw new BadRequestException(
+        'El archivo no es un PDF ni una imagen válida (JPG, PNG, WebP o GIF). Revisa que no esté dañado y vuelve a intentarlo.',
+      );
+    }
+    // Un documento privado (legal o clínico) se escribe UNA sola vez: nadie
+    // cambia el archivo que el equipo ya revisó. Una corrección es otra versión.
+    if (parsed.visibility === 'private' && (await this.storage.readObject(key))) {
+      throw new ConflictException(
+        'Este archivo ya se subió y no se puede reemplazar. Sube una versión nueva.',
+      );
+    }
+
+    // Las fotos se recomprimen a WebP antes de guardar; el original ya pasó el límite.
+    const optimized = await optimizeImage(file.buffer, realType);
+    if (!optimized) {
+      throw new BadRequestException('La imagen no se pudo procesar');
     }
 
     // Cuota de espacio del plan (solo con los planes encendidos).
-    await this.plans.assertStorageAvailable(parsed.organizationId, file.size);
-    await this.storage.saveObject(key, file.buffer, file.mimetype);
+    await this.plans.assertStorageAvailable(parsed.organizationId, optimized.buffer.length);
+    await this.storage.saveObject(key, optimized.buffer, optimized.contentType);
     await this.audit.record({
       organizationId: parsed.organizationId,
       actorUserId: user.id,
@@ -130,7 +162,12 @@ export class StorageController {
     if (!object) {
       throw new NotFoundException();
     }
-    res.setHeader('Content-Type', object.contentType ?? 'application/octet-stream');
+    setServeHeaders(res, key, object.data);
+    // Plan de escala (B2): la clave lleva un uuid nuevo por archivo, así que su
+    // contenido no cambia; la CDN y el navegador la guardan 30 días y la API
+    // solo atiende los fallos de caché. 30 días (no un año) para que una foto
+    // borrada deje de circular pronto aunque nadie purgue la CDN.
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     // Rangos de bytes: Safari en iPhone no reproduce un video sin ellos.
     res.setHeader('Accept-Ranges', 'bytes');
     const size = object.data.length;
@@ -191,7 +228,9 @@ export class StorageController {
       entityId: key,
       metadata: { visibility: 'private' },
     });
-    res.setHeader('Content-Type', object.contentType ?? 'application/octet-stream');
+    setServeHeaders(res, key, object.data);
+    // Un documento legal no se queda en cachés del navegador ni de intermediarios.
+    res.setHeader('Cache-Control', 'private, no-store');
     res.send(object.data);
   }
 }

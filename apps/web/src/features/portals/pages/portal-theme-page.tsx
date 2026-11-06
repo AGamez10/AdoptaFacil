@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   OrganizationStatus,
   Role,
@@ -231,6 +232,10 @@ export function PortalThemePage() {
   const { hasAnyRole } = useSession();
   const canEdit = hasAnyRole(Role.Owner, Role.Administrator);
   const { toast } = useToast();
+  // `?plantilla=<id>` (botón "Probar en mi portal" de la vista de ejemplo):
+  // se preselecciona en el editor, sin guardar nada hasta que la organización lo decida.
+  const [searchParams] = useSearchParams();
+  const tryTemplate = searchParams.get('plantilla');
 
   const [form, setForm] = useState<FormState>({});
   const [logoPosition, setLogoPosition] = useState<PortalLogoPosition>('left');
@@ -274,10 +279,22 @@ export function PortalThemePage() {
         setForm(safePortalTheme(config.tokens) as FormState);
         setLogoPosition(config.logoPosition ?? 'left');
         setSocialNavPosition(config.socialNavPosition ?? 'right');
-        setTemplate(safeTemplate(config.template));
+        const saved = safeTemplate(config.template);
+        const tried =
+          tryTemplate && safeTemplate(tryTemplate) === tryTemplate
+            ? safeTemplate(tryTemplate)
+            : saved;
+        setTemplate(tried);
         setTemplateOptions(
-          resolveTemplateOptions(safeTemplate(config.template), config.templateOptions),
+          resolveTemplateOptions(tried, tried === saved ? config.templateOptions : {}),
         );
+        if (tried !== saved) {
+          setTemplateTouched(true);
+          toast({
+            title: 'Estás probando otra plantilla',
+            description: 'Tu portal no cambia hasta que pulses "Guardar".',
+          });
+        }
         setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
         setPremiumAvailable(config.premiumDesignsAvailable !== false);
         setLockedTemplate(config.lockedTemplate);
@@ -296,6 +313,7 @@ export function PortalThemePage() {
     return () => {
       active = false;
     };
+    // `toast` y `tryTemplate` solo se leen al cargar.
   }, [client, canEdit]);
 
   const previewTokens = useMemo(() => tokensFromForm(form), [form]);
@@ -455,7 +473,7 @@ export function PortalThemePage() {
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
           <div className="space-y-6">
             <TemplateUpsell premiumAvailable={premiumAvailable} lockedTemplate={lockedTemplate} />
 
@@ -547,7 +565,30 @@ export function PortalThemePage() {
             <div className="flex justify-end">{saveButton}</div>
           </div>
 
-          <div className="lg:sticky lg:top-4 lg:self-start">
+          <div className="order-first min-w-0 lg:order-none lg:sticky lg:top-4 lg:self-start">
+            {/* Móvil: cambio de plantilla inmediato, arriba de la vista previa. */}
+            <div
+              className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden"
+              role="group"
+              aria-label="Cambiar plantilla"
+              data-testid="template-quick-switch"
+            >
+              {PORTAL_TEMPLATES.map((info) => (
+                <button
+                  key={info.id}
+                  type="button"
+                  aria-pressed={template === info.id}
+                  onClick={() => chooseTemplate(info.id)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                    template === info.id
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'bg-background text-foreground'
+                  }`}
+                >
+                  {info.name}
+                </button>
+              ))}
+            </div>
             <Card>
               <CardHeader>
                 <CardTitle>Vista previa en vivo</CardTitle>

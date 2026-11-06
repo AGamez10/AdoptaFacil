@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
+import sharp from 'sharp';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
@@ -266,5 +268,170 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       .get(`/marketplace/products/${productId}`)
       .set('Authorization', `Bearer ${orgB.token}`)
       .expect(404);
+  });
+  describe('las fotos del producto (hasta 2, subidas en un paso)', () => {
+    const photo = (width: number, height: number) =>
+      sharp({ create: { width, height, channels: 3, background: { r: 200, g: 150, b: 90 } } })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+
+    const putImage = (token: string, id: string, file: Buffer, name = 'foto.jpg') =>
+      request(server)
+        .put(`/marketplace/products/${id}/image`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', file, name);
+
+    const addPhoto = (token: string, id: string, file: Buffer, name = 'foto.jpg') =>
+      request(server)
+        .post(`/marketplace/products/${id}/images/file`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', file, name);
+
+    const replacePhoto = (
+      token: string,
+      id: string,
+      imageId: string,
+      file: Buffer,
+      name = 'foto.jpg',
+    ) =>
+      request(server)
+        .put(`/marketplace/products/${id}/images/${imageId}/file`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', file, name);
+
+    const rowsOf = (productId: string) =>
+      admin.productImage.findMany({ where: { productId }, orderBy: { order: 'asc' } });
+
+    let photoProductId = '';
+
+    beforeAll(async () => {
+      const res = await createProduct(org.token, { name: `Collar ${randomUUID()}` }).expect(201);
+      photoProductId = res.body.id;
+    });
+
+    it('RBAC: a ReadOnlyAuditor cannot upload a photo (403)', async () => {
+      const auditor = await actorWithRoles('photo-auditor', ['read_only_auditor']);
+      await putImage(auditor.token, photoProductId, await photo(50, 50)).expect(403);
+      await addPhoto(auditor.token, photoProductId, await photo(50, 50)).expect(403);
+    });
+
+    it('stores the first photo recompressed to a light WebP and shows it publicly', async () => {
+      const res = await addPhoto(org.token, photoProductId, await photo(3000, 2000)).expect(201);
+      expect(res.body.images).toHaveLength(1);
+      expect(res.body.images[0]).toMatchObject({ order: 0 });
+
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const [row] = await rowsOf(photoProductId);
+      const stored = await storage.readObject(row.storageRef);
+      expect(stored).not.toBeNull();
+      const meta = await sharp(stored!.data).metadata();
+      expect(meta.format).toBe('webp');
+      expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(1200);
+      expect(stored!.data.length).toBeLessThanOrEqual(250 * 1024);
+
+      const publicDetail = await request(server)
+        .get(`/public/marketplace/products/${photoProductId}`)
+        .expect(200);
+      expect(publicDetail.body.images).toHaveLength(1);
+    });
+
+    it('accepts a second photo, shows both in order, and refuses a third (409)', async () => {
+      const res = await addPhoto(org.token, photoProductId, await photo(900, 600)).expect(201);
+      expect(res.body.images.map((i: { order: number }) => i.order)).toEqual([0, 1]);
+
+      const publicDetail = await request(server)
+        .get(`/public/marketplace/products/${photoProductId}`)
+        .expect(200);
+      expect(publicDetail.body.images).toHaveLength(2);
+
+      const third = await addPhoto(org.token, photoProductId, await photo(500, 500)).expect(409);
+      expect(third.body.message).toContain('hasta 2 fotos');
+      expect(await rowsOf(photoProductId)).toHaveLength(2);
+    });
+
+    it('the old two-step endpoint also respects the cap of 2 (409)', async () => {
+      await request(server)
+        .post(`/marketplace/products/${photoProductId}/images`)
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({ filename: 'otra.jpg', contentType: 'image/jpeg' })
+        .expect(409);
+    });
+
+    it('concurrent uploads never leave more than 2 photos', async () => {
+      const created = await createProduct(org.token, { name: `Cama ${randomUUID()}` }).expect(201);
+      const file = await photo(400, 400);
+      const results = await Promise.all(
+        [1, 2, 3].map(() => addPhoto(org.token, created.body.id, file)),
+      );
+      expect(results.filter((r) => r.status === 201)).toHaveLength(2);
+      expect(results.filter((r) => r.status === 409)).toHaveLength(1);
+      expect(await rowsOf(created.body.id)).toHaveLength(2);
+    });
+
+    it('replacing a photo keeps its place and frees the old bytes', async () => {
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const [first, second] = await rowsOf(photoProductId);
+
+      const res = await replacePhoto(
+        org.token,
+        photoProductId,
+        second.id,
+        await photo(800, 800),
+      ).expect(200);
+      expect(res.body.images).toHaveLength(2);
+      const rows = await rowsOf(photoProductId);
+      expect(rows.map((r) => r.order)).toEqual([0, 1]);
+      expect(rows[0].id).toBe(first.id);
+      expect(rows[0].storageRef).toBe(first.storageRef);
+      expect(rows[1].storageRef).not.toBe(second.storageRef);
+      expect(await storage.readObject(second.storageRef)).toBeNull();
+      expect(await storage.readObject(rows[1].storageRef)).not.toBeNull();
+    });
+
+    it('PUT /image replaces the main photo', async () => {
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const [first] = await rowsOf(photoProductId);
+      const res = await putImage(org.token, photoProductId, await photo(700, 700)).expect(200);
+      expect(res.body.images).toHaveLength(2);
+      const [after] = await rowsOf(photoProductId);
+      expect(after.order).toBe(0);
+      expect(after.storageRef).not.toBe(first.storageRef);
+      expect(await storage.readObject(first.storageRef)).toBeNull();
+    });
+
+    it('rejects a file that is not a JPG, PNG or WebP photo, in Spanish', async () => {
+      const res = await addPhoto(
+        org.token,
+        photoProductId,
+        Buffer.from('%PDF-1.4 no es una foto'),
+        'factura.jpg',
+      ).expect(400);
+      expect(res.body.message).toBe('La foto debe ser JPG, PNG o WebP.');
+    });
+
+    it('another organization cannot touch the photos of this product (404)', async () => {
+      const [row] = await rowsOf(photoProductId);
+      await putImage(orgB.token, photoProductId, await photo(50, 50)).expect(404);
+      await addPhoto(orgB.token, photoProductId, await photo(50, 50)).expect(404);
+      await replacePhoto(orgB.token, photoProductId, row.id, await photo(50, 50)).expect(404);
+    });
+
+    it('removing the main photo deletes its bytes; the other becomes the main and stays first', async () => {
+      const storage = app.get<StoragePort>(STORAGE_PORT);
+      const [first, second] = await rowsOf(photoProductId);
+      await request(server)
+        .delete(`/marketplace/products/${photoProductId}/images/${first.id}`)
+        .set('Authorization', `Bearer ${org.token}`)
+        .expect(204);
+      expect(await storage.readObject(first.storageRef)).toBeNull();
+      const rows = await rowsOf(photoProductId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(second.id);
+
+      // A new photo goes AFTER the remaining one: it never takes over as the main photo.
+      const res = await addPhoto(org.token, photoProductId, await photo(600, 400)).expect(201);
+      expect(res.body.images[0].id).toBe(second.id);
+      expect(res.body.images).toHaveLength(2);
+    });
   });
 });

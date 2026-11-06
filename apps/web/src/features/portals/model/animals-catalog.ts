@@ -6,6 +6,7 @@ import type {
   AnimalSummary,
   ComputedAge,
 } from '@adoptafacil/contracts';
+import { publicAnimalPath } from '../../../seo/page-meta.js';
 
 /** Etiquetas legibles (es-CO) de los campos PÚBLICOS del animal. */
 export const SPECIES_LABELS: Record<AnimalSpecies, string> = {
@@ -93,9 +94,13 @@ export function buildSponsorHref(
   return `/apadrinar?${params.toString()}`;
 }
 
-/** Enlace al detalle PÚBLICO del animal dentro del portal de la organización. */
-export function publicAnimalDetailHref(slug: string, animalId: string): string {
-  return `/o/${encodeURIComponent(slug)}/animales/${encodeURIComponent(animalId)}`;
+/** Enlace al detalle PÚBLICO del animal dentro del portal de la organización:
+ *  `/o/<org>/animales/<nombre>-<código público>` (el id solo si aún no hay código). */
+export function publicAnimalDetailHref(
+  slug: string,
+  animal: Pick<AnimalSummary, 'id' | 'name' | 'publicCode'>,
+): string {
+  return publicAnimalPath(slug, animal);
 }
 
 /**

@@ -57,6 +57,9 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { ownerPreviewOrganization } from '../model/owner-preview';
 import { PortalPreviewContext } from '../model/portal-preview-context';
+import { TemplatePortal } from '../templates/template-portal';
+import { isEngineTemplate } from '../templates/registry';
+import { useGuideContext } from '../../guide/model/guide-context';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -326,6 +329,22 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // documentos revisados se muestran como sellos en el hero.
   useDocumentTitle(view?.profile.organization.name);
 
+  // El botón de Ayuda se vuelve discreto y su WhatsApp lleva a ESTA organización.
+  const guideOrg = state === 'ready' ? view?.profile.organization : undefined;
+  useGuideContext(
+    guideOrg
+      ? {
+          kind: 'portal',
+          organization: {
+            name: guideOrg.name,
+            whatsapp: guideOrg.whatsapp,
+            contactEmail: guideOrg.contactEmail,
+          },
+          ownerPreview,
+        }
+      : null,
+  );
+
   // Secciones agregadas AÚN sin módulo dueño (transparencia) nacen en
   // status:'placeholder' — ocultarlas evita el "Próximamente" vacío frente al
   // cliente (pulido visual T-D02). 'pets', 'products' (F-MKT-PORTAL-1),
@@ -368,7 +387,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     { label: payments ? 'Cómo ayudar' : 'Cómo adoptar', href: '#portal-help-cta' },
     ...(aboutUs ? [{ label: 'Nosotros', href: '#portal-about' }] : []),
     ...(reputation ? [{ label: 'Reseñas', href: '#portal-reviews' }] : []),
-    ...(payments ? [{ label: 'Transparencia', href: '#portal-section-public-ledger' }] : []),
+    // RF14: el libro público se ve siempre (la transparencia es un pilar).
+    { label: 'Transparencia', href: '#portal-section-public-ledger' },
     ...(hasContactInfo ? [{ label: 'Contacto', href: '#portal-contact-info' }] : []),
   ];
 
@@ -390,7 +410,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       }
     : null;
 
-  return (
+  const classic = (
     <PortalPreviewContext.Provider value={previewClient}>
       <div
         className={templateStyles.page}
@@ -550,11 +570,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 </section>
               )}
 
-              {payments && (
-                <div style={{ scrollMarginTop: '5rem' }}>
-                  <PortalPublicLedgerSection />
-                </div>
-              )}
+              <PortalPublicLedgerSection slug={slug as string} />
             </div>
           )}
         </main>
@@ -578,4 +594,19 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       </div>
     </PortalPreviewContext.Provider>
   );
+  // Plantillas del motor (14 gratuitas nuevas): pintan el mismo contenido con su
+  // propio diseño. Si la plantilla no carga o los datos fallan, se muestra el
+  // portal clásico de arriba: nunca queda un portal caído por el diseño elegido.
+  if (state === 'ready' && view && slug && isEngineTemplate(layout.template)) {
+    return (
+      <TemplatePortal
+        template={layout.template}
+        slug={slug}
+        organization={view.profile.organization}
+        themeStyle={themeStyle}
+        fallback={classic}
+      />
+    );
+  }
+  return classic;
 }

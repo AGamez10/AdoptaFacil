@@ -149,4 +149,46 @@ describe('OrgFormalizationPage', () => {
     expect(await screen.findByText('Reintento iniciado')).toBeInTheDocument();
     expect(await screen.findByText('Reintentando verificación DIAN')).toBeInTheDocument();
   });
+
+  it('lists what is missing for the next state with a direct link to upload each document', async () => {
+    stubFetch((url) => {
+      if (url.includes('/org/formalization/history')) return [];
+      if (url.includes('/org/formalization/capabilities')) return {};
+      if (url.includes('/org/formalization')) {
+        return { state: FormalizationState.EnProceso, rteVigente: false };
+      }
+      if (url.includes('/org/documents')) {
+        return [
+          {
+            id: 'd1',
+            organizationId: 'org-1',
+            type: 'rut',
+            storageRef: 'private/org-1/x-rut.pdf',
+            version: 1,
+            status: 'pending',
+            createdAt: '2026-10-01T00:00:00.000Z',
+            updatedAt: '2026-10-01T00:00:00.000Z',
+          },
+        ];
+      }
+      return {};
+    });
+    renderShell({ route: '/organizacion/formalizacion', ...ownerSession() });
+
+    const box = await screen.findByTestId('formalization-requirements');
+    expect(within(box).getByText('Lo que te falta para Formalizada')).toBeInTheDocument();
+    expect(box).toHaveTextContent('RUT · Subido, esperando revisión del equipo');
+    expect(within(box).getByRole('link', { name: 'Ver en Documentos' })).toHaveAttribute(
+      'href',
+      '/organizacion/documentos',
+    );
+    expect(
+      within(box).getByRole('link', {
+        name: 'Subir Certificado de existencia y representación legal',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/organizacion/documentos?subir=existence_representation_certificate',
+    );
+  });
 });

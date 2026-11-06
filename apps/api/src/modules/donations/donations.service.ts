@@ -7,13 +7,17 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
+  CampaignStatus,
   computeBreakdown,
   DIRECT_COLLECTION_RATES,
   type EpaycoCollectorCredentials,
+  type MercadoPagoCollectorCredentials,
   type CreateDonationInput,
   type Donation,
   type DonationCertificate,
@@ -51,6 +55,8 @@ import {
   loadEpaycoKeysEncryptionKey,
 } from '../payments/epayco-keys-crypto';
 import { loadEpaycoCollector } from '../payments/epayco-connect.service';
+import { MercadoPagoConnectionsService } from '../payments/mercadopago-connections.service';
+import { mercadoPagoNotificationType } from '../../core/payments/mercadopago-payment.adapter';
 
 /** Reference/invoice shape we accept from a gateway body before querying. */
 const GATEWAY_REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -145,6 +151,8 @@ export class DonationsService {
   /** ADR-PAG-002: ePayco driver ⇒ the collector is the org's ePayco account. */
   private readonly epayco: boolean;
   private readonly epaycoTest: boolean;
+  /** ADR-PAG-003: Mercado Pago driver ⇒ the collector is the org's OAuth grant. */
+  private readonly mercadopago: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -158,6 +166,7 @@ export class DonationsService {
     private readonly legal: LegalService,
     @Inject(EPAYCO_KEYS_ENCRYPTION_KEY)
     private readonly epaycoKey: Buffer = loadEpaycoKeysEncryptionKey(),
+    @Optional() private readonly mercadopagoConnections?: MercadoPagoConnectionsService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.certificatesEnabled =
@@ -165,6 +174,7 @@ export class DonationsService {
     const driver = config.get('PAYMENT_DRIVER', { infer: true });
     this.requiresCollector = driver !== 'fake';
     this.epayco = driver === 'epayco';
+    this.mercadopago = driver === 'mercadopago';
     this.epaycoTest = config.get('EPAYCO_TEST', { infer: true }) === true;
   }
 
@@ -236,6 +246,8 @@ export class DonationsService {
       return this.fromRow(existing);
     }
 
+    await this.assertConceptOfOrganization(input.organizationId, concept);
+
     // ADR-PAG-001 (cobro directo, sin custodia): the charge is created with
     // the BENEFICIARY org's own connected account, so the money lands in the
     // organization's account the moment it is approved. Without a connected
@@ -248,7 +260,13 @@ export class DonationsService {
     const epaycoCollector = this.epayco
       ? await this.resolveEpaycoCollector(input.organizationId)
       : undefined;
-    if (this.requiresCollector && !epaycoCollector) {
+    // ADR-PAG-003: Mercado Pago with the org's own OAuth grant (renewed
+    // first if it is about to expire). A connection that needs reconnecting
+    // counts as "not connected": no donation, never a platform fallback.
+    const mercadopagoCollector = this.mercadopago
+      ? await this.resolveMercadoPagoCollector(input.organizationId)
+      : undefined;
+    if (this.requiresCollector && !epaycoCollector && !mercadopagoCollector) {
       throw new ConflictException(
         'Esta organización todavía no conectó su cuenta para recibir donaciones.',
       );
@@ -273,11 +291,12 @@ export class DonationsService {
       payer: input.payer,
       idempotencyKey: input.idempotencyKey,
       epaycoCollector,
+      mercadopagoCollector,
     });
     // ePayco: the adapter is the one that knows the collection mode (a
     // gateway split could carry an approved platform fee), so what it charged
     // is what we persist; for every other driver the local math is identical.
-    const persistedBreakdown = this.epayco ? collection.breakdown : breakdown;
+    const persistedBreakdown = this.epayco || this.mercadopago ? collection.breakdown : breakdown;
 
     let rows: DonationRow[];
     try {
@@ -446,7 +465,240 @@ export class DonationsService {
     if (!(await this.matchesExpectedPayment(event, notifiedOrgId, epaycoCollector?.custId))) {
       return { applied: false, status: null, donationId: null };
     }
+    return this.settle(event);
+  }
 
+  /**
+   * ADR-PAG-003 — Mercado Pago notification for a payment of ONE organization
+   * (`/donations/webhook/mercadopago/:organizationId`, the URL each
+   * preference carries). Only `payment` notifications matter; anything else
+   * is acknowledged without effect. The org id in the path only picks whose
+   * grant reads the payment back: a forged one makes the read-back (and the
+   * collector check) fail, so it never settles anything.
+   */
+  async applyMercadoPagoWebhook(
+    organizationId: string,
+    payload: unknown,
+    signature: string,
+    context: WebhookVerificationContext = {},
+  ): Promise<WebhookOutcome> {
+    const noop: WebhookOutcome = { applied: false, status: null, donationId: null };
+    if (!this.mercadopago) {
+      throw new NotFoundException();
+    }
+    const type = mercadoPagoNotificationType(payload, context.query);
+    if (type !== 'payment') {
+      return noop;
+    }
+    const mercadopagoCollector = await this.resolveMercadoPagoCollector(organizationId);
+
+    let event: NormalizedWebhookEvent;
+    try {
+      event = await this.payment.verifyAndNormalizeWebhook(payload, signature, {
+        ...context,
+        mercadopagoCollector,
+      });
+    } catch (error) {
+      this.logger.warn(`Webhook de Mercado Pago rechazado: ${(error as Error).message}`);
+      throw new ForbiddenException('Webhook verification failed.');
+    }
+
+    // Reconciliation record: every verified read-back is kept, even one that
+    // does not match the donation (that is exactly what reconciliation must see).
+    await this.recordMercadoPagoPayment(organizationId, event);
+
+    if (!(await this.matchesExpectedPayment(event, organizationId, mercadopagoCollector?.userId))) {
+      return noop;
+    }
+    if (event.status === 'voided') {
+      await this.recordGatewayReversal(event);
+      return noop;
+    }
+    return this.settle(event);
+  }
+
+  /**
+   * Monthly reconciliation (sección 2A): re-read with the org's OWN token
+   * every payment of its Mercado Pago account in [from, to) that AdoptaFácil
+   * originated, and apply each one exactly like a verified notification
+   * (record for reconciliation; settle a pending donation Mercado Pago already
+   * approved — e.g. a lost notification —; audit a reversal). Read-only on
+   * Mercado Pago: nothing is charged, refunded or moved.
+   */
+  async rereadMercadoPagoPayments(
+    organizationId: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ fetched: number; settled: number }> {
+    const adapter = this.payment as PaymentPort & {
+      searchOrganizationPayments?: (
+        collector: MercadoPagoCollectorCredentials,
+        from: Date,
+        to: Date,
+      ) => Promise<NormalizedWebhookEvent[]>;
+    };
+    if (!this.mercadopago || typeof adapter.searchOrganizationPayments !== 'function') {
+      throw new ConflictException('Mercado Pago no está habilitado como pasarela.');
+    }
+    const collector = await this.resolveMercadoPagoCollector(organizationId);
+    if (!collector) {
+      throw new ConflictException(
+        'Conecta la cuenta de Mercado Pago de la organización para conciliar contra ella.',
+      );
+    }
+    let events: NormalizedWebhookEvent[];
+    try {
+      events = await adapter.searchOrganizationPayments(collector, from, to);
+    } catch (error) {
+      this.logger.warn(`Relectura de Mercado Pago falló: ${(error as Error).message}`);
+      throw new ServiceUnavailableException(
+        'Mercado Pago no respondió. Intenta de nuevo en unos minutos.',
+      );
+    }
+    let settled = 0;
+    for (const event of events) {
+      await this.recordMercadoPagoPayment(organizationId, event);
+      if (!(await this.matchesExpectedPayment(event, organizationId, collector.userId))) continue;
+      if (event.status === 'voided') {
+        await this.recordGatewayReversal(event);
+        continue;
+      }
+      const outcome = await this.settle(event);
+      if (outcome.applied && outcome.status === 'approved') settled++;
+    }
+    return { fetched: events.length, settled };
+  }
+
+  /**
+   * Upsert the per-account reconciliation row (`mercadopago_payments`, RLS)
+   * from the READ-BACK snapshot. Best-effort: a failure here is logged and
+   * never blocks the settlement (the notification will repeat anyway).
+   */
+  private async recordMercadoPagoPayment(
+    organizationId: string,
+    event: NormalizedWebhookEvent,
+  ): Promise<void> {
+    const p = event.mercadopagoPayment;
+    if (!p) return;
+    try {
+      const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+        SELECT * FROM donation_by_collection_id(${p.externalReference})
+      `);
+      const donationId = rows[0] && rows[0].organization_id === organizationId ? rows[0].id : null;
+      const toDate = (iso: string | null) => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? null : d;
+      };
+      const data = {
+        collectorId: p.collectorId,
+        externalReference: p.externalReference,
+        donationId,
+        status: p.status,
+        statusDetail: p.statusDetail,
+        currency: p.currency,
+        transactionAmount: new Prisma.Decimal(p.transactionAmount),
+        netReceivedAmount: p.netReceivedAmount ? new Prisma.Decimal(p.netReceivedAmount) : null,
+        transactionAmountRefunded: p.transactionAmountRefunded
+          ? new Prisma.Decimal(p.transactionAmountRefunded)
+          : null,
+        feeDetails: p.feeDetails as Prisma.InputJsonValue,
+        refunds: p.refunds as Prisma.InputJsonValue,
+        paymentTypeId: p.paymentTypeId,
+        paymentMethodId: p.paymentMethodId,
+        dateApproved: toDate(p.dateApproved),
+        moneyReleaseDate: toDate(p.moneyReleaseDate),
+      };
+      await this.prisma.withOrgContext(organizationId, (tx) =>
+        tx.mercadoPagoPayment.upsert({
+          where: { organizationId_mpPaymentId: { organizationId, mpPaymentId: p.paymentId } },
+          create: { organizationId, mpPaymentId: p.paymentId, ...data },
+          update: data,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo guardar el pago ${p.paymentId} para conciliación: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * A refund, cancellation or chargeback reported by the gateway. The
+   * donation and its receipt are never rewritten (append-only history);
+   * the reversal is AUDITED on the org's log so reconciliation and the org
+   * see it. Idempotent per gateway event (audit carries the dedup key).
+   */
+  private async recordGatewayReversal(event: NormalizedWebhookEvent): Promise<void> {
+    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+      SELECT * FROM donation_by_collection_id(${event.collectionId})
+    `);
+    const donation = rows[0];
+    if (!donation) return;
+    const gatewayStatus = event.mercadopagoPayment?.status;
+    const reason =
+      gatewayStatus === 'refunded' ||
+      gatewayStatus === 'charged_back' ||
+      gatewayStatus === 'cancelled'
+        ? gatewayStatus
+        : 'voided';
+    await this.prisma.withOrgContext(donation.organization_id, async (tx) => {
+      // One reversal per donation (UNIQUE donation_id): a repeated
+      // notification records and audits nothing new.
+      const { count } = await tx.donationReversal.createMany({
+        data: [
+          {
+            organizationId: donation.organization_id,
+            donationId: donation.id,
+            reason,
+            dedupKey: event.dedupKey,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (count === 0) return;
+      await this.audit.recordWithTx(tx, {
+        organizationId: donation.organization_id,
+        actorUserId: null,
+        action: 'donation.reversed_at_gateway',
+        entityType: 'donation',
+        entityId: donation.id,
+        metadata: {
+          collectionId: event.collectionId,
+          dedupKey: event.dedupKey,
+          previousStatus: donation.status,
+          reason,
+        },
+      });
+      // The donation and its receipt stay as the record of what happened,
+      // but a tax certificate for money that went back is no longer valid.
+      const certificate = await tx.donationCertificate.findUnique({
+        where: { donationId: donation.id },
+        select: { id: true, code: true },
+      });
+      if (certificate) {
+        await this.audit.recordWithTx(tx, {
+          organizationId: donation.organization_id,
+          actorUserId: null,
+          action: 'donation.certificate_revoked',
+          entityType: 'donation_certificate',
+          entityId: certificate.id,
+          metadata: { donationId: donation.id, code: certificate.code, reason },
+        });
+      }
+    });
+  }
+
+  /** When the gateway reversed this donation (refund/chargeback), or null. */
+  private async reversedAt(donationId: string): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ at: Date | null }>>(Prisma.sql`
+      SELECT donation_reversed_at(${donationId}::uuid) AS at
+    `);
+    return rows[0]?.at ? rows[0].at.toISOString() : null;
+  }
+
+  /** Settle a verified, matching event (shared by every gateway). */
+  private async settle(event: NormalizedWebhookEvent): Promise<WebhookOutcome> {
     const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
       SELECT * FROM apply_donation_webhook(
         ${event.collectionId},
@@ -677,7 +929,10 @@ export class DonationsService {
       SELECT * FROM donation_certificate_by_donation(${row.id}::uuid)
     `);
     const certificate = certificateRows[0]
-      ? this.fromAccessCertificateRow(certificateRows[0])
+      ? {
+          ...this.fromAccessCertificateRow(certificateRows[0]),
+          revokedAt: await this.reversedAt(row.id),
+        }
       : undefined;
 
     return { donation, receipt, certificate };
@@ -699,6 +954,37 @@ export class DonationsService {
       issuedAt: row.issued_at.toISOString(),
       contentHash: row.content_hash,
     };
+  }
+
+  /**
+   * El concepto de una donación (a qué se destina) debe ser de la MISMA
+   * organización que la recibe: la propia org, uno de sus animales o una de sus
+   * campañas activas. Sin esto, una donación aprobada a la org A podía sumar al
+   * progreso público de una campaña de la org B (`apply_campaign_funding` es
+   * SECURITY DEFINER y salta la RLS). Se lee bajo el contexto de la org
+   * beneficiaria, así un id de otra org simplemente no aparece.
+   */
+  private async assertConceptOfOrganization(
+    organizationId: string,
+    concept: PaymentConcept,
+  ): Promise<void> {
+    if (concept.kind === 'organization') {
+      if (concept.id === organizationId) return;
+    } else {
+      const found = await this.prisma.withOrgContext(organizationId, (tx) =>
+        concept.kind === 'campaign'
+          ? tx.campaign.count({
+              where: { id: concept.id, organizationId, status: CampaignStatus.Active },
+            })
+          : tx.animal.count({ where: { id: concept.id, organizationId } }),
+      );
+      if (found > 0) return;
+    }
+    throw new BadRequestException(
+      concept.kind === 'campaign'
+        ? 'Esta campaña no es de la organización o ya no recibe donaciones.'
+        : 'El destino de la donación no corresponde a esta organización.',
+    );
   }
 
   /**
@@ -776,6 +1062,14 @@ export class DonationsService {
     `);
     const orgNames = await this.organizationNamesById(rows.map((r) => r.organization_id));
     return rows.map((r) => this.fromRow(r, orgNames.get(r.organization_id)));
+  }
+
+  /** ADR-PAG-003: the org's own Mercado Pago grant (server-only). */
+  private async resolveMercadoPagoCollector(
+    organizationId: string,
+  ): Promise<MercadoPagoCollectorCredentials | undefined> {
+    if (!this.mercadopagoConnections) return undefined;
+    return this.mercadopagoConnections.resolveCollector(organizationId);
   }
 
   /** ADR-PAG-002: the org's own ePayco keys, decrypted under its RLS context. */
@@ -877,6 +1171,12 @@ export class DonationsService {
   async getOrganizationAvailability(
     organizationId: string,
   ): Promise<DonationOrganizationAvailability> {
+    if (this.mercadopago) {
+      const active = this.mercadopagoConnections
+        ? await this.mercadopagoConnections.hasActiveConnection(organizationId)
+        : false;
+      return { organizationId, canReceiveDonations: active };
+    }
     if (this.epayco) {
       const account = await this.prisma.withOrgContext(organizationId, (tx) =>
         tx.organizationEpaycoAccount.findUnique({

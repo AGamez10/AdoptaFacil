@@ -16,9 +16,9 @@ import {
 } from '../data/colombian-locations';
 import { IMAGE_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
 import { EpaycoConnectSection } from './epayco-connect-section';
-import { DonationQrCard } from '../../donations';
-import { isEpaycoProvider } from '../../payments/lib/payment-provider';
-import { useFeature } from '../../../shell/capabilities';
+import { MercadoPagoConnectSection } from './mercadopago-connect-section';
+import { OrgQrCard } from '../../portals/components/org-qr-card';
+import { activePaymentProvider } from '../../payments/lib/payment-provider';
 import {
   OrgSelectField,
   OrgStaticField,
@@ -52,6 +52,7 @@ const TABS: OrgTabItem[] = [
   { value: 'contacto', label: 'Contacto' },
   { value: 'imagenes', label: 'Imágenes y redes' },
   { value: 'pagos', label: 'Medios de pago' },
+  { value: 'qr', label: 'Código QR' },
   { value: 'nosotros', label: 'Acerca de nosotros' },
 ];
 
@@ -371,13 +372,17 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
     const client = useApiClient();
     const { toast } = useToast();
     const [searchParams] = useSearchParams();
-    // `?tab=pagos` (avisos "Cobros pendientes de conexión") abre la pestaña
-    // "Medios de pago" directamente.
+    // `?tab=<pestaña>` abre esa pestaña directamente: los avisos "Cobros
+    // pendientes de conexión" (`pagos`) y la lista "Qué falta para publicar tu
+    // portal" (institucional, ubicación, contacto…).
+    const tabParam = searchParams.get('tab');
     const [activeTab, setActiveTab] = useState<string>(() =>
-      searchParams.get('tab') === 'pagos' ? 'pagos' : TABS[0].value,
+      TABS.some((tab) => tab.value === tabParam) ? (tabParam as string) : TABS[0].value,
     );
-    const epayco = isEpaycoProvider();
-    const paymentsEnabled = useFeature('payments');
+    useEffect(() => {
+      if (tabParam && TABS.some((tab) => tab.value === tabParam)) setActiveTab(tabParam);
+    }, [tabParam]);
+    const paymentProvider = activePaymentProvider();
     const [form, setForm] = useState<FormState>(() => initialState(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
     const [saving, setSaving] = useState(false);
@@ -778,10 +783,13 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
             de este formulario (conectar/desconectar ya es inmediato). */}
         <OrgTabPanel value="pagos" activeValue={activeTab}>
           <div className="flex flex-col gap-6">
-            {/* ADR-PAG-002: la organización conecta SU cuenta ePayco (llaves
-                API), la única pasarela. Con el interruptor de apagado
-                (VITE_PAYMENT_PROVIDER=off) no se ofrece conectar nada. */}
-            {epayco ? (
+            {/* ADR-PAG-003: por defecto la organización conecta SU cuenta
+                de Mercado Pago por OAuth; con VITE_PAYMENT_PROVIDER=epayco,
+                sus llaves de ePayco (ADR-PAG-002). Con el interruptor de
+                apagado (VITE_PAYMENT_PROVIDER=off) no se ofrece conectar nada. */}
+            {paymentProvider === 'mercadopago' ? (
+              <MercadoPagoConnectSection />
+            ) : paymentProvider === 'epayco' ? (
               <EpaycoConnectSection />
             ) : (
               <p className="text-sm text-muted-foreground" data-testid="payments-online-off">
@@ -789,22 +797,22 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
                 cuenta de tu organización.
               </p>
             )}
-            {/* QR de donaciones: junto a la cuenta que recibe el dinero. Usa el
-                slug/subdominio GUARDADO (`initial`), no lo que se está editando. */}
-            {paymentsEnabled && (
-              <DonationQrCard
-                organization={{
-                  name: initial.name,
-                  slug: initial.slug,
-                  subdomain: initial.subdomain,
-                }}
-                onConfigureLink={() => {
-                  setActiveTab('institucional');
-                  window.setTimeout(() => document.getElementById('org-slug')?.focus(), 0);
-                }}
-              />
-            )}
           </div>
+        </OrgTabPanel>
+
+        <OrgTabPanel value="qr" activeValue={activeTab}>
+          {/* QR FIJO de la organización: siempre disponible (perfil, donar,
+              campaña o apadrinar). Usa el slug GUARDADO (`initial`), no lo que
+              se está editando. Los QR de donación ya impresos con
+              `/o/<slug>/donar` siguen funcionando. */}
+          <OrgQrCard
+            organizationName={initial.name}
+            hasPortalLink={!!initial.slug}
+            onConfigureLink={() => {
+              setActiveTab('institucional');
+              window.setTimeout(() => document.getElementById('org-slug')?.focus(), 0);
+            }}
+          />
         </OrgTabPanel>
 
         <OrgTabPanel value="nosotros" activeValue={activeTab}>

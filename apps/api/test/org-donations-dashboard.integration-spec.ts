@@ -156,6 +156,7 @@ describe('Org donations/campaigns dashboard (M13, S-14)', () => {
       .post('/animals')
       .set('Authorization', `Bearer ${org.token}`)
       .send({
+        approximateAgeMonths: 12,
         name: `Firu-S14-${randomUUID().slice(0, 6)}`,
         species: 'dog',
         sex: 'unknown',

@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
+  DocumentStatus,
+  DocumentType,
   FORMALIZATION_SEQUENCE,
   FormalizationState,
+  STATE_REQUIRED_DOCUMENTS,
+  type OrganizationDocument,
   type DianVerificationCheckStatus,
   type FormalizationStatus,
   type FormalizationTransition,
@@ -31,6 +36,7 @@ import { useSession } from '../../../shell/auth';
 import { Role } from '@adoptafacil/contracts';
 import { TextField } from '../components/profile-fields';
 import { CapabilitiesPanel } from '../components/capabilities-panel';
+import { DOCUMENT_NAMES } from '../components/legal-labels';
 import styles from './org-formalization-page.module.scss';
 
 const STATE_LABELS: Record<FormalizationState, string> = {
@@ -40,6 +46,35 @@ const STATE_LABELS: Record<FormalizationState, string> = {
   [FormalizationState.ESAL]: 'ESAL',
   [FormalizationState.ESAL_RTE]: 'ESAL + RTE',
 };
+
+/** Cómo va cada documento que pide el siguiente estado, en palabras de la org. */
+const REQUIREMENT_STATUS: Record<DocumentStatus | 'missing', string> = {
+  missing: 'Sin subir',
+  [DocumentStatus.Pending]: 'Subido, esperando revisión del equipo',
+  [DocumentStatus.UnderReview]: 'En revisión del equipo',
+  [DocumentStatus.Observed]: 'El equipo pidió una corrección',
+  [DocumentStatus.Approved]: 'Aprobado',
+  [DocumentStatus.Rejected]: 'Rechazado: sube uno nuevo',
+  [DocumentStatus.Expired]: 'Vencido: sube uno vigente',
+};
+
+/** Estados en los que la organización debe hacer algo (subir o corregir). */
+const NEEDS_UPLOAD: ReadonlyArray<DocumentStatus | 'missing'> = [
+  'missing',
+  DocumentStatus.Observed,
+  DocumentStatus.Rejected,
+  DocumentStatus.Expired,
+];
+
+function latestStatus(
+  documents: OrganizationDocument[],
+  type: DocumentType,
+): DocumentStatus | 'missing' {
+  const latest = documents
+    .filter((doc) => doc.type === type)
+    .sort((a, b) => b.version - a.version)[0];
+  return latest?.status ?? 'missing';
+}
 
 interface TransitionResult {
   status: FormalizationStatus;
@@ -73,6 +108,7 @@ export function OrgFormalizationPage() {
 
   const [status, setStatus] = useState<FormalizationStatus | null>(null);
   const [history, setHistory] = useState<FormalizationTransition[]>([]);
+  const [documents, setDocuments] = useState<OrganizationDocument[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
@@ -119,6 +155,20 @@ export function OrgFormalizationPage() {
     };
   }, [client]);
 
+  // Los documentos se leen aparte: si fallan, la página sigue y solo se pierde
+  // el detalle de qué falta. Solo el Owner los necesita (es quien avanza).
+  useEffect(() => {
+    if (!canManage) return undefined;
+    let active = true;
+    client
+      .request<OrganizationDocument[]>('/org/documents')
+      .then((docs) => active && Array.isArray(docs) && setDocuments(docs))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [client, canManage, history.length]);
+
   const currentIndex = status ? FORMALIZATION_SEQUENCE.indexOf(status.state) : -1;
   const next = currentIndex >= 0 ? FORMALIZATION_SEQUENCE[currentIndex + 1] : undefined;
   const previous = currentIndex > 0 ? FORMALIZATION_SEQUENCE[currentIndex - 1] : undefined;
@@ -126,6 +176,15 @@ export function OrgFormalizationPage() {
   // an approved document — the organization cannot self-declare it.
   const nextNeedsPlatform =
     next === FormalizationState.ESAL || next === FormalizationState.ESAL_RTE;
+  // Qué pide el siguiente estado y cómo va cada documento (misma matriz que la API).
+  const requirements =
+    next && documents
+      ? STATE_REQUIRED_DOCUMENTS[next].map((type) => ({
+          type,
+          status: latestStatus(documents, type),
+        }))
+      : [];
+  const pendingRequirements = requirements.filter((r) => r.status !== DocumentStatus.Approved);
 
   const move = async (targetState: FormalizationState, requiresReason: boolean) => {
     if (requiresReason && !reason.trim()) {
@@ -147,9 +206,17 @@ export function OrgFormalizationPage() {
       await load();
       toast({ title: 'Estado actualizado', description: `Ahora: ${STATE_LABELS[targetState]}.` });
     } catch (error) {
+      const forward = !requiresReason;
       toast({
         title: 'No se pudo cambiar el estado',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        description:
+          forward && pendingRequirements.length > 0
+            ? `Aún falta que el equipo apruebe: ${pendingRequirements
+                .map((r) => DOCUMENT_NAMES[r.type])
+                .join(' y ')}. En "Lo que te falta" tienes el enlace para subir cada uno.`
+            : error instanceof Error
+              ? error.message
+              : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
     } finally {
@@ -241,10 +308,42 @@ export function OrgFormalizationPage() {
                       Cámara de Comercio.
                     </p>
                   )}
+                  {pendingRequirements.length > 0 && next && (
+                    <div className={styles.requirements} data-testid="formalization-requirements">
+                      <p className={styles.requirements__title}>
+                        Lo que te falta para {STATE_LABELS[next]}
+                      </p>
+                      <ul className={styles.requirements__list}>
+                        {pendingRequirements.map(({ type, status }) => (
+                          <li key={type} className={styles.requirements__item}>
+                            <span>
+                              <strong>{DOCUMENT_NAMES[type]}</strong> · {REQUIREMENT_STATUS[status]}
+                            </span>
+                            <Link
+                              to={
+                                NEEDS_UPLOAD.includes(status)
+                                  ? `/organizacion/documentos?subir=${type}`
+                                  : '/organizacion/documentos'
+                              }
+                              className={styles.requirements__link}
+                            >
+                              {NEEDS_UPLOAD.includes(status)
+                                ? `Subir ${DOCUMENT_NAMES[type]}`
+                                : 'Ver en Documentos'}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {next && nextNeedsPlatform && (
                     <p>
                       El paso a {STATE_LABELS[next]} lo aprueba el equipo de AdoptaFácil tras
-                      revisar tus documentos. Súbelos en Documentos para que el equipo los revise.
+                      revisar tus documentos. Súbelos en{' '}
+                      <Link to="/organizacion/documentos" className={styles.requirements__link}>
+                        Documentos
+                      </Link>{' '}
+                      para que el equipo los revise.
                     </p>
                   )}
                   {previous && (

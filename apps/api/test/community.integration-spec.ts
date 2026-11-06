@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
@@ -142,10 +143,18 @@ describe('Community (M11, F-8: posts, comments, likes, RBAC, moderation)', () =>
       .put('/storage/upload')
       .query({ key })
       .set('Authorization', `Bearer ${org.token}`)
-      .attach('file', Buffer.from('fake-jpeg-bytes'), {
-        filename: 'evento.jpg',
-        contentType: 'image/jpeg',
-      })
+      .attach(
+        'file',
+        await sharp({
+          create: { width: 64, height: 48, channels: 3, background: { r: 30, g: 120, b: 90 } },
+        })
+          .jpeg()
+          .toBuffer(),
+        {
+          filename: 'evento.jpg',
+          contentType: 'image/jpeg',
+        },
+      )
       .expect(200);
     await request(server).get('/storage/public').query({ key }).expect(200);
   });

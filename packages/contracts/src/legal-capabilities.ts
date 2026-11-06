@@ -5,7 +5,12 @@
 // Fundamento y puntos para abogado/contador: docs/legal/estados-formales-y-funciones.md
 // ============================================================================
 
-import { DocumentType, FormalizationState, FORMALIZATION_SEQUENCE } from './org';
+import {
+  DocumentType,
+  FormalizationState,
+  FORMALIZATION_SEQUENCE,
+  type OrganizationDocument,
+} from './org';
 
 /**
  * Funciones de la organización cuyo permiso depende de su estado formal ante
@@ -319,4 +324,27 @@ export interface DocumentPrefill {
   /** "900123456-8", solo si el dígito de verificación es correcto. */
   nit?: string;
   legalName?: string;
+}
+
+/** Qué pudo confirmar la lectura automática de un documento al subirlo.
+ *  - `match`: el texto del PDF corresponde al tipo de documento elegido.
+ *  - `unreadable`: foto o escaneo sin texto; el equipo lo revisa a mano.
+ *  - `not_checked`: tipo sin patrón automático ("Otro documento").
+ *  Un archivo legible que NO corresponde al tipo nunca llega aquí: la API lo
+ *  rechaza (422) con un mensaje que dice qué parece ser. */
+export type DocumentUploadCheckResult = 'match' | 'unreadable' | 'not_checked';
+
+export interface DocumentUploadCheck {
+  result: DocumentUploadCheckResult;
+  /** Mensaje para la organización, en lenguaje claro. */
+  message: string;
+}
+
+/** `POST /org/documents/file` (multipart: `file`, `type`, `issuedAt?`,
+ *  `expiresAt?`): documento subido, validado y guardado en una sola llamada. */
+export interface UploadOrganizationDocumentFileResult {
+  document: OrganizationDocument;
+  check: DocumentUploadCheck;
+  /** Datos para llenar el perfil cuando el RUT o el certificado se leyeron. */
+  prefill?: DocumentPrefill;
 }

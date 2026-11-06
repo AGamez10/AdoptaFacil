@@ -8,7 +8,7 @@ import {
   CampaignStatus,
   type CampaignPublic,
 } from '@adoptafacil/contracts';
-import { PublicCampaignDetailPage } from './public-campaign-detail-page';
+import { buildCampaignDonateHref, PublicCampaignDetailPage } from './public-campaign-detail-page';
 
 /**
  * §M14/M06 (T-055) — public campaign detail by id. Public columns only; nav-state
@@ -85,6 +85,15 @@ afterEach(() => {
 });
 
 describe('PublicCampaignDetailPage', () => {
+  it('donating to the campaign opens the checkout with the campaign as the concept', () => {
+    const href = buildCampaignDonateHref(CAMPAIGN);
+    const params = new URLSearchParams(href.split('?')[1]);
+    expect(href.startsWith('/donaciones?')).toBe(true);
+    expect(params.get('organizationId')).toBe('org-1');
+    expect(params.get('campaignId')).toBe('c1');
+    expect(params.get('campaignTitle')).toBe('Cirugía para Max');
+  });
+
   it('renders the public detail from nav-state (no campaign refetch)', () => {
     // Even from nav-state, the accountability report is fetched independently.
     stub(CAMPAIGN);

@@ -4,7 +4,6 @@ import {
   PRODUCT_CATEGORIES,
   ProductCategory,
   type Product,
-  type ProductImageUploadResult,
   type UpdateProductInput,
   Role,
 } from '@adoptafacil/contracts';
@@ -25,7 +24,8 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { SelectField, TextAreaField } from '../components/product-form-fields';
 import { CATEGORY_LABELS, formatCop } from '../model/marketplace-view';
-import { IMAGE_ACCEPT, uploadImageFile, validateImageUpload } from '../lib/storage';
+import { ProductPhotosField } from '../components/product-photos-field';
+import { addProductImage, replaceProductImage, validateImageUpload } from '../lib/storage';
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
   value,
@@ -57,7 +57,6 @@ export function ProductDetailPage() {
   const [stock, setStock] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const applyProduct = (found: Product): void => {
@@ -170,29 +169,25 @@ export function ProductDetailPage() {
     }
   };
 
-  const submitImage = async (): Promise<void> => {
-    if (!id || !imageFile) return;
-    const invalid = validateImageUpload(imageFile);
+  /** Sube una foto nueva (`imageId` ausente) o cambia la indicada. */
+  const submitImage = async (file: File, imageId?: string): Promise<void> => {
+    if (!id) return;
+    const invalid = validateImageUpload(file);
     if (invalid) {
-      toast({ title: 'Archivo no válido', description: invalid, variant: 'warning' });
+      toast({ title: 'Foto no válida', description: invalid, variant: 'warning' });
       return;
     }
     setUploadingImage(true);
     try {
-      const result = await client.request<ProductImageUploadResult>(
-        `/marketplace/products/${encodeURIComponent(id)}/images`,
-        {
-          method: 'POST',
-          json: { filename: imageFile.name, contentType: imageFile.type || undefined },
-        },
+      applyProduct(
+        imageId
+          ? await replaceProductImage(client, id, imageId, file)
+          : await addProductImage(client, id, file),
       );
-      await uploadImageFile(client, result.upload.key, imageFile);
-      setImageFile(null);
-      await load();
-      toast({ title: 'Foto agregada', variant: 'success' });
+      toast({ title: 'Foto guardada', variant: 'success' });
     } catch (error) {
       toast({
-        title: 'No se pudo agregar la foto',
+        title: 'No se pudo subir la foto',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -209,10 +204,10 @@ export function ProductDetailPage() {
         { method: 'DELETE' },
       );
       await load();
-      toast({ title: 'Foto eliminada', variant: 'success' });
+      toast({ title: 'Foto quitada', variant: 'success' });
     } catch (error) {
       toast({
-        title: 'No se pudo eliminar la foto',
+        title: 'No se pudo quitar la foto',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -223,7 +218,7 @@ export function ProductDetailPage() {
     <PageContainer>
       <PageHeader
         title="Detalle de producto"
-        description="Edita el producto, activa/desactívalo y gestiona sus fotos."
+        description="Edita el producto, actívalo o desactívalo y cambia sus fotos."
       />
       <Link
         to="/organizacion/marketplace"
@@ -262,6 +257,23 @@ export function ProductDetailPage() {
                   {product.isActive ? 'Desactivar' : 'Activar'}
                 </Button>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Fotos del producto</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProductPhotosField
+                photos={product.images.map((image) => ({ key: image.id, url: image.url }))}
+                alt={product.name}
+                canManage={canManage}
+                busy={uploadingImage}
+                onAdd={(file) => void submitImage(file)}
+                onReplace={(key, file) => void submitImage(file, key)}
+                onRemove={(key) => void removeImage(key)}
+              />
             </CardContent>
           </Card>
 
@@ -337,57 +349,6 @@ export function ProductDetailPage() {
               </CardContent>
             </Card>
           )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Fotos</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {canManage && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    id="product-image-file"
-                    type="file"
-                    accept={IMAGE_ACCEPT.join(',')}
-                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                    className="block text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    disabled={!imageFile || uploadingImage}
-                    onClick={() => void submitImage()}
-                  >
-                    {uploadingImage ? 'Subiendo…' : 'Agregar foto'}
-                  </Button>
-                </div>
-              )}
-              {product.images.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aún no hay fotos de este producto.</p>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {product.images.map((image) => (
-                    <div key={image.id} className="space-y-2">
-                      <img
-                        src={image.url}
-                        alt={product.name}
-                        className="aspect-square w-full rounded-md border object-cover"
-                      />
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => void removeImage(image.id)}
-                        >
-                          Eliminar
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
       )}
     </PageContainer>

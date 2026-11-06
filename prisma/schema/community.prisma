@@ -45,6 +45,9 @@ model Post {
   status            String    @default("published")
   commentCount      Int       @default(0) @map("comment_count")
   likeCount         Int       @default(0) @map("like_count")
+  /// La autora autorizó que se vea sin sesión y se comparta en redes. Se
+  /// cambia solo vía `community_post_set_shareable` (por identidad de autora).
+  shareable         Boolean   @default(false)
   moderationReason  String?   @map("moderation_reason")
   moderatedByUserId String?   @map("moderated_by_user_id") @db.Uuid
   moderatedAt       DateTime? @map("moderated_at")

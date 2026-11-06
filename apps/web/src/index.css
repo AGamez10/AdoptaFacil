@@ -12,3 +12,32 @@ body,
 #root {
   min-height: 100vh;
 }
+
+/* iOS agranda el texto al girar a horizontal: se respeta el tamaño definido. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * Revelado al hacer scroll (landing). Solo CSS: usa las animaciones ligadas
+ * al scroll del navegador (sin JavaScript ni observadores). Donde no existen
+ * (Firefox, Safari viejo) o con "reducir movimiento", el contenido se ve
+ * quieto desde el principio: nunca queda oculto.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .af-reveal {
+      animation: af-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+  }
+}
+
+@keyframes af-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.98);
+  }
+}

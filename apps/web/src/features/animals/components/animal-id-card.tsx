@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import QRCode from 'qrcode';
+import { qrDataUrl } from '../../../lib/qr';
 import type { Animal, AnimalSex, AnimalStatus, ComputedAge } from '@adoptafacil/contracts';
 import styles from './animal-id-card.module.scss';
 
@@ -128,7 +128,7 @@ function Qr({ value }: { value: string }) {
   useEffect(() => {
     let active = true;
     try {
-      QRCode.toDataURL(value, { margin: 0, width: 220, errorCorrectionLevel: 'M' })
+      qrDataUrl(value, { margin: 0, width: 220, errorCorrectionLevel: 'M' })
         .then((url) => {
           if (active) setSrc(url);
         })

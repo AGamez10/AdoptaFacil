@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SponsorshipPeriodicity } from '@adoptafacil/contracts';
+import { MAX_SPONSORSHIP_AMOUNT_COP, SponsorshipPeriodicity } from '@adoptafacil/contracts';
 
 const uuid = z.string().guid();
 
@@ -26,6 +26,17 @@ export const updateSponsorshipPlanSchema = z
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field must be provided.',
   });
+
+/**
+ * Mark an animal as needing sponsorship (`PUT /sponsorship-plans/animal/:id`).
+ * `amount` is optional: omitted keeps the current one (or the suggested
+ * default for a new plan). Capped as a typo guard.
+ */
+export const markAnimalNeedsSponsorshipSchema = z
+  .object({
+    amount: z.number().int().positive().max(MAX_SPONSORSHIP_AMOUNT_COP).optional(),
+  })
+  .strict();
 
 /**
  * Subscribe to a plan (authenticated Person = the padrino). Requerimiento

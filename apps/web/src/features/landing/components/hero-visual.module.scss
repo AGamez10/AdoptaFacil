@@ -41,6 +41,20 @@
   opacity: 0.35;
 }
 
+/* Respiración lenta del fondo de puntos (aunque no haya WebGL): transform y
+   opacity en su propia capa, sin repintar. */
+@media (prefers-reduced-motion: no-preference) {
+  .visual__fallback {
+    animation: globe-breathe 9s ease-in-out infinite;
+  }
+}
+
+@keyframes globe-breathe {
+  50% {
+    transform: scale(1.04) rotate(4deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .visual__canvas,
   .visual__fallback {

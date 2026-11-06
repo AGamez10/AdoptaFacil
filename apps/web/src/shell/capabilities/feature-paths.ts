@@ -12,7 +12,10 @@ const FEATURE_PATHS: ReadonlyArray<readonly [FeatureKey, readonly string[]]> = [
   // Donation certificates and their public verification (D9, SEC-003).
   ['donationCertificates', ['/certificado', '/verificar']],
   ['sponsorships', ['/apadrinar', '/organizacion/apadrinamientos']],
-  ['resources', ['/recursos', '/ofrecer', '/mis-ofertas', '/organizacion/recursos']],
+  [
+    'resources',
+    ['/recursos', '/ofrecer', '/tengo-para-donar', '/mis-ofertas', '/organizacion/recursos'],
+  ],
   ['marketplace', ['/marketplace', '/organizacion/marketplace']],
   // Muro de publicaciones: su propio interruptor (la API lo apaga si `community` está apagado).
   ['communityWall', ['/comunidad', '/mis-publicaciones', '/plataforma/comunidad']],

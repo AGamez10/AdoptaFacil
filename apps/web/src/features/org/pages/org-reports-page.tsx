@@ -95,6 +95,12 @@ const KIND_UI: Record<OrgReportKind, { title: string; description: string; short
       'Horas aprobadas de voluntarios y estudiantes, por institución educativa, con quién ya cumple las horas mínimas.',
     short: 'Servicio social',
   },
+  accounting: {
+    title: 'Libro auxiliar de donaciones',
+    description:
+      'Se genera al cerrar un mes en Contabilidad y lo firma tu contador o revisor fiscal.',
+    short: 'Libro auxiliar',
+  },
 };
 
 /** Mismo conjunto que el servidor: solo aquí se ofrecen firmantes. */
@@ -164,6 +170,9 @@ function summaryText(report: OrgReport): string {
   if (report.kind === 'donations') {
     return `${s.rowCount} ${s.rowCount === 1 ? 'donación' : 'donaciones'} · ${money(s.netTotal ?? 0)} neto`;
   }
+  if (report.kind === 'accounting') {
+    return `${s.rowCount} ${s.rowCount === 1 ? 'renglón' : 'renglones'} · ${money(s.grossTotal ?? 0)} bruto`;
+  }
   return `${s.volunteers ?? s.rowCount} ${s.volunteers === 1 ? 'voluntario' : 'voluntarios'} · ${(s.approvedHours ?? 0).toLocaleString('es-CO')} h`;
 }
 
@@ -187,7 +196,7 @@ async function downloadReport(
 function defaultSigners(kind: OrgReportKind, registered: Set<LegalRepresentativeRole>) {
   const roles: LegalRepresentativeRole[] = [];
   if (registered.has('legal_representative')) roles.push('legal_representative');
-  if (kind === 'donations') {
+  if (kind === 'donations' || kind === 'accounting') {
     if (registered.has('fiscal_reviewer')) roles.push('fiscal_reviewer');
     else if (registered.has('accountant')) roles.push('accountant');
   }
@@ -540,6 +549,20 @@ export function OrgReportsPage() {
     setHistory((current) => [report, ...current.filter((r) => r.id !== report.id)]);
   }
 
+  /** Reenvía a quien falte por firmar un enlace nuevo (el anterior deja de servir). */
+  async function handleResend(report: OrgReport) {
+    try {
+      await client.request(`/org/reports/${report.id}/signature-requests`, { method: 'POST' });
+      toast({ title: 'Enlace de firma reenviado', variant: 'success' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo reenviar',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+    }
+  }
+
   async function handleDownload(report: OrgReport, format: 'pdf' | 'xlsx') {
     try {
       await downloadReport(client, report, format);
@@ -656,6 +679,15 @@ export function OrgReportsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-right">
+                            {canGenerate && report.status === 'pending_signatures' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void handleResend(report)}
+                              >
+                                Reenviar firma
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"

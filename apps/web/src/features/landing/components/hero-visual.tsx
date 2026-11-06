@@ -7,9 +7,15 @@ type Mode = 'fallback' | 'loading' | 'scene';
  *  muy modestos se queda el fondo estático (que ya es el diseño completo). */
 export function canRunScene(): boolean {
   if (typeof window === 'undefined' || typeof WebGLRenderingContext === 'undefined') return false;
-  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-  if (connection?.saveData) return false;
-  if ((navigator.hardwareConcurrency ?? 4) < 3) return false;
+  const nav = navigator as Navigator & {
+    connection?: { saveData?: boolean; effectiveType?: string };
+    deviceMemory?: number;
+  };
+  if (nav.connection?.saveData) return false;
+  // Red lenta (2G/3G) o equipo de gama baja (poca RAM o pocos núcleos): fondo estático.
+  if (/(^|-)2g$|^3g$/.test(nav.connection?.effectiveType ?? '')) return false;
+  if ((nav.deviceMemory ?? 8) < 4) return false;
+  if ((navigator.hardwareConcurrency ?? 4) < 4) return false;
   try {
     const probe = document.createElement('canvas');
     return Boolean(probe.getContext('webgl2') ?? probe.getContext('webgl'));

@@ -4,6 +4,7 @@ import { useAnimalClinicalRecord } from '../hooks/use-animal-clinical-record';
 import { ClinicalAttachmentsField } from './clinical-attachments-field';
 import { CLINICAL_TYPE_LABELS, formatClinicalDate } from '../lib/clinical-format';
 import styles from './animal-detail-panel.module.scss';
+import { dateBounds } from '../../../lib/date-rules';
 
 /**
  * Contenido del tab "Registro clínico" del panel maestro-detalle — MISMOS
@@ -34,6 +35,7 @@ export function AnimalRegistroClinicoSection({ animalId }: { animalId: string })
             type="date"
             aria-label="Fecha del evento"
             value={form.occurredAt}
+            {...dateBounds('clinicalOccurred')}
             onChange={(e) => form.setOccurredAt(e.target.value)}
           />
           <Input

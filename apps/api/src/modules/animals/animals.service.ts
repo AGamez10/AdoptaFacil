@@ -225,6 +225,14 @@ export class AnimalsService {
       if (input.breedId) {
         await this.assertBreed(tx, input.breedId, input.species ?? existing.species);
       }
+      // Clearing the birth date is only allowed when an approximate age remains.
+      if (
+        input.birthDate === null &&
+        input.approximateAgeMonths === undefined &&
+        existing.approximateAgeMonths === null
+      ) {
+        throw new BadRequestException('Indica la fecha de nacimiento o una edad aproximada.');
+      }
       const updated = await tx.animal.update({
         where: { id },
         data: {
@@ -235,7 +243,12 @@ export class AnimalsService {
           status: input.status,
           breedId: input.breedId,
           customBreed: input.customBreed,
-          birthDate: input.birthDate ? new Date(input.birthDate) : undefined,
+          birthDate:
+            input.birthDate === null
+              ? null
+              : input.birthDate
+                ? new Date(input.birthDate)
+                : undefined,
           approximateAgeMonths: input.approximateAgeMonths,
           description: input.description,
           tags: input.tags,

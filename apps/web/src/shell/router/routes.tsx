@@ -17,13 +17,16 @@ import {
   ORG_PLAN_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
+  ORG_LEDGER_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
+  PLATFORM_PLANS_ROLES,
   PLATFORM_REVIEWS_ROLES,
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
   PLATFORM_TEAM_ROLES,
   RESOURCE_VIEW_ROLES,
+  RESOURCE_MANAGE_ROLES,
   SPONSORSHIP_VIEW_ROLES,
   VOLUNTEERING_VIEW_ROLES,
 } from '../navigation';
@@ -36,6 +39,7 @@ import {
   LoginPage,
   RegisterPage,
   ResetPasswordPage,
+  AcceptInvitationPage,
 } from '../../features/auth';
 import { PublicAnimalDetailPage } from '../../features/portals/pages/public-animal-detail-page';
 import { usePortalSubdomainSlug } from '../../features/portals/use-portal-subdomain-slug';
@@ -57,9 +61,17 @@ const PortalThemePage = lazyPage(
   () => import('../../features/portals/pages/portal-theme-page'),
   'PortalThemePage',
 );
+const TemplateDemoPage = lazyPage(
+  () => import('../../features/portals/pages/template-demo-page'),
+  'TemplateDemoPage',
+);
 const OrgDonateRedirectPage = lazyPage(
   () => import('../../features/portals/pages/org-donate-redirect-page'),
   'OrgDonateRedirectPage',
+);
+const OrgQrRedirectPage = lazyPage(
+  () => import('../../features/portals/pages/org-qr-redirect-page'),
+  'OrgQrRedirectPage',
 );
 const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
@@ -72,11 +84,15 @@ const OrgProfilePage = lazyPage(loadOrg, 'OrgProfilePage');
 const OrgReportsPage = lazyPage(loadOrg, 'OrgReportsPage');
 const OrgSignersPage = lazyPage(loadOrg, 'OrgSignersPage');
 const OrgSigningInboxPage = lazyPage(loadOrg, 'OrgSigningInboxPage');
+const SignatureRequestPage = lazyPage(loadOrg, 'SignatureRequestPage');
+const OrgAccountingPage = lazyPage(loadOrg, 'OrgAccountingPage');
+const AccountingSharePage = lazyPage(loadOrg, 'AccountingSharePage');
 const PlatformAdminDashboardPage = lazyPage(loadOrg, 'PlatformAdminDashboardPage');
 const PlatformBannerPage = lazyPage(loadOrg, 'PlatformBannerPage');
 const PlatformDocumentsReviewPage = lazyPage(loadOrg, 'PlatformDocumentsReviewPage');
 const PlatformDuplicatesReviewPage = lazyPage(loadOrg, 'PlatformDuplicatesReviewPage');
 const PlatformOrganizationsReviewPage = lazyPage(loadOrg, 'PlatformOrganizationsReviewPage');
+const PlatformPlansPage = lazyPage(loadOrg, 'PlatformPlansPage');
 const PlatformReviewsReviewPage = lazyPage(loadOrg, 'PlatformReviewsReviewPage');
 const PlatformSuperAdminDashboardPage = lazyPage(loadOrg, 'PlatformSuperAdminDashboardPage');
 const loadCampaigns = () => import('../../features/campaigns');
@@ -87,6 +103,8 @@ const PublicCampaignsPage = lazyPage(loadCampaigns, 'PublicCampaignsPage');
 const loadResources = () => import('../../features/resources');
 const MyResourceOffersPage = lazyPage(loadResources, 'MyResourceOffersPage');
 const OfferResourcePage = lazyPage(loadResources, 'OfferResourcePage');
+const OpenOfferPage = lazyPage(loadResources, 'OpenOfferPage');
+const OpenOffersBoardPage = lazyPage(loadResources, 'OpenOffersBoardPage');
 const PublicResourceDetailPage = lazyPage(loadResources, 'PublicResourceDetailPage');
 const PublicResourcesPage = lazyPage(loadResources, 'PublicResourcesPage');
 const ResourceNeedDetailPage = lazyPage(loadResources, 'ResourceNeedDetailPage');
@@ -98,6 +116,7 @@ const PublicMarketplacePage = lazyPage(loadMarketplace, 'PublicMarketplacePage')
 const PublicProductDetailPage = lazyPage(loadMarketplace, 'PublicProductDetailPage');
 const loadCommunity = () => import('../../features/community');
 const CommunityFeedPage = lazyPage(loadCommunity, 'CommunityFeedPage');
+const PublicPostPage = lazyPage(loadCommunity, 'PublicPostPage');
 const CommunityModerationPage = lazyPage(loadCommunity, 'CommunityModerationPage');
 const MyPostsPage = lazyPage(loadCommunity, 'MyPostsPage');
 const PostDetailPage = lazyPage(loadCommunity, 'PostDetailPage');
@@ -146,6 +165,8 @@ const VolunteerOpportunitiesPage = lazyPage(loadVolunteering, 'VolunteerOpportun
 const VolunteerOpportunityDetailPage = lazyPage(loadVolunteering, 'VolunteerOpportunityDetailPage');
 const loadReputation = () => import('../../features/reputation');
 const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
+const loadLedger = () => import('../../features/ledger');
+const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -232,6 +253,9 @@ export function AppRoutes() {
           HANDOFF(@fabian): minimal shell route for the auth reset page (the page
           itself lives in features/auth). Cross-review this single line. */}
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Enlace del correo de invitación a un equipo ({WEB_BASE_URL}/invitacion#token=…):
+          pública, la persona invitada aún no tiene cuenta. */}
+          <Route path="/invitacion" element={<AcceptInvitationPage />} />
           {/* Legal (Ley 1581): términos, política de datos, cookies y alcance de la
             plataforma, públicos y versionados — `/legal/:slug/:version` muestra
             exactamente la versión que alguien aceptó. */}
@@ -241,6 +265,9 @@ export function AppRoutes() {
           {/* Public rich organization portal (§M14, T-026) — no auth, public fields
           only: real profile + placeholder sections wired per docs/TASKS.md. */}
           <Route path="/o/:slug" element={<OrgPublicPage />} />
+          {/* Vista de ejemplo de cada plantilla con datos de demostración (noindex,
+          sin API): desde aquí se va al registro con la plantilla elegida. */}
+          <Route path="/plantillas/:id" element={<TemplateDemoPage />} />
           {/* Public animal detail within the org portal (§M14/M03, T-052) — public,
           AnimalSummary fields only (no clinical data). The "Solicitar adopción"
           button links to the /adopciones/solicitar flow, itself under RequireAuth. */}
@@ -250,6 +277,10 @@ export function AppRoutes() {
           `/donaciones`. `/donar` solo tiene sentido en un subdominio real de
           organización; en el dominio principal lleva a `/donaciones`. */}
           <Route path="/o/:slug/donar" element={<OrgDonateRedirectPage />} />
+          {/* QR FIJO por organización: la etiqueta impresa no cambia; la org
+          elige desde su panel si lleva a su perfil, a donar, a una campaña o a
+          apadrinar un animal. La API valida el destino en cada escaneo. */}
+          <Route path="/q/:code" element={<OrgQrRedirectPage />} />
           <Route
             path="/donar"
             element={
@@ -262,6 +293,10 @@ export function AppRoutes() {
           />
           {/* Public certificate VERIFICATION, REAL (§M05/RF14, F-3) — no session,
           queries `GET /public/donations/certificates/:code`. */}
+          {/* M13 · firma por enlace de correo (contador / revisor fiscal, sin sesión). */}
+          <Route path="/firmar" element={<SignatureRequestPage />} />
+          {/* Contabilidad compartida con el revisor fiscal / contador (sin sesión). */}
+          <Route path="/contabilidad-compartida" element={<AccountingSharePage />} />
           <Route path="/verificar" element={<CertificateVerificationPage />} />
           <Route path="/verificar/:code" element={<CertificateVerificationPage />} />
           {/* Public campaigns portal (§M14/M06, T-055) — no auth, active campaigns from
@@ -284,6 +319,9 @@ export function AppRoutes() {
           {/* Comunidad · directorio PÚBLICO de servicios del ecosistema (sin
           sesión): solo perfiles aprobados por la plataforma. Gestión propia en
           /mi-negocio y ficha privada en /mis-mascotas, abajo (RequireAuth). */}
+          {/* Comunidad · publicación PÚBLICA que su autora marcó como compartible
+          (sin sesión): destino de los enlaces compartidos en redes (`/c/:id`). */}
+          <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
           <Route path="/servicios/:id" element={<ServiceDetailPage />} />
           {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
@@ -449,6 +487,9 @@ export function AppRoutes() {
               detalle público de una necesidad (/recursos/:id). */}
                 <Route path="ofrecer" element={<OfferResourcePage />} />
                 <Route path="mis-ofertas" element={<MyResourceOffersPage />} />
+                {/* Ofrecimiento abierto: cuando no hay una necesidad que calce, la
+              persona deja lo que tiene (cualquier autenticado, sin @Roles). */}
+                <Route path="tengo-para-donar" element={<OpenOfferPage />} />
                 {/* M11 · comunidad (F-8). Ninguna de estas rutas lleva `@Roles` en el
               backend (`POST/GET /community/posts`, comentarios, likes son
               cualquier autenticado), así que ninguna lleva <RequireRoles> —
@@ -584,6 +625,14 @@ export function AppRoutes() {
                   }
                 />
                 <Route
+                  path="organizacion/recursos/ofrecimientos"
+                  element={
+                    <RequireRoles roles={RESOURCE_MANAGE_ROLES}>
+                      <OpenOffersBoardPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
                   path="organizacion/recursos/:id"
                   element={
                     <RequireRoles roles={RESOURCE_VIEW_ROLES}>
@@ -607,6 +656,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
                       <ProductDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* RF14 · libro público de la organización (registrar/anular solo
+              Owner/Administrator; la API vuelve a exigirlo). */}
+                <Route
+                  path="organizacion/libro-publico"
+                  element={
+                    <RequireRoles roles={ORG_LEDGER_ROLES}>
+                      <OrgLedgerPage />
                     </RequireRoles>
                   }
                 />
@@ -654,6 +713,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
                       <PlatformOrganizationsReviewPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Planes de organizaciones: asignar, extender o cancelar a mano
+              (PUT /platform/organizations/:id/plan). Audiencia de PLATAFORMA. */}
+                <Route
+                  path="plataforma/planes"
+                  element={
+                    <RequireRoles roles={PLATFORM_PLANS_ROLES}>
+                      <PlatformPlansPage />
                     </RequireRoles>
                   }
                 />
@@ -726,6 +795,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
                       <OrgReportsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Contabilidad: libro auxiliar, conciliación con Mercado Pago,
+                cierre y firma del revisor. Mismos roles que GET /org/accounting. */}
+                <Route
+                  path="organizacion/contabilidad"
+                  element={
+                    <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
+                      <OrgAccountingPage />
                     </RequireRoles>
                   }
                 />

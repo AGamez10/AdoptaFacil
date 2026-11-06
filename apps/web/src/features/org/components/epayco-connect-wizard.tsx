@@ -49,7 +49,9 @@ export function mapEpaycoConnectError(error: unknown): SubmitFailure {
     return { message: EPAYCO_CONNECT_ERRORS.conflict, step: 'cust-id', showHelp: true };
   }
   if (ApiError.is(error) && error.status === 400) {
-    const detail = error.message ?? '';
+    // El campo sale del cuerpo original (`details`): `message` ya es el texto amable.
+    const raw = (error.details as { message?: unknown } | undefined)?.message;
+    const detail = Array.isArray(raw) ? raw.join(' ') : typeof raw === 'string' ? raw : '';
     if (/custId\s*:/.test(detail))
       return { message: EPAYCO_CONNECT_ERRORS.custId, step: 'cust-id' };
     if (/publicKey\s*:/.test(detail)) {

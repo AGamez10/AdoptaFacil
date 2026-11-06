@@ -176,7 +176,7 @@ function AdoptListing({
       itemListLd(
         results.slice(0, 24).map((animal) => ({
           name: animal.name,
-          path: publicAnimalDetailHref(animal.organization.slug, animal.id),
+          path: publicAnimalDetailHref(animal.organization.slug, animal),
           image: animal.photoUrl,
         })),
       ),
@@ -308,6 +308,27 @@ function AdoptListing({
                 </p>
               )}
             </div>
+            {/* Enlaces de verdad (no solo el mapa) para que la gente y los
+                buscadores lleguen a la página de cada ciudad. */}
+            {status === 'ready' && cities.length > 0 ? (
+              <nav className={styles.cityLinks} aria-label="Ciudades con animales">
+                <h2 className={styles.cityLinks__title}>Por ciudad</h2>
+                <ul className={styles.cityLinks__list}>
+                  {cities.map((entry) => (
+                    <li key={citySlug(entry.city)}>
+                      <Link
+                        to={buildAdoptPath(species, entry.city)}
+                        className={styles.cityLinks__link}
+                        aria-current={entry.city === city ? 'page' : undefined}
+                      >
+                        {entry.city}
+                        <span className={styles.cityLinks__count}>{entry.count}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ) : null}
           </aside>
 
           <section className={styles.results} aria-label="Resultados">

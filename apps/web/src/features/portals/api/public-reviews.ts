@@ -5,6 +5,8 @@ import type {
   Review,
 } from '@adoptafacil/contracts';
 
+import { friendlyHttpError } from '../../../shell/api/friendly-error';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 /**
@@ -52,8 +54,8 @@ export async function submitPublicReview(
     },
   );
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(body?.message ?? 'No se pudo enviar la reseña.');
+    // Nunca el texto técnico del servidor ("Cannot POST …"): mensaje amable.
+    throw await friendlyHttpError(response);
   }
   return response.json() as Promise<Review>;
 }

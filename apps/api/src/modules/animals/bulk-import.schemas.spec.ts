@@ -75,6 +75,11 @@ describe('bulkImportRowSchema (row-level validation)', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('rejects a future birth date', () => {
+    const future = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    expect(bulkImportRowSchema.safeParse({ ...valid, birthDate: future }).success).toBe(false);
+  });
+
   it('rejects more than 10 tags', () => {
     const tooMany = Array.from({ length: 11 }, (_, i) => `tag-${i}`);
     expect(bulkImportRowSchema.safeParse({ ...valid, tags: tooMany }).success).toBe(false);

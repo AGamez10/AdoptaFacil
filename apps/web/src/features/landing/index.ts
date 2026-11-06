@@ -1,6 +1,7 @@
 export {
   AdoptionStepsSection,
   CommunitySection,
+  FaqSection,
   ForOrganizationsSection,
   ImpactSection,
   LandingHero,
@@ -12,8 +13,15 @@ export {
 export { HeroVisual } from './components/hero-visual';
 export {
   ActiveCampaignsSection,
+  CommunityPulseSection,
   FinalCtaSection,
   LANDING_HELP_ID,
   WaysToHelpSection,
 } from './components/commerce-sections';
+export {
+  CoffeeSection,
+  LANDING_COFFEE_ID,
+  LANDING_TEMPLATES_ID,
+  TemplateGallerySection,
+} from './components/landing-showcase';
 export { useCatalogSnapshot, type CatalogSnapshot } from './model/use-catalog-snapshot';

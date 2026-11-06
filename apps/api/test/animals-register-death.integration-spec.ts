@@ -81,7 +81,7 @@ describe('Animal death registration (M07 hallazgo QA, POST /animals/:id/register
     const res = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name, species: 'dog', sex: 'unknown', size: 'medium' })
+      .send({ approximateAgeMonths: 12, name, species: 'dog', sex: 'unknown', size: 'medium' })
       .expect(201);
     return res.body.id;
   }

@@ -18,6 +18,9 @@
 /// `approximate_age_months` — never stored. `created_at`/`birth_date` are UTC.
 model Animal {
   id                   String    @id @default(uuid()) @db.Uuid
+  /// Código público para la URL de la ficha (/o/<org>/animales/<nombre>-<código>):
+  /// 8 caracteres aleatorios, nunca el id. Lo genera la base (af_public_code).
+  publicCode           String    @unique @default(dbgenerated("af_public_code()")) @map("public_code")
   organizationId       String    @map("organization_id") @db.Uuid
   name                 String
   species              String

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import QRCode from 'qrcode';
+import { qrDataUrl } from '../../../lib/qr';
 import {
   ADOPTION_DELIVERY_ITEMS,
   type AdoptionDelivery,
@@ -32,7 +32,7 @@ function DeliveryQr({ value }: { value: string }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    QRCode.toDataURL(value, { width: 220, margin: 1 })
+    qrDataUrl(value, { width: 220, margin: 1 })
       .then((url) => active && setDataUrl(url))
       .catch(() => undefined);
     return () => {

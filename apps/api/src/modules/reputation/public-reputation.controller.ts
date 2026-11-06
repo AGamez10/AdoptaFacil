@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   type CreatePublicReviewInput,
@@ -15,10 +16,12 @@ import {
   type PublicReview,
   type Review,
 } from '@adoptafacil/contracts';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { PublicReputationService } from './public-reputation.service';
 import { createPublicReviewSchema } from './reviews.schemas';
 import { RequireFeature } from '../../core/features';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * Public reputation indicators (RF23 · M12) — NO auth, mirrors
@@ -31,6 +34,7 @@ export class PublicReputationController {
   constructor(private readonly service: PublicReputationService) {}
 
   @Get('public/organizations/:slug/reputation-summary')
+  @PublicCache()
   async summary(@Param('slug') slug: string): Promise<OrganizationReputationSummary> {
     const summary = await this.service.getSummaryByOrgSlug(slug);
     if (!summary) {
@@ -40,6 +44,7 @@ export class PublicReputationController {
   }
 
   @Get('public/organizations/:slug/reviews')
+  @PublicCache()
   async reviews(
     @Param('slug') slug: string,
     @Query('limit') limit?: string,
@@ -60,6 +65,9 @@ export class PublicReputationController {
    */
   @Post('public/organizations/:slug/reviews')
   @HttpCode(201)
+  // Sin sesión: tope por IP contra el spam (10 reseñas cada 10 minutos).
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 10 * 60_000 } })
   createReview(
     @Param('slug') slug: string,
     @Body(new ZodValidationPipe(createPublicReviewSchema)) dto: CreatePublicReviewInput,

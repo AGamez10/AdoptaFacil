@@ -5,6 +5,7 @@ import type { Env } from '../../config/env.validation';
 import { DisabledPaymentAdapter } from './disabled-payment.adapter';
 import { PAYMENT_PORT } from './payment.port';
 import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
+import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
 
 /**
  * Shared PaymentPort provider (T-052). Global so any module injects PAYMENT_PORT
@@ -13,10 +14,10 @@ import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
  * The adapter is chosen by PAYMENT_DRIVER ('fake' by default). The Fake adapter
  * is IMPORTED from @adoptafacil/contracts (dependency-free, deterministic) — NOT
  * copied here, so Fabián's `computeBreakdown` stays the single source of the
- * commission math. `epayco` (ADR-PAG-002, the only real gateway) binds the
- * ePayco checkout v2 adapter: each session is created with the organization's
- * own keys. Mercado Pago was retired from the product on 2026-10-17 (owner
- * decision) and Wompi before it; `disabled` refuses every call.
+ * commission math. `mercadopago` (ADR-PAG-003, 2026-11-06) binds Checkout Pro
+ * with each organization's OWN OAuth token; `epayco` (ADR-PAG-002) binds the
+ * ePayco checkout v2 adapter with the organization's own keys. Both collect
+ * directly to the organization (no custody); `disabled` refuses every call.
  */
 @Global()
 @Module({
@@ -26,6 +27,9 @@ import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => {
         const driver = config.get('PAYMENT_DRIVER', { infer: true }) ?? 'fake';
+        if (driver === 'mercadopago') {
+          return new MercadoPagoPaymentAdapter(config);
+        }
         if (driver === 'epayco') {
           return new EpaycoPaymentAdapter(config);
         }

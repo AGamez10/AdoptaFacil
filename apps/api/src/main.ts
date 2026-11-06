@@ -5,12 +5,17 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import type { Env } from './config/env.validation';
 import { runLocalPreflight } from './config/local-preflight';
+import { appRole, configureQueueRole } from './config/app-role';
 import { applyHttpHardening } from './core/http/configure-http';
 
 async function bootstrap(): Promise<void> {
   // Local dev only: a stopped Postgres/Redis container gets one clear message
   // and exit, instead of an endless connection-error loop before listen().
   await runLocalPreflight();
+  // Plan de escala (B7): an `api` process keeps every queue processor wired but
+  // idle; the `worker` containers do the queue work.
+  const role = appRole();
+  configureQueueRole(role);
   // Env validation runs while the module graph is built: with NODE_ENV=production
   // it refuses simulated adapters and unsafe settings (Ola 1, R0-1), so the
   // process exits before listening.
@@ -20,6 +25,7 @@ async function bootstrap(): Promise<void> {
   applyHttpHardening(app, {
     production: config.get('NODE_ENV', { infer: true }) === 'production',
     trustProxyHops: config.get('TRUST_PROXY_HOPS', { infer: true }) ?? 0,
+    accessLog: config.get('HTTP_ACCESS_LOG', { infer: true }),
   });
 
   const origins = config
@@ -35,7 +41,9 @@ async function bootstrap(): Promise<void> {
     ? Number(process.env.PORT)
     : config.get('API_PORT', { infer: true });
   await app.listen(port, '0.0.0.0');
-  new Logger('Bootstrap').log(`AdoptaFácil API listening on http://0.0.0.0:${port}`);
+  new Logger('Bootstrap').log(
+    `AdoptaFácil API listening on http://0.0.0.0:${port} (APP_ROLE=${role})`,
+  );
 }
 
 void bootstrap();

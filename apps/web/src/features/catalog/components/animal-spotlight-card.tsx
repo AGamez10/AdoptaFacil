@@ -62,7 +62,7 @@ export function AnimalSpotlightCard({
       data-testid="animal-spotlight-card"
     >
       <Link
-        to={publicAnimalDetailHref(organization.slug, animal.id)}
+        to={publicAnimalDetailHref(organization.slug, animal)}
         state={{ animal }}
         className={styles.card__link}
         aria-label={`Conoce a ${animal.name}${age ? `, ${age}` : ''}${

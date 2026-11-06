@@ -209,6 +209,39 @@ describe('Campaign funding (RF15 · T-055)', () => {
     expect(await raisedOf(campaignX)).toBe(raisedXBefore);
   });
 
+  it('rejects a donation whose campaign belongs to ANOTHER organization', async () => {
+    const res = await request(server)
+      .post('/donations')
+      .set('Authorization', `Bearer ${personToken}`)
+      .send({
+        organizationId: orgB,
+        intendedAmount: 100_000,
+        commissionPayer: 'organization',
+        concept: { kind: 'campaign', id: campaignX },
+        idempotencyKey: `idem-${randomUUID()}`,
+      })
+      .expect(400);
+    expect(res.body.message).toMatch(/campaña no es de la organización/);
+  });
+
+  it('never counts a donation of org B toward a campaign of org A (SQL guard)', async () => {
+    // Datos heredados: una donación de B que quedó apuntando a la campaña de A
+    // (antes de la validación de la API). La función tampoco debe contarla.
+    const raisedXBefore = await raisedOf(campaignX);
+    const { collectionId } = await donateToCampaign(campaignZ, orgB);
+    await admin.donation.updateMany({
+      where: { collectionId },
+      data: { conceptId: campaignX, status: 'approved' },
+    });
+
+    expect(await funding.applyApprovedCollection(collectionId)).toEqual({ applied: false });
+    await request(server)
+      .post('/campaigns/funding/reconcile')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200);
+    expect(await raisedOf(campaignX)).toBe(raisedXBefore);
+  });
+
   it('audits the funding-applied event (UTC) with no payer data', async () => {
     const rows = await admin.auditLog.findMany({
       where: { action: 'campaign.funding_applied', entityId: campaignX },

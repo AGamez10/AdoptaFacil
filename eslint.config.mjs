@@ -45,6 +45,13 @@ export default tseslint.config(
     },
   },
   {
+    // k6 load scenarios (scripts/load/k6) run inside k6, not Node: k6 globals.
+    files: ['scripts/load/k6/**/*.js'],
+    languageOptions: {
+      globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly', open: 'readonly' },
+    },
+  },
+  {
     // CommonJS config files (tailwind/postcss/commitlint) legitimately use require().
     files: ['**/*.cjs'],
     languageOptions: {

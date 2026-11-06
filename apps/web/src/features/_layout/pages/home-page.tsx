@@ -11,6 +11,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  friendlyErrorMessage,
   CardHeader,
   CardTitle,
   ProgressStepper,
@@ -96,7 +97,7 @@ export function HomePage() {
       .catch((error: unknown) =>
         setState({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Error desconocido',
+          message: friendlyErrorMessage(error),
         }),
       );
   }, []);
@@ -256,9 +257,7 @@ export function HomePage() {
             )}
 
             {state.status === 'error' && (
-              <p className="text-sm text-destructive">
-                No se pudo contactar la API: {state.message}
-              </p>
+              <p className="text-sm text-destructive">{state.message}</p>
             )}
 
             {state.status === 'ready' && (

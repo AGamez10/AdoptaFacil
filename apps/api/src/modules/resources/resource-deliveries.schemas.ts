@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { ResourceDeliveryMethod } from '@adoptafacil/contracts';
+import { ruledDate } from '../../core/validation/date-rules';
+import { DATE_RULES, ResourceDeliveryMethod } from '@adoptafacil/contracts';
 
 /** Fijar/actualizar método y fecha mientras la entrega sigue `scheduled`. */
 export const scheduleResourceDeliverySchema = z
   .object({
     method: z.nativeEnum(ResourceDeliveryMethod).optional(),
-    scheduledAt: z.string().datetime({ offset: true }).optional(),
+    scheduledAt: ruledDate(DATE_RULES.deliveryScheduled).optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

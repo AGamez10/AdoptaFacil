@@ -59,10 +59,13 @@ describe('Animal behavior disclosure (M03, S-9: FSD v3.5 Doc 4)', () => {
   }
 
   const createAnimal = (token: string) =>
-    request(server)
-      .post('/animals')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' });
+    request(server).post('/animals').set('Authorization', `Bearer ${token}`).send({
+      approximateAgeMonths: 12,
+      name: 'Firulais',
+      species: 'dog',
+      sex: 'male',
+      size: 'medium',
+    });
 
   const disclosurePayload = {
     signedByName: 'Claudia Vásquez',

@@ -85,7 +85,13 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     const animal = await request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${refugeToken}`)
-      .send({ name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' })
+      .send({
+        approximateAgeMonths: 12,
+        name: 'Firulais',
+        species: 'dog',
+        sex: 'male',
+        size: 'medium',
+      })
       .expect(201);
     animalId = animal.body.id;
 
@@ -185,12 +191,30 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     expect(future.body.questionnaire[0].id).toBeTruthy();
     futureMilestoneId = future.body.id;
 
-    const overdue = await request(server)
+    // Un hito nuevo nunca se programa en el pasado (ni en un día inexistente)…
+    const past = await request(server)
       .post('/adoptions/followups')
       .set('Authorization', `Bearer ${refugeToken}`)
       .send({ contractId, title: 'Chequeo inicial', dueAt: '2020-01-01T00:00:00.000Z' })
+      .expect(400);
+    expect(JSON.stringify(past.body.message)).toMatch(/no puede ser anterior a hoy/);
+    await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Chequeo inicial', dueAt: '2027-02-29T00:00:00.000Z' })
+      .expect(400);
+
+    // …así que el hito vencido se programa hoy y el tiempo "pasa" en la base.
+    const overdue = await request(server)
+      .post('/adoptions/followups')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ contractId, title: 'Chequeo inicial', dueAt: new Date().toISOString() })
       .expect(201);
     overdueMilestoneId = overdue.body.id;
+    await admin.adoptionFollowUpMilestone.update({
+      where: { id: overdueMilestoneId },
+      data: { dueAt: new Date('2020-01-01T00:00:00.000Z') },
+    });
 
     // The T-028a/b trackingRef seam is now materialized on the request.
     const kanban = await request(server)
@@ -336,12 +360,13 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       header.write(type, 4, 'latin1');
       return Buffer.concat([header, payload]);
     };
-    const mp4 = (seconds: number) => {
+    // `brand` 'qt  ' es un MOV de iPhone: el tipo servido sale de esos bytes.
+    const mp4 = (seconds: number, brand = 'isom') => {
       const mvhd = Buffer.alloc(100);
       mvhd.writeUInt32BE(1000, 12);
       mvhd.writeUInt32BE(seconds * 1000, 16);
       return Buffer.concat([
-        box('ftyp', Buffer.from('isom0000isommp41', 'latin1')),
+        box('ftyp', Buffer.from(`${brand}0000${brand}mp41`, 'latin1')),
         box('moov', box('mvhd', mvhd)),
         box('mdat', Buffer.alloc(256)),
       ]);
@@ -368,7 +393,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .post(`/adoptions/followups/${milestoneId}/photo`)
       .set('Authorization', `Bearer ${personToken}`)
       .field('complete', 'true')
-      .attach('file', mp4(28), { filename: 'paseo.mov', contentType: 'video/quicktime' })
+      .attach('file', mp4(28, 'qt  '), { filename: 'paseo.mov', contentType: 'video/quicktime' })
       .expect(201);
 
     const listed = await request(server)

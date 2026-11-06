@@ -34,6 +34,7 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { SelectField, TextAreaField } from '../components/campaign-form-fields';
 import { CampaignProgress } from '../components/campaign-progress';
+import { QrSharePanel } from '../../portals/components/qr-share-panel';
 import {
   CATEGORY_LABELS,
   EVIDENCE_TYPE_LABELS,
@@ -44,6 +45,7 @@ import {
   parseOptionalEvidenceAmount,
 } from '../model/campaigns-view';
 import { EVIDENCE_ACCEPT, uploadEvidenceFile, validateEvidenceUpload } from '../lib/storage';
+import { dateBounds, dateError } from '../../../lib/date-rules';
 
 const CATEGORY_OPTIONS = CAMPAIGN_CATEGORIES.map((value) => ({
   value,
@@ -221,6 +223,11 @@ export function CampaignDetailPage() {
       });
       return;
     }
+    const spentError = dateError('campaignSpent', evSpentAt);
+    if (spentError) {
+      toast({ title: 'Fecha no válida', description: spentError, variant: 'warning' });
+      return;
+    }
     setSavingEvidence(true);
     try {
       const body: CreateCampaignEvidenceInput = {
@@ -303,6 +310,29 @@ export function CampaignDetailPage() {
               </Link>
             </CardContent>
           </Card>
+
+          {/* QR propio de la campaña: lleva a su página pública, donde
+              "Donar a esta campaña" abre el checkout con la campaña como
+              concepto, así cada donación aprobada suma a su recaudo. */}
+          {campaign.status !== CampaignStatus.Cancelled && (
+            <Card data-testid="campaign-qr-card">
+              <CardHeader>
+                <CardTitle>QR de esta campaña</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <QrSharePanel
+                  url={`${window.location.origin}/campanas/${encodeURIComponent(campaign.id)}`}
+                  fileName={`qr-campana-${campaign.id.slice(0, 8)}`}
+                  alt={`Código QR de la campaña ${campaign.title}`}
+                >
+                  <p className="text-sm text-muted-foreground">
+                    Compártelo para esta campaña: quien lo escanea llega a su página y puede donarle
+                    directamente. Cada donación aprobada suma al recaudo que se ve en la página.
+                  </p>
+                </QrSharePanel>
+              </CardContent>
+            </Card>
+          )}
 
           {canManage && (
             <Card>
@@ -454,6 +484,7 @@ export function CampaignDetailPage() {
                         id="evidence-spent-at"
                         type="date"
                         value={evSpentAt}
+                        {...dateBounds('campaignSpent')}
                         onChange={(e) => setEvSpentAt(e.target.value)}
                       />
                     </div>

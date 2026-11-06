@@ -66,7 +66,7 @@ describe('RegisterPage — Organization vs Person', () => {
     expect(screen.getByRole('heading', { name: 'Crear cuenta' })).toBeInTheDocument();
   });
 
-  it('registers a valid organization, stores the session and enters the shell', async () => {
+  it('registers a valid organization and sends it to complete its profile', async () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
     renderShell({ route: '/register', session: { initialStatus: 'unauthenticated' } });
@@ -82,8 +82,11 @@ describe('RegisterPage — Organization vs Person', () => {
 
     await user.click(screen.getByRole('button', { name: 'Crear cuenta de organización' }));
 
-    // Landed inside the protected shell.
-    expect(await screen.findByRole('heading', { name: 'Inicio' })).toBeInTheDocument();
+    // Landed inside the protected shell, first on "Mi organización" to complete
+    // the profile (the public portal shows nothing until it is configured).
+    expect(
+      await screen.findByRole('heading', { name: 'Perfil de la organización' }),
+    ).toBeInTheDocument();
     // Non-negotiable: no browser storage was touched.
     expect(setItem).not.toHaveBeenCalled();
     expect(window.localStorage.length).toBe(0);

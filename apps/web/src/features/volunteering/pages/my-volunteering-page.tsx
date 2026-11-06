@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   type Paginated,
   type ServiceHours,
@@ -26,12 +26,14 @@ import { downloadVolunteerCertificatePdf } from '../lib/certificate';
 import {
   ENROLLMENT_STATUS_LABELS,
   HOURS_STATUS_LABELS,
+  OPPORTUNITY_QUERY_PARAM,
   enrollmentStatusVariant,
   formatBogota,
   formatHours,
   hoursStatusVariant,
   parseSessionHours,
 } from '../model/volunteering-view';
+import { dateBounds, dateError } from '../../../lib/date-rules';
 
 /**
  * `/voluntariado` (RF18/RF19, M08) — experiencia del voluntario (Persona):
@@ -44,6 +46,10 @@ export function MyVolunteeringPage() {
   const client = useApiClient();
   const { toast } = useToast();
   const navigate = useNavigate();
+  // Jornada elegida desde la landing (`?oportunidad=<id>`): se resalta y se
+  // lleva a la vista para que la persona la encuentre sin buscarla.
+  const [searchParams] = useSearchParams();
+  const highlightedId = searchParams.get(OPPORTUNITY_QUERY_PARAM);
 
   const [opportunities, setOpportunities] = useState<VolunteerOpportunityPublic[]>([]);
   const [enrollments, setEnrollments] = useState<VolunteerEnrollmentMine[]>([]);
@@ -89,6 +95,13 @@ export function MyVolunteeringPage() {
     };
   }, [client]);
 
+  useEffect(() => {
+    if (loading || !highlightedId) return;
+    document
+      .getElementById(`oportunidad-${highlightedId}`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [loading, highlightedId]);
+
   const enroll = async (opportunityId: string): Promise<void> => {
     try {
       await client.request('/volunteer-enrollments', { method: 'POST', json: { opportunityId } });
@@ -129,6 +142,11 @@ export function MyVolunteeringPage() {
         description: 'Fecha, horas (hasta 24) y descripción son obligatorios.',
         variant: 'warning',
       });
+      return;
+    }
+    const logDateError = dateError('serviceHoursDate', logDate);
+    if (logDateError) {
+      toast({ title: 'Fecha no válida', description: logDateError, variant: 'warning' });
       return;
     }
     setSaving(true);
@@ -182,7 +200,13 @@ export function MyVolunteeringPage() {
                   {opportunities.map((opportunity) => (
                     <li
                       key={opportunity.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
+                      id={`oportunidad-${opportunity.id}`}
+                      aria-current={opportunity.id === highlightedId ? 'true' : undefined}
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm${
+                        opportunity.id === highlightedId
+                          ? ' border-primary ring-2 ring-primary'
+                          : ''
+                      }`}
                     >
                       <div>
                         <p className="font-medium">
@@ -247,6 +271,7 @@ export function MyVolunteeringPage() {
                               <Input
                                 type="date"
                                 value={logDate}
+                                {...dateBounds('serviceHoursDate')}
                                 onChange={(e) => setLogDate(e.target.value)}
                                 aria-label="Fecha de la sesión"
                               />

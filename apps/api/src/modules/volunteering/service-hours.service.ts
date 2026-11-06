@@ -28,6 +28,25 @@ import {
 } from './volunteer-notifications';
 import { clampLimit } from './volunteer-opportunities.service';
 
+/** Reglas que `create_service_hours` aplica en la base de datos (backstop de
+ *  la validación Zod) traducidas a un mensaje claro para el voluntario. */
+const SERVICE_HOURS_DB_ERRORS: ReadonlyArray<readonly [RegExp, string]> = [
+  [
+    /certificate has already been issued/i,
+    'Ya se emitió un certificado para esta inscripción: no se pueden registrar más horas.',
+  ],
+  [/service hours out of range/i, 'Las horas de una sesión deben ser más de 0 y hasta 24.'],
+  [/service hours date is in the future/i, 'La fecha de la sesión no puede ser posterior a hoy.'],
+  [
+    /service hours date outside the opportunity/i,
+    'La fecha de la sesión debe estar dentro de las fechas de la convocatoria.',
+  ],
+  [
+    /service hours exceed 24 per day/i,
+    'Con esta sesión superarías 24 horas en un mismo día. Revisa las horas que ya registraste esa fecha.',
+  ],
+];
+
 /** Row shape returned by the raw SQL `create_service_hours(...)`. */
 interface ServiceHoursRawRow {
   id: string;
@@ -152,11 +171,8 @@ export class ServiceHoursService {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (/certificate has already been issued/i.test(message)) {
-        throw new BadRequestException(
-          'Ya se emitió un certificado para esta inscripción: no se pueden registrar más horas.',
-        );
-      }
+      const friendly = SERVICE_HOURS_DB_ERRORS.find(([pattern]) => pattern.test(message));
+      if (friendly) throw new BadRequestException(friendly[1]);
       throw error;
     }
     const row = rows[0];

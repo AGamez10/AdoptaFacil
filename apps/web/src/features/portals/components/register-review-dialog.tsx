@@ -18,6 +18,13 @@ export interface RegisterReviewDialogProps {
   /** Se llama justo tras un envío exitoso — el llamador la muestra de inmediato
    *  (el cliente pidió que, al registrarse, se vea sin esperar un refetch). */
   onSubmitted: (review: Review) => void;
+  /**
+   * Modo controlado (plantillas del portal): la plantilla abre el diálogo desde
+   * su propio botón, así que aquí no se pinta el disparador. Sin estas props el
+   * componente se comporta exactamente como antes.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
@@ -30,9 +37,20 @@ const STAR_VALUES = [1, 2, 3, 4, 5] as const;
  * `POST /public/organizations/:slug/reviews` (sin token) y queda visible de
  * inmediato — nunca pasa por una cola de aprobación.
  */
-export function RegisterReviewDialog({ slug, onSubmitted }: RegisterReviewDialogProps) {
+export function RegisterReviewDialog({
+  slug,
+  onSubmitted,
+  open: controlledOpen,
+  onOpenChange,
+}: RegisterReviewDialogProps) {
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -72,11 +90,13 @@ export function RegisterReviewDialog({ slug, onSubmitted }: RegisterReviewDialog
         if (!next) reset();
       }}
     >
-      <DialogTrigger asChild>
-        <button type="button" className={`${styles.btn} ${styles['btn--primary']}`}>
-          Registrar reseña
-        </button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <button type="button" className={`${styles.btn} ${styles['btn--primary']}`}>
+            Registrar reseña
+          </button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Registrar reseña</DialogTitle>

@@ -1,0 +1,39 @@
+// Module: ledger (RF14 · libro público de transparencia).
+// Movimientos que la organización registra a mano (donaciones recibidas y
+// gastos ejecutados). Tenant-scoped con RLS. Inmutables: la app solo puede
+// INSERTar y, en una fila vigente, fijar las tres columnas de anulación (GRANT
+// por columna + trigger en la migración). Nunca se borran.
+
+model LedgerEntry {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  /// `LedgerEntryKind`: 'income' | 'expense'.
+  kind               String
+  /// `LedgerCategory` (lista cerrada en contracts; CHECK en la migración).
+  category           String
+  occurredOn         DateTime  @map("occurred_on") @db.Date
+  /// Pesos colombianos enteros (> 0).
+  amountCop          BigInt    @map("amount_cop")
+  concept            String
+  /// Solo gastos: proveedor (empresa/comercio). Público.
+  counterparty       String?
+  /// Soporte PRIVADO en StoragePort (factura/recibo); el público solo ve que existe.
+  supportStorageRef  String?   @map("support_storage_ref")
+  supportFilename    String?   @map("support_filename")
+  supportContentType String?   @map("support_content_type")
+  supportSizeBytes   Int?      @map("support_size_bytes")
+  /// Idempotencia: el cliente manda un UUID por intento de registro; un
+  /// reintento (doble clic, red caída) devuelve el MISMO movimiento.
+  clientRequestId    String?   @map("client_request_id") @db.Uuid
+  createdByUserId    String    @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at")
+  voidedAt           DateTime? @map("voided_at")
+  voidedByUserId     String?   @map("voided_by_user_id") @db.Uuid
+  voidReason         String?   @map("void_reason")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, clientRequestId])
+  @@index([organizationId, occurredOn])
+  @@map("ledger_entries")
+}

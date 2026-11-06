@@ -128,4 +128,87 @@ describe('MarketplacePage — gestión interna del catálogo (F-7)', () => {
     });
     expect(await screen.findByText('Producto publicado')).toBeInTheDocument();
   });
+  it('warns a manager when the organization has no WhatsApp for buyers to write to', async () => {
+    stubFetch((url) =>
+      url.includes('/org/profile')
+        ? { id: 'org-1', name: 'Refugio' }
+        : { items: [product('p1', 'Concentrado Premium')], total: 1, limit: 50, offset: 0 },
+    );
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    const notice = await screen.findByTestId('marketplace-missing-whatsapp');
+    expect(within(notice).getByRole('link', { name: 'el perfil' })).toHaveAttribute(
+      'href',
+      '/organizacion',
+    );
+  });
+
+  it('does not warn once the organization has a WhatsApp', async () => {
+    stubFetch((url) =>
+      url.includes('/org/profile')
+        ? { id: 'org-1', name: 'Refugio', whatsapp: '3001234567' }
+        : { items: [product('p1', 'Concentrado Premium')], total: 1, limit: 50, offset: 0 },
+    );
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByText('Concentrado Premium')).toBeInTheDocument();
+    expect(screen.queryByTestId('marketplace-missing-whatsapp')).not.toBeInTheDocument();
+  });
+  it('publishes a product WITH two photos: create, then one upload per photo', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method === 'POST' && url.endsWith('/marketplace/products')) {
+        return product('p9', 'Collar reflectivo');
+      }
+      if (init?.method === 'POST' && url.includes('/marketplace/products/p9/images/file')) {
+        return product('p9', 'Collar reflectivo', {
+          images: [{ id: 'i1', storageRef: 'k', order: 0, url: 'https://cdn.test/k.webp' }],
+        });
+      }
+      return { items: [], total: 0, limit: 50, offset: 0 };
+    });
+    vi.stubGlobal(
+      'URL',
+      Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: () => {} }),
+    );
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Publicar producto' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Collar reflectivo' } });
+    fireEvent.change(screen.getByLabelText('Precio (COP)'), { target: { value: '25000' } });
+    const fileInput = () => dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    for (const name of ['collar.jpg', 'collar-lado.jpg']) {
+      const file = new File([new Uint8Array(2048)], name, { type: 'image/jpeg' });
+      fireEvent.change(fileInput(), { target: { files: [file] } });
+    }
+    expect(within(dialog).getAllByTestId('product-photo-image')).toHaveLength(2);
+    // With two photos chosen there is no slot left to add a third.
+    expect(within(dialog).queryByTestId('product-photo-add')).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Publicar producto' }));
+
+    await waitFor(() => {
+      const uploads = calls.filter(
+        (c) => c.init?.method === 'POST' && c.url.includes('/images/file'),
+      );
+      expect(uploads).toHaveLength(2);
+      expect(uploads[0]?.init?.body).toBeInstanceOf(FormData);
+    });
+    expect((await screen.findAllByText('Producto publicado')).length).toBeGreaterThan(0);
+  });
+
+  it('refuses a GIF or a PDF as the product photo before uploading anything', async () => {
+    stubFetch(() => ({ items: [], total: 0, limit: 50, offset: 0 }));
+    renderShell({ route: '/organizacion/marketplace', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Publicar producto' }));
+    const dialog = await screen.findByRole('dialog');
+    const pdf = new File(['%PDF'], 'factura.pdf', { type: 'application/pdf' });
+    fireEvent.change(dialog.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [pdf] },
+    });
+    expect(await screen.findByText('Sube una foto en JPG, PNG o WebP.')).toBeInTheDocument();
+    expect(within(dialog).queryByTestId('product-photo-image')).not.toBeInTheDocument();
+  });
 });

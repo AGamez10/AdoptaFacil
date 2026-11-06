@@ -79,6 +79,51 @@ export interface CreateSponsorshipPlanInput {
   periodicity: SponsorshipPeriodicity;
 }
 
+/**
+ * Suggested monthly sponsorship amount (integer COP) used when an organization
+ * marks an animal as "necesita apadrinamiento" without typing an amount. The
+ * organization can change it per animal at any time (decisión del dueño,
+ * 2026-10-30: 50.000 COP).
+ */
+export const DEFAULT_SPONSORSHIP_AMOUNT_COP = 50_000;
+
+/** Name given to the plan created when an animal is marked as needing sponsorship. */
+export const DEFAULT_SPONSORSHIP_PLAN_NAME = 'Apadrinamiento mensual';
+
+/**
+ * Upper bound (integer COP) for a per-animal amount — a guard against typos
+ * (an extra zero), not a business rule. TODO(client): confirm the ceiling.
+ */
+export const MAX_SPONSORSHIP_AMOUNT_COP = 10_000_000;
+
+/**
+ * Body of `PUT /sponsorship-plans/animal/:animalId` — "este animal necesita
+ * apadrinamiento". Idempotent: repeating it never creates a second plan.
+ * `amount` omitted → keeps the current amount, or {@link DEFAULT_SPONSORSHIP_AMOUNT_COP}
+ * when the animal had no active plan.
+ */
+export interface MarkAnimalNeedsSponsorshipInput {
+  /** Integer COP pesos, > 0. */
+  amount?: number;
+}
+
+/**
+ * Sponsorship settings of ONE animal, as the organization manages them from the
+ * animal's file. `plan` is the active plan new sponsors join (null when the
+ * animal does not need sponsorship). `activeSponsorsCount` counts the
+ * sponsorships still running (active or suspended) on ANY of the animal's
+ * plans: changing the amount never changes what those sponsors already agreed
+ * to pay — only new sponsors get the new amount.
+ */
+export interface AnimalSponsorshipSettings {
+  animalId: string;
+  needsSponsorship: boolean;
+  plan: SponsorshipPlan | null;
+  activeSponsorsCount: number;
+  /** {@link DEFAULT_SPONSORSHIP_AMOUNT_COP}, echoed so the UI never hardcodes it. */
+  suggestedAmount: number;
+}
+
 /** Patch a plan. All fields optional; `isActive:false` archives it. */
 export interface UpdateSponsorshipPlanInput {
   name?: string;

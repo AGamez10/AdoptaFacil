@@ -1,10 +1,14 @@
 import { createVolunteerOpportunitySchema } from './volunteer-opportunities.schemas';
 
+/** Días relativos a hoy: el fin de una convocatoria nueva no puede estar en el pasado. */
+const day = (offset: number) =>
+  `${new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)}T00:00:00.000Z`;
+
 const BASE = {
   title: 'Jornada de esterilización',
   category: 'sterilizations',
-  startDate: '2026-09-01T00:00:00.000Z',
-  endDate: '2026-09-02T00:00:00.000Z',
+  startDate: day(10),
+  endDate: day(11),
   location: 'Refugio Patitas',
 };
 
@@ -25,12 +29,26 @@ describe('createVolunteerOpportunitySchema (RF18)', () => {
     expect(createVolunteerOpportunitySchema.safeParse(BASE).success).toBe(true);
   });
 
+  it('rejects a new opportunity that already ended, or nonexistent dates', () => {
+    const ended = createVolunteerOpportunitySchema.safeParse({
+      ...BASE,
+      startDate: day(-10),
+      endDate: day(-5),
+    });
+    expect(ended.success).toBe(false);
+    expect(ended.error?.issues[0]?.message).toBe('La fecha de fin no puede ser anterior a hoy.');
+    expect(
+      createVolunteerOpportunitySchema.safeParse({ ...BASE, endDate: '2030-02-30T00:00:00.000Z' })
+        .success,
+    ).toBe(false);
+  });
+
   it('rejects endDate before or equal to startDate', () => {
     expect(
       createVolunteerOpportunitySchema.safeParse({
         ...BASE,
-        startDate: '2026-09-02T00:00:00.000Z',
-        endDate: '2026-09-01T00:00:00.000Z',
+        startDate: day(11),
+        endDate: day(10),
       }).success,
     ).toBe(false);
     expect(

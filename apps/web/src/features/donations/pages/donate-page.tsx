@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import type { Donation } from '@adoptafacil/contracts';
+import { isMercadoPagoCheckoutUrl, type Donation } from '@adoptafacil/contracts';
 import {
   Button,
   buttonVariants,
@@ -22,8 +22,13 @@ import { createDonation, fetchOrganizationDonationAvailability } from '../api/do
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
 import { DonationsActivatingNotice } from '../components/donations-activating-notice';
 import { formatCop } from '../model/donation-breakdown-view';
-import { isEpaycoProvider } from '../../payments/lib/payment-provider';
+import {
+  isEpaycoProvider,
+  isMercadoPagoProvider,
+  onlinePaymentsEnabled,
+} from '../../payments/lib/payment-provider';
 import { openEpaycoCheckout } from '../../payments/lib/epayco-checkout';
+import { useNoIndex } from '../../../seo/seo';
 import styles from './donate-page.module.scss';
 
 interface DonationTarget {
@@ -37,6 +42,11 @@ interface DonationTarget {
   /** Slug del portal público (`/o/<slug>`), para ofrecer alternativas si la
    *  organización aún no recibe donaciones en línea. Solo navegación. */
   organizationSlug?: string;
+  /** Donación a UNA campaña de la organización (botón "Donar a esta campaña"
+   *  o el QR fijo apuntando a una campaña). Viaja como `concept`; la API
+   *  rechaza una campaña que no sea de la organización o no esté activa. */
+  campaignId?: string;
+  campaignTitle?: string;
 }
 
 /**
@@ -61,6 +71,8 @@ function useDonationTarget(): DonationTarget | null {
         organizationCity: params.get('organizationCity') ?? undefined,
         organizationNit: params.get('organizationNit') ?? undefined,
         organizationSlug: params.get('organizationSlug') ?? undefined,
+        campaignId: params.get('campaignId') ?? undefined,
+        campaignTitle: params.get('campaignTitle') ?? undefined,
       };
     }
     return null;
@@ -82,6 +94,7 @@ function useDonationTarget(): DonationTarget | null {
  * (invitado). `POST /donations` acepta ambos casos (`OptionalJwtAuthGuard`).
  */
 export function DonatePage() {
+  useNoIndex();
   const client = useApiClient();
   const { status, user } = useSession();
   const hasSession = status === 'authenticated';
@@ -100,6 +113,11 @@ export function DonatePage() {
   // su checkout con la sesión que devolvió la API. `false` solo con el
   // interruptor de apagado (VITE_PAYMENT_PROVIDER=off): aviso tranquilo.
   const epayco = isEpaycoProvider();
+  // ADR-PAG-003 (por defecto): Mercado Pago — tras crear la donación se va a
+  // Checkout Pro de la cuenta del refugio (`paymentLinkUrl`).
+  const mercadopago = isMercadoPagoProvider();
+  const online = onlinePaymentsEnabled();
+  const [redirectingToMercadoPago, setRedirectingToMercadoPago] = useState<Donation | null>(null);
   const [epaycoCheckout, setEpaycoCheckout] = useState<{
     donation: Donation;
     sessionId: string;
@@ -115,7 +133,7 @@ export function DonatePage() {
   const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
 
   useEffect(() => {
-    if (!targetOrganizationId || !epayco) return;
+    if (!targetOrganizationId || !online) return;
     let active = true;
     setAvailability('loading');
     fetchOrganizationDonationAvailability(targetOrganizationId)
@@ -128,7 +146,7 @@ export function DonatePage() {
     return () => {
       active = false;
     };
-  }, [targetOrganizationId, availabilityAttempt, epayco]);
+  }, [targetOrganizationId, availabilityAttempt, online]);
 
   if (!target) {
     // Sin organización objetivo y CON sesión: el historial vive en `/mis-donaciones`
@@ -190,6 +208,7 @@ export function DonatePage() {
     try {
       const donation = await createDonation(client, {
         organizationId: target.organizationId,
+        ...(target.campaignId ? { concept: { kind: 'campaign', id: target.campaignId } } : {}),
         intendedAmount,
         commissionPayer,
         anonymous,
@@ -205,6 +224,13 @@ export function DonatePage() {
         // Idempotencia: el servidor deduplica por (org, key); una clave por intento.
         idempotencyKey: crypto.randomUUID(),
       });
+      if (mercadopago && isMercadoPagoCheckoutUrl(donation.paymentLinkUrl)) {
+        // Navegación completa a Mercado Pago (solo a sus dominios: nunca un
+        // redireccionamiento abierto). Vuelve a /donaciones/resultado.
+        setRedirectingToMercadoPago(donation);
+        window.location.assign(donation.paymentLinkUrl as string);
+        return;
+      }
       if (epayco && donation.checkoutSessionId) {
         await launchEpaycoCheckout(
           donation,
@@ -269,7 +295,14 @@ export function DonatePage() {
       <PublicNavbar />
       <main className="flex-1">
         <PageContainer>
-          <PageHeader title="Donar" description={`Tu aporte para ${target.organizationName}.`} />
+          <PageHeader
+            title="Donar"
+            description={
+              target.campaignId && target.campaignTitle
+                ? `Tu aporte para la campaña «${target.campaignTitle}» de ${target.organizationName}.`
+                : `Tu aporte para ${target.organizationName}.`
+            }
+          />
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -306,7 +339,21 @@ export function DonatePage() {
                   {user.email && ` (${user.email})`}
                 </p>
               )}
-              {epaycoCheckout ? (
+              {redirectingToMercadoPago ? (
+                <div className={styles.done} data-testid="mercadopago-redirecting">
+                  <EmptyState
+                    title="Te llevamos a Mercado Pago"
+                    description={`Vas a pagar ${formatCop(redirectingToMercadoPago.amountCharged)} en la página segura de Mercado Pago, directo a la cuenta de ${target.organizationName}. Cuando Mercado Pago confirme el pago te enviaremos el recibo automático.`}
+                  />
+                  <a
+                    href={redirectingToMercadoPago.paymentLinkUrl}
+                    className={cn(buttonVariants({ variant: 'outline' }))}
+                    data-testid="mercadopago-open-again"
+                  >
+                    Si no se abrió, toca aquí
+                  </a>
+                </div>
+              ) : epaycoCheckout ? (
                 <div className={styles.done} data-testid="epayco-checkout-panel">
                   {epaycoCheckout.status === 'opening' ? (
                     <p className={styles['done__hint']} data-testid="epayco-checkout-opening">
@@ -407,7 +454,7 @@ export function DonatePage() {
                     )}
                   </div>
                 )
-              ) : !epayco ? (
+              ) : !online ? (
                 // Interruptor de apagado (VITE_PAYMENT_PROVIDER=off): nunca un
                 // flujo roto, un aviso tranquilo y otras formas de ayudar.
                 <div className={styles.done} data-testid="donation-online-off">

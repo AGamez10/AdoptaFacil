@@ -4,6 +4,7 @@ import { EmptyState, Skeleton } from '@adoptafacil/ui';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { listPublicNeeds } from '../api/public-resources';
 import { NeedCard } from '../components/need-card';
+import { OtherWaysToHelp, OpenOfferInvite } from '../components/other-ways-to-help';
 
 type ListState = 'loading' | 'ready' | 'error';
 const PAGE_SIZE = 24;
@@ -53,16 +54,21 @@ export function PublicResourcesPage() {
           <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
         )}
         {state === 'ready' && items.length === 0 && (
-          <EmptyState
-            title="Sin necesidades activas"
-            description="No hay necesidades publicadas ahora. Vuelve pronto."
-          />
+          <div className="space-y-8">
+            <OpenOfferInvite empty />
+            <OtherWaysToHelp />
+          </div>
         )}
         {state === 'ready' && items.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((need) => (
               <NeedCard key={need.id} need={need} />
             ))}
+          </div>
+        )}
+        {state === 'ready' && items.length > 0 && (
+          <div className="mt-10">
+            <OpenOfferInvite />
           </div>
         )}
       </main>

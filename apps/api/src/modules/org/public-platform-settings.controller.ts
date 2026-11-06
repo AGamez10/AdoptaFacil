@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import type { PublicHeroBanner } from '@adoptafacil/contracts';
 import { PlatformSettingsService } from './platform-settings.service';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * Public read of the platform's hero banner photos (S-15) — the general
@@ -15,6 +16,7 @@ export class PublicPlatformSettingsController {
   constructor(private readonly service: PlatformSettingsService) {}
 
   @Get('public/hero-banner')
+  @PublicCache()
   getHeroBanner(): Promise<PublicHeroBanner> {
     return this.service.getPublicHeroBanner();
   }

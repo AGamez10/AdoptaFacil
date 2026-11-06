@@ -68,7 +68,13 @@ describe('Animal record (M03, RF07: expediente + breeds + soft-disable + RBAC)',
   const createAnimal = (token: string, body: Record<string, unknown>) =>
     request(server).post('/animals').set('Authorization', `Bearer ${token}`).send(body);
 
-  const baseAnimal = { name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' };
+  const baseAnimal = {
+    name: 'Firulais',
+    species: 'dog',
+    sex: 'male',
+    size: 'medium',
+    approximateAgeMonths: 12,
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -130,15 +136,27 @@ describe('Animal record (M03, RF07: expediente + breeds + soft-disable + RBAC)',
     expect(events.length).toBe(1);
   });
 
-  it('shows an approximate age when the birth date is unknown, and none when fully unknown', async () => {
+  it('shows an approximate age when the birth date is unknown, and rejects a fully unknown age', async () => {
     const approx = await createAnimal(operator.token, {
       ...baseAnimal,
       approximateAgeMonths: 8,
     }).expect(201);
     expect(approx.body.computedAge).toMatchObject({ totalMonths: 8, approximate: true });
 
-    const unknown = await createAnimal(operator.token, baseAnimal).expect(201);
-    expect(unknown.body.computedAge ?? null).toBeNull();
+    const { approximateAgeMonths: _omit, ...noAge } = baseAnimal;
+    await createAnimal(operator.token, noAge).expect(400);
+  });
+
+  it('rejects a future birth date on create and update', async () => {
+    const future = new Date(Date.now() + 6 * 86_400_000).toISOString();
+    await createAnimal(operator.token, { ...baseAnimal, birthDate: future }).expect(400);
+
+    const created = await createAnimal(operator.token, baseAnimal).expect(201);
+    await request(server)
+      .patch(`/animals/${created.body.id}`)
+      .set('Authorization', `Bearer ${operator.token}`)
+      .send({ birthDate: future })
+      .expect(400);
   });
 
   // --- Custom breeds ---------------------------------------------------------

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   type CreateProductInput,
+  type Organization,
   PRODUCT_CATEGORIES,
   ProductCategory,
   type Product,
@@ -24,6 +26,8 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { SelectField, TextAreaField } from '../components/product-form-fields';
 import { ProductManageCard } from '../components/product-manage-card';
+import { ProductPhotosField } from '../components/product-photos-field';
+import { addProductImage, MAX_PRODUCT_PHOTOS, validateImageUpload } from '../lib/storage';
 import { CATEGORY_LABELS } from '../model/marketplace-view';
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
@@ -53,6 +57,11 @@ export function MarketplacePage() {
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
   const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  // El comprador contacta a la organización por el WhatsApp de su perfil: sin
+  // él, el producto se ve en el marketplace pero nadie puede pedirlo.
+  const [missingWhatsapp, setMissingWhatsapp] = useState(false);
 
   // ⚠️ Blindaje anti-regresión (patrón de public-campaigns.ts): SIEMPRE se
   // normaliza `.items` a `[]` si la respuesta no trae un array.
@@ -62,6 +71,43 @@ export function MarketplacePage() {
     );
     setProducts(Array.isArray(page?.items) ? page.items : []);
   };
+
+  useEffect(() => {
+    const urls = photos.map((file) => URL.createObjectURL(file));
+    setPhotoPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [photos]);
+
+  /** Valida la foto elegida y la deja en la posición `index` (o al final). */
+  const choosePhoto = (file: File, index?: number): void => {
+    const invalid = validateImageUpload(file);
+    if (invalid) {
+      toast({ title: 'Foto no válida', description: invalid, variant: 'warning' });
+      return;
+    }
+    setPhotos((current) => {
+      if (index !== undefined && index < current.length) {
+        return current.map((existing, i) => (i === index ? file : existing));
+      }
+      return current.length < MAX_PRODUCT_PHOTOS ? [...current, file] : current;
+    });
+  };
+
+  useEffect(() => {
+    if (!canManage) return;
+    let active = true;
+    client
+      .request<Organization>('/org/profile')
+      .then((org) => {
+        if (active) setMissingWhatsapp(!org?.whatsapp?.trim());
+      })
+      .catch(() => {
+        // Best-effort: sin perfil no se muestra el aviso.
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, canManage]);
 
   useEffect(() => {
     let active = true;
@@ -86,6 +132,7 @@ export function MarketplacePage() {
     setCategory(ProductCategory.Food);
     setPrice('');
     setStock('');
+    setPhotos([]);
   };
 
   const submit = async (): Promise<void> => {
@@ -114,11 +161,31 @@ export function MarketplacePage() {
         price: priceValue,
         ...(stockValue !== undefined ? { stock: stockValue } : {}),
       };
-      await client.request<Product>('/marketplace/products', { method: 'POST', json: body });
+      const created = await client.request<Product>('/marketplace/products', {
+        method: 'POST',
+        json: body,
+      });
+      let photoError: string | null = null;
+      for (const photo of photos) {
+        try {
+          await addProductImage(client, created.id, photo);
+        } catch (error) {
+          photoError = error instanceof Error ? error.message : 'Inténtalo de nuevo.';
+          break;
+        }
+      }
       resetForm();
       setShowForm(false);
       await load();
-      toast({ title: 'Producto publicado', variant: 'success' });
+      if (photoError) {
+        toast({
+          title: 'Producto publicado, pero una foto no se pudo subir',
+          description: `${photoError} Puedes subirla desde "Ver detalle".`,
+          variant: 'warning',
+        });
+      } else {
+        toast({ title: 'Producto publicado', variant: 'success' });
+      }
     } catch (error) {
       toast({
         title: 'No se pudo publicar el producto',
@@ -137,6 +204,20 @@ export function MarketplacePage() {
         description="Publica productos físicos de tu organización. El contacto y la venta ocurren por WhatsApp, fuera de la plataforma."
         actions={canManage && <Button onClick={() => setShowForm(true)}>Publicar producto</Button>}
       />
+      {missingWhatsapp && (
+        <p
+          role="status"
+          data-testid="marketplace-missing-whatsapp"
+          className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          Tus productos se ven en el marketplace, pero los compradores aún no tienen cómo
+          escribirte: agrega el WhatsApp de la organización en{' '}
+          <Link to="/organizacion" className="font-semibold underline">
+            el perfil
+          </Link>
+          . La plataforma no cobra en línea; el pago y la entrega se acuerdan por WhatsApp.
+        </p>
+      )}
       {loading && <Skeleton className="h-64 w-full" />}
       {!loading && (
         <div className="space-y-6">
@@ -225,6 +306,20 @@ export function MarketplacePage() {
                 placeholder="Unidades disponibles"
                 value={stock}
                 onChange={(e) => setStock(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-foreground">Fotos (opcional, hasta 2)</p>
+              <ProductPhotosField
+                photos={photoPreviews.map((url, index) => ({ key: String(index), url }))}
+                alt="Vista previa de la foto del producto"
+                canManage
+                busy={saving}
+                onAdd={(file) => choosePhoto(file)}
+                onReplace={(key, file) => choosePhoto(file, Number(key))}
+                onRemove={(key) =>
+                  setPhotos((current) => current.filter((_, i) => i !== Number(key)))
+                }
               />
             </div>
           </div>

@@ -120,6 +120,16 @@ describe('CampaignDetailPage (S2-01)', () => {
     );
   });
 
+  it('shows the campaign QR, pointing to its public page', async () => {
+    stubCampaignApi();
+    renderShell({ route: '/organizacion/campanas/c1', ...sessionWith([Role.Owner]) });
+
+    const card = await screen.findByTestId('campaign-qr-card');
+    expect(within(card).getByTestId('qr-share-url')).toHaveTextContent(
+      `${window.location.origin}/campanas/c1`,
+    );
+  });
+
   it('hides edit and evidence-write controls for a ReadOnlyAuditor (view-only)', async () => {
     stubCampaignApi();
     renderShell({ route: '/organizacion/campanas/c1', ...sessionWith([Role.ReadOnlyAuditor]) });

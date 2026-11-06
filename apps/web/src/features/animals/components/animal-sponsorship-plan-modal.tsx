@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  type Paginated,
-  type SponsorshipPlan,
-  SponsorshipPeriodicity,
+  type AnimalSponsorshipSettings,
+  DEFAULT_SPONSORSHIP_AMOUNT_COP,
 } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -18,18 +17,13 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
+import {
+  formatAmountInput,
+  formatCop,
+  parseAmountInput,
+  sponsorshipErrorMessage,
+} from '../lib/sponsorship-settings';
 import styles from './animal-sponsorship-plan-modal.module.scss';
-
-/** Feature-local (same duplication convention as `formatBogota`/`formatCop`
- *  elsewhere in the repo, e.g. `features/sponsorships/model/sponsorships-view.ts`)
- *  rather than a cross-feature import — `animals` and `sponsorships` stay decoupled. */
-function formatCop(pesos: number): string {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(pesos);
-}
 
 export interface AnimalSponsorshipPlanModalProps {
   open: boolean;
@@ -40,22 +34,20 @@ export interface AnimalSponsorshipPlanModalProps {
 
 type LoadState = 'loading' | 'ready' | 'error';
 
+function sponsorsLabel(count: number): string {
+  return count === 1 ? '1 padrino activo' : `${count} padrinos activos`;
+}
+
 /**
- * S2-03-REV (Objetivo #1, M07/RF17) — activar/gestionar el plan de
- * apadrinamiento de UN animal, desde la ficha (`/animales`, dominio M03).
- * PRERREQUISITO del resto del módulo: sin un plan activo, `SponsorPage`
- * (`features/sponsorships`) siempre muestra "sin plan activo" y el animal
- * nunca aparece apadrinable en el portal público.
+ * "¿Este animal necesita apadrinamiento?" — desde la ficha (`/animales`, M03).
+ * Marcarlo abre el plan mensual con el aporte sugerido (50.000 COP, editable
+ * aquí mismo) y muestra "Apadrinar" en el portal público; desmarcarlo deja de
+ * recibir padrinos nuevos sin tocar a los actuales.
  *
- * Consume SOLO endpoints ya existentes de `SponsorshipPlansController`:
- * `GET /sponsorship-plans?animalId=` (¿ya tiene uno?), `POST
- * /sponsorship-plans` (crear) y `PATCH /sponsorship-plans/:id` (activar/
- * desactivar). Un solo plan mensual por este spec — `periodicity` no se
- * ofrece elegir, el enum del backend ya está cerrado a `monthly`.
- *
- * Simplificación MVP: si el animal ya tuviera más de un plan (no impedido
- * por el backend), se gestiona solo el primero devuelto — este spec asume
- * como mucho un plan por animal, igual que el resto de M07 en Ola 2.
+ * Consume `GET|PUT|DELETE /sponsorship-plans/animal/:animalId` (idempotentes:
+ * un doble clic nunca abre dos planes). Cambiar el monto con padrinos activos
+ * lo resuelve la API: ellos conservan el monto que aceptaron y el nuevo aplica
+ * solo a padrinos nuevos — esta ventana lo explica antes de guardar.
  */
 export function AnimalSponsorshipPlanModal({
   open,
@@ -66,20 +58,25 @@ export function AnimalSponsorshipPlanModal({
   const client = useApiClient();
   const { toast } = useToast();
   const [state, setState] = useState<LoadState>('loading');
-  const [plan, setPlan] = useState<SponsorshipPlan | null>(null);
-  const [name, setName] = useState('Apadrinamiento mensual');
-  const [amount, setAmount] = useState('');
+  const [settings, setSettings] = useState<AnimalSponsorshipSettings | null>(null);
+  const [amount, setAmount] = useState(formatAmountInput(DEFAULT_SPONSORSHIP_AMOUNT_COP));
+  const [amountError, setAmountError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
+  const apply = useCallback((next: AnimalSponsorshipSettings) => {
+    setSettings(next);
+    setAmount(formatAmountInput(next.plan?.amount ?? next.suggestedAmount));
+    setAmountError(null);
+  }, []);
+
+  const load = useCallback(() => {
     let active = true;
     setState('loading');
     client
-      .request<Paginated<SponsorshipPlan>>(`/sponsorship-plans?animalId=${animalId}&limit=1`)
-      .then((page) => {
+      .request<AnimalSponsorshipSettings>(`/sponsorship-plans/animal/${animalId}`)
+      .then((next) => {
         if (!active) return;
-        setPlan(page.items[0] ?? null);
+        apply(next);
         setState('ready');
       })
       .catch(() => {
@@ -88,39 +85,27 @@ export function AnimalSponsorshipPlanModal({
     return () => {
       active = false;
     };
-  }, [client, animalId, open]);
+  }, [client, animalId, apply]);
 
-  async function createPlan(): Promise<void> {
-    const parsed = Number(amount);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      toast({
-        title: 'Monto inválido',
-        description: 'Indica un monto mensual mayor a 0.',
-        variant: 'warning',
-      });
-      return;
-    }
+  useEffect(() => {
+    if (!open) return;
+    return load();
+  }, [open, load]);
+
+  async function save(
+    request: () => Promise<AnimalSponsorshipSettings>,
+    success: (next: AnimalSponsorshipSettings) => { title: string; description: string },
+    failureTitle: string,
+  ): Promise<void> {
     setSaving(true);
     try {
-      const created = await client.request<SponsorshipPlan>('/sponsorship-plans', {
-        method: 'POST',
-        json: {
-          animalId,
-          name: name.trim() || 'Apadrinamiento mensual',
-          amount: Math.round(parsed),
-          periodicity: SponsorshipPeriodicity.Monthly,
-        },
-      });
-      setPlan(created);
-      toast({
-        title: 'Plan de apadrinamiento creado',
-        description: `${animalName} ya puede recibir padrinos.`,
-        variant: 'success',
-      });
+      const next = await request();
+      apply(next);
+      toast({ ...success(next), variant: 'success' });
     } catch (error) {
       toast({
-        title: 'No se pudo crear el plan',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        title: failureTitle,
+        description: sponsorshipErrorMessage(error),
         variant: 'destructive',
       });
     } finally {
@@ -128,32 +113,102 @@ export function AnimalSponsorshipPlanModal({
     }
   }
 
-  async function toggleActive(): Promise<void> {
-    if (!plan) return;
-    setSaving(true);
-    try {
-      const updated = await client.request<SponsorshipPlan>(`/sponsorship-plans/${plan.id}`, {
-        method: 'PATCH',
-        json: { isActive: !plan.isActive },
-      });
-      setPlan(updated);
-      toast({
-        title: updated.isActive ? 'Plan activado' : 'Plan desactivado',
-        description: updated.isActive
-          ? `${animalName} ya puede recibir padrinos.`
-          : `${animalName} ya no acepta nuevos padrinos (los existentes no se ven afectados).`,
-        variant: 'success',
-      });
-    } catch (error) {
-      toast({
-        title: 'No se pudo actualizar el plan',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSaving(false);
+  function readAmount(): number | null {
+    const parsed = parseAmountInput(amount);
+    if (!parsed.ok) {
+      setAmountError(parsed.message);
+      return null;
     }
+    setAmountError(null);
+    return parsed.value;
   }
+
+  function mark(): void {
+    const value = readAmount();
+    if (value === null) return;
+    void save(
+      () =>
+        client.request<AnimalSponsorshipSettings>(`/sponsorship-plans/animal/${animalId}`, {
+          method: 'PUT',
+          json: { amount: value },
+        }),
+      (next) => ({
+        title: 'Listo: necesita apadrinamiento',
+        description: `${animalName} ya aparece con el botón "Apadrinar" en tu portal, con un aporte de ${formatCop(next.plan?.amount ?? value)} al mes.`,
+      }),
+      'No pudimos marcarlo',
+    );
+  }
+
+  function changeAmount(): void {
+    const value = readAmount();
+    if (value === null) return;
+    const keeping = settings?.activeSponsorsCount ?? 0;
+    void save(
+      () =>
+        client.request<AnimalSponsorshipSettings>(`/sponsorship-plans/animal/${animalId}`, {
+          method: 'PUT',
+          json: { amount: value },
+        }),
+      () => ({
+        title: 'Aporte actualizado',
+        description:
+          keeping > 0
+            ? `Los padrinos nuevos de ${animalName} verán ${formatCop(value)} al mes. Los ${keeping} actuales siguen con el monto que aceptaron.`
+            : `Los padrinos de ${animalName} verán ${formatCop(value)} al mes.`,
+      }),
+      'No pudimos cambiar el aporte',
+    );
+  }
+
+  function unmark(): void {
+    void save(
+      () =>
+        client.request<AnimalSponsorshipSettings>(`/sponsorship-plans/animal/${animalId}`, {
+          method: 'DELETE',
+        }),
+      (next) => ({
+        title: 'Ya no recibe padrinos nuevos',
+        description:
+          next.activeSponsorsCount > 0
+            ? `${animalName} conserva sus ${sponsorsLabel(next.activeSponsorsCount)}. Si quieres terminar esos apadrinamientos, hazlo desde Apadrinamientos.`
+            : `${animalName} ya no muestra el botón "Apadrinar" en tu portal.`,
+      }),
+      'No pudimos desmarcarlo',
+    );
+  }
+
+  const plan = settings?.plan ?? null;
+  const parsed = parseAmountInput(amount);
+  const amountChanged = plan !== null && parsed.ok && parsed.value !== plan.amount;
+  const suggested = formatCop(settings?.suggestedAmount ?? DEFAULT_SPONSORSHIP_AMOUNT_COP);
+
+  const amountField = (
+    <div className="space-y-1">
+      <label className={styles.label} htmlFor={`sponsorship-amount-${animalId}`}>
+        Aporte mensual (COP)
+      </label>
+      <Input
+        id={`sponsorship-amount-${animalId}`}
+        inputMode="numeric"
+        autoComplete="off"
+        value={amount}
+        aria-invalid={amountError ? true : undefined}
+        aria-describedby={`sponsorship-amount-help-${animalId}`}
+        onChange={(e) => {
+          setAmount(e.target.value);
+          setAmountError(null);
+        }}
+      />
+      <p
+        id={`sponsorship-amount-help-${animalId}`}
+        className={amountError ? styles['hint--error'] : styles.hint}
+        role={amountError ? 'alert' : undefined}
+      >
+        {amountError ?? `Sugerido: ${suggested} al mes. Puedes ajustarlo para ${animalName}.`}
+      </p>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -161,57 +216,67 @@ export function AnimalSponsorshipPlanModal({
         <DialogHeader>
           <DialogTitle>Apadrinamiento de {animalName}</DialogTitle>
           <DialogDescription>
-            Plan mensual único (RF17). Actívalo para que las Personas puedan apadrinar a{' '}
-            {animalName} desde el portal público.
+            Un padrino aporta cada mes para los gastos de {animalName} (comida, salud, cuidados)
+            mientras encuentra hogar.
           </DialogDescription>
         </DialogHeader>
 
         {state === 'loading' && <Skeleton className="h-24 w-full" />}
         {state === 'error' && (
-          <p className={styles['hint--error']}>
-            No se pudo cargar el plan de apadrinamiento. Inténtalo de nuevo.
-          </p>
-        )}
-
-        {state === 'ready' && plan && (
           <div className="space-y-3">
-            <div className={styles['plan-summary']}>
-              <div>
-                <p className={styles['plan-summary__name']}>{plan.name}</p>
-                <p className={styles['plan-summary__amount']}>{formatCop(plan.amount)} / mes</p>
-              </div>
-              <Badge variant={plan.isActive ? 'success' : 'secondary'}>
-                {plan.isActive ? 'Activo' : 'Inactivo'}
-              </Badge>
-            </div>
-            <Button variant="outline" disabled={saving} onClick={() => void toggleActive()}>
-              {saving ? 'Guardando…' : plan.isActive ? 'Desactivar plan' : 'Activar plan'}
+            <p className={styles['hint--error']} role="alert">
+              No pudimos cargar el apadrinamiento de {animalName}. Revisa tu conexión e inténtalo de
+              nuevo.
+            </p>
+            <Button variant="outline" onClick={() => load()}>
+              Reintentar
             </Button>
           </div>
         )}
 
-        {state === 'ready' && !plan && (
+        {state === 'ready' && settings && plan && (
+          <div className="space-y-3">
+            <div className={styles['plan-summary']}>
+              <div>
+                <p className={styles['plan-summary__name']}>Necesita apadrinamiento</p>
+                <p className={styles['plan-summary__amount']}>
+                  {formatCop(plan.amount)} al mes ·{' '}
+                  {settings.activeSponsorsCount > 0
+                    ? sponsorsLabel(settings.activeSponsorsCount)
+                    : 'aún sin padrinos'}
+                </p>
+              </div>
+              <Badge variant="success">Visible en tu portal</Badge>
+            </div>
+            {amountField}
+            {amountChanged && settings.activeSponsorsCount > 0 && (
+              <p className={styles.hint}>
+                El nuevo monto aplica solo a padrinos nuevos. Los{' '}
+                {sponsorsLabel(settings.activeSponsorsCount)} siguen aportando lo que aceptaron.
+              </p>
+            )}
+            <div className={styles.actions}>
+              <Button disabled={saving || !amountChanged} onClick={changeAmount}>
+                {saving ? 'Guardando…' : 'Guardar aporte'}
+              </Button>
+              <Button variant="outline" disabled={saving} onClick={unmark}>
+                Ya no necesita apadrinamiento
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {state === 'ready' && settings && !plan && (
           <div className="space-y-3">
             <p className={styles.hint}>
-              {animalName} todavía no tiene un plan de apadrinamiento. Crea uno para que aparezca
-              disponible en el portal público.
+              Al marcarlo, {animalName} aparecerá con el botón &quot;Apadrinar&quot; en tu portal
+              público.
+              {settings.activeSponsorsCount > 0 &&
+                ` Hoy conserva ${sponsorsLabel(settings.activeSponsorsCount)} de antes.`}
             </p>
-            <Input
-              aria-label="Nombre del plan"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nombre del plan"
-            />
-            <Input
-              aria-label="Monto mensual (COP)"
-              type="number"
-              min={1}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Monto mensual (COP)"
-            />
-            <Button disabled={saving} onClick={() => void createPlan()}>
-              {saving ? 'Creando…' : 'Crear plan'}
+            {amountField}
+            <Button disabled={saving} onClick={mark}>
+              {saving ? 'Guardando…' : 'Marcar que necesita apadrinamiento'}
             </Button>
           </div>
         )}

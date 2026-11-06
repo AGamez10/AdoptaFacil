@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SponsorshipStatus } from '@adoptafacil/contracts';
 import type { AuditService } from '../../core/audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -216,5 +216,56 @@ describe('AnimalsService.registerDeath (M07 hallazgo QA)', () => {
 
     await expect(service.registerDeath('actor-1', 'animal-1')).rejects.toThrow(NotFoundException);
     expect(tx.animal.update).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Birth date on update (demo bug: an animal could be left with no age). The
+ * schema rejects future dates; the service keeps the record with SOME age when
+ * the birth date is cleared to switch to an approximate one.
+ */
+describe('AnimalsService.update — age stays required', () => {
+  function withExisting(existing: Record<string, unknown>): TxMock {
+    const tx = makeTx();
+    tx.animal.findUnique.mockResolvedValue({
+      id: 'animal-1',
+      organizationId: 'org-1',
+      ...existing,
+    });
+    return tx;
+  }
+
+  it('rejects clearing the birth date when no approximate age would remain', async () => {
+    const tx = withExisting({ birthDate: new Date('2024-01-01'), approximateAgeMonths: null });
+    const { service } = makeService(tx);
+
+    await expect(service.update('actor-1', 'animal-1', { birthDate: null })).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(tx.animal.update).not.toHaveBeenCalled();
+  });
+
+  it('clears the birth date when switching to an approximate age', async () => {
+    const tx = withExisting({ birthDate: new Date('2024-01-01'), approximateAgeMonths: null });
+    const { service } = makeService(tx);
+
+    await service.update('actor-1', 'animal-1', { birthDate: null, approximateAgeMonths: 18 });
+
+    expect(tx.animal.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ birthDate: null, approximateAgeMonths: 18 }),
+      }),
+    );
+  });
+
+  it('leaves the birth date untouched when the patch does not mention it', async () => {
+    const tx = withExisting({ birthDate: new Date('2024-01-01'), approximateAgeMonths: null });
+    const { service } = makeService(tx);
+
+    await service.update('actor-1', 'animal-1', { name: 'Luna' });
+
+    expect(tx.animal.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ birthDate: undefined }) }),
+    );
   });
 });

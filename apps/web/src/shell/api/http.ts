@@ -1,3 +1,4 @@
+import { friendlyMessage } from '@adoptafacil/ui';
 import { ApiError } from './api-error';
 
 /**
@@ -74,8 +75,10 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
   }
   const code =
     typeof body?.code === 'string' ? body.code : (STATUS_CODES[response.status] ?? 'http_error');
-  const message =
-    extractMessage(body?.message) ?? (response.statusText || `HTTP ${response.status}`);
+  // Lo que verá la persona: el mensaje del servidor si ya es claro y en
+  // español; si es técnico ("Cannot POST /…", inglés, validador), uno amable
+  // según el código. El cuerpo original sigue en `details` para depurar.
+  const message = friendlyMessage(extractMessage(body?.message), response.status);
   return new ApiError(response.status, code, message, body);
 }
 

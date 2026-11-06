@@ -46,6 +46,7 @@ import {
   needStatusVariant,
   offerStatusVariant,
 } from '../model/resources-view';
+import { dateBounds } from '../../../lib/date-rules';
 
 const CATEGORY_OPTIONS = RESOURCE_CATEGORIES.map((value) => ({
   value,
@@ -613,6 +614,7 @@ function DeliveryPanel({
                 id={`delivery-date-${delivery.id}`}
                 type="date"
                 value={scheduledAt}
+                {...dateBounds('deliveryScheduled')}
                 onChange={(e) => setScheduledAt(e.target.value)}
               />
             </div>

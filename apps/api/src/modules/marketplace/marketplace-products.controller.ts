@@ -8,9 +8,13 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ProductCategory,
   Role,
@@ -26,13 +30,20 @@ import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
-import { MarketplaceProductsService } from './marketplace-products.service';
+import {
+  MarketplaceProductsService,
+  type UploadedProductImage,
+} from './marketplace-products.service';
 import {
   addProductImageSchema,
   createProductSchema,
   updateProductSchema,
 } from './marketplace-products.schemas';
 import { RequireFeature } from '../../core/features';
+
+/** Tope de lo que se acepta en memoria por una foto (el límite real, en
+ *  español, lo aplica el servicio con STORAGE_MAX_FILE_MB). */
+const PRODUCT_IMAGE_MULTIPART_LIMIT = 25 * 1024 * 1024;
 
 /** Roles that may PUBLISH/EDIT a product (M10). */
 export const MARKETPLACE_WRITE_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
@@ -102,6 +113,49 @@ export class MarketplaceProductsController {
     @Body(new ZodValidationPipe(updateProductSchema)) dto: UpdateProductInput,
   ): Promise<Product> {
     return this.service.update(actor.id, id, dto);
+  }
+
+  /** La foto principal del producto: se sube en un paso y reemplaza la primera (o se agrega si no hay). */
+  @Put(':id/image')
+  @Roles(...MARKETPLACE_WRITE_ROLES)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
+  )
+  setImage(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: UploadedProductImage | undefined,
+  ): Promise<Product> {
+    return this.service.setImage(actor.id, id, file);
+  }
+
+  /** Agrega una foto (hasta 2 por producto): se sube en un paso, ya recomprimida. */
+  @Post(':id/images/file')
+  @Roles(...MARKETPLACE_WRITE_ROLES)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
+  )
+  addImageFile(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: UploadedProductImage | undefined,
+  ): Promise<Product> {
+    return this.service.addImageFile(actor.id, id, file);
+  }
+
+  /** Cambia una de las fotos del producto por otra. */
+  @Put(':id/images/:imageId/file')
+  @Roles(...MARKETPLACE_WRITE_ROLES)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
+  )
+  replaceImageFile(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @UploadedFile() file: UploadedProductImage | undefined,
+  ): Promise<Product> {
+    return this.service.replaceImageFile(actor.id, id, imageId, file);
   }
 
   @Post(':id/images')

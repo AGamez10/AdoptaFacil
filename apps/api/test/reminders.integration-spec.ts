@@ -74,10 +74,13 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
   }
 
   const createAnimal = (token: string) =>
-    request(server)
-      .post('/animals')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'Firulais', species: 'dog', sex: 'male', size: 'medium' });
+    request(server).post('/animals').set('Authorization', `Bearer ${token}`).send({
+      approximateAgeMonths: 12,
+      name: 'Firulais',
+      species: 'dog',
+      sex: 'male',
+      size: 'medium',
+    });
 
   const addVaccine = (token: string, animalId: string, nextDueDate: string) =>
     request(server)

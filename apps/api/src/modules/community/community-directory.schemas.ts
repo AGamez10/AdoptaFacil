@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { ServiceCategory } from '@adoptafacil/contracts';
+import { DATE_RULES, ServiceCategory } from '@adoptafacil/contracts';
+import { ruledDate } from '../../core/validation/date-rules';
 
 /** Validación del primer corte del ecosistema (directorio + mascotas).
  *  `.strict()` rechaza llaves desconocidas, como el resto del módulo. Nunca
@@ -74,13 +75,9 @@ const petFields = {
   species: z.enum(['dog', 'cat', 'other']),
   breed: optionalText(80),
   sex: z.enum(['male', 'female', 'unknown']).optional(),
-  birthDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .refine((value) => {
-      const date = new Date(`${value}T00:00:00Z`);
-      return !Number.isNaN(date.getTime()) && date.getTime() <= Date.now();
-    }, 'Fecha inválida o futura.')
+  /** Solo día (`AAAA-MM-DD`): la columna es DATE. Criterio compartido de fechas. */
+  birthDate: ruledDate(DATE_RULES.petBirth)
+    .refine((value) => /^\d{4}-\d{2}-\d{2}$/.test(value), 'Usa el formato AAAA-MM-DD.')
     .optional(),
   sterilized: z.boolean().optional(),
   adoptedFrom: optionalText(120),

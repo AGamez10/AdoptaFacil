@@ -3,6 +3,7 @@ export { LoginPage } from './pages/login-page';
 export { RegisterPage } from './pages/register-page';
 export { ForgotPasswordPage } from './pages/forgot-password-page';
 export { ResetPasswordPage } from './pages/reset-password-page';
+export { AcceptInvitationPage } from './pages/accept-invitation-page';
 
 // Shared building blocks (also reusable by future auth screens).
 export { AuthLayout, type AuthLayoutProps } from './components/auth-layout';

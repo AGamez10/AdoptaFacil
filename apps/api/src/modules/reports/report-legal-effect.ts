@@ -41,6 +41,14 @@ export function isFormalState(state: string): boolean {
  */
 export function computeLegalEffect(input: LegalEffectInput): OrgReportLegalEffect {
   if (!isFormalState(input.formalizationState)) return 'informative';
+  if (input.kind === 'accounting') {
+    // El libro auxiliar lo revisa y firma el contador o el revisor fiscal; el
+    // representante legal es opcional. Nunca `certified`: no es un
+    // certificado tributario ni un estado financiero (🧾 contador).
+    return input.signerRoles.includes('fiscal_reviewer') || input.signerRoles.includes('accountant')
+      ? 'signed'
+      : 'informative';
+  }
   if (!input.signerRoles.includes('legal_representative')) return 'informative';
   if (
     input.kind === 'donations' &&
@@ -60,6 +68,8 @@ export function computeLegalEffect(input: LegalEffectInput): OrgReportLegalEffec
  * - donaciones: representante legal + revisor fiscal, o contador si no hay
  *   revisor fiscal registrado;
  * - servicio social: representante legal.
+ * - libro auxiliar (accounting): representante legal si registró firma +
+ *   revisor fiscal, o contador si no hay revisor.
  */
 export function defaultSignerRoles(
   kind: OrgReportKind,
@@ -67,7 +77,7 @@ export function defaultSignerRoles(
 ): LegalRepresentativeRole[] {
   const roles: LegalRepresentativeRole[] = [];
   if (registered.has('legal_representative')) roles.push('legal_representative');
-  if (kind === 'donations') {
+  if (kind === 'donations' || kind === 'accounting') {
     if (registered.has('fiscal_reviewer')) roles.push('fiscal_reviewer');
     else if (registered.has('accountant')) roles.push('accountant');
   }

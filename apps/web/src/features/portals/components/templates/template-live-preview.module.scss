@@ -86,6 +86,7 @@
 }
 
 .canvas {
+  container-type: inline-size;
   position: absolute;
   top: 0;
   left: 0;
@@ -98,6 +99,11 @@
   flex-direction: column;
   gap: 2rem;
   padding: 1.5rem;
+}
+
+.inner > * {
+  width: 100%;
+  min-width: 0;
 }
 
 .catalog {

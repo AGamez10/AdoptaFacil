@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
+import { qrDataUrl } from '../../../lib/qr';
 
 export interface CertificateQrProps {
   /** URL que el QR debe codificar (F-3, RF14: la verificación pública real del
@@ -22,7 +22,7 @@ export function CertificateQr({ value, size = 128 }: CertificateQrProps) {
   useEffect(() => {
     let active = true;
     setDataUrl(null);
-    QRCode.toDataURL(value, { width: size, margin: 1 })
+    qrDataUrl(value, { width: size, margin: 1 })
       .then((url) => {
         if (active) setDataUrl(url);
       })

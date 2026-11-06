@@ -62,7 +62,7 @@ describe('Clinical carnet — timeline + PDF (S2-04B-2)', () => {
     request(server)
       .post('/animals')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name, species: 'dog', sex: 'male', size: 'medium' })
+      .send({ approximateAgeMonths: 12, name, species: 'dog', sex: 'male', size: 'medium' })
       .expect(201);
 
   const createEvent = (token: string, animalId: string, body: Record<string, unknown>) =>
