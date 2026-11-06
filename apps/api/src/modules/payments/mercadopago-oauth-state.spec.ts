@@ -1,5 +1,10 @@
 import { loadEpaycoKeysEncryptionKey } from './epayco-keys-crypto';
-import { openOAuthState, sealOAuthState } from './mercadopago-oauth-state';
+import {
+  createOAuthBinding,
+  oauthBindingMatches,
+  openOAuthState,
+  sealOAuthState,
+} from './mercadopago-oauth-state';
 import { isDueForRefresh } from './mercadopago-connections.service';
 import {
   decryptMercadoPagoSecret,
@@ -12,6 +17,7 @@ const CLAIMS = {
   organizationId: '11111111-2222-3333-4444-555555555555',
   actorUserId: '66666666-7777-8888-9999-000000000000',
   codeVerifier: 'pkce-verifier-should-stay-hidden',
+  bindingHash: 'a'.repeat(64),
 };
 
 describe('Mercado Pago OAuth state (sealed, anti-CSRF)', () => {
@@ -22,6 +28,16 @@ describe('Mercado Pago OAuth state (sealed, anti-CSRF)', () => {
     const opened = openOAuthState(state, key);
     expect(opened).toMatchObject(CLAIMS);
     expect(opened?.nonce).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('binds the state to the browser cookie that asked for it (constant-time)', () => {
+    const binding = createOAuthBinding();
+    const state = sealOAuthState({ ...CLAIMS, bindingHash: binding.hash }, key, 600);
+    const opened = openOAuthState(state, key)!;
+    expect(oauthBindingMatches(opened, binding.secret)).toBe(true);
+    expect(oauthBindingMatches(opened, createOAuthBinding().secret)).toBe(false);
+    expect(oauthBindingMatches(opened, undefined)).toBe(false);
+    expect(oauthBindingMatches(opened, 'short')).toBe(false);
   });
 
   it('gives each authorize URL a different state', () => {

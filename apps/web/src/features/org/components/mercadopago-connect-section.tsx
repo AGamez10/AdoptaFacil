@@ -99,8 +99,11 @@ export function MercadoPagoConnectSection() {
   const connect = async () => {
     setRedirecting(true);
     try {
+      // `credentials: 'include'`: the API sets an HttpOnly cookie that binds
+      // this authorization to THIS browser (a leaked link is useless elsewhere).
       const { authorizeUrl } = await client.request<MercadoPagoConnectUrlView>(
         '/org/mercadopago/connect',
+        { credentials: 'include' },
       );
       // Navegación completa (nunca un fetch): Mercado Pago pide la autorización
       // en su propia página y vuelve a la API, que nos devuelve aquí.

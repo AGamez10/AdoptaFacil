@@ -132,11 +132,21 @@ export function CertificateVerificationPage() {
           <Card data-testid="verification-result" className={styles.result}>
             <CardHeader className="gap-2">
               <div className={styles['result__title-row']}>
-                <CardTitle>Certificado válido</CardTitle>
-                <Badge variant="success">Auténtico</Badge>
+                <CardTitle>
+                  {result.revokedAt ? 'Certificado anulado' : 'Certificado válido'}
+                </CardTitle>
+                {result.revokedAt ? (
+                  <Badge variant="destructive" data-testid="certificate-revoked">
+                    Anulado
+                  </Badge>
+                ) : (
+                  <Badge variant="success">Auténtico</Badge>
+                )}
               </div>
               <p className={styles['result__intro']}>
-                Evidencia de autenticidad emitida por una ESAL con RTE vigente.
+                {result.revokedAt
+                  ? `Lo emitió una ESAL con RTE vigente, pero el pago de la donación se reembolsó o se contracargó el ${formatBogota(result.revokedAt)}. Este certificado ya no sirve como soporte de la donación.`
+                  : 'Evidencia de autenticidad emitida por una ESAL con RTE vigente.'}
               </p>
             </CardHeader>
             <CardContent>

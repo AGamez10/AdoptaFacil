@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { decryptSignature, encryptSignature } from '../../core/crypto/signature-crypto';
 
 /**
@@ -21,8 +21,35 @@ export interface MercadoPagoOAuthStateClaims {
   nonce: string;
   /** PKCE verifier when PKCE is on. */
   codeVerifier?: string;
+  /** sha256 (hex) of the browser-binding secret set as an HttpOnly cookie
+   *  by `/connect`: a leaked authorize URL is useless in another browser. */
+  bindingHash: string;
   /** Expiry, epoch seconds. */
   exp: number;
+}
+
+/** HttpOnly cookie that binds an authorize URL to the browser that asked for it. */
+export const MERCADOPAGO_OAUTH_BINDING_COOKIE = 'af_mp_oauth';
+
+/** A fresh browser-binding secret and the hash the state carries. */
+export function createOAuthBinding(): { secret: string; hash: string } {
+  const secret = randomBytes(32).toString('base64url');
+  return { secret, hash: oauthBindingHash(secret) };
+}
+
+export function oauthBindingHash(secret: string): string {
+  return createHash('sha256').update(secret, 'utf8').digest('hex');
+}
+
+/** Constant-time check of the cookie against the state's hash. */
+export function oauthBindingMatches(
+  claims: MercadoPagoOAuthStateClaims,
+  secret: string | undefined,
+): boolean {
+  if (!secret || !/^[A-Za-z0-9_-]{20,200}$/.test(secret)) return false;
+  const expected = Buffer.from(claims.bindingHash, 'hex');
+  const actual = Buffer.from(oauthBindingHash(secret), 'hex');
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 export function sealOAuthState(
@@ -58,6 +85,9 @@ export function openOAuthState(
     !claims ||
     typeof claims.organizationId !== 'string' ||
     typeof claims.actorUserId !== 'string' ||
+    typeof claims.nonce !== 'string' ||
+    typeof claims.bindingHash !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(claims.bindingHash) ||
     typeof claims.exp !== 'number' ||
     claims.exp < Math.floor(now.getTime() / 1000)
   ) {

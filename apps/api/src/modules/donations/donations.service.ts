@@ -582,29 +582,66 @@ export class DonationsService {
     `);
     const donation = rows[0];
     if (!donation) return;
-    const already = await this.prisma.withOrgContext(donation.organization_id, (tx) =>
-      tx.auditLog.findFirst({
-        where: {
-          organizationId: donation.organization_id,
-          action: 'donation.reversed_at_gateway',
-          entityId: donation.id,
+    const gatewayStatus = event.mercadopagoPayment?.status;
+    const reason =
+      gatewayStatus === 'refunded' ||
+      gatewayStatus === 'charged_back' ||
+      gatewayStatus === 'cancelled'
+        ? gatewayStatus
+        : 'voided';
+    await this.prisma.withOrgContext(donation.organization_id, async (tx) => {
+      // One reversal per donation (UNIQUE donation_id): a repeated
+      // notification records and audits nothing new.
+      const { count } = await tx.donationReversal.createMany({
+        data: [
+          {
+            organizationId: donation.organization_id,
+            donationId: donation.id,
+            reason,
+            dedupKey: event.dedupKey,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (count === 0) return;
+      await this.audit.recordWithTx(tx, {
+        organizationId: donation.organization_id,
+        actorUserId: null,
+        action: 'donation.reversed_at_gateway',
+        entityType: 'donation',
+        entityId: donation.id,
+        metadata: {
+          collectionId: event.collectionId,
+          dedupKey: event.dedupKey,
+          previousStatus: donation.status,
+          reason,
         },
-        select: { id: true },
-      }),
-    );
-    if (already) return;
-    await this.audit.record({
-      organizationId: donation.organization_id,
-      actorUserId: null,
-      action: 'donation.reversed_at_gateway',
-      entityType: 'donation',
-      entityId: donation.id,
-      metadata: {
-        collectionId: event.collectionId,
-        dedupKey: event.dedupKey,
-        previousStatus: donation.status,
-      },
+      });
+      // The donation and its receipt stay as the record of what happened,
+      // but a tax certificate for money that went back is no longer valid.
+      const certificate = await tx.donationCertificate.findUnique({
+        where: { donationId: donation.id },
+        select: { id: true, code: true },
+      });
+      if (certificate) {
+        await this.audit.recordWithTx(tx, {
+          organizationId: donation.organization_id,
+          actorUserId: null,
+          action: 'donation.certificate_revoked',
+          entityType: 'donation_certificate',
+          entityId: certificate.id,
+          metadata: { donationId: donation.id, code: certificate.code, reason },
+        });
+      }
     });
+  }
+
+  /** When the gateway reversed this donation (refund/chargeback), or null. */
+  private async reversedAt(donationId: string): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ at: Date | null }>>(Prisma.sql`
+      SELECT donation_reversed_at(${donationId}::uuid) AS at
+    `);
+    return rows[0]?.at ? rows[0].at.toISOString() : null;
   }
 
   /** Settle a verified, matching event (shared by every gateway). */
@@ -839,7 +876,10 @@ export class DonationsService {
       SELECT * FROM donation_certificate_by_donation(${row.id}::uuid)
     `);
     const certificate = certificateRows[0]
-      ? this.fromAccessCertificateRow(certificateRows[0])
+      ? {
+          ...this.fromAccessCertificateRow(certificateRows[0]),
+          revokedAt: await this.reversedAt(row.id),
+        }
       : undefined;
 
     return { donation, receipt, certificate };

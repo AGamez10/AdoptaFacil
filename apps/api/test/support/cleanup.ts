@@ -57,8 +57,13 @@ const APPEND_ONLY_TABLES = [
   'campaign_evidences',
   'volunteer_certificates',
   'reviews',
+  // donation_reversals (ADR-PAG-003): append-only, triggers rechazan DELETE.
+  'donation_reversals',
   'sponsorship_payment_attempts',
   'sponsorship_payments',
+  // mercadopago_payments (ADR-PAG-003): libro de conciliación; FK RESTRICT y
+  // triggers que rechazan DELETE/TRUNCATE.
+  'mercadopago_payments',
   // legal_acceptances (prueba de autorización, Ley 1581) es append-only igual.
   'legal_acceptances',
   // org_reports (M13): append-only, mismos triggers que volunteer_certificates.
