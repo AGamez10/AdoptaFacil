@@ -380,6 +380,13 @@ export const navItems: NavItem[] = [
         signerGate: 'not-for-signers',
       },
       {
+        path: '/organizacion/contabilidad',
+        label: 'Contabilidad',
+        icon: ShieldIcon,
+        roles: ORG_DOCUMENTS_ROLES,
+        signerGate: 'not-for-signers',
+      },
+      {
         path: '/organizacion/documentos-por-firmar',
         label: 'Documentos por firmar',
         icon: ShieldIcon,

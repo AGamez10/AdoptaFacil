@@ -485,11 +485,29 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
 
   it('closing the month seals it and sends the ledger to the reviewer for signature', async () => {
     await onPlan('crece');
+    // La política exige al representante legal, que aún no registró su firma:
+    // el mes se cierra igual y el libro firmable se genera después.
+    await admin.orgReportPolicy.create({
+      data: {
+        organizationId: owner.orgId,
+        kind: 'accounting',
+        requiredRoles: ['legal_representative', 'fiscal_reviewer'],
+        updatedByUserId: owner.userId,
+      },
+    });
     const res = await request(server)
       .post(`/org/accounting/periods/${PAST}/close`)
       .set(auth(owner))
       .send({ note: 'Cierre de prueba' })
       .expect(200);
+    expect(res.body.report).toBeNull();
+    expect(res.body.reportError).toMatch(/representante legal/i);
+    await admin.orgReportPolicy.deleteMany({ where: { organizationId: owner.orgId } });
+    const retry = await request(server)
+      .post(`/org/accounting/periods/${PAST}/report`)
+      .set(auth(owner))
+      .expect(200);
+    res.body.report = retry.body;
     expect(res.body.close).toMatchObject({
       period: PAST,
       entryCount: 2,

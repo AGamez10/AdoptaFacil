@@ -286,6 +286,12 @@ export interface CloseAccountingPeriodResult {
   close: AccountingPeriodClose;
   /** Informe contable del mes enviado a firma del contador / revisor fiscal. */
   report: { id: string; code: string; status: OrgReportStatus } | null;
+  /**
+   * Presente si el mes quedó cerrado pero el libro firmable no se pudo generar
+   * (p. ej. falta una firma exigida). Se reintenta con
+   * `POST /org/accounting/periods/:period/report`.
+   */
+  reportError?: string;
 }
 
 /** `POST /org/accounting/periods/:period/shares`. */

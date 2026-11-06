@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
@@ -620,37 +621,80 @@ export class AccountingService {
     });
 
     let report: CloseAccountingPeriodResult['report'] = null;
+    let reportError: string | undefined;
     if (await this.plans.hasCapability(organizationId, 'accountantPackage')) {
-      const generated = await this.reports.generateAccounting(actorUserId, period, {
-        version: 1,
-        kind: 'accounting',
-        month: period,
-        rows: close.entries.map((e) => ({
-          seq: e.seq,
-          occurredAt: e.occurredAt,
-          type: ACCOUNTING_ENTRY_TYPE_LABEL[e.entryType],
-          destination: e.destinationLabel
-            ? `${ACCOUNTING_DESTINATION_LABEL[e.destination]}: ${e.destinationLabel}`
-            : ACCOUNTING_DESTINATION_LABEL[e.destination],
-          paymentType: e.paymentType ?? '',
-          gatewayPaymentId: e.gatewayPaymentId ?? '',
-          gross: e.grossCop,
-          fee: e.feeCop,
-          net: e.netCop,
-          adjustment: e.isAdjustment ? `Ajuste de ${e.eventPeriod}` : '',
-        })),
-        totals: close.totals,
-        reconciliation: { balanced: rec.balanced, counts: rec.counts },
-        close: {
-          closedAt: close.row.closedAt.toISOString(),
-          entriesHash: close.row.entriesHash,
-          lastSeq: close.row.lastSeq,
-          note: close.row.note,
-        },
-      } satisfies Omit<AccountingReportPayload, 'organization' | 'period'>);
-      report = { id: generated.id, code: generated.code, status: generated.status ?? 'issued' };
+      // El cierre ya quedó guardado: si el informe no se puede generar (p. ej.
+      // falta registrar la firma del representante legal que exige la
+      // política), el mes sigue cerrado y el informe se genera después con
+      // `POST periods/:period/report`, sin perder nada.
+      try {
+        report = await this.issueReport(organizationId, actorUserId, period);
+      } catch (error) {
+        if (!(error instanceof HttpException)) throw error;
+        reportError = error.message;
+      }
     }
-    return { close: toClose(close.row), report };
+    return { close: toClose(close.row), report, ...(reportError ? { reportError } : {}) };
+  }
+
+  /**
+   * Genera (o reutiliza, si nada cambió) el libro auxiliar firmable de un mes
+   * YA cerrado, con los renglones sellados en el cierre. Sirve para reintentar
+   * cuando el cierre no pudo generarlo, o cuando la organización sube de plan
+   * después de cerrar.
+   */
+  async generateReport(
+    period: string,
+    actorUserId: string,
+  ): Promise<NonNullable<CloseAccountingPeriodResult['report']>> {
+    const organizationId = this.requireOrgId();
+    this.assertPeriod(period);
+    await this.plans.assertCapability(organizationId, 'accountantPackage');
+    return this.issueReport(organizationId, actorUserId, period);
+  }
+
+  private async issueReport(
+    organizationId: string,
+    actorUserId: string,
+    period: string,
+  ): Promise<NonNullable<CloseAccountingPeriodResult['report']>> {
+    const { entries, close } = await this.prisma.withOrgContext(organizationId, (tx) =>
+      this.loadPeriod(tx, organizationId, period),
+    );
+    if (!close) {
+      throw new ConflictException('Primero cierra el mes: el libro firmable sale del cierre.');
+    }
+    const sealed = entries.filter((e) => e.seq <= close.lastSeq);
+    const reconciliation =
+      close.reconciliation as unknown as AccountingPeriodClose['reconciliation'];
+    const generated = await this.reports.generateAccounting(actorUserId, period, {
+      version: 1,
+      kind: 'accounting',
+      month: period,
+      rows: sealed.map((e) => ({
+        seq: e.seq,
+        occurredAt: e.occurredAt,
+        type: ACCOUNTING_ENTRY_TYPE_LABEL[e.entryType],
+        destination: e.destinationLabel
+          ? `${ACCOUNTING_DESTINATION_LABEL[e.destination]}: ${e.destinationLabel}`
+          : ACCOUNTING_DESTINATION_LABEL[e.destination],
+        paymentType: e.paymentType ?? '',
+        gatewayPaymentId: e.gatewayPaymentId ?? '',
+        gross: e.grossCop,
+        fee: e.feeCop,
+        net: e.netCop,
+        adjustment: e.isAdjustment ? `Ajuste de ${e.eventPeriod}` : '',
+      })),
+      totals: close.totals as unknown as AccountingTotals,
+      reconciliation: { balanced: reconciliation.balanced, counts: reconciliation.counts },
+      close: {
+        closedAt: close.closedAt.toISOString(),
+        entriesHash: close.entriesHash,
+        lastSeq: close.lastSeq,
+        note: close.note,
+      },
+    } satisfies Omit<AccountingReportPayload, 'organization' | 'period'>);
+    return { id: generated.id, code: generated.code, status: generated.status ?? 'issued' };
   }
 
   // -------------------------------------------------------------------------

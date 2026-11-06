@@ -85,6 +85,8 @@ const OrgReportsPage = lazyPage(loadOrg, 'OrgReportsPage');
 const OrgSignersPage = lazyPage(loadOrg, 'OrgSignersPage');
 const OrgSigningInboxPage = lazyPage(loadOrg, 'OrgSigningInboxPage');
 const SignatureRequestPage = lazyPage(loadOrg, 'SignatureRequestPage');
+const OrgAccountingPage = lazyPage(loadOrg, 'OrgAccountingPage');
+const AccountingSharePage = lazyPage(loadOrg, 'AccountingSharePage');
 const PlatformAdminDashboardPage = lazyPage(loadOrg, 'PlatformAdminDashboardPage');
 const PlatformBannerPage = lazyPage(loadOrg, 'PlatformBannerPage');
 const PlatformDocumentsReviewPage = lazyPage(loadOrg, 'PlatformDocumentsReviewPage');
@@ -293,6 +295,8 @@ export function AppRoutes() {
           queries `GET /public/donations/certificates/:code`. */}
           {/* M13 · firma por enlace de correo (contador / revisor fiscal, sin sesión). */}
           <Route path="/firmar" element={<SignatureRequestPage />} />
+          {/* Contabilidad compartida con el revisor fiscal / contador (sin sesión). */}
+          <Route path="/contabilidad-compartida" element={<AccountingSharePage />} />
           <Route path="/verificar" element={<CertificateVerificationPage />} />
           <Route path="/verificar/:code" element={<CertificateVerificationPage />} />
           {/* Public campaigns portal (§M14/M06, T-055) — no auth, active campaigns from
@@ -791,6 +795,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
                       <OrgReportsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Contabilidad: libro auxiliar, conciliación con Mercado Pago,
+                cierre y firma del revisor. Mismos roles que GET /org/accounting. */}
+                <Route
+                  path="organizacion/contabilidad"
+                  element={
+                    <RequireRoles roles={ORG_DOCUMENTS_ROLES}>
+                      <OrgAccountingPage />
                     </RequireRoles>
                   }
                 />

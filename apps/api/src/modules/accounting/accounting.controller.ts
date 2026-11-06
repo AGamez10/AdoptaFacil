@@ -126,6 +126,18 @@ export class AccountingController {
     return this.service.close(period, actor.id, dto);
   }
 
+  /** Genera (o reintenta) el libro auxiliar firmable de un mes ya cerrado. */
+  @Post('periods/:period/report')
+  @HttpCode(200)
+  @Roles(...MANAGE_ROLES)
+  @RequirePlan('accountantPackage')
+  report(
+    @CurrentUser() actor: RequestUser,
+    @Param('period') period: string,
+  ): Promise<NonNullable<CloseAccountingPeriodResult['report']>> {
+    return this.service.generateReport(period, actor.id);
+  }
+
   /** `?format=csv|xlsx&detail=basic|full` (full exige `accountingFullExport`). */
   @Get('periods/:period/export')
   @Roles(...VIEW_ROLES)
