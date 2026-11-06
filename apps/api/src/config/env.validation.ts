@@ -74,6 +74,16 @@ export const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
   SMTP_FROM: z.string().min(1).optional(),
+  // SMTP_USER/SMTP_PASS van juntas o no van: sin ellas la API habla sin
+  // autenticarse, lo que solo sirve con un relay propio en la red interna de
+  // Docker (Postfix en el mismo VPS). Un proveedor externo siempre las pide.
+  // Firma DKIM hecha por la propia API (nodemailer, código abierto): las tres
+  // van juntas o no van. Sirve cuando el servidor que entrega el correo no firma
+  // por nosotros (Postfix propio). La clave es PEM; en una sola línea, con los
+  // saltos escritos como \n. Ver docs/operacion/CORREO.md.
+  SMTP_DKIM_DOMAIN: z.string().min(1).optional(),
+  SMTP_DKIM_SELECTOR: z.string().min(1).optional(),
+  SMTP_DKIM_PRIVATE_KEY: z.string().min(1).optional(),
   // Email delivery queue (BullMQ on the same Redis). Every email is a job: the
   // request only enqueues it and a worker renders + sends it, with retries.
   // Tune these to the SMTP provider's limits; no code change needed.
@@ -285,12 +295,12 @@ export const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 /** SMTP vars required when NOTIFICATION_DRIVER=smtp (fail-fast at boot, T-109). */
-const REQUIRED_SMTP_KEYS = [
-  'SMTP_HOST',
-  'SMTP_PORT',
-  'SMTP_USER',
-  'SMTP_PASS',
-  'SMTP_FROM',
+const REQUIRED_SMTP_KEYS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_FROM'] as const;
+
+/** Grupos de variables SMTP que van completos o no van. */
+const SMTP_ALL_OR_NONE_GROUPS = [
+  ['SMTP_USER', 'SMTP_PASS'],
+  ['SMTP_DKIM_DOMAIN', 'SMTP_DKIM_SELECTOR', 'SMTP_DKIM_PRIVATE_KEY'],
 ] as const;
 
 /**
@@ -415,6 +425,18 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
           path: [key],
           message: `${key} is required when NOTIFICATION_DRIVER=smtp`,
         });
+      }
+    }
+    for (const group of SMTP_ALL_OR_NONE_GROUPS) {
+      const present = group.filter((key) => env[key] !== undefined && env[key] !== '');
+      if (present.length > 0 && present.length < group.length) {
+        for (const key of group.filter((k) => !present.includes(k))) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required together with ${present.join(', ')}`,
+          });
+        }
       }
     }
   }
