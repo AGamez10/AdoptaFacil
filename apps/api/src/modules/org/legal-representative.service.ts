@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Inject,
+  Logger,
   Injectable,
 } from '@nestjs/common';
 import type { Prisma, LegalRepresentative as LegalRepresentativeRow } from '@prisma/client';
@@ -69,6 +70,7 @@ function toContract(row: LegalRepresentativeRow): LegalRepresentative {
  */
 @Injectable()
 export class LegalRepresentativeService {
+  private readonly logger = new Logger('LegalRepresentative');
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
@@ -273,6 +275,9 @@ export class LegalRepresentativeService {
 
     const stored = await this.storage.readObject(row.signatureFileRef);
     if (!stored) {
+      this.logger.warn(
+        `Firma de ${role} (${row.id}) de la org ${organizationId}: el archivo no existe en el almacenamiento.`,
+      );
       return null;
     }
 
@@ -285,7 +290,11 @@ export class LegalRepresentativeService {
         signatureFileRef: row.signatureFileRef,
         signatureHash: row.signatureHash,
       };
-    } catch {
+    } catch (error) {
+      // Casi siempre: SIGNATURE_ENCRYPTION_KEY distinta a la que cifró la firma.
+      this.logger.error(
+        `Firma de ${role} (${row.id}) de la org ${organizationId}: no se pudo descifrar (${(error as Error).message}).`,
+      );
       return null;
     }
   }

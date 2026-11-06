@@ -6,6 +6,8 @@ import {
   type VolunteerCertificate,
   type VolunteerEnrollmentMine,
   type VolunteerOpportunityPublic,
+  opportunityHoursDayError,
+  opportunityHoursWindow,
 } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -149,6 +151,19 @@ export function MyVolunteeringPage() {
       toast({ title: 'Fecha no válida', description: logDateError, variant: 'warning' });
       return;
     }
+    // Solo los días que dura la jornada (lo que la organización publicó).
+    const enrollment = enrollments.find((e) => e.id === enrollmentId);
+    if (enrollment?.opportunityStartDate && enrollment.opportunityEndDate) {
+      const windowError = opportunityHoursDayError(
+        logDate,
+        enrollment.opportunityStartDate,
+        enrollment.opportunityEndDate,
+      );
+      if (windowError) {
+        toast({ title: 'Fecha fuera de la jornada', description: windowError, variant: 'warning' });
+        return;
+      }
+    }
     setSaving(true);
     try {
       await client.request('/service-hours', {
@@ -175,6 +190,13 @@ export function MyVolunteeringPage() {
   };
 
   const enrolledOpportunityIds = new Set(enrollments.map((e) => e.opportunityId));
+  /** Calendario acotado a los días que dura la jornada (hasta hoy). */
+  const hoursDateBounds = (enrollment: VolunteerEnrollmentMine) =>
+    enrollment.opportunityStartDate && enrollment.opportunityEndDate
+      ? (({ min, max }) => ({ min, max }))(
+          opportunityHoursWindow(enrollment.opportunityStartDate, enrollment.opportunityEndDate),
+        )
+      : dateBounds('serviceHoursDate');
   // Nuevo requerimiento: una vez la organización emite el certificado de una
   // inscripción, el voluntario ya no puede registrar más horas sobre ella.
   const certifiedEnrollmentIds = new Set(certificates.map((c) => c.enrollmentId));
@@ -271,7 +293,7 @@ export function MyVolunteeringPage() {
                               <Input
                                 type="date"
                                 value={logDate}
-                                {...dateBounds('serviceHoursDate')}
+                                {...hoursDateBounds(enrollment)}
                                 onChange={(e) => setLogDate(e.target.value)}
                                 aria-label="Fecha de la sesión"
                               />

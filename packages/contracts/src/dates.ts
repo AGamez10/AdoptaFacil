@@ -222,3 +222,44 @@ export function dateInputBounds(
 
 /** Máximo de horas que una persona puede registrar en un mismo día. */
 export const MAX_SERVICE_HOURS_PER_DAY = 24;
+
+/** Día calendario de Colombia (`AAAA-MM-DD`) de un instante ISO. */
+export function colombiaDayOf(iso: string): string {
+  return new Date(new Date(iso).getTime() - COLOMBIA_UTC_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Días en los que una persona PUEDE registrar horas en una jornada: desde el
+ * día de inicio de la jornada hasta el día de fin, sin pasar de hoy. Así el
+ * calendario solo ofrece los días que la organización publicó (no el rango
+ * abierto de 2000 a hoy).
+ */
+export function opportunityHoursWindow(
+  opportunityStart: string,
+  opportunityEnd: string,
+  now: Date = new Date(),
+): { min: string; max: string; empty: boolean } {
+  const today = todayInColombia(now);
+  const min = colombiaDayOf(opportunityStart);
+  const max = [colombiaDayOf(opportunityEnd), today].sort()[0] as string;
+  return { min, max, empty: min > max };
+}
+
+/** Mensaje en español si el día no cae dentro de la ventana de la jornada. */
+export function opportunityHoursDayError(
+  day: string,
+  opportunityStart: string,
+  opportunityEnd: string,
+  now: Date = new Date(),
+): string | null {
+  const { min, max, empty } = opportunityHoursWindow(opportunityStart, opportunityEnd, now);
+  if (empty) {
+    return colombiaDayOf(opportunityStart) > todayInColombia(now)
+      ? `Esta jornada empieza el ${formatDayEs(min)}. Solo podrás registrar horas desde ese día.`
+      : `Esta jornada terminó el ${formatDayEs(colombiaDayOf(opportunityEnd))}. Ya no se registran horas.`;
+  }
+  if (day < min || day > max) {
+    return `Solo puedes registrar horas entre el ${formatDayEs(min)} y el ${formatDayEs(max)}, los días en que dura esta jornada.`;
+  }
+  return null;
+}

@@ -159,6 +159,10 @@ export interface VolunteerEnrollment {
 export interface VolunteerEnrollmentMine extends VolunteerEnrollment {
   organizationName: string;
   opportunityTitle: string;
+  /** ISO-8601 UTC: inicio y fin de la jornada. Acotan los días en que se
+   *  pueden registrar horas (ver `opportunityHoursWindow`). */
+  opportunityStartDate: string;
+  opportunityEndDate: string;
 }
 
 /** Enroll in an opportunity — any authenticated Person. The guardian/school

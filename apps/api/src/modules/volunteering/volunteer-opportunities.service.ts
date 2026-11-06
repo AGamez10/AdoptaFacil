@@ -170,7 +170,12 @@ export class VolunteerOpportunitiesService {
     const take = clampLimit(limit);
     const skip = Math.max(offset || 0, 0);
     return this.prisma.withOrgContext(org.id, async (tx) => {
-      const where = { organizationId: org.id, status: VolunteerOpportunityStatus.Active };
+      // Solo jornadas vigentes (igual que el feed global `public_volunteer_opportunities`).
+      const where = {
+        organizationId: org.id,
+        status: VolunteerOpportunityStatus.Active,
+        endDate: { gte: new Date() },
+      };
       const [rows, total] = await Promise.all([
         tx.volunteerOpportunity.findMany({ where, orderBy: { startDate: 'asc' }, take, skip }),
         tx.volunteerOpportunity.count({ where }),

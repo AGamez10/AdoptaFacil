@@ -38,6 +38,7 @@ import { PortalSocialLinks } from '../components/portal-social-links';
 import { PortalAdoptionSection } from '../components/portal-adoption-section';
 import { PortalProductsSection } from '../components/portal-products-section';
 import { PortalNeedsSection } from '../components/portal-needs-section';
+import { PortalVolunteeringSection } from '../components/portal-volunteering-section';
 import { PortalCampaignsSection } from '../components/portal-campaigns-section';
 import { PortalAboutSection } from '../components/portal-about-section';
 import { PortalReviewsSection } from '../components/portal-reviews-section';
@@ -525,6 +526,9 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                       <PortalPlaceholderSection key={section.kind} section={section} />
                     ),
                   )}
+                  {/* Voluntariado: jornadas abiertas de ESTA organización. Se
+                    oculta si no hay ninguna (la sección se autooculta). */}
+                  <PortalVolunteeringSection slug={slug as string} />
                 </div>
 
                 <aside
