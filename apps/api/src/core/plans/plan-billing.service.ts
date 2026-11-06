@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -30,6 +31,7 @@ import {
   mercadoPagoNotificationType,
 } from '../payments/mercadopago-payment.adapter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PlansService } from './plans.service';
 
 type PaidPlan = Exclude<PlanKey, 'free'>;
 
@@ -74,6 +76,7 @@ export class PlanBillingService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly billing: MercadoPagoBillingClient,
+    private readonly plans: PlansService,
     config: ConfigService<Env, true>,
   ) {
     this.webBaseUrl = (config.get('WEB_BASE_URL', { infer: true }) as string).replace(/\/+$/, '');
@@ -83,6 +86,13 @@ export class PlanBillingService {
 
   /** `POST /org/plan/checkout` (Owner/Administrator of the caller's org). */
   async startCheckout(actor: RequestUser, plan: PaidPlan): Promise<PlanCheckoutView> {
+    // While PLAN_ENFORCEMENT is off every organization already has Pro for
+    // free: charging for it would bill for something it already has.
+    if (!this.plans.enforced) {
+      throw new ConflictException(
+        'Durante el piloto todas las funciones son gratis: no hay nada que pagar todavía.',
+      );
+    }
     if (!this.billing.isConfigured()) {
       throw new ServiceUnavailableException(
         'El pago de planes en línea todavía no está disponible. Escríbenos y lo activamos a mano.',

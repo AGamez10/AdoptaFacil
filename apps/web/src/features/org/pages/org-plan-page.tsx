@@ -107,9 +107,19 @@ function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
   );
 }
 
-function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean }) {
+function PlanCard({
+  plan,
+  current,
+  enforced,
+}: {
+  plan: PlanDefinition;
+  current: boolean;
+  enforced: boolean;
+}) {
   const paid = plan.monthlyPriceCop > 0;
-  const onlineBilling = isMercadoPagoProvider();
+  // While plans are not enforced every org already has Pro for free: never
+  // offer to charge for it (the API answers 409 too).
+  const onlineBilling = enforced && isMercadoPagoProvider();
   const included = PLAN_CAPABILITIES.filter((capability) => plan.capabilities[capability]);
   return (
     <Card className={current ? 'border-primary ring-2 ring-primary/30' : undefined}>
@@ -299,7 +309,12 @@ export function OrgPlanPage() {
 
       <section aria-label="Planes" className="mt-6 grid gap-4 md:grid-cols-3">
         {view.catalog.map((plan) => (
-          <PlanCard key={plan.key} plan={plan} current={view.enforced && plan.key === current} />
+          <PlanCard
+            key={plan.key}
+            plan={plan}
+            current={view.enforced && plan.key === current}
+            enforced={view.enforced}
+          />
         ))}
       </section>
     </PageContainer>

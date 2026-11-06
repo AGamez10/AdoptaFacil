@@ -77,6 +77,16 @@ describe('OrgPlanPage', () => {
       await screen.findByText('Durante el piloto tienes todas las funciones sin costo.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Tu plan')).not.toBeInTheDocument();
+    // Everyone already has Pro for free: nothing is offered for payment online.
+    expect(screen.queryByText(/con Mercado Pago/)).not.toBeInTheDocument();
+  });
+
+  it('offers to pay a paid plan with Mercado Pago once plans are enforced', async () => {
+    stubPlan(viewFor({ effectivePlan: 'free' }));
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByText('Pagar Crece con Mercado Pago')).toBeInTheDocument();
+    expect(screen.getByText('Pagar Pro con Mercado Pago')).toBeInTheDocument();
   });
 
   it('warns about the grace period when a payment is pending', async () => {

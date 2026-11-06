@@ -10,6 +10,7 @@ import {
 } from '@adoptafacil/contracts';
 import { mercadoPagoSignatureV1 } from '../src/core/payments/mercadopago-payment.adapter';
 import { planMonthlyAmount } from '../src/core/plans/plan-billing.service';
+import { PlansService } from '../src/core/plans/plans.service';
 import { MercadoPagoConnectionsService } from '../src/modules/payments/mercadopago-connections.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_GUEST, LEGAL_ORG } from './support/legal';
@@ -514,6 +515,18 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     };
 
     let preapprovalId = '';
+
+    it('while plans are not enforced (everyone has Pro free) checkout is refused with 409', async () => {
+      const before = preapprovals.size;
+      await request(server)
+        .post('/org/plan/checkout')
+        .set('Authorization', `Bearer ${orgToken}`)
+        .send({ plan: 'pro' })
+        .expect(409);
+      expect(preapprovals.size).toBe(before);
+      // The rest of this block runs with plans enforced.
+      Object.defineProperty(app.get(PlansService), 'enforced', { value: true, configurable: true });
+    });
 
     it('checkout creates a monthly subscription with the platform token', async () => {
       const res = await request(server)
