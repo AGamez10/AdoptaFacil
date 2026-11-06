@@ -14,6 +14,8 @@ import {
   parsePlanSubscriptionReference,
   planSubscriptionReference,
   priceWithIva,
+  type AssignOrganizationPlanInput,
+  type OrganizationSubscription,
   type PlanCheckoutView,
   type PlanKey,
   type WebhookVerificationContext,
@@ -51,6 +53,12 @@ export function addOneMonth(from: Date): Date {
 
 export interface PlanWebhookOutcome {
   applied: boolean;
+}
+
+interface AppliedPreapproval extends PlanWebhookOutcome {
+  /** Mercado Pago subscription this one replaced (upgrade/downgrade): it is
+   *  cancelled AFTER the commit so the organization is never charged twice. */
+  replacedPreapprovalId?: string;
 }
 
 /**
@@ -159,9 +167,12 @@ export class PlanBillingService {
 
     if (type === 'subscription_preapproval') {
       const preapproval = await this.billing.getPreapproval(dataId as string);
-      return this.applyPreapproval(preapproval, null);
+      return this.afterApply(await this.applyPreapproval(preapproval, null));
     }
     const charge = await this.billing.getAuthorizedPayment(dataId as string);
+    if (charge.preapprovalId && charge.paymentStatus === 'rejected') {
+      return this.markPastDue(charge.preapprovalId, charge.id);
+    }
     if (!charge.preapprovalId || charge.paymentStatus !== 'approved' || !charge.chargedAt) {
       return { applied: false };
     }
@@ -170,7 +181,156 @@ export class PlanBillingService {
       this.logger.warn(`Plan charge ${charge.id} does not match its subscription`);
       return { applied: false };
     }
-    return this.applyPreapproval(preapproval, addOneMonth(charge.chargedAt));
+    return this.afterApply(await this.applyPreapproval(preapproval, addOneMonth(charge.chargedAt)));
+  }
+
+  /** Cancels, after the commit, the subscription a new one replaced. */
+  private async afterApply(outcome: AppliedPreapproval): Promise<PlanWebhookOutcome> {
+    if (outcome.replacedPreapprovalId) {
+      await this.cancelAtGateway(outcome.replacedPreapprovalId, 'replaced');
+    }
+    return { applied: outcome.applied };
+  }
+
+  /**
+   * Best-effort: stop Mercado Pago from charging `preapprovalId`. A failure is
+   * logged (never the token) and does not undo the change already saved; the
+   * team sees it in the log and cancels it from the Mercado Pago panel.
+   */
+  private async cancelAtGateway(preapprovalId: string, reason: string): Promise<boolean> {
+    try {
+      await this.billing.cancelPreapproval(preapprovalId);
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Could not cancel Mercado Pago preapproval ${preapprovalId} (${reason}): ${(error as Error).message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * A monthly charge was rejected: the subscription it belongs to becomes
+   * `past_due`. The plan keeps working for the grace days after the paid
+   * period (Mercado Pago retries the charge meanwhile); an approved retry makes
+   * it `active` again.
+   */
+  private async markPastDue(preapprovalId: string, chargeId: string): Promise<PlanWebhookOutcome> {
+    const preapproval = await this.billing.getPreapproval(preapprovalId);
+    const ref = parsePlanSubscriptionReference(preapproval.externalReference);
+    if (!ref) return { applied: false };
+    return this.prisma.withOrgContext(ref.organizationId, async (tx) => {
+      const previous = await tx.organizationSubscription.findUnique({
+        where: { organizationId: ref.organizationId },
+      });
+      if (
+        !previous ||
+        previous.provider !== 'mercadopago' ||
+        previous.providerReference !== preapproval.id ||
+        previous.status !== 'active'
+      ) {
+        return { applied: false };
+      }
+      const row = await tx.organizationSubscription.update({
+        where: { organizationId: ref.organizationId },
+        data: { status: 'past_due' },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId: ref.organizationId,
+        actorUserId: null,
+        action: 'organization.plan_payment_failed',
+        entityType: 'organization_subscription',
+        entityId: row.id,
+        metadata: { preapprovalId: preapproval.id, chargeId, plan: row.plan },
+      });
+      return { applied: true };
+    });
+  }
+
+  /**
+   * `POST /org/plan/cancel` (Owner/Administrator): the organization stops
+   * paying. Mercado Pago stops the monthly charge and the plan keeps working
+   * until the end of the period already paid, then falls back to Gratis. Its
+   * data is never deleted.
+   */
+  async cancelOwn(actor: RequestUser): Promise<OrganizationSubscription> {
+    const organizationId = actor.organizationId;
+    if (!organizationId) throw new ForbiddenException('Missing tenant context');
+    const current = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.organizationSubscription.findUnique({ where: { organizationId } }),
+    );
+    if (!current || current.status === 'canceled' || current.plan === 'free') {
+      throw new ConflictException('Tu organización no tiene un plan de pago activo.');
+    }
+    if (current.provider === 'mercadopago' && current.providerReference) {
+      // Primero se detiene el cobro: si Mercado Pago falla no marcamos nada
+      // como cancelado (la organización vería "cancelado" y le seguirían cobrando).
+      try {
+        await this.billing.cancelPreapproval(current.providerReference);
+      } catch (error) {
+        this.logger.error(`Plan cancel failed at Mercado Pago: ${(error as Error).message}`);
+        throw new ServiceUnavailableException(
+          'No pudimos cancelar el cobro en Mercado Pago. Intenta de nuevo en unos minutos.',
+        );
+      }
+    }
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      const row = await tx.organizationSubscription.update({
+        where: { organizationId },
+        data: { status: 'canceled' },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId: actor.id,
+        action: 'organization.plan_canceled',
+        entityType: 'organization_subscription',
+        entityId: row.id,
+        metadata: {
+          plan: row.plan,
+          provider: row.provider,
+          paidThrough: row.currentPeriodEnd?.toISOString() ?? null,
+        },
+      });
+      return {
+        organizationId: row.organizationId,
+        plan: row.plan as PlanKey,
+        status: 'canceled',
+        currentPeriodEnd: row.currentPeriodEnd?.toISOString() ?? null,
+        provider: row.provider as OrganizationSubscription['provider'],
+        providerReference: row.providerReference,
+        discountPercent: row.discountPercent,
+        updatedAt: row.updatedAt.toISOString(),
+      };
+    });
+  }
+
+  /**
+   * `PUT /platform/organizations/:id/plan`: the platform sets the plan by hand.
+   * If the organization was paying with Mercado Pago, that recurring charge is
+   * cancelled first (the plan is now `manual`), so it is never charged twice.
+   */
+  async platformAssign(
+    actorUserId: string,
+    organizationId: string,
+    input: AssignOrganizationPlanInput,
+  ): Promise<OrganizationSubscription> {
+    const view = await this.plans.platformGet(organizationId);
+    const previous = view.subscription;
+    if (
+      previous?.provider === 'mercadopago' &&
+      previous.providerReference &&
+      previous.status !== 'canceled'
+    ) {
+      try {
+        await this.billing.cancelPreapproval(previous.providerReference);
+      } catch (error) {
+        this.logger.error(`Platform plan change: cancel failed (${(error as Error).message})`);
+        throw new ServiceUnavailableException(
+          'No se pudo cancelar el cobro de Mercado Pago de esta organización; no se cambió el plan.',
+        );
+      }
+    }
+    return this.plans.assign(actorUserId, organizationId, input);
   }
 
   /**
@@ -180,7 +340,7 @@ export class PlanBillingService {
   private async applyPreapproval(
     preapproval: MercadoPagoPreapproval,
     paidThrough: Date | null,
-  ): Promise<PlanWebhookOutcome> {
+  ): Promise<AppliedPreapproval> {
     const ref = parsePlanSubscriptionReference(preapproval.externalReference);
     if (!ref) {
       this.logger.warn(`Preapproval ${preapproval.id} is not an AdoptaFácil plan`);
@@ -268,7 +428,15 @@ export class PlanBillingService {
           providerReference: preapproval.id,
         },
       });
-      return { applied: true };
+      const replaced =
+        status === 'active' &&
+        previous?.provider === 'mercadopago' &&
+        previous.providerReference &&
+        previous.providerReference !== preapproval.id &&
+        previous.status !== 'canceled'
+          ? previous.providerReference
+          : undefined;
+      return { applied: true, ...(replaced ? { replacedPreapprovalId: replaced } : {}) };
     });
   }
 }

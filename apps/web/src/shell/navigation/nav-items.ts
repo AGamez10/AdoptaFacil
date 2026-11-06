@@ -119,6 +119,10 @@ export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
  */
 export const PLATFORM_TEAM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
 
+/** Planes de organizaciones · copiado VERBATIM del `@Roles` de
+ *  `PlatformPlansController` (`GET`/`PUT /platform/organizations/:id/plan`). */
+export const PLATFORM_PLANS_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
+
 export const PLATFORM_ADMIN_DASHBOARD_ROLES = [
   Role.PlatformAdmin,
   Role.PlatformSuperAdmin,
@@ -617,6 +621,12 @@ export const navItems: NavItem[] = [
     label: 'Aprobar organizaciones',
     icon: ShieldIcon,
     roles: PLATFORM_DUPLICATES_ROLES,
+  },
+  {
+    path: '/plataforma/planes',
+    label: 'Planes de organizaciones',
+    icon: ShieldIcon,
+    roles: PLATFORM_PLANS_ROLES,
   },
   {
     path: '/plataforma/organizaciones-duplicadas',

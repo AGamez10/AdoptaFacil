@@ -94,7 +94,9 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     monthlyPriceCop: 0,
     annualPriceCop: 0,
     limits: { members: 3, storageMb: 1024, portalDesigns: 5 },
-    capabilities: { ...NONE, portalAllDesigns: true },
+    // Personalización avanzada en todos los planes (2026-11-06): el servidor no
+    // la restringe, así que no se vende como exclusiva de un plan de pago.
+    capabilities: { ...NONE, portalAllDesigns: true, portalAdvancedCustomization: true },
   },
   crece: {
     key: 'crece',
@@ -380,7 +382,10 @@ export function graceEnd(currentPeriodEnd: Date): Date {
  * The plan in effect for an organization at `now`:
  * - enforcement off → `pro` (nothing is gated);
  * - no subscription and the launch promotion still running (`promoEndsAt`) → `pro`;
- * - no subscription or `canceled` → `free`;
+ * - no subscription → `free`;
+ * - `canceled`: the plan keeps working until the end of the period already
+ *   paid (`currentPeriodEnd`, no grace), then `free`; with no period end it is
+ *   `free` at once (a platform cancellation);
  * - otherwise the subscribed plan until `currentPeriodEnd` + grace days, then
  *   `free`. An open-ended period (`null`) never lapses.
  */
@@ -392,7 +397,14 @@ export function resolveEffectivePlan(
 ): PlanKey {
   if (!enforced) return 'pro';
   if (!subscription && promoEndsAt && now.getTime() <= promoEndsAt.getTime()) return 'pro';
-  if (!subscription || subscription.status === 'canceled') return 'free';
+  if (!subscription) return 'free';
+  if (subscription.status === 'canceled') {
+    if (subscription.currentPeriodEnd === null) return 'free';
+    // Lo ya pagado se respeta hasta el último día del periodo, sin gracia.
+    return now.getTime() <= new Date(subscription.currentPeriodEnd).getTime()
+      ? subscription.plan
+      : 'free';
+  }
   if (subscription.currentPeriodEnd === null) return subscription.plan;
   const end = new Date(subscription.currentPeriodEnd);
   return now.getTime() <= graceEnd(end).getTime() ? subscription.plan : 'free';

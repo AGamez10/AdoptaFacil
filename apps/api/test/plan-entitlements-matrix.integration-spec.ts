@@ -55,6 +55,7 @@ describe('Plan entitlements matrix (free / crece / pro, enforced)', () => {
   const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
   const inDays = (n: number) => new Date(Date.now() + n * 86_400_000);
   // El período del reporte va en días de Colombia (UTC-5), no de UTC.
+  const inDaysIso = (iso: string) => new Date(iso).toISOString();
   const ymd = (d: Date) => new Date(d.getTime() - 5 * 3_600_000).toISOString().slice(0, 10);
 
   async function registerOrg(name: string): Promise<Actor> {
@@ -410,8 +411,26 @@ describe('Plan entitlements matrix (free / crece / pro, enforced)', () => {
       await request(server).get('/org/exports/data.xlsx').set(auth(org.token)).expect(403);
     });
 
-    it('cancelado = Gratis de inmediato, aunque el periodo no haya terminado', async () => {
+    it('cancelado conserva lo ya pagado hasta el fin del periodo, sin gracia', async () => {
       await onPlan(org.orgId, 'pro', 'canceled', inDays(20));
+      const view = await effective();
+      expect(view.effectivePlan).toBe('pro');
+      expect(view.graceEndsAt).toBe(inDaysIso(view.subscription.currentPeriodEnd));
+      await onPlan(org.orgId, 'pro', 'canceled', inDays(-1));
+      expect((await effective()).effectivePlan).toBe('free');
+    });
+
+    it('cancelado por la plataforma sin periodo = Gratis de inmediato', async () => {
+      await admin.organizationSubscription.upsert({
+        where: { organizationId: org.orgId },
+        create: {
+          organizationId: org.orgId,
+          plan: 'pro',
+          status: 'canceled',
+          currentPeriodEnd: null,
+        },
+        update: { plan: 'pro', status: 'canceled', currentPeriodEnd: null },
+      });
       expect((await effective()).effectivePlan).toBe('free');
     });
   });

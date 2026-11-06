@@ -55,6 +55,15 @@ export class OrgPlanController {
   ): Promise<PlanCheckoutView> {
     return this.billing.startCheckout(user, dto.plan);
   }
+
+  /** Stop paying: Mercado Pago stops the monthly charge and the plan keeps
+   *  working until the end of the period already paid (Estatuto del
+   *  Consumidor: cancelar tiene que ser tan fácil como contratar). */
+  @Post('cancel')
+  @HttpCode(200)
+  cancel(@CurrentUser() user: RequestUser): Promise<OrganizationSubscription> {
+    return this.billing.cancelOwn(user);
+  }
 }
 
 /**
@@ -95,7 +104,10 @@ export class PlanBillingWebhookController {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
 export class PlatformPlansController {
-  constructor(private readonly plans: PlansService) {}
+  constructor(
+    private readonly plans: PlansService,
+    private readonly billing: PlanBillingService,
+  ) {}
 
   @Get(':id/plan')
   get(@Param('id') id: string): Promise<OrganizationPlanView> {
@@ -108,6 +120,6 @@ export class PlatformPlansController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(assignPlanSchema)) dto: AssignOrganizationPlanInput,
   ): Promise<OrganizationSubscription> {
-    return this.plans.assign(actor.id, id, dto);
+    return this.billing.platformAssign(actor.id, id, dto);
   }
 }

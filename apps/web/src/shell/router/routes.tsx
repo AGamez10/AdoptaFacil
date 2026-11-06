@@ -21,6 +21,7 @@ import {
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
+  PLATFORM_PLANS_ROLES,
   PLATFORM_REVIEWS_ROLES,
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
   PLATFORM_TEAM_ROLES,
@@ -89,6 +90,7 @@ const PlatformBannerPage = lazyPage(loadOrg, 'PlatformBannerPage');
 const PlatformDocumentsReviewPage = lazyPage(loadOrg, 'PlatformDocumentsReviewPage');
 const PlatformDuplicatesReviewPage = lazyPage(loadOrg, 'PlatformDuplicatesReviewPage');
 const PlatformOrganizationsReviewPage = lazyPage(loadOrg, 'PlatformOrganizationsReviewPage');
+const PlatformPlansPage = lazyPage(loadOrg, 'PlatformPlansPage');
 const PlatformReviewsReviewPage = lazyPage(loadOrg, 'PlatformReviewsReviewPage');
 const PlatformSuperAdminDashboardPage = lazyPage(loadOrg, 'PlatformSuperAdminDashboardPage');
 const loadCampaigns = () => import('../../features/campaigns');
@@ -707,6 +709,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={PLATFORM_DUPLICATES_ROLES}>
                       <PlatformOrganizationsReviewPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Planes de organizaciones: asignar, extender o cancelar a mano
+              (PUT /platform/organizations/:id/plan). Audiencia de PLATAFORMA. */}
+                <Route
+                  path="plataforma/planes"
+                  element={
+                    <RequireRoles roles={PLATFORM_PLANS_ROLES}>
+                      <PlatformPlansPage />
                     </RequireRoles>
                   }
                 />

@@ -192,6 +192,58 @@ function PlanCard({
 }
 
 /**
+ * Cancelar el plan (Estatuto del Consumidor: tan fácil como contratar). Pide
+ * una confirmación en el mismo botón; Mercado Pago deja de cobrar y el plan
+ * sigue hasta el fin de lo pagado.
+ */
+function CancelPlanButton({ onCanceled }: { onCanceled: () => void }) {
+  const client = useApiClient();
+  const { toast } = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const cancel = async () => {
+    setBusy(true);
+    try {
+      await client.request('/org/plan/cancel', { method: 'POST' });
+      toast({
+        title: 'Plan cancelado',
+        description: 'No se te volverá a cobrar. Lo puedes usar hasta el fin del periodo pagado.',
+      });
+      onCanceled();
+    } catch {
+      toast({
+        title: 'No pudimos cancelar tu plan',
+        description: 'No se canceló nada. Intenta de nuevo en unos minutos.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+  if (!confirming) {
+    return (
+      <Button variant="outline" onClick={() => setConfirming(true)} data-testid="plan-cancel">
+        Cancelar mi plan
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm">
+        ¿Seguro? Dejarás de pagar y al final del periodo pasas a Gratis.
+      </span>
+      <Button onClick={cancel} disabled={busy} data-testid="plan-cancel-confirm">
+        Sí, cancelar
+      </Button>
+      <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
+        No
+      </Button>
+    </div>
+  );
+}
+
+/**
  * `/organizacion/plan` — Plan y facturación (Owner/Administrator, same roles as
  * `GET /org/plan`). Shows the plan in effect, how much of each limit is used,
  * and the three plans side by side. While plans are not enforced it says so:
@@ -257,11 +309,13 @@ export function OrgPlanPage() {
               ? 'Durante el piloto tienes todas las funciones sin costo.'
               : view.launchPromoEndsAt
                 ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
-                : periodEnd
-                  ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
-                  : current === 'free'
-                    ? 'Sin costo y sin fecha de vencimiento.'
-                    : 'Sin fecha de vencimiento.'}
+                : periodEnd && view.subscription?.status === 'canceled'
+                  ? `Cancelaste tu plan: lo puedes usar hasta el ${colombiaDate.format(new Date(periodEnd))} y no se te volverá a cobrar. Después pasas a Gratis sin perder tus datos.`
+                  : periodEnd
+                    ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
+                    : current === 'free'
+                      ? 'Sin costo y sin fecha de vencimiento.'
+                      : 'Sin fecha de vencimiento.'}
             {view.graceEndsAt && view.subscription?.status === 'past_due' && (
               <>
                 {' '}
@@ -294,6 +348,14 @@ export function OrgPlanPage() {
             </p>
           )}
         </CardContent>
+        {view.enforced &&
+          view.subscription &&
+          view.subscription.plan !== 'free' &&
+          view.subscription.status !== 'canceled' && (
+            <CardFooter>
+              <CancelPlanButton onCanceled={load} />
+            </CardFooter>
+          )}
       </Card>
 
       <section aria-labelledby="always-included" className="mt-6">

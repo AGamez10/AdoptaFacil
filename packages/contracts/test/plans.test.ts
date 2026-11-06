@@ -27,9 +27,10 @@ const sub = (overrides: Partial<SubFields> = {}): SubFields => ({
 });
 
 describe('plan catalog', () => {
-  it('free includes no paid capability (all current designs are free) and pro includes all of them', () => {
+  it('free includes no paid capability (all current designs and advanced customization are free) and pro includes all of them', () => {
+    const freeForAll = ['portalAllDesigns', 'portalAdvancedCustomization'];
     for (const capability of PLAN_CAPABILITIES) {
-      expect(PLAN_CATALOG.free.capabilities[capability]).toBe(capability === 'portalAllDesigns');
+      expect(PLAN_CATALOG.free.capabilities[capability]).toBe(freeForAll.includes(capability));
       expect(PLAN_CATALOG.pro.capabilities[capability]).toBe(true);
     }
   });
@@ -104,9 +105,20 @@ describe('resolveEffectivePlan', () => {
     expect(resolveEffectivePlan(null, NOW, false)).toBe('pro');
   });
 
-  it('is free without a subscription or when canceled', () => {
+  it('is free without a subscription or when canceled with no period left', () => {
     expect(resolveEffectivePlan(null, NOW, true)).toBe('free');
-    expect(resolveEffectivePlan(sub({ status: 'canceled' }), NOW, true)).toBe('free');
+    expect(
+      resolveEffectivePlan(sub({ status: 'canceled', currentPeriodEnd: null }), NOW, true),
+    ).toBe('free');
+  });
+
+  it('a canceled plan keeps working until the paid period ends, without grace days', () => {
+    expect(
+      resolveEffectivePlan(sub({ status: 'canceled', currentPeriodEnd: days(10) }), NOW, true),
+    ).toBe('crece');
+    expect(
+      resolveEffectivePlan(sub({ status: 'canceled', currentPeriodEnd: days(-1) }), NOW, true),
+    ).toBe('free');
   });
 
   it('keeps the plan during the period and the 15 grace days, then falls back to free', () => {
@@ -142,6 +154,8 @@ describe('launch promotion', () => {
     expect(
       resolveEffectivePlan(sub({ currentPeriodEnd: '2027-06-01T00:00:00Z' }), during, true, end),
     ).toBe('crece');
-    expect(resolveEffectivePlan(sub({ status: 'canceled' }), during, true, end)).toBe('free');
+    expect(
+      resolveEffectivePlan(sub({ status: 'canceled', currentPeriodEnd: null }), during, true, end),
+    ).toBe('free');
   });
 });
