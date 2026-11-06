@@ -207,3 +207,18 @@ describe('AuthService.googleSignIn — unverified email', () => {
     expect(tx.authCredential.create).not.toHaveBeenCalled();
   });
 });
+
+describe('AuthService.googleSignIn — token that fails verification', () => {
+  it('answers 401 (never 500) and never touches the database', async () => {
+    const { service, identity, withOrgContext } = makeService({
+      existingCredential: null,
+      claims: {} as IdentityClaims,
+    });
+    identity.verifyGoogleIdToken.mockRejectedValue(new Error('Invalid Google ID token'));
+
+    await expect(service.googleSignIn({ idToken: 'forged.token.value' })).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(withOrgContext).not.toHaveBeenCalled();
+  });
+});

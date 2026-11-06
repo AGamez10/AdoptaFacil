@@ -292,7 +292,16 @@ export class AuthService {
    * separate kind of session.
    */
   async googleSignIn(dto: GoogleSignInInput): Promise<AuthSession> {
-    const claims = await this.identity.verifyGoogleIdToken(dto.idToken);
+    let claims: Awaited<ReturnType<IdentityPort['verifyGoogleIdToken']>>;
+    try {
+      claims = await this.identity.verifyGoogleIdToken(dto.idToken);
+    } catch {
+      // A forged, expired or malformed token is the caller's problem (401),
+      // not a server fault: answering 500 hides real outages in the error
+      // rate and tells the client to retry something that will never pass.
+      // The adapter already logs the verification detail.
+      throw new UnauthorizedException('Invalid Google sign-in token.');
+    }
     if (!claims.emailVerified) {
       // Auto-link trusts `claims.email` to enter an EXISTING account by
       // email match alone — that is only safe when the provider itself
