@@ -189,6 +189,10 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
+      # PWA: el service worker se revisa en cada visita (versiones nuevas sin espera).
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
     routes:
       # SPA: cualquier ruta que no sea un asset debe servir index.html para
       # que React Router la resuelva client-side (si no, F5 en /organizacion da 404).
