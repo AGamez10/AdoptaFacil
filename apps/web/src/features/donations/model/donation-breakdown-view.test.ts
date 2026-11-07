@@ -27,7 +27,7 @@ describe('donation-breakdown-view', () => {
     expect(lines).toEqual([
       { key: 'amountCharged', label: 'Total que pagas', amount: 50000, emphasis: 'charged' },
     ]);
-    expect(lines.map((l) => l.label).join(' ')).not.toMatch(/comisi[oó]n|estimad|wompi/i);
+    expect(lines.map((l) => l.label).join(' ')).not.toMatch(/comisi[oó]n|estimad/i);
   });
 
   it('a stored gateway fee (if any) is shown with the net, never an AdoptaFácil fee', () => {

@@ -10,6 +10,7 @@ import { PlansService } from '../src/core/plans/plans.service';
 import { MercadoPagoConnectionsService } from '../src/modules/payments/mercadopago-connections.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_GUEST, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Mercado Pago end to end (ADR-PAG-003) with PAYMENT_DRIVER=mercadopago and
@@ -137,6 +138,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
         })
         .expect(201);
       orgIds.push(reg.body.user.organizationId);
+      await approveTestOrganization(admin, reg.body.user.organizationId);
       return reg.body;
     };
     const a = await register('Refugio Mercado Pago');
@@ -458,6 +460,22 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
   });
 
   it('a later refund is audited on the org log (the receipt is never rewritten)', async () => {
+    const totals = async () => ({
+      summary: (
+        await request(server)
+          .get('/org/summary')
+          .set('Authorization', `Bearer ${orgToken}`)
+          .expect(200)
+      ).body.donationsReceivedTotal as number,
+      dashboard: (
+        await request(server)
+          .get('/org/dashboard/donations')
+          .set('Authorization', `Bearer ${orgToken}`)
+          .expect(200)
+      ).body.donations?.netReceivedTotal as number,
+    });
+    const before = await totals();
+    expect(before.summary).toBeGreaterThan(0);
     payments.set('900001', {
       token: orgAccess,
       body: { ...payments.get('900001')!.body, status: 'refunded' },
@@ -471,6 +489,10 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     expect(audits).toHaveLength(1);
     const donation = await admin.donation.findUnique({ where: { id: donationId } });
     expect(donation?.status).toBe('approved');
+    // P1-1: lo que volvió al donante ya no cuenta como recibido.
+    const after = await totals();
+    expect(after.summary).toBe(0);
+    expect(after.dashboard).toBe(0);
 
     const row = await admin.mercadoPagoPayment.findUnique({
       where: { organizationId_mpPaymentId: { organizationId: orgId, mpPaymentId: '900001' } },

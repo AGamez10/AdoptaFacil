@@ -512,7 +512,7 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
   );
   c.y -= 4;
   c.paragraph(
-    'Montos en pesos colombianos. "Neto" es lo que efectivamente recibe la organización después de la comisión de la plataforma, la de la pasarela y su IVA. Por protección de datos (Ley 1581 de 2012) los documentos de identidad se muestran parcialmente y las donaciones anónimas no revelan al donante.',
+    'Montos en pesos colombianos. "Neto" es lo que efectivamente recibe la organización después de la tarifa de Mercado Pago y su IVA; AdoptaFácil no cobra comisión por donación. Las donaciones reembolsadas o contracargadas no se cuentan. Por protección de datos (Ley 1581 de 2012) los documentos de identidad se muestran parcialmente y las donaciones anónimas no revelan al donante.',
     MARGIN,
     8,
     PAGE_W - MARGIN * 2,

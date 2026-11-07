@@ -195,9 +195,11 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
     expect(wb.getWorksheet('Adopciones')!.rowCount).toBe(2);
     const donation = wb.getWorksheet('Donaciones')!.getRow(2);
     expect(donation.getCell(3).value).toBe('Aprobada');
-    // 0 % de AdoptaFácil: cobrado 50.000 = neto + tarifas (aquí cero, sin pasarela real).
+    // 0 % de AdoptaFácil (sin columna de comisión): cobrado = neto + tarifa de
+    // Mercado Pago + su IVA (aquí cero: sin pasarela real).
     expect(donation.getCell(6).value).toBe(50_000);
-    const parts = [7, 8, 9, 10, 11].map((c) => Number(donation.getCell(c).value));
+    expect(donation.getCell(10).value ?? null).toBeNull();
+    const parts = [7, 8, 9].map((c) => Number(donation.getCell(c).value));
     expect(parts[0]).toBe(50_000);
     expect(parts.reduce((a, b) => a + b, 0)).toBe(50_000);
   });

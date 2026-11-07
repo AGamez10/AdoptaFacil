@@ -19,6 +19,7 @@ import {
   registerOwnSignature,
 } from './support/signers';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M13 · Reportes de donaciones y servicio social (extremo a extremo):
@@ -72,6 +73,7 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       userId: res.body.user.id,

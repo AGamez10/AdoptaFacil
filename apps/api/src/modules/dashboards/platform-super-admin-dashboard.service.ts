@@ -10,7 +10,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 interface FinancialRow {
   gross_total: string;
-  platform_fee_total: string;
   gateway_fee_total: string;
   net_total: string;
 }
@@ -96,7 +95,6 @@ export class PlatformSuperAdminDashboardService {
 
     return {
       grossTotal: Number(financial?.gross_total ?? 0),
-      platformFeeTotal: Number(financial?.platform_fee_total ?? 0),
       gatewayFeeTotal: Number(financial?.gateway_fee_total ?? 0),
       netTotal: Number(financial?.net_total ?? 0),
       organizationsByVerificationLevel: verificationRows[0]?.data ?? [],

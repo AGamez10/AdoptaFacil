@@ -37,7 +37,7 @@ describe('DonateForm (with an active session — pre-existing behavior, non-regr
     expect(screen.getByRole('button', { name: /Donar a Refugio Patitas/ })).toBeEnabled();
   });
 
-  it('never shows an invented gateway rate nor a "cubro la comisión" option', () => {
+  it('never shows an invented gateway rate nor an option to pay a fee', () => {
     render(<DonateForm organizationName="Refugio Patitas" hasSession onDonate={vi.fn()} />);
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
 

@@ -63,12 +63,12 @@ export interface ExportDonationRow {
   id: string;
   approvedAt: Date;
   status: string;
+  /** P1-1: si el pago volvió al donante (refunded, charged_back…), su motivo. */
+  reversedReason: string | null;
   conceptKind: string;
   conceptName: string | null;
   amountCharged: number;
   net: number;
-  platformFee: number;
-  platformIva: number;
   gatewayFee: number;
   gatewayIva: number;
 }
@@ -107,6 +107,14 @@ export interface DataExportInput {
 }
 
 const MONEY = '"$" #,##0';
+
+/** Motivo de una reversa, en palabras de la organización. */
+const REVERSAL_LABEL: Record<string, string> = {
+  refunded: 'reembolso',
+  charged_back: 'contracargo',
+  cancelled: 'cancelada',
+  voided: 'anulada',
+};
 const DATE = 'yyyy-mm-dd';
 const DATE_TIME = 'yyyy-mm-dd hh:mm';
 
@@ -223,22 +231,20 @@ export async function renderDataExportXlsx(input: DataExportInput): Promise<Buff
     ['Animal o campaña', 26],
     ['Monto cobrado', 16, MONEY],
     ['Neto para la organización', 18, MONEY],
-    ['Comisión AdoptaFácil', 16, MONEY],
-    ['IVA de la comisión', 14, MONEY],
-    ['Costo de la pasarela', 16, MONEY],
-    ['IVA de la pasarela', 14, MONEY],
+    ['Tarifa de Mercado Pago', 16, MONEY],
+    ['IVA de la tarifa', 14, MONEY],
   ]);
   for (const d of input.donations) {
     donations.addRow([
       d.id,
       colombia(d.approvedAt),
-      labelOf(DONATION_STATUS_LABEL, d.status),
+      d.reversedReason
+        ? `Reversada (${REVERSAL_LABEL[d.reversedReason] ?? d.reversedReason})`
+        : labelOf(DONATION_STATUS_LABEL, d.status),
       labelOf(DONATION_CONCEPT_LABEL, d.conceptKind),
       sheetText(d.conceptName ?? ''),
       d.amountCharged,
       d.net,
-      d.platformFee,
-      d.platformIva,
       d.gatewayFee,
       d.gatewayIva,
     ]);

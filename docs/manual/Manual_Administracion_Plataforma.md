@@ -96,27 +96,22 @@ Ruta: **Dashboard financiero** (`/plataforma/dashboard/financiero`). Muestra:
 - **Mapa de Colombia real**: distribución geográfica de organizaciones como un mapa coroplético
   (departamentos coloreados según cuántas organizaciones tienen registradas ahí), con la geometría real
   de la división política del país — ya no es una lista de barras.
-- Cifras financieras agregadas: volumen recaudado, dispersado y neto.
-- **Conciliación de recaudo vs. dispersión**: cruza lo recibido a través de MercadoPago Collections
-  contra lo efectivamente dispersado a cada organización, señalando diferencias para revisión
-  manual, por organización y por período.
+- Cifras financieras agregadas: total donado, tarifa de Mercado Pago y neto que recibieron las
+  organizaciones. Las donaciones reembolsadas o contracargadas no se cuentan. AdoptaFácil no cobra
+  comisión por donación (0 %), así que no hay una cifra de comisión de la plataforma.
 
 Un PlatformAdmin que no sea SuperAdmin no puede ver esta pantalla ni sus cifras — se lo confirma un
 aviso de acceso denegado.
 
-
 ![Dashboard financiero](img/56-plataforma-dashboard-financiero.png)
 _Finanzas, indicadores de negocio (incluida la tasa de crecimiento) y el mapa real de Colombia por
 departamento._
-=======
-**Aviso vigente (reemplazo de pasarela, sep-2026):** el recaudo ya corre 100% sobre MercadoPago,
-pero la dispersión (`createPayout`) todavía NO está implementada para MercadoPago — requiere que
-MercadoPago apruebe el permiso "Disbursements" sobre la aplicación del cliente, trámite en curso.
-Mientras esa aprobación no llegue, el lado "dispersado" de la conciliación se queda en cero para
-toda donación recaudada después del cambio de pasarela: no es un error del reporte, es el estado
-real de la integración. Avísale al equipo de desarrollo en cuanto el cliente confirme la
-aprobación, para retomar esa parte.
 
+**Cómo se cobra hoy (ADR-PAG-003, nov-2026):** cada organización conecta su propia cuenta de
+Mercado Pago por OAuth y cada donación se cobra con esa cuenta, así que el dinero llega directo a la
+organización. AdoptaFácil no recibe, no retiene ni transfiere dinero de donaciones: no hay
+dispersiones que conciliar. La conciliación que existe es la de cada organización entre sus
+donaciones y los pagos que Mercado Pago reporta en su cuenta (módulo de contabilidad).
 
 ## 8. Resumen de hallazgos de la última verificación
 
@@ -139,22 +134,16 @@ organizaciones, control de acceso por rol, auditoría, cifrado de la firma legal
 fondos) — todos se verificaron correctos y sin excepciones durante la ronda original y se re-verificaron
 después de fusionar las cuatro correcciones juntas.
 
-**Pendiente real, no de esta ronda:** la conciliación de recaudo vs. dispersión (sección 7) y el resto
-del dashboard financiero solo cubren organizaciones registradas para el indicador de crecimiento (RF28);
+**Pendiente real, no de esta ronda:** el dashboard financiero solo cubre organizaciones registradas para el indicador de crecimiento (RF28);
 una serie de tiempo de donaciones/adopciones sigue fuera de alcance hasta que el documento base la pida
 explícitamente.
 
-**Cambio posterior (20-sep-2026): reemplazo de pasarela de pago.** Por decisión del cliente,
-MercadoPago reemplazó completamente a Wompi ([#177](https://github.com/sebasdev-space/AdoptaFacil/pull/177)),
-manteniendo el mismo modelo (recaudo consolidado + dispersión T+1 manual, nunca el split automático
-de Marketplace). Verificado en vivo contra el sandbox real de MercadoPago antes de fusionar. Dos
-cosas quedan pendientes de que el cliente confirme, sin las cuales esta parte no está 100% cerrada:
-
-1. La comisión real de pasarela asignada a su cuenta (el desglose que ve el donante sigue mostrando
-   temporalmente la tarifa vieja de Wompi, marcado con `TODO(client)` en el código).
-2. Si su aplicación de MercadoPago ya tiene aprobados los permisos de "Disbursements" — sin eso, la
-   dispersión T+1 real (Fase 2) sigue sin poder implementarse, y el recaudo actual no tiene forma
-   automática de llegar a la cuenta bancaria de las organizaciones (ver sección 7, aviso vigente).
+**Cambio posterior (nov-2026): cobro directo con Mercado Pago y 0 %.** Por decisión del dueño,
+AdoptaFácil no cobra comisión por donación y cada organización recibe el dinero en su propia cuenta
+de Mercado Pago, conectada por OAuth. El donante paga exactamente el monto que elige; la tarifa de
+Mercado Pago la descuenta Mercado Pago a la organización y AdoptaFácil la registra tal como la
+reporta el pago confirmado. Solo pueden recibir donaciones las organizaciones aprobadas por la
+plataforma.
 
 ## 9. Soporte
 

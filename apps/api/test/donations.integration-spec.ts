@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M05 donations (T-050, P1) end-to-end: an authenticated PERSON donates to an
@@ -49,6 +50,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       .expect(201);
     orgToken = orgReg.body.tokens.accessToken;
     orgId = orgReg.body.user.organizationId;
+    await approveTestOrganization(admin, orgReg.body.user.organizationId);
     orgIds.push(orgId);
 
     const otherReg = await request(server)
@@ -63,6 +65,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       .expect(201);
     otherToken = otherReg.body.tokens.accessToken;
     orgIds.push(otherReg.body.user.organizationId);
+    await approveTestOrganization(admin, otherReg.body.user.organizationId);
 
     const personReg = await request(server)
       .post('/auth/register/person')
@@ -117,8 +120,9 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     const expected = computeBreakdown(50000);
     expect(res.body.amountCharged).toBe(50000);
     expect(res.body.breakdown).toEqual(expected);
-    // Org absorbs the commissions: the net it receives is below the intended amount.
-    expect(res.body.breakdown.net).toBeLessThan(50000);
+    // 0 %: no AdoptaFácil fee; the real Mercado Pago fee only exists once the
+    // payment is confirmed (read-back), never estimated here.
+    expect(res.body.breakdown.net).toBe(50000);
     // The just-created donation carries the checkout link (FakePaymentAdapter
     // always returns one too, see payments.ts) — never persisted, only on
     // THIS response (see the field's doc comment on the `Donation` contract).
@@ -159,20 +163,32 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     expect(res.body.id).toBe(orgDonationId);
   });
 
-  it('donor mode ("cubro la comisión") ⇒ amountCharged > intended and net ≈ intended', async () => {
+  it('0 %: the donor pays exactly the chosen amount and the org receives all of it', async () => {
     const res = await request(server)
       .post('/donations')
       .set('Authorization', `Bearer ${personToken}`)
       .send({
         organizationId: orgId,
         intendedAmount: 50000,
-        idempotencyKey: `donor-mode-${randomUUID()}`,
+        idempotencyKey: `zero-fee-${randomUUID()}`,
       })
       .expect(201);
-    expect(res.body.amountCharged).toBeGreaterThan(50000);
+    expect(res.body.amountCharged).toBe(50000);
     expect(res.body.breakdown).toEqual(computeBreakdown(50000));
-    // The org receives (net) essentially the intended amount (rounding ≤ 2 pesos).
-    expect(Math.abs(res.body.breakdown.net - 50000)).toBeLessThanOrEqual(2);
+    expect(res.body.breakdown).toMatchObject({ platformFee: 0, platformIva: 0, net: 50000 });
+  });
+
+  it('a field to make the donor pay a fee is rejected (strict schema, 400)', async () => {
+    await request(server)
+      .post('/donations')
+      .set('Authorization', `Bearer ${personToken}`)
+      .send({
+        organizationId: orgId,
+        intendedAmount: 50000,
+        idempotencyKey: `fee-field-${randomUUID()}`,
+        commissionPayer: 'donor',
+      })
+      .expect(400);
   });
 
   it('rejects a below-minimum amount (400) and denies received-list to a non-org role (403)', async () => {

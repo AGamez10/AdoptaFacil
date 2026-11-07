@@ -9,8 +9,9 @@
 Plataforma web **multi-tenant** para el ecosistema de rescate animal en Colombia: muchas organizaciones y
 personas conviven en un mismo sistema (adopciones, donaciones, campañas, apadrinamientos, voluntariado,
 banco de recursos, marketplace, comunidad y reputación). Su sello es la **transparencia y la confianza**.
-Es gratis para las organizaciones; el ingreso es una comisión del 4 % sobre las transacciones, con
-desglose transparente (IVA solo sobre la comisión).
+Es gratis para las organizaciones y AdoptaFácil no cobra comisión sobre las donaciones (0 %, decisión del
+dueño): cada organización recibe el dinero directo en su propia cuenta de Mercado Pago. El ingreso de la
+plataforma son sus planes.
 
 ```mermaid
 flowchart LR
@@ -47,7 +48,7 @@ flowchart LR
 | -------------------- | -------------------------------------------------------------------------------------------- |
 | `apps/api`           | Backend NestJS (`@adoptafacil/api`)                                                          |
 | `apps/web`           | Frontend React 18 + Vite 5 + react-router 6 (`@adoptafacil/web`)                             |
-| `packages/contracts` | DTOs, enums, puertos y lógica compartida (comisiones, adaptadores fake)                      |
+| `packages/contracts` | DTOs, enums, puertos y lógica compartida (desglose de donaciones, adaptadores fake)          |
 | `packages/ui`        | Librería de componentes (Radix + CVA + SCSS modules, Tailwind preset)                        |
 | `prisma/`            | Esquema dividido por módulo (`schema/*.prisma`), ~67 migraciones, `rls-policy.reference.sql` |
 | `scripts/`           | `setup-env.mjs`, `render-setup-roles.sh`, `generate-docx-manuals.mjs`                        |
@@ -121,20 +122,19 @@ flowchart LR
 | `community` (M11)    | Feed, comentarios, likes y moderación                                                                                                                     |
 | `reputation` (M12)   | Reseñas con moderación y resumen público                                                                                                                  |
 | `dashboards` (M13)   | Tableros de plataforma y de organización                                                                                                                  |
-| `payments`           | Cuenta bancaria, payouts, conciliación                                                                                                                    |
+| `payments`           | Conexión OAuth de la cuenta de Mercado Pago de cada organización (sin custodia)                                                                           |
 
 Convención de rutas: `/<recurso>` para usuarios autenticados, `/public/...` sin autenticación y `/platform/...`
 solo para `PlatformAdmin` / `PlatformSuperAdmin`.
 
 ### 3.6 Colas y workers (BullMQ sobre Redis)
 
-| Cola                  | Función                                   | Frecuencia               |
-| --------------------- | ----------------------------------------- | ------------------------ |
-| `clinical-reminders`  | Escaneo y envío de recordatorios clínicos | Diaria                   |
-| `adoption-followups`  | Marca hitos vencidos                      | Configurable             |
-| `dian-verification`   | Verificación DIAN con backoff             | Por evento               |
-| `sponsorship-billing` | Escaneo de cobros y _poller_ de pagos     | Diaria / 300 s           |
-| `wompi-payouts`       | Despacho de payouts (nombre heredado)     | Por evento, 5 reintentos |
+| Cola                  | Función                                   | Frecuencia     |
+| --------------------- | ----------------------------------------- | -------------- |
+| `clinical-reminders`  | Escaneo y envío de recordatorios clínicos | Diaria         |
+| `adoption-followups`  | Marca hitos vencidos                      | Configurable   |
+| `dian-verification`   | Verificación DIAN con backoff             | Por evento     |
+| `sponsorship-billing` | Escaneo de cobros y _poller_ de pagos     | Diaria / 300 s |
 
 ## 4. Seguridad (cadena de confianza)
 
@@ -173,19 +173,22 @@ flowchart LR
 
 ## 6. Pagos
 
-- **Comisiones** (`packages/contracts/src/payments.ts`): plataforma 4 %, pasarela 2,65 % + COP 700 (`TODO(client)`),
-  IVA 19 % solo sobre comisiones, montos en COP enteros con redondeo half-up. Invariante:
-  `bruto = neto + comisión + IVA comisión + pasarela + IVA pasarela`. La comisión la puede absorber la
-  organización o el donante.
-- **Sin pasarela conectada (2026-10-29, decisión del dueño):** `PAYMENT_DRIVER` solo acepta `fake` (dev/test) y
-  `disabled`. Con `disabled`, `POST /donations` responde 409 con un mensaje claro y la disponibilidad pública de
-  cada organización es `false`; la web muestra un aviso tranquilo en vez de un flujo roto. Una pasarela nueva se
-  enchufa detrás de `PaymentPort` (`apps/api/src/core/payments/payment.module.ts`) sin tocar a los consumidores;
-  el cobro sigue siendo directo a la organización (ADR-PAG-001).
-- **Confirmación:** el adaptador verifica la firma del webhook y normaliza el evento; `DonationsService` lo
-  compara con lo registrado (monto, moneda; PAY-003) y lo aplica con una función `SECURITY DEFINER` idempotente.
-- **Mercado Pago retirado (2026-10-17, decisión del dueño):** sin driver, sin OAuth, sin Brick; la tabla
-  `organization_mercadopago_accounts` y sus tokens se eliminan con la migración 20261017110000.
+- **Modelo (ADR-PAG-003, `docs/pagos/mercadopago-oauth.md`):** cada organización conecta su propia cuenta de
+  Mercado Pago por OAuth (tokens cifrados en reposo, renovación diaria) y cada donación es una preferencia de
+  Checkout Pro creada con el token de esa organización: el dinero llega directo a su cuenta. Sin split, sin
+  custodia. Solo cobran las organizaciones **aprobadas** por la plataforma.
+- **0 % de AdoptaFácil (decisión del dueño):** `computeBreakdown(intendedAmount)` (`packages/contracts/src/payments.ts`)
+  deja toda tarifa en 0: el donante paga exactamente lo que elige. Cuando Mercado Pago confirma el pago, el
+  desglose de la donación pasa a ser el real (`mercadoPagoSettledBreakdown`: `net_received_amount` y la tarifa
+  que cobró Mercado Pago). Montos en COP enteros.
+- **Drivers:** `PAYMENT_DRIVER` acepta `mercadopago` (producción), `fake` (dev/test) y `disabled`. Con
+  `disabled`, `POST /donations` responde 409 con un mensaje claro y la disponibilidad pública es `false`.
+- **Confirmación:** el adaptador verifica la firma del webhook (`MERCADOPAGO_WEBHOOK_SECRET`), vuelve a leer el
+  pago con el token de la organización y descarta pagos de prueba en producción; `DonationsService` lo compara
+  con lo registrado (monto, moneda; PAY-003) y lo aplica con una función `SECURITY DEFINER` idempotente.
+- **Reembolsos y contracargos:** quedan en `donation_reversals` y **restan**: se descuentan de la campaña
+  (una sola vez) y no cuentan en informes, exportes ni tableros.
+- **Planes:** AdoptaFácil cobra sus planes con su propia cuenta de Mercado Pago (suscripción, preapproval).
 
 ```mermaid
 sequenceDiagram
@@ -208,9 +211,6 @@ sequenceDiagram
   automático real: la vía de pago tras una suspensión es `POST /sponsorships/:id/retry-payment`. Desde el
   retiro de Mercado Pago la web no cobra apadrinamientos (muestra "Pronto podrás apadrinar con pago en línea")
   hasta que exista una pasarela con cobro recurrente.
-- **Dispersión T+1 y payouts:** la dispersión real (API "Disbursements") **no está implementada**;
-  no hay adaptador de payouts real (el cobro es directo a cada organización). Hoy es una operación manual de un admin
-  de plataforma. La conciliación (`GET /platform/reconciliation`) compara donaciones aprobadas contra payouts.
 
 ## 7. Frontend (`apps/web`)
 
@@ -267,11 +267,11 @@ sequenceDiagram
 
 ## 11. Puntos de atención (deuda y discrepancias conocidas)
 
-1. Comentarios y documentos antiguos aún mencionan **Checkout Pro** o **Wompi**; el código usa Orders y los
-   drivers de pago válidos son `fake` y `disabled` (no hay pasarela conectada). La cola de payouts conserva el nombre `wompi-payouts`.
+1. Pagos: Mercado Pago por OAuth (Checkout Pro con la cuenta de cada organización) es la única pasarela;
+   AdoptaFácil no custodia dinero de donaciones.
 2. `render.yaml` define `JWT_REFRESH_SECRET`, que ningún código lee. `JWT_SECRET` debe fijarse en producción.
 3. En Render existió un workaround con `NO FORCE RLS` (hallazgo S1-01 de `DEPLOY.md`); conviene verificar que
    producción tenga `FORCE RLS` activo.
 4. La contraseña inicial del rol `adoptafacil_app` está en la migración `init` y debe rotarse.
-5. La dispersión real y el cobro recurrente automático (vaulting de tarjetas) siguen pendientes.
+5. El cobro recurrente automático de apadrinamientos (débito automático) sigue pendiente.
 6. `auth_credentials` tiene `organization_id` pero no tiene RLS; revisar frente a la invariante del proyecto.

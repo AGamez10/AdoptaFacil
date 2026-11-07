@@ -56,10 +56,10 @@ export function breakdownLines(breakdown: PaymentBreakdown): BreakdownLine[] {
     },
   ];
   const fees: BreakdownLine[] = [
-    { key: 'gatewayFee', label: 'Comisión de la pasarela', amount: breakdown.gatewayFee },
+    { key: 'gatewayFee', label: 'Tarifa de Mercado Pago', amount: breakdown.gatewayFee },
     {
       key: 'gatewayIva',
-      label: 'IVA sobre la comisión de la pasarela',
+      label: 'IVA de la tarifa de Mercado Pago',
       amount: breakdown.gatewayIva,
     },
   ];

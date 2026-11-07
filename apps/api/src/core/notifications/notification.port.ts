@@ -8,7 +8,7 @@ import type { EmailEventKey } from '@adoptafacil/contracts';
  * Ola 1 ships only the PORT and a simulable stub (see LogNotificationAdapter);
  * real adapters arrive later behind this same interface, bound to
  * NOTIFICATION_PORT in one place. Consumers (auth password-reset, clinical
- * reminders, future dispersions/emails) depend on this abstraction only.
+ * reminders, future emails) depend on this abstraction only.
  */
 export const NOTIFICATION_PORT = Symbol('NOTIFICATION_PORT');
 

@@ -14,8 +14,7 @@
 //     from a donation. The gateway's own fee is set by Mercado Pago on the
 //     organization's account and is never estimated here; the real fee and net
 //     come from the read-back of the payment (`mercadopago_payments`).
-//   - No custody: the money never passes through an AdoptaFácil account, so
-//     there are no payouts, bank accounts or dispersions. COP only.
+//   - No custody: the money never passes through an AdoptaFácil account. COP only.
 //
 // This file is TYPES + a PURE breakdown function + a deterministic FAKE adapter
 // (dev/test double, dependency-free, browser-safe). The DI token (PAYMENT_PORT),

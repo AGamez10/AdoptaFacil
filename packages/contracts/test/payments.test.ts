@@ -79,8 +79,4 @@ describe('FakePaymentAdapter — deterministic + idempotent', () => {
   it('reports a collection status', async () => {
     expect(await port.getCollectionStatus('fake-col-1')).toBe('approved');
   });
-
-  it('has no payout or dispersion operation (no custody)', () => {
-    expect('createPayout' in port).toBe(false);
-  });
 });

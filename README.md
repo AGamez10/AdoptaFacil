@@ -3,8 +3,9 @@
 Plataforma web **multi-tenant** para el ecosistema de rescate animal en Colombia: organizaciones y
 personas conviven en un mismo sistema para adopciones, donaciones, campañas, apadrinamientos,
 voluntariado, banco de recursos, marketplace, comunidad y reputación. Su sello es la **transparencia y
-la confianza**. Es gratis para las organizaciones; el ingreso es una comisión del 4 % sobre las
-transacciones, con desglose transparente (IVA solo sobre la comisión).
+la confianza**. Es gratis para las organizaciones y AdoptaFácil no cobra comisión sobre las donaciones (0 %): cada
+organización recibe el dinero directo en su propia cuenta de Mercado Pago. El ingreso de la plataforma
+son sus planes.
 
 - Reglas permanentes del repositorio, invariantes y flujo de trabajo: [`AGENTS.md`](./AGENTS.md).
 - Arquitectura completa: [`docs/ARQUITECTURA.md`](./docs/ARQUITECTURA.md).
@@ -16,7 +17,7 @@ transacciones, con desglose transparente (IVA solo sobre la comisión).
 | Monorepo   | pnpm 9.15.9 (workspaces) + Turborepo                                        |
 | Backend    | NestJS sobre Node 24 LTS                                                    |
 | Base       | PostgreSQL 16 + Prisma 5 (esquema dividido por módulo), Row-Level Security  |
-| Colas      | Redis 7 + BullMQ (recordatorios, seguimientos, DIAN, facturación, payouts)  |
+| Colas      | Redis 7 + BullMQ (recordatorios, seguimientos, DIAN, facturación)           |
 | Frontend   | React 18 + Vite 5 + Tailwind + Radix (`packages/ui`)                        |
 | Pagos      | `PaymentPort` (cobro directo a la organización); hoy sin pasarela conectada |
 | Despliegue | Render (Blueprint `render.yaml`)                                            |

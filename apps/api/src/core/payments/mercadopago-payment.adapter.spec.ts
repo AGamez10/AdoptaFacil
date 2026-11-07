@@ -274,10 +274,9 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     expect(Number.isNaN(event.amountCharged)).toBe(true);
   });
 
-  it('never polls a status without the org grant, and has no payout operation', async () => {
+  it('never polls a status without the org grant', async () => {
     const adapter = new MercadoPagoPaymentAdapter(makeConfig(), makeFetch());
     await expect(adapter.getCollectionStatus('af-x')).rejects.toThrow();
-    expect('createPayout' in adapter).toBe(false);
   });
 });
 

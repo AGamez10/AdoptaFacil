@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_GUEST, LEGAL_ORG, LEGAL_PERSON } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Guest donation "magic link" comprobante (client requirement, final): a
@@ -54,6 +55,7 @@ describe('Donations guest access link (magic link comprobante)', () => {
       })
       .expect(201);
     orgId = orgReg.body.user.organizationId;
+    await approveTestOrganization(admin, orgReg.body.user.organizationId);
     orgIds.push(orgId);
 
     // An authenticated person too, to prove the link is GUEST-only (§ below).

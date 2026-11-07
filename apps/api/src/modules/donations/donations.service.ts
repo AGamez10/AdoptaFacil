@@ -630,7 +630,7 @@ export class DonationsService {
       gatewayStatus === 'cancelled'
         ? gatewayStatus
         : 'voided';
-    await this.prisma.withOrgContext(donation.organization_id, async (tx) => {
+    const recorded = await this.prisma.withOrgContext(donation.organization_id, async (tx) => {
       // One reversal per donation (UNIQUE donation_id): a repeated
       // notification records and audits nothing new.
       const { count } = await tx.donationReversal.createMany({
@@ -644,7 +644,7 @@ export class DonationsService {
         ],
         skipDuplicates: true,
       });
-      if (count === 0) return;
+      if (count === 0) return false;
       await this.audit.recordWithTx(tx, {
         organizationId: donation.organization_id,
         actorUserId: null,
@@ -674,7 +674,20 @@ export class DonationsService {
           metadata: { donationId: donation.id, code: certificate.code, reason },
         });
       }
+      return true;
     });
+    // P1-1: the money that went back to the donor stops counting toward its
+    // campaign (exactly once; reports, dashboards and exports already exclude
+    // reversed donations).
+    if (recorded && donation.concept_kind === 'campaign') {
+      try {
+        await this.campaignFunding.reverseCollection(event.collectionId);
+      } catch (error) {
+        this.logger.error(
+          `No se pudo restar la reversa ${event.collectionId} de su campaña: ${(error as Error).message}`,
+        );
+      }
+    }
   }
 
   /** When the gateway reversed this donation (refund/chargeback), or null. */

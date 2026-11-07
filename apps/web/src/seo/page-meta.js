@@ -174,7 +174,7 @@ export const HOME_FAQ = [
   },
   {
     q: '¿Cómo sé a dónde va mi donación?',
-    a: 'Antes de pagar ves el desglose de tu aporte: lo que pagas, lo que recibe la organización y las comisiones, que puedes elegir cubrir. Al terminar recibes tu comprobante. Las campañas muestran su meta, su avance y en qué se usó la ayuda.',
+    a: 'Pagas en Mercado Pago y el dinero va directo a la cuenta de la organización: AdoptaFácil no cobra comisión por tu donación. Al terminar recibes tu comprobante. Las campañas muestran su meta, su avance y en qué se usó la ayuda.',
   },
   {
     q: '¿Cuánto le cuesta a una organización usar AdoptaFácil?',

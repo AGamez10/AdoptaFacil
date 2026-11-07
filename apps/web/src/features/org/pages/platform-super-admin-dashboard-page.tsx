@@ -154,7 +154,6 @@ export function PlatformSuperAdminDashboardPage() {
         if (active) {
           setSummary({
             grossTotal: data?.grossTotal ?? 0,
-            platformFeeTotal: data?.platformFeeTotal ?? 0,
             gatewayFeeTotal: data?.gatewayFeeTotal ?? 0,
             netTotal: data?.netTotal ?? 0,
             organizationsByVerificationLevel: Array.isArray(data?.organizationsByVerificationLevel)
@@ -207,11 +206,7 @@ export function PlatformSuperAdminDashboardPage() {
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label="Total bruto" value={formatCop(summary.grossTotal)} />
-              <StatCard
-                label="Comisión de plataforma"
-                value={formatCop(summary.platformFeeTotal)}
-              />
-              <StatCard label="Comisión de pasarela" value={formatCop(summary.gatewayFeeTotal)} />
+              <StatCard label="Tarifa de Mercado Pago" value={formatCop(summary.gatewayFeeTotal)} />
               <StatCard label="Neto a organizaciones" value={formatCop(summary.netTotal)} />
             </CardContent>
           </Card>

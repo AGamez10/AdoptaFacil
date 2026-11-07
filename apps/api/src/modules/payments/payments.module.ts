@@ -9,8 +9,7 @@ import { MercadoPagoConnectController } from './mercadopago-connect.controller';
  * account connected by OAuth (`/org/mercadopago/*`), tokens encrypted at rest
  * and renewed by a daily scan (`MercadoPagoAccountsModule`). Every Mercado Pago
  * donation is created with that org's token, so the money lands directly in
- * the organization's account: AdoptaFácil holds no balance, so there are no
- * payouts, bank accounts or dispersions.
+ * the organization's account: AdoptaFácil never holds a balance (no custody).
  *
  * PaymentPort: consumed from the GLOBAL `PAYMENT_PORT` provider (core
  * `PaymentModule`, @Global).

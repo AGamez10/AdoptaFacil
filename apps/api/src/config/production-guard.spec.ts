@@ -169,8 +169,8 @@ describe('module feature flags (R1-1)', () => {
     expect(() => validateEnv({ ...SAFE_PRODUCTION, FEATURE_PAYMENTS: 'true' })).toThrow(
       /PAYMENT_DRIVER[\s\S]*PAYMENTS_PRODUCTION_APPROVAL_REF/,
     );
-    // No real gateway is wired today: even with the approval reference the
-    // money modules cannot be switched on in production.
+    // Without the real Mercado Pago driver, even with the approval reference
+    // the money modules cannot be switched on in production.
     for (const flag of ['FEATURE_PAYMENTS', 'FEATURE_SPONSORSHIPS']) {
       expect(() =>
         validateEnv({
@@ -180,6 +180,21 @@ describe('module feature flags (R1-1)', () => {
         }),
       ).toThrow(/PAYMENT_DRIVER/);
     }
+  });
+
+  it('refuses sponsorships in production even with Mercado Pago (they would charge without the org grant)', () => {
+    expect(() =>
+      validateEnv({
+        ...SAFE_PRODUCTION,
+        PAYMENT_DRIVER: 'mercadopago',
+        MERCADOPAGO_CLIENT_ID: '123',
+        MERCADOPAGO_CLIENT_SECRET: 'client-secret-dummy',
+        MERCADOPAGO_WEBHOOK_SECRET: 'webhook-secret-dummy',
+        API_PUBLIC_BASE_URL: 'https://api.adoptafacil.co',
+        FEATURE_SPONSORSHIPS: 'true',
+        PAYMENTS_PRODUCTION_APPROVAL_REF: 'acta-2026-11-06',
+      }),
+    ).toThrow(/FEATURE_SPONSORSHIPS/);
   });
 
   it("accepts PAYMENT_DRIVER='mercadopago' for money modules in production (ADR-PAG-003)", () => {

@@ -53,6 +53,8 @@ model CampaignFundingApplication {
   collectionId   String   @unique @map("collection_id")
   net            Int
   createdAt      DateTime @default(now()) @map("created_at")
+  /// P1-1: cuándo se restó de la campaña por un reembolso o contracargo.
+  reversedAt     DateTime? @map("reversed_at")
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 

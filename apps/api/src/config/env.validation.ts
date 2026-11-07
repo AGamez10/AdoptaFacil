@@ -369,6 +369,16 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
       );
     }
   }
+  // Sponsorships still charge through the shared PaymentPort without the
+  // organization's own Mercado Pago grant: under ADR-PAG-003 that would be
+  // custody (the adapter refuses it), so the module cannot be on in
+  // production until it charges with the organization's account.
+  if (env.FEATURE_SPONSORSHIPS) {
+    fail(
+      'FEATURE_SPONSORSHIPS',
+      "sponsorships do not charge with the organization's own Mercado Pago account yet; keep them off in production",
+    );
+  }
   if (env.FEATURE_DONATION_CERTIFICATES && !env.FEATURE_PAYMENTS) {
     fail('FEATURE_DONATION_CERTIFICATES', 'donation certificates require FEATURE_PAYMENTS');
   }
