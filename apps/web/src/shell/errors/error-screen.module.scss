@@ -1,0 +1,222 @@
+/* Pantallas de error — marca v3 (crema, tinta, teal, sol). */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  min-height: 60vh;
+  padding: 3rem 1.25rem;
+  text-align: center;
+  color: var(--af-ink);
+
+  &[data-compact='true'] {
+    min-height: 50vh;
+    padding-block: 2rem;
+  }
+}
+
+.badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: 50%;
+  background: var(--af-mint);
+  color: var(--af-teal-deep);
+  font-size: 3rem;
+
+  [data-kind='forbidden'] & {
+    background: var(--af-sun-soft);
+  }
+
+  [data-kind='server'] &,
+  [data-kind='offline'] & {
+    background: var(--af-coral-soft);
+    color: #8a2d16;
+  }
+
+  [data-kind='update'] & {
+    background: var(--af-sky);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: bob 3.2s ease-in-out infinite;
+  }
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(4deg);
+  }
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--af-teal-ink);
+}
+
+.title {
+  margin: 0;
+  max-width: 22ch;
+  font-family: var(--font-brand);
+  font-size: clamp(1.75rem, 5vw, 2.75rem);
+  font-weight: var(--fw-extra);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+
+  /* Recibe el foco solo para que el lector de pantalla lo anuncie; no es un
+     control, así que no lleva anillo de foco. */
+  &:focus,
+  &:focus-visible {
+    outline: none;
+  }
+
+  [data-compact='true'] & {
+    font-size: clamp(1.4rem, 4vw, 2rem);
+  }
+}
+
+.message {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--af-ink-soft);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.action {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-full);
+  border: 2px solid transparent;
+  padding: 0 1.4rem;
+  font: inherit;
+  font-weight: var(--fw-bold);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform var(--transition-base),
+    background-color var(--transition-base);
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &:hover {
+      transform: translateY(-1px);
+    }
+  }
+}
+
+.action--primary {
+  background: var(--af-sun);
+  color: var(--af-ink);
+}
+
+.action--secondary {
+  border-color: var(--af-ink);
+  background: transparent;
+  color: var(--af-ink);
+
+  &:hover {
+    background: var(--af-paper);
+  }
+}
+
+.suggestions {
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 40rem;
+}
+
+.suggestions__title {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-ink-soft);
+}
+
+.suggestions__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestions__link {
+  display: block;
+  height: 100%;
+  border: 1px solid var(--af-line);
+  border-radius: 1rem;
+  background: var(--af-paper);
+  padding: 0.9rem 1rem;
+  text-align: left;
+  text-decoration: none;
+  color: var(--af-ink);
+  box-shadow: var(--af-shadow-card);
+
+  strong {
+    display: block;
+    font-size: 0.9375rem;
+  }
+
+  span {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.8125rem;
+    color: var(--af-ink-soft);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
+}
+
+/* Marco público: navbar + contenido + pie, fondo crema. */
+.page {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  background: var(--af-cream);
+  color: var(--af-ink);
+}
+
+.page__main {
+  flex: 1;
+}
+
+/* Último recurso (sin router ni contextos): cabecera mínima con el logo. */
+.bare__header {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--af-line);
+  background: var(--af-paper);
+}

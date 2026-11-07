@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 import { Outlet } from 'react-router-dom';
 import type { Role } from '@adoptafacil/contracts';
-import { EmptyState } from '@adoptafacil/ui';
-import { PageContainer } from '../../features/_layout';
+import { ErrorScreen } from '../errors/error-screen';
 import { useSession } from './session-context';
 
 export interface RequireRolesProps {
@@ -42,9 +41,13 @@ export function RequireRoles({
 
   if (!hasAnyRole(...roles)) {
     return (
-      <PageContainer>
-        <EmptyState title={title} description={description} />
-      </PageContainer>
+      <ErrorScreen
+        kind="forbidden"
+        compact
+        title={title}
+        message={description}
+        actions={[{ label: 'Ir a mi inicio', to: '/inicio' }]}
+      />
     );
   }
 
