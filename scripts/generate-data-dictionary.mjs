@@ -69,15 +69,16 @@ const modelByTable = new Map();
 for (const m of Prisma.dmmf.datamodel.models) modelByTable.set(m.dbName ?? m.name, m);
 
 const db = new PrismaClient();
-const q = (sql) => db.$queryRawUnsafe(sql);
+// Consultas fijas, sin valores del usuario: plantilla etiquetada (parametrizada).
+const q = (strings, ...values) => db.$queryRaw(strings, ...values);
 
-const tables = await q(`
+const tables = await q`
   SELECT c.relname AS name, c.relrowsecurity AS rls, c.relforcerowsecurity AS force,
          COALESCE((SELECT string_agg(p.polname, ', ' ORDER BY p.polname) FROM pg_policy p WHERE p.polrelid = c.oid), '') AS policies
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname = 'public' AND c.relkind IN ('r','p') AND c.relname <> '_prisma_migrations'
-  ORDER BY c.relname`);
-const columns = await q(`
+  ORDER BY c.relname`;
+const columns = await q`
   SELECT table_name AS t, column_name AS c, ordinal_position::int AS pos, is_nullable = 'YES' AS nullable,
          column_default AS def,
          CASE WHEN data_type = 'USER-DEFINED' THEN udt_name
@@ -86,8 +87,8 @@ const columns = await q(`
               WHEN data_type = 'character varying' THEN 'varchar' || COALESCE('(' || character_maximum_length || ')', '')
               WHEN data_type = 'numeric' AND numeric_precision IS NOT NULL THEN 'numeric(' || numeric_precision || ',' || numeric_scale || ')'
               ELSE data_type END AS type
-  FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position`);
-const constraints = await q(`
+  FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position`;
+const constraints = await q`
   SELECT cl.relname AS t, co.conname AS name, co.contype AS kind, pg_get_constraintdef(co.oid) AS def,
          ARRAY(SELECT a.attname::text FROM unnest(co.conkey) WITH ORDINALITY k(n, o) JOIN pg_attribute a ON a.attrelid = co.conrelid AND a.attnum = k.n ORDER BY k.o) AS cols,
          rf.relname AS ref_table,
@@ -95,10 +96,10 @@ const constraints = await q(`
          co.confdeltype AS on_delete
   FROM pg_constraint co JOIN pg_class cl ON cl.oid = co.conrelid JOIN pg_namespace n ON n.oid = cl.relnamespace
   LEFT JOIN pg_class rf ON rf.oid = co.confrelid
-  WHERE n.nspname = 'public' ORDER BY cl.relname, co.conname`);
-const indexes = await q(`
+  WHERE n.nspname = 'public' ORDER BY cl.relname, co.conname`;
+const indexes = await q`
   SELECT tablename AS t, indexname AS name, indexdef AS def FROM pg_indexes
-  WHERE schemaname = 'public' ORDER BY tablename, indexname`);
+  WHERE schemaname = 'public' ORDER BY tablename, indexname`;
 await db.$disconnect();
 
 const tableNames = new Set(tables.map((t) => t.name));
