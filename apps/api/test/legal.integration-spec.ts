@@ -221,7 +221,6 @@ describe('Legal: aceptación versionada', () => {
     const base = {
       organizationId: beneficiaryOrgId,
       intendedAmount: 20_000,
-      commissionPayer: 'organization',
       payer: { fullName: 'Invitada', email: `legal-guest-${randomUUID()}@test.local` },
     };
     const rejected = await request(server)

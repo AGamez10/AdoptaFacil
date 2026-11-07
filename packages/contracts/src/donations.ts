@@ -1,26 +1,18 @@
 // Module: M05 donations · Contracts owner: @fabian
 //
-// P1 pitch (cliente): una Persona dona a una organización, ve el DESGLOSE
-// transparente antes de pagar, puede marcar "cubro la comisión", y al aprobarse el
-// pago se emite un RECIBO automático. El motor de dinero es M15 (PaymentPort): este
-// contrato NO recalcula comisiones — CONSUME `computeBreakdown`/`PaymentBreakdown`
-// desde `./payments`, que es la ÚNICA fuente de la cuenta (checkout y recibo
-// muestran lo mismo).
+// P1 pitch (cliente): una Persona dona a una organización, ve cuánto paga antes
+// de pagar y, al aprobarse el pago, se emite un RECIBO automático. Los montos
+// salen de `computeBreakdown` (`./payments`), la ÚNICA fuente de la cuenta
+// (checkout y recibo muestran lo mismo).
 //
-// Decisiones cerradas heredadas de payments.ts (NO reabrir): MercadoPago (reemplazó
-// a Wompi por completo), recaudo + dispersión T+1 MANUAL (la dispersión real es
-// M15, fuera de M05), SIN split, comisión plataforma 4%, pasarela 2,65%+700 (cifra
-// de Wompi, pendiente confirmación del cliente para MercadoPago — ver TODO(client)
-// en payments.ts), IVA 19% solo sobre comisiones, COP (pesos enteros), sin
-// custodia de saldos.
+// Decisiones cerradas (NO reabrir): Mercado Pago con la cuenta propia de la
+// organización (ADR-PAG-003), cobro directo SIN custodia ni dispersión, SIN
+// split, comisión de AdoptaFácil 0 % (decisión del dueño). La tarifa de Mercado
+// Pago la fija Mercado Pago sobre la cuenta de la organización y no se estima
+// aquí. COP en pesos enteros.
 
 import type { LegalAcceptanceItem } from './legal';
-import type {
-  CommissionPayer,
-  PaymentBreakdown,
-  PaymentConcept,
-  PaymentCurrency,
-} from './payments';
+import type { PaymentBreakdown, PaymentConcept, PaymentCurrency } from './payments';
 
 /**
  * Máquina de estados de la DONACIÓN (subconjunto de `PaymentStatus` relevante para
@@ -87,9 +79,7 @@ export interface Donation {
   donorUserId: string | null;
   /** Para qué es la donación (P1: la organización; forward-compat animal/campaña). */
   concept: PaymentConcept;
-  /** Quién asume las comisiones — la casilla "cubro la comisión" (P1). */
-  commissionPayer: CommissionPayer;
-  /** Pesos que la Persona QUIERE que reciba la org (objetivo neto). */
+  /** Pesos que la Persona dona (lo mismo que se le cobra). */
   intendedAmount: number;
   /** Pesos que efectivamente se cobran al instrumento del donante. */
   amountCharged: number;
@@ -160,10 +150,8 @@ export interface DonationWithReceipt extends Donation {
 export interface CreateDonationInput {
   /** Organización beneficiaria. */
   organizationId: string;
-  /** Pesos enteros que deben llegar a la org (objetivo neto, > 0). */
+  /** Pesos enteros que la Persona dona (> 0). */
   intendedAmount: number;
-  /** "Cubro la comisión" marcada ⇒ 'donor'; desmarcada ⇒ 'organization'. */
-  commissionPayer: CommissionPayer;
   /** Concepto; por defecto la propia organización (P1). */
   concept?: PaymentConcept;
   /**

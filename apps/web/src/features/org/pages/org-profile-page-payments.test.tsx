@@ -152,7 +152,8 @@ describe('Medios de pago — interruptor de apagado', () => {
     expect(await screen.findByTestId('payments-online-off')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Conectar/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(calls.every((c) => !c.url.includes('/status'))).toBe(true);
+    expect(screen.queryByText(/Mercado ?Pago/i)).not.toBeInTheDocument();
+    expect(calls.some((c) => c.url.includes('/org/mercadopago'))).toBe(false);
   });
 });
 
@@ -181,7 +182,7 @@ describe('Medios de pago — "Conectar Mercado Pago" por OAuth (por defecto, ADR
   it('by default shows the Mercado Pago card; "Conectar" navigates to Mercado Pago (no secrets asked)', async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
-    const calls = stubFetch(mpStub({ connected: false }));
+    stubFetch(mpStub({ connected: false }));
     renderShell({ route: '/organizacion', ...ownerSession() });
 
     await openPaymentsTab();

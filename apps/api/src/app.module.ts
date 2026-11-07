@@ -103,14 +103,14 @@ import { RedisModule } from './redis/redis.module';
     AnimalsModule,
     // M04 · adoption request + evaluation kanban (T-028a).
     AdoptionsModule,
-    // M05 · donations (P1: breakdown + "cubro la comisión" + receipt, T-050).
+    // M05 · donations (P1: amount + receipt, T-050; cobro directo, 0 %).
     DonationsModule,
     // M06 · fundraising campaigns (RF15 / T-053).
     CampaignsModule,
     // M07 · recurring sponsorships base (RF17 / T-056, no payment yet).
     SponsorshipsModule,
-    // M15b · dispersión T+1 (RF26, F-4) — Fase 2, BLOQUEADA (pendiente
-    // aprobación de Disbursements de MercadoPago; antes vía Wompi Payouts).
+    // M15 · pagos: conexión OAuth de la cuenta de Mercado Pago de cada
+    // organización (ADR-PAG-003). Cobro directo: sin custodia ni dispersión.
     PaymentsModule,
     // M09 · banco de recursos: necesidades, ofertas y entregas (Ola 3, F-6).
     ResourcesModule,

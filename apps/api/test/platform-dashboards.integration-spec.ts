@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
+import { computeBreakdown } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
@@ -140,7 +140,6 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .send({
         organizationId: org.orgId,
         intendedAmount: 10_000,
-        commissionPayer: 'organization',
         idempotencyKey,
       })
       .expect(201);
@@ -227,7 +226,6 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .send({
         organizationId: org.orgId,
         intendedAmount: 80_000,
-        commissionPayer: 'organization',
         idempotencyKey,
       })
       .expect(201);
@@ -242,7 +240,7 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .expect(200);
 
     const after = await superAdminSummary(platformSuperAdmin.token).expect(200);
-    const expected = computeBreakdown(80_000, 'organization', DIRECT_COLLECTION_RATES);
+    const expected = computeBreakdown(80_000);
 
     expect(after.body.grossTotal - before.body.grossTotal).toBeCloseTo(expected.gross, 6);
     expect(after.body.platformFeeTotal - before.body.platformFeeTotal).toBeCloseTo(

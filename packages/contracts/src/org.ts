@@ -201,7 +201,7 @@ export interface FormalizationStatus {
 // additive: DIAN has NO official API (documento base) — this models the
 // SIMULATED verification (DianPort/fake adapter) that gates ESAL → ESAL_RTE,
 // with staggered retries (5min/30min/2h/24h, same schedule as the clinical
-// reminders / payouts workers) before surfacing "Verificación pendiente" with
+// reminders worker) before surfacing "Verificación pendiente" with
 // a manual-retry option. Never a stand-in for the real DIAN/RTE process itself
 // (RNF07's real integration is `TODO(client)` — see DianPort).
 // ============================================================================

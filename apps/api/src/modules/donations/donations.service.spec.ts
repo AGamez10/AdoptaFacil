@@ -52,7 +52,10 @@ function makeService(configValues: Record<string, unknown> = {}): Harness {
       create: donationAccessLinkCreate,
       findUnique: donationAccessLinkFindUnique,
     },
-    organization: { findMany: organizationFindMany },
+    organization: {
+      findMany: organizationFindMany,
+      findUnique: jest.fn().mockResolvedValue({ status: 'approved' }),
+    },
   } as unknown as PrismaService;
   const tenant = { getOrganizationId } as unknown as TenantContextService;
   const audit = { record, recordWithTx: jest.fn() } as unknown as AuditService;
@@ -109,7 +112,6 @@ function makeService(configValues: Record<string, unknown> = {}): Harness {
 const BASE_INPUT = {
   organizationId: 'org-1',
   intendedAmount: 50_000,
-  commissionPayer: 'organization' as const,
   idempotencyKey: 'idem-key-guest-1',
   // Un invitado acepta términos y autorización de datos en el formulario.
   legalAcceptances: currentLegalAcceptanceItems(requiredGuestLegalDocuments()),
@@ -133,7 +135,6 @@ describe('DonationsService.create — guest checkout', () => {
         donor_user_id: null,
         concept_kind: 'organization',
         concept_id: 'org-1',
-        commission_payer: 'organization',
         intended_amount: 50_000,
         amount_charged: 50_000,
         currency: 'COP',
@@ -202,7 +203,6 @@ describe('DonationsService.create — guest checkout', () => {
         donor_user_id: null,
         concept_kind: 'organization',
         concept_id: 'org-1',
-        commission_payer: 'organization',
         intended_amount: 50_000,
         amount_charged: 50_000,
         currency: 'COP',
@@ -247,7 +247,6 @@ describe('DonationsService.create — paymentLinkUrl (checkout redirect fix)', (
       donor_user_id: null,
       concept_kind: 'organization',
       concept_id: 'org-1',
-      commission_payer: 'organization',
       intended_amount: 50_000,
       amount_charged: 50_000,
       currency: 'COP',
@@ -317,7 +316,6 @@ describe('DonationsService.create — surfaces a synchronously-known gateway out
       donor_user_id: null,
       concept_kind: 'organization',
       concept_id: 'org-1',
-      commission_payer: 'organization',
       intended_amount: 50_000,
       amount_charged: 50_000,
       currency: 'COP',
@@ -389,7 +387,6 @@ describe('DonationsService.create — direct collection + card passthrough', () 
       donor_user_id: null,
       concept_kind: 'organization',
       concept_id: 'org-1',
-      commission_payer: 'organization',
       intended_amount: 50_000,
       amount_charged: 50_000,
       currency: 'COP',
@@ -435,7 +432,7 @@ describe('DonationsService.create — direct collection + card passthrough', () 
     });
 
     const createCallArgs = h.queryRaw.mock.calls[1][0] as { values: unknown[] };
-    const breakdown = JSON.parse(createCallArgs.values[7] as string);
+    const breakdown = JSON.parse(createCallArgs.values[6] as string);
     expect(breakdown.platformFee).toBe(0);
     expect(breakdown.platformIva).toBe(0);
   });
@@ -507,7 +504,6 @@ describe('DonationsService.listReceived — org-facing anonymity masking', () =>
       donorUserId: 'donor-1',
       conceptKind: 'organization',
       conceptId: 'org-1',
-      commissionPayer: 'organization',
       intendedAmount: 50_000,
       amountCharged: 50_000,
       currency: 'COP',
@@ -597,7 +593,6 @@ describe('DonationsService.applyWebhook — guest access link (magic link)', () 
       donor_user_id: null,
       concept_kind: 'organization',
       concept_id: 'org-1',
-      commission_payer: 'organization',
       intended_amount: 50_000,
       amount_charged: 50_000,
       currency: 'COP',
@@ -703,7 +698,6 @@ describe('DonationsService.getByAccessToken', () => {
     donor_user_id: null,
     concept_kind: 'organization',
     concept_id: 'org-1',
-    commission_payer: 'organization',
     intended_amount: 50_000,
     amount_charged: 50_000,
     currency: 'COP',
@@ -831,7 +825,6 @@ describe('DonationsService.applyWebhook — PAY-003 (fake driver)', () => {
     donor_user_id: 'user-1',
     concept_kind: 'organization',
     concept_id: 'org-1',
-    commission_payer: 'organization',
     intended_amount: 50_000,
     amount_charged: 50_000,
     currency: 'COP',

@@ -95,7 +95,6 @@ describe('Donations guest access link (magic link comprobante)', () => {
         ...LEGAL_GUEST,
         organizationId: orgId,
         intendedAmount: 40_000,
-        commissionPayer: 'organization',
         idempotencyKey,
         payer: { fullName: 'Donante Invitado', email: guestEmail },
       })
@@ -158,7 +157,6 @@ describe('Donations guest access link (magic link comprobante)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 15_000,
-        commissionPayer: 'organization',
         idempotencyKey,
       })
       .expect(201);
@@ -188,7 +186,6 @@ describe('Donations guest access link (magic link comprobante)', () => {
         ...LEGAL_GUEST,
         organizationId: orgId,
         intendedAmount: 20_000,
-        commissionPayer: 'organization',
         idempotencyKey: `guest-expired-${randomUUID()}`,
         payer: { fullName: 'Invitado Expira', email: guestEmail },
       })

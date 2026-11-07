@@ -81,7 +81,6 @@ describe('Org impact report (impactReport: cifras agregadas, período, plan, no-
       .send({
         organizationId: to.orgId,
         intendedAmount: amount,
-        commissionPayer: 'donor',
         idempotencyKey: `imp-${randomUUID()}`,
         payer: { fullName: 'Donante Privada', documentId: '1020304050' },
       })

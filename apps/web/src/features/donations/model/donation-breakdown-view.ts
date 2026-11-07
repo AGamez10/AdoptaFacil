@@ -1,16 +1,15 @@
 import {
   computeBreakdown,
-  DIRECT_COLLECTION_RATES,
   MIN_DONATION_AMOUNT,
-  type CommissionPayer,
   type PaymentBreakdown,
 } from '@adoptafacil/contracts';
 
 /**
  * View-model del DESGLOSE de una donación (§M05, P1). La cuenta es SIEMPRE la de
- * `computeBreakdown` (M15) — el frontend NO recalcula comisiones ni el IVA: el
- * checkout y el recibo muestran exactamente lo mismo. Este módulo solo etiqueta las
- * cifras para presentación (es-CO), sobre pesos enteros COP.
+ * `computeBreakdown` (M15): el donante paga exactamente lo que elige, AdoptaFácil
+ * no cobra comisión (0 %) y no se inventa ninguna tarifa de pasarela (Mercado
+ * Pago cobra la suya a la cuenta de la organización). Este módulo solo etiqueta
+ * las cifras para presentación (es-CO), sobre pesos enteros COP.
  */
 export interface BreakdownLine {
   key: keyof PaymentBreakdown;
@@ -40,10 +39,12 @@ export function formatBogota(isoUtc: string): string {
 }
 
 /**
- * Etiqueta cada cifra de un `PaymentBreakdown` YA CALCULADO (labels compartidas
- * por `buildDonationBreakdown` —desglose en vivo del checkout— y por
- * F-MIS-DONACIONES-PLUS —desglose histórico de una donación ya persistida—, para
- * que ambas pantallas usen EXACTAMENTE el mismo texto sin duplicar los literales).
+ * Etiqueta cada cifra de un `PaymentBreakdown` YA CALCULADO (compartido por el
+ * checkout y por el detalle de una donación ya persistida, para que ambas
+ * pantallas usen EXACTAMENTE el mismo texto). AdoptaFácil no cobra comisión
+ * (0 %), así que nunca hay línea de AdoptaFácil; una comisión de pasarela o un
+ * neto distinto solo aparecen si la donación guardada los tiene (hoy no se
+ * estima la tarifa de Mercado Pago).
  */
 export function breakdownLines(breakdown: PaymentBreakdown): BreakdownLine[] {
   const lines: BreakdownLine[] = [
@@ -53,42 +54,37 @@ export function breakdownLines(breakdown: PaymentBreakdown): BreakdownLine[] {
       amount: breakdown.amountCharged,
       emphasis: 'charged',
     },
+  ];
+  const fees: BreakdownLine[] = [
+    { key: 'gatewayFee', label: 'Comisión de la pasarela', amount: breakdown.gatewayFee },
     {
-      key: 'platformFee',
-      label: 'Apoyo de sostenimiento a AdoptaFácil',
-      amount: breakdown.platformFee,
-    },
-    {
-      key: 'platformIva',
-      label: 'IVA sobre el apoyo de sostenimiento a AdoptaFácil',
-      amount: breakdown.platformIva,
-    },
-    { key: 'gatewayFee', label: 'Comisión pasarela (estimada)', amount: breakdown.gatewayFee },
-    { key: 'gatewayIva', label: 'IVA sobre la comisión pasarela', amount: breakdown.gatewayIva },
-    {
-      key: 'net',
-      label: 'Neto estimado que recibe la organización en su cuenta',
-      amount: breakdown.net,
-      emphasis: 'net',
+      key: 'gatewayIva',
+      label: 'IVA sobre la comisión de la pasarela',
+      amount: breakdown.gatewayIva,
     },
   ];
-  // Cobro directo (ADR-PAG-001): AdoptaFácil no cobra comisión por donación,
-  // así que esas líneas solo aparecen en donaciones históricas que la tuvieron.
-  return lines.filter(
-    (line) => !(line.key === 'platformFee' || line.key === 'platformIva') || line.amount > 0,
-  );
+  lines.push(...fees.filter((line) => line.amount > 0));
+  if (breakdown.net !== breakdown.amountCharged) {
+    lines.push({
+      key: 'net',
+      label: 'Neto que recibe la organización',
+      amount: breakdown.net,
+      emphasis: 'net',
+    });
+  }
+  return lines;
 }
 
 /**
- * Construye el desglose presentable a partir del monto pretendido y de quién asume
- * la comisión. `breakdown` es EXACTAMENTE `computeBreakdown(intendedAmount,
- * commissionPayer, DIRECT_COLLECTION_RATES)` — misma fuente que el backend y el recibo.
+ * Construye el desglose presentable a partir del monto donado. `breakdown` es
+ * EXACTAMENTE `computeBreakdown(intendedAmount)`: misma fuente que el backend y
+ * el recibo.
  */
-export function buildDonationBreakdown(
-  intendedAmount: number,
-  commissionPayer: CommissionPayer,
-): { breakdown: PaymentBreakdown; lines: BreakdownLine[] } {
-  const breakdown = computeBreakdown(intendedAmount, commissionPayer, DIRECT_COLLECTION_RATES);
+export function buildDonationBreakdown(intendedAmount: number): {
+  breakdown: PaymentBreakdown;
+  lines: BreakdownLine[];
+} {
+  const breakdown = computeBreakdown(intendedAmount);
   return { breakdown, lines: breakdownLines(breakdown) };
 }
 
@@ -99,10 +95,9 @@ export function buildDonationBreakdown(
  */
 export function safeBuildDonationBreakdown(
   intendedAmount: number,
-  commissionPayer: CommissionPayer,
 ): { breakdown: PaymentBreakdown; lines: BreakdownLine[] } | null {
   if (!Number.isInteger(intendedAmount) || intendedAmount < MIN_DONATION_AMOUNT) {
     return null;
   }
-  return buildDonationBreakdown(intendedAmount, commissionPayer);
+  return buildDonationBreakdown(intendedAmount);
 }

@@ -127,7 +127,6 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
         ...LEGAL_GUEST,
         organizationId: owner.orgId,
         intendedAmount: amount,
-        commissionPayer: 'organization',
         idempotencyKey: `acc-${randomUUID()}`,
         payer: { email: 'donante@test.local', fullName: 'Donante Prueba' },
       })

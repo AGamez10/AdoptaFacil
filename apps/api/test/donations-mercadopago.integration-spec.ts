@@ -3,11 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import {
-  computeBreakdown,
-  DIRECT_COLLECTION_RATES,
-  planSubscriptionReference,
-} from '@adoptafacil/contracts';
+import { computeBreakdown, planSubscriptionReference } from '@adoptafacil/contracts';
 import { mercadoPagoSignatureV1 } from '../src/core/payments/mercadopago-payment.adapter';
 import { addOneMonth, planMonthlyAmount } from '../src/core/plans/plan-billing.service';
 import { PlansService } from '../src/core/plans/plans.service';
@@ -165,7 +161,6 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
         ...LEGAL_GUEST,
         organizationId: orgId,
         intendedAmount: 50000,
-        commissionPayer: 'donor',
         idempotencyKey,
         payer: { email: 'donante@test.local' },
       });
@@ -346,7 +341,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
 
   it("a guest donation is a Checkout Pro preference created with the ORG's token, no platform fee", async () => {
     const res = await donate(`mp-${randomUUID()}`).expect(201);
-    const expected = computeBreakdown(50000, 'donor', DIRECT_COLLECTION_RATES);
+    const expected = computeBreakdown(50000);
     expect(res.body.status).toBe('pending');
     expect(res.body.breakdown).toEqual(expected);
     expect(res.body.paymentLinkUrl).toMatch(/^https:\/\/www\.mercadopago\.com\.co\//);

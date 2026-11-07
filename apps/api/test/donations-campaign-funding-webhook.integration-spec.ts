@@ -98,7 +98,6 @@ describe('Donations webhook → campaign funding enganche (T-057)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 30_000,
-        commissionPayer: 'organization',
         ...(concept ? { concept } : {}),
         idempotencyKey: `t057-${randomUUID()}`,
       })

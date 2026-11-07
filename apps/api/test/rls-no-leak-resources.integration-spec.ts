@@ -8,7 +8,7 @@ import { purgeOrganizations } from './support/cleanup';
  * resource_offer_proofs
  * — tenant-isolated (no cross-org visibility, no cross-org write). Connects
  * as the NON-SUPERUSER app role. no-leak tests carry "no-leak" so `test:rls`
- * runs them (same pattern as rls-no-leak-payouts).
+ * runs them (same pattern as rls-no-leak-donations).
  */
 const APP_DATABASE_URL =
   process.env.DATABASE_URL_APP ??

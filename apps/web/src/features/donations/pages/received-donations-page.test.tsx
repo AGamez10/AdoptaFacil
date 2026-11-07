@@ -53,18 +53,17 @@ describe('ReceivedDonationsPage', () => {
             organizationId: 'org-1',
             donorUserId: 'donor-1',
             concept: { kind: 'organization', id: 'org-1' },
-            commissionPayer: 'organization',
             intendedAmount: 50000,
             amountCharged: 50000,
             currency: 'COP',
             breakdown: {
               amountCharged: 50000,
               gross: 50000,
-              platformFee: 2000,
-              platformIva: 380,
+              platformFee: 0,
+              platformIva: 0,
               gatewayFee: 2025,
               gatewayIva: 385,
-              net: 45210,
+              net: 47590,
             },
             collectionId: 'test_abc123',
             status: 'approved',
@@ -80,11 +79,11 @@ describe('ReceivedDonationsPage', () => {
               breakdown: {
                 amountCharged: 50000,
                 gross: 50000,
-                platformFee: 2000,
-                platformIva: 380,
+                platformFee: 0,
+                platformIva: 0,
                 gatewayFee: 2025,
                 gatewayIva: 385,
-                net: 45210,
+                net: 47590,
               },
               issuedAt: '2026-07-28T22:00:00.000Z',
             },
@@ -115,18 +114,17 @@ describe('ReceivedDonationsPage', () => {
             organizationId: 'org-1',
             donorUserId: 'donor-1',
             concept: { kind: 'organization', id: 'org-1' },
-            commissionPayer: 'organization',
             intendedAmount: 50000,
             amountCharged: 50000,
             currency: 'COP',
             breakdown: {
               amountCharged: 50000,
               gross: 50000,
-              platformFee: 2000,
-              platformIva: 380,
+              platformFee: 0,
+              platformIva: 0,
               gatewayFee: 2025,
               gatewayIva: 385,
-              net: 45210,
+              net: 47590,
             },
             collectionId: 'test_abc123',
             status: 'approved',
@@ -142,11 +140,11 @@ describe('ReceivedDonationsPage', () => {
               breakdown: {
                 amountCharged: 50000,
                 gross: 50000,
-                platformFee: 2000,
-                platformIva: 380,
+                platformFee: 0,
+                platformIva: 0,
                 gatewayFee: 2025,
                 gatewayIva: 385,
-                net: 45210,
+                net: 47590,
               },
               issuedAt: '2026-07-28T22:00:00.000Z',
             },
@@ -163,10 +161,11 @@ describe('ReceivedDonationsPage', () => {
 
     const modal = await screen.findByTestId('received-donation-detail-modal');
     expect(within(modal).getByRole('heading', { name: 'Camilo Torres' })).toBeInTheDocument();
-    expect(within(modal).getByTestId('received-donation-detail-net')).toHaveTextContent('45.210');
-    expect(within(modal).getByTestId('received-donation-detail-platformFee')).toHaveTextContent(
-      '2.000',
+    expect(within(modal).getByTestId('received-donation-detail-net')).toHaveTextContent('47.590');
+    expect(within(modal).getByTestId('received-donation-detail-gatewayFee')).toHaveTextContent(
+      '2.025',
     );
+    expect(within(modal).queryByTestId('received-donation-detail-platformFee')).toBeNull();
   });
 
   it('never fabricates a donor name for a pending donation (no receipt yet)', async () => {
@@ -184,7 +183,6 @@ describe('ReceivedDonationsPage', () => {
             organizationId: 'org-1',
             donorUserId: 'donor-2',
             concept: { kind: 'animal', id: '08d734c6-1900-4bf4-b3e5-d6468479cf8b' },
-            commissionPayer: 'donor',
             intendedAmount: 30000,
             amountCharged: 32000,
             currency: 'COP',
@@ -253,18 +251,17 @@ describe('"Generar certificado" desde el detalle de una donación recibida', () 
     organizationId: 'org-1',
     donorUserId: 'donor-1',
     concept: { kind: 'organization', id: 'org-1' },
-    commissionPayer: 'organization',
     intendedAmount: 50000,
     amountCharged: 50000,
     currency: 'COP',
     breakdown: {
       amountCharged: 50000,
       gross: 50000,
-      platformFee: 2000,
-      platformIva: 380,
+      platformFee: 0,
+      platformIva: 0,
       gatewayFee: 2025,
       gatewayIva: 385,
-      net: 45210,
+      net: 47590,
     },
     collectionId: 'test_abc123',
     status: 'approved',
@@ -280,11 +277,11 @@ describe('"Generar certificado" desde el detalle de una donación recibida', () 
       breakdown: {
         amountCharged: 50000,
         gross: 50000,
-        platformFee: 2000,
-        platformIva: 380,
+        platformFee: 0,
+        platformIva: 0,
         gatewayFee: 2025,
         gatewayIva: 385,
-        net: 45210,
+        net: 47590,
       },
       issuedAt: '2026-07-28T22:00:00.000Z',
     },

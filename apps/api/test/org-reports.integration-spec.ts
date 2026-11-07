@@ -109,7 +109,6 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
       .send({
         organizationId: to.orgId,
         intendedAmount: amount,
-        commissionPayer: 'organization',
         idempotencyKey: `rep-${randomUUID()}`,
         ...extra,
       })

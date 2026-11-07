@@ -159,7 +159,6 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
       .send({
         organizationId: orgA.orgId,
         intendedAmount: 50_000,
-        commissionPayer: 'organization',
         idempotencyKey: `exp-${randomUUID()}`,
         payer: { fullName: DONOR_NAME, documentId: '1020304050' },
       })

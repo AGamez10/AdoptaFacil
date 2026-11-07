@@ -2,9 +2,9 @@
 //
 // Monthly plans an ORGANIZATION pays to AdoptaFácil for the software. This is
 // AdoptaFácil's own revenue (the org is the customer), so it never touches
-// donations: donor → organization money keeps flowing through PaymentPort with
-// the 4 % fee, and a subscription is billed separately (BillingPort, manual at
-// first). Rule of the catalog: everything that protects the animal, the adopter
+// donations: donor → organization money flows straight to the organization's
+// own Mercado Pago account with NO AdoptaFácil fee (0 %, owner's decision), and
+// a subscription is billed separately on AdoptaFácil's own account. Rule of the catalog: everything that protects the animal, the adopter
 // or transparency (contract, follow-ups, audit, documents, donation receipts,
 // collecting donations — also for informal rescuers) is FREE. Plans sell brand,
 // reach and convenience — mainly the public portal (designs, seal, domain).

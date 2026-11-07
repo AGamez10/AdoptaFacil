@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
+import { computeBreakdown } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
@@ -108,14 +108,13 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 50000,
-        commissionPayer: 'organization',
         idempotencyKey: orgKey,
       })
       .expect(201);
 
     expect(res.body.status).toBe('pending');
     expect(res.body.organizationId).toBe(orgId);
-    const expected = computeBreakdown(50000, 'organization', DIRECT_COLLECTION_RATES);
+    const expected = computeBreakdown(50000);
     expect(res.body.amountCharged).toBe(50000);
     expect(res.body.breakdown).toEqual(expected);
     // Org absorbs the commissions: the net it receives is below the intended amount.
@@ -154,7 +153,6 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 50000,
-        commissionPayer: 'organization',
         idempotencyKey: orgKey,
       })
       .expect(201);
@@ -168,12 +166,11 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 50000,
-        commissionPayer: 'donor',
         idempotencyKey: `donor-mode-${randomUUID()}`,
       })
       .expect(201);
     expect(res.body.amountCharged).toBeGreaterThan(50000);
-    expect(res.body.breakdown).toEqual(computeBreakdown(50000, 'donor', DIRECT_COLLECTION_RATES));
+    expect(res.body.breakdown).toEqual(computeBreakdown(50000));
     // The org receives (net) essentially the intended amount (rounding ≤ 2 pesos).
     expect(Math.abs(res.body.breakdown.net - 50000)).toBeLessThanOrEqual(2);
   });
@@ -185,7 +182,6 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 10,
-        commissionPayer: 'organization',
         idempotencyKey: `too-small-${randomUUID()}`,
       })
       .expect(400);

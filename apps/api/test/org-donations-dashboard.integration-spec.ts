@@ -117,7 +117,6 @@ describe('Org donations/campaigns dashboard (M13, S-14)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 20_000,
-        commissionPayer: 'organization',
         idempotencyKey,
       })
       .expect(201);

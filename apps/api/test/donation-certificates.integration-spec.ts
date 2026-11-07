@@ -121,7 +121,6 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
       .send({
         organizationId: esalOrgId,
         intendedAmount: 150000,
-        commissionPayer: 'organization',
         idempotencyKey: `cert-esal-${randomUUID()}`,
         payer: { fullName: 'María Restrepo' },
       })
@@ -210,7 +209,6 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
       .send({
         organizationId: informalOrgId,
         intendedAmount: 30000,
-        commissionPayer: 'organization',
         idempotencyKey: `cert-informal-${randomUUID()}`,
         payer: { fullName: 'María Restrepo' },
       })
@@ -268,7 +266,6 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
         .send({
           organizationId: informalOrgId,
           intendedAmount: 45000,
-          commissionPayer: 'organization',
           idempotencyKey: `cert-regen-${randomUUID()}`,
           payer: { fullName: 'María Restrepo' },
         })

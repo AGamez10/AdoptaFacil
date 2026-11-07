@@ -36,7 +36,6 @@ describe('PaymentModule (T-052)', () => {
       intendedAmount: 100_000,
       currency: 'COP' as const,
       concept: { kind: 'organization' as const, id: 'org-1' },
-      commissionPayer: 'organization' as const,
       idempotencyKey: 'key-abc',
     };
 
@@ -45,28 +44,6 @@ describe('PaymentModule (T-052)', () => {
     expect(a.collectionId).toBe(b.collectionId);
     expect(a.status).toBe('approved');
     expect(a.breakdown).toEqual(b.breakdown);
-
-    const bankAccount = {
-      bankCode: '001',
-      accountType: 'savings' as const,
-      accountNumber: '1234567890',
-      accountHolderName: 'Refugio Patitas',
-      accountHolderDocument: '900123456-1',
-    };
-    const p1 = await port.createPayout({
-      beneficiaryOrgId: 'org-1',
-      amount: 50_000,
-      idempotencyKey: 'pk',
-      bankAccount,
-    });
-    const p2 = await port.createPayout({
-      beneficiaryOrgId: 'org-1',
-      amount: 50_000,
-      idempotencyKey: 'pk',
-      bankAccount,
-    });
-    expect(p1.payoutId).toBe(p2.payoutId);
-    expect(p1.status).toBe('scheduled');
   });
 
   it('binds PAYMENT_PORT to the MercadoPagoPaymentAdapter when PAYMENT_DRIVER=mercadopago', async () => {

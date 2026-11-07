@@ -75,11 +75,10 @@ function useDonationTarget(): DonationTarget | null {
 
 /**
  * `/donaciones` — donación a una organización (§M05, P1 + checkout de INVITADO,
- * requisito final del cliente: donar NUNCA exige cuenta ni login). Ve el desglose
- * transparente antes de pagar (misma cuenta que el backend), puede marcar
- * "cubro la comisión" y la donación anónima frente a la organización, y al
- * confirmarse el pago (webhook) se emite un recibo automático. Dato personal
- * bajo Ley 1581.
+ * requisito final del cliente: donar NUNCA exige cuenta ni login). Ve cuánto paga
+ * antes de pagar (misma cuenta que el backend), puede donar de forma anónima
+ * frente a la organización, y al confirmarse el pago (webhook) se emite un recibo
+ * automático. Dato personal bajo Ley 1581.
  *
  * SEAM resuelto: la ruta vive FUERA de `<RequireAuth>`/`<AppLayout>` (ver
  * routes.tsx) — esta página arma su propio chrome público (mismo patrón que
@@ -169,7 +168,6 @@ export function DonatePage() {
 
   const donate = async ({
     intendedAmount,
-    commissionPayer,
     anonymous,
     guestPayer,
     legalAcceptances,
@@ -180,7 +178,6 @@ export function DonatePage() {
         organizationId: target.organizationId,
         ...(target.campaignId ? { concept: { kind: 'campaign', id: target.campaignId } } : {}),
         intendedAmount,
-        commissionPayer,
         anonymous,
         // Con sesión: se prellena del donante autenticado (como antes). Sin
         // sesión (invitado): viene del propio formulario, requerido allí.

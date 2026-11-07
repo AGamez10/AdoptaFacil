@@ -15,7 +15,7 @@ import { Prisma } from '@prisma/client';
 import {
   CampaignStatus,
   computeBreakdown,
-  DIRECT_COLLECTION_RATES,
+  mercadoPagoSettledBreakdown,
   type MercadoPagoCollectorCredentials,
   type CreateDonationInput,
   type Donation,
@@ -52,7 +52,6 @@ import { buildDonationAccessLink } from './donation-access-link';
 import { MercadoPagoConnectionsService } from '../payments/mercadopago-connections.service';
 import { mercadoPagoNotificationType } from '../../core/payments/mercadopago-payment.adapter';
 
-
 /**
  * How long a guest's donation access link (magic link) stays valid (client's
  * own words, final: "acceso seguro... con expiración"). Unlike the password-
@@ -69,7 +68,6 @@ interface DonationRow {
   donor_user_id: string | null;
   concept_kind: string;
   concept_id: string;
-  commission_payer: string;
   intended_amount: number;
   amount_charged: number;
   currency: string;
@@ -170,10 +168,10 @@ export class DonationsService {
    * guest-checkout requirement: donating must never require an account/login).
    * The donation lands in the BENEFICIARY org's tenant via `create_donation`
    * (SECURITY DEFINER; the donor is not a member of that org, and for a guest
-   * there is no donor account at all). The commission math is computed HERE
-   * with `computeBreakdown` (the single source — the client never supplies
-   * amounts beyond `intendedAmount`) and the collection is processed through
-   * the PaymentPort.
+   * there is no donor account at all). The amounts are computed HERE with
+   * `computeBreakdown` (the single source — the client never supplies amounts
+   * beyond `intendedAmount`) and the collection is processed through the
+   * PaymentPort.
    *
    * `actor` is `undefined` for a guest (set by `OptionalJwtAuthGuard`, which
    * never rejects the request). The profile-completion gate
@@ -225,6 +223,15 @@ export class DonationsService {
       return this.fromRow(existing);
     }
 
+    // P1-2: only an APPROVED organization collects. Suspending an organization
+    // is the platform's only lever against fraud (the money goes straight to
+    // its own account), so a suspended, rejected or unreviewed one never does.
+    if (!(await this.isApprovedOrganization(input.organizationId))) {
+      throw new ConflictException(
+        'Las donaciones en línea no están disponibles por ahora para esta organización.',
+      );
+    }
+
     await this.assertConceptOfOrganization(input.organizationId, concept);
 
     // ADR-PAG-001 (cobro directo, sin custodia): the charge is created with
@@ -245,14 +252,10 @@ export class DonationsService {
       );
     }
 
-    // Single source of the money math (RNF12); persisted verbatim. No
-    // per-transaction platform fee in direct collection: AdoptaFácil's revenue
-    // comes from subscription plans until a gateway splits at source.
-    const breakdown = computeBreakdown(
-      input.intendedAmount,
-      input.commissionPayer,
-      DIRECT_COLLECTION_RATES,
-    );
+    // Single source of the money math (RNF12); persisted verbatim. The donor
+    // pays exactly `intendedAmount`; AdoptaFácil takes 0 % and no gateway fee
+    // is estimated (Mercado Pago charges its own rate to the org's account).
+    const breakdown = computeBreakdown(input.intendedAmount);
 
     // Process the collection through the port. Ids are derived from the
     // idempotency key, so a retry maps to the same collection.
@@ -260,14 +263,14 @@ export class DonationsService {
       intendedAmount: input.intendedAmount,
       currency: 'COP',
       concept,
-      commissionPayer: input.commissionPayer,
       payer: input.payer,
       idempotencyKey: input.idempotencyKey,
       mercadopagoCollector,
     });
-    // Mercado Pago: what the adapter charged is what we persist; for the fake
-    // driver the local math is identical.
-    const persistedBreakdown = this.mercadopago ? collection.breakdown : breakdown;
+    if (collection.breakdown && collection.breakdown.amountCharged !== breakdown.amountCharged) {
+      // The adapter must charge exactly what the donor chose (PAY-003).
+      throw new ServiceUnavailableException('No pudimos preparar el pago. Inténtalo de nuevo.');
+    }
 
     let rows: DonationRow[];
     try {
@@ -277,7 +280,6 @@ export class DonationsService {
           ${actor?.id ?? null}::uuid,
           ${concept.kind},
           ${concept.id}::uuid,
-          ${input.commissionPayer},
           ${input.intendedAmount}::int,
           ${breakdown.amountCharged}::int,
           ${JSON.stringify(breakdown)}::jsonb,
@@ -326,7 +328,6 @@ export class DonationsService {
       metadata: {
         intendedAmount: input.intendedAmount,
         amountCharged: breakdown.amountCharged,
-        commissionPayer: input.commissionPayer,
         collectionId: collection.collectionId,
       },
     });
@@ -467,6 +468,7 @@ export class DonationsService {
       await this.recordGatewayReversal(event);
       return noop;
     }
+    await this.applyMercadoPagoSettledBreakdown(organizationId, event);
     return this.settle(event);
   }
 
@@ -516,10 +518,43 @@ export class DonationsService {
         await this.recordGatewayReversal(event);
         continue;
       }
+      await this.applyMercadoPagoSettledBreakdown(organizationId, event);
       const outcome = await this.settle(event);
       if (outcome.applied && outcome.status === 'approved') settled++;
     }
     return { fetched: events.length, settled };
+  }
+
+  /**
+   * Before an approved Mercado Pago payment settles its PENDING donation, the
+   * donation's breakdown becomes the REAL one read back from Mercado Pago (what
+   * the organization actually received after Mercado Pago's own fee). Nothing
+   * is estimated: without a reported net the creation breakdown stays. Runs
+   * before `settle`, so the receipt, the campaign total, reports and exports
+   * all use the real figures. A settled donation is never rewritten.
+   */
+  private async applyMercadoPagoSettledBreakdown(
+    organizationId: string,
+    event: NormalizedWebhookEvent,
+  ): Promise<void> {
+    if (event.status !== 'approved' || !event.mercadopagoPayment) return;
+    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+      SELECT * FROM donation_by_collection_id(${event.collectionId})
+    `);
+    const donation = rows[0];
+    if (!donation || donation.organization_id !== organizationId) return;
+    if (donation.status !== 'pending') return;
+    const breakdown = mercadoPagoSettledBreakdown(
+      donation.amount_charged,
+      event.mercadopagoPayment,
+    );
+    if (!breakdown) return;
+    await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.donation.updateMany({
+        where: { id: donation.id, status: 'pending' },
+        data: { breakdown: breakdown as unknown as Prisma.InputJsonValue },
+      }),
+    );
   }
 
   /**
@@ -1079,14 +1114,17 @@ export class DonationsService {
   }
 
   /**
-   * PUBLIC: can this organization receive donations? The fake driver
-   * (dev/test) needs no account, so it is always `true`; with no real gateway
-   * wired, every other driver is `false`. Exposes a boolean — never a
-   * connected account id.
+   * PUBLIC: can this organization receive donations? Only an `approved`
+   * organization can. With Mercado Pago it also needs its own connected
+   * account; the fake driver (dev/test) needs none; `disabled` never can.
+   * Exposes a boolean — never a connected account id.
    */
   async getOrganizationAvailability(
     organizationId: string,
   ): Promise<DonationOrganizationAvailability> {
+    if (!(await this.isApprovedOrganization(organizationId))) {
+      return { organizationId, canReceiveDonations: false };
+    }
     if (this.mercadopago) {
       const active = this.mercadopagoConnections
         ? await this.mercadopagoConnections.hasActiveConnection(organizationId)
@@ -1094,6 +1132,15 @@ export class DonationsService {
       return { organizationId, canReceiveDonations: active };
     }
     return { organizationId, canReceiveDonations: !this.requiresCollector };
+  }
+
+  /** Operational status gate (AF-023): only `approved` organizations collect. */
+  private async isApprovedOrganization(organizationId: string): Promise<boolean> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { status: true },
+    });
+    return org?.status === 'approved';
   }
 
   private async organizationNamesById(ids: string[]): Promise<Map<string, string>> {
@@ -1151,7 +1198,6 @@ export class DonationsService {
       organizationName,
       donorUserId: row.donor_user_id,
       concept: { kind: row.concept_kind as PaymentConcept['kind'], id: row.concept_id },
-      commissionPayer: row.commission_payer as Donation['commissionPayer'],
       intendedAmount: row.intended_amount,
       amountCharged: row.amount_charged,
       currency: row.currency as Donation['currency'],
@@ -1180,7 +1226,6 @@ export class DonationsService {
       organizationId: row.organizationId,
       donorUserId: row.donorUserId,
       concept: { kind: row.conceptKind as PaymentConcept['kind'], id: row.conceptId },
-      commissionPayer: row.commissionPayer as Donation['commissionPayer'],
       intendedAmount: row.intendedAmount,
       amountCharged: row.amountCharged,
       currency: row.currency as Donation['currency'],

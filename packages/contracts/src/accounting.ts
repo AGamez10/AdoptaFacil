@@ -19,7 +19,7 @@ export const ACCOUNTING_ENTRY_TYPES = ['donation', 'refund', 'chargeback'] as co
 export type AccountingEntryType = (typeof ACCOUNTING_ENTRY_TYPES)[number];
 
 /** Pasarela que confirmó el hecho. */
-export type AccountingSource = 'mercadopago' | 'epayco' | 'other';
+export type AccountingSource = 'mercadopago' | 'other';
 
 /** Destinación de la donación (para rendir cuentas de donaciones con destino). */
 export const ACCOUNTING_DESTINATIONS = ['general', 'animal', 'campaign'] as const;
