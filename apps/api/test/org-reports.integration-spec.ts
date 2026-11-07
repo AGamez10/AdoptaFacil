@@ -19,7 +19,7 @@ import {
   registerOwnSignature,
 } from './support/signers';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * M13 · Reportes de donaciones y servicio social (extremo a extremo):
@@ -105,6 +105,13 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
   }
 
   async function donate(to: Actor, amount: number, extra: Record<string, unknown>) {
+    // Solo organizaciones formalizadas cobran: se formaliza solo para crear el cobro
+    // y se restaura el estado previo antes de aprobarlo (el certificado depende de él).
+    const previous = await admin.organizationProfile.findUnique({
+      where: { organizationId: to.orgId },
+      select: { formalizationState: true, rteVigente: true },
+    });
+    await formalizeTestOrganization(admin, to.orgId, 'formalizada');
     const res = await request(server)
       .post('/donations')
       .set('Authorization', `Bearer ${donor.token}`)
@@ -115,6 +122,18 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
         ...extra,
       })
       .expect(201);
+    await admin.organizationProfile.upsert({
+      where: { organizationId: to.orgId },
+      create: {
+        organizationId: to.orgId,
+        formalizationState: previous?.formalizationState ?? 'informal',
+        rteVigente: previous?.rteVigente ?? false,
+      },
+      update: {
+        formalizationState: previous?.formalizationState ?? 'informal',
+        rteVigente: previous?.rteVigente ?? false,
+      },
+    });
     await request(server)
       .post('/donations/webhook')
       .set('x-signature', 'fake-sig')

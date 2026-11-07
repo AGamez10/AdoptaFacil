@@ -8,7 +8,7 @@ import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * M05 donations (T-050, P1) end-to-end: an authenticated PERSON donates to an
@@ -51,6 +51,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     orgToken = orgReg.body.tokens.accessToken;
     orgId = orgReg.body.user.organizationId;
     await approveTestOrganization(admin, orgReg.body.user.organizationId);
+    await formalizeTestOrganization(admin, orgReg.body.user.organizationId);
     orgIds.push(orgId);
 
     const otherReg = await request(server)
@@ -66,6 +67,7 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
     otherToken = otherReg.body.tokens.accessToken;
     orgIds.push(otherReg.body.user.organizationId);
     await approveTestOrganization(admin, otherReg.body.user.organizationId);
+    await formalizeTestOrganization(admin, otherReg.body.user.organizationId);
 
     const personReg = await request(server)
       .post('/auth/register/person')
@@ -277,5 +279,34 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       .get(`/donations/${orgDonationId}/receipt`)
       .set('Authorization', `Bearer ${person2Token}`)
       .expect(404);
+  });
+
+  // Dueño (2026-11-07): solo cobran organizaciones formalizadas. Una informal
+  // no recibe donaciones, ni por API ni en la disponibilidad pública.
+  it('an INFORMAL organization cannot collect: 409 on donate and not available publicly', async () => {
+    await admin.organizationProfile.update({
+      where: { organizationId: orgId },
+      data: { formalizationState: 'informal' },
+    });
+    try {
+      const avail = await request(server)
+        .get(`/public/donations/organizations/${orgId}/availability`)
+        .expect(200);
+      expect(avail.body.canReceiveDonations).toBe(false);
+      await request(server)
+        .post('/donations')
+        .set('Authorization', `Bearer ${personToken}`)
+        .send({
+          organizationId: orgId,
+          intendedAmount: 20_000,
+          idempotencyKey: `informal-${randomUUID()}`,
+        })
+        .expect(409);
+    } finally {
+      await admin.organizationProfile.update({
+        where: { organizationId: orgId },
+        data: { formalizationState: 'formalizada' },
+      });
+    }
   });
 });

@@ -45,6 +45,16 @@ function makeService(configValues: Record<string, unknown> = {}): Harness {
   const donationAccessLinkCreate = jest.fn().mockResolvedValue({});
   const donationAccessLinkFindUnique = jest.fn();
   const organizationFindMany = jest.fn().mockResolvedValue([]);
+  // Per-org reads run inside withOrgContext. By default the callback gets a
+  // transaction with the formalized profile and the legal-acceptance writer.
+  withOrgContext.mockImplementation(async (_orgId: string, fn: (tx: unknown) => unknown) =>
+    fn({
+      organizationProfile: {
+        findUnique: jest.fn().mockResolvedValue({ formalizationState: 'formalizada' }),
+      },
+      legalAcceptance: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    }),
+  );
   const prisma = {
     $queryRaw: queryRaw,
     withOrgContext,
@@ -55,6 +65,10 @@ function makeService(configValues: Record<string, unknown> = {}): Harness {
     organization: {
       findMany: organizationFindMany,
       findUnique: jest.fn().mockResolvedValue({ status: 'approved' }),
+    },
+    // Owner's rule (2026-11-07): only a formalized organization collects.
+    organizationProfile: {
+      findUnique: jest.fn().mockResolvedValue({ formalizationState: 'formalizada' }),
     },
   } as unknown as PrismaService;
   const tenant = { getOrganizationId } as unknown as TenantContextService;
@@ -405,7 +419,12 @@ describe('DonationsService.create — direct collection + card passthrough', () 
     const h = makeService();
     h.withOrgContext.mockImplementation(async (_orgId, fn) =>
       // Prueba de la aceptación del invitado (Ley 1581), en la misma org.
-      fn({ legalAcceptance: { createMany: jest.fn() } }),
+      fn({
+        legalAcceptance: { createMany: jest.fn() },
+        organizationProfile: {
+          findUnique: jest.fn().mockResolvedValue({ formalizationState: 'formalizada' }),
+        },
+      }),
     );
     h.queryRaw.mockResolvedValueOnce([]); // idempotency pre-check: none yet
     h.queryRaw.mockResolvedValueOnce([donationRow()]);
@@ -805,7 +824,6 @@ describe('DonationsService.getOrganizationAvailability', () => {
       canReceiveDonations: true,
     });
     expect(h.queryRaw).not.toHaveBeenCalled();
-    expect(h.withOrgContext).not.toHaveBeenCalled();
   });
 
   it('disabled driver: never available (and never looks up a Mercado Pago account)', async () => {
@@ -869,7 +887,6 @@ describe('DonationsService.applyWebhook — PAY-003 (fake driver)', () => {
     expect(h.queryRaw).toHaveBeenCalledTimes(1); // only apply_donation_webhook
     const sql = (h.queryRaw.mock.calls[0][0] as { strings: string[] }).strings.join('?');
     expect(sql).toContain('apply_donation_webhook');
-    expect(h.withOrgContext).not.toHaveBeenCalled();
   });
 });
 
@@ -894,7 +911,6 @@ describe('DonationsService — no real gateway wired (PAYMENT_DRIVER=disabled)',
       canReceiveDonations: false,
     });
     expect(h.queryRaw).not.toHaveBeenCalled();
-    expect(h.withOrgContext).not.toHaveBeenCalled();
   });
 });
 

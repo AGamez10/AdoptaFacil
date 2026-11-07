@@ -51,6 +51,7 @@ import { DonationCertificatesService } from './donation-certificates.service';
 import { buildDonationAccessLink } from './donation-access-link';
 import { MercadoPagoConnectionsService } from '../payments/mercadopago-connections.service';
 import { mercadoPagoNotificationType } from '../../core/payments/mercadopago-payment.adapter';
+import { isFormalState } from '../reports/report-legal-effect';
 
 /**
  * How long a guest's donation access link (magic link) stays valid (client's
@@ -1147,13 +1148,25 @@ export class DonationsService {
     return { organizationId, canReceiveDonations: !this.requiresCollector };
   }
 
-  /** Operational status gate (AF-023): only `approved` organizations collect. */
+  /**
+   * Who may collect online (owner's decision, 2026-11-07): the organization must
+   * be operationally `approved` (AF-023, P1-2) AND minimally formalized — a
+   * legal person (ESAL, formalizada or esal_rte). Informal groups never collect.
+   */
   private async isApprovedOrganization(organizationId: string): Promise<boolean> {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { status: true },
     });
-    return org?.status === 'approved';
+    if (org?.status !== 'approved') return false;
+    // organization_profiles is tenant-scoped (RLS): read it in the org's context.
+    const profile = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.organizationProfile.findUnique({
+        where: { organizationId },
+        select: { formalizationState: true },
+      }),
+    );
+    return isFormalState(profile?.formalizationState ?? 'informal');
   }
 
   private async organizationNamesById(ids: string[]): Promise<Map<string, string>> {

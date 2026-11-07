@@ -10,7 +10,7 @@ import { PlansService } from '../src/core/plans/plans.service';
 import { MercadoPagoConnectionsService } from '../src/modules/payments/mercadopago-connections.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_GUEST, LEGAL_ORG } from './support/legal';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * Mercado Pago end to end (ADR-PAG-003) with PAYMENT_DRIVER=mercadopago and
@@ -139,6 +139,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
         .expect(201);
       orgIds.push(reg.body.user.organizationId);
       await approveTestOrganization(admin, reg.body.user.organizationId);
+      await formalizeTestOrganization(admin, reg.body.user.organizationId);
       return reg.body;
     };
     const a = await register('Refugio Mercado Pago');

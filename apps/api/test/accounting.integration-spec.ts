@@ -10,7 +10,7 @@ import { PlansService } from '../src/core/plans/plans.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_GUEST, LEGAL_ORG } from './support/legal';
 import { CapturingNotificationPort, SIGNATURE_PNG } from './support/signers';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * Contabilidad de donaciones por detrás (sección 2A/2B), de punta a punta con
@@ -260,6 +260,7 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
         .expect(201);
       orgIds.push(res.body.user.organizationId);
       await approveTestOrganization(admin, res.body.user.organizationId);
+      await formalizeTestOrganization(admin, res.body.user.organizationId);
       return {
         token: res.body.tokens.accessToken as string,
         userId: res.body.user.id as string,

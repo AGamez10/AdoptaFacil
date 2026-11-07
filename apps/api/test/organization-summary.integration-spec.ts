@@ -8,7 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
@@ -235,6 +235,8 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${personB}`)
       .send({ planId: plan2.body.id })
       .expect(201);
+    // Solo organizaciones formalizadas cobran: se formaliza mientras dura el cobro.
+    await formalizeTestOrganization(admin, owner.orgId, 'formalizada');
     await request(server)
       .post(`/sponsorships/${sponsorship2.body.id}/suspend`)
       .set('Authorization', `Bearer ${owner.token}`)
@@ -314,6 +316,7 @@ describe('Organization summary (S2-08, M13)', () => {
         idempotencyKey: `s208-pending-${randomUUID()}`,
       })
       .expect(201);
+    await formalizeTestOrganization(admin, owner.orgId, 'informal');
   });
 
   afterAll(async () => {

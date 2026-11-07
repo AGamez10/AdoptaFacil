@@ -7,7 +7,7 @@ import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * M05 donation certificates (F-3, RF14): the certificate is issued
@@ -50,6 +50,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     esalToken = esalReg.body.tokens.accessToken;
     esalOrgId = esalReg.body.user.organizationId;
     await approveTestOrganization(admin, esalReg.body.user.organizationId);
+    await formalizeTestOrganization(admin, esalReg.body.user.organizationId);
     orgIds.push(esalOrgId);
 
     // Force ESAL + RTE vigente (mismo atajo que organization-type.integration-spec.ts:
@@ -77,6 +78,7 @@ describe('Donation certificates (M05: RF14, ESAL-RTE gating, no cross-org/donor 
     informalToken = informalReg.body.tokens.accessToken;
     informalOrgId = informalReg.body.user.organizationId;
     await approveTestOrganization(admin, informalReg.body.user.organizationId);
+    await formalizeTestOrganization(admin, informalReg.body.user.organizationId);
     orgIds.push(informalOrgId);
     // Se queda 'informal' (default) a propósito — nunca debe emitir certificado.
 

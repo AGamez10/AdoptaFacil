@@ -8,7 +8,7 @@ import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * M13 dashboards (RF24, S-8): PlatformAdmin consolidates the three existing
@@ -46,6 +46,7 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .expect(201);
     orgIds.push(res.body.user.organizationId);
     await approveTestOrganization(admin, res.body.user.organizationId);
+    await formalizeTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       orgId: res.body.user.organizationId,

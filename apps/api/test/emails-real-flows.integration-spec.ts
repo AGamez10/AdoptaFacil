@@ -9,7 +9,7 @@ import type { NotificationMessage } from '../src/core/notifications/notification
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_GUEST, LEGAL_ORG, LEGAL_PERSON } from './support/legal';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * Smoke of the branded emails on the REAL flows (real AppModule, Prisma, RLS,
@@ -59,6 +59,7 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
     orgToken = org.body.tokens.accessToken;
     orgId = org.body.user.organizationId;
     await approveTestOrganization(admin, org.body.user.organizationId);
+    await formalizeTestOrganization(admin, org.body.user.organizationId);
     orgIds.push(orgId);
 
     personEmail = `flows-p-${randomUUID()}@test.local`;
