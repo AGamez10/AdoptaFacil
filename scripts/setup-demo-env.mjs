@@ -81,6 +81,54 @@ export function applyDemoFlags(text) {
   return { text: out.join(eol), changes };
 }
 
+/** Bandeja local (servicio `mailpit` de docker-compose.yml). */
+export const LOCAL_MAILBOX = {
+  NOTIFICATION_DRIVER: 'smtp',
+  SMTP_HOST: 'localhost',
+  SMTP_PORT: '1025',
+  SMTP_FROM: '"AdoptaFácil (local)" <no-reply@adoptafacil.local>',
+};
+
+/**
+ * Con NOTIFICATION_DRIVER=log los correos solo se escriben en la consola de la
+ * API: una invitación o una solicitud de firma "no llega" a nadie. Si el .env
+ * no tiene un SMTP propio (driver log y SMTP_HOST vacío), lo apunta a la
+ * bandeja local de Mailpit (http://localhost:8025). Un SMTP ya configurado
+ * nunca se toca.
+ */
+export function applyLocalMailbox(text) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
+  const driver = readValue(lines, 'NOTIFICATION_DRIVER') ?? 'log';
+  const host = readValue(lines, 'SMTP_HOST') ?? '';
+  if (driver !== 'log' || host !== '') return { text, changes: [] };
+
+  const changes = [];
+  const seen = new Set();
+  const out = lines.map((line) => {
+    const m = line.match(/^(\s*)([A-Z0-9_]+)(\s*=\s*)(.*)$/);
+    if (!m || !(m[2] in LOCAL_MAILBOX) || seen.has(m[2])) return line;
+    seen.add(m[2]);
+    const value = LOCAL_MAILBOX[m[2]];
+    const current = m[4].trim().replace(/^(['"])(.*)\1$/, '$2');
+    if (current === value) return line;
+    changes.push(`${m[2]}: ${m[4].trim() || '(vacío)'} → ${value}`);
+    return `${m[1]}${m[2]}${m[3]}${m[2] === 'SMTP_FROM' ? `'${value}'` : value}`;
+  });
+  const missing = Object.keys(LOCAL_MAILBOX).filter((key) => !seen.has(key));
+  if (missing.length > 0) {
+    while (out.length > 0 && out[out.length - 1] === '') out.pop();
+    out.push('', '# --- pnpm setup:demo-env: bandeja local (Mailpit) ---');
+    for (const key of missing) {
+      const value = LOCAL_MAILBOX[key];
+      out.push(`${key}=${key === 'SMTP_FROM' ? `'${value}'` : value}`);
+      changes.push(`${key}: (no estaba) → ${value}`);
+    }
+    out.push('');
+  }
+  return { text: out.join(eol), changes };
+}
+
 /**
  * Appends to an existing .env the keys the template has and the file lacks, so
  * a .env from an older checkout gets the new variables. Existing lines are never
@@ -132,12 +180,15 @@ function main() {
     process.exit(1);
   }
   const keys = addMissingKeys(result.text, readFileSync(examplePath, 'utf8'));
+  const mailbox = applyLocalMailbox(keys.text);
+  keys.text = mailbox.text;
   const changes = [
     ...keys.added.map(
       (line) =>
         `${line.split('=')[0]}: (no estaba) → ${line.slice(line.indexOf('=') + 1) || '(vacío)'}`,
     ),
     ...result.changes,
+    ...mailbox.changes,
   ];
 
   if (changes.length === 0) {
@@ -147,6 +198,11 @@ function main() {
   writeFileSync(targetPath, keys.text, { encoding: 'utf8' });
   console.log('[setup:demo-env] Cambios en .env:');
   for (const change of changes) console.log(`  - ${change}`);
+  if (mailbox.changes.length > 0) {
+    console.log(
+      '[setup:demo-env] Correos a la bandeja local: corre `docker compose up -d mailpit` y ábrelos en http://localhost:8025',
+    );
+  }
   console.log('[setup:demo-env] Si `pnpm dev` ya corría, reinícialo para que tome los cambios.');
 }
 

@@ -291,11 +291,11 @@ class Cursor {
 
 /** Incrusta una firma PNG o JPEG; `null` si los bytes no son una imagen válida
  *  (una firma rota nunca impide generar el documento). */
-async function embedSignature(
-  pdf: PDFDocumentType,
-  bytes: Buffer | null,
-): Promise<PDFImage | null> {
-  if (!bytes || bytes.length < 4) return null;
+async function embedSignature(pdf: PDFDocumentType, raw: Buffer | null): Promise<PDFImage | null> {
+  if (!raw || raw.length < 4) return null;
+  // Copia propia: el lector JPEG de pdf-lib ignora el `byteOffset` de un Buffer
+  // que es vista de otro (lo normal tras descifrar la firma).
+  const bytes = Uint8Array.from(raw);
   try {
     if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
       return await pdf.embedPng(bytes);

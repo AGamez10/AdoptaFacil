@@ -171,9 +171,28 @@ export interface EnrollmentSourceRow {
   appliesToStudentService: boolean;
   schoolName: string | null;
   schoolAgreementCode: string | null;
-  hours: Array<{ date: Date; hours: number; status: string }>;
+  hours: Array<{
+    date: Date;
+    hours: number;
+    status: string;
+    /** Fotos de la jornada de esa sesión (id + huella del archivo). */
+    photos?: Array<{ id: string; sha256: string }>;
+  }>;
   certificate?: { id: string; issuedAt: Date };
 }
+
+/** Foto de la jornada citada por el reporte: el PDF la vuelve a leer por id y
+ *  solo la dibuja si su SHA-256 coincide con el sellado aquí. */
+export interface SocialServiceReportPhoto {
+  id: string;
+  sha256: string;
+  /** Día de la jornada (`AAAA-MM-DD`). */
+  date: string;
+}
+
+/** Tope de fotos por persona y por reporte (el PDF debe seguir siendo liviano). */
+export const SOCIAL_SERVICE_PHOTOS_PER_ROW = 4;
+export const SOCIAL_SERVICE_PHOTOS_PER_REPORT = 60;
 
 export interface SocialServiceReportRow {
   volunteerName: string;
@@ -187,6 +206,14 @@ export interface SocialServiceReportRow {
   missingHours: number;
   status: string;
   certificateNo: string;
+  /** Horas registradas en el período que la organización aún no decide. */
+  pendingHoursInPeriod?: number;
+  /** Sesiones (jornadas) registradas en el período, de cualquier estado salvo rechazadas. */
+  sessionsInPeriod?: number;
+  /** Persona sin autorización de uso de datos: figura con sus horas, sin nombre. */
+  anonymized?: boolean;
+  /** Fotos de la jornada del período (nunca para una fila anonimizada). */
+  photos?: SocialServiceReportPhoto[];
 }
 
 export interface SocialServiceReportPayload {
@@ -197,10 +224,21 @@ export interface SocialServiceReportPayload {
   filters: SocialServiceReportFilters;
   minHours: number;
   rows: SocialServiceReportRow[];
-  totals: { volunteers: number; hoursInPeriod: number; certificates: number; completed: number };
+  totals: {
+    volunteers: number;
+    hoursInPeriod: number;
+    certificates: number;
+    completed: number;
+    /** Horas registradas en el período pendientes de aprobación. */
+    pendingHoursInPeriod?: number;
+    /** Fotos de la jornada incluidas en el reporte. */
+    photos?: number;
+  };
   bySchool: Array<{ school: string; volunteers: number; hours: number }>;
   /** Voluntarios que habrían figurado pero no autorizaron el uso de sus datos (solo el conteo). */
   omittedWithoutConsent?: number;
+  /** Personas que figuran sin nombre por no autorizar el uso de sus datos. */
+  anonymizedWithoutConsent?: number;
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -215,7 +253,9 @@ export function buildSocialServicePayload(input: {
   consentedUserIds?: ReadonlySet<string>;
 }): SocialServiceReportPayload {
   const consented = input.consentedUserIds ?? new Set<string>();
+  let anonymizedWithoutConsent = 0;
   let omittedWithoutConsent = 0;
+  let photoBudget = SOCIAL_SERVICE_PHOTOS_PER_REPORT;
   const { fromUtc, toUtcExclusive } = input.period;
   const inPeriod = (d: Date) => d >= fromUtc && d < toUtcExclusive;
   const school = input.filters.schoolName?.trim();
@@ -229,11 +269,39 @@ export function buildSocialServicePayload(input: {
     const hoursInPeriod = round2(
       approved.filter((h) => inPeriod(h.date)).reduce((s, h) => s + h.hours, 0),
     );
+    // Toda persona que anexó horas en el período figura, aunque la
+    // organización aún no las apruebe (antes solo entraban horas aprobadas y
+    // quien acababa de registrar su jornada no aparecía en el reporte).
+    const loggedInPeriod = e.hours.filter((h) => h.status !== 'rejected' && inPeriod(h.date));
+    const pendingHoursInPeriod = round2(
+      loggedInPeriod.filter((h) => h.status === 'pending').reduce((s, h) => s + h.hours, 0),
+    );
     const certifiedInPeriod = e.certificate ? inPeriod(e.certificate.issuedAt) : false;
-    if (hoursInPeriod === 0 && !certifiedInPeriod) continue;
-    if (!e.volunteerUserId || !consented.has(e.volunteerUserId)) {
+    if (loggedInPeriod.length === 0 && !certifiedInPeriod) continue;
+    // Sin autorización de uso de datos (Ley 1581 de 2012) la persona figura
+    // igual —sus horas cuentan— pero sin nombre, institución ni fotos.
+    const anonymized = !e.volunteerUserId || !consented.has(e.volunteerUserId);
+    // En un reporte filtrado por colegio, una fila anónima delataría que esa
+    // persona estudia ahí: se cuenta aparte, sin fila.
+    if (anonymized && school) {
       omittedWithoutConsent += 1;
       continue;
+    }
+    if (anonymized) anonymizedWithoutConsent += 1;
+
+    const photos: SocialServiceReportPhoto[] = [];
+    if (!anonymized) {
+      for (const h of [...loggedInPeriod].sort((a, b) => a.date.getTime() - b.date.getTime())) {
+        for (const photo of h.photos ?? []) {
+          if (photos.length >= SOCIAL_SERVICE_PHOTOS_PER_ROW || photoBudget <= 0) break;
+          photos.push({
+            id: photo.id,
+            sha256: photo.sha256,
+            date: h.date.toISOString().slice(0, 10),
+          });
+          photoBudget -= 1;
+        }
+      }
     }
 
     const hoursTotal = round2(approved.reduce((s, h) => s + h.hours, 0));
@@ -247,17 +315,23 @@ export function buildSocialServicePayload(input: {
         : 'Cumple, sin certificar';
 
     rows.push({
-      volunteerName: e.volunteerName,
+      volunteerName: anonymized
+        ? `Voluntario sin autorización de datos ${anonymizedWithoutConsent}`
+        : e.volunteerName,
       opportunity: e.opportunityTitle,
       studentService: e.appliesToStudentService,
-      school: e.schoolName?.trim() ?? '',
-      agreementCode: e.schoolAgreementCode?.trim() ?? '',
+      school: anonymized ? '' : (e.schoolName?.trim() ?? ''),
+      agreementCode: anonymized ? '' : (e.schoolAgreementCode?.trim() ?? ''),
       hoursInPeriod,
       hoursTotal,
       pendingSessions: e.hours.filter((h) => h.status === 'pending').length,
       missingHours,
       status,
       certificateNo: e.certificate ? e.certificate.id.slice(0, 8).toUpperCase() : '',
+      pendingHoursInPeriod,
+      sessionsInPeriod: loggedInPeriod.length,
+      ...(anonymized ? { anonymized: true } : {}),
+      ...(photos.length > 0 ? { photos } : {}),
     });
   }
 
@@ -288,11 +362,14 @@ export function buildSocialServicePayload(input: {
       hoursInPeriod: round2(rows.reduce((s, r) => s + r.hoursInPeriod, 0)),
       certificates: rows.filter((r) => r.certificateNo).length,
       completed: rows.filter((r) => r.studentService && r.missingHours === 0).length,
+      pendingHoursInPeriod: round2(rows.reduce((s, r) => s + (r.pendingHoursInPeriod ?? 0), 0)),
+      photos: rows.reduce((s, r) => s + (r.photos?.length ?? 0), 0),
     },
     bySchool: [...schoolMap.entries()]
       .map(([s, v]) => ({ school: s, ...v }))
       .sort((a, b) => a.school.localeCompare(b.school, 'es')),
     omittedWithoutConsent,
+    anonymizedWithoutConsent,
   };
 }
 

@@ -158,6 +158,15 @@ export function createKit(m: TplModel) {
       SHOW.redes
         ? `<div class="k-soc" data-sec="redes"><p>${COPY.socialsText}</p><div>${m.SOCIALS.map((x) => socialLink(x, ic[x.key])).join('')}</div></div>`
         : '',
+    /** Voluntariados abiertos de la organización (el portal clásico los lista
+     *  igual). Sin voluntariados no se pinta nada. */
+    volunteering: (head = hd('Súmate con tu tiempo', 'Voluntariado')) =>
+      m.VOLUNTEERING.length
+        ? `<section class="w k-sec tpl-vol" data-sec="voluntariado" id="portal-section-volunteering">${head}<div class="tpl-vol-grid">${m.VOLUNTEERING.map(
+            (v) =>
+              `<article class="tpl-vol-card"><b>${v.title}</b><span class="tpl-vol-meta">${v.dates} · ${v.location}</span>${v.sessionDays ? `<span class="tpl-vol-days">Jornadas: ${v.sessionDays}</span>` : ''}${v.description ? `<p>${v.description}</p>` : ''}${v.studentService ? '<span class="tpl-vol-tag">Servicio social estudiantil</span>' : ''}<a class="tpl-vol-btn" href="${v.href}">Inscribirme ${ic.arrow}</a></article>`,
+          ).join('')}</div></section>`
+        : '',
     campEmpty: (head = hd('Campaña activa', 'Sin campaña por ahora')) =>
       `<section class="w k-sec" data-sec="campana">${head}<p class="k-empty">${EMPTY.campana}</p></section>`,
     init(app: HTMLElement, motion: Motion) {
@@ -183,3 +192,21 @@ export function createKit(m: TplModel) {
 }
 
 export type Kit = ReturnType<typeof createKit>;
+
+/**
+ * Voluntariado en TODAS las plantillas (igual que el portal clásico): si el
+ * diseño no pinta su propia sección, se inserta la del kit antes del pie de
+ * página (o al final si no tiene pie). Sin voluntariados no hace nada.
+ */
+export function ensureVolunteeringSection(root: HTMLElement, kit: Kit): void {
+  if (root.querySelector('[data-sec="voluntariado"]')) return;
+  const html = kit.volunteering();
+  if (!html) return;
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  const section = holder.firstElementChild;
+  if (!section) return;
+  const footer = root.querySelector('footer');
+  if (footer?.parentElement) footer.parentElement.insertBefore(section, footer);
+  else root.appendChild(section);
+}

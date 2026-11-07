@@ -12,7 +12,7 @@ import {
 import { hslStringToHex } from '../model/color-conversion';
 import { PreviewAnimalDialog } from './demo/preview-animal-dialog';
 import { PreviewLedgerDialog } from './demo/preview-ledger-dialog';
-import { createKit } from './engine/kit';
+import { createKit, ensureVolunteeringSection } from './engine/kit';
 import { buildTemplateModel, type TemplateSourceData } from './engine/model';
 import { createCatalog, createMotion } from './engine/runtime';
 import type { TemplateDesign, ThreeModule } from './engine/types';
@@ -143,6 +143,8 @@ export function PortalTemplateView({
         },
       });
       kit.init(root, motion);
+      // Voluntariado: TODAS las plantillas lo muestran, como el portal clásico.
+      ensureVolunteeringSection(root, kit);
       const hidden = [
         ...(reputation ? [] : ['[data-sec="resenas"]', '[data-review]']),
         ...(marketplace ? [] : ['[data-sec="productos"]']),

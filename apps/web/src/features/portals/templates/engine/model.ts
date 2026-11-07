@@ -10,7 +10,10 @@ import {
   type PublicLedgerPage,
   type PublicReview,
   type ResourceNeedPublic,
+  type VolunteerOpportunityPublic,
+  formatDayEs,
 } from '@adoptafacil/contracts';
+import { volunteerSignupHref } from '../../../volunteering/model/volunteering-view';
 import { CATEGORY_LABELS as CAMPAIGN_CATEGORY_LABELS } from '../../../campaigns/model/campaigns-view';
 import { publicCampaignDetailHref } from '../../../campaigns/model/campaigns-view';
 import { CATEGORY_LABELS as PRODUCT_CATEGORY_LABELS } from '../../../marketplace/model/marketplace-view';
@@ -47,6 +50,8 @@ export interface TemplateSourceData {
   /** Total reportado por la API. La plantilla anuncia `animals.length` (lo que puede mostrar). */
   animalTotal: number;
   campaigns: CampaignPublic[];
+  /** Voluntariados abiertos de la organización (opcional: datos de ejemplo viejos). */
+  volunteering?: VolunteerOpportunityPublic[];
   needs: ResourceNeedPublic[];
   products: ProductPublic[];
   reviews: PublicReview[];
@@ -102,6 +107,19 @@ export interface TplCampaign {
   deadlineShort: string;
   deadlineISO: string;
   daysLeft: number;
+  href: string;
+}
+
+export interface TplVolunteering {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  /** "Del 10 nov al 20 dic de 2026". */
+  dates: string;
+  /** Días de jornada ("8 de noviembre de 2026 · …"), vacío si no los definió. */
+  sessionDays: string;
+  studentService: boolean;
   href: string;
 }
 
@@ -214,6 +232,7 @@ export interface TplModel {
   ORG: TplOrg;
   CAMPAIGN: TplCampaign & { active: boolean };
   CAMPAIGNS: TplCampaign[];
+  VOLUNTEERING: TplVolunteering[];
   ANIMALS: TplAnimal[];
   animalTotal: number;
   COUNTS: {
@@ -423,6 +442,22 @@ function toCampaign(c: CampaignPublic, now: Date): TplCampaign {
   };
 }
 
+function toVolunteering(v: VolunteerOpportunityPublic): TplVolunteering {
+  const opts = { day: 'numeric', month: 'short', year: 'numeric' } as const;
+  const days = (v.sessionDates ?? []).slice(0, 6).map(formatDayEs);
+  const more = (v.sessionDates?.length ?? 0) - days.length;
+  return {
+    id: esc(v.id),
+    title: esc(v.title),
+    description: esc(v.description ?? ''),
+    location: esc(v.location),
+    dates: esc(`Del ${dateLabel(v.startDate, opts)} al ${dateLabel(v.endDate, opts)}`),
+    sessionDays: esc(days.join(' · ') + (more > 0 ? ` y ${more} más` : '')),
+    studentService: v.appliesToStudentService,
+    href: esc(volunteerSignupHref(v.id)),
+  };
+}
+
 const EMPTY_CAMPAIGN: TplCampaign = {
   id: '',
   title: '',
@@ -623,6 +658,7 @@ export function buildTemplateModel(src: TemplateSourceData, now: Date = new Date
     },
     CAMPAIGN: { ...(campaigns[0] ?? EMPTY_CAMPAIGN), active: campaigns.length > 0 },
     CAMPAIGNS: campaigns,
+    VOLUNTEERING: (src.volunteering ?? []).map(toVolunteering),
     ANIMALS: animals,
     // El total que anuncia la plantilla es EXACTAMENTE el de los animales que
     // puede mostrar (catálogo, "ver más", filtros): nunca un número mayor.

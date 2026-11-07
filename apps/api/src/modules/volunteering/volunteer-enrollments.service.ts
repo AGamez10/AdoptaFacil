@@ -75,6 +75,15 @@ interface EnrollmentMineRow {
   guardianDocument: string | null;
   schoolName: string | null;
   schoolAgreementCode: string | null;
+  opportunityStartDate?: string | null;
+  opportunityEndDate?: string | null;
+  sessionDates?: string[] | null;
+}
+
+/** `timestamp` sin zona serializado por `jsonb_build_object` (UTC) → ISO con Z. */
+function jsonbUtc(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  return /Z$|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`;
 }
 
 function toEnrollment(row: EnrollmentRow): VolunteerEnrollment {
@@ -142,6 +151,9 @@ function toMine(row: EnrollmentMineRow): VolunteerEnrollmentMine {
     guardianDocument: row.guardianDocument ?? undefined,
     schoolName: row.schoolName ?? undefined,
     schoolAgreementCode: row.schoolAgreementCode ?? undefined,
+    opportunityStartDate: jsonbUtc(row.opportunityStartDate),
+    opportunityEndDate: jsonbUtc(row.opportunityEndDate),
+    sessionDates: row.sessionDates ?? [],
   };
 }
 

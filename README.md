@@ -42,8 +42,13 @@ pnpm install
 # 2. Variables de entorno (crea .env en UTF-8 sin BOM; NO uses `>`/Out-File)
 pnpm setup:env
 
-# 3. Infraestructura local (Postgres 16 en el puerto 5433 + Redis 7)
+# 3. Infraestructura local (Postgres 16 en el puerto 5433 + Redis 7 + Mailpit)
 docker compose up -d
+# Mailpit es la bandeja de correo local: invitaciones y solicitudes de firma
+# se leen en http://localhost:8025 (nada sale a Internet). pnpm setup:demo-env
+# apunta el .env ahí si no configuraste un SMTP propio.
+# Sin Docker (Ubuntu/WSL): instala el binario de Mailpit y córrelo con `mailpit`
+# (usa los mismos puertos por defecto: SMTP 1025 y web 8025).
 
 # Atajo para ver la demo local con todos los módulos (hace los pasos 4 y 5):
 #   pnpm demo:prepare

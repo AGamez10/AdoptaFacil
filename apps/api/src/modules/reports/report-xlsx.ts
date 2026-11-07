@@ -202,6 +202,9 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       { header: 'Sesiones pendientes', key: 'pending', width: 12 },
       { header: 'Estado', key: 'status', width: 26 },
       { header: 'Certificado', key: 'cert', width: 12 },
+      { header: 'Jornadas en el período', key: 'sessions', width: 12 },
+      { header: 'Horas por aprobar', key: 'pendingHours', width: 12, style: { numFmt: HOURS } },
+      { header: 'Fotos de la jornada', key: 'photos', width: 10 },
     ];
     styleHeader(detail.getRow(1));
     for (const r of payload.rows) {
@@ -216,6 +219,16 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
         pending: r.pendingSessions,
         status: sheetText(r.status),
         cert: sheetText(r.certificateNo),
+        sessions: r.sessionsInPeriod,
+        pendingHours: r.pendingHoursInPeriod,
+        photos: r.photos?.length ?? 0,
+      });
+    }
+    if (payload.anonymizedWithoutConsent && payload.anonymizedWithoutConsent > 0) {
+      detail.addRow({
+        name: sheetText(
+          `${payload.anonymizedWithoutConsent} persona(s) figuran sin nombre por no autorizar el uso de sus datos; sus horas sí se cuentan.`,
+        ),
       });
     }
     if (payload.omittedWithoutConsent && payload.omittedWithoutConsent > 0) {
@@ -226,7 +239,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       });
     }
     detail.views = [{ state: 'frozen', ySplit: 1 }];
-    detail.autoFilter = { from: 'A1', to: 'J1' };
+    detail.autoFilter = { from: 'A1', to: 'M1' };
 
     const bySchool = wb.addWorksheet('Por institución');
     bySchool.columns = [

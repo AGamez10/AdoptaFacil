@@ -6,9 +6,11 @@ import type {
   ProductPublic,
   PublicReview,
   ResourceNeedPublic,
+  VolunteerOpportunityPublic,
 } from '@adoptafacil/contracts';
 import { fetchAllPublicAnimals } from '../api/public-animals';
 import { fetchPublicOrgCampaigns } from '../api/public-campaigns';
+import { fetchPublicOrgVolunteering } from '../api/public-volunteering';
 import { fetchPublicReviews } from '../api/public-reviews';
 import { fetchPublicLedger } from '../../ledger/api/public-ledger';
 import { listPublicNeeds } from '../../resources/api/public-resources';
@@ -43,6 +45,9 @@ export function useTemplateSource(
     const campaigns = fetchPublicOrgCampaigns({ slug, limit: 12, offset: 0, signal })
       .then((p) => p.items.filter((c) => c.organizationId === organization.id))
       .catch(() => [] as CampaignPublic[]);
+    const volunteering = fetchPublicOrgVolunteering({ slug, limit: 12, signal })
+      .then((items) => items.filter((v) => v.organizationId === organization.id))
+      .catch(() => [] as VolunteerOpportunityPublic[]);
     const needs = listPublicNeeds({ organizationId: organization.id, limit: 12, offset: 0, signal })
       .then((p) => p.items.filter((n) => n.organizationId === organization.id))
       .catch(() => [] as ResourceNeedPublic[]);
@@ -60,8 +65,8 @@ export function useTemplateSource(
 
     const ledger = fetchPublicLedger(slug, { limit: 5, signal }).catch(() => null);
 
-    Promise.all([animals, campaigns, needs, products, reviews, ledger])
-      .then(([a, c, n, p, r, l]) => {
+    Promise.all([animals, campaigns, needs, products, reviews, ledger, volunteering])
+      .then(([a, c, n, p, r, l, v]) => {
         if (signal.aborted) return;
         setState({
           status: 'ready',
@@ -71,6 +76,7 @@ export function useTemplateSource(
             animals: a.items,
             animalTotal: a.total,
             campaigns: c,
+            volunteering: v,
             needs: n,
             products: p,
             reviews: r,

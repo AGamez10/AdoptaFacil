@@ -7,11 +7,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { ServiceHours as ServiceHoursRow } from '@prisma/client';
+import type {
+  ServiceHours as ServiceHoursRow,
+  ServiceHoursPhoto as ServiceHoursPhotoRow,
+} from '@prisma/client';
 import type {
   DecideServiceHoursInput,
   Paginated,
   ServiceHours,
+  ServiceHoursPhoto,
   ServiceHoursStatus,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
@@ -27,6 +31,7 @@ import {
   buildServiceHoursDecisionSubject,
 } from './volunteer-notifications';
 import { clampLimit } from './volunteer-opportunities.service';
+import { toPhoto } from './service-hours-photos.service';
 
 /** Reglas que `create_service_hours` aplica en la base de datos (backstop de
  *  la validación Zod) traducidas a un mensaje claro para el voluntario. */
@@ -40,6 +45,10 @@ const SERVICE_HOURS_DB_ERRORS: ReadonlyArray<readonly [RegExp, string]> = [
   [
     /service hours date outside the opportunity/i,
     'La fecha de la sesión debe estar dentro de las fechas de la convocatoria.',
+  ],
+  [
+    /not an enabled session day/i,
+    'Ese día no es una jornada habilitada por la organización. Elige uno de los días de jornada de la convocatoria.',
   ],
   [
     /service hours exceed 24 per day/i,
@@ -63,7 +72,7 @@ interface ServiceHoursRawRow {
   created_at: Date;
 }
 
-function toServiceHours(row: ServiceHoursRow): ServiceHours {
+function toServiceHours(row: ServiceHoursRow & { photos?: ServiceHoursPhotoRow[] }): ServiceHours {
   return {
     id: row.id,
     organizationId: row.organizationId,
@@ -77,6 +86,7 @@ function toServiceHours(row: ServiceHoursRow): ServiceHours {
     decidedByUserId: row.decidedByUserId ?? undefined,
     decidedAt: row.decidedAt?.toISOString(),
     createdAt: row.createdAt.toISOString(),
+    ...(row.photos ? { photos: row.photos.map(toPhoto) } : {}),
   };
 }
 
@@ -114,6 +124,13 @@ interface ServiceHoursMineRow {
   decidedByUserId: string | null;
   decidedAt: string | null;
   createdAt: string;
+  photos?: Array<{
+    id: string;
+    serviceHoursId: string;
+    contentType: string;
+    sizeBytes: number;
+    createdAt: string;
+  }>;
 }
 
 function fromMineRow(row: ServiceHoursMineRow): ServiceHours {
@@ -130,6 +147,13 @@ function fromMineRow(row: ServiceHoursMineRow): ServiceHours {
     decidedByUserId: row.decidedByUserId ?? undefined,
     decidedAt: row.decidedAt ?? undefined,
     createdAt: row.createdAt,
+    photos: (row.photos ?? []).map((photo): ServiceHoursPhoto => ({
+      id: photo.id,
+      serviceHoursId: photo.serviceHoursId,
+      contentType: photo.contentType,
+      sizeBytes: photo.sizeBytes,
+      createdAt: photo.createdAt,
+    })),
   };
 }
 
@@ -213,7 +237,13 @@ export class ServiceHoursService {
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const where = { organizationId, enrollmentId };
       const [rows, total] = await Promise.all([
-        tx.serviceHours.findMany({ where, orderBy: { date: 'desc' }, take, skip }),
+        tx.serviceHours.findMany({
+          where,
+          orderBy: { date: 'desc' },
+          take,
+          skip,
+          include: { photos: { orderBy: { createdAt: 'asc' } } },
+        }),
         tx.serviceHours.count({ where }),
       ]);
       return { items: rows.map(toServiceHours), total, limit: take, offset: skip };

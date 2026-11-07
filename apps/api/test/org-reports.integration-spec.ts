@@ -445,17 +445,28 @@ describe('Org reports (M13: donaciones + servicio social, firmas, idempotencia, 
     expect(downloads).toBe(3); // borrador + PDF emitido + Excel
   });
 
-  it('social service WITHOUT consent: the volunteer is not named, only counted as omitted', async () => {
+  it('social service WITHOUT consent: the volunteer appears with their hours but without name, school or photos', async () => {
     const res = await generate(drafterA, {
       kind: 'social_service',
       periodStart: monthAgo,
       periodEnd: today,
       filters: { studentServiceOnly: true, schoolName: '  Colegio San José ' },
     }).expect(201);
+    // El filtro por colegio no ve la institución de quien no autorizó; sin
+    // filtro figura igual, con sus horas, pero sin nombre.
     expect(res.body.summary).toMatchObject({ rowCount: 0, volunteers: 0 });
-    const row = await admin.orgReport.findUniqueOrThrow({ where: { id: res.body.id } });
-    expect((row.payload as { omittedWithoutConsent?: number }).omittedWithoutConsent).toBe(1);
+    const filtered = await admin.orgReport.findUniqueOrThrow({ where: { id: res.body.id } });
+    expect((filtered.payload as { omittedWithoutConsent?: number }).omittedWithoutConsent).toBe(1);
+    const all = await generate(drafterA, {
+      kind: 'social_service',
+      periodStart: monthAgo,
+      periodEnd: today,
+    }).expect(201);
+    expect(all.body.summary).toMatchObject({ rowCount: 1, volunteers: 1 });
+    const row = await admin.orgReport.findUniqueOrThrow({ where: { id: all.body.id } });
+    expect((row.payload as { anonymizedWithoutConsent?: number }).anonymizedWithoutConsent).toBe(1);
     expect(JSON.stringify(row.payload)).not.toContain('Estudiante');
+    expect(JSON.stringify(row.payload)).not.toContain('San José');
   });
 
   it('CONSENT: the person grants it, the next reports identify them; revoking removes them again; issued documents never change', async () => {

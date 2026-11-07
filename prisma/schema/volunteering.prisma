@@ -34,6 +34,11 @@ model VolunteerOpportunity {
   requirements             String?
   appliesToStudentService  Boolean  @default(false) @map("applies_to_student_service")
   status                   String   @default("active")
+  /// Días de jornada que la organización habilita para registrar horas
+  /// (dentro de start_date–end_date). Vacío = cualquier día de la convocatoria
+  /// (convocatorias publicadas antes de esta regla). `create_service_hours`
+  /// lo aplica en la base de datos.
+  sessionDates             DateTime[] @default([]) @map("session_dates") @db.Date
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
 
@@ -116,11 +121,37 @@ model ServiceHours {
   createdAt       DateTime  @default(now()) @map("created_at")
 
   enrollment VolunteerEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  photos     ServiceHoursPhoto[]
 
   @@index([organizationId])
   @@index([enrollmentId])
   @@index([volunteerUserId])
   @@map("service_hours")
+}
+
+/// Foto de la jornada que el voluntario adjunta a UNA de sus sesiones de horas
+/// (evidencia para la organización y para su reporte de voluntariado). Archivo
+/// PRIVADO en StoragePort, normalizado a JPEG en el servidor. El rol de la app
+/// solo tiene SELECT + INSERT (nunca se edita ni se borra desde la app): un
+/// reporte sellado que la cita por id + `sha256` siempre la encuentra igual.
+/// Se crea cross-tenant con `add_service_hours_photo` (SECURITY DEFINER), que
+/// valida que la sesión sea del voluntario y que no haya certificado emitido.
+model ServiceHoursPhoto {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  serviceHoursId  String   @map("service_hours_id") @db.Uuid
+  volunteerUserId String   @map("volunteer_user_id") @db.Uuid
+  storageRef      String   @map("storage_ref")
+  contentType     String   @map("content_type")
+  sizeBytes       Int      @map("size_bytes")
+  sha256          String
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  serviceHours ServiceHours @relation(fields: [serviceHoursId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([serviceHoursId])
+  @@map("service_hours_photos")
 }
 
 /// Certificate issued by the organization for ONE enrollment (RF18/RF19).

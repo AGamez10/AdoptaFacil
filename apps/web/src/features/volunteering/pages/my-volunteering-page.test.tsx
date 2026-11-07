@@ -197,6 +197,59 @@ describe('MyVolunteeringPage (RF18/RF19)', () => {
     expect(body.hours).toBe(3);
   });
 
+  it('solo ofrece los días de jornada habilitados que ya ocurrieron, y sube las fotos de la jornada', async () => {
+    const day = (offset: number) =>
+      new Date(Date.now() - 5 * 3_600_000 + offset * 86_400_000).toISOString().slice(0, 10);
+    const enrollment = {
+      ...ACCEPTED_MINE,
+      opportunityStartDate: `${day(-20)}T00:00:00.000Z`,
+      opportunityEndDate: `${day(10)}T00:00:00.000Z`,
+      sessionDates: [day(-10), day(-5), day(3)],
+    };
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method === 'POST' && url.endsWith('/photos')) {
+        return { id: 'ph-1', serviceHoursId: 'h-1', contentType: 'image/jpeg', sizeBytes: 10 };
+      }
+      if (init?.method === 'POST' && url.includes('/service-hours')) {
+        return { id: 'h-1', status: 'pending' };
+      }
+      if (url.includes('/public/volunteer-opportunities')) {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      }
+      if (url.includes('/volunteer-enrollments/mine')) return [enrollment];
+      if (url.includes('/service-hours/mine')) return [];
+      if (url.includes('/volunteer-certificates/mine')) return [];
+      return {};
+    });
+    renderShell({ route: '/voluntariado', ...sessionWith([]) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Registrar horas' }));
+    const select = screen.getByLabelText('Día de la jornada') as HTMLSelectElement;
+    const offered = Array.from(select.options)
+      .map((o) => o.value)
+      .filter(Boolean);
+    // Ni hoy, ni días no habilitados, ni el día habilitado que aún no llega.
+    expect(offered).toEqual([day(-5), day(-10)]);
+
+    fireEvent.change(select, { target: { value: day(-5) } });
+    fireEvent.change(screen.getByLabelText('Horas trabajadas'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Descripción de la sesión'), {
+      target: { value: 'Baños' },
+    });
+    const photo = new File(['x'], 'jornada.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText('Fotos de la jornada'), { target: { files: [photo] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar horas' }));
+
+    expect(await screen.findByText('Horas registradas')).toBeInTheDocument();
+    const post = calls.find((c) => c.init?.method === 'POST' && c.url.endsWith('/service-hours'));
+    expect(JSON.parse(String(post?.init?.body)).date.slice(0, 10)).toBe(day(-5));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith('/service-hours/h-1/photos'))).toBe(true),
+    );
+  });
+
   it('nuevo requerimiento: oculta "Registrar horas" una vez la organización emitió el certificado de esa inscripción', async () => {
     stubFetch((url) => {
       if (url.includes('/public/volunteer-opportunities')) {

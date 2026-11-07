@@ -66,6 +66,7 @@ import {
 } from './report-payloads';
 import { resolveReportPeriod, type ReportPeriod } from './report-period';
 import { renderReportPdf } from './report-pdf';
+import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { renderReportXlsx } from './report-xlsx';
 import { REPORT_CODE_PATTERN, generateReportCode, sealHash } from './report-seal';
 import {
@@ -216,6 +217,7 @@ export class ReportsService {
     private readonly legalRepresentatives: LegalRepresentativeService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     @Inject(ConfigService) config: ConfigService,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
   ) {
     this.signaturesEnabled = config.get('REPORTS_SIGNATURES_ENABLED') === true;
     this.webBaseUrl = String(config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(
@@ -882,7 +884,9 @@ export class ReportsService {
   async signatureRequestPdf(token: string): Promise<{ filename: string; data: Buffer }> {
     const { report } = await this.resolveSignatureRequest(token);
     const sealed = report.signers as unknown as SealedSigner[];
+    const payload = report.payload as unknown as OrgReportPayload;
     const data = await renderReportPdf({
+      photos: await this.loadReportPhotos(report.organizationId, payload),
       code: report.code,
       contentHash: report.contentHash,
       createdAt: report.createdAt,
@@ -1162,7 +1166,14 @@ export class ReportsService {
       where: { organizationId, status: { in: ['accepted', 'completed'] } },
       include: {
         opportunity: { select: { title: true } },
-        serviceHours: { select: { date: true, hours: true, status: true } },
+        serviceHours: {
+          select: {
+            date: true,
+            hours: true,
+            status: true,
+            photos: { select: { id: true, sha256: true }, orderBy: { createdAt: 'asc' } },
+          },
+        },
         certificate: { select: { id: true, issuedAt: true } },
       },
     });
@@ -1388,6 +1399,43 @@ export class ReportsService {
     return status === 'issued' ? undefined : status;
   }
 
+  /**
+   * Fotos de la jornada que cita un reporte de servicio social, leídas por id
+   * dentro de la organización (RLS + filtro explícito) y SOLO si su SHA-256
+   * coincide con el sellado en el reporte. Una foto ausente o alterada no se
+   * dibuja; nunca impide generar el PDF.
+   */
+  private async loadReportPhotos(
+    organizationId: string,
+    payload: OrgReportPayload,
+  ): Promise<Map<string, Buffer>> {
+    const out = new Map<string, Buffer>();
+    if (payload.kind !== 'social_service') return out;
+    const wanted = new Map<string, string>();
+    for (const r of payload.rows) for (const p of r.photos ?? []) wanted.set(p.id, p.sha256);
+    if (wanted.size === 0) return out;
+    try {
+      const rows = await this.prisma.withOrgContext(organizationId, (tx) =>
+        tx.serviceHoursPhoto.findMany({
+          where: { organizationId, id: { in: [...wanted.keys()] } },
+          select: { id: true, storageRef: true, sha256: true },
+        }),
+      );
+      await Promise.all(
+        rows.map(async (photo) => {
+          if (wanted.get(photo.id) !== photo.sha256) return;
+          const stored = await this.storage.readObject(photo.storageRef).catch(() => null);
+          if (!stored) return;
+          const hash = createHash('sha256').update(stored.data).digest('hex');
+          if (hash === photo.sha256) out.set(photo.id, stored.data);
+        }),
+      );
+    } catch {
+      // Sin fotos antes que sin reporte.
+    }
+    return out;
+  }
+
   /** PDF dibujado desde el snapshot sellado. Emitido ⇒ con LAS firmas que cada
    *  firmante aprobó (por id + hash); si no, BORRADOR sin firmas ni valor. */
   async renderPdf(id: string, actorUserId: string): Promise<{ filename: string; data: Buffer }> {
@@ -1415,6 +1463,10 @@ export class ReportsService {
       }),
     );
     const data = await renderReportPdf({
+      photos: await this.loadReportPhotos(
+        row.organizationId,
+        row.payload as unknown as OrgReportPayload,
+      ),
       code: row.code,
       contentHash: row.contentHash,
       createdAt: row.createdAt,

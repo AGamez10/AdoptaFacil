@@ -232,7 +232,7 @@ describe('report-payloads', () => {
     expect(JSON.stringify(other)).not.toContain('Secreto');
   });
 
-  it('servicio social: solo figuran voluntarios con consentimiento; los demás se cuentan sin nombre', () => {
+  it('servicio social: todos figuran con sus horas; sin consentimiento, sin nombre ni fotos', () => {
     const period = resolveReportPeriod(
       '2026-09-01',
       '2026-09-30',
@@ -260,13 +260,18 @@ describe('report-payloads', () => {
       })),
     };
     const partial = buildSocialServicePayload({ ...base, consentedUserIds: new Set(['v1']) });
-    expect(partial.rows.map((r) => r.volunteerName)).toEqual(['Nombre v1']);
-    expect(partial.omittedWithoutConsent).toBe(1);
+    expect(partial.rows.map((r) => r.volunteerName)).toEqual([
+      'Nombre v1',
+      'Voluntario sin autorización de datos 1',
+    ]);
+    expect(partial.anonymizedWithoutConsent).toBe(1);
+    expect(partial.totals.hoursInPeriod).toBe(10);
     expect(JSON.stringify(partial)).not.toContain('Nombre v2');
     const none = buildSocialServicePayload({ ...base });
-    expect(none.rows).toEqual([]);
-    expect(none.omittedWithoutConsent).toBe(2);
-    expect(none.totals.volunteers).toBe(0);
+    expect(none.rows.every((r) => r.anonymized)).toBe(true);
+    expect(none.anonymizedWithoutConsent).toBe(2);
+    expect(none.totals.volunteers).toBe(2);
+    expect(JSON.stringify(none)).not.toContain('Nombre');
   });
 
   it('servicio social: solo horas aprobadas del período, filtros y faltantes', () => {
@@ -408,5 +413,146 @@ describe('render PDF / Excel', () => {
     const sheet = wb.getWorksheet('Donaciones')!;
     expect(sheet.getRow(3).getCell(3).value).toBe('\'=cmd|"/c calc"!A1');
     expect(sheet.getRow(2).getCell(8).value).toBe(41670);
+  });
+});
+
+describe('reporte de servicio social: cada persona que anexa horas, con sus fotos', () => {
+  const period = resolveReportPeriod('2026-09-01', '2026-09-30', new Date('2026-10-09T12:00:00Z'));
+  const base = {
+    organization: ORG,
+    period: {
+      start: period.startDate,
+      end: period.endDate,
+      fromUtc: period.fromUtc,
+      toUtcExclusive: period.toUtcExclusive,
+    },
+    filters: {},
+    minHours: 80,
+  };
+
+  it('quien solo tiene horas por aprobar figura, con sus jornadas y fotos; las rechazadas no', () => {
+    const payload = buildSocialServicePayload({
+      ...base,
+      consentedUserIds: new Set(['v1', 'v2']),
+      enrollments: [
+        {
+          id: 'e-v1',
+          volunteerUserId: 'v1',
+          volunteerName: 'Ana Pendiente',
+          opportunityTitle: 'Jornada de baños',
+          appliesToStudentService: false,
+          schoolName: null,
+          schoolAgreementCode: null,
+          hours: [
+            {
+              date: new Date('2026-09-05T00:00:00Z'),
+              hours: 4,
+              status: 'pending',
+              photos: [
+                { id: 'p1', sha256: 'h1' },
+                { id: 'p2', sha256: 'h2' },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'e-v2',
+          volunteerUserId: 'v2',
+          volunteerName: 'Beto Rechazado',
+          opportunityTitle: 'Jornada de baños',
+          appliesToStudentService: false,
+          schoolName: null,
+          schoolAgreementCode: null,
+          hours: [{ date: new Date('2026-09-06T00:00:00Z'), hours: 3, status: 'rejected' }],
+        },
+      ],
+    });
+    expect(payload.rows).toHaveLength(1);
+    expect(payload.rows[0]).toMatchObject({
+      volunteerName: 'Ana Pendiente',
+      hoursInPeriod: 0,
+      pendingHoursInPeriod: 4,
+      sessionsInPeriod: 1,
+      photos: [
+        { id: 'p1', sha256: 'h1', date: '2026-09-05' },
+        { id: 'p2', sha256: 'h2', date: '2026-09-05' },
+      ],
+    });
+    expect(payload.totals).toMatchObject({ volunteers: 1, pendingHoursInPeriod: 4, photos: 2 });
+  });
+
+  it('sin autorización de datos: figura con horas pero sin fotos ni institución', () => {
+    const payload = buildSocialServicePayload({
+      ...base,
+      enrollments: [
+        {
+          id: 'e-x',
+          volunteerUserId: 'x',
+          volunteerName: 'Secreta',
+          opportunityTitle: 'Paseo',
+          appliesToStudentService: true,
+          schoolName: 'Colegio Privado',
+          schoolAgreementCode: 'C-1',
+          hours: [
+            {
+              date: new Date('2026-09-05T00:00:00Z'),
+              hours: 2,
+              status: 'approved',
+              photos: [{ id: 'p9', sha256: 'h9' }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(payload.rows[0]).toMatchObject({ anonymized: true, school: '', hoursInPeriod: 2 });
+    expect(payload.rows[0].photos).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toMatch(/Secreta|Colegio Privado|p9/);
+  });
+
+  it('el PDF incluye el registro fotográfico con las fotos verificadas', async () => {
+    const sharp = (await import('sharp')).default;
+    const jpeg = await sharp({
+      create: { width: 40, height: 30, channels: 3, background: '#2a9d8f' },
+    })
+      .jpeg()
+      .toBuffer();
+    const payload = buildSocialServicePayload({
+      ...base,
+      consentedUserIds: new Set(['v1']),
+      enrollments: [
+        {
+          id: 'e-v1',
+          volunteerUserId: 'v1',
+          volunteerName: 'Ana Fotos',
+          opportunityTitle: 'Jornada',
+          appliesToStudentService: false,
+          schoolName: null,
+          schoolAgreementCode: null,
+          hours: [
+            {
+              date: new Date('2026-09-05T00:00:00Z'),
+              hours: 4,
+              status: 'approved',
+              photos: [{ id: 'p1', sha256: 'h1' }],
+            },
+          ],
+        },
+      ],
+    });
+    const render = (photos?: Map<string, Buffer>) =>
+      renderReportPdf({
+        code: 'ADF-REP-2026-ABCDEFGH',
+        contentHash: 'a'.repeat(64),
+        createdAt: new Date('2026-10-01T12:00:00Z'),
+        legalEffect: 'informative',
+        payload,
+        signers: [],
+        verifyUrl: 'https://adoptafacil.co/verificar/ADF-REP-2026-ABCDEFGH',
+        photos,
+      });
+    const withPhoto = await render(new Map([['p1', jpeg]]));
+    const without = await render();
+    expect(withPhoto.toString('latin1')).toContain('/Subtype /Image');
+    expect(without.toString('latin1')).not.toContain('/Subtype /Image');
   });
 });

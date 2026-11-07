@@ -17,6 +17,7 @@ import {
   ImpactSection,
   LANDING_CATALOG_ID,
   LandingHero,
+  OpenVolunteeringSection,
   PromisesSection,
   TemplateGallerySection,
   WaitingAnimalsSection,
@@ -134,6 +135,7 @@ export function GeneralPortalPage() {
         <ImpactSection snapshot={snapshot} />
 
         <ActiveCampaignsSection />
+        <OpenVolunteeringSection />
         <Suspense fallback={null}>
           <NetworkNeedsSection />
           <PublicLedgerSection snapshot={snapshot} />
