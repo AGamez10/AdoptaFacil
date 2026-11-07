@@ -640,9 +640,13 @@ export interface RegisterLegalRepresentativeInput {
   documentNumber: string;
   position: string;
   /** Base64-encoded signature image (drawn on a canvas or an uploaded file),
-   *  WITHOUT a `data:` URL prefix. */
+   *  WITHOUT a `data:` URL prefix. Only PNG or JPG: the server checks the real
+   *  bytes and re-encodes it to PNG, so what is stored is what the PDF shows. */
   signatureBase64: string;
-  signatureContentType: string;
+  signatureContentType: 'image/png' | 'image/jpeg';
+  /** `drawn` (canvas, the default) or `photo` (a photo of a signature on white
+   *  paper: the server keeps only the ink, on a transparent background). */
+  signatureMethod?: 'drawn' | 'photo';
 }
 
 /**

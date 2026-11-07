@@ -364,4 +364,11 @@ export interface VolunteerCertificate {
    *  there are no approved sessions, though issuance itself already requires
    *  approved hours to exist. */
   bitacora: VolunteerCertificateBitacoraEntry[];
+  /** Quién firmó por la organización AL EMITIR (congelado). Ausente solo en
+   *  certificados emitidos antes de este control: esos se muestran sin firma. */
+  signerFullName?: string;
+  signerPosition?: string;
+  /** true: ESAL formalizada, firma su representante legal. false: grupo
+   *  informal o en proceso, firma su responsable. */
+  signerIsLegalRepresentative?: boolean;
 }

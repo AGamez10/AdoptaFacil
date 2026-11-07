@@ -189,6 +189,16 @@ model VolunteerCertificate {
   /// duplicated capture) and snapshotted at issuance — see
   /// `VolunteerCertificateBitacoraEntry` in the contract.
   bitacora                Json     @default("[]")
+  /// P0-2: quien firmó por la organización AL EMITIR (congelado). Un cambio
+  /// posterior de representante nunca altera un certificado ya emitido.
+  /// Nulos solo en certificados anteriores a este control. true en
+  /// signerIsLegalRepresentative = ESAL formalizada (firma su representante
+  /// legal); false = grupo informal o en proceso (firma su responsable).
+  signerLegalRepresentativeId String?  @map("signer_legal_representative_id") @db.Uuid
+  signerSignatureHash         String?  @map("signer_signature_hash")
+  signerFullName              String?  @map("signer_full_name")
+  signerPosition              String?  @map("signer_position")
+  signerIsLegalRepresentative Boolean? @map("signer_is_legal_representative")
 
   enrollment VolunteerEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
