@@ -10,7 +10,7 @@ import {
  * and refresh, ADR-PAG-003). AES-256-GCM (authenticated: a tampered value
  * fails to decrypt instead of yielding a wrong token) with a key DERIVED via
  * HKDF-SHA256 from SIGNATURE_ENCRYPTION_KEY under its own `info` label — same
- * pattern as the ePayco keys and the staff TOTP secrets: one secret for
+ * pattern as the staff TOTP secrets: one secret for
  * operations to manage, a separate key per purpose. A database dump alone
  * never reveals an organization's token.
  *

@@ -18,7 +18,7 @@ export interface OrgDonateRedirectPageProps {
 }
 
 /**
- * Destino ESTABLE del QR de donaciones de cada organización (ADR-PAG-002 §QR):
+ * Destino ESTABLE del QR de donaciones de cada organización (ADR-PAG-001 §QR):
  * `/o/:slug/donar` y, en un subdominio real, `/donar`. Resuelve la organización
  * pública por slug (mismo endpoint que el portal) y entra al flujo de donación
  * ya existente (`/donaciones?organizationId=…`, vía `buildDonateHref`). El QR

@@ -1,3 +1,5 @@
+// Debe ir antes de AppModule (ver el archivo).
+import { previousVolunteeringMinors } from './support/volunteering-minors-on';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -8,6 +10,7 @@ import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
+import { memberWithRole, registerOwnSignature } from './support/signers';
 
 /** Día `n` de una convocatoria que empezó hace 60 días (siempre en el pasado,
  *  dentro de sus fechas): las horas nunca pueden ser futuras. */
@@ -126,6 +129,11 @@ describe('Volunteering (M08, RF18/RF19)', () => {
   let otherOrg: Actor;
   let volunteer: Actor;
 
+  // Los casos S-12 de menores necesitan el flujo de menores ENCENDIDO (solo
+  // fuera de producción); con el flag apagado el servidor rechaza la
+  // inscripción de un menor (volunteering-minors-off.integration-spec.ts).
+  const previousMinors = previousVolunteeringMinors;
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -135,9 +143,16 @@ describe('Volunteering (M08, RF18/RF19)', () => {
     org = await registerOrg('Refugio Voluntariado');
     otherOrg = await registerOrg('Otro Refugio');
     volunteer = await registerPerson('a');
+    // P0-2: el certificado lo emite y firma quien firma por la organización.
+    await registerOwnSignature(server, org, 'legal_representative', 'Dueña Firmante').expect(201);
+    await registerOwnSignature(server, otherOrg, 'legal_representative', 'Otro Firmante').expect(
+      201,
+    );
   });
 
   afterAll(async () => {
+    if (previousMinors === undefined) delete process.env.FEATURE_VOLUNTEERING_MINORS;
+    else process.env.FEATURE_VOLUNTEERING_MINORS = previousMinors;
     await purgeOrganizations(admin, orgIds);
     await admin.$disconnect();
     await app?.close();
@@ -271,6 +286,34 @@ describe('Volunteering (M08, RF18/RF19)', () => {
       description: 'Intento tardío',
     }).expect(400);
     expect(blocked.body.message).toMatch(/ya se emitió un certificado/i);
+  });
+
+  it('P0-2: solo quien firma por la organización emite el certificado; otra administradora recibe 403', async () => {
+    const opportunity = await publishOpportunity(org.token, false).expect(201);
+    const enrolled = await enroll(volunteer.token, opportunity.body.id).expect(201);
+    await decideEnrollment(org.token, enrolled.body.id, { decision: 'accept' }).expect(200);
+    const logged = await logHours(volunteer.token, {
+      enrollmentId: enrolled.body.id,
+      date: sessionDay(19),
+      hours: 3,
+      description: 'Apoyo en jornada',
+    }).expect(201);
+    await decideHours(org.token, logged.body.id, { decision: 'approve' }).expect(200);
+
+    const administrator = await memberWithRole(app, admin, org.orgId, 'administrator');
+    const refused = await issueCertificate(administrator.token, enrolled.body.id).expect(403);
+    expect(refused.body.message).toMatch(/Dueña Firmante/);
+
+    const issued = await issueCertificate(org.token, enrolled.body.id).expect(201);
+    expect(issued.body).toMatchObject({
+      signerFullName: 'Dueña Firmante',
+      signerIsLegalRepresentative: expect.any(Boolean),
+    });
+    const stored = await admin.volunteerCertificate.findUniqueOrThrow({
+      where: { id: issued.body.id },
+    });
+    expect(stored.signerLegalRepresentativeId).toBeTruthy();
+    expect(stored.signerSignatureHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("S-14: the certificate PDF embeds the org's CURRENT legal representative + signature when one is registered", async () => {

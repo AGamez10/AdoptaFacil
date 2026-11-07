@@ -14,8 +14,7 @@
 //
 // S-5-REDISEÑO (incluye T-057) — replaces the original S-5 design (automatic
 // debit does not exist; the gateway only exposes one-shot payment links/
-// preferences — true under Wompi and still true under MercadoPago, which
-// replaced it). Adds
+// preferences, true under Mercado Pago). Adds
 // `SponsorshipPayment`/`SponsorshipPaymentAttempt`: a per-billing-period ledger
 // driven by the FIRST real cron job in this project (daily BullMQ scan), with a
 // tolerant reminder/retry ladder (up to 3 payment-link attempts) before

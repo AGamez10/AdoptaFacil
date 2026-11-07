@@ -1100,6 +1100,9 @@ export class ReportsService {
       where: {
         organizationId,
         status: 'approved',
+        // P1-1: un informe (que puede salir firmado) nunca cuenta como recibido
+        // lo que volvió al donante por reembolso o contracargo.
+        reversal: null,
         OR: [{ receipt: { issuedAt: range } }, { receipt: null, updatedAt: range }],
       },
       include: {
@@ -1215,7 +1218,13 @@ export class ReportsService {
         distinct: ['volunteerUserId'],
       }),
       tx.donation.findMany({
-        where: { organizationId, status: 'approved', donorUserId: { not: null }, anonymous: false },
+        where: {
+          organizationId,
+          status: 'approved',
+          reversal: null,
+          donorUserId: { not: null },
+          anonymous: false,
+        },
         select: { donorUserId: true },
         distinct: ['donorUserId'],
       }),

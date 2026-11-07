@@ -1,7 +1,7 @@
 # ADR-PAG-003 · Mercado Pago por OAuth: cada refugio cobra en su cuenta; AdoptaFácil cobra sus planes
 
 > Estado: **decidido por el dueño** (2026-11-06). Implementado. Solo se probó con dobles de prueba, sin dinero real.
-> Reemplaza la parte de [ADR-PAG-002](./epayco.md) que retiró Mercado Pago (2026-10-17). Descarta el split 1:1.
+> Es la única pasarela del producto. Descarta el split 1:1.
 > [ADR-PAG-001](./pasarelas-multiples.md) (sin custodia) sigue vigente.
 > Esto no es asesoría jurídica ni tributaria. Lo marcado ⚖️ va al abogado y lo marcado 🧾 al contador.
 > Lo marcado 👤 lo tiene que hacer el dueño.
@@ -17,7 +17,6 @@
   mensual (preapproval).
 - AdoptaFácil hace la contabilidad de cada refugio por detrás. Para eso guarda en `mercadopago_payments` una
   copia de cada pago tal como lo devuelve Mercado Pago al consultarlo (sección 5).
-- ePayco sigue en el código y se puede elegir con `PAYMENT_DRIVER=epayco` / `VITE_PAYMENT_PROVIDER=epayco`.
 
 ## 2. Flujo OAuth (conectar la cuenta del refugio)
 
@@ -137,7 +136,7 @@ Nunca van en el repositorio. Se cargan como secretos del despliegue.
 | `MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS`      | no                      | 30 por defecto                                                       |
 | `MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS` | no                      | Una vez al día por defecto                                           |
 
-Web: `VITE_PAYMENT_PROVIDER=mercadopago` (es el valor por defecto; `epayco` u `off` cambian la pasarela).
+Web: `VITE_PAYMENT_PROVIDER=mercadopago` (es el valor por defecto; `off` apaga el botón de donar).
 
 ## 7. 👤 Pasos en el panel de desarrolladores de Mercado Pago
 

@@ -1,9 +1,5 @@
 import { useState } from 'react';
-import {
-  MIN_DONATION_AMOUNT,
-  type CommissionPayer,
-  type LegalAcceptanceItem,
-} from '@adoptafacil/contracts';
+import { MIN_DONATION_AMOUNT, type LegalAcceptanceItem } from '@adoptafacil/contracts';
 import { Button, Input, cn } from '@adoptafacil/ui';
 import {
   acceptancesFrom,
@@ -22,7 +18,6 @@ const EMAIL_LOOKS_VALID = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface DonateFormValues {
   intendedAmount: number;
-  commissionPayer: CommissionPayer;
   /** "¿Donar de forma anónima frente a la organización?" */
   anonymous: boolean;
   /** Solo presente cuando NO hay sesión (checkout de invitado): el nombre y
@@ -43,23 +38,19 @@ export interface DonateFormProps {
    *  "Continuar". Con sesión, esos campos ni se muestran (se prellenan aparte). */
   hasSession: boolean;
   /**
-   * ADR-PAG-002: "Donar" llama a `onDonate` directo (sin datos de tarjeta) y
-   * la página abre el checkout de ePayco, que ofrece los medios que la
-   * organización tenga habilitados. Un rechazo lo comunica la página (toast).
+   * "Donar" llama a `onDonate` directo (sin datos de tarjeta): la página crea
+   * la donación. Un rechazo lo comunica la página (toast).
    */
   onDonate: (values: DonateFormValues) => Promise<void>;
 }
 
 /**
- * Formulario de donación (§M05, P1 + checkout de invitado + ADR-PAG-002). PRESENTACIONAL
+ * Formulario de donación (§M05, P1 + checkout de invitado). PRESENTACIONAL
  * (sin api/sesión real, recibe `hasSession` como prop) para poder testearlo directo.
- * Un solo paso: monto + casillas + desglose transparente EN VIVO (misma cuenta que el
- * backend, vía `computeBreakdown`) + identidad de invitado si no hay sesión. "Donar"
- * crea la donación y la página abre la pasarela segura de ePayco (la única desde que
- * Mercado Pago se retiró, 2026-10-17): nunca se piden datos de tarjeta en AdoptaFácil.
- * Ofrece la casilla "cubro la comisión de la pasarela"
- * (commissionPayer = 'donor'; F-NOMENCLATURA-CHECKBOX: el donante cubre la comisión
- * real de la pasarela de pago, un tercero).
+ * Un solo paso: monto + total EN VIVO (misma cuenta que el backend, vía
+ * `computeBreakdown`) + identidad de invitado si no hay sesión. "Donar" crea la
+ * donación: nunca se piden datos de tarjeta en AdoptaFácil. El donante paga
+ * exactamente lo que elige; AdoptaFácil no cobra comisión.
  * Lo PRIMERO que se pregunta es si la donación es con datos o anónima FRENTE A LA
  * ORGANIZACIÓN (con o sin sesión). Sin sesión y con datos, se exige nombre + correo
  * (checkout de invitado); si elige anónima, esos campos se omiten por completo.
@@ -71,15 +62,13 @@ export function DonateForm({
   onDonate,
 }: DonateFormProps) {
   const [amountText, setAmountText] = useState('');
-  const [coverFee, setCoverFee] = useState(false);
   const [anonymous, setAnonymous] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [consents, setConsents] = useState<ConsentState>({});
 
-  const commissionPayer: CommissionPayer = coverFee ? 'donor' : 'organization';
   const amount = Number.parseInt(amountText, 10);
-  const preview = safeBuildDonationBreakdown(amount, commissionPayer);
+  const preview = safeBuildDonationBreakdown(amount);
   // Anónima: el invitado no entrega nombre ni correo (no se pide ni se envía).
   const askGuestIdentity = !hasSession && !anonymous;
   const guestIdentityComplete =
@@ -173,22 +162,8 @@ export function DonateForm({
         onChange={(e) => setAmountText(e.target.value.replace(/[^\d]/g, ''))}
       />
 
-      <label className={styles['checkbox-row']}>
-        <input
-          type="checkbox"
-          className={styles['checkbox-row__input']}
-          checked={coverFee}
-          data-testid="cover-fee"
-          onChange={(e) => setCoverFee(e.target.checked)}
-        />
-        <span>
-          Cubro la comisión de la pasarela de pago para que la organización reciba el monto
-          completo. AdoptaFácil no cobra comisión por tu donación.
-        </span>
-      </label>
-
       {preview ? (
-        <DonationBreakdown intendedAmount={amount} commissionPayer={commissionPayer} />
+        <DonationBreakdown intendedAmount={amount} organizationName={organizationName} />
       ) : (
         <p className={styles.hint}>
           Ingresa al menos {formatCop(MIN_DONATION_AMOUNT)} para ver el desglose.
@@ -205,20 +180,18 @@ export function DonateForm({
       )}
 
       <p className={styles.hint}>
-        Pagarás en la pasarela segura de ePayco con los medios que tenga habilitados{' '}
-        {organizationName} (tarjeta, PSE, Nequi, Daviplata, efectivo…). El dinero llega directo a su
-        cuenta.
+        Pagarás en la página segura de Mercado Pago, sin dar datos de tarjeta en AdoptaFácil. El
+        dinero llega directo a la cuenta de {organizationName}.
       </p>
 
       <Button
         disabled={!canContinue}
         onClick={() => {
-          // Sin paso de tarjeta: la página crea la donación y abre ePayco. Un
+          // Sin paso de tarjeta: la página crea la donación. Un
           // rechazo ya lo comunica la página (toast); aquí solo se evita el
           // "unhandled rejection".
           onDonate({
             intendedAmount: amount,
-            commissionPayer,
             anonymous,
             guestPayer,
             legalAcceptances: hasSession ? undefined : acceptancesFrom('guest', consents),

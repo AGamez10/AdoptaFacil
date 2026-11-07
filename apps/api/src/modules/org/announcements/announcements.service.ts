@@ -150,7 +150,7 @@ export class AnnouncementsService {
       (tx) =>
         Promise.all([
           tx.donation.findMany({
-            where: { organizationId, status: 'approved' },
+            where: { organizationId, status: 'approved', reversal: null },
             select: { payer: true },
             take: MAX_RECIPIENTS * 2,
           }),

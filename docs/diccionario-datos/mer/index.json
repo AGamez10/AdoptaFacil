@@ -1,0 +1,86 @@
+[
+  {
+    "id": "general",
+    "title": "Vista general"
+  },
+  {
+    "id": "org",
+    "title": "Organizaciones, identidad y seguridad (M01)"
+  },
+  {
+    "id": "animals",
+    "title": "Animales y expediente clínico (M03)"
+  },
+  {
+    "id": "adoptions",
+    "title": "Adopciones (M04)"
+  },
+  {
+    "id": "donations",
+    "title": "Donaciones (M05)"
+  },
+  {
+    "id": "campaigns",
+    "title": "Campañas (M06)"
+  },
+  {
+    "id": "sponsorships",
+    "title": "Apadrinamientos (M07)"
+  },
+  {
+    "id": "volunteering",
+    "title": "Voluntariado (M08)"
+  },
+  {
+    "id": "resources",
+    "title": "Banco de recursos (M09)"
+  },
+  {
+    "id": "marketplace",
+    "title": "Marketplace (M10)"
+  },
+  {
+    "id": "community",
+    "title": "Comunidad (M11)"
+  },
+  {
+    "id": "reputation",
+    "title": "Reputación y reseñas (M12)"
+  },
+  {
+    "id": "portals",
+    "title": "Portales públicos (M14)"
+  },
+  {
+    "id": "payments",
+    "title": "Pagos con Mercado Pago (cuenta de cada organización)"
+  },
+  {
+    "id": "ledger",
+    "title": "Libro auxiliar de donaciones"
+  },
+  {
+    "id": "accounting",
+    "title": "Contabilidad de la organización"
+  },
+  {
+    "id": "reports",
+    "title": "Informes"
+  },
+  {
+    "id": "billing",
+    "title": "Planes y suscripciones de AdoptaFácil"
+  },
+  {
+    "id": "legal",
+    "title": "Textos legales y consentimientos"
+  },
+  {
+    "id": "notifications",
+    "title": "Notificaciones"
+  },
+  {
+    "id": "platform-workspace",
+    "title": "Espacio de trabajo de la plataforma"
+  }
+]

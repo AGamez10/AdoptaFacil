@@ -1,22 +1,19 @@
-// Module: M15 payments · multi-gateway direct collection · Contracts owner: @fabian
+// Module: M15 payments · direct collection · Contracts owner: @fabian
 //
-// Design: docs/pagos/pasarelas-multiples.md (ADR-PAG-001).
+// Design: docs/pagos/mercadopago-oauth.md (ADR-PAG-003) on top of ADR-PAG-001.
 //
-// ADDITIVE contract. It does not touch the published `PaymentPort` in
-// `payments.ts`; it adds the vocabulary and the PURE policy that every gateway
-// adapter must go through, so that no adapter can ever route a donor's money to
-// an AdoptaFácil account (D1: sin custodia).
+// The vocabulary and the PURE policy that the gateway adapter must go through,
+// so that no adapter can ever route a donor's money to an AdoptaFácil account
+// (D1: sin custodia).
 //
 // Rules this file encodes (and the tests in test/payment-gateways.test.ts pin):
-//   1. The collector (who receives the money) is ALWAYS the organization. There
-//      is no "platform collects and pays out later" mode: custody is not a mode.
-//   2. AdoptaFácil takes a per-transaction fee ONLY when the gateway splits at
-//      source (`platform_split`) AND a written provider approval reference is
-//      configured. Otherwise the platform fee is 0 and revenue comes from plans.
+//   1. The collector (who receives the money) is ALWAYS the organization, with
+//      its own Mercado Pago account. There is no "platform collects and pays
+//      out later" mode: custody is not a mode.
+//   2. AdoptaFácil takes NO per-transaction fee (0 %, owner's decision). There
+//      is no split mode and no platform fee rate anywhere in the policy.
 //   3. A gateway payment is accepted only if amount, currency and the receiving
 //      account match what the server expected (PAY-003).
-//   4. `external_link` payments cannot be verified by the platform: they are
-//      shown as "reportado por la organización", never as confirmed.
 //
 // Money is integer COP pesos. Browser-safe, dependency-free.
 
@@ -27,52 +24,33 @@ import type { PaymentCurrency } from './payments';
 // ----------------------------------------------------------------------------
 
 /**
- * Gateways an organization can connect. The order is historical and carries
- * no meaning. 2026-11-06 (owner's decision, ADR-PAG-003): Mercado Pago is back
- * as the main gateway, with each organization connecting its OWN account
- * through OAuth (direct collection, no split). ePayco (ADR-PAG-002) stays
- * available behind its own driver.
+ * Gateways an organization can connect. 2026-11-06 (owner's decision,
+ * ADR-PAG-003): Mercado Pago is the only gateway, with each organization
+ * connecting its OWN account through OAuth. A new gateway is added here and in
+ * `GATEWAY_CATALOG` only by the owner's decision.
  */
-export const GATEWAY_PROVIDERS = [
-  'wompi',
-  'epayco',
-  'mercadopago',
-  'bold',
-  'external_link',
-] as const;
+export const GATEWAY_PROVIDERS = ['mercadopago'] as const;
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 /**
  * How money moves. There is intentionally NO mode in which AdoptaFácil
- * receives a donation into its own account.
- *  - `direct_to_org`: the charge is created with the organization's OWN
- *    credentials (OAuth token or its merchant keys); the org is the merchant of
- *    record and receives 100 % minus its own gateway fees.
- *  - `platform_split`: the gateway itself splits at source; the org is still
- *    the collector and the platform fee is deducted by the gateway. Requires a
- *    written provider confirmation (D1/D2, §3.4).
- *  - `external_link`: the org's own payment link (Bold, Nequi, ePayco, a bank
- *    button…). AdoptaFácil only redirects; it cannot verify the payment.
+ * receives a donation into its own account, and none that splits a fee.
+ *  - `direct_to_org`: the charge is created with the organization's OWN OAuth
+ *    token; the org is the merchant of record and receives the donation minus
+ *    the fee its own Mercado Pago account is charged.
  */
-export const COLLECTION_MODES = ['direct_to_org', 'platform_split', 'external_link'] as const;
+export const COLLECTION_MODES = ['direct_to_org'] as const;
 export type CollectionMode = (typeof COLLECTION_MODES)[number];
 
 /** What the organization hands over to connect a gateway. */
 export type GatewayCredentialKind =
   /** Revocable OAuth grant; the org never shares a password or secret. */
-  | 'oauth'
-  /** The org's own merchant keys (stored encrypted, AF-014). */
-  | 'merchant_keys'
-  /** Nothing secret: a public URL. */
-  | 'none';
+  'oauth';
 
 /** Evidence status of a capability, as of the date in `checkedAt`. */
 export type GatewayCapabilityStatus =
-  /** Documented by the provider for Colombia; still needs a sandbox test. */
+  /** Documented by the provider for Colombia. */
   | 'documented'
-  /** Documented somewhere but contradicted, or needs commercial activation:
-   *  stays OFF until written confirmation. */
-  | 'requires_written_confirmation'
   /** Provider said in writing it is not available in Colombia. */
   | 'not_available';
 
@@ -82,8 +60,6 @@ export interface GatewayCapability {
   credentialKind: GatewayCredentialKind;
   /** Can the server confirm the payment (signed webhook + read-back)? */
   verifiable: boolean;
-  /** Can the gateway deduct an AdoptaFácil fee at source? */
-  platformFeeAtSource: boolean;
   status: GatewayCapabilityStatus;
   /** UTC date (YYYY-MM-DD) the sources were read. */
   checkedAt: string;
@@ -92,60 +68,15 @@ export interface GatewayCapability {
 }
 
 /**
- * What we know today. This is documentation-as-data so the UI and the
- * superadmin can show it; it NEVER enables anything by itself (see
- * `planCollection`).
+ * What we know today. Documentation-as-data; it NEVER enables anything by
+ * itself (see `planCollection`).
  */
 export const GATEWAY_CATALOG: readonly GatewayCapability[] = [
-  {
-    provider: 'wompi',
-    mode: 'direct_to_org',
-    credentialKind: 'merchant_keys',
-    verifiable: true,
-    platformFeeAtSource: false,
-    status: 'documented',
-    checkedAt: '2026-10-08',
-    sources: ['https://docs.wompi.co/en/docs/colombia/inicio-rapido/'],
-  },
-  {
-    provider: 'epayco',
-    mode: 'direct_to_org',
-    credentialKind: 'merchant_keys',
-    verifiable: true,
-    platformFeeAtSource: false,
-    // The org's own ePayco account (persona natural or jurídica): checkout v2
-    // session created with ITS keys, confirmation signed with ITS P_KEY and
-    // read back from ePayco. The money lands in the org's ePayco balance.
-    status: 'documented',
-    checkedAt: '2026-10-15',
-    sources: [
-      'https://docs.epayco.com/docs/checkout-implementacion',
-      'https://docs.epayco.com/docs/checkout-respuesta-y-confirmacion',
-    ],
-  },
-  {
-    provider: 'epayco',
-    mode: 'platform_split',
-    credentialKind: 'merchant_keys',
-    verifiable: true,
-    platformFeeAtSource: true,
-    // "Pagos divididos": aggregator/gateway models only, enabled by ePayco on
-    // request; receivers must be validated ePayco merchants. In the aggregator
-    // model the transaction is in the PRINCIPAL's name (AdoptaFácil) and the
-    // dispersion runs from its account: legal review required (ADR-PAG-002).
-    status: 'requires_written_confirmation',
-    checkedAt: '2026-10-15',
-    sources: [
-      'https://docs.epayco.com/docs/split-descripcion',
-      'https://epayco.com/pagos-divididos/',
-    ],
-  },
   {
     provider: 'mercadopago',
     mode: 'direct_to_org',
     credentialKind: 'oauth',
     verifiable: true,
-    platformFeeAtSource: false,
     // The org connects ITS account through OAuth; Checkout Pro preferences
     // are created with ITS access token, so the org is the collector. Signed
     // notification + read-back of the payment with the org's token.
@@ -157,42 +88,10 @@ export const GATEWAY_CATALOG: readonly GatewayCapability[] = [
       'https://www.mercadopago.com.co/developers/es/docs/your-integrations/notifications/webhooks',
     ],
   },
-  {
-    provider: 'mercadopago',
-    mode: 'platform_split',
-    credentialKind: 'oauth',
-    verifiable: true,
-    platformFeeAtSource: true,
-    // Split 1:1 (`marketplace_fee`): Mercado Pago answered in writing on
-    // 2026-10-01 that it is not active for Colombia (ADR-PAG-001 §1).
-    status: 'not_available',
-    checkedAt: '2026-11-06',
-    sources: ['https://www.mercadopago.com.co/developers/es/docs/split-payments/landing'],
-  },
-  {
-    provider: 'bold',
-    mode: 'external_link',
-    credentialKind: 'none',
-    verifiable: false,
-    platformFeeAtSource: false,
-    status: 'documented',
-    checkedAt: '2026-10-08',
-    sources: ['https://developers.bold.co/pagos-en-linea/llaves-de-integracion'],
-  },
-  {
-    provider: 'external_link',
-    mode: 'external_link',
-    credentialKind: 'none',
-    verifiable: false,
-    platformFeeAtSource: false,
-    status: 'documented',
-    checkedAt: '2026-10-08',
-    sources: [],
-  },
 ];
 
 // ----------------------------------------------------------------------------
-// Policy: who may collect, how, and with which platform fee
+// Policy: who may collect, and how
 // ----------------------------------------------------------------------------
 
 /** A gateway connection owned by ONE organization (tenant-scoped, RLS). */
@@ -202,9 +101,9 @@ export interface OrgGatewayConnection {
   mode: CollectionMode;
   status: 'active' | 'revoked' | 'pending';
   /**
-   * Opaque id of the org's account AT the gateway (MP user id, Wompi merchant
-   * id…). Used to check that a confirmed payment landed in the org's account.
-   * Never a secret.
+   * Opaque id of the org's account AT the gateway (the Mercado Pago user id).
+   * Used to check that a confirmed payment landed in the org's account. Never
+   * a secret.
    */
   gatewayAccountId: string | null;
 }
@@ -213,13 +112,6 @@ export interface OrgGatewayConnection {
 export interface CollectionPolicy {
   /** Modes switched on for this environment. Empty = payments off. */
   enabledModes: readonly CollectionMode[];
-  /** Per-transaction AdoptaFácil fee for `platform_split` (e.g. 0.04). */
-  splitPlatformFeeRate: number;
-  /**
-   * Written provider approval for `platform_split` (ticket/contract ref).
-   * Without it, `platform_split` is refused even if enabled.
-   */
-  splitApprovalRef: string | null;
 }
 
 export interface CollectionPlan {
@@ -227,9 +119,7 @@ export interface CollectionPlan {
   mode: CollectionMode;
   /** Always the organization: custody is not representable. */
   collector: 'organization';
-  /** 0 unless the gateway deducts it at source with written approval. */
-  platformFeeRate: number;
-  /** false ⇒ the UI must say "reportado por la organización". */
+  /** false ⇒ the payment cannot be confirmed by the platform. */
   verifiable: boolean;
 }
 
@@ -238,29 +128,21 @@ export type CollectionRefusal =
   | 'no_active_connection'
   | 'connection_of_other_org'
   | 'mode_disabled'
-  | 'mode_not_supported_by_provider'
-  | 'split_without_written_approval'
-  | 'invalid_fee_rate';
+  | 'mode_not_supported_by_provider';
 
 export type CollectionDecision =
   { ok: true; plan: CollectionPlan } | { ok: false; reason: CollectionRefusal };
 
-function capabilityFor(
-  provider: GatewayProvider,
-  mode: CollectionMode,
-): GatewayCapability | undefined {
-  return GATEWAY_CATALOG.find((c) => c.provider === provider && c.mode === mode);
-}
-
 /**
  * Decide whether `organizationId` may collect through `connection`, and how.
- * Pure and deterministic: the API calls it before creating any checkout, and
- * the web may call it to explain why the "Donar" button is hidden.
+ * Pure and deterministic: the API calls it before creating any checkout.
+ * `catalog` defaults to `GATEWAY_CATALOG`.
  */
 export function planCollection(
   organizationId: string,
   connection: OrgGatewayConnection | null,
   policy: CollectionPolicy,
+  catalog: readonly GatewayCapability[] = GATEWAY_CATALOG,
 ): CollectionDecision {
   if (policy.enabledModes.length === 0) return { ok: false, reason: 'payments_disabled' };
   if (!connection || connection.status !== 'active') {
@@ -271,21 +153,11 @@ export function planCollection(
   }
   if (!policy.enabledModes.includes(connection.mode)) return { ok: false, reason: 'mode_disabled' };
 
-  const capability = capabilityFor(connection.provider, connection.mode);
+  const capability = catalog.find(
+    (c) => c.provider === connection.provider && c.mode === connection.mode,
+  );
   if (!capability || capability.status === 'not_available') {
     return { ok: false, reason: 'mode_not_supported_by_provider' };
-  }
-
-  let platformFeeRate = 0;
-  if (connection.mode === 'platform_split') {
-    if (!policy.splitApprovalRef || policy.splitApprovalRef.trim() === '') {
-      return { ok: false, reason: 'split_without_written_approval' };
-    }
-    const rate = policy.splitPlatformFeeRate;
-    if (!Number.isFinite(rate) || rate < 0 || rate >= 1) {
-      return { ok: false, reason: 'invalid_fee_rate' };
-    }
-    platformFeeRate = rate;
   }
 
   return {
@@ -294,7 +166,6 @@ export function planCollection(
       provider: connection.provider,
       mode: connection.mode,
       collector: 'organization',
-      platformFeeRate,
       verifiable: capability.verifiable,
     },
   };

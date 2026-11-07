@@ -119,6 +119,7 @@ export class OrgExportsService {
           createdAt: true,
           updatedAt: true,
           receipt: { select: { issuedAt: true } },
+          reversal: { select: { reason: true } },
         },
       }),
     );
@@ -223,12 +224,11 @@ export class OrgExportsService {
           id: d.id,
           approvedAt: d.receipt?.issuedAt ?? (d.status === 'pending' ? d.createdAt : d.updatedAt),
           status: d.status,
+          reversedReason: d.reversal?.reason ?? null,
           conceptKind: d.conceptKind,
           conceptName,
           amountCharged: d.amountCharged,
           net: b.net ?? 0,
-          platformFee: b.platformFee ?? 0,
-          platformIva: b.platformIva ?? 0,
           gatewayFee: b.gatewayFee ?? 0,
           gatewayIva: b.gatewayIva ?? 0,
         };
@@ -329,6 +329,8 @@ export class OrgExportsService {
         where: {
           organizationId,
           status: 'approved',
+          // P1-1: lo que volvió al donante (reembolso o contracargo) no cuenta.
+          reversal: null,
           OR: [{ receipt: { issuedAt: range } }, { receipt: null, updatedAt: range }],
         },
         select: { breakdown: true, donorUserId: true },

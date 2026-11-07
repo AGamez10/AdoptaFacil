@@ -1,11 +1,11 @@
 // Module: M15 payments · enlace y QR de donación por organización · Contracts owner: @fabian
 //
-// Design: docs/pagos/pasarelas-multiples.md (ADR-PAG-002, §QR).
+// Design: docs/pagos/pasarelas-multiples.md (ADR-PAG-001, §QR).
 //
 // Every organization gets ONE stable donation URL that its community can scan
 // from a printed QR. The URL must survive gateway changes (it points to
 // AdoptaFácil, never to a gateway link), so a sticker printed today keeps
-// working when the org switches from Mercado Pago to ePayco or adds methods.
+// working when the org switches gateways or adds methods.
 //
 // Browser-safe, dependency-free.
 

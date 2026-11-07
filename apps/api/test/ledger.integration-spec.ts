@@ -257,7 +257,6 @@ describe('Public ledger (RF14: libro público, idempotencia, inmutabilidad, no-l
       .send({
         organizationId: orgA.orgId,
         intendedAmount: 50000,
-        commissionPayer: 'organization',
         idempotencyKey: `ledger-${randomUUID()}`,
         payer: { fullName: 'Donante Real', documentId: '1020304050' },
       })

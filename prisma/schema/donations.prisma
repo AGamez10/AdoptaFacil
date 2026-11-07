@@ -13,8 +13,9 @@
 //     del webhook (sin contexto de tenant) usan funciones SECURITY DEFINER acotadas
 //     de la migración (misma técnica que `create_adoption_request`), no evaden RLS.
 //   - La relación donation↔receipt SÍ se modela (ambas tablas M05).
-//   - NO recalcula comisiones: el desglose se persiste tal cual lo produce
-//     `computeBreakdown` (M15). Los montos son pesos enteros COP.
+//   - El desglose se persiste tal cual lo produce `computeBreakdown` (M15):
+//     0 % de AdoptaFácil y ninguna tarifa estimada (la de Mercado Pago la cobra
+//     Mercado Pago a la cuenta de la organización). Pesos enteros COP.
 
 /// Donación (P1). Estados: pending → approved | declined (contrato DonationStatus).
 /// approved dispara el recibo automático.
@@ -32,9 +33,7 @@ model Donation {
   conceptKind     String   @map("concept_kind")
   /// PaymentConcept.id (org/animal/campaña atribuida); en P1 = organization_id.
   conceptId       String   @map("concept_id") @db.Uuid
-  /// CommissionPayer: 'organization' | 'donor' (casilla "cubro la comisión").
-  commissionPayer String   @map("commission_payer")
-  /// Pesos que deben llegar a la org (objetivo neto).
+  /// Pesos que la persona dona (lo mismo que se le cobra).
   intendedAmount  Int      @map("intended_amount")
   /// Pesos efectivamente cobrados al donante.
   amountCharged   Int      @map("amount_charged")

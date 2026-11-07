@@ -11,6 +11,7 @@ import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import { memberWithRole } from './support/signers';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Reporte de impacto en PDF (`GET /org/exports/impact-report.pdf`):
@@ -58,6 +59,7 @@ describe('Org impact report (impactReport: cifras agregadas, período, plan, no-
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       userId: res.body.user.id,
@@ -81,7 +83,6 @@ describe('Org impact report (impactReport: cifras agregadas, período, plan, no-
       .send({
         organizationId: to.orgId,
         intendedAmount: amount,
-        commissionPayer: 'donor',
         idempotencyKey: `imp-${randomUUID()}`,
         payer: { fullName: 'Donante Privada', documentId: '1020304050' },
       })

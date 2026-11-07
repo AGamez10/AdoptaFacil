@@ -20,7 +20,7 @@ model AccountingEntry {
   dedupKey         String   @map("dedup_key")
   /// `AccountingEntryType`: donation | refund | chargeback.
   entryType        String   @map("entry_type")
-  /// `AccountingSource`: mercadopago | epayco | other.
+  /// `AccountingSource`: mercadopago | other.
   source           String
   donationId       String?  @map("donation_id") @db.Uuid
   gatewayPaymentId String?  @map("gateway_payment_id")

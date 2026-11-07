@@ -86,7 +86,7 @@ const KIND_UI: Record<OrgReportKind, { title: string; description: string; short
   donations: {
     title: 'Informe de donaciones',
     description:
-      'Todas las donaciones aprobadas del período: quién donó (protegiendo a los anónimos), a qué destino, comisiones y neto recibido.',
+      'Todas las donaciones aprobadas del período: quién donó (protegiendo a los anónimos), a qué destino, tarifa de Mercado Pago y neto recibido.',
     short: 'Donaciones',
   },
   social_service: {

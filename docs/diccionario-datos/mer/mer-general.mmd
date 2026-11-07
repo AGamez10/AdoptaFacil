@@ -1,102 +1,569 @@
 erDiagram
-  organizations ||--o{ adoption_requests : "organization_id"
+  _rls_probe {
+    uuid id PK
+  }
+  accounting_entries {
+    uuid id PK
+    uuid organization_id FK
+  }
+  accounting_period_closes {
+    uuid id PK
+    uuid organization_id FK
+    uuid closed_by_user_id FK
+  }
+  accounting_shares {
+    uuid id PK
+    uuid organization_id FK
+    uuid signer_user_id FK
+    uuid created_by_user_id FK
+  }
+  adoption_contracts {
+    uuid id PK
+    uuid organization_id FK
+    uuid request_id FK
+  }
+  adoption_deliveries {
+    uuid id PK
+    uuid contract_id FK
+  }
+  adoption_followup_evidence {
+    uuid id PK
+    uuid organization_id FK
+    uuid milestone_id FK
+  }
+  adoption_followup_milestones {
+    uuid id PK
+    uuid organization_id FK
+    uuid contract_id FK
+    uuid request_id FK
+  }
+  adoption_requests {
+    uuid id PK
+    uuid organization_id FK
+  }
+  animal_behavior_disclosures {
+    uuid id PK
+    uuid animal_id FK
+  }
+  animal_breeds {
+    uuid id PK
+    uuid organization_id FK
+  }
+  animal_photos {
+    uuid id PK
+    uuid organization_id FK
+    uuid animal_id FK
+  }
+  animals {
+    uuid id PK
+    uuid organization_id FK
+    uuid breed_id FK
+  }
+  audit_logs {
+    uuid id PK
+    uuid organization_id FK
+  }
+  auth_credentials {
+    uuid id PK
+    uuid user_id FK,UK
+  }
+  auth_mfa_factors {
+    uuid id PK
+    uuid user_id FK,UK
+  }
+  campaign_evidences {
+    uuid id PK
+    uuid organization_id FK
+    uuid campaign_id FK
+  }
+  campaign_funding_applications {
+    uuid id PK
+    uuid organization_id FK
+    uuid campaign_id FK
+  }
+  campaigns {
+    uuid id PK
+    uuid organization_id FK
+  }
+  clinical_event_attachments {
+    uuid id PK
+    uuid organization_id FK
+    uuid clinical_event_id FK
+  }
+  clinical_events {
+    uuid id PK
+    uuid organization_id FK
+    uuid animal_id FK
+  }
+  clinical_reminders {
+    uuid id PK
+    uuid organization_id FK
+    uuid animal_id FK
+  }
+  community_comments {
+    uuid id PK
+    uuid organization_id FK
+    uuid post_id FK
+  }
+  community_pet_profiles {
+    uuid id PK
+    uuid organization_id FK
+  }
+  community_post_images {
+    uuid id PK
+    uuid organization_id FK
+    uuid post_id FK
+  }
+  community_post_likes {
+    uuid post_id PK,FK
+    uuid user_id PK
+    uuid organization_id FK
+  }
+  community_posts {
+    uuid id PK
+    uuid organization_id FK
+  }
+  community_service_listing_reviews {
+    uuid id PK
+    uuid organization_id FK
+    uuid listing_id FK
+  }
+  community_service_listings {
+    uuid id PK
+    uuid organization_id FK
+  }
+  dian_verification_attempts {
+    uuid id PK
+    uuid organization_id FK
+  }
+  donation_access_links {
+    uuid id PK
+    uuid donation_id FK
+  }
+  donation_certificates {
+    uuid id PK
+    uuid donation_id FK,UK
+  }
+  donation_receipts {
+    uuid id PK
+    uuid organization_id FK
+    uuid donation_id FK,UK
+  }
+  donation_reversals {
+    uuid id PK
+    uuid donation_id FK,UK
+  }
+  donations {
+    uuid id PK
+    uuid organization_id FK
+  }
+  email_suppressions {
+    text email_hash PK
+    text category PK
+  }
+  email_template_settings {
+    text event_key PK,FK
+    integer active_version FK
+  }
+  email_template_versions {
+    uuid id PK
+  }
+  formalization_transitions {
+    uuid id PK
+    uuid organization_id FK
+  }
+  ledger_entries {
+    uuid id PK
+    uuid organization_id FK
+  }
+  legal_acceptances {
+    uuid id PK
+    uuid organization_id FK
+  }
+  legal_representatives {
+    uuid id PK
+    uuid organization_id FK
+    uuid member_id FK
+  }
+  mercadopago_payments {
+    uuid id PK
+    uuid organization_id FK
+  }
+  org_members {
+    uuid id PK
+    uuid organization_id FK
+  }
+  org_report_approvals {
+    uuid id PK
+    uuid organization_id FK
+    uuid report_id FK
+    uuid signer_user_id FK
+    uuid legal_representative_id FK
+  }
+  org_report_policies {
+    uuid id PK
+    uuid organization_id FK
+    uuid updated_by_user_id FK
+  }
+  org_reports {
+    uuid id PK
+    uuid organization_id FK
+    uuid generated_by_user_id FK
+  }
+  org_signature_requests {
+    uuid id PK
+    uuid organization_id FK
+    uuid report_id FK
+    uuid signer_user_id FK
+  }
+  org_signer_designations {
+    uuid id PK
+    uuid organization_id FK
+    uuid user_id FK
+    uuid designated_by_user_id FK
+    uuid revoked_by_user_id FK
+  }
+  organization_documents {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organization_duplicate_flags {
+    uuid id PK
+    uuid organization_id FK
+    uuid matched_organization_id FK
+  }
+  organization_email_usage {
+    uuid organization_id PK,FK
+    text month PK
+  }
+  organization_invitations {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organization_mercadopago_connections {
+    uuid id PK
+    uuid organization_id FK,UK
+  }
+  organization_profiles {
+    uuid id PK
+    uuid organization_id FK,UK
+  }
+  organization_qr_links {
+    uuid id PK
+    uuid organization_id FK,UK
+  }
+  organization_qr_scan_days {
+    uuid organization_id PK,FK
+    date day PK
+    text target_kind PK
+  }
+  organization_subscriptions {
+    uuid id PK
+    uuid organization_id FK,UK
+  }
+  organizations {
+    uuid id PK
+  }
+  password_reset_tokens {
+    uuid id PK
+    uuid user_id FK
+  }
+  platform_sensitive_action_decisions {
+    uuid id PK
+    uuid organization_id FK
+    uuid action_id FK,UK
+  }
+  platform_sensitive_actions {
+    uuid id PK
+    uuid organization_id FK
+  }
+  platform_settings {
+    text id PK
+  }
+  platform_workspace_ticket_events {
+    uuid id PK
+    uuid organization_id FK
+    uuid ticket_id FK
+  }
+  platform_workspace_tickets {
+    uuid id PK
+    uuid organization_id FK
+  }
+  portal_themes {
+    uuid id PK
+    uuid organization_id FK,UK
+  }
+  product_images {
+    uuid id PK
+    uuid organization_id FK
+    uuid product_id FK
+  }
+  products {
+    uuid id PK
+    uuid organization_id FK
+  }
+  refresh_tokens {
+    uuid id PK
+    uuid user_id FK
+  }
+  resource_deliveries {
+    uuid id PK
+    uuid organization_id FK
+    uuid offer_id FK,UK
+  }
+  resource_delivery_evidences {
+    uuid id PK
+    uuid organization_id FK
+    uuid delivery_id FK
+  }
+  resource_fulfillment_applications {
+    uuid id PK
+    uuid organization_id FK
+    uuid delivery_id FK,UK
+  }
+  resource_needs {
+    uuid id PK
+    uuid organization_id FK
+  }
+  resource_offer_proofs {
+    uuid id PK
+    uuid organization_id FK
+    uuid offer_id FK
+  }
+  resource_offers {
+    uuid id PK
+    uuid organization_id FK
+    uuid need_id FK
+  }
+  resource_open_offers {
+    uuid id PK
+    uuid organization_id FK
+  }
+  reviews {
+    uuid id PK
+    uuid organization_id FK
+    uuid author_user_id FK
+    uuid moderated_by_user_id FK
+  }
+  service_hours {
+    uuid id PK
+    uuid organization_id FK
+    uuid enrollment_id FK
+    uuid volunteer_user_id FK
+  }
+  service_hours_photos {
+    uuid id PK
+    uuid service_hours_id FK
+  }
+  sponsorship_payment_attempts {
+    uuid id PK
+    uuid organization_id FK
+    uuid sponsorship_payment_id FK
+  }
+  sponsorship_payments {
+    uuid id PK
+    uuid organization_id FK
+    uuid sponsorship_id FK
+  }
+  sponsorship_plans {
+    uuid id PK
+    uuid organization_id FK
+    uuid animal_id FK
+  }
+  sponsorship_status_history {
+    uuid id PK
+    uuid organization_id FK
+    uuid sponsorship_id FK
+  }
+  sponsorships {
+    uuid id PK
+    uuid organization_id FK
+    uuid plan_id FK
+    uuid animal_id FK
+  }
+  third_party_consents {
+    uuid id PK
+    uuid organization_id FK
+    uuid subject_user_id FK
+  }
+  user_roles {
+    uuid id PK
+    uuid organization_id FK
+    uuid user_id FK
+  }
+  users {
+    uuid id PK
+    uuid organization_id FK
+  }
+  volunteer_certificates {
+    uuid id PK
+    uuid organization_id FK
+    uuid enrollment_id FK,UK
+    uuid volunteer_user_id FK
+  }
+  volunteer_enrollments {
+    uuid id PK
+    uuid organization_id FK
+    uuid opportunity_id FK
+    uuid volunteer_user_id FK
+  }
+  volunteer_opportunities {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organizations ||--o{ accounting_entries : "organization_id"
+  users ||--o{ accounting_period_closes : "closed_by_user_id"
+  organizations ||--o{ accounting_period_closes : "organization_id"
+  users ||--o{ accounting_shares : "created_by_user_id"
+  organizations ||--o{ accounting_shares : "organization_id"
+  users ||--o{ accounting_shares : "signer_user_id"
   organizations ||--o{ adoption_contracts : "organization_id"
   adoption_requests ||--o{ adoption_contracts : "request_id"
-  organizations ||--o{ adoption_followup_milestones : "organization_id"
-  adoption_contracts ||--o{ adoption_followup_milestones : "contract_id"
-  adoption_requests ||--o{ adoption_followup_milestones : "request_id"
-  organizations ||--o{ adoption_followup_evidence : "organization_id"
+  adoption_contracts ||--o{ adoption_deliveries : "contract_id"
   adoption_followup_milestones ||--o{ adoption_followup_evidence : "milestone_id"
-  animal_breeds |o--o{ animals : "breed_id"
-  organizations ||--o{ animals : "organization_id"
+  organizations ||--o{ adoption_followup_evidence : "organization_id"
+  adoption_contracts ||--o{ adoption_followup_milestones : "contract_id"
+  organizations ||--o{ adoption_followup_milestones : "organization_id"
+  adoption_requests ||--o{ adoption_followup_milestones : "request_id"
+  organizations ||--o{ adoption_requests : "organization_id"
+  animals ||--o{ animal_behavior_disclosures : "animal_id"
+  organizations ||--o{ animal_breeds : "organization_id"
   animals ||--o{ animal_photos : "animal_id"
   organizations ||--o{ animal_photos : "organization_id"
-  organizations ||--o{ animal_breeds : "organization_id"
-  animals ||--o{ clinical_events : "animal_id"
-  organizations ||--o{ clinical_events : "organization_id"
-  clinical_events ||--o{ clinical_event_attachments : "clinical_event_id"
-  organizations ||--o{ clinical_event_attachments : "organization_id"
-  animals ||--o{ clinical_reminders : "animal_id"
-  organizations ||--o{ clinical_reminders : "organization_id"
-  animals ||--o{ animal_behavior_disclosures : "animal_id"
-  organizations ||--o{ campaigns : "organization_id"
-  campaigns ||--o{ campaign_funding_applications : "campaign_id"
-  organizations ||--o{ campaign_funding_applications : "organization_id"
+  animal_breeds |o--o{ animals : "breed_id"
+  organizations ||--o{ animals : "organization_id"
+  organizations ||--o{ audit_logs : "organization_id"
+  users ||--o| auth_credentials : "user_id"
+  users ||--o| auth_mfa_factors : "user_id"
   campaigns ||--o{ campaign_evidences : "campaign_id"
   organizations ||--o{ campaign_evidences : "organization_id"
-  organizations |o--o{ community_posts : "organization_id"
-  community_posts ||--o{ community_post_images : "post_id"
-  organizations |o--o{ community_post_images : "organization_id"
-  community_posts ||--o{ community_comments : "post_id"
+  campaigns ||--o{ campaign_funding_applications : "campaign_id"
+  organizations ||--o{ campaign_funding_applications : "organization_id"
+  organizations ||--o{ campaigns : "organization_id"
+  clinical_events ||--o{ clinical_event_attachments : "clinical_event_id"
+  organizations ||--o{ clinical_event_attachments : "organization_id"
+  animals ||--o{ clinical_events : "animal_id"
+  organizations ||--o{ clinical_events : "organization_id"
+  animals ||--o{ clinical_reminders : "animal_id"
+  organizations ||--o{ clinical_reminders : "organization_id"
   organizations |o--o{ community_comments : "organization_id"
-  community_posts ||--o{ community_post_likes : "post_id"
+  community_posts ||--o{ community_comments : "post_id"
+  organizations ||--o{ community_pet_profiles : "organization_id"
+  organizations |o--o{ community_post_images : "organization_id"
+  community_posts ||--o{ community_post_images : "post_id"
   organizations |o--o{ community_post_likes : "organization_id"
-  organizations ||--o{ donations : "organization_id"
+  community_posts ||--o| community_post_likes : "post_id"
+  organizations |o--o{ community_posts : "organization_id"
+  community_service_listings ||--o{ community_service_listing_reviews : "listing_id"
+  organizations ||--o{ community_service_listing_reviews : "organization_id"
+  organizations ||--o{ community_service_listings : "organization_id"
+  organizations ||--o{ dian_verification_attempts : "organization_id"
+  donations ||--o{ donation_access_links : "donation_id"
+  donations ||--o| donation_certificates : "donation_id"
   donations ||--o| donation_receipts : "donation_id"
   organizations ||--o{ donation_receipts : "organization_id"
-  donations ||--o| donation_certificates : "donation_id"
-  donations ||--o{ donation_access_links : "donation_id"
-  organizations ||--o{ products : "organization_id"
-  products ||--o{ product_images : "product_id"
-  organizations ||--o{ product_images : "organization_id"
+  donations ||--o| donation_reversals : "donation_id"
+  organizations ||--o{ donations : "organization_id"
+  email_template_versions ||--o| email_template_settings : "event_key, active_version"
   organizations ||--o{ formalization_transitions : "organization_id"
-  organizations ||--o| organization_profiles : "organization_id"
-  organizations ||--o{ organization_documents : "organization_id"
-  organizations ||--o{ audit_logs : "organization_id"
-  organizations ||--o{ users : "organization_id"
-  organizations ||--o{ user_roles : "organization_id"
-  users ||--o{ user_roles : "user_id"
-  users ||--o| auth_credentials : "user_id"
-  users ||--o{ refresh_tokens : "user_id"
-  users ||--o{ password_reset_tokens : "user_id"
-  organizations ||--o{ org_members : "organization_id"
-  organizations ||--o{ legal_representatives : "organization_id"
+  organizations ||--o{ ledger_entries : "organization_id"
+  organizations ||--o{ legal_acceptances : "organization_id"
   users ||--o{ legal_representatives : "member_id"
-  organizations ||--o{ dian_verification_attempts : "organization_id"
-  organizations ||--o{ organization_duplicate_flags : "organization_id"
+  organizations ||--o{ legal_representatives : "organization_id"
+  organizations ||--o{ mercadopago_payments : "organization_id"
+  organizations ||--o{ org_members : "organization_id"
+  legal_representatives ||--o{ org_report_approvals : "legal_representative_id"
+  organizations ||--o{ org_report_approvals : "organization_id"
+  org_reports ||--o{ org_report_approvals : "report_id"
+  users ||--o{ org_report_approvals : "signer_user_id"
+  organizations ||--o{ org_report_policies : "organization_id"
+  users ||--o{ org_report_policies : "updated_by_user_id"
+  users ||--o{ org_reports : "generated_by_user_id"
+  organizations ||--o{ org_reports : "organization_id"
+  organizations ||--o{ org_signature_requests : "organization_id"
+  org_reports ||--o{ org_signature_requests : "report_id"
+  users ||--o{ org_signature_requests : "signer_user_id"
+  users ||--o{ org_signer_designations : "designated_by_user_id"
+  organizations ||--o{ org_signer_designations : "organization_id"
+  users |o--o{ org_signer_designations : "revoked_by_user_id"
+  users ||--o{ org_signer_designations : "user_id"
+  organizations ||--o{ organization_documents : "organization_id"
   organizations ||--o{ organization_duplicate_flags : "matched_organization_id"
-  organizations ||--o{ organization_bank_accounts : "organization_id"
-  organizations ||--o{ payouts : "organization_id"
-  organizations ||--o| organization_mercadopago_accounts : "organization_id"
+  organizations ||--o{ organization_duplicate_flags : "organization_id"
+  organizations ||--o| organization_email_usage : "organization_id"
+  organizations ||--o{ organization_invitations : "organization_id"
+  organizations ||--o| organization_mercadopago_connections : "organization_id"
+  organizations ||--o| organization_profiles : "organization_id"
+  organizations ||--o| organization_qr_links : "organization_id"
+  organizations ||--o| organization_qr_scan_days : "organization_id"
+  organizations ||--o| organization_subscriptions : "organization_id"
+  users ||--o{ password_reset_tokens : "user_id"
+  platform_sensitive_actions ||--o| platform_sensitive_action_decisions : "action_id, organization_id"
+  organizations ||--o{ platform_sensitive_action_decisions : "organization_id"
+  organizations ||--o{ platform_sensitive_actions : "organization_id"
+  organizations ||--o{ platform_workspace_ticket_events : "organization_id"
+  platform_workspace_tickets ||--o{ platform_workspace_ticket_events : "ticket_id, organization_id"
+  organizations ||--o{ platform_workspace_tickets : "organization_id"
   organizations ||--o| portal_themes : "organization_id"
-  organizations ||--o{ reviews : "organization_id"
-  users |o--o{ reviews : "author_user_id"
-  users |o--o{ reviews : "moderated_by_user_id"
-  organizations ||--o{ resource_needs : "organization_id"
-  resource_needs ||--o{ resource_offers : "need_id"
-  organizations ||--o{ resource_offers : "organization_id"
-  resource_offers ||--o{ resource_offer_proofs : "offer_id"
-  organizations ||--o{ resource_offer_proofs : "organization_id"
+  organizations ||--o{ product_images : "organization_id"
+  products ||--o{ product_images : "product_id"
+  organizations ||--o{ products : "organization_id"
+  users ||--o{ refresh_tokens : "user_id"
   resource_offers ||--o| resource_deliveries : "offer_id"
   organizations ||--o{ resource_deliveries : "organization_id"
   resource_deliveries ||--o{ resource_delivery_evidences : "delivery_id"
   organizations ||--o{ resource_delivery_evidences : "organization_id"
   resource_deliveries ||--o| resource_fulfillment_applications : "delivery_id"
   organizations ||--o{ resource_fulfillment_applications : "organization_id"
-  organizations ||--o{ sponsorship_plans : "organization_id"
-  animals ||--o{ sponsorship_plans : "animal_id"
-  sponsorship_plans ||--o{ sponsorships : "plan_id"
-  organizations ||--o{ sponsorships : "organization_id"
-  animals ||--o{ sponsorships : "animal_id"
-  sponsorships ||--o{ sponsorship_payments : "sponsorship_id"
-  organizations ||--o{ sponsorship_payments : "organization_id"
-  sponsorship_payments ||--o{ sponsorship_payment_attempts : "sponsorship_payment_id"
-  organizations ||--o{ sponsorship_payment_attempts : "organization_id"
-  sponsorships ||--o{ sponsorship_status_history : "sponsorship_id"
-  organizations ||--o{ sponsorship_status_history : "organization_id"
-  organizations ||--o{ volunteer_opportunities : "organization_id"
-  volunteer_opportunities ||--o{ volunteer_enrollments : "opportunity_id"
-  organizations ||--o{ volunteer_enrollments : "organization_id"
-  users ||--o{ volunteer_enrollments : "volunteer_user_id"
+  organizations ||--o{ resource_needs : "organization_id"
+  resource_offers ||--o{ resource_offer_proofs : "offer_id"
+  organizations ||--o{ resource_offer_proofs : "organization_id"
+  resource_needs ||--o{ resource_offers : "need_id"
+  organizations ||--o{ resource_offers : "organization_id"
+  organizations ||--o{ resource_open_offers : "organization_id"
+  users |o--o{ reviews : "author_user_id"
+  users |o--o{ reviews : "moderated_by_user_id"
+  organizations ||--o{ reviews : "organization_id"
   volunteer_enrollments ||--o{ service_hours : "enrollment_id"
   organizations ||--o{ service_hours : "organization_id"
   users ||--o{ service_hours : "volunteer_user_id"
+  service_hours ||--o{ service_hours_photos : "service_hours_id"
+  organizations ||--o{ sponsorship_payment_attempts : "organization_id"
+  sponsorship_payments ||--o{ sponsorship_payment_attempts : "sponsorship_payment_id"
+  organizations ||--o{ sponsorship_payments : "organization_id"
+  sponsorships ||--o{ sponsorship_payments : "sponsorship_id"
+  animals ||--o{ sponsorship_plans : "animal_id"
+  organizations ||--o{ sponsorship_plans : "organization_id"
+  organizations ||--o{ sponsorship_status_history : "organization_id"
+  sponsorships ||--o{ sponsorship_status_history : "sponsorship_id"
+  animals ||--o{ sponsorships : "animal_id"
+  organizations ||--o{ sponsorships : "organization_id"
+  sponsorship_plans ||--o{ sponsorships : "plan_id"
+  organizations ||--o{ third_party_consents : "organization_id"
+  users ||--o{ third_party_consents : "subject_user_id"
+  organizations ||--o{ user_roles : "organization_id"
+  users ||--o{ user_roles : "user_id"
+  organizations ||--o{ users : "organization_id"
   volunteer_enrollments ||--o| volunteer_certificates : "enrollment_id"
   organizations ||--o{ volunteer_certificates : "organization_id"
   users ||--o{ volunteer_certificates : "volunteer_user_id"
-  animals ||..o{ adoption_requests : "animal_id (lógica)"
+  volunteer_opportunities ||--o{ volunteer_enrollments : "opportunity_id"
+  organizations ||--o{ volunteer_enrollments : "organization_id"
+  users ||--o{ volunteer_enrollments : "volunteer_user_id"
+  organizations ||--o{ volunteer_opportunities : "organization_id"
+  organizations ||..o{ _rls_probe : "organization_id (lógica)"
+  donations |o..o{ accounting_entries : "donation_id (lógica)"
   animals ||..o{ adoption_contracts : "animal_id (lógica)"
+  organizations ||..o{ adoption_deliveries : "organization_id (lógica)"
+  animals ||..o{ adoption_deliveries : "animal_id (lógica)"
+  animals ||..o{ adoption_requests : "animal_id (lógica)"
+  organizations ||..o{ animal_behavior_disclosures : "organization_id (lógica)"
+  organizations ||..o{ auth_credentials : "organization_id (lógica)"
   clinical_events ||..o{ clinical_reminders : "clinical_event_id (lógica)"
-  resource_needs ||..o{ resource_deliveries : "need_id (lógica)"
-  resource_needs ||..o{ resource_fulfillment_applications : "need_id (lógica)"
-  refresh_tokens |o..o{ refresh_tokens : "replaced_by_id (lógica)"
+  organizations ||..o{ donation_certificates : "organization_id (lógica)"
+  organizations ||..o{ donation_reversals : "organization_id (lógica)"
+  organizations |o..o{ ledger_movements : "organization_id (lógica)"
+  donations |o..o{ mercadopago_payments : "donation_id (lógica)"
+  organizations ||..o{ platform_workspace_tickets : "subject_organization_id (lógica)"
+  organizations |o..o{ resource_open_offers : "claimed_by_organization_id (lógica)"
+  organizations ||..o{ service_hours_photos : "organization_id (lógica)"

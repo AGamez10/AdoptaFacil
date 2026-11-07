@@ -8,9 +8,9 @@ erDiagram
     boolean is_anonymous
     text status
     uuid moderated_by_user_id FK
-    timestamp3 moderated_at
+    timestamp moderated_at
     text rejection_reason
-    timestamp3 created_at
+    timestamp created_at
   }
   organizations {
     uuid id PK
@@ -19,6 +19,6 @@ erDiagram
     uuid id PK
     uuid organization_id FK
   }
-  organizations ||--o{ reviews : "organization_id"
   users |o--o{ reviews : "author_user_id"
   users |o--o{ reviews : "moderated_by_user_id"
+  organizations ||--o{ reviews : "organization_id"

@@ -8,6 +8,7 @@ import { CampaignFundingService } from '../src/modules/campaigns/campaign-fundin
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * Donations webhook → campaign funding enganche (T-057). When the gateway webhook
@@ -52,6 +53,7 @@ describe('Donations webhook → campaign funding enganche (T-057)', () => {
       .expect(201);
     orgToken = orgReg.body.tokens.accessToken;
     orgId = orgReg.body.user.organizationId;
+    await approveTestOrganization(admin, orgReg.body.user.organizationId);
     orgIds.push(orgId);
 
     const personReg = await request(server)
@@ -98,7 +100,6 @@ describe('Donations webhook → campaign funding enganche (T-057)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 30_000,
-        commissionPayer: 'organization',
         ...(concept ? { concept } : {}),
         idempotencyKey: `t057-${randomUUID()}`,
       })

@@ -3,11 +3,12 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { computeBreakdown, DIRECT_COLLECTION_RATES } from '@adoptafacil/contracts';
+import { computeBreakdown } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M13 dashboards (RF24, S-8): PlatformAdmin consolidates the three existing
@@ -44,6 +45,7 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       orgId: res.body.user.organizationId,
@@ -140,7 +142,6 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .send({
         organizationId: org.orgId,
         intendedAmount: 10_000,
-        commissionPayer: 'organization',
         idempotencyKey,
       })
       .expect(201);
@@ -182,7 +183,6 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
     const res = await superAdminSummary(platformSuperAdmin.token).expect(200);
     expect(res.body).toEqual({
       grossTotal: expect.any(Number),
-      platformFeeTotal: expect.any(Number),
       gatewayFeeTotal: expect.any(Number),
       netTotal: expect.any(Number),
       organizationsByVerificationLevel: expect.any(Array),
@@ -227,7 +227,6 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .send({
         organizationId: org.orgId,
         intendedAmount: 80_000,
-        commissionPayer: 'organization',
         idempotencyKey,
       })
       .expect(201);
@@ -242,13 +241,10 @@ describe('Platform dashboards (M13, RF24, S-8)', () => {
       .expect(200);
 
     const after = await superAdminSummary(platformSuperAdmin.token).expect(200);
-    const expected = computeBreakdown(80_000, 'organization', DIRECT_COLLECTION_RATES);
+    const expected = computeBreakdown(80_000);
 
     expect(after.body.grossTotal - before.body.grossTotal).toBeCloseTo(expected.gross, 6);
-    expect(after.body.platformFeeTotal - before.body.platformFeeTotal).toBeCloseTo(
-      expected.platformFee + expected.platformIva,
-      6,
-    );
+    expect(after.body).not.toHaveProperty('platformFeeTotal');
     expect(after.body.gatewayFeeTotal - before.body.gatewayFeeTotal).toBeCloseTo(
       expected.gatewayFee + expected.gatewayIva,
       6,

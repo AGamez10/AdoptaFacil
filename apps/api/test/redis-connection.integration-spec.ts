@@ -6,7 +6,7 @@ import { parseRedisUrl } from '../src/config/env.validation';
  * Ola 1 · R1-7 (BLD-003): BullMQ must connect with the WHOLE REDIS_URL. Before,
  * only host and port survived, so two environments pointed at different
  * database indexes (`/1`, `/2`) shared one queue and consumed each other's
- * jobs — reproduced during the audit with the DIAN and payout queues.
+ * jobs — reproduced during the audit with the DIAN queue.
  */
 describe('BullMQ connection keeps the REDIS_URL database (R1-7)', () => {
   const base = new URL(process.env.REDIS_URL as string);

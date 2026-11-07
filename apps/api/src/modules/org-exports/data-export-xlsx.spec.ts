@@ -38,14 +38,25 @@ const input: DataExportInput = {
       id: 'd1',
       approvedAt: at,
       status: 'approved',
+      reversedReason: null,
       conceptKind: 'campaign',
       conceptName: 'Cirugía de Luna',
-      amountCharged: 52_000,
+      amountCharged: 51_190,
       net: 50_000,
-      platformFee: 2_000,
-      platformIva: 380,
       gatewayFee: 1_000,
       gatewayIva: 190,
+    },
+    {
+      id: 'd2',
+      approvedAt: at,
+      status: 'approved',
+      reversedReason: 'charged_back',
+      conceptKind: 'organization',
+      conceptName: null,
+      amountCharged: 10_000,
+      net: 10_000,
+      gatewayFee: 0,
+      gatewayIva: 0,
     },
   ],
   campaigns: [],
@@ -96,8 +107,15 @@ describe('data-export-xlsx (exportación de datos de la organización)', () => {
   it('los montos y las horas van como números para poder sumarlos', async () => {
     const wb = await read(await renderDataExportXlsx(input));
     const donation = wb.getWorksheet('Donaciones')!.getRow(2);
-    expect(donation.getCell(6).value).toBe(52_000);
+    expect(donation.getCell(6).value).toBe(51_190);
     expect(donation.getCell(7).value).toBe(50_000);
+    // Sin columna de comisión de AdoptaFácil (0 %): neto + tarifa + IVA = cobrado.
+    expect(donation.getCell(8).value).toBe(1_000);
+    expect(donation.getCell(9).value).toBe(190);
+    expect(donation.getCell(10).value ?? null).toBeNull();
+    // P1-1: una donación reversada se ve como tal, no como "Aprobada".
+    const reversed = wb.getWorksheet('Donaciones')!.getRow(3);
+    expect(reversed.getCell(3).value).toBe('Reversada (contracargo)');
     expect(wb.getWorksheet('Voluntariado')!.getRow(2).getCell(9).value).toBe(12.5);
   });
 

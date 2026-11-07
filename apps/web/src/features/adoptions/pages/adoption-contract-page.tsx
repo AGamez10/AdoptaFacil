@@ -209,8 +209,13 @@ export function AdoptionContractPage() {
   const mySigner = contract.signers.find((s) => s.userId === user?.id && !s.signedAt);
   const noOneHasSignedYet = !contract.signers.some((s) => s.signedAt);
   const canEditData = contract.status === 'draft' && noOneHasSignedYet;
+  // P0-2: only the registered representative approves and signs the
+  // organization's part, from their own account.
+  const isRepresentative = Boolean(representative && representative.userId === user?.id);
   const canSignAsRepresentative =
-    canManage && contract.status === 'draft' && !representative?.signedAt;
+    isRepresentative && contract.status === 'draft' && !representative?.signedAt;
+  const waitingForRepresentative =
+    canManage && !isRepresentative && contract.status === 'draft' && !representative?.signedAt;
   const canSendToSignatures =
     canManage && contract.status === 'draft' && Boolean(representative?.signedAt);
   // Adoptante, responsable firmante o testigo: todos firman dibujando/subiendo
@@ -719,8 +724,14 @@ export function AdoptionContractPage() {
 
           {canSignAsRepresentative && (
             <Button size="sm" disabled={busyAction} onClick={() => void signAsRepresentative()}>
-              Firmar como representante
+              Aprobar y firmar por la organización
             </Button>
+          )}
+          {waitingForRepresentative && (
+            <p className="text-sm text-muted-foreground" data-testid="waiting-representative">
+              Este contrato lo aprueba y firma {representative?.fullName}, quien firma por la
+              organización, desde su propia cuenta. Pídele que lo revise.
+            </p>
           )}
           {canSendToSignatures && (
             <Button size="sm" disabled={busyAction} onClick={() => void sendToSignatures()}>

@@ -22,8 +22,7 @@ deny-by-default, siempre dentro del tenant del JWT → **RLS** en PostgreSQL.
   - filtros de catálogos públicos (`GET /public/marketplace/products`,
     `GET /public/resources/needs`, `GET /public/donations/organizations/:id/availability`),
     que solo leen datos ya públicos;
-  - operaciones de plataforma (`/platform/payouts`, `/platform/reconciliation`,
-    `/platform/organizations/:organizationId/...` de formalización y estado), protegidas con
+  - operaciones de plataforma (`/platform/organizations/:organizationId/...` de formalización y estado), protegidas con
     `@Roles(...PLATFORM_ROLES)` y auditadas en la organización destino.
 
 ## 2. Roles de organización (§13 del documento base)

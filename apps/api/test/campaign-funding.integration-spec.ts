@@ -75,7 +75,6 @@ describe('Campaign funding (RF15 · T-055)', () => {
       .send({
         organizationId,
         intendedAmount: 100_000,
-        commissionPayer: 'organization',
         concept: { kind: 'campaign', id: campaignId },
         idempotencyKey: `idem-${randomUUID()}`,
       })
@@ -216,7 +215,6 @@ describe('Campaign funding (RF15 · T-055)', () => {
       .send({
         organizationId: orgB,
         intendedAmount: 100_000,
-        commissionPayer: 'organization',
         concept: { kind: 'campaign', id: campaignX },
         idempotencyKey: `idem-${randomUUID()}`,
       })

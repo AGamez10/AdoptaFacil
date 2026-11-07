@@ -10,6 +10,7 @@ import {
 } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 const SIGNATURE_PNG =
@@ -96,6 +97,7 @@ describe('Adoption delivery (ajuste 6: acta de entrega)', () => {
       .expect(201);
     refugeToken = refuge.body.tokens.accessToken;
     refugeOrgId = refuge.body.user.organizationId;
+    await approveTestOrganization(admin, refugeOrgId);
     orgIds.push(refugeOrgId);
 
     const person = await request(server)
@@ -159,7 +161,8 @@ describe('Adoption delivery (ajuste 6: acta de entrega)', () => {
         documentType: 'cedula_ciudadania',
         documentNumber: '987654321',
         position: 'Representante legal',
-        signatureBase64: Buffer.from('fake-rep-signature').toString('base64'),
+        signatureBase64:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
         signatureContentType: 'image/png',
       })
       .expect(201);

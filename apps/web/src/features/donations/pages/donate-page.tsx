@@ -17,17 +17,11 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
-import { FormAlert } from '../../auth/components/form-alert';
 import { createDonation, fetchOrganizationDonationAvailability } from '../api/donations-api';
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
 import { DonationsActivatingNotice } from '../components/donations-activating-notice';
 import { formatCop } from '../model/donation-breakdown-view';
-import {
-  isEpaycoProvider,
-  isMercadoPagoProvider,
-  onlinePaymentsEnabled,
-} from '../../payments/lib/payment-provider';
-import { openEpaycoCheckout } from '../../payments/lib/epayco-checkout';
+import { isMercadoPagoProvider, onlinePaymentsEnabled } from '../../payments/lib/payment-provider';
 import { useNoIndex } from '../../../seo/seo';
 import styles from './donate-page.module.scss';
 
@@ -81,11 +75,10 @@ function useDonationTarget(): DonationTarget | null {
 
 /**
  * `/donaciones` — donación a una organización (§M05, P1 + checkout de INVITADO,
- * requisito final del cliente: donar NUNCA exige cuenta ni login). Ve el desglose
- * transparente antes de pagar (misma cuenta que el backend), puede marcar
- * "cubro la comisión" y la donación anónima frente a la organización, y al
- * confirmarse el pago (webhook) se emite un recibo automático. Dato personal
- * bajo Ley 1581.
+ * requisito final del cliente: donar NUNCA exige cuenta ni login). Ve cuánto paga
+ * antes de pagar (misma cuenta que el backend), puede donar de forma anónima
+ * frente a la organización, y al confirmarse el pago (webhook) se emite un recibo
+ * automático. Dato personal bajo Ley 1581.
  *
  * SEAM resuelto: la ruta vive FUERA de `<RequireAuth>`/`<AppLayout>` (ver
  * routes.tsx) — esta página arma su propio chrome público (mismo patrón que
@@ -109,22 +102,13 @@ export function DonatePage() {
   // after a declined charge) — the form owns its own amount state, so a plain
   // re-render alone wouldn't reset it.
   const [formInstanceKey, setFormInstanceKey] = useState(0);
-  // ADR-PAG-002: ePayco es la única pasarela — tras crear la donación se abre
-  // su checkout con la sesión que devolvió la API. `false` solo con el
+  // ADR-PAG-003: Mercado Pago — tras crear la donación se va a Checkout Pro
+  // de la cuenta del refugio (`paymentLinkUrl`). `false` solo con el
   // interruptor de apagado (VITE_PAYMENT_PROVIDER=off): aviso tranquilo.
-  const epayco = isEpaycoProvider();
-  // ADR-PAG-003 (por defecto): Mercado Pago — tras crear la donación se va a
-  // Checkout Pro de la cuenta del refugio (`paymentLinkUrl`).
   const mercadopago = isMercadoPagoProvider();
   const online = onlinePaymentsEnabled();
   const [redirectingToMercadoPago, setRedirectingToMercadoPago] = useState<Donation | null>(null);
-  const [epaycoCheckout, setEpaycoCheckout] = useState<{
-    donation: Donation;
-    sessionId: string;
-    test: boolean;
-    status: 'opening' | 'open' | 'error';
-  } | null>(null);
-  // Solo se puede donar a una organización con su cuenta ePayco conectada.
+  // Solo se puede donar a una organización con su cuenta de Mercado Pago conectada.
   const [availability, setAvailability] = useState<
     'loading' | 'connected' | 'not-connected' | 'error'
   >('loading');
@@ -182,24 +166,8 @@ export function DonatePage() {
     );
   }
 
-  const launchEpaycoCheckout = async (donation: Donation, sessionId: string, test: boolean) => {
-    setEpaycoCheckout({ donation, sessionId, test, status: 'opening' });
-    try {
-      await openEpaycoCheckout({ sessionId, test });
-      setEpaycoCheckout({ donation, sessionId, test, status: 'open' });
-    } catch {
-      setEpaycoCheckout({ donation, sessionId, test, status: 'error' });
-      toast({
-        title: 'No se pudo abrir la pasarela de ePayco',
-        description: 'Revisa tu conexión e inténtalo de nuevo. No se te ha cobrado nada.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const donate = async ({
     intendedAmount,
-    commissionPayer,
     anonymous,
     guestPayer,
     legalAcceptances,
@@ -210,7 +178,6 @@ export function DonatePage() {
         organizationId: target.organizationId,
         ...(target.campaignId ? { concept: { kind: 'campaign', id: target.campaignId } } : {}),
         intendedAmount,
-        commissionPayer,
         anonymous,
         // Con sesión: se prellena del donante autenticado (como antes). Sin
         // sesión (invitado): viene del propio formulario, requerido allí.
@@ -229,14 +196,6 @@ export function DonatePage() {
         // redireccionamiento abierto). Vuelve a /donaciones/resultado.
         setRedirectingToMercadoPago(donation);
         window.location.assign(donation.paymentLinkUrl as string);
-        return;
-      }
-      if (epayco && donation.checkoutSessionId) {
-        await launchEpaycoCheckout(
-          donation,
-          donation.checkoutSessionId,
-          donation.checkoutTest === true,
-        );
         return;
       }
       setDone(donation);
@@ -352,44 +311,6 @@ export function DonatePage() {
                   >
                     Si no se abrió, toca aquí
                   </a>
-                </div>
-              ) : epaycoCheckout ? (
-                <div className={styles.done} data-testid="epayco-checkout-panel">
-                  {epaycoCheckout.status === 'opening' ? (
-                    <p className={styles['done__hint']} data-testid="epayco-checkout-opening">
-                      Abriendo la pasarela segura de ePayco…
-                    </p>
-                  ) : epaycoCheckout.status === 'error' ? (
-                    <FormAlert variant="error">
-                      <span data-testid="epayco-checkout-error">
-                        No pudimos cargar la pasarela de pagos de ePayco. Revisa tu conexión (o
-                        desactiva el bloqueador de anuncios) e inténtalo de nuevo. Tu donación quedó
-                        registrada como pendiente: no se te ha cobrado nada.
-                      </span>
-                    </FormAlert>
-                  ) : (
-                    <EmptyState
-                      title="Completa tu pago en ePayco"
-                      description={`Abrimos la ventana segura de ePayco para pagar ${formatCop(epaycoCheckout.donation.amountCharged)} con los medios que tenga habilitados ${target.organizationName}. Cuando ePayco confirme el pago te enviaremos el recibo automático.`}
-                    />
-                  )}
-                  {epaycoCheckout.status !== 'opening' && (
-                    <Button
-                      variant={epaycoCheckout.status === 'error' ? 'default' : 'outline'}
-                      onClick={() =>
-                        void launchEpaycoCheckout(
-                          epaycoCheckout.donation,
-                          epaycoCheckout.sessionId,
-                          epaycoCheckout.test,
-                        )
-                      }
-                      data-testid="epayco-checkout-reopen"
-                    >
-                      {epaycoCheckout.status === 'error'
-                        ? 'Reintentar abrir el pago'
-                        : 'Abrir de nuevo la ventana de pago'}
-                    </Button>
-                  )}
                 </div>
               ) : done ? (
                 done.status === 'declined' ? (

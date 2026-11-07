@@ -46,13 +46,7 @@ const SWITCHED_OFF: Array<[string, 'get' | 'post', string]> = [
   ['payments', 'get', `/public/donations/organizations/${ORG_ID}/availability`],
   ['payments', 'post', '/campaigns/funding/reconcile'],
   ['payments', 'get', '/org/dashboard/donations'],
-  ['payments', 'get', '/org/payout-bank-account'],
-  // Mercado Pago's /org/mercadopago/* routes were removed (2026-10-17);
-  // the ePayco connect status replaces them in this feature-flag gate.
-  ['payments', 'get', '/org/epayco/status'],
-  ['payments', 'post', '/payments/payouts/webhook'],
-  ['payments', 'get', `/platform/payouts/${ORG_ID}`],
-  ['payments', 'get', '/platform/reconciliation'],
+  ['payments', 'get', '/org/mercadopago/status'],
   ['donationCertificates', 'get', '/public/donations/certificates/ABC123'],
   ['sponsorships', 'get', `/public/sponsorships/animals/${ID}`],
   ['sponsorships', 'get', '/public/sponsorships/status/some-reference'],

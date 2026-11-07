@@ -1,18 +1,4 @@
 erDiagram
-  adoption_requests {
-    uuid id PK
-    uuid organization_id FK
-    uuid animal_id
-    jsonb animal_snapshot
-    uuid applicant_user_id
-    jsonb applicant
-    text message
-    text status
-    text contract_ref
-    text tracking_ref
-    timestamp3 created_at
-    timestamp3 updated_at
-  }
   adoption_contracts {
     uuid id PK
     uuid organization_id FK
@@ -23,9 +9,43 @@ erDiagram
     jsonb signers
     jsonb payload
     text content_hash
-    timestamp3 created_at
-    timestamp3 updated_at
-    timestamp3 signed_at
+    timestamp created_at
+    timestamp updated_at
+    timestamp signed_at
+  }
+  adoption_deliveries {
+    uuid id PK
+    uuid organization_id
+    uuid contract_id FK
+    uuid request_id
+    uuid animal_id
+    uuid adopter_user_id
+    text adopter_name
+    text adopter_email
+    text animal_name
+    text status
+    jsonb details
+    jsonb record
+    jsonb milestone_plan
+    text content_hash
+    text code_hash
+    timestamp code_expires_at
+    integer code_attempts
+    uuid created_by_user_id
+    timestamp created_at
+    timestamp updated_at
+    timestamp confirmed_at
+  }
+  adoption_followup_evidence {
+    uuid id PK
+    uuid organization_id FK
+    uuid milestone_id FK
+    text kind
+    jsonb answers
+    text storage_ref
+    text storage_url
+    uuid submitted_by_user_id
+    timestamp created_at
   }
   adoption_followup_milestones {
     uuid id PK
@@ -37,45 +57,53 @@ erDiagram
     text adopter_email
     text title
     jsonb questionnaire
-    timestamp3 due_at
+    timestamp due_at
     text status
-    timestamp3 completed_at
-    timestamp3 created_at
-    timestamp3 updated_at
+    timestamp completed_at
+    timestamp created_at
+    timestamp updated_at
   }
-  adoption_followup_evidence {
+  adoption_requests {
     uuid id PK
     uuid organization_id FK
-    uuid milestone_id FK
-    text kind
-    jsonb answers
-    text storage_ref
-    text storage_url
-    uuid submitted_by_user_id
-    timestamp3 created_at
-  }
-  organizations {
-    uuid id PK
+    uuid animal_id
+    jsonb animal_snapshot
+    uuid applicant_user_id
+    jsonb applicant
+    text message
+    text status
+    text contract_ref
+    text tracking_ref
+    timestamp created_at
+    timestamp updated_at
   }
   animals {
     uuid id PK
     uuid organization_id FK
     uuid breed_id FK
   }
+  organizations {
+    uuid id PK
+  }
   users {
     uuid id PK
     uuid organization_id FK
   }
-  organizations ||--o{ adoption_requests : "organization_id"
   organizations ||--o{ adoption_contracts : "organization_id"
   adoption_requests ||--o{ adoption_contracts : "request_id"
-  organizations ||--o{ adoption_followup_milestones : "organization_id"
-  adoption_contracts ||--o{ adoption_followup_milestones : "contract_id"
-  adoption_requests ||--o{ adoption_followup_milestones : "request_id"
-  organizations ||--o{ adoption_followup_evidence : "organization_id"
+  adoption_contracts ||--o{ adoption_deliveries : "contract_id"
   adoption_followup_milestones ||--o{ adoption_followup_evidence : "milestone_id"
-  animals ||..o{ adoption_requests : "animal_id (lógica)"
+  organizations ||--o{ adoption_followup_evidence : "organization_id"
+  adoption_contracts ||--o{ adoption_followup_milestones : "contract_id"
+  organizations ||--o{ adoption_followup_milestones : "organization_id"
+  adoption_requests ||--o{ adoption_followup_milestones : "request_id"
+  organizations ||--o{ adoption_requests : "organization_id"
   animals ||..o{ adoption_contracts : "animal_id (lógica)"
-  users ||..o{ adoption_requests : "applicant_user_id (lógica)"
-  users ||..o{ adoption_followup_milestones : "adopter_user_id (lógica)"
+  organizations ||..o{ adoption_deliveries : "organization_id (lógica)"
+  animals ||..o{ adoption_deliveries : "animal_id (lógica)"
+  users ||..o{ adoption_deliveries : "adopter_user_id (lógica)"
+  users ||..o{ adoption_deliveries : "created_by_user_id (lógica)"
   users ||..o{ adoption_followup_evidence : "submitted_by_user_id (lógica)"
+  users ||..o{ adoption_followup_milestones : "adopter_user_id (lógica)"
+  animals ||..o{ adoption_requests : "animal_id (lógica)"
+  users ||..o{ adoption_requests : "applicant_user_id (lógica)"

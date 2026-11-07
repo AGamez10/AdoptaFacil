@@ -103,8 +103,22 @@ export class MercadoPagoConnectionsService {
    * browser-binding secret the controller sets as an HttpOnly cookie: the
    * authorize URL only works in the browser that asked for it.
    */
-  getConnectUrl(actorUserId: string): { view: MercadoPagoConnectUrlView; bindingSecret: string } {
+  async getConnectUrl(
+    actorUserId: string,
+  ): Promise<{ view: MercadoPagoConnectUrlView; bindingSecret: string }> {
     const organizationId = this.requireOrgId();
+    // A suspended or rejected organization cannot connect a collecting account
+    // (it could not receive donations anyway). One still under review can
+    // prepare it: donations stay blocked until the platform approves it.
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { status: true },
+    });
+    if (!org || org.status === 'suspended' || org.status === 'rejected') {
+      throw new ForbiddenException(
+        'Tu organización no puede conectar una cuenta de cobro en este momento.',
+      );
+    }
     if (!this.oauth.isConfigured()) {
       throw new ServiceUnavailableException(
         'La conexión con Mercado Pago todavía no está disponible.',

@@ -2,9 +2,9 @@
 //
 // Monthly plans an ORGANIZATION pays to AdoptaFácil for the software. This is
 // AdoptaFácil's own revenue (the org is the customer), so it never touches
-// donations: donor → organization money keeps flowing through PaymentPort with
-// the 4 % fee, and a subscription is billed separately (BillingPort, manual at
-// first). Rule of the catalog: everything that protects the animal, the adopter
+// donations: donor → organization money flows straight to the organization's
+// own Mercado Pago account with NO AdoptaFácil fee (0 %, owner's decision), and
+// a subscription is billed separately on AdoptaFácil's own account. Rule of the catalog: everything that protects the animal, the adopter
 // or transparency (contract, follow-ups, audit, documents, donation receipts,
 // collecting donations — also for informal rescuers) is FREE. Plans sell brand,
 // reach and convenience — mainly the public portal (designs, seal, domain).
@@ -101,7 +101,7 @@ const NONE: Record<PlanCapability, boolean> = {
 /** The plan catalog: the single source of truth for the landing, the plans
  *  screen and the enforcement, so they never disagree. Paid plans are optional
  *  (client decision 2026-10-22); publishing a price never turns charging on —
- *  that is `PLAN_ENFORCEMENT` plus a manual or ePayco subscription. */
+ *  that is `PLAN_ENFORCEMENT` plus a manual subscription. */
 export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
   free: {
     key: 'free',
@@ -312,11 +312,10 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 /** How the subscription is collected. `manual` = payment link/transfer to
  *  AdoptaFácil's own account + electronic invoice, activated by the platform.
- *  `epayco` = recurring charge with ePayco on AdoptaFácil's OWN merchant
- *  account (ADR-PAG-002): it is AdoptaFácil's revenue for the software, so it
- *  never touches a donation. `mercadopago` = monthly subscription
- *  (preapproval) on AdoptaFácil's OWN Mercado Pago account (ADR-PAG-003). */
-export const BILLING_PROVIDERS = ['manual', 'epayco', 'mercadopago'] as const;
+ *  `mercadopago` = monthly subscription (preapproval) on AdoptaFácil's OWN
+ *  Mercado Pago account (ADR-PAG-003): it is AdoptaFácil's revenue for the
+ *  software, so it never touches a donation. */
+export const BILLING_PROVIDERS = ['manual', 'mercadopago'] as const;
 export type BillingProvider = (typeof BILLING_PROVIDERS)[number];
 
 /** The stored subscription of one organization (at most one per org). */

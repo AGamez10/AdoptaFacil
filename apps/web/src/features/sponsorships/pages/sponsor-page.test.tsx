@@ -12,7 +12,7 @@ import { renderShell } from '../../../test-utils';
  * S2-03 — `/apadrinar`, mismo doble-propósito que `/donaciones` (T-064): SIN
  * animalId → "Mis apadrinamientos" (`GET /sponsorships/mine`); CON animalId →
  * ver los planes (`GET /public/sponsorships/animals/:id`). Mercado Pago se
- * retiró (2026-10-17) y ePayco aún no cobra apadrinamientos: la web muestra
+ * retiró (2026-10-17) y hoy ninguna pasarela cobra apadrinamientos: la web muestra
  * "Pronto podrás apadrinar con pago en línea" en vez de un flujo roto.
  */
 function personSession() {

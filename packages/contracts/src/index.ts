@@ -17,7 +17,6 @@ export * from './payments';
 export * from './payment-gateways';
 export * from './donation-links';
 export * from './org-qr';
-export * from './epayco';
 export * from './mercadopago';
 export * from './campaigns';
 export * from './sponsorships';

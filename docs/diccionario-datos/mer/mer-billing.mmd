@@ -1,0 +1,24 @@
+erDiagram
+  organization_email_usage {
+    uuid organization_id PK,FK
+    text month PK
+    integer branded_count
+    timestamp updated_at
+  }
+  organization_subscriptions {
+    uuid id PK
+    uuid organization_id FK,UK
+    text plan
+    text status
+    timestamp current_period_end
+    text provider
+    text provider_reference
+    integer discount_percent
+    timestamp created_at
+    timestamp updated_at
+  }
+  organizations {
+    uuid id PK
+  }
+  organizations ||--o| organization_email_usage : "organization_id"
+  organizations ||--o| organization_subscriptions : "organization_id"
