@@ -6,7 +6,7 @@
 // (checkout y recibo muestran lo mismo).
 //
 // Decisiones cerradas (NO reabrir): Mercado Pago con la cuenta propia de la
-// organización (ADR-PAG-003), cobro directo SIN custodia ni dispersión, SIN
+// organización (ADR-PAG-003), cobro directo SIN custodia, SIN
 // split, comisión de AdoptaFácil 0 % (decisión del dueño). La tarifa de Mercado
 // Pago la fija Mercado Pago sobre la cuenta de la organización y no se estima
 // aquí. COP en pesos enteros.

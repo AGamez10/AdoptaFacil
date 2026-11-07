@@ -272,7 +272,7 @@ export function AppRoutes() {
           AnimalSummary fields only (no clinical data). The "Solicitar adopción"
           button links to the /adopciones/solicitar flow, itself under RequireAuth. */}
           <Route path="/o/:slug/animales/:animalId" element={<PublicAnimalDetailPage />} />
-          {/* QR de donaciones por organización (ADR-PAG-002 §QR, módulo
+          {/* QR de donaciones por organización (ADR-PAG-001 §QR, módulo
           `payments`): URL ESTABLE que resuelve la org pública y entra al flujo
           `/donaciones`. `/donar` solo tiene sentido en un subdominio real de
           organización; en el dominio principal lleva a `/donaciones`. */}

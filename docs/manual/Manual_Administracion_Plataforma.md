@@ -110,7 +110,7 @@ departamento._
 **Cómo se cobra hoy (ADR-PAG-003, nov-2026):** cada organización conecta su propia cuenta de
 Mercado Pago por OAuth y cada donación se cobra con esa cuenta, así que el dinero llega directo a la
 organización. AdoptaFácil no recibe, no retiene ni transfiere dinero de donaciones: no hay
-dispersiones que conciliar. La conciliación que existe es la de cada organización entre sus
+entregas de dinero que conciliar. La conciliación que existe es la de cada organización entre sus
 donaciones y los pagos que Mercado Pago reporta en su cuenta (módulo de contabilidad).
 
 ## 8. Resumen de hallazgos de la última verificación

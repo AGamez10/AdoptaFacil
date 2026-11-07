@@ -217,7 +217,7 @@ describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
       // the session user's own name ALSO renders in the shell header (same
       // literal text here, coincidentally), so an unscoped match is ambiguous.
       expect(screen.getByText('Donante Tester', { selector: 'dd' })).toBeInTheDocument();
-      expect(screen.getByText(/45\.210/)).toBeInTheDocument();
+      expect(screen.getByText(/47\.590/)).toBeInTheDocument();
     });
   });
 

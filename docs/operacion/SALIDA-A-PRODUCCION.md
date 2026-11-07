@@ -108,7 +108,7 @@ S3_SECRET_ACCESS_KEY=<R2>
 
 ## 3. Mercado Pago (el último paso)
 
-Requiere que el PR #88 (ADR-PAG-003, OAuth del refugio sin split y sin custodia) esté en la versión desplegada. Detalle en `docs/pagos/mercadopago-oauth.md`.
+Modelo: ADR-PAG-003 (cada refugio conecta su cuenta por OAuth; sin custodia y sin comisión de AdoptaFácil). Detalle en `docs/pagos/mercadopago-oauth.md`.
 
 **Del panel de [Mercado Pago Developers](https://www.mercadopago.com.co/developers/panel/app)**, con la cuenta de AdoptaFácil:
 

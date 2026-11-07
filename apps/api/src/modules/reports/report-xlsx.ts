@@ -85,7 +85,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     info.push(
       ['Donaciones aprobadas', payload.totals.count],
       ['Valor donado (COP)', payload.totals.amountCharged],
-      ['Comisiones e IVA (COP)', payload.totals.fees],
+      ['Tarifa de Mercado Pago e IVA (COP)', payload.totals.fees],
       ['Neto recibido (COP)', payload.totals.net],
     );
   } else if (payload.kind === 'accounting') {
@@ -97,7 +97,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       ['Reembolsos (COP)', t.refundsCop],
       ['Contracargos (COP)', t.chargebacksCop],
       ['Saldo bruto neto de reversos (COP)', t.balanceCop],
-      ['Comisiones de la pasarela (COP)', t.feesCop],
+      ['Tarifa de Mercado Pago (COP)', t.feesCop],
       ['Neto informado por la pasarela (COP)', t.netCop],
       ['Conciliación al cerrar', payload.reconciliation.balanced ? 'Cuadra' : 'Con descuadres'],
       ['Huella SHA-256 de los renglones', payload.close.entriesHash],
@@ -127,7 +127,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       { header: 'Documento', key: 'doc', width: 14 },
       { header: 'Destino', key: 'concept', width: 34 },
       { header: 'Valor donado', key: 'amount', width: 15, style: { numFmt: MONEY } },
-      { header: 'Comisiones e IVA', key: 'fees', width: 16, style: { numFmt: MONEY } },
+      { header: 'Tarifa de Mercado Pago e IVA', key: 'fees', width: 16, style: { numFmt: MONEY } },
       { header: 'Neto recibido', key: 'net', width: 15, style: { numFmt: MONEY } },
       { header: 'Certificado', key: 'cert', width: 22 },
     ];

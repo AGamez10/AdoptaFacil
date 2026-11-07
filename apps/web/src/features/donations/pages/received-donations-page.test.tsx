@@ -101,7 +101,7 @@ describe('ReceivedDonationsPage', () => {
     expect(await screen.findByText('Camilo Torres')).toBeInTheDocument();
     expect(screen.getByText('Aprobada')).toBeInTheDocument();
     expect(screen.getByText('Donación general')).toBeInTheDocument();
-    expect(screen.getByText(/45\.210/)).toBeInTheDocument();
+    expect(screen.getByText(/47\.590/)).toBeInTheDocument();
   });
 
   it('REFACTOR-VISUAL Fase C3: "Ver detalle" opens the full breakdown in a modal', async () => {

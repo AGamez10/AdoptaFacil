@@ -129,7 +129,7 @@ export interface AccountingTotals {
   chargebacksCop: number;
   /** Bruto neto de reversos: donaciones + reembolsos + contracargos. */
   balanceCop: number;
-  /** Comisiones de la pasarela informadas (positivo: lo que el refugio paga). */
+  /** Tarifa de Mercado Pago informadas (positivo: lo que el refugio paga). */
   feesCop: number;
   /** Neto recibido informado por la pasarela. */
   netCop: number;

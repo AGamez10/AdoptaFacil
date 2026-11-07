@@ -1,4 +1,42 @@
 erDiagram
+  community_comments {
+    uuid id PK
+    uuid organization_id FK
+    uuid post_id FK
+    uuid author_user_id
+    text author_name
+    text body
+    timestamp created_at
+  }
+  community_pet_profiles {
+    uuid id PK
+    uuid organization_id FK
+    uuid owner_user_id
+    text name
+    text species
+    text breed
+    text sex
+    date birth_date
+    boolean sterilized
+    text adopted_from
+    text notes
+    timestamp created_at
+    timestamp updated_at
+  }
+  community_post_images {
+    uuid id PK
+    uuid organization_id FK
+    uuid post_id FK
+    text storage_ref
+    integer order
+    timestamp created_at
+  }
+  community_post_likes {
+    uuid post_id PK,FK
+    uuid user_id PK
+    uuid organization_id FK
+    timestamp created_at
+  }
   community_posts {
     uuid id PK
     uuid organization_id FK
@@ -12,32 +50,47 @@ erDiagram
     integer like_count
     text moderation_reason
     uuid moderated_by_user_id
-    timestamp3 moderated_at
-    timestamp3 created_at
-    timestamp3 updated_at
+    timestamp moderated_at
+    timestamp created_at
+    timestamp updated_at
+    boolean shareable
   }
-  community_post_images {
+  community_service_listing_reviews {
     uuid id PK
     uuid organization_id FK
-    uuid post_id FK
-    text storage_ref
-    integer order
-    timestamp3 created_at
-  }
-  community_comments {
-    uuid id PK
-    uuid organization_id FK
-    uuid post_id FK
+    uuid listing_id FK
     uuid author_user_id
     text author_name
-    text body
-    timestamp3 created_at
+    integer rating
+    text comment
+    text status
+    text moderation_reason
+    uuid moderated_by_user_id
+    timestamp moderated_at
+    timestamp created_at
   }
-  community_post_likes {
-    uuid post_id FK
-    uuid user_id
+  community_service_listings {
+    uuid id PK
     uuid organization_id FK
-    timestamp3 created_at
+    uuid created_by_user_id
+    text category
+    text name
+    text description
+    text department
+    text city
+    text address
+    text phone
+    text whatsapp
+    text website
+    text email
+    text status
+    text moderation_reason
+    uuid moderated_by_user_id
+    timestamp moderated_at
+    boolean is_partner
+    timestamp partner_since
+    timestamp created_at
+    timestamp updated_at
   }
   organizations {
     uuid id PK
@@ -46,13 +99,23 @@ erDiagram
     uuid id PK
     uuid organization_id FK
   }
-  organizations |o--o{ community_posts : "organization_id"
-  community_posts ||--o{ community_post_images : "post_id"
-  organizations |o--o{ community_post_images : "organization_id"
-  community_posts ||--o{ community_comments : "post_id"
   organizations |o--o{ community_comments : "organization_id"
-  community_posts ||--o{ community_post_likes : "post_id"
+  community_posts ||--o{ community_comments : "post_id"
+  organizations ||--o{ community_pet_profiles : "organization_id"
+  organizations |o--o{ community_post_images : "organization_id"
+  community_posts ||--o{ community_post_images : "post_id"
   organizations |o--o{ community_post_likes : "organization_id"
+  community_posts ||--o| community_post_likes : "post_id"
+  organizations |o--o{ community_posts : "organization_id"
+  community_service_listings ||--o{ community_service_listing_reviews : "listing_id"
+  organizations ||--o{ community_service_listing_reviews : "organization_id"
+  organizations ||--o{ community_service_listings : "organization_id"
+  users ||..o{ community_comments : "author_user_id (lógica)"
+  users ||..o{ community_pet_profiles : "owner_user_id (lógica)"
+  users ||..o| community_post_likes : "user_id (lógica)"
   users ||..o{ community_posts : "author_user_id (lógica)"
   users |o..o{ community_posts : "moderated_by_user_id (lógica)"
-  users ||..o{ community_comments : "author_user_id (lógica)"
+  users ||..o{ community_service_listing_reviews : "author_user_id (lógica)"
+  users |o..o{ community_service_listing_reviews : "moderated_by_user_id (lógica)"
+  users ||..o{ community_service_listings : "created_by_user_id (lógica)"
+  users |o..o{ community_service_listings : "moderated_by_user_id (lógica)"

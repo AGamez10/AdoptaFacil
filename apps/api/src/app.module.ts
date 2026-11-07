@@ -110,7 +110,7 @@ import { RedisModule } from './redis/redis.module';
     // M07 · recurring sponsorships base (RF17 / T-056, no payment yet).
     SponsorshipsModule,
     // M15 · pagos: conexión OAuth de la cuenta de Mercado Pago de cada
-    // organización (ADR-PAG-003). Cobro directo: sin custodia ni dispersión.
+    // organización (ADR-PAG-003). Cobro directo: sin custodia.
     PaymentsModule,
     // M09 · banco de recursos: necesidades, ofertas y entregas (Ola 3, F-6).
     ResourcesModule,
