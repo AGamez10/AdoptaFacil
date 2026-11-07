@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
@@ -42,6 +43,7 @@ describe('Organization summary (S2-08, M13)', () => {
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       orgId: res.body.user.organizationId,
@@ -142,9 +144,10 @@ describe('Organization summary (S2-08, M13)', () => {
       .expect(201);
 
     // --- adoptionRequestsPending: 'new' + 'in_review' count; 'rejected' doesn't -
+    // P0-3: solo se postula a un animal disponible; pasa a `in_process`
+    // después (abajo), como cuando la organización ya está evaluando.
     const forRequests = await createAnimal(owner.token, {
       name: 'ParaSolicitudes',
-      status: 'in_process',
     }).expect(201);
     requestAnimalId = forRequests.body.id;
     const reqBody = (animalId: string) => ({
@@ -163,7 +166,6 @@ describe('Organization summary (S2-08, M13)', () => {
 
     const animal2 = await createAnimal(owner.token, {
       name: 'ParaSolicitudes2',
-      status: 'in_process',
     }).expect(201);
     const personB = await registerPerson('solicitante2');
     const req2 = await request(server)
@@ -179,7 +181,6 @@ describe('Organization summary (S2-08, M13)', () => {
 
     const animal3 = await createAnimal(owner.token, {
       name: 'ParaSolicitudes3',
-      status: 'in_process',
     }).expect(201);
     const personC = await registerPerson('solicitante3');
     const req3 = await request(server)
@@ -197,6 +198,10 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${owner.token}`)
       .send({ targetStatus: 'rejected', reason: 'No cumple requisitos' })
       .expect(201); // terminal — does NOT count.
+    await admin.animal.updateMany({
+      where: { id: { in: [requestAnimalId, animal2.body.id, animal3.body.id] } },
+      data: { status: 'in_process' },
+    });
 
     // --- sponsorshipsActive: 1 active, 1 suspended (excluded) ------------------
     const plan1 = await request(server)

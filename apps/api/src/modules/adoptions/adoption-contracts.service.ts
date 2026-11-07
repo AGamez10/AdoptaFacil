@@ -134,7 +134,7 @@ export class AdoptionContractsService {
       }
 
       const applicant = req.applicant as unknown as AdoptionApplicant;
-      const animal = req.animalSnapshot as unknown as AdoptionAnimalSnapshot;
+      let animal = req.animalSnapshot as unknown as AdoptionAnimalSnapshot;
 
       // P0-2: the organization's part is signed by ITS registered legal
       // representative (or, for an informal group, its registered responsible
@@ -170,6 +170,19 @@ export class AdoptionContractsService {
           Prisma.sql`SELECT * FROM adopter_profile_for_contract(${req.applicantUserId}::uuid)`,
         ),
       ]);
+      // P0-3: el contrato identifica al animal REAL de la organización, nunca
+      // un snapshot que haya mandado el cliente.
+      if (!animalRow || animalRow.organizationId !== organizationId || !animalRow.isActive) {
+        throw new ConflictException(
+          'No se puede generar el contrato: el animal de esta solicitud ya no existe en tu organización.',
+        );
+      }
+      animal = {
+        ...animal,
+        animalId: animalRow.id,
+        name: animalRow.name,
+        species: animalRow.species as AdoptionAnimalSnapshot['species'],
+      };
       const location = profile?.location as OrganizationLocation | null | undefined;
       const computedAge = animalRow
         ? computeAge(animalRow.birthDate, animalRow.approximateAgeMonths, new Date())
@@ -178,6 +191,11 @@ export class AdoptionContractsService {
 
       const data: AdoptionContractData = {
         organizationName: profile?.legalName?.trim() || organization?.name || undefined,
+        organizationFormalization: ['formalizada', 'esal', 'esal_rte'].includes(
+          profile?.formalizationState ?? 'informal',
+        )
+          ? 'formal'
+          : 'informal',
         organizationNit: profile?.nit ?? undefined,
         organizationAddress: formatOrgAddress(location),
         animalBreed: animalRow?.breed?.name ?? animalRow?.customBreed ?? undefined,

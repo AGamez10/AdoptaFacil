@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PlansService } from '../src/core/plans/plans.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import { memberWithRole } from './support/signers';
 
@@ -55,6 +56,7 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       userId: res.body.user.id,
@@ -193,10 +195,10 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
     expect(wb.getWorksheet('Adopciones')!.rowCount).toBe(2);
     const donation = wb.getWorksheet('Donaciones')!.getRow(2);
     expect(donation.getCell(3).value).toBe('Aprobada');
-    // La organización cubre la comisión: cobrado 50.000 = neto + comisión + pasarela (con IVA).
+    // 0 % de AdoptaFácil: cobrado 50.000 = neto + tarifas (aquí cero, sin pasarela real).
     expect(donation.getCell(6).value).toBe(50_000);
     const parts = [7, 8, 9, 10, 11].map((c) => Number(donation.getCell(c).value));
-    expect(parts[0]).toBeLessThan(50_000);
+    expect(parts[0]).toBe(50_000);
     expect(parts.reduce((a, b) => a + b, 0)).toBe(50_000);
   });
 
