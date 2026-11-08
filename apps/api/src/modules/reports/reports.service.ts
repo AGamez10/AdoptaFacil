@@ -1445,13 +1445,22 @@ export class ReportsService {
     return out;
   }
 
-  /** PDF dibujado desde el snapshot sellado. Emitido ⇒ con LAS firmas que cada
-   *  firmante aprobó (por id + hash); si no, BORRADOR sin firmas ni valor. */
-  async renderPdf(id: string, actorUserId: string): Promise<{ filename: string; data: Buffer }> {
-    const { row, approvals } = await this.findOwn(id, actorUserId);
-    const sealed = row.signers as unknown as SealedSigner[];
-    const draft = this.draftOf(sealed, approvals);
-    const signers = await Promise.all(
+  /** Firmantes sellados con la imagen que cada uno aprobó (por id + hash).
+   *  Un borrador, o un firmante que aún no aprobó, va sin imagen. */
+  private async signersWithImages(
+    organizationId: string,
+    sealed: SealedSigner[],
+    approvals: Awaited<ReturnType<ReportsService['findOwn']>>['approvals'],
+    draft: ReturnType<ReportsService['draftOf']>,
+  ): Promise<
+    Array<{
+      role: SealedSigner['role'];
+      fullName: string;
+      position: string;
+      image: Buffer | null;
+    }>
+  > {
+    return Promise.all(
       sealed.map(async (s) => {
         const approval = approvals.find(
           (a) => a.signerRole === s.role && a.decision === 'approved',
@@ -1464,13 +1473,22 @@ export class ReportsService {
             draft || !approval
               ? null
               : await this.legalRepresentatives.getSignatureImageById(
-                  row.organizationId,
+                  organizationId,
                   approval.legalRepresentativeId,
                   approval.signatureHash,
                 ),
         };
       }),
     );
+  }
+
+  /** PDF dibujado desde el snapshot sellado. Emitido ⇒ con LAS firmas que cada
+   *  firmante aprobó (por id + hash); si no, BORRADOR sin firmas ni valor. */
+  async renderPdf(id: string, actorUserId: string): Promise<{ filename: string; data: Buffer }> {
+    const { row, approvals } = await this.findOwn(id, actorUserId);
+    const sealed = row.signers as unknown as SealedSigner[];
+    const draft = this.draftOf(sealed, approvals);
+    const signers = await this.signersWithImages(row.organizationId, sealed, approvals, draft);
     const data = await renderReportPdf({
       photos: await this.loadReportPhotos(
         row.organizationId,
@@ -1493,6 +1511,7 @@ export class ReportsService {
     const { row, approvals } = await this.findOwn(id, actorUserId);
     const sealed = row.signers as unknown as SealedSigner[];
     const draft = this.draftOf(sealed, approvals);
+    const withImages = await this.signersWithImages(row.organizationId, sealed, approvals, draft);
     const data = await renderReportXlsx({
       code: row.code,
       contentHash: row.contentHash,
@@ -1500,6 +1519,7 @@ export class ReportsService {
       legalEffect: row.legalEffect as OrgReportLegalEffect,
       payload: row.payload as unknown as OrgReportPayload,
       signers: sealed.map(({ role, fullName, position }) => ({ role, fullName, position })),
+      signerImages: withImages.map((s) => s.image),
       verifyUrl: this.verifyUrl(row.code),
       ...(draft ? { draft } : {}),
     });

@@ -1,5 +1,8 @@
 import * as ExcelJS from 'exceljs';
 import { sheetText } from '../reports/report-text';
+import { setupPrint, styleHeader, styleTable } from '../reports/xlsx-style';
+import { buildPanelMetrics } from './data-export-panel';
+import { buildPanelSheet } from './data-export-panel-sheet';
 import {
   ADOPTION_STATUS_LABEL,
   ANIMAL_STATUS_LABEL,
@@ -96,6 +99,16 @@ export interface ExportOpportunityRow {
   approvedHours: number;
 }
 
+export interface ExportProductRow {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  isActive: boolean;
+  createdAt: Date;
+}
+
 export interface DataExportInput {
   organizationName: string;
   generatedAt: Date;
@@ -104,6 +117,8 @@ export interface DataExportInput {
   donations: ExportDonationRow[];
   campaigns: ExportCampaignRow[];
   opportunities: ExportOpportunityRow[];
+  /** Tienda (marketplace). Opcional: una exportación anterior no la traía. */
+  products?: ExportProductRow[];
 }
 
 const MONEY = '"$" #,##0';
@@ -129,11 +144,27 @@ function header(sheet: ExcelJS.Worksheet, columns: Array<[string, number, string
     width,
     style: numFmt ? { numFmt } : {},
   }));
-  const row = sheet.getRow(1);
-  row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14294D' } };
+  styleHeader(sheet.getRow(1));
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+}
+
+/** Cierra una hoja de detalle: bordes, filas alternas e impresión A4 apaisado. */
+function finish(
+  sheet: ExcelJS.Worksheet,
+  input: DataExportInput,
+  columns: number,
+  tab: string,
+): void {
+  styleTable(sheet, columns);
+  sheet.properties.tabColor = { argb: tab };
+  setupPrint(sheet, {
+    org: input.organizationName,
+    title: sheet.name,
+    code: 'Exportación de datos',
+    verifyUrl: 'AdoptaFácil',
+    repeatHeader: true,
+  });
 }
 
 const yesNo = (value: boolean) => (value ? 'Sí' : 'No');
@@ -143,30 +174,8 @@ export async function renderDataExportXlsx(input: DataExportInput): Promise<Buff
   wb.creator = 'AdoptaFácil';
   wb.created = input.generatedAt;
 
-  const summary = wb.addWorksheet('Resumen');
-  summary.columns = [{ width: 34 }, { width: 80 }];
-  summary.addRow(['Exportación de datos']).font = { bold: true, size: 14 };
-  summary.addRow([]);
-  summary.addRow(['Organización', sheetText(input.organizationName)]);
-  const generated = summary.addRow(['Generado (hora de Colombia)', colombia(input.generatedAt)]);
-  generated.getCell(2).numFmt = DATE_TIME;
-  summary.addRow([]);
-  const sections: Array<[string, number]> = [
-    ['Animales', input.animals.length],
-    ['Solicitudes de adopción', input.adoptions.length],
-    ['Donaciones', input.donations.length],
-    ['Campañas', input.campaigns.length],
-    ['Oportunidades de voluntariado', input.opportunities.length],
-  ];
-  for (const [label, count] of sections) {
-    const capped = count >= EXPORT_MAX_ROWS_PER_SHEET;
-    summary.addRow([label, capped ? `${count} (tope por hoja: pide el resto a soporte)` : count]);
-  }
-  summary.addRow([]);
-  summary.addRow([
-    'Datos personales',
-    'Este archivo no incluye nombres, correos, teléfonos, documentos ni direcciones de adoptantes, donantes o voluntarios. Esos datos se consultan en el panel.',
-  ]).alignment = { wrapText: true, vertical: 'top' };
+  // El Panel va primero en el libro, pero se llena al final (necesita todas las cifras).
+  const panel = wb.addWorksheet('Panel');
 
   const animals = wb.addWorksheet('Animales');
   header(animals, [
@@ -199,6 +208,7 @@ export async function renderDataExportXlsx(input: DataExportInput): Promise<Buff
       colombia(a.createdAt),
     ]);
   }
+  finish(animals, input, 12, 'FF0D7468');
 
   const adoptions = wb.addWorksheet('Adopciones');
   header(adoptions, [
@@ -221,6 +231,7 @@ export async function renderDataExportXlsx(input: DataExportInput): Promise<Buff
       colombia(r.contractSignedAt),
     ]);
   }
+  finish(adoptions, input, 7, 'FF9A5B00');
 
   const donations = wb.addWorksheet('Donaciones');
   header(donations, [
@@ -249,6 +260,7 @@ export async function renderDataExportXlsx(input: DataExportInput): Promise<Buff
       d.gatewayIva,
     ]);
   }
+  finish(donations, input, 9, 'FF14294D');
 
   const campaigns = wb.addWorksheet('Campañas');
   header(campaigns, [
@@ -273,6 +285,7 @@ export async function renderDataExportXlsx(input: DataExportInput): Promise<Buff
       colombia(c.createdAt),
     ]);
   }
+  finish(campaigns, input, 8, 'FF8B2F4B');
 
   const volunteering = wb.addWorksheet('Voluntariado');
   header(volunteering, [
@@ -299,6 +312,75 @@ export async function renderDataExportXlsx(input: DataExportInput): Promise<Buff
       o.approvedHours,
     ]);
   }
+  finish(volunteering, input, 9, 'FF9A5B00');
 
+  const products = input.products ?? [];
+  const store = wb.addWorksheet('Tienda');
+  header(store, [
+    ['ID', 38],
+    ['Producto', 32],
+    ['Categoría', 18],
+    ['Precio', 14, MONEY],
+    ['Existencias', 12],
+    ['Estado', 12],
+    ['Publicado', 18, DATE_TIME],
+  ]);
+  for (const p of products) {
+    store.addRow([
+      p.id,
+      sheetText(p.name),
+      sheetText(p.category),
+      p.price,
+      p.stock,
+      p.isActive ? (p.stock === 0 ? 'Agotado' : 'Activo') : 'Oculto',
+      colombia(p.createdAt),
+    ]);
+  }
+  finish(store, input, 7, 'FF8B2F4B');
+
+  const capped = [
+    ['Animales', input.animals.length],
+    ['Adopciones', input.adoptions.length],
+    ['Donaciones', input.donations.length],
+    ['Campañas', input.campaigns.length],
+    ['Voluntariado', input.opportunities.length],
+    ['Tienda', products.length],
+  ]
+    .filter(([, count]) => (count as number) >= EXPORT_MAX_ROWS_PER_SHEET)
+    .map(([name]) => String(name));
+
+  buildPanelSheet(panel, {
+    organizationName: input.organizationName,
+    generatedAt: input.generatedAt,
+    generatedAtLocal: colombia(input.generatedAt) as Date,
+    metrics: buildPanelMetrics(input),
+    cappedSheets: capped,
+    sheets: [
+      {
+        name: 'Animales',
+        description: `${input.animals.length} animales con especie, estado, edad y etiquetas.`,
+      },
+      {
+        name: 'Adopciones',
+        description: `${input.adoptions.length} solicitudes con su estado y su contrato (sin datos del adoptante).`,
+      },
+      {
+        name: 'Donaciones',
+        description: `${input.donations.length} donaciones con destino, monto, neto y tarifas (sin datos del donante).`,
+      },
+      {
+        name: 'Campañas',
+        description: `${input.campaigns.length} campañas con meta, recaudado y fecha límite.`,
+      },
+      {
+        name: 'Voluntariado',
+        description: `${input.opportunities.length} oportunidades con cupos, voluntarios aceptados y horas.`,
+      },
+      {
+        name: 'Tienda',
+        description: `${products.length} productos con precio, existencias y estado.`,
+      },
+    ],
+  });
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

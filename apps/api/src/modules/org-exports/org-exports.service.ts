@@ -179,6 +179,24 @@ export class OrgExportsService {
       hoursBy.set(key, (hoursBy.get(key) ?? 0) + h.hours);
     }
 
+    // Tienda: el catálogo propio de la organización (sin imágenes ni contactos).
+    const products = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.product.findMany({
+        where: { organizationId },
+        orderBy: { createdAt: 'asc' },
+        take,
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          price: true,
+          stock: true,
+          isActive: true,
+          createdAt: true,
+        },
+      }),
+    );
+
     const animalNames = new Map(animals.map((a) => [a.id, a.name]));
     const campaignTitles = new Map(campaigns.map((c) => [c.id, c.title]));
 
@@ -234,6 +252,7 @@ export class OrgExportsService {
         };
       }),
       campaigns,
+      products,
       opportunities: opportunities.map((o) => ({
         ...o,
         acceptedVolunteers: acceptedBy.get(o.id) ?? 0,

@@ -85,12 +85,13 @@ describe('data-export-xlsx (exportación de datos de la organización)', () => {
   it('arma una hoja por tipo de dato, en español', async () => {
     const wb = await read(await renderDataExportXlsx(input));
     expect(wb.worksheets.map((s) => s.name)).toEqual([
-      'Resumen',
+      'Panel',
       'Animales',
       'Adopciones',
       'Donaciones',
       'Campañas',
       'Voluntariado',
+      'Tienda',
     ]);
     const animals = wb.getWorksheet('Animales')!;
     expect(animals.getRow(2).getCell(3).value).toBe('Perro');
@@ -122,7 +123,7 @@ describe('data-export-xlsx (exportación de datos de la organización)', () => {
   it('las columnas no incluyen datos de contacto de adoptantes, donantes ni voluntarios', async () => {
     const wb = await read(await renderDataExportXlsx(input));
     const headers = wb.worksheets
-      .filter((s) => s.name !== 'Resumen')
+      .filter((s) => s.name !== 'Panel')
       .flatMap((s) => (s.getRow(1).values as unknown[]).filter(Boolean).map(String));
     for (const forbidden of [
       /correo/i,
