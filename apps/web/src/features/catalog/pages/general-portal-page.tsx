@@ -11,6 +11,7 @@ import {
   CoffeeSection,
   CommunitySection,
   CommunityPulseSection,
+  CommunityWallSection,
   FaqSection,
   FinalCtaSection,
   ForOrganizationsSection,
@@ -125,7 +126,8 @@ export function GeneralPortalPage() {
         {/* Landing marca v3 (rediseño 2026-10): primero animales reales y
             "Quiero adoptar", luego las formas de ayudar (donar y recursos
             solo con su módulo encendido), cómo adoptar, la red en cifras
-            reales, campañas, comunidad, la propuesta
+            reales, campañas, la comunidad (muro público y
+            escalafón), servicios, la propuesta
             para organizaciones y el cierre. Ninguna cifra que no salga de
             la API. */}
         <LandingHero snapshot={snapshot} />
@@ -140,9 +142,10 @@ export function GeneralPortalPage() {
           <NetworkNeedsSection />
           <PublicLedgerSection snapshot={snapshot} />
         </Suspense>
+        <CommunityWallSection />
         <CoffeeSection />
-        <CommunitySection />
         <CommunityPulseSection />
+        <CommunitySection />
         <ForOrganizationsSection />
         <TemplateGallerySection />
         <PromisesSection />
