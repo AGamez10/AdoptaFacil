@@ -1,5 +1,6 @@
 import {
   Controller,
+  Inject,
   Get,
   Header,
   NotFoundException,
@@ -9,8 +10,13 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { PublicCommunityPost, PublicCommunityPostsPage } from '@adoptafacil/contracts';
+import type {
+  PublicCommunityLeader,
+  PublicCommunityPost,
+  PublicCommunityPostsPage,
+} from '@adoptafacil/contracts';
 import { RequireFeature } from '../../core/features';
+import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { PublicCache } from '../../core/cache/public-cache.decorator';
 import { PublicCommunityService } from './public-community.service';
 import { buildShareHtml, renderShareCard, shareSource } from './share/share-card';
@@ -25,6 +31,7 @@ export function publicPostPath(id: string): string {
  * interruptor que el muro (`community` + `communityWall`): apagado, todo 404.
  *   GET public/community/posts            → últimas publicaciones compartibles
  *   GET public/community/posts/:id        → una publicación compartible
+ *   GET public/community/leaders          → escalafón (solo lo ya público)
  *   GET public/community/posts/:id/card.png → tarjeta 1200×630 para og:image
  *   GET public/share/c/:id?s=<red>        → HTML con Open Graph + redirección
  *                                            a la web con parámetros UTM
@@ -38,6 +45,7 @@ export class PublicCommunityController {
 
   constructor(
     private readonly service: PublicCommunityService,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     config: ConfigService,
   ) {
     this.webBaseUrl = String(config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(
@@ -58,6 +66,12 @@ export class PublicCommunityController {
     return this.service.list(Number(limit), Number(offset));
   }
 
+  @Get('community/leaders')
+  @PublicCache()
+  leaders(@Query('limit') limit?: string): Promise<PublicCommunityLeader[]> {
+    return this.service.leaders(Number(limit));
+  }
+
   @Get('community/posts/:id')
   @PublicCache()
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<PublicCommunityPost> {
@@ -71,7 +85,15 @@ export class PublicCommunityController {
   async card(@Param('id', ParseUUIDPipe) id: string): Promise<StreamableFile> {
     const post = await this.service.get(id);
     if (!post) throw new NotFoundException('Publicación no encontrada');
-    const png = await renderShareCard(post, new URL(this.webBaseUrl).host.replace(/^www\./, ''));
+    // Solo publicaciones de organización traen fotos (ya públicas en la propia
+    // publicación); si no se puede leer, la tarjeta usa la ilustración de marca.
+    const first = post.isOrganization ? post.images[0] : undefined;
+    const stored = first ? await this.storage.readObject(first.storageRef).catch(() => null) : null;
+    const png = await renderShareCard(
+      post,
+      new URL(this.webBaseUrl).host.replace(/^www\./, ''),
+      stored?.data ?? null,
+    );
     return new StreamableFile(png, { type: 'image/png', length: png.length });
   }
 

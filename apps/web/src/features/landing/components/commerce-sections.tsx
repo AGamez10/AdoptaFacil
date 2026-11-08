@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  PostType,
   type CampaignPublic,
-  type PublicCommunityPost,
   type ResourceNeedPublic,
   type VolunteerOpportunityPublic,
   formatDayEs,
@@ -13,8 +11,6 @@ import { useFeature } from '../../../shell/capabilities';
 import { usePublicModules } from '../../../shell/layout/public-nav-model';
 import { listPublicCampaigns } from '../../campaigns/api/public-campaigns';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
-import { listPublicPosts } from '../../community/api/public-community';
-import { publicPostPath } from '../../community/lib/share';
 import { listPublicNeeds } from '../../resources/api/public-resources';
 import { volunteerSignupHref } from '../../volunteering/model/volunteering-view';
 
@@ -312,40 +308,22 @@ export function OpenVolunteeringSection() {
   );
 }
 
-const POST_TYPE_LABEL: Record<PostType, string> = {
-  [PostType.General]: 'Comunidad',
-  [PostType.Campaign]: 'Campaña',
-  [PostType.Notice]: 'Aviso',
-  [PostType.Event]: 'Evento',
-};
-
-/** Cuántas publicaciones muestra la portada. */
-const WALL_POSTS = 6;
-
-/** Solo imágenes por http(s) o rutas propias; cualquier otra cosa no se dibuja. */
-function safeImageUrl(url: string | undefined): string | null {
-  if (!url) return null;
-  return /^(https?:\/\/|\/)/i.test(url) ? url : null;
-}
-
 function clip(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length > max ? `${flat.slice(0, max - 1).replace(/\s+\S*$/, '')}…` : flat;
 }
 
 /**
- * "Lo que está pasando hoy": las últimas publicaciones PÚBLICAS de la
- * comunidad y las necesidades que registran las organizaciones. Sutil: solo
+ * "Lo que necesitan hoy": las necesidades que registran las organizaciones en
+ * el banco de recursos (las publicaciones de la comunidad tienen su propia
+ * sección, `CommunityWallSection`). Sutil: solo
  * pide datos cuando el visitante se acerca a la sección (no compite con el
  * hero ni con el LCP) y, sin nada que mostrar, no se monta.
  */
 export function CommunityPulseSection() {
-  const wallOn = useFeature('communityWall');
   const resourcesOn = useFeature('resources');
   const sentinel = useRef<HTMLDivElement | null>(null);
   const [near, setNear] = useState(false);
-  const [posts, setPosts] = useState<PublicCommunityPost[]>([]);
-  const [wallState, setWallState] = useState<'idle' | 'ready' | 'error'>('idle');
   const [needs, setNeeds] = useState<ResourceNeedPublic[]>([]);
 
   useEffect(() => {
@@ -366,28 +344,15 @@ export function CommunityPulseSection() {
   }, [near]);
 
   useEffect(() => {
-    if (!near) return;
+    if (!near || !resourcesOn) return;
     const controller = new AbortController();
-    if (wallOn) {
-      listPublicPosts(WALL_POSTS, controller.signal)
-        .then((page) => {
-          setPosts(page.items.slice(0, WALL_POSTS));
-          setWallState('ready');
-        })
-        .catch(() => setWallState('error'));
-    }
-    if (resourcesOn) {
-      listPublicNeeds({ limit: 3, offset: 0, signal: controller.signal })
-        .then((page) => setNeeds(page.items.slice(0, 3)))
-        .catch(() => undefined);
-    }
+    listPublicNeeds({ limit: 3, offset: 0, signal: controller.signal })
+      .then((page) => setNeeds(page.items.slice(0, 3)))
+      .catch(() => undefined);
     return () => controller.abort();
-  }, [near, wallOn, resourcesOn]);
+  }, [near, resourcesOn]);
 
-  // Con el muro encendido la sección se ve aunque aún no haya publicaciones
-  // (se invita a publicar la primera); sin muro ni necesidades, no se monta.
-  const showWall = wallOn && wallState === 'ready';
-  if (!showWall && needs.length === 0) {
+  if (needs.length === 0) {
     return <div ref={sentinel} aria-hidden="true" data-testid="landing-pulse-sentinel" />;
   }
 
@@ -402,7 +367,7 @@ export function CommunityPulseSection() {
           <div>
             <p className={styles.eyebrow}>Hoy en AdoptaFácil</p>
             <h2 id="landing-pulse-title" className={styles.head__title}>
-              Una comunidad que se mueve.
+              Lo que necesitan las organizaciones.
             </h2>
           </div>
           <Link to="/register" className={styles.link}>
@@ -410,107 +375,31 @@ export function CommunityPulseSection() {
             <IconArrowRight aria-hidden="true" />
           </Link>
         </div>
-        {showWall && (
-          <div className={styles.wall} data-testid="landing-wall">
-            <div className={styles.wall__intro}>
-              <h3 className={styles.pulse__subtitle}>Lo último de la comunidad</h3>
-              <p className={styles.wall__lead}>
-                Rescatistas, adoptantes y organizaciones comparten historias, avisos y eventos.
-                Entra para publicar, dar me gusta y comentar.
-              </p>
-              <div className={styles.wall__actions}>
-                <Link to="/comunidad" className={styles.wall__cta}>
-                  Entrar a la comunidad
-                  <IconArrowRight aria-hidden="true" />
-                </Link>
-              </div>
-            </div>
-            {posts.length === 0 ? (
-              <div className={styles.wall__empty} data-testid="landing-wall-empty">
-                <p>Todavía no hay publicaciones públicas. Sé la primera persona en compartir.</p>
-                <Link to="/register" className={styles.link}>
-                  Crear cuenta y publicar
-                  <IconArrowRight aria-hidden="true" />
-                </Link>
-              </div>
-            ) : (
-              <ul className={styles.wall__grid}>
-                {posts.map((post) => {
-                  const cover = safeImageUrl(post.images[0]?.url);
-                  return (
-                    <li key={post.id}>
-                      <Link to={publicPostPath(post.id)} className={styles.wallCard}>
-                        {cover && (
-                          <img
-                            src={cover}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            className={styles.wallCard__img}
-                          />
-                        )}
-                        <span className={styles.wallCard__chip}>
-                          {POST_TYPE_LABEL[post.type] ?? 'Comunidad'}
-                        </span>
-                        <span className={styles.pulse__title}>
-                          {clip(post.title ?? post.body, 100)}
-                        </span>
-                        {post.title && (
-                          <span className={styles.wallCard__excerpt}>{clip(post.body, 120)}</span>
-                        )}
-                        <span className={styles.wallCard__foot}>
-                          <span className={styles.wallCard__author}>
-                            {post.authorDisplayName}
-                            {post.isOrganization ? ' · organización' : ''}
-                          </span>
-                          <span
-                            className={styles.wallCard__stats}
-                            aria-label={`${post.likeCount} me gusta, ${post.commentCount} comentarios`}
-                          >
-                            <span aria-hidden="true">
-                              <IconHeart /> {post.likeCount}
-                            </span>
-                            <span aria-hidden="true">
-                              <IconChat /> {post.commentCount}
-                            </span>
-                          </span>
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+        <div className={styles.pulse__cols} data-single="true">
+          <div className={styles.pulse__col}>
+            <ul className={styles.pulse__list}>
+              {needs.map((need) => (
+                <li key={need.id}>
+                  <Link
+                    to={`/recursos/${encodeURIComponent(need.id)}`}
+                    className={styles.pulse__item}
+                  >
+                    <span className={styles.pulse__meta}>{need.organizationName}</span>
+                    <span className={styles.pulse__title}>
+                      {clip(need.title, 80)} · {need.quantityNeeded} {need.unit}
+                    </span>
+                    <span className={styles.pulse__bar} aria-hidden="true">
+                      <span style={{ width: `${Math.round(need.progress * 100)}%` }} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link to="/recursos" className={styles.link}>
+              Ver el banco de recursos
+              <IconArrowRight aria-hidden="true" />
+            </Link>
           </div>
-        )}
-        <div className={styles.pulse__cols} data-single="true" hidden={needs.length === 0}>
-          {needs.length > 0 && (
-            <div className={styles.pulse__col}>
-              <h3 className={styles.pulse__subtitle}>Lo que necesitan hoy</h3>
-              <ul className={styles.pulse__list}>
-                {needs.map((need) => (
-                  <li key={need.id}>
-                    <Link
-                      to={`/recursos/${encodeURIComponent(need.id)}`}
-                      className={styles.pulse__item}
-                    >
-                      <span className={styles.pulse__meta}>{need.organizationName}</span>
-                      <span className={styles.pulse__title}>
-                        {clip(need.title, 80)} · {need.quantityNeeded} {need.unit}
-                      </span>
-                      <span className={styles.pulse__bar} aria-hidden="true">
-                        <span style={{ width: `${Math.round(need.progress * 100)}%` }} />
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <Link to="/recursos" className={styles.link}>
-                Ver el banco de recursos
-                <IconArrowRight aria-hidden="true" />
-              </Link>
-            </div>
-          )}
         </div>
       </div>
     </section>
