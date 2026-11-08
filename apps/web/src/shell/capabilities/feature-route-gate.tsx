@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { NotFoundPage } from '../../features/_layout';
+import { NotFoundRoute } from '../errors/not-found-route';
 import { useCapabilities } from './capabilities-context';
 import { featureForPath } from './feature-paths';
 
@@ -14,7 +14,7 @@ export function FeatureRouteGate({ children }: { children: ReactNode }) {
   const { status, capabilities } = useCapabilities();
   const feature = featureForPath(pathname);
   if (feature && !capabilities.features[feature]) {
-    return status === 'loading' ? null : <NotFoundPage />;
+    return status === 'loading' ? null : <NotFoundRoute />;
   }
   return <>{children}</>;
 }

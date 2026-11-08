@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { EmptyState, Skeleton } from '@adoptafacil/ui';
+import { Skeleton } from '@adoptafacil/ui';
 import { RequireAuth, RequireRoles } from '../auth';
 import { FeatureRouteGate } from '../capabilities';
 import { AppLayout } from '../layout';
@@ -32,7 +32,8 @@ import {
 } from '../navigation';
 import { AdoptPage, GeneralPortalPage } from '../../features/catalog';
 import { GuidePage, GuidesIndexPage } from '../../features/guias';
-import { HomePage, NotFoundPage } from '../../features/_layout';
+import { HomePage } from '../../features/_layout';
+import { NotFoundRoute, PublicNotFoundPage } from '../errors';
 import {
   CompleteProfilePage,
   ForgotPasswordPage,
@@ -211,9 +212,9 @@ export function AppRoutes() {
   }
   if (portalSubdomain.status === 'not-found') {
     return (
-      <EmptyState
+      <PublicNotFoundPage
         title="Organización no encontrada"
-        description="Este subdominio no corresponde a ninguna organización activa."
+        message="Esta dirección no corresponde a ninguna organización activa. Puede que haya cambiado o que su portal aún no esté publicado."
       />
     );
   }
@@ -901,10 +902,11 @@ export function AppRoutes() {
                     </RequireRoles>
                   }
                 />
-                <Route path="*" element={<NotFoundPage />} />
               </Route>
             </Route>
           </Route>
+          {/* 404 de toda la app (con o sin sesión): ver NotFoundRoute. */}
+          <Route path="*" element={<NotFoundRoute />} />
         </Routes>
       </Suspense>
     </FeatureRouteGate>
