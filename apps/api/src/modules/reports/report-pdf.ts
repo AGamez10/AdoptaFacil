@@ -17,6 +17,11 @@ import type {
 import { SIGNER_ROLE_LABEL } from './report-legal-effect';
 import { pdfText, toWinAnsi } from './report-text';
 import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
+import {
+  SIGNATURE_LINE_OVERLAP,
+  embedSignatureForPdf,
+  fitSignature,
+} from '../../core/legal/signature-render';
 
 /**
  * Dibujo del PDF de un reporte (M13). Todo sale del snapshot sellado y TODA
@@ -89,7 +94,10 @@ const EFFECT_STYLE: Record<
   },
 };
 
-function effectExplanation(kind: OrgReportPayload['kind'], effect: OrgReportLegalEffect): string {
+export function effectExplanation(
+  kind: OrgReportPayload['kind'],
+  effect: OrgReportLegalEffect,
+): string {
   if (effect === 'informative') {
     return 'Este documento resume información registrada en AdoptaFácil por la organización. No está firmado por un representante legal y no sirve como soporte legal ni tributario.';
   }
@@ -103,6 +111,45 @@ function effectExplanation(kind: OrgReportPayload['kind'], effect: OrgReportLega
   return kind === 'social_service'
     ? 'Firmado por el representante legal. Hace constar las horas de servicio prestadas y verificadas por la organización (Resolución 4210 de 1996).'
     : 'Firmado por el representante legal de una organización formalizada. Sirve como soporte de rendición de cuentas; no reemplaza el certificado tributario de donación.';
+}
+
+/** Título y texto de la franja de valor legal (o de borrador), igual en PDF y Excel. */
+export function reportBanner(
+  kind: OrgReportPayload['kind'],
+  effect: OrgReportLegalEffect,
+  draft?: 'pending_signatures' | 'rejected',
+): { title: string; explanation: string } {
+  if (draft) {
+    return {
+      title:
+        draft === 'rejected'
+          ? 'BORRADOR RECHAZADO — SIN VALOR'
+          : 'BORRADOR — PENDIENTE DE FIRMAS, SIN VALOR HASTA QUE SE EMITA',
+      explanation:
+        'Este documento todavía no está emitido: cada firmante requerido debe aprobarlo con su propia cuenta en AdoptaFácil. No lo presentes ante terceros como documento firmado.',
+    };
+  }
+  return { title: EFFECT_STYLE[effect].title, explanation: effectExplanation(kind, effect) };
+}
+
+/** Constancia que antecede a las firmas, igual en PDF y Excel. */
+export function signatureStatement(kind: OrgReportPayload['kind']): string {
+  if (kind === 'accounting') {
+    // TODO(client) 🧾: redacción de la constancia a validar por un contador público.
+    return 'Los suscritos revisaron este libro auxiliar de donaciones del mes indicado, preparado a partir de los pagos confirmados por la pasarela de la organización, y lo aprueban como soporte de su contabilidad.';
+  }
+  return kind === 'donations'
+    ? 'Los suscritos hacen constar que la información de este informe corresponde a las donaciones recibidas por la entidad en el período indicado, tal como quedaron registradas en AdoptaFácil.'
+    : 'El suscrito hace constar que las horas aquí relacionadas fueron prestadas en la organización y verificadas por ella en el período indicado.';
+}
+
+/** Título del documento según su tipo. */
+export function reportTitle(kind: OrgReportPayload['kind']): string {
+  return kind === 'donations'
+    ? 'Informe de donaciones recibidas'
+    : kind === 'accounting'
+      ? 'Libro auxiliar de donaciones'
+      : 'Reporte de servicio social y voluntariado';
 }
 
 const money = (n: number): string => `$ ${Math.round(n).toLocaleString('es-CO')}`;
@@ -426,18 +473,9 @@ function drawHeader(c: ReportCanvas, input: RenderReportInput, title: string): v
   );
   c.y = Math.min(c.y - 14, PAGE_H - MARGIN - qrSize - 12);
 
-  const style = input.draft
-    ? {
-        ...DRAFT_STYLE,
-        title:
-          input.draft === 'rejected'
-            ? 'BORRADOR RECHAZADO — SIN VALOR'
-            : 'BORRADOR — PENDIENTE DE FIRMAS, SIN VALOR HASTA QUE SE EMITA',
-      }
-    : EFFECT_STYLE[input.legalEffect];
-  const explanation = input.draft
-    ? 'Este documento todavía no está emitido: cada firmante requerido debe aprobarlo con su propia cuenta en AdoptaFácil. No lo presentes ante terceros como documento firmado.'
-    : effectExplanation(payload.kind, input.legalEffect);
+  const banner = reportBanner(payload.kind, input.legalEffect, input.draft);
+  const style = input.draft ? DRAFT_STYLE : EFFECT_STYLE[input.legalEffect];
+  const explanation = banner.explanation;
   const lines = wrap(explanation, c.font.regular, 8.5, PAGE_W - MARGIN * 2 - 20);
   const boxH = 22 + lines.length * 11;
   c.page.drawRectangle({
@@ -447,7 +485,7 @@ function drawHeader(c: ReportCanvas, input: RenderReportInput, title: string): v
     height: boxH,
     color: style.bg,
   });
-  c.text(style.title, MARGIN + 10, 9.5, { font: c.font.bold, color: style.fg, y: c.y - 14 });
+  c.text(banner.title, MARGIN + 10, 9.5, { font: c.font.bold, color: style.fg, y: c.y - 14 });
   lines.forEach((line, i) => {
     c.text(line, MARGIN + 10, 8.5, { color: style.fg, y: c.y - 27 - i * 11 });
   });
@@ -737,7 +775,7 @@ async function embedImage(pdf: PDFDocument, raw: Buffer | null): Promise<PDFImag
 
 /** "Revisora fiscal · T.P. 145872-T" — el cargo registrado si ya nombra el
  *  rol; si no, "Rol · cargo" (nunca "Revisor fiscal · Revisora fiscal"). */
-function signerRoleLine(role: LegalRepresentativeRole, position: string): string {
+export function signerRoleLine(role: LegalRepresentativeRole, position: string): string {
   const label = SIGNER_ROLE_LABEL[role];
   const clean = pdfText(position, 80);
   if (!clean) return label;
@@ -778,34 +816,34 @@ async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promis
     return;
   }
 
-  const statement =
-    input.payload.kind === 'accounting'
-      ? // TODO(client) 🧾: redacción de la constancia a validar por un contador público.
-        'Los suscritos revisaron este libro auxiliar de donaciones del mes indicado, preparado a partir de los pagos confirmados por la pasarela de la organización, y lo aprueban como soporte de su contabilidad.'
-      : input.payload.kind === 'donations'
-        ? 'Los suscritos hacen constar que la información de este informe corresponde a las donaciones recibidas por la entidad en el período indicado, tal como quedaron registradas en AdoptaFácil.'
-        : 'El suscrito hace constar que las horas aquí relacionadas fueron prestadas en la organización y verificadas por ella en el período indicado.';
-  const blockH = 120;
-  c.ensure(blockH + 20);
+  const statement = signatureStatement(input.payload.kind);
+  // La constancia y las firmas viajan juntas: si no caben completas sobre el
+  // pie, pasan a la página siguiente (nunca una firma partida ni pisando el pie).
+  const statementLines = wrap(statement, c.font.regular, 9.5, PAGE_W - MARGIN * 2).length;
+  const sigAreaH = 60;
+  const blockH = 10 + statementLines * 13 + 4 + sigAreaH + 34;
+  c.ensure(blockH);
   c.y -= 10;
   c.paragraph(statement, MARGIN, 9.5, PAGE_W - MARGIN * 2, 13);
   c.y -= 4;
 
-  const images = await Promise.all(input.signers.map((s) => embedImage(c.pdf, s.image)));
+  const images = await Promise.all(input.signers.map((s) => embedSignatureForPdf(c.pdf, s.image)));
   const count = input.signers.length;
   const blockW = 210;
   const gap = Math.max(20, (PAGE_W - MARGIN * 2 - blockW * count) / Math.max(1, count + 1));
-  const lineY = c.y - 72;
+  const lineY = c.y - sigAreaH;
   input.signers.forEach((signer, i) => {
     const x = MARGIN + gap + i * (blockW + gap);
     const image = images[i];
     if (image) {
-      const maxW = 150;
-      const maxH = 58;
-      const ratio = Math.min(maxW / image.width, maxH / image.height, 1);
-      const w = image.width * ratio;
-      const h = image.height * ratio;
-      c.page.drawImage(image, { x: x + (blockW - w) / 2, y: lineY + 3, width: w, height: h });
+      // Centrada en su bloque y apoyada sobre la línea, que la cruza apenas.
+      const size = fitSignature(image.width, image.height, 170, sigAreaH - 2);
+      c.page.drawImage(image, {
+        x: x + (blockW - size.width) / 2,
+        y: lineY - SIGNATURE_LINE_OVERLAP,
+        width: size.width,
+        height: size.height,
+      });
     }
     c.page.drawLine({
       start: { x, y: lineY },
@@ -815,12 +853,12 @@ async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promis
     });
     const name = fit(pdfText(signer.fullName, 120), c.font.bold, 10, blockW);
     const nameW = c.font.bold.widthOfTextAtSize(name, 10);
-    c.text(name, x + (blockW - nameW) / 2, 10, { font: c.font.bold, y: lineY - 13 });
+    c.text(name, x + (blockW - nameW) / 2, 10, { font: c.font.bold, y: lineY - 14 });
     const role = fit(signerRoleLine(signer.role, signer.position), c.font.regular, 8.5, blockW);
     const roleW = c.font.regular.widthOfTextAtSize(role, 8.5);
-    c.text(role, x + (blockW - roleW) / 2, 8.5, { color: MUTED, y: lineY - 25 });
+    c.text(role, x + (blockW - roleW) / 2, 8.5, { color: MUTED, y: lineY - 26 });
   });
-  c.y = lineY - 40;
+  c.y = lineY - 34;
 }
 
 function drawFooters(c: ReportCanvas, input: RenderReportInput): void {
@@ -900,12 +938,7 @@ function formatDayLabel(day: string): string {
 
 export async function renderReportPdf(input: RenderReportInput): Promise<Buffer> {
   const pdf = await PDFDocument.create();
-  const kindTitle =
-    input.payload.kind === 'donations'
-      ? 'Informe de donaciones recibidas'
-      : input.payload.kind === 'accounting'
-        ? 'Libro auxiliar de donaciones'
-        : 'Reporte de servicio social y voluntariado';
+  const kindTitle = reportTitle(input.payload.kind);
   pdf.setTitle(`${kindTitle} · ${input.code}`);
   pdf.setAuthor(pdfText(input.payload.organization.name));
   pdf.setProducer('AdoptaFácil');

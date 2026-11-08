@@ -1,5 +1,6 @@
 import * as ExcelJS from 'exceljs';
 import { PDFDocument } from 'pdf-lib';
+import sharp from 'sharp';
 import { computeLegalEffect, defaultSignerRoles, nextStepsFor } from './report-legal-effect';
 import { buildDonationsPayload, buildSocialServicePayload } from './report-payloads';
 import { resolveReportPeriod, todayInColombia } from './report-period';
@@ -413,6 +414,83 @@ describe('render PDF / Excel', () => {
     const sheet = wb.getWorksheet('Donaciones')!;
     expect(sheet.getRow(3).getCell(3).value).toBe('\'=cmd|"/c calc"!A1');
     expect(sheet.getRow(2).getCell(8).value).toBe(41670);
+  });
+
+  it('el Excel conserva el diseño del PDF: hoja "Reporte" con QR, firmas e impresión A4', async () => {
+    // Firma con tinta: basta para comprobar que viaja al Excel.
+    const signature = await sharp({
+      create: { width: 40, height: 20, channels: 4, background: { r: 20, g: 20, b: 20, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+    const signers = [
+      {
+        role: 'legal_representative' as const,
+        fullName: 'Ana Pérez',
+        position: 'Representante legal',
+        image: signature,
+      },
+      {
+        role: 'fiscal_reviewer' as const,
+        fullName: 'Luis Gómez',
+        position: 'Revisor fiscal',
+        image: signature,
+      },
+    ];
+    const base = {
+      code: 'ADF-REP-2026-ABCDEFGH',
+      contentHash: 'c'.repeat(64),
+      createdAt: new Date('2026-10-01T12:00:00Z'),
+      legalEffect: 'certified' as const,
+      payload: donationsPayload(),
+      signers,
+      verifyUrl: 'http://x/verificar/ADF-REP-2026-ABCDEFGH',
+    };
+    const load = async (bytes: Buffer) => {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(bytes as unknown as ArrayBuffer);
+      return wb;
+    };
+
+    const wb = await load(await renderReportXlsx(base));
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Reporte', 'Donaciones', 'Por destino']);
+    const sheet = wb.getWorksheet('Reporte')!;
+    // QR + una imagen por firmante.
+    expect(sheet.getImages()).toHaveLength(3);
+    expect(sheet.pageSetup).toMatchObject({
+      orientation: 'landscape',
+      fitToWidth: 1,
+      paperSize: 9,
+    });
+    const texts = sheet
+      .getSheetValues()
+      .flatMap((row) => (Array.isArray(row) ? row : []))
+      .filter((v): v is string => typeof v === 'string');
+    expect(texts).toEqual(
+      expect.arrayContaining([
+        'INFORME CERTIFICADO (ART. 125-2 DEL ESTATUTO TRIBUTARIO)',
+        'Ana Pérez',
+        'Luis Gómez',
+        'Detalle de donaciones',
+      ]),
+    );
+    // Los montos siguen siendo números con formato de moneda.
+    const net = sheet
+      .getSheetValues()
+      .flatMap((row) => (Array.isArray(row) ? row : []))
+      .includes(base.payload.totals.net);
+    expect(net).toBe(true);
+
+    // La firma queda apoyada en la fila de la línea (la fila del nombre va justo debajo).
+    const nameRow = sheet
+      .getSheetValues()
+      .findIndex((row) => Array.isArray(row) && row.includes('Ana Pérez'));
+    const sigs = sheet.getImages().slice(1);
+    for (const img of sigs) expect(img.range.tl.nativeRow).toBe(nameRow - 2);
+
+    // Borrador: sin imágenes de firma (solo el QR).
+    const draft = await load(await renderReportXlsx({ ...base, draft: 'pending_signatures' }));
+    expect(draft.getWorksheet('Reporte')!.getImages()).toHaveLength(1);
   });
 });
 

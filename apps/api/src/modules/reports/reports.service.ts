@@ -1445,13 +1445,15 @@ export class ReportsService {
     return out;
   }
 
-  /** PDF dibujado desde el snapshot sellado. Emitido ⇒ con LAS firmas que cada
-   *  firmante aprobó (por id + hash); si no, BORRADOR sin firmas ni valor. */
-  async renderPdf(id: string, actorUserId: string): Promise<{ filename: string; data: Buffer }> {
-    const { row, approvals } = await this.findOwn(id, actorUserId);
-    const sealed = row.signers as unknown as SealedSigner[];
-    const draft = this.draftOf(sealed, approvals);
-    const signers = await Promise.all(
+  /** Firmantes sellados con la imagen de la firma que cada uno aprobó (por id +
+   *  hash). Un borrador nunca lleva firmas. */
+  private signersWithImages(
+    organizationId: string,
+    sealed: SealedSigner[],
+    approvals: ApprovalRecord[],
+    draft: 'pending_signatures' | 'rejected' | undefined,
+  ) {
+    return Promise.all(
       sealed.map(async (s) => {
         const approval = approvals.find(
           (a) => a.signerRole === s.role && a.decision === 'approved',
@@ -1464,13 +1466,22 @@ export class ReportsService {
             draft || !approval
               ? null
               : await this.legalRepresentatives.getSignatureImageById(
-                  row.organizationId,
+                  organizationId,
                   approval.legalRepresentativeId,
                   approval.signatureHash,
                 ),
         };
       }),
     );
+  }
+
+  /** PDF dibujado desde el snapshot sellado. Emitido ⇒ con LAS firmas que cada
+   *  firmante aprobó (por id + hash); si no, BORRADOR sin firmas ni valor. */
+  async renderPdf(id: string, actorUserId: string): Promise<{ filename: string; data: Buffer }> {
+    const { row, approvals } = await this.findOwn(id, actorUserId);
+    const sealed = row.signers as unknown as SealedSigner[];
+    const draft = this.draftOf(sealed, approvals);
+    const signers = await this.signersWithImages(row.organizationId, sealed, approvals, draft);
     const data = await renderReportPdf({
       photos: await this.loadReportPhotos(
         row.organizationId,
@@ -1499,7 +1510,8 @@ export class ReportsService {
       createdAt: row.createdAt,
       legalEffect: row.legalEffect as OrgReportLegalEffect,
       payload: row.payload as unknown as OrgReportPayload,
-      signers: sealed.map(({ role, fullName, position }) => ({ role, fullName, position })),
+      // Las mismas firmas aprobadas que el PDF: el Excel conserva el diseño.
+      signers: await this.signersWithImages(row.organizationId, sealed, approvals, draft),
       verifyUrl: this.verifyUrl(row.code),
       ...(draft ? { draft } : {}),
     });
