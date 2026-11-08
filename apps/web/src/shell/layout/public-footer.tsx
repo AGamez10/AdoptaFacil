@@ -6,6 +6,7 @@ import {
   officialWhatsappUrl,
 } from '../../lib/contact';
 import { useFeature } from '../capabilities';
+import { openCookieSettings } from '../consent';
 import { Brand } from './brand';
 import styles from './public-footer.module.scss';
 
@@ -108,6 +109,13 @@ export function PublicFooter() {
             <Link to="/legal/cookies" className={styles.footer__link}>
               Cookies
             </Link>
+            <button
+              type="button"
+              onClick={openCookieSettings}
+              className={`${styles.footer__link} ${styles['footer__link--button']}`}
+            >
+              Configurar cookies
+            </button>
             <Link to="/legal/alcance" className={styles.footer__link}>
               Qué es y qué no es AdoptaFácil
             </Link>
