@@ -350,6 +350,38 @@ describe('Open offers (M09) + public shareable community (M11)', () => {
     await request(server).get(`/public/community/posts/${id}`).expect(404);
   });
 
+  it('no-leak: the public leaderboard ranks only shareable posts, with first names and no ids', async () => {
+    const person = await request(server)
+      .post('/auth/register/person')
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Zoila Ranking Pérez',
+        email: `oo-rank-${randomUUID()}@test.local`,
+        password,
+      })
+      .expect(201);
+    orgIds.push(person.body.user.organizationId);
+    const token = person.body.tokens.accessToken;
+    // Ten shareable posts puts her at the top (50 points); a private one never counts.
+    for (let i = 0; i < 10; i += 1) {
+      await createPost(token, { shareable: true, title: `Historia ${i}` }).expect(201);
+    }
+    await createPost(token, { title: 'Privada' }).expect(201);
+
+    const res = await request(server).get('/public/community/leaders?limit=50').expect(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeLessThanOrEqual(10);
+    const zoila = res.body.find((l: { displayName: string }) => l.displayName === 'Zoila');
+    expect(zoila).toMatchObject({ isOrganization: false, publicPosts: 10 });
+    expect(zoila.points).toBe(10 * 5 + zoila.commentsReceived * 2 + zoila.likesReceived);
+    const json = JSON.stringify(res.body);
+    expect(json).not.toContain('Pérez');
+    expect(json).not.toContain(person.body.user.id);
+    expect(json).not.toContain(person.body.user.organizationId);
+    const points = res.body.map((l: { points: number }) => l.points);
+    expect([...points].sort((a: number, b: number) => b - a)).toEqual(points);
+  });
+
   it('only the author can change whether a post is shareable', async () => {
     const post = await createPost(donor.token, { shareable: true }).expect(201);
     await request(server)

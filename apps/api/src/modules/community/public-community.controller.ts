@@ -9,7 +9,11 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { PublicCommunityPost, PublicCommunityPostsPage } from '@adoptafacil/contracts';
+import type {
+  PublicCommunityLeader,
+  PublicCommunityPost,
+  PublicCommunityPostsPage,
+} from '@adoptafacil/contracts';
 import { RequireFeature } from '../../core/features';
 import { PublicCache } from '../../core/cache/public-cache.decorator';
 import { PublicCommunityService } from './public-community.service';
@@ -25,6 +29,7 @@ export function publicPostPath(id: string): string {
  * interruptor que el muro (`community` + `communityWall`): apagado, todo 404.
  *   GET public/community/posts            → últimas publicaciones compartibles
  *   GET public/community/posts/:id        → una publicación compartible
+ *   GET public/community/leaders          → escalafón (solo lo ya público)
  *   GET public/community/posts/:id/card.png → tarjeta 1200×630 para og:image
  *   GET public/share/c/:id?s=<red>        → HTML con Open Graph + redirección
  *                                            a la web con parámetros UTM
@@ -56,6 +61,12 @@ export class PublicCommunityController {
     @Query('offset') offset?: string,
   ): Promise<PublicCommunityPostsPage> {
     return this.service.list(Number(limit), Number(offset));
+  }
+
+  @Get('community/leaders')
+  @PublicCache()
+  leaders(@Query('limit') limit?: string): Promise<PublicCommunityLeader[]> {
+    return this.service.leaders(Number(limit));
   }
 
   @Get('community/posts/:id')
