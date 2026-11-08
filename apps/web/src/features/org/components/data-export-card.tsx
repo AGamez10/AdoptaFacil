@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { OrganizationPlanView } from '@adoptafacil/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
 import { downloadOrgExport, exportErrorMessage } from './org-export-download';
+import { PlanFeatureNote, planAllows } from './plan-feature-note';
 
 /**
  * "Exportar tus datos" (planes Crece y Pro): descarga un Excel con los
@@ -10,7 +12,7 @@ import { downloadOrgExport, exportErrorMessage } from './org-export-download';
  * El archivo no lleva datos de contacto de adoptantes, donantes ni voluntarios
  * (lo arma `GET /org/exports/data.xlsx`). Solo Owner y Administrator lo ven.
  */
-export function DataExportCard() {
+export function DataExportCard({ plan = null }: { plan?: OrganizationPlanView | null }) {
   const client = useApiClient();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; needsPlan: boolean } | null>(null);
@@ -38,10 +40,11 @@ export function DataExportCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Button onClick={() => void download()} disabled={busy}>
+        <Button onClick={() => void download()} disabled={busy || !planAllows(plan, 'dataExport')}>
           {busy ? 'Generando…' : 'Exportar mis datos'}
         </Button>
         <ExportMessage message={message} />
+        <PlanFeatureNote plan={plan} capability="dataExport" />
       </CardContent>
     </Card>
   );
