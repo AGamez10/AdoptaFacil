@@ -16,7 +16,7 @@ import { volunteerSignupHref } from '../../volunteering/model/volunteering-view'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 import { CatMascot, DogMascot, Sparkle } from './illustrations';
-import { IconArrowRight, IconChat, IconHeart } from './landing-icons';
+import { IconArrowRight } from './landing-icons';
 import styles from './commerce.module.scss';
 
 /** Ancla de "Formas de ayudar" (la usa el hero). */
