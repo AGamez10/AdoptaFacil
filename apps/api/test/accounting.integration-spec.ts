@@ -193,11 +193,10 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
           live_mode: true,
         });
       }
-      if (u === 'https://api.mp.test/checkout/preferences') {
+      if (u === 'https://api.mp.test/v1/orders') {
         return json({
-          id: `pref-${randomUUID()}`,
-          collector_id: Number(mpUserId),
-          init_point: 'https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=x',
+          id: `ORDTEST${randomUUID()}`,
+          checkout_url: 'https://www.mercadopago.com.co/checkout/v1/redirect?order_id=x',
         });
       }
       if (u.startsWith('https://api.mp.test/v1/payments/search?')) {

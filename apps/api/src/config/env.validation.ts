@@ -160,13 +160,15 @@ export const envSchema = z.object({
   // Secret signature of the application's webhooks ("Tus integraciones" →
   // Webhooks → Clave secreta). Verifies `x-signature` on every notification.
   MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Webhook secret of the Checkout Pro (Orders) application; falls back to the shared one. */
+  MERCADOPAGO_ORDERS_WEBHOOK_SECRET: z.string().min(1).optional(),
   // Exact redirect URI registered in the application. Optional: falls back to
   // `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`.
   MERCADOPAGO_OAUTH_REDIRECT_URI: z.string().url().optional(),
   // PKCE (S256) on the OAuth flow. Turn on ONLY after enabling PKCE in the
   // application's settings in Mercado Pago (otherwise the exchange fails).
   MERCADOPAGO_OAUTH_PKCE: featureFlag(),
-  // Sandbox: ask for test tokens and open `sandbox_init_point`. OFF unless "true".
+  // Sandbox: ask for test tokens (subscriptions still open `sandbox_init_point`). OFF unless "true".
   MERCADOPAGO_TEST: featureFlag(),
   // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
   // AdoptaFácil's plans (subscriptions); never used for a donation.
