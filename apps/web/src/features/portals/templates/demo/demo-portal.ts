@@ -206,6 +206,7 @@ function demoReviews(now: number): PublicReview[] {
     {
       id: 'demo-rev-1',
       rating: 5,
+      isCommunityMember: false,
       comment: 'Nos acompañaron antes y después de adoptar a Canela. Todo fue claro.',
       authorName: 'Laura M.',
       createdAt: new Date(now - 18 * DAY).toISOString(),
@@ -213,6 +214,7 @@ function demoReviews(now: number): PublicReview[] {
     {
       id: 'demo-rev-2',
       rating: 5,
+      isCommunityMember: false,
       comment: 'Doné para una cirugía y me enviaron el certificado y fotos de la recuperación.',
       authorName: 'Andrés P.',
       createdAt: new Date(now - 45 * DAY).toISOString(),
@@ -220,6 +222,7 @@ function demoReviews(now: number): PublicReview[] {
     {
       id: 'demo-rev-3',
       rating: 4,
+      isCommunityMember: false,
       comment: 'Un equipo muy comprometido. La visita previa nos dio mucha tranquilidad.',
       createdAt: new Date(now - 80 * DAY).toISOString(),
     },

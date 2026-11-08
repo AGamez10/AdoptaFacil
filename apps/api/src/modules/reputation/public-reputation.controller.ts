@@ -17,7 +17,6 @@ import {
   type PublicReview,
   type Review,
 } from '@adoptafacil/contracts';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { OptionalJwtAuthGuard } from '../../core/auth/optional-jwt-auth.guard';

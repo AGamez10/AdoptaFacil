@@ -248,7 +248,7 @@ export function PortalTemplateView({
           slug={source.slug}
           open={reviewOpen}
           onOpenChange={setReviewOpen}
-          onSubmitted={onReviewCreated}
+          onSubmitted={(submitted) => onReviewCreated(submitted.review)}
         />
       )}
       {demo ? (

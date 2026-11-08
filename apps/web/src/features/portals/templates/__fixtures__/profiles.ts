@@ -157,6 +157,7 @@ const REVIEWS = [
   {
     id: 'rev-1',
     rating: 5,
+    isCommunityMember: false,
     comment: 'El acompañamiento después de adoptar fue impecable.',
     authorName: 'Laura M.',
     createdAt: daysAgo(30),
@@ -164,12 +165,14 @@ const REVIEWS = [
   {
     id: 'rev-2',
     rating: 5,
+    isCommunityMember: false,
     comment: 'Todo el proceso fue claro, desde la visita hasta la firma.',
     createdAt: daysAgo(60),
   },
   {
     id: 'rev-3',
     rating: 4,
+    isCommunityMember: false,
     comment: 'Doné para una cirugía y me enviaron el certificado.',
     authorName: 'Camila R.',
     createdAt: daysAgo(90),
@@ -272,7 +275,16 @@ export const PROFILES: Record<'completa' | 'nueva' | 'vacia' | 'hostil', Templat
           images: [{ id: 'i', storageRef: 'r', order: 0, url: 'javascript:window.__xss=1' }],
         },
       ],
-      reviews: [{ id: 'r"><b>', rating: 9, comment: X, authorName: X, createdAt: daysAgo(1) }],
+      reviews: [
+        {
+          id: 'r"><b>',
+          rating: 9,
+          comment: X,
+          authorName: X,
+          isCommunityMember: false,
+          createdAt: daysAgo(1),
+        },
+      ],
     };
   })(),
 };
