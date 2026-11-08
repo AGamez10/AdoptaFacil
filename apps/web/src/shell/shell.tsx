@@ -2,6 +2,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AppProviders } from './app-providers';
 import { AppRoutes } from './router/routes';
 import { GuideAssistant } from '../features/guide/components/guide-assistant';
+import { CookieConsentBanner } from './consent';
 
 /**
  * Auth transport for the real app: 'http' talks to the backend `/auth/*`
@@ -23,6 +24,9 @@ export function Shell() {
         <AppRoutes />
         {/* Ola 3 (R3-8): ayuda fija por página, sin IA (D14). */}
         <GuideAssistant />
+        {/* Aviso de cookies (Ley 1581): sale hasta que el visitante decide; sin
+        permiso no se carga nada de estadística ni de marketing. */}
+        <CookieConsentBanner />
       </BrowserRouter>
     </AppProviders>
   );
