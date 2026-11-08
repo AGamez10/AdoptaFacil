@@ -42,17 +42,23 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-const PREFERENCE = {
-  id: 'pref-1',
-  collector_id: 123456789,
-  init_point: 'https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=pref-1',
-  sandbox_init_point: 'https://sandbox.mercadopago.com.co/checkout/v1/redirect?pref_id=pref-1',
+const ORDER = {
+  id: 'ORDTST01KS5AJ6HTK2HRQ3XJ3C2JCKP9',
+  status: 'created',
+  checkout_url:
+    'https://www.mercadopago.com.co/checkout/v1/redirect?order_id=ORDTST01KS5AJ6HTK2HRQ3XJ3C2JCKP9',
 };
 
-function makeFetch(payment: Record<string, unknown> = {}, preference: unknown = PREFERENCE) {
-  return jest.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+function makeFetch(
+  payment: Record<string, unknown> = {},
+  order: unknown = ORDER,
+  readOrder: Record<string, unknown> | null = null,
+) {
+  return jest.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const u = String(url);
-    if (u === 'https://api.mp.test/checkout/preferences') return json(preference);
+    if (u === 'https://api.mp.test/v1/orders' && init?.method === 'POST') return json(order);
+    if (u.startsWith('https://api.mp.test/v1/orders/'))
+      return readOrder ? json(readOrder) : json({}, 404);
     if (u.startsWith('https://api.mp.test/v1/payments/'))
       return json({ live_mode: true, ...payment });
     return json({}, 404);
@@ -90,7 +96,7 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     ).rejects.toThrow(/custody/);
   });
 
-  it("creates the Checkout Pro preference WITH THE ORG's token, no platform fee", async () => {
+  it("creates the Checkout Pro ORDER WITH THE ORG's token, no platform fee", async () => {
     const fetchFn = makeFetch();
     const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
     const result = await adapter.createCollection(INPUT);
@@ -103,54 +109,74 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
       collectionId: reference,
       status: 'pending',
       breakdown,
-      paymentLinkUrl: PREFERENCE.init_point,
+      paymentLinkUrl: ORDER.checkout_url,
     });
 
     const [url, init] = fetchFn.mock.calls[0];
-    expect(String(url)).toBe('https://api.mp.test/checkout/preferences');
+    expect(String(url)).toBe('https://api.mp.test/v1/orders');
     const headers = init?.headers as Record<string, string>;
     expect(headers.Authorization).toBe(`Bearer ${ORG.accessToken}`);
     expect(headers['X-Idempotency-Key']).toBe(reference);
     const body = JSON.parse(String(init?.body));
-    expect(body.external_reference).toBe(reference);
-    expect(body.items[0]).toMatchObject({
-      quantity: 1,
-      currency_id: 'COP',
-      unit_price: breakdown.amountCharged,
+    const amount = breakdown.amountCharged.toFixed(2);
+    expect(body).toMatchObject({
+      type: 'online',
+      processing_mode: 'manual',
+      total_amount: amount,
+      external_reference: reference,
+      items: [{ title: 'Donación', unit_price: amount, quantity: 1 }],
+      payer: { email: 'donante@test.local' },
+      expiration_time: 'P3D',
     });
-    expect(body.notification_url).toBe(
-      `https://api.adoptafacil.test/donations/webhook/mercadopago/${ORG_ID}?source_news=webhooks`,
-    );
-    expect(body.back_urls.success).toBe(
-      `https://app.adoptafacil.test/donaciones/resultado?reference=${reference}`,
-    );
+    const back = `https://app.adoptafacil.test/donaciones/resultado?reference=${reference}`;
+    expect(body.config.online).toEqual({
+      success_url: back,
+      pending_url: back,
+      failure_url: back,
+      auto_return: 'approved',
+    });
+    // Orders has no per-order notification URL (it is set on the application).
+    expect(body.notification_url).toBeUndefined();
     // No split field: AdoptaFácil never takes a cut at source.
     expect(body.marketplace_fee).toBeUndefined();
     expect(body.application_fee).toBeUndefined();
-    // Nothing personal beyond what the payer gave; never the org token.
+    // Nothing personal beyond the email the payer gave; never the org token.
+    expect(JSON.stringify(body)).not.toContain('Ana Donante');
     expect(JSON.stringify(body)).not.toContain(ORG.accessToken);
   });
 
-  it('uses the sandbox link in test mode', async () => {
+  it('sends no payer when the donor gave no email', async () => {
+    const fetchFn = makeFetch();
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+    await adapter.createCollection({ ...INPUT, payer: undefined });
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).payer).toBeUndefined();
+  });
+
+  it('uses the same checkout_url in test mode (the order id carries the mode)', async () => {
     const adapter = new MercadoPagoPaymentAdapter(
       makeConfig({ MERCADOPAGO_TEST: true }),
       makeFetch(),
     );
     const result = await adapter.createCollection(INPUT);
-    expect(result.paymentLinkUrl).toBe(PREFERENCE.sandbox_init_point);
+    expect(result.paymentLinkUrl).toBe(ORDER.checkout_url);
   });
 
-  it('refuses a preference whose link is not a Mercado Pago checkout or names another collector', async () => {
+  it('refuses an order whose link is not a Mercado Pago checkout or that fails', async () => {
     const evil = new MercadoPagoPaymentAdapter(
       makeConfig(),
-      makeFetch({}, { ...PREFERENCE, init_point: 'https://evil.test/pay' }),
+      makeFetch({}, { ...ORDER, checkout_url: 'https://evil.test/pay' }),
     );
     await expect(evil.createCollection(INPUT)).rejects.toThrow(/checkout link/);
-    const other = new MercadoPagoPaymentAdapter(
+    const legacyShape = new MercadoPagoPaymentAdapter(
       makeConfig(),
-      makeFetch({}, { ...PREFERENCE, collector_id: 999 }),
+      makeFetch({}, { id: 'x', init_point: ORDER.checkout_url }),
     );
-    await expect(other.createCollection(INPUT)).rejects.toThrow(/another collector/);
+    await expect(legacyShape.createCollection(INPUT)).rejects.toThrow(/checkout link/);
+    const failing = new MercadoPagoPaymentAdapter(
+      makeConfig(),
+      jest.fn(async () => json({}, 400)),
+    );
+    await expect(failing.createCollection(INPUT)).rejects.toThrow(/order create failed \(400\)/);
   });
 
   it('settles only a signed notification whose payment, read with the ORG token, is the org’s', async () => {
@@ -272,6 +298,131 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     const event = await adapter.verifyAndNormalizeWebhook({}, signature, context);
     expect(event.status).toBe('voided');
     expect(Number.isNaN(event.amountCharged)).toBe(true);
+  });
+
+  describe('Orders notifications', () => {
+    const ORDERS_SECRET = 'orders-webhook-secret-for-tests';
+    const orderConfig = () => makeConfig({ MERCADOPAGO_ORDERS_WEBHOOK_SECRET: ORDERS_SECRET });
+    const signedOrder = (dataId: string, secret = ORDERS_SECRET) => {
+      const ts = '1704908010';
+      const v1 = mercadoPagoSignatureV1(secret, dataId, 'req-9', ts);
+      return {
+        signature: `ts=${ts},v1=${v1}`,
+        context: {
+          headers: { 'x-request-id': 'req-9' },
+          query: { 'data.id': dataId, type: 'order' },
+          mercadopagoCollector: ORG,
+        },
+      };
+    };
+    const paid = {
+      id: 'ORD01JRTXT3GC8CJGW394QWYQ9VP3',
+      status: 'processed',
+      status_detail: 'accredited',
+      external_reference: 'af-ref',
+      total_amount: '50000.00',
+      total_paid_amount: '50000.00',
+      transactions: {
+        payments: [
+          {
+            id: 'PAY01JRTXT3GC8CJGW394QZZ349N6',
+            amount: '50000.00',
+            paid_amount: '50000.00',
+            status: 'processed',
+            payment_method: { id: 'master', type: 'credit_card', installments: 1 },
+          },
+        ],
+      },
+    };
+
+    it('reads the order back with the ORG token and approves a fully paid, processed order', async () => {
+      const fetchFn = makeFetch({}, ORDER, { live_mode: true, ...paid });
+      const adapter = new MercadoPagoPaymentAdapter(orderConfig(), fetchFn);
+      const { signature, context } = signedOrder(paid.id);
+      const event = await adapter.verifyAndNormalizeWebhook({ type: 'order' }, signature, context);
+      expect(event).toEqual({
+        eventId: paid.id,
+        collectionId: 'af-ref',
+        status: 'approved',
+        dedupKey: `mercadopago:${paid.id}:approved`,
+        amountCharged: 50000,
+        currency: 'COP',
+        receiverAccountId: '123456789',
+        mercadopagoPayment: expect.objectContaining({
+          paymentId: 'PAY01JRTXT3GC8CJGW394QZZ349N6',
+          collectorId: '123456789',
+          externalReference: 'af-ref',
+          status: 'approved',
+          transactionAmount: '50000.00',
+          paymentMethodId: 'master',
+          paymentTypeId: 'credit_card',
+          netReceivedAmount: null,
+        }),
+      });
+      const [url, init] = fetchFn.mock.calls[0];
+      expect(String(url)).toBe(`https://api.mp.test/v1/orders/${paid.id}`);
+      expect((init?.headers as Record<string, string>).Authorization).toBe(
+        `Bearer ${ORG.accessToken}`,
+      );
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('is signed with the Orders application secret (the shared one is not enough)', async () => {
+      const readOrder = { live_mode: true, ...paid };
+      const adapter = new MercadoPagoPaymentAdapter(orderConfig(), makeFetch({}, ORDER, readOrder));
+      const wrong = signedOrder(paid.id, SECRET);
+      await expect(
+        adapter.verifyAndNormalizeWebhook({}, wrong.signature, wrong.context),
+      ).rejects.toThrow(/signature mismatch/);
+      // Without a dedicated secret it falls back to the shared one.
+      const fallback = new MercadoPagoPaymentAdapter(makeConfig(), makeFetch({}, ORDER, readOrder));
+      const shared = signedOrder(paid.id, SECRET);
+      await expect(
+        fallback.verifyAndNormalizeWebhook({}, shared.signature, shared.context),
+      ).resolves.toMatchObject({ status: 'approved' });
+    });
+
+    it('rejects an order the org token cannot read, a sandbox order and one without reference', async () => {
+      const { signature, context } = signedOrder(paid.id);
+      const unreadable = new MercadoPagoPaymentAdapter(orderConfig(), makeFetch({}, ORDER, null));
+      await expect(unreadable.verifyAndNormalizeWebhook({}, signature, context)).rejects.toThrow(
+        /order read-back failed \(404\)/,
+      );
+      const sandbox = new MercadoPagoPaymentAdapter(
+        orderConfig(),
+        makeFetch({}, ORDER, { ...paid, live_mode: false }),
+      );
+      await expect(sandbox.verifyAndNormalizeWebhook({}, signature, context)).rejects.toThrow(
+        /live_mode/,
+      );
+      const noRef = new MercadoPagoPaymentAdapter(
+        orderConfig(),
+        makeFetch({}, ORDER, { ...paid, external_reference: undefined }),
+      );
+      await expect(noRef.verifyAndNormalizeWebhook({}, signature, context)).rejects.toThrow(
+        /no external_reference/,
+      );
+    });
+
+    it('maps order statuses: only `processed` approves, refunds void, the rest is pending', async () => {
+      const statusOf = async (over: Record<string, unknown>) => {
+        const adapter = new MercadoPagoPaymentAdapter(
+          orderConfig(),
+          makeFetch({}, ORDER, { ...paid, ...over }),
+        );
+        const { signature, context } = signedOrder(paid.id);
+        return (await adapter.verifyAndNormalizeWebhook({}, signature, context)).status;
+      };
+      expect(await statusOf({ status: 'refunded' })).toBe('voided');
+      expect(await statusOf({ status: 'charged_back' })).toBe('voided');
+      expect(await statusOf({ status: 'canceled' })).toBe('voided');
+      expect(await statusOf({ status: 'failed' })).toBe('declined');
+      for (const status of ['created', 'action_required', 'expired', 'something_new']) {
+        expect(await statusOf({ status })).toBe('pending');
+      }
+      // Processed but not paid in full: never approves.
+      expect(await statusOf({ total_paid_amount: '1000.00' })).toBe('pending');
+    });
   });
 
   it('never polls a status without the org grant', async () => {
