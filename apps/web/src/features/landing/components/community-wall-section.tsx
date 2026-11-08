@@ -11,7 +11,7 @@ import {
 import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
 import { listPublicLeaders, listPublicPosts } from '../../community/api/public-community';
-import { publicPostPath } from '../../community/lib/share';
+import { publicPostPath, shareLink, shareTargets, shareText } from '../../community/lib/share';
 import { IconArrowRight, IconChat, IconHeart } from './landing-icons';
 import styles from './community.module.scss';
 
@@ -70,44 +70,100 @@ function useNearViewport() {
   return { ref, near };
 }
 
+function ShareRow({ post }: { post: PublicCommunityPost }) {
+  const [copied, setCopied] = useState(false);
+  const text = shareText(post);
+  const whatsapp = shareTargets(post.id, text).find((t) => t.network === 'whatsapp');
+  const facebook = shareTargets(post.id, text).find((t) => t.network === 'facebook');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink(post.id, 'copy'));
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className={styles.share} role="group" aria-label="Compartir esta publicación">
+      <span className={styles.share__label}>Compartir</span>
+      {[whatsapp, facebook].map(
+        (target) =>
+          target && (
+            <a
+              key={target.network}
+              href={target.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.share__btn}
+            >
+              {target.label}
+              <span className="sr-only"> (se abre en otra pestaña)</span>
+            </a>
+          ),
+      )}
+      <button type="button" className={styles.share__btn} onClick={() => void copy()}>
+        {copied ? 'Enlace copiado' : 'Copiar enlace'}
+      </button>
+    </div>
+  );
+}
+
 function PostCard({ post }: { post: PublicCommunityPost }) {
   const image = post.images[0];
+  const extra = post.images.length - 1;
   return (
     <li className={cn(styles.post, 'af-reveal')} data-tone={TYPE_TONE[post.type]}>
-      <Link
-        to={publicPostPath(post.id)}
-        className={styles.post__link}
-        data-testid="landing-social-post"
-      >
-        {image?.url && <img src={image.url} alt="" loading="lazy" className={styles.post__image} />}
-        <span className={styles.post__body}>
-          <span className={styles.post__head}>
-            <span className={styles.avatar} aria-hidden="true">
-              {initial(post.authorDisplayName)}
+      <article className={styles.post__card}>
+        <Link
+          to={publicPostPath(post.id)}
+          className={styles.post__link}
+          data-testid="landing-social-post"
+        >
+          {image?.url && (
+            <span className={styles.post__media}>
+              <img
+                src={image.url}
+                alt={`Foto de la publicación de ${post.authorDisplayName}`}
+                loading="lazy"
+                className={styles.post__image}
+              />
+              {extra > 0 && (
+                <span className={styles.post__more}>
+                  +{extra} {extra === 1 ? 'foto' : 'fotos'}
+                </span>
+              )}
             </span>
-            <span className={styles.post__author}>
-              <strong>{post.authorDisplayName}</strong>
-              <span>{post.isOrganization ? 'Organización' : 'Comunidad'}</span>
+          )}
+          <span className={styles.post__body}>
+            <span className={styles.post__head}>
+              <span className={styles.avatar} aria-hidden="true">
+                {initial(post.authorDisplayName)}
+              </span>
+              <span className={styles.post__author}>
+                <strong>{post.authorDisplayName}</strong>
+                <span>{post.isOrganization ? 'Organización' : 'Comunidad'}</span>
+              </span>
+              <span className={styles.chip} data-tone={TYPE_TONE[post.type]}>
+                {TYPE_LABEL[post.type] ?? 'Comunidad'}
+              </span>
             </span>
-            <span className={styles.chip} data-tone={TYPE_TONE[post.type]}>
-              {TYPE_LABEL[post.type] ?? 'Comunidad'}
+            {post.title && <span className={styles.post__title}>{clip(post.title, 80)}</span>}
+            <span className={styles.post__text}>{clip(post.body, 160)}</span>
+            <span className={styles.post__foot}>
+              <span aria-label={plural(post.likeCount, 'me gusta', 'me gusta')}>
+                <IconHeart aria-hidden="true" /> {post.likeCount.toLocaleString('es-CO')}
+              </span>
+              <span aria-label={plural(post.commentCount, 'comentario', 'comentarios')}>
+                <IconChat aria-hidden="true" /> {post.commentCount.toLocaleString('es-CO')}
+              </span>
+              <span className={styles.post__cta}>
+                Ver y comentar <IconArrowRight aria-hidden="true" />
+              </span>
             </span>
           </span>
-          {post.title && <span className={styles.post__title}>{clip(post.title, 80)}</span>}
-          <span className={styles.post__text}>{clip(post.body, 160)}</span>
-          <span className={styles.post__foot}>
-            <span aria-label={plural(post.likeCount, 'me gusta', 'me gusta')}>
-              <IconHeart aria-hidden="true" /> {post.likeCount.toLocaleString('es-CO')}
-            </span>
-            <span aria-label={plural(post.commentCount, 'comentario', 'comentarios')}>
-              <IconChat aria-hidden="true" /> {post.commentCount.toLocaleString('es-CO')}
-            </span>
-            <span className={styles.post__cta}>
-              Ver y comentar <IconArrowRight aria-hidden="true" />
-            </span>
-          </span>
-        </span>
-      </Link>
+        </Link>
+        <ShareRow post={post} />
+      </article>
     </li>
   );
 }

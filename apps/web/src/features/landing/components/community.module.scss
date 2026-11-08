@@ -200,15 +200,13 @@
   min-width: 0;
 }
 
-.post__link {
+.post__card {
   display: flex;
   height: 100%;
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--af-r-card);
   background: #fff;
-  color: var(--af-ink);
-  text-decoration: none;
   box-shadow: var(--af-shadow-card);
   transition:
     transform var(--transition-base),
@@ -218,6 +216,14 @@
     transform: translateY(-3px);
     box-shadow: var(--af-shadow-pop);
   }
+}
+
+.post__link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  color: var(--af-ink);
+  text-decoration: none;
 
   &:focus-visible {
     outline: 3px solid var(--af-teal-ink);
@@ -225,12 +231,70 @@
   }
 }
 
+.post__media {
+  position: relative;
+  display: block;
+}
+
 .post__image {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10;
   object-fit: cover;
   background: var(--af-mint);
+}
+
+.post__more {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  border-radius: var(--r-full);
+  background: rgb(20 32 46 / 0.78);
+  padding: 0.2rem 0.65rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  color: #fff;
+}
+
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  border-top: 1px solid var(--af-line);
+  padding: 0.6rem 1.25rem 0.9rem;
+}
+
+.share__label {
+  margin-right: 0.15rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-ink-soft);
+}
+
+.share__btn {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  border: 1.5px solid var(--af-line);
+  border-radius: var(--r-full);
+  background: #fff;
+  padding: 0 0.8rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-teal-ink);
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--af-mint-soft);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
 }
 
 .post__body {
@@ -320,8 +384,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
-  border-top: 1px solid var(--af-line);
-  padding-top: 0.75rem;
+  padding-top: 0.25rem;
   font-size: 0.9375rem;
   font-weight: var(--fw-bold);
 
@@ -465,7 +528,7 @@
     animation: none;
   }
 
-  .post__link,
+  .post__card,
   .btn {
     transition: none;
   }

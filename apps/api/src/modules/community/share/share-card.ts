@@ -7,10 +7,13 @@ import { SHARE_CARD_ART_JPEG_BASE64 } from './share-card-art';
  * de la comunidad: 1200×630, el mismo lenguaje visual de la imagen social de
  * la landing (crema a la izquierda, perro y gato sobre menta a la derecha).
  *
- * Privacidad: la tarjeta NUNCA lleva fotos subidas por la gente (pueden
- * mostrar personas o menores) ni datos de contacto; solo el título, un
+ * Privacidad: la tarjeta nunca lleva datos de contacto; solo el título, un
  * extracto, el tipo y el nombre público de quien publica (la organización o
- * el primer nombre de la persona, ya recortado por la base de datos).
+ * el primer nombre de la persona, ya recortado por la base de datos). Solo
+ * puede llevar la PRIMERA FOTO de una publicación de ORGANIZACIÓN: esas fotos
+ * ya se muestran en público en la propia publicación, y las personas no
+ * adjuntan fotos. Sin foto (o si no se puede leer), va el perro y el gato de
+ * siempre.
  */
 
 export const SHARE_CARD_WIDTH = 1200;
@@ -108,8 +111,24 @@ function textLines(
     .join('');
 }
 
+/** Panel derecho: la foto de la publicación (recortada y con esquinas
+ *  redondeadas) o, sin foto, la ilustración de marca. */
+function panelArt(photoJpegBase64?: string): string {
+  if (!photoJpegBase64) {
+    return `<image x="760" y="0" width="440" height="630" href="data:image/jpeg;base64,${SHARE_CARD_ART_JPEG_BASE64}" xlink:href="data:image/jpeg;base64,${SHARE_CARD_ART_JPEG_BASE64}"/>`;
+  }
+  return `<rect x="760" y="0" width="440" height="630" fill="${MINT}"/>
+  <clipPath id="photo"><rect x="780" y="30" width="390" height="570" rx="36" ry="36"/></clipPath>
+  <image x="780" y="30" width="390" height="570" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo)" href="data:image/jpeg;base64,${photoJpegBase64}" xlink:href="data:image/jpeg;base64,${photoJpegBase64}"/>
+  <rect x="780" y="30" width="390" height="570" rx="36" ry="36" fill="none" stroke="#ffffff" stroke-width="6"/>`;
+}
+
 /** SVG de la tarjeta (exportado para pruebas). */
-export function buildShareCardSvg(post: PublicCommunityPost, siteHost: string): string {
+export function buildShareCardSvg(
+  post: PublicCommunityPost,
+  siteHost: string,
+  photoJpegBase64?: string,
+): string {
   const { headline, excerpt } = cardCopy(post);
   const titleLines = wrapLines(headline, 20, 3);
   const titleSize = titleLines.length >= 3 ? 50 : 56;
@@ -128,7 +147,7 @@ export function buildShareCardSvg(post: PublicCommunityPost, siteHost: string): 
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${SHARE_CARD_WIDTH}" height="${SHARE_CARD_HEIGHT}" viewBox="0 0 ${SHARE_CARD_WIDTH} ${SHARE_CARD_HEIGHT}">
   <rect width="100%" height="100%" fill="${CREAM}"/>
-  <image x="760" y="0" width="440" height="630" href="data:image/jpeg;base64,${SHARE_CARD_ART_JPEG_BASE64}" xlink:href="data:image/jpeg;base64,${SHARE_CARD_ART_JPEG_BASE64}"/>
+  ${panelArt(photoJpegBase64)}
   <text x="84" y="104" font-family="${FONT}" font-size="34" font-weight="800" fill="${INK}">Adopta<tspan fill="${TEAL_INK}">Fácil</tspan></text>
   <rect x="84" y="140" rx="20" ry="20" width="${chipWidth}" height="40" fill="${MINT}"/>
   <text x="104" y="167" font-family="${FONT}" font-size="17" font-weight="700" letter-spacing="1.2" fill="${TEAL_INK}">${escapeXml(chip)}</text>
@@ -144,8 +163,23 @@ export function buildShareCardSvg(post: PublicCommunityPost, siteHost: string): 
 export async function renderShareCard(
   post: PublicCommunityPost,
   siteHost: string,
+  photo?: Buffer | null,
 ): Promise<Buffer> {
-  return sharp(Buffer.from(buildShareCardSvg(post, siteHost)))
+  let photoBase64: string | undefined;
+  if (photo) {
+    try {
+      // Se reduce al tamaño del panel (×1) para que la tarjeta pese poco.
+      const resized = await sharp(photo)
+        .rotate()
+        .resize(390, 570, { fit: 'cover', position: 'attention' })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+      photoBase64 = resized.toString('base64');
+    } catch {
+      photoBase64 = undefined; // archivo ilegible: cae a la ilustración
+    }
+  }
+  return sharp(Buffer.from(buildShareCardSvg(post, siteHost, photoBase64)))
     .png({ compressionLevel: 9, palette: false })
     .toBuffer();
 }

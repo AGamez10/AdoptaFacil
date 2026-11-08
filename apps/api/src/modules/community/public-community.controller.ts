@@ -1,5 +1,6 @@
 import {
   Controller,
+  Inject,
   Get,
   Header,
   NotFoundException,
@@ -15,6 +16,7 @@ import type {
   PublicCommunityPostsPage,
 } from '@adoptafacil/contracts';
 import { RequireFeature } from '../../core/features';
+import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { PublicCache } from '../../core/cache/public-cache.decorator';
 import { PublicCommunityService } from './public-community.service';
 import { buildShareHtml, renderShareCard, shareSource } from './share/share-card';
@@ -43,6 +45,7 @@ export class PublicCommunityController {
 
   constructor(
     private readonly service: PublicCommunityService,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     config: ConfigService,
   ) {
     this.webBaseUrl = String(config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(
@@ -82,7 +85,15 @@ export class PublicCommunityController {
   async card(@Param('id', ParseUUIDPipe) id: string): Promise<StreamableFile> {
     const post = await this.service.get(id);
     if (!post) throw new NotFoundException('Publicación no encontrada');
-    const png = await renderShareCard(post, new URL(this.webBaseUrl).host.replace(/^www\./, ''));
+    // Solo publicaciones de organización traen fotos (ya públicas en la propia
+    // publicación); si no se puede leer, la tarjeta usa la ilustración de marca.
+    const first = post.isOrganization ? post.images[0] : undefined;
+    const stored = first ? await this.storage.readObject(first.storageRef).catch(() => null) : null;
+    const png = await renderShareCard(
+      post,
+      new URL(this.webBaseUrl).host.replace(/^www\./, ''),
+      stored?.data ?? null,
+    );
     return new StreamableFile(png, { type: 'image/png', length: png.length });
   }
 

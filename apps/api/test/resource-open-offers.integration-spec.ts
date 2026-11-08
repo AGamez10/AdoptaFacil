@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
@@ -380,6 +381,45 @@ describe('Open offers (M09) + public shareable community (M11)', () => {
     expect(json).not.toContain(person.body.user.organizationId);
     const points = res.body.map((l: { points: number }) => l.points);
     expect([...points].sort((a: number, b: number) => b - a)).toEqual(points);
+  });
+
+  it('the share card of an organization post uses its real photo (and stays a 1200×630 PNG)', async () => {
+    const created = await createPost(org.token, {
+      shareable: true,
+      title: 'Jornada con foto',
+      images: [{ filename: 'jornada.jpg', contentType: 'image/jpeg' }],
+    }).expect(201);
+    const { key } = created.body.imageUploads[0];
+    const bytes = await sharp({
+      create: { width: 600, height: 800, channels: 3, background: { r: 220, g: 40, b: 40 } },
+    })
+      .jpeg()
+      .toBuffer();
+    await request(server)
+      .put('/storage/upload')
+      .query({ key })
+      .set('Authorization', `Bearer ${org.token}`)
+      .attach('file', bytes, { filename: 'jornada.jpg', contentType: 'image/jpeg' })
+      .expect(200);
+
+    const card = await request(server)
+      .get(`/public/community/posts/${created.body.post.id}/card.png`)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const png = sharp(card.body as Buffer);
+    expect((await png.metadata()).width).toBe(1200);
+    // The photo panel (right side) is the red photo, not the brand illustration.
+    const { data } = await png
+      .extract({ left: 940, top: 300, width: 8, height: 8 })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    expect(data[0]).toBeGreaterThan(180);
+    expect(data[1]).toBeLessThan(90);
   });
 
   it('only the author can change whether a post is shareable', async () => {
