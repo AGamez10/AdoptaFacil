@@ -77,6 +77,8 @@ export interface Post {
   status: PostStatus;
   /** Presente solo cuando `status === 'removed'`. */
   moderationReason?: string;
+  /** La autora autorizó que se vea sin sesión y se comparta en redes. */
+  shareable?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,6 +97,8 @@ export interface CreatePostInput {
   title?: string;
   body: string;
   images?: PostImageInput[];
+  /** Autoriza verla sin sesión y compartirla en redes. Ausente = privada a la comunidad. */
+  shareable?: boolean;
 }
 
 /**
@@ -164,4 +168,39 @@ export interface ToggleLikeResult {
 export interface ModeratePostInput {
   decision: 'remove' | 'restore';
   reason?: string;
+}
+
+// ============================================================================
+// Comunidad PÚBLICA (sin sesión) — solo publicaciones que su autora marcó como
+// compartibles. Nunca lleva el id de la autora; una persona aparece solo con
+// su primer nombre y nunca adjunta fotos (solo las organizaciones lo hacen).
+// ============================================================================
+
+/** Publicación vista sin sesión y en las tarjetas para redes sociales. */
+export interface PublicCommunityPost {
+  id: string;
+  /** Nombre de la organización o primer nombre de la persona. */
+  authorDisplayName: string;
+  isOrganization: boolean;
+  organizationName?: string;
+  type: PostType;
+  title?: string;
+  body: string;
+  /** Solo publicaciones de organizaciones. */
+  images: PostImage[];
+  commentCount: number;
+  likeCount: number;
+  createdAt: string;
+}
+
+export interface PublicCommunityPostsPage {
+  items: PublicCommunityPost[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Cambiar si la publicación propia es pública y compartible. */
+export interface SetPostShareableInput {
+  shareable: boolean;
 }

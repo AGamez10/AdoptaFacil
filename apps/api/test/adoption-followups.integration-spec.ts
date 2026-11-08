@@ -360,12 +360,13 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       header.write(type, 4, 'latin1');
       return Buffer.concat([header, payload]);
     };
-    const mp4 = (seconds: number) => {
+    // `brand` 'qt  ' es un MOV de iPhone: el tipo servido sale de esos bytes.
+    const mp4 = (seconds: number, brand = 'isom') => {
       const mvhd = Buffer.alloc(100);
       mvhd.writeUInt32BE(1000, 12);
       mvhd.writeUInt32BE(seconds * 1000, 16);
       return Buffer.concat([
-        box('ftyp', Buffer.from('isom0000isommp41', 'latin1')),
+        box('ftyp', Buffer.from(`${brand}0000${brand}mp41`, 'latin1')),
         box('moov', box('mvhd', mvhd)),
         box('mdat', Buffer.alloc(256)),
       ]);
@@ -392,7 +393,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .post(`/adoptions/followups/${milestoneId}/photo`)
       .set('Authorization', `Bearer ${personToken}`)
       .field('complete', 'true')
-      .attach('file', mp4(28), { filename: 'paseo.mov', contentType: 'video/quicktime' })
+      .attach('file', mp4(28, 'qt  '), { filename: 'paseo.mov', contentType: 'video/quicktime' })
       .expect(201);
 
     const listed = await request(server)

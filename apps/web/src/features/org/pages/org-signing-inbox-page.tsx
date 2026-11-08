@@ -36,6 +36,7 @@ const SEAT_LABEL: Record<LegalRepresentativeRole, string> = {
 const KIND_LABEL = {
   donations: 'Informe de donaciones',
   social_service: 'Reporte de servicio social',
+  accounting: 'Libro auxiliar de donaciones',
 } as const;
 
 function formatDay(ymd: string): string {

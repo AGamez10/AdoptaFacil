@@ -67,6 +67,23 @@ describe('CertificateVerificationPage (RF14, F-3 — real backend)', () => {
     expect(evidence).toHaveTextContent('150.000');
   });
 
+  it('says a certificate is annulled when its payment was refunded (never "válido")', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({ ...VALID_CERTIFICATE, revokedAt: '2026-11-06T12:00:00.000Z' }, 200),
+        ),
+      ),
+    );
+
+    renderVerify(`/verificar/${VALID_CERTIFICATE.code}`);
+
+    expect(await screen.findByTestId('certificate-revoked')).toHaveTextContent('Anulado');
+    expect(screen.getByText('Certificado anulado')).toBeInTheDocument();
+    expect(screen.queryByText('Certificado válido')).not.toBeInTheDocument();
+  });
+
   it('verifies a code entered manually', async () => {
     vi.stubGlobal(
       'fetch',

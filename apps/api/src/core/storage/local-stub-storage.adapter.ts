@@ -40,6 +40,10 @@ export class LocalStubStorageAdapter implements StoragePort {
     return this.objects.get(key) ?? null;
   }
 
+  async deleteObject(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+
   async measureOrganizationUsage(organizationId: string): Promise<number> {
     let bytes = 0;
     for (const [key, object] of this.objects) {

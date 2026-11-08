@@ -44,6 +44,19 @@ export const PLAN_CAPABILITIES = [
   'corporateSponsorship',
   /** Priority WhatsApp support. */
   'prioritySupport',
+  /** Month close of the donations ledger: seals the month (hash) and books
+   *  later events as dated adjustments (sección 2B: "libro auxiliar con cierre
+   *  de período y ajustes"). Reconciliation itself is FREE. */
+  'accountingClose',
+  /** Full accounting export for the accountant: fee, net, payment method,
+   *  destination and donor identity (only with the donor's authorization).
+   *  The basic export (period + totals) is FREE. */
+  'accountingFullExport',
+  /** "Listo para firmar": the month's accounting report sent to the linked
+   *  accountant / fiscal reviewer for signature, and a secure link so they
+   *  review the month without an account. AdoptaFácil prepares; the
+   *  professional signs (Ley 43 de 1990 🧾). */
+  'accountantPackage',
 ] as const;
 export type PlanCapability = (typeof PLAN_CAPABILITIES)[number];
 
@@ -80,6 +93,9 @@ const NONE: Record<PlanCapability, boolean> = {
   impactReport: false,
   corporateSponsorship: false,
   prioritySupport: false,
+  accountingClose: false,
+  accountingFullExport: false,
+  accountantPackage: false,
 };
 
 /** The plan catalog: the single source of truth for the landing, the plans
@@ -94,7 +110,9 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
     monthlyPriceCop: 0,
     annualPriceCop: 0,
     limits: { members: 3, storageMb: 1024, portalDesigns: 5 },
-    capabilities: { ...NONE, portalAllDesigns: true },
+    // Personalización avanzada en todos los planes (2026-11-06): el servidor no
+    // la restringe, así que no se vende como exclusiva de un plan de pago.
+    capabilities: { ...NONE, portalAllDesigns: true, portalAdvancedCustomization: true },
   },
   crece: {
     key: 'crece',
@@ -112,6 +130,9 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       brandedEmails: true,
       dataExport: true,
       impactReport: true,
+      accountingClose: true,
+      accountingFullExport: true,
+      accountantPackage: true,
     },
   },
   pro: {
@@ -132,6 +153,9 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
       impactReport: true,
       corporateSponsorship: true,
       prioritySupport: true,
+      accountingClose: true,
+      accountingFullExport: true,
+      accountantPackage: true,
     },
   },
 };
@@ -162,6 +186,19 @@ export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; avail
   impactReport: { label: 'Reporte de impacto en PDF para donantes', available: true },
   corporateSponsorship: { label: 'Patrocinio de empresas', available: false },
   prioritySupport: { label: 'Soporte prioritario por WhatsApp', available: true },
+  accountingClose: {
+    label: 'Cierre mensual del libro de donaciones, con ajustes fechados',
+    available: true,
+  },
+  accountingFullExport: {
+    label: 'Exporte contable completo para tu contador (comisión, neto y destinación)',
+    available: true,
+  },
+  accountantPackage: {
+    label:
+      'Contabilidad de donaciones lista para que tu contador o revisor fiscal la revise y firme',
+    available: true,
+  },
 };
 
 /**
@@ -277,8 +314,9 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
  *  AdoptaFácil's own account + electronic invoice, activated by the platform.
  *  `epayco` = recurring charge with ePayco on AdoptaFácil's OWN merchant
  *  account (ADR-PAG-002): it is AdoptaFácil's revenue for the software, so it
- *  never touches a donation. */
-export const BILLING_PROVIDERS = ['manual', 'epayco'] as const;
+ *  never touches a donation. `mercadopago` = monthly subscription
+ *  (preapproval) on AdoptaFácil's OWN Mercado Pago account (ADR-PAG-003). */
+export const BILLING_PROVIDERS = ['manual', 'epayco', 'mercadopago'] as const;
 export type BillingProvider = (typeof BILLING_PROVIDERS)[number];
 
 /** The stored subscription of one organization (at most one per org). */
@@ -379,7 +417,10 @@ export function graceEnd(currentPeriodEnd: Date): Date {
  * The plan in effect for an organization at `now`:
  * - enforcement off → `pro` (nothing is gated);
  * - no subscription and the launch promotion still running (`promoEndsAt`) → `pro`;
- * - no subscription or `canceled` → `free`;
+ * - no subscription → `free`;
+ * - `canceled`: the plan keeps working until the end of the period already
+ *   paid (`currentPeriodEnd`, no grace), then `free`; with no period end it is
+ *   `free` at once (a platform cancellation);
  * - otherwise the subscribed plan until `currentPeriodEnd` + grace days, then
  *   `free`. An open-ended period (`null`) never lapses.
  */
@@ -391,7 +432,14 @@ export function resolveEffectivePlan(
 ): PlanKey {
   if (!enforced) return 'pro';
   if (!subscription && promoEndsAt && now.getTime() <= promoEndsAt.getTime()) return 'pro';
-  if (!subscription || subscription.status === 'canceled') return 'free';
+  if (!subscription) return 'free';
+  if (subscription.status === 'canceled') {
+    if (subscription.currentPeriodEnd === null) return 'free';
+    // Lo ya pagado se respeta hasta el último día del periodo, sin gracia.
+    return now.getTime() <= new Date(subscription.currentPeriodEnd).getTime()
+      ? subscription.plan
+      : 'free';
+  }
   if (subscription.currentPeriodEnd === null) return subscription.plan;
   const end = new Date(subscription.currentPeriodEnd);
   return now.getTime() <= graceEnd(end).getTime() ? subscription.plan : 'free';

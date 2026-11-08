@@ -1,3 +1,4 @@
+import type { AcceptInvitationInput, AuthSession } from '@adoptafacil/contracts';
 import type {
   AuthTokens,
   AuthenticatedUser,
@@ -45,6 +46,13 @@ export interface AuthApi {
    * invalid/expired/used or the password is too weak.
    */
   confirmPasswordReset(request: ResetPasswordRequest): Promise<void>;
+  /**
+   * Accept an organization invitation from its emailed link: creates the
+   * invitee's account inside the inviting organization and returns a session
+   * (same shape as register). Optional: the mock transport and test fakes
+   * have no invitations.
+   */
+  acceptInvitation?(input: AcceptInvitationInput): Promise<AuthSession>;
   /** Exchange a refresh token for a fresh pair (no access token required). */
   refresh(refreshToken: string): Promise<AuthTokens>;
   /**
@@ -165,6 +173,16 @@ export class HttpAuthApi implements AuthApi {
     );
     // 204 No Content on success; parseJsonResponse throws (→ ApiError) on non-2xx.
     await parseJsonResponse<void>(response);
+  }
+
+  async acceptInvitation(input: AcceptInvitationInput): Promise<AuthSession> {
+    // Unauthenticated (the invitee has no account yet) → a plain fetch; the
+    // response also sets the httpOnly refresh cookie, like register.
+    const response = await this.fetchFn(
+      endpoint(this.baseUrl, '/auth/invitations/accept'),
+      jsonRequestInit('POST', input),
+    );
+    return parseJsonResponse<AuthSession>(response);
   }
 
   refresh(refreshToken: string): Promise<AuthTokens> {

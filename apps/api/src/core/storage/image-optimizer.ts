@@ -15,6 +15,12 @@ const WEBP_QUALITIES: readonly number[] = [85, 75, 65];
 /** Tope de píxeles de entrada: evita decodificar imágenes gigantes. */
 const INPUT_PIXEL_LIMIT = 80_000_000;
 
+/** Límites de una recompresión; por defecto, los de cualquier foto subida. */
+export interface ImageOptimizeOptions {
+  maxEdgePx?: number;
+  targetMaxBytes?: number;
+}
+
 export interface OptimizedImage {
   buffer: Buffer;
   contentType: string;
@@ -28,13 +34,18 @@ export interface OptimizedImage {
 export async function optimizeImage(
   buffer: Buffer,
   contentType: string,
+  options: ImageOptimizeOptions = {},
 ): Promise<OptimizedImage | null> {
   if (!OPTIMIZABLE_IMAGE_TYPES.includes(contentType)) {
     return { buffer, contentType };
   }
   let best: Buffer;
   try {
-    best = await encodeWebp(buffer);
+    best = await encodeWebp(
+      buffer,
+      options.maxEdgePx ?? IMAGE_MAX_EDGE_PX,
+      options.targetMaxBytes ?? IMAGE_TARGET_MAX_BYTES,
+    );
   } catch {
     return null;
   }
@@ -44,20 +55,24 @@ export async function optimizeImage(
   return { buffer: best, contentType: 'image/webp' };
 }
 
-async function encodeWebp(buffer: Buffer): Promise<Buffer> {
+async function encodeWebp(
+  buffer: Buffer,
+  maxEdgePx: number,
+  targetMaxBytes: number,
+): Promise<Buffer> {
   let out: Buffer = Buffer.alloc(0);
   for (const quality of WEBP_QUALITIES) {
     out = await sharp(buffer, { limitInputPixels: INPUT_PIXEL_LIMIT })
       .rotate() // respeta la orientación EXIF y, al re-codificar, quita la metadata (GPS)
       .resize({
-        width: IMAGE_MAX_EDGE_PX,
-        height: IMAGE_MAX_EDGE_PX,
+        width: maxEdgePx,
+        height: maxEdgePx,
         fit: 'inside',
         withoutEnlargement: true,
       })
       .webp({ quality })
       .toBuffer();
-    if (out.length <= IMAGE_TARGET_MAX_BYTES) break;
+    if (out.length <= targetMaxBytes) break;
   }
   return out;
 }

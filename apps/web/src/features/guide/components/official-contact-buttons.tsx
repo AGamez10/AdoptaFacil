@@ -20,6 +20,64 @@ export interface OfficialContactButtonsProps {
   className?: string;
 }
 
+export interface ContactButtonsProps {
+  /** Enlace `wa.me` ya armado; sin él no se pinta el botón de WhatsApp. */
+  whatsappHref?: string | null;
+  /** Enlace `mailto:` ya armado; sin él no se pinta el botón de correo. */
+  emailHref?: string | null;
+  whatsappLabel?: string;
+  emailLabel?: string;
+  whatsappDetail?: string;
+  emailDetail?: string;
+  tone?: 'light' | 'dark';
+  className?: string;
+}
+
+/** Botones de WhatsApp y correo con los enlaces que se le den (de AdoptaFácil o de una organización). */
+export function ContactButtons({
+  whatsappHref,
+  emailHref,
+  whatsappLabel = 'Escribir por WhatsApp',
+  emailLabel = 'Enviar un correo',
+  whatsappDetail,
+  emailDetail,
+  tone = 'light',
+  className,
+}: ContactButtonsProps) {
+  return (
+    <div className={cn(styles.group, tone === 'dark' && styles['group--dark'], className)}>
+      {whatsappHref && (
+        <a
+          href={whatsappHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(styles.button, styles['button--whatsapp'])}
+          data-testid="contact-whatsapp"
+        >
+          <IconWhatsapp className={styles.icon} />
+          <span className={styles.label}>
+            {whatsappLabel}
+            {whatsappDetail && <small className={styles.detail}>{whatsappDetail}</small>}
+          </span>
+        </a>
+      )}
+      {emailHref && (
+        <a
+          href={emailHref}
+          className={cn(styles.button, styles['button--mail'])}
+          data-testid="contact-email"
+        >
+          <IconMail className={styles.icon} />
+          <span className={styles.label}>
+            {emailLabel}
+            {emailDetail && <small className={styles.detail}>{emailDetail}</small>}
+          </span>
+        </a>
+      )}
+    </div>
+  );
+}
+
 /**
  * Contacto oficial de AdoptaFácil a un clic (decisión D10, anexo #4):
  * WhatsApp 302 852 8926 y adoptafacil.oficial@gmail.com. Abre la app de
@@ -33,31 +91,13 @@ export function OfficialContactButtons({
   className,
 }: OfficialContactButtonsProps) {
   return (
-    <div className={cn(styles.group, tone === 'dark' && styles['group--dark'], className)}>
-      <a
-        href={officialWhatsappUrl(whatsappMessage)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={cn(styles.button, styles['button--whatsapp'])}
-        data-testid="contact-whatsapp"
-      >
-        <IconWhatsapp className={styles.icon} />
-        <span className={styles.label}>
-          Escribir por WhatsApp
-          {showDetails && <small className={styles.detail}>{OFFICIAL_WHATSAPP_DISPLAY}</small>}
-        </span>
-      </a>
-      <a
-        href={officialMailtoUrl(emailSubject)}
-        className={cn(styles.button, styles['button--mail'])}
-        data-testid="contact-email"
-      >
-        <IconMail className={styles.icon} />
-        <span className={styles.label}>
-          Enviar un correo
-          {showDetails && <small className={styles.detail}>{OFFICIAL_EMAIL}</small>}
-        </span>
-      </a>
-    </div>
+    <ContactButtons
+      whatsappHref={officialWhatsappUrl(whatsappMessage)}
+      emailHref={officialMailtoUrl(emailSubject)}
+      whatsappDetail={showDetails ? OFFICIAL_WHATSAPP_DISPLAY : undefined}
+      emailDetail={showDetails ? OFFICIAL_EMAIL : undefined}
+      tone={tone}
+      className={className}
+    />
   );
 }

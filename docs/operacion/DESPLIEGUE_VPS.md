@@ -102,7 +102,8 @@ confírmalos antes de comprar.
    aislado en la red interna. Cuando R1-7 llegue, añadir `--requirepass` y la
    contraseña en `REDIS_URL`.
 3. **Correo real (R3-4)**: sin proveedor SMTP no llegan reset de contraseña ni
-   invitaciones.
+   invitaciones. Proveedor, registros DNS (SPF, DKIM, DMARC) y Postfix propio:
+   [CORREO.md](CORREO.md).
 4. **Respaldo off-site** funcionando y primera prueba de restauración registrada.
 5. **Pagos apagados** hasta la decisión del cliente: no se cargan credenciales de
    Mercado Pago de producción.

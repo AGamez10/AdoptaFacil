@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   type Paginated,
   type ServiceHours,
@@ -26,6 +26,7 @@ import { downloadVolunteerCertificatePdf } from '../lib/certificate';
 import {
   ENROLLMENT_STATUS_LABELS,
   HOURS_STATUS_LABELS,
+  OPPORTUNITY_QUERY_PARAM,
   enrollmentStatusVariant,
   formatBogota,
   formatHours,
@@ -45,6 +46,10 @@ export function MyVolunteeringPage() {
   const client = useApiClient();
   const { toast } = useToast();
   const navigate = useNavigate();
+  // Jornada elegida desde la landing (`?oportunidad=<id>`): se resalta y se
+  // lleva a la vista para que la persona la encuentre sin buscarla.
+  const [searchParams] = useSearchParams();
+  const highlightedId = searchParams.get(OPPORTUNITY_QUERY_PARAM);
 
   const [opportunities, setOpportunities] = useState<VolunteerOpportunityPublic[]>([]);
   const [enrollments, setEnrollments] = useState<VolunteerEnrollmentMine[]>([]);
@@ -89,6 +94,13 @@ export function MyVolunteeringPage() {
       active = false;
     };
   }, [client]);
+
+  useEffect(() => {
+    if (loading || !highlightedId) return;
+    document
+      .getElementById(`oportunidad-${highlightedId}`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [loading, highlightedId]);
 
   const enroll = async (opportunityId: string): Promise<void> => {
     try {
@@ -188,7 +200,13 @@ export function MyVolunteeringPage() {
                   {opportunities.map((opportunity) => (
                     <li
                       key={opportunity.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
+                      id={`oportunidad-${opportunity.id}`}
+                      aria-current={opportunity.id === highlightedId ? 'true' : undefined}
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm${
+                        opportunity.id === highlightedId
+                          ? ' border-primary ring-2 ring-primary'
+                          : ''
+                      }`}
                     >
                       <div>
                         <p className="font-medium">

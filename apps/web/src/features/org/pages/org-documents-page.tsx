@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   DocumentStatus,
   DocumentType,
   Role,
   type DocumentPrefill,
   type OrganizationDocument,
-  type UploadOrganizationDocumentResult,
+  type UploadOrganizationDocumentFileResult,
   type VerificationLevel,
 } from '@adoptafacil/contracts';
 import {
@@ -33,12 +34,8 @@ import { MissingDocumentHelp } from '../../guide/components/missing-document-hel
 import { OnboardingHelpCard } from '../../guide/components/onboarding-help-card';
 import { DocumentTypeIcon, UploadCloudIcon } from '../components/document-icons';
 import { TextField } from '../components/profile-fields';
-import {
-  DOCUMENT_ACCEPT,
-  downloadPrivateFile,
-  uploadFileBytes,
-  validateUpload,
-} from '../lib/storage';
+import { PrivateFileViewer } from '../../../lib/private-file-viewer';
+import { DOCUMENT_ACCEPT, validateUpload } from '../lib/storage';
 import styles from './org-documents-page.module.scss';
 import { dateBounds, dateError } from '../../../lib/date-rules';
 
@@ -164,7 +161,8 @@ export function OrgDocumentsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [expiresAt, setExpiresAt] = useState('');
   const [saving, setSaving] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<OrganizationDocument | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [prefill, setPrefill] = useState<DocumentPrefill | null>(null);
   const [reading, setReading] = useState<string | null>(null);
 
@@ -197,6 +195,23 @@ export function OrgDocumentsPage() {
       active = false;
     };
   }, [client]);
+
+  // Enlace directo desde Formalización y los avisos: `?subir=rut` abre la
+  // subida de ese documento en cuanto carga la página.
+  const requestedType = searchParams.get('subir');
+  useEffect(() => {
+    if (!requestedType || loading) return;
+    if (canManage && (DOC_TYPES as string[]).includes(requestedType)) {
+      setUploadType(requestedType as DocumentType);
+    }
+    setSearchParams(
+      (params) => {
+        params.delete('subir');
+        return params;
+      },
+      { replace: true },
+    );
+  }, [requestedType, loading, canManage, setSearchParams]);
 
   const openUpload = (type: DocumentType): void => {
     setUploadType(type);
@@ -232,31 +247,31 @@ export function OrgDocumentsPage() {
     }
     setSaving(true);
     try {
-      // 1) Reserve the versioned document + a private storage key (T-103).
-      const reserved = await client.request<UploadOrganizationDocumentResult>('/org/documents', {
-        method: 'POST',
-        json: {
-          type: uploadType,
-          filename: file.name,
-          ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
-        },
-      });
-      // 2) Send the real bytes to the reserved key (T-108).
-      await uploadFileBytes(client, reserved.upload.key, file);
-      const uploadedType = uploadType;
+      // Una sola llamada: el servidor valida el tipo real del archivo y que sea
+      // el documento elegido (un certificado subido como RUT se rechaza con un
+      // mensaje que dice qué parece y dónde va).
+      const form = new FormData();
+      form.append('type', uploadType);
+      if (expiresAt) form.append('expiresAt', new Date(expiresAt).toISOString());
+      form.append('file', file, file.name);
+      const result = await client.request<UploadOrganizationDocumentFileResult>(
+        '/org/documents/file',
+        { method: 'POST', body: form },
+      );
       closeUpload();
       await load();
-      if (PREFILL_TYPES.includes(uploadedType)) {
-        void readForProfile(reserved.document.id, true);
+      if (result.prefill?.nit || result.prefill?.legalName) {
+        setPrefill(result.prefill);
       }
       toast({
-        title: 'Documento subido',
-        description: 'Nueva versión enviada a revisión.',
-        variant: 'success',
+        title: result.check.result === 'unreadable' ? 'Documento recibido' : 'Documento subido',
+        description: result.check.message,
+        variant: result.check.result === 'unreadable' ? 'warning' : 'success',
       });
     } catch (error) {
+      // El diálogo queda abierto para elegir otro archivo.
       toast({
-        title: 'No se pudo subir el documento',
+        title: 'No pudimos guardar el documento',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -318,22 +333,6 @@ export function OrgDocumentsPage() {
       });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const download = async (doc: OrganizationDocument): Promise<void> => {
-    setDownloading(doc.id);
-    try {
-      const name = doc.storageRef.split('/').pop() ?? `${doc.type}-v${doc.version}`;
-      await downloadPrivateFile(client, doc.storageRef, name);
-    } catch (error) {
-      toast({
-        title: 'No se pudo descargar',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
-        variant: 'destructive',
-      });
-    } finally {
-      setDownloading(null);
     }
   };
 
@@ -456,12 +455,7 @@ export function OrgDocumentsPage() {
                           </p>
                         )}
                         <div className={styles['doc-card__actions']}>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={downloading === doc.id}
-                            onClick={() => void download(doc)}
-                          >
+                          <Button size="sm" variant="outline" onClick={() => setViewing(doc)}>
                             Ver documento
                           </Button>
                           {canManage && (
@@ -551,6 +545,11 @@ export function OrgDocumentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PrivateFileViewer
+        storageRef={viewing?.storageRef ?? null}
+        title={viewing ? `${TYPE_LABELS[viewing.type]} · v${viewing.version}` : ''}
+        onClose={() => setViewing(null)}
+      />
       <Dialog open={prefill !== null} onOpenChange={(open) => !open && setPrefill(null)}>
         <DialogContent>
           <DialogHeader>

@@ -8,12 +8,17 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import type { Request, Response } from 'express';
 import {
   type DecideOrgReportInput,
+  type DecideSignatureRequestInput,
+  type SignatureRequestDecisionResult,
+  type SignatureRequestPreview,
   type GenerateOrgReportInput,
   type OrgReport,
   type OrgReportPendingSignature,
@@ -33,6 +38,8 @@ import { RolesGuard } from '../../core/rbac/roles.guard';
 import { ReportsService } from './reports.service';
 import {
   decideOrgReportSchema,
+  decideSignatureRequestSchema,
+  signatureRequestTokenSchema,
   generateOrgReportSchema,
   setOrgReportPolicySchema,
 } from './reports.schemas';
@@ -119,6 +126,14 @@ export class ReportsController {
     return this.service.decide(actor.id, id, dto);
   }
 
+  /** Reenvía el enlace de firma a quien aún no decide (p. ej. si venció). */
+  @Post(':id/signature-requests')
+  @HttpCode(200)
+  @Roles(...GENERATE_ROLES)
+  resendSignatureRequests(@Param('id', ParseUUIDPipe) id: string): Promise<{ sent: number }> {
+    return this.service.resendSignatureRequests(id);
+  }
+
   @Get(':id/pdf')
   @Roles(...VIEW_ROLES)
   async pdf(
@@ -152,5 +167,45 @@ export class ReportsPublicController {
   @Get('public/reports/:code')
   verify(@Param('code') code: string): Promise<OrgReportVerification> {
     return this.service.verifyPublic(code);
+  }
+}
+
+/**
+ * Firma por enlace de correo (contador / revisor fiscal, sin sesión). El token
+ * viaja en el cuerpo, nunca en la URL, y las rutas están limitadas por IP.
+ */
+@Controller('public/signature-requests')
+@UseGuards(ThrottlerGuard)
+@Throttle({ default: { limit: 20, ttl: 60_000 } })
+export class SignatureRequestsPublicController {
+  constructor(private readonly service: ReportsService) {}
+
+  @Post('preview')
+  @HttpCode(200)
+  preview(
+    @Body(new ZodValidationPipe(signatureRequestTokenSchema)) dto: { token: string },
+  ): Promise<SignatureRequestPreview> {
+    return this.service.previewSignatureRequest(dto.token);
+  }
+
+  @Post('pdf')
+  @HttpCode(200)
+  async pdf(
+    @Body(new ZodValidationPipe(signatureRequestTokenSchema)) dto: { token: string },
+    @Res() res: Response,
+  ): Promise<void> {
+    sendFile(res, await this.service.signatureRequestPdf(dto.token), 'application/pdf');
+  }
+
+  @Post('decision')
+  @HttpCode(200)
+  decide(
+    @Body(new ZodValidationPipe(decideSignatureRequestSchema)) dto: DecideSignatureRequestInput,
+    @Req() req: Request,
+  ): Promise<SignatureRequestDecisionResult> {
+    return this.service.decideSignatureRequest(dto, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
   }
 }

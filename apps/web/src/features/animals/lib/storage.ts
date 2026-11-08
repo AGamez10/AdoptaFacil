@@ -8,16 +8,12 @@ import type { ApiClient } from '../../../shell/api';
  *
  * Clinical attachments (fix, T-ANIMALS-ATTACHMENTS-AUDIT) are the opposite:
  * PRIVATE objects (exam results, vaccination proof — never shown in the public
- * catalog), so DOWNLOADING them needs the Bearer token (`downloadPrivateFile`
- * below, same pattern as `apps/web/src/features/org/lib/storage.ts`'s
- * legal-document download — duplicated here per this project's "small,
- * self-contained helper" convention rather than a cross-feature import).
+ * catalog), so they are SHOWN in place, never force-downloaded, with the shared
+ * `src/lib/private-file-viewer.tsx` (Bearer fetch + type checked by bytes).
  *
  * HANDOFF(@fabian): a reusable file-upload primitive (input + validation +
  * progress) would live in packages/ui; kept local per T-109a's UI-boundary rule.
  */
-
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000';
 
 /** MB ceiling — coherent with the backend STORAGE_MAX_FILE_MB default (T-108). */
 export const MAX_UPLOAD_MB = 15;
@@ -60,39 +56,4 @@ export async function uploadFileBytes(client: ApiClient, key: string, file: File
     method: 'PUT',
     body: form,
   });
-}
-
-/** Read the access token from the shell client's token store (same bridge as
- *  `apps/web/src/features/org/lib/storage.ts` — the shell `ApiClient` parses
- *  every response as JSON and exposes no authenticated BINARY fetch). */
-function accessTokenOf(client: ApiClient): string | null {
-  const bridged = client as unknown as {
-    config?: { tokenStore?: { getAccessToken(): string | null } };
-  };
-  return bridged.config?.tokenStore?.getAccessToken() ?? null;
-}
-
-/** Download a PRIVATE clinical attachment (Bearer-authenticated) and save it
- *  locally (fix, T-ANIMALS-ATTACHMENTS-AUDIT). */
-export async function downloadPrivateFile(
-  client: ApiClient,
-  key: string,
-  filename: string,
-): Promise<void> {
-  const token = accessTokenOf(client);
-  const response = await fetch(`${API_BASE}/storage/private?key=${encodeURIComponent(key)}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!response.ok) {
-    throw new Error(`No se pudo descargar el documento (HTTP ${response.status}).`);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
 }

@@ -86,7 +86,7 @@ La plantilla es `.env.example`. Por defecto todo funciona sin proveedores extern
 | `STORAGE_DRIVER`       | `disk`, `stub`   | `disk`      |
 | `AUTH_IDENTITY_DRIVER` | `fake`, `google` | `fake`      |
 
-Con `PAYMENT_DRIVER=epayco` en modo `platform_split` son obligatorias las `EPAYCO_*` de plataforma; con `smtp`, las `SMTP_*`. La
+Con `PAYMENT_DRIVER=epayco` en modo `platform_split` son obligatorias las `EPAYCO_*` de plataforma; con `smtp`, `SMTP_HOST`, `SMTP_PORT` y `SMTP_FROM` (guía en `docs/operacion/CORREO.md`). La
 configuración se valida al arrancar y la API falla rápido si falta algo. En producción debe definirse
 `JWT_SECRET`.
 

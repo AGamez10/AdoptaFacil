@@ -102,9 +102,17 @@ export function adoptTitle(species, city) {
 export function adoptDescription(species, city, count) {
   const who = species === 'all' ? 'perros y gatos' : SPECIES_PLURAL[species].toLowerCase();
   const where = city ? `en ${city}` : 'en toda Colombia';
+  const noun =
+    species === 'all'
+      ? count === 1
+        ? 'animal espera'
+        : 'animales esperan'
+      : count === 1
+        ? `${SPECIES_SINGULAR[species]} espera`
+        : `${SPECIES_PLURAL[species].toLowerCase()} esperan`;
   const lead =
     typeof count === 'number' && count > 0
-      ? `${count} ${count === 1 ? 'animal espera' : 'animales esperan'} hogar ${where}.`
+      ? `${count} ${noun} hogar ${where}.`
       : `Encuentra ${who} en adopción ${where}.`;
   return `${lead} Filtra por tamaño, edad y sexo, conoce la organización que los cuida y solicita la adopción en línea, gratis.`;
 }

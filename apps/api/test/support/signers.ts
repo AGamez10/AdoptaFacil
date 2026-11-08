@@ -8,6 +8,7 @@ import type {
   NotificationMessage,
   NotificationPort,
 } from '../../src/core/notifications/notification.port';
+import { LEGAL_ORG } from './legal';
 
 /** Captura los correos (la invitación vive SOLO en el enlace enviado). */
 export class CapturingNotificationPort implements NotificationPort {
@@ -50,7 +51,12 @@ export async function inviteSigner(
   if (!match) throw new Error(`no invitation link sent to ${email}`);
   const accepted = await request(server)
     .post('/auth/invitations/accept')
-    .send({ token: decodeURIComponent(match[1]), displayName, password: 'password-1234' })
+    .send({
+      token: decodeURIComponent(match[1]),
+      displayName,
+      password: 'password-1234',
+      ...LEGAL_ORG,
+    })
     .expect(201);
   return {
     token: accepted.body.tokens.accessToken,

@@ -70,6 +70,12 @@ export class DonationCertificatesService {
           where: { donationId: input.donationId },
         });
         if (existing) return; // ya emitido — reentrega idempotente del webhook.
+        // Un pago reversado en la pasarela nunca se certifica (ADR-PAG-003).
+        const reversed = await tx.donationReversal.findUnique({
+          where: { donationId: input.donationId },
+          select: { id: true },
+        });
+        if (reversed) return;
         await this.issueInTx(tx, input); // null ⇒ no elegible (gating RF14), no es un error.
       });
     } catch (error) {
@@ -108,6 +114,15 @@ export class DonationCertificatesService {
         if (donation.status !== 'approved') {
           throw new UnprocessableEntityException(
             'Solo se puede generar el certificado de una donación aprobada.',
+          );
+        }
+        const reversal = await tx.donationReversal.findUnique({
+          where: { donationId: donation.id },
+          select: { id: true },
+        });
+        if (reversal) {
+          throw new UnprocessableEntityException(
+            'El pago de esta donación se reembolsó o se contracargó: su certificado está anulado.',
           );
         }
 
@@ -240,7 +255,7 @@ export class DonationCertificatesService {
         'Certificado no encontrado, no eres el donante, o la organización no es una ESAL con RTE vigente.',
       );
     }
-    return this.fromRow(row);
+    return { ...this.fromRow(row), revokedAt: await this.revokedAt(row.donation_id) };
   }
 
   /** Verificación PÚBLICA por código (sin sesión) — superficie mínima. */
@@ -253,6 +268,17 @@ export class DonationCertificatesService {
       throw new NotFoundException('No existe ningún certificado con ese código.');
     }
     return data;
+  }
+
+  /**
+   * Fecha de anulación (reembolso/contracargo) del certificado de una donación,
+   * o null si está vigente. Solo para vistas ya autorizadas (donante verificado).
+   */
+  async revokedAt(donationId: string): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ at: Date | null }>>(Prisma.sql`
+      SELECT donation_reversed_at(${donationId}::uuid) AS at
+    `);
+    return rows[0]?.at ? rows[0].at.toISOString() : null;
   }
 
   private fromRow(row: CertificateRow): DonationCertificate {

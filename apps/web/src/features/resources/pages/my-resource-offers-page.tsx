@@ -15,6 +15,8 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
+import { MyOpenOffers } from '../components/my-open-offers';
+import { OPEN_OFFER_PATH } from '../model/open-offers-view';
 import { useApiClient } from '../../../shell/api';
 import { EVIDENCE_ACCEPT, uploadOfferProof, validateProofFiles } from '../lib/storage';
 import {
@@ -84,7 +86,13 @@ export function MyResourceOffersPage() {
       <PageHeader
         title="Mis ofertas"
         description="Ofertas de donación física que has enviado a las organizaciones."
+        actions={
+          <Link to={OPEN_OFFER_PATH} className={cn(buttonVariants({ variant: 'outline' }))}>
+            Ofrecer lo que tengo
+          </Link>
+        }
       />
+      <MyOpenOffers />
       {loading && <Skeleton className="h-64 w-full" />}
       {!loading && error && (
         <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />

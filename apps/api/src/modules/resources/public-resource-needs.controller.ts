@@ -2,6 +2,7 @@ import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query } from 
 import { type ResourceNeedPublic, type ResourceNeedsPage } from '@adoptafacil/contracts';
 import { PublicResourceNeedsService } from './public-resource-needs.service';
 import { RequireFeature } from '../../core/features';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * PUBLIC resource-need catalog (M09) — NO authentication, public columns
@@ -18,6 +19,7 @@ export class PublicResourceNeedsController {
   constructor(private readonly service: PublicResourceNeedsService) {}
 
   @Get()
+  @PublicCache()
   list(
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
@@ -27,6 +29,7 @@ export class PublicResourceNeedsController {
   }
 
   @Get(':id')
+  @PublicCache()
   async get(@Param('id', ParseUUIDPipe) id: string): Promise<ResourceNeedPublic> {
     const need = await this.service.get(id);
     if (!need) {

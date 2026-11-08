@@ -16,8 +16,9 @@ import {
 } from '../data/colombian-locations';
 import { IMAGE_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
 import { EpaycoConnectSection } from './epayco-connect-section';
+import { MercadoPagoConnectSection } from './mercadopago-connect-section';
 import { OrgQrCard } from '../../portals/components/org-qr-card';
-import { isEpaycoProvider } from '../../payments/lib/payment-provider';
+import { activePaymentProvider } from '../../payments/lib/payment-provider';
 import {
   OrgSelectField,
   OrgStaticField,
@@ -381,7 +382,7 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
     useEffect(() => {
       if (tabParam && TABS.some((tab) => tab.value === tabParam)) setActiveTab(tabParam);
     }, [tabParam]);
-    const epayco = isEpaycoProvider();
+    const paymentProvider = activePaymentProvider();
     const [form, setForm] = useState<FormState>(() => initialState(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
     const [saving, setSaving] = useState(false);
@@ -782,10 +783,13 @@ export const OrgProfileForm = forwardRef<OrgProfileFormHandle, OrgProfileFormPro
             de este formulario (conectar/desconectar ya es inmediato). */}
         <OrgTabPanel value="pagos" activeValue={activeTab}>
           <div className="flex flex-col gap-6">
-            {/* ADR-PAG-002: la organización conecta SU cuenta ePayco (llaves
-                API), la única pasarela. Con el interruptor de apagado
-                (VITE_PAYMENT_PROVIDER=off) no se ofrece conectar nada. */}
-            {epayco ? (
+            {/* ADR-PAG-003: por defecto la organización conecta SU cuenta
+                de Mercado Pago por OAuth; con VITE_PAYMENT_PROVIDER=epayco,
+                sus llaves de ePayco (ADR-PAG-002). Con el interruptor de
+                apagado (VITE_PAYMENT_PROVIDER=off) no se ofrece conectar nada. */}
+            {paymentProvider === 'mercadopago' ? (
+              <MercadoPagoConnectSection />
+            ) : paymentProvider === 'epayco' ? (
               <EpaycoConnectSection />
             ) : (
               <p className="text-sm text-muted-foreground" data-testid="payments-online-off">

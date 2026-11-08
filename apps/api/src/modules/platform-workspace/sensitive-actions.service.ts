@@ -15,6 +15,7 @@ import {
   type AuditExportPayload,
   type CreateSensitiveActionInput,
   PLATFORM_ROLES,
+  invitationRoleCopy,
   Role,
   type SensitiveActionPayload,
   type SensitiveActionRequest,
@@ -40,6 +41,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   buildInvitationLink,
+  dutiesAsList,
   hashInvitationToken,
   INVITATION_TTL_MS,
 } from '../org/governance/invitations.service';
@@ -370,6 +372,7 @@ export class SensitiveActionsService {
         where: { organizationId: teamId, email, acceptedAt: null, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+      const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
       const invitation = await tx.organizationInvitation.create({
         data: {
           organizationId: teamId,
@@ -377,7 +380,7 @@ export class SensitiveActionsService {
           role,
           tokenHash: hashInvitationToken(token),
           invitedByUserId: action.requestedByUserId,
-          expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+          expiresAt,
         },
       });
       await this.audit.recordWithTx(tx, {
@@ -388,7 +391,9 @@ export class SensitiveActionsService {
         entityId: invitation.id,
         metadata: { role, ...base },
       });
-      afterCommit.push(() => this.sendStaffInvitation(email, token));
+      afterCommit.push(() =>
+        this.sendStaffInvitation(email, token, role, expiresAt, invitation.id),
+      );
       return { invitationId: invitation.id, role };
     }
 
@@ -467,16 +472,37 @@ export class SensitiveActionsService {
     };
   }
 
-  private async sendStaffInvitation(email: string, token: string): Promise<void> {
+  private async sendStaffInvitation(
+    email: string,
+    token: string,
+    role: Role,
+    expiresAt: Date,
+    invitationId: string,
+  ): Promise<void> {
+    const copy = invitationRoleCopy(role);
+    const link = buildInvitationLink(this.webBaseUrl, token);
     await this.notifications.send({
       to: email,
       subject: 'Te invitaron al equipo de plataforma de AdoptaFácil',
+      // Respaldo en texto plano si la plantilla no se puede dibujar.
       body:
-        'Hola,\n\nTe invitaron a unirte al equipo que opera la plataforma AdoptaFácil.\n' +
+        'Hola,\n\nTe invitaron a unirte al equipo que opera la plataforma AdoptaFácil ' +
+        `con el cargo de ${copy.label}.\n\n` +
+        `Con este cargo podrás:\n${dutiesAsList(copy.duties)}\n\n` +
         'Abre este enlace para crear tu cuenta (caduca en 7 días y solo sirve una vez):\n\n' +
-        `${buildInvitationLink(this.webBaseUrl, token)}\n\n` +
+        `${link}\n\n` +
         'Al entrar por primera vez te pediremos activar la verificación en dos pasos con una ' +
         'app de autenticación en tu celular.\n\nSi no esperabas esta invitación, ignora este correo.',
+      template: {
+        event: 'platform.team_invitation',
+        data: {
+          cargo: copy.label,
+          funciones: dutiesAsList(copy.duties),
+          vence: expiresAt.toISOString(),
+          enlace: link,
+        },
+      },
+      idempotencyKey: `platform.team_invitation:${invitationId}`,
     });
   }
 

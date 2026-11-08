@@ -1,7 +1,10 @@
 import {
+  useEffect,
   useId,
+  useRef,
   useState,
   type ComponentType,
+  type CSSProperties,
   type FormEvent,
   type ReactNode,
   type SVGProps,
@@ -386,20 +389,84 @@ export function WaitingAnimalsSection({ snapshot }: { snapshot: CatalogSnapshot 
   );
 }
 
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/**
+ * Cifra que cuenta desde cero cuando entra en pantalla (requestAnimationFrame,
+ * ~1,2 s, solo cambia texto). El valor real está en el DOM desde el primer
+ * render y para lectores de pantalla nunca cambia; sin IntersectionObserver o
+ * con "reducir movimiento" se queda quieto.
+ */
+function CountUp({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [shown, setShown] = useState(value);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || prefersReducedMotion() || typeof IntersectionObserver !== 'function') {
+      setShown(value);
+      return;
+    }
+    let frame = 0;
+    setShown(0);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        observer.disconnect();
+        const start = performance.now();
+        const tick = (now: number) => {
+          const t = Math.min((now - start) / 1200, 1);
+          setShown(Math.round(value * (1 - (1 - t) ** 3)));
+          if (t < 1) frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+      },
+      { threshold: 0.6 },
+    );
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [value]);
+
+  return (
+    <>
+      <span ref={ref} aria-hidden="true">
+        {shown.toLocaleString('es-CO')}
+      </span>
+      <span className="sr-only">{value.toLocaleString('es-CO')}</span>
+    </>
+  );
+}
+
 /**
  * Cifras grandes de la red (solo con datos reales) junto al globo 3D, que
- * ahora ilustra la red de organizaciones en vez de ocupar el primer pantallazo.
+ * ilustra la red de organizaciones. Las cifras cuentan al entrar en pantalla y
+ * las tarjetas y organizaciones aparecen escalonadas; todo con transform y
+ * opacity, y quieto con "reducir movimiento".
  */
 export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
   const { total, organizations, cities } = snapshot;
   if (total === 0) return null;
   const stats = [
-    { value: total, label: total === 1 ? 'animal buscando hogar' : 'animales buscando hogar' },
     {
+      Icon: IconPaw,
+      value: total,
+      label: total === 1 ? 'animal buscando hogar' : 'animales buscando hogar',
+    },
+    {
+      Icon: IconPeople,
       value: organizations.length,
       label: organizations.length === 1 ? 'organización publicando' : 'organizaciones publicando',
     },
-    { value: cities.length, label: cities.length === 1 ? 'ciudad' : 'ciudades' },
+    { Icon: IconGlobe, value: cities.length, label: cities.length === 1 ? 'ciudad' : 'ciudades' },
   ].filter((stat) => stat.value > 0);
   return (
     <section
@@ -409,6 +476,10 @@ export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
     >
       <HeroVisual />
       <div className={cn(styles.container, styles.impact__inner)}>
+        <p className={styles.live}>
+          <span className={styles.live__dot} aria-hidden="true" />
+          Catálogo en vivo
+        </p>
         <SectionHeading
           tone="dark"
           eyebrow="Una red que crece"
@@ -418,20 +489,38 @@ export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
           Cada número sale del catálogo en vivo: nada inflado, nada inventado.
         </SectionHeading>
         <dl className={styles.stats}>
-          {stats.map((stat) => (
-            <div key={stat.label} className={cn(styles.stat, 'af-reveal')}>
-              <dt className={styles.stat__label}>{stat.label}</dt>
-              <dd className={styles.stat__value}>{stat.value.toLocaleString('es-CO')}</dd>
+          {stats.map(({ Icon, value, label }) => (
+            <div key={label} className={cn(styles.stat, 'af-reveal')}>
+              <dt className={styles.stat__label}>
+                <span className={styles.stat__icon} aria-hidden="true">
+                  <Icon />
+                </span>
+                {label}
+              </dt>
+              <dd className={styles.stat__value}>
+                <CountUp value={value} />
+              </dd>
             </div>
           ))}
         </dl>
         {organizations.length > 0 && (
           <ul className={styles.orgs} aria-label="Organizaciones con animales publicados">
-            {organizations.slice(0, 12).map((org) => (
-              <li key={org.id}>
+            {organizations.slice(0, 12).map((org, index) => (
+              <li
+                key={org.id}
+                className={styles.orgs__item}
+                style={{ '--i': index } as CSSProperties}
+              >
                 <Link to={`/o/${encodeURIComponent(org.slug)}`} className={styles.orgChip}>
                   {org.logoUrl ? (
-                    <img src={org.logoUrl} alt="" className={styles.orgChip__logo} loading="lazy" />
+                    <img
+                      src={org.logoUrl}
+                      alt=""
+                      width={28}
+                      height={28}
+                      className={styles.orgChip__logo}
+                      loading="lazy"
+                    />
                   ) : (
                     <span className={styles.orgChip__initial} aria-hidden="true">
                       {org.name.charAt(0)}
@@ -446,6 +535,15 @@ export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
             ))}
           </ul>
         )}
+        <div className={styles.impact__actions}>
+          <Link to={ADOPT_BASE_PATH} className={cn(styles.btn, styles['btn--light'])}>
+            Ver los animales
+            <IconArrowRight className={styles.btn__icon} />
+          </Link>
+          <Link to="/register" className={cn(styles.btn, styles['btn--ghostDark'])}>
+            Sumar mi organización
+          </Link>
+        </div>
       </div>
     </section>
   );

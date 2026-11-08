@@ -239,6 +239,18 @@ export interface OrganizationInvitation {
   expiresAt: string;
   /** ISO-8601 UTC. */
   createdAt: string;
+  /**
+   * Solo en la respuesta de `POST /org/invitations` (aditivo): `simulated`
+   * cuando el servidor no envía correos reales (`NOTIFICATION_DRIVER=log`), así
+   * la pantalla avisa en vez de decir "enviada" sin que llegue nada.
+   */
+  emailDelivery?: 'sent' | 'simulated';
+  /**
+   * Solo con `emailDelivery: 'simulated'` y `NODE_ENV=development`: el enlace de
+   * la invitación, para copiarlo a mano en desarrollo local. En producción el
+   * enlace solo existe en el correo.
+   */
+  simulatedInviteLink?: string;
 }
 
 /** `POST /org/invitations` (Owner, Administrator; only an Owner invites an
@@ -259,6 +271,8 @@ export interface InvitationPreview {
   organizationName: string;
   email: string;
   role: Role;
+  /** Aditivo: cargo de firmante (contador / revisor fiscal) si la invitación es para firmar. */
+  signerRole?: 'accountant' | 'fiscal_reviewer';
   /** ISO-8601 UTC. */
   expiresAt: string;
 }
@@ -269,6 +283,11 @@ export interface AcceptInvitationInput {
   token: string;
   displayName: string;
   password: string;
+  /** Documentos legales aceptados en la pantalla de la invitación (versión
+   *  vista). Como en el registro, la API exige los obligatorios de una cuenta
+   *  de organización en su versión vigente y responde 400 si faltan
+   *  (Ley 1581, autorización previa). */
+  legalAcceptances?: LegalAcceptanceItem[];
 }
 
 /** Assign a role to a user in the caller's organization. */

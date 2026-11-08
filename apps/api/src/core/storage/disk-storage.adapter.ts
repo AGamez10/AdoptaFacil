@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -124,6 +124,20 @@ export class DiskStorageAdapter implements StoragePort {
       }
       throw error;
     }
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    const full = this.resolvePath(key);
+    let size: number;
+    try {
+      size = (await stat(full)).size;
+      await unlink(full);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+    const org = parseStorageKey(key)?.organizationId;
+    if (org) await this.usageCache.add(org, -size);
   }
 
   /** Resolve a key to an absolute path, refusing anything outside the root. */

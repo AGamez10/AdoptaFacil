@@ -14,6 +14,7 @@
     "test:integration": "jest --config test/jest-integration.json --runInBand",
     "test:rls": "jest --config test/jest-integration.json --runInBand -t \"no-leak\"",
     "seed:admin": "ts-node --transpile-only scripts/seed-platform-admin.ts",
+    "mail:test": "ts-node --transpile-only scripts/mail-test.ts",
     "seed:demo": "ts-node --transpile-only scripts/seed-demo.ts",
     "seed:breeds": "ts-node --transpile-only scripts/seed-breeds.ts",
     "seed:trafico": "ts-node --transpile-only scripts/seed-trafico.ts",

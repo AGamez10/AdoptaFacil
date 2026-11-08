@@ -6,7 +6,9 @@ import {
   PLAN_CAPABILITY_INFO,
   PLAN_LIMIT_LABELS,
   formatPlanLimit,
+  isMercadoPagoCheckoutUrl,
   priceWithIva,
+  type PlanCheckoutView,
   type OrganizationPlanView,
   type PlanDefinition,
   type PlanKey,
@@ -22,12 +24,15 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  Button,
   ErrorState,
   Skeleton,
+  useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { officialWhatsappUrl } from '../../../lib/contact';
+import { isMercadoPagoProvider } from '../../payments/lib/payment-provider';
 
 /** Labels, limits and the always-free list come from the plan catalog in
  *  `@adoptafacil/contracts`, the same one the landing uses. */
@@ -62,8 +67,59 @@ function planRequestUrl(plan: PlanDefinition): string {
   );
 }
 
-function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean }) {
+/**
+ * ADR-PAG-003: pagar el plan cada mes con Mercado Pago. Es ingreso de
+ * AdoptaFácil por el software, así que se cobra con la cuenta de Mercado Pago
+ * de AdoptaFácil (nunca con la del refugio ni con sus donaciones). Si el pago
+ * en línea aún no está activo, se ofrece pedirlo por WhatsApp.
+ */
+function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
+  const client = useApiClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const pay = async () => {
+    setBusy(true);
+    try {
+      const view = await client.request<PlanCheckoutView>('/org/plan/checkout', {
+        method: 'POST',
+        json: { plan: plan.key },
+      });
+      if (!isMercadoPagoCheckoutUrl(view.checkoutUrl)) throw new Error('bad checkout url');
+      window.location.assign(view.checkoutUrl);
+    } catch {
+      setBusy(false);
+      toast({
+        title: 'El pago en línea del plan aún no está disponible',
+        description: 'Escríbenos por WhatsApp y lo activamos contigo.',
+        variant: 'destructive',
+      });
+    }
+  };
+  return (
+    <Button
+      className="w-full"
+      onClick={pay}
+      disabled={busy}
+      data-testid={`plan-pay-mercadopago-${plan.key}`}
+    >
+      {busy ? 'Abriendo Mercado Pago…' : `Pagar ${plan.name} con Mercado Pago`}
+    </Button>
+  );
+}
+
+function PlanCard({
+  plan,
+  current,
+  enforced,
+}: {
+  plan: PlanDefinition;
+  current: boolean;
+  enforced: boolean;
+}) {
   const paid = plan.monthlyPriceCop > 0;
+  // While plans are not enforced every org already has Pro for free: never
+  // offer to charge for it (the API answers 409 too).
+  const onlineBilling = enforced && isMercadoPagoProvider();
   const included = PLAN_CAPABILITIES.filter((capability) => plan.capabilities[capability]);
   return (
     <Card className={current ? 'border-primary ring-2 ring-primary/30' : undefined}>
@@ -115,19 +171,75 @@ function PlanCard({ plan, current }: { plan: PlanDefinition; current: boolean })
         )}
       </CardContent>
       {paid && !current && (
-        <CardFooter>
+        <CardFooter className="flex flex-col gap-2">
+          {onlineBilling && <PayWithMercadoPagoButton plan={plan} />}
           <a
-            className={cn(buttonVariants(), 'w-full')}
+            className={cn(
+              buttonVariants({ variant: onlineBilling ? 'outline' : 'default' }),
+              'w-full',
+            )}
             href={planRequestUrl(plan)}
             target="_blank"
             rel="noreferrer"
             data-testid={`plan-request-${plan.key}`}
           >
-            Quiero el plan {plan.name}
+            {onlineBilling ? 'Prefiero pagar por transferencia' : `Quiero el plan ${plan.name}`}
           </a>
         </CardFooter>
       )}
     </Card>
+  );
+}
+
+/**
+ * Cancelar el plan (Estatuto del Consumidor: tan fácil como contratar). Pide
+ * una confirmación en el mismo botón; Mercado Pago deja de cobrar y el plan
+ * sigue hasta el fin de lo pagado.
+ */
+function CancelPlanButton({ onCanceled }: { onCanceled: () => void }) {
+  const client = useApiClient();
+  const { toast } = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const cancel = async () => {
+    setBusy(true);
+    try {
+      await client.request('/org/plan/cancel', { method: 'POST' });
+      toast({
+        title: 'Plan cancelado',
+        description: 'No se te volverá a cobrar. Lo puedes usar hasta el fin del periodo pagado.',
+      });
+      onCanceled();
+    } catch {
+      toast({
+        title: 'No pudimos cancelar tu plan',
+        description: 'No se canceló nada. Intenta de nuevo en unos minutos.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+  if (!confirming) {
+    return (
+      <Button variant="outline" onClick={() => setConfirming(true)} data-testid="plan-cancel">
+        Cancelar mi plan
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm">
+        ¿Seguro? Dejarás de pagar y al final del periodo pasas a Gratis.
+      </span>
+      <Button onClick={cancel} disabled={busy} data-testid="plan-cancel-confirm">
+        Sí, cancelar
+      </Button>
+      <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
+        No
+      </Button>
+    </div>
   );
 }
 
@@ -197,11 +309,13 @@ export function OrgPlanPage() {
               ? 'Durante el piloto tienes todas las funciones sin costo.'
               : view.launchPromoEndsAt
                 ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
-                : periodEnd
-                  ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
-                  : current === 'free'
-                    ? 'Sin costo y sin fecha de vencimiento.'
-                    : 'Sin fecha de vencimiento.'}
+                : periodEnd && view.subscription?.status === 'canceled'
+                  ? `Cancelaste tu plan: lo puedes usar hasta el ${colombiaDate.format(new Date(periodEnd))} y no se te volverá a cobrar. Después pasas a Gratis sin perder tus datos.`
+                  : periodEnd
+                    ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
+                    : current === 'free'
+                      ? 'Sin costo y sin fecha de vencimiento.'
+                      : 'Sin fecha de vencimiento.'}
             {view.graceEndsAt && view.subscription?.status === 'past_due' && (
               <>
                 {' '}
@@ -234,6 +348,14 @@ export function OrgPlanPage() {
             </p>
           )}
         </CardContent>
+        {view.enforced &&
+          view.subscription &&
+          view.subscription.plan !== 'free' &&
+          view.subscription.status !== 'canceled' && (
+            <CardFooter>
+              <CancelPlanButton onCanceled={load} />
+            </CardFooter>
+          )}
       </Card>
 
       <section aria-labelledby="always-included" className="mt-6">
@@ -249,7 +371,12 @@ export function OrgPlanPage() {
 
       <section aria-label="Planes" className="mt-6 grid gap-4 md:grid-cols-3">
         {view.catalog.map((plan) => (
-          <PlanCard key={plan.key} plan={plan} current={view.enforced && plan.key === current} />
+          <PlanCard
+            key={plan.key}
+            plan={plan}
+            current={view.enforced && plan.key === current}
+            enforced={view.enforced}
+          />
         ))}
       </section>
     </PageContainer>

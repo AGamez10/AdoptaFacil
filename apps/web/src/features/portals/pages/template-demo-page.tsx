@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
-import { Role, type PortalTemplateId } from '@adoptafacil/contracts';
+import { Role, type AnimalSummary, type PortalTemplateId } from '@adoptafacil/contracts';
 import { buttonVariants, cn, Skeleton } from '@adoptafacil/ui';
 import { useSeo } from '../../../seo/seo';
 import { useSession } from '../../../shell/auth';
 import { buildPortalView } from '../model/portal-view';
-import { AnimalCard } from '../components/animal-card';
+import { PortalAdoptionSection } from '../components/portal-adoption-section';
 import { PortalAboutSection } from '../components/portal-about-section';
 import { PortalContactInfoSection } from '../components/portal-contact-info-section';
 import { PortalProfileSection } from '../components/portal-profile-section';
@@ -14,6 +14,8 @@ import { PublicFooter } from '../components/public-footer';
 import { PublicHeader } from '../components/public-header';
 import templateStyles from '../components/templates/portal-templates.module.scss';
 import { buildDemoSource } from '../templates/demo/demo-portal';
+import { PreviewAnimalDialog } from '../templates/demo/preview-animal-dialog';
+import { useOwnPortalSource } from '../templates/demo/use-own-portal-source';
 import {
   DEMO_TEMPLATE_IDS,
   isDemoTemplate,
@@ -25,13 +27,18 @@ import type { TemplateDesign } from '../templates/engine/types';
 import type { TemplateSourceData } from '../templates/engine/model';
 import { PortalTemplateView } from '../templates/portal-template-view';
 import { isEngineTemplate, loadDesign, type EngineTemplateId } from '../templates/registry';
+import { useGuideContext } from '../../guide/model/guide-context';
 
 /**
  * Vista previa PÚBLICA de una plantilla (`/plantillas/:id`): el portal completo
  * pintado con datos de demostración (`demo-portal.ts`) para que quien la elige
- * la vea llena. No consulta la API, no se indexa (noindex) y ningún enlace del
- * portal de ejemplo sale de la página. Desde aquí se va al registro con la
- * plantilla elegida (`/register?plantilla=<id>`).
+ * la vea llena. Para un visitante no consulta la API, no se indexa (noindex) y
+ * ningún enlace del portal de ejemplo sale de la página. Desde aquí se va al
+ * registro con la plantilla elegida (`/register?plantilla=<id>`).
+ *
+ * Quien gestiona una organización que ya registró animales ve la plantilla con
+ * SUS datos (`useOwnPortalSource`); los de ejemplo solo aparecen mientras no
+ * tenga ninguno.
  *
  * `?captura=1` oculta la barra superior: así se generan las miniaturas de
  * `public/template-previews`.
@@ -41,7 +48,11 @@ export function TemplateDemoPage() {
   const [params] = useSearchParams();
   const capture = params.get('captura') === '1';
   const template = isDemoTemplate(id) ? id : null;
-  const source = useMemo(() => buildDemoSource(), []);
+  const { status, hasAnyRole } = useSession();
+  const isOrgEditor = status === 'authenticated' && hasAnyRole(Role.Owner, Role.Administrator);
+  const own = useOwnPortalSource(isOrgEditor && !capture);
+  const demoSource = useMemo(() => buildDemoSource(), []);
+  const source = own.status === 'ready' ? own.data : demoSource;
   const name = template ? templateName(template) : '';
 
   useSeo({
@@ -50,12 +61,19 @@ export function TemplateDemoPage() {
     noindex: true,
   });
 
+  // La ayuda explica el ejemplo y se ve tan discreta como en un portal real.
+  useGuideContext(template ? { kind: 'template-demo', templateName: name } : null);
+
   if (!template) return <Navigate to="/#plantillas" replace />;
 
   return (
     <div className="min-h-screen bg-background" data-testid="template-demo-page">
-      {!capture && <DemoBar template={template} />}
-      {isEngineTemplate(template) ? (
+      {!capture && <DemoBar template={template} ownData={own.status === 'ready'} />}
+      {own.status === 'loading' ? (
+        <div className="mx-auto w-full max-w-[1320px] px-4 py-10" aria-busy="true">
+          <Skeleton className="h-72 w-full" />
+        </div>
+      ) : isEngineTemplate(template) ? (
         <EngineDemo template={template} source={source} />
       ) : (
         <ClassicDemo source={source} />
@@ -64,7 +82,7 @@ export function TemplateDemoPage() {
   );
 }
 
-function DemoBar({ template }: { template: PortalTemplateId }) {
+function DemoBar({ template, ownData }: { template: PortalTemplateId; ownData: boolean }) {
   const { status, hasAnyRole } = useSession();
   const index = DEMO_TEMPLATE_IDS.indexOf(template);
   const prev = DEMO_TEMPLATE_IDS[(index - 1 + DEMO_TEMPLATE_IDS.length) % DEMO_TEMPLATE_IDS.length];
@@ -111,7 +129,11 @@ function DemoBar({ template }: { template: PortalTemplateId }) {
           <div className="min-w-0 text-center sm:text-left">
             <p className="truncate text-sm font-bold text-foreground">Plantilla {name}</p>
             <p className="truncate text-xs text-muted-foreground">
-              Ejemplo con datos de prueba. Los botones del portal no llevan a ninguna parte.
+              {ownData
+                ? 'Con los datos de tu organización. Los botones del portal no llevan a ninguna parte.'
+                : isOrg
+                  ? 'Datos de ejemplo: cuando registres tu primer animal verás aquí los tuyos.'
+                  : 'Ejemplo con datos de prueba. Los botones del portal no llevan a ninguna parte.'}
             </p>
           </div>
           <Link
@@ -190,6 +212,7 @@ const COP = new Intl.NumberFormat('es-CO', {
  */
 function ClassicDemo({ source }: { source: TemplateSourceData }) {
   const organization = source.organization;
+  const [openAnimal, setOpenAnimal] = useState<AnimalSummary | null>(null);
   const profile = useMemo(() => buildPortalView(organization).profile, [organization]);
   // Ningún enlace interno sale del ejemplo; las anclas del menú siguen funcionando.
   const stayHere = (event: MouseEvent) => {
@@ -214,39 +237,37 @@ function ClassicDemo({ source }: { source: TemplateSourceData }) {
           }
         />
         <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-          <section id="portal-section-pets" style={{ scrollMarginTop: '5rem' }}>
-            <h2 className="mb-4 text-2xl font-bold text-foreground">Mascotas en adopción</h2>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {source.animals.slice(0, 6).map((animal) => (
-                <AnimalCard
-                  key={animal.id}
-                  slug={source.slug}
-                  animal={animal}
-                  onOpenDetail={() => undefined}
-                />
-              ))}
-            </div>
-          </section>
+          <div style={{ scrollMarginTop: '5rem' }}>
+            {/* El MISMO catálogo del portal (filtros, orden, "Cargar más" de a 12
+                hasta el último), sobre los animales de la vista previa. */}
+            <PortalAdoptionSection
+              slug={source.slug}
+              animals={source.animals}
+              onOpenDetail={setOpenAnimal}
+            />
+          </div>
           <aside className="space-y-6">
-            <section className="rounded-2xl border border-border bg-card p-5">
-              <h2 className="text-lg font-bold text-foreground">Campañas activas</h2>
-              <ul className="mt-3 space-y-4">
-                {source.campaigns.map((c) => (
-                  <li key={c.id}>
-                    <p className="text-sm font-semibold text-foreground">{c.title}</p>
-                    <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.round(c.progress * 100)}%` }}
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {COP.format(c.raisedAmount)} de {COP.format(c.goalAmount)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {source.campaigns.length > 0 && (
+              <section className="rounded-2xl border border-border bg-card p-5">
+                <h2 className="text-lg font-bold text-foreground">Campañas activas</h2>
+                <ul className="mt-3 space-y-4">
+                  {source.campaigns.map((c) => (
+                    <li key={c.id}>
+                      <p className="text-sm font-semibold text-foreground">{c.title}</p>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.round(c.progress * 100)}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {COP.format(c.raisedAmount)} de {COP.format(c.goalAmount)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             <PortalSocialLinks organization={organization} />
           </aside>
         </div>
@@ -267,6 +288,13 @@ function ClassicDemo({ source }: { source: TemplateSourceData }) {
       <div className="mx-auto w-full px-4 sm:px-6 lg:w-[94vw] lg:max-w-[1500px] lg:px-0">
         <PublicFooter organization={organization} navItems={CLASSIC_NAV} />
       </div>
+      <PreviewAnimalDialog
+        animal={openAnimal}
+        animals={source.animals}
+        org={organization}
+        slug={source.slug}
+        onOpenAnimal={setOpenAnimal}
+      />
     </div>
   );
 }

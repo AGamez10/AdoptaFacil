@@ -28,8 +28,21 @@ export function CertificateDocument({ certificate }: CertificateDocumentProps) {
         <header className={styles.header}>
           <p className={styles.eyebrow}>AdoptaFácil</p>
           <CardTitle className={styles.title}>Certificado de donación</CardTitle>
-          <Badge variant="success">ESAL · RTE vigente</Badge>
+          {certificate.revokedAt ? (
+            <Badge variant="destructive" data-testid="certificate-document-revoked">
+              Anulado
+            </Badge>
+          ) : (
+            <Badge variant="success">ESAL · RTE vigente</Badge>
+          )}
         </header>
+        {certificate.revokedAt && (
+          <p role="status" className="text-sm font-medium text-destructive">
+            El pago de esta donación se reembolsó o se contracargó el{' '}
+            {formatBogota(certificate.revokedAt)}. Este certificado quedó anulado y ya no sirve como
+            soporte.
+          </p>
+        )}
 
         <section className={styles.issuer} aria-label="Organización beneficiaria">
           <p className={styles.issuer__name}>{certificate.organizationName}</p>

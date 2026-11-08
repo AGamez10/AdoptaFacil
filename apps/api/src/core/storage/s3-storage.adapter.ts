@@ -116,6 +116,17 @@ export class S3StorageAdapter implements StoragePort {
     };
   }
 
+  async deleteObject(key: string): Promise<void> {
+    assertSafeRelativeKey(key);
+    const res = await this.send('DELETE', key);
+    // S3/R2 answer 204 also for a missing key; 404 only from some providers.
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`Storage delete failed with status ${res.status}`);
+    }
+    // The cached total is not adjusted (the size is unknown here): it may
+    // over-count until it expires, which only errs on the safe side.
+  }
+
   async measureOrganizationUsage(organizationId: string): Promise<number> {
     const cached = await this.usageCache.get(organizationId);
     if (cached !== null) {
@@ -147,7 +158,7 @@ export class S3StorageAdapter implements StoragePort {
 
   /** One signed request against `<endpoint>/<bucket>/<key>`. */
   private send(
-    method: 'GET' | 'PUT',
+    method: 'GET' | 'PUT' | 'DELETE',
     key: string,
     query: Record<string, string> = {},
     body?: Buffer,

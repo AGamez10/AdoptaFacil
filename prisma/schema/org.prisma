@@ -31,12 +31,16 @@ model Organization {
   documents                OrganizationDocument[]
   legalRepresentatives     LegalRepresentative[]
   dianVerificationAttempts DianVerificationAttempt[]
-  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsFlagged")
-  duplicateFlagsAsMatched  OrganizationDuplicateFlag[]       @relation("OrganizationDuplicateFlagsMatched")
+  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsFlagged")
+  duplicateFlagsAsMatched  OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsMatched")
   invitations              OrganizationInvitation[]
   reports                  OrgReport[]
   ledgerEntries            LedgerEntry[]
   signerDesignations       OrgSignerDesignation[]
+  signatureRequests        OrgSignatureRequest[]
+  accountingEntries        AccountingEntry[]
+  accountingPeriodCloses   AccountingPeriodClose[]
+  accountingShares         AccountingShare[]
   thirdPartyConsents       ThirdPartyConsent[]
   reportApprovals          OrgReportApproval[]
   reportPolicies           OrgReportPolicy[]
@@ -51,10 +55,13 @@ model Organization {
   // ePayco (ADR-PAG-002): the organization's own connected merchant account.
   // See payments.prisma.
   epaycoAccount            OrganizationEpaycoAccount?
+  mercadopagoConnection    OrganizationMercadoPagoConnection?
+  mercadopagoPayments      MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.
   serviceListings          ServiceListing[]
   serviceListingReviews    ServiceListingReview[]
   petProfiles              PetProfile[]
+  resourceOpenOffers       ResourceOpenOffer[]
   emailUsage               OrganizationEmailUsage[]
 
   @@index([status])
@@ -238,19 +245,23 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization              Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization              Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   credential                AuthCredential?
   refreshTokens             RefreshToken[]
   passwordResetTokens       PasswordResetToken[]
   roleAssignments           UserRole[]
   legalRepresentatives      LegalRepresentative[]
   generatedReports          OrgReport[]
-  signerDesignationsOwn     OrgSignerDesignation[] @relation("SignerDesignationUser")
-  signerDesignationsMade    OrgSignerDesignation[] @relation("SignerDesignationBy")
-  signerDesignationsRevoked OrgSignerDesignation[] @relation("SignerDesignationRevokedBy")
-  thirdPartyConsents        ThirdPartyConsent[]    @relation("ThirdPartyConsentSubject")
-  reportApprovals           OrgReportApproval[]    @relation("ReportApprovalSigner")
-  reportPoliciesUpdated     OrgReportPolicy[]      @relation("ReportPolicyUpdatedBy")
+  signerDesignationsOwn     OrgSignerDesignation[]  @relation("SignerDesignationUser")
+  signerDesignationsMade    OrgSignerDesignation[]  @relation("SignerDesignationBy")
+  signerDesignationsRevoked OrgSignerDesignation[]  @relation("SignerDesignationRevokedBy")
+  thirdPartyConsents        ThirdPartyConsent[]     @relation("ThirdPartyConsentSubject")
+  reportApprovals           OrgReportApproval[]     @relation("ReportApprovalSigner")
+  signatureRequests         OrgSignatureRequest[]   @relation("SignatureRequestSigner")
+  accountingCloses          AccountingPeriodClose[] @relation("AccountingCloseBy")
+  accountingSharesReceived  AccountingShare[]       @relation("AccountingShareSigner")
+  accountingSharesCreated   AccountingShare[]       @relation("AccountingShareCreatedBy")
+  reportPoliciesUpdated     OrgReportPolicy[]       @relation("ReportPolicyUpdatedBy")
   mfaFactor                 AuthMfaFactor?
 
   @@unique([organizationId, email])

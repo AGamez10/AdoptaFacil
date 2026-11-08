@@ -68,6 +68,54 @@ $ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
+/* Dentro del portal de una organización (o su plantilla de ejemplo) la ayuda
+   no es de AdoptaFácil sino de esa página: botón pequeño, translúcido y sin
+   texto, para no competir con la marca ni con los botones de la organización. */
+.toggle--subtle {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-color: rgb(255 255 255 / 0.25);
+  background-color: hsl(var(--navy) / 0.55);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 16px -8px rgb(17 24 39 / 0.45);
+  opacity: 0.8;
+  transition:
+    opacity 0.2s $ease,
+    transform 0.2s $ease;
+
+  @media (min-width: 640px) {
+    width: 2.25rem;
+    padding: 0;
+  }
+
+  &:hover,
+  &:focus-visible,
+  &[aria-expanded='true'] {
+    opacity: 1;
+    background-color: hsl(var(--navy) / 0.9);
+  }
+
+  .toggle__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .toggle__icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    font-size: 0.8rem;
+  }
+}
+
+.assistant--subtle {
+  right: 0.6rem;
+  bottom: calc(0.6rem + var(--af-bottom-bar, 0px) + env(safe-area-inset-bottom, 0px));
+}
+
 .toggle__label {
   /* En celular solo se ve el ícono; el nombre sigue disponible para lectores de pantalla. */
   position: absolute;
@@ -100,7 +148,7 @@ $ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 .panel {
   width: min(24rem, calc(100vw - 2rem));
-  max-height: min(36rem, calc(100vh - 6rem));
+  max-height: min(36rem, calc(100dvh - 6rem - var(--af-bottom-bar, 0px)));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -314,6 +362,43 @@ $ease: cubic-bezier(0.22, 1, 0.36, 1);
   color: hsl(var(--primary));
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.related {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed hsl(var(--border));
+}
+
+.related__title {
+  margin-bottom: 0.4rem;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.related__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.related__link {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: hsl(var(--primary));
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 1px;
+  }
 }
 
 .panel__footer {

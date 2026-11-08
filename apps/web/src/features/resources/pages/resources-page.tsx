@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   type CreateResourceNeedInput,
   RESOURCE_CATEGORIES,
@@ -17,6 +18,8 @@ import {
   EmptyState,
   Input,
   Skeleton,
+  buttonVariants,
+  cn,
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
@@ -25,6 +28,7 @@ import { useSession } from '../../../shell/auth';
 import { SelectField, TextAreaField } from '../components/resource-form-fields';
 import { NeedManageCard } from '../components/need-manage-card';
 import { CATEGORY_LABELS } from '../model/resources-view';
+import { OPEN_OFFERS_BOARD_PATH } from '../model/open-offers-view';
 
 const CATEGORY_OPTIONS = RESOURCE_CATEGORIES.map((value) => ({
   value,
@@ -126,7 +130,19 @@ export function ResourcesPage() {
       <PageHeader
         title="Banco de recursos"
         description="Publica las necesidades de tu organización y coordina las donaciones físicas que recibas."
-        actions={canManage && <Button onClick={() => setShowForm(true)}>Publicar necesidad</Button>}
+        actions={
+          canManage && (
+            <>
+              <Link
+                to={OPEN_OFFERS_BOARD_PATH}
+                className={cn(buttonVariants({ variant: 'outline' }))}
+              >
+                Ofrecimientos de la comunidad
+              </Link>
+              <Button onClick={() => setShowForm(true)}>Publicar necesidad</Button>
+            </>
+          )
+        }
       />
       {loading && <Skeleton className="h-64 w-full" />}
       {!loading && (

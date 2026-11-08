@@ -54,5 +54,6 @@ Thumbs.db
 # Despliegue: secretos reales del VPS (solo se versionan los *.example)
 deploy/api.env
 deploy/backups/
+deploy/.last-release
 node-compile-cache/
 dump.rdb

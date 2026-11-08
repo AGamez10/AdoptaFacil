@@ -1,3 +1,4 @@
+import { addDaysToDay, todayInColombia } from '@adoptafacil/contracts';
 import { scheduleFollowUpSchema } from '../../modules/adoptions/followup.schemas';
 import { createClinicalEventSchema } from '../../modules/animals/clinical.schemas';
 import { createAnimalSchema } from '../../modules/animals/animals.schemas';
@@ -6,9 +7,8 @@ import { createCampaignSchema } from '../../modules/campaigns/campaigns.schemas'
 import { createPetProfileSchema } from '../../modules/community/community-directory.schemas';
 import { uploadDocumentSchema } from '../../modules/org/documents.schemas';
 
-/** Día relativo a hoy, como lo envía el formulario (medianoche UTC). */
-const day = (offset: number) =>
-  `${new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)}T00:00:00.000Z`;
+/** Día relativo a hoy en Colombia, como lo envía el formulario (medianoche UTC). */
+const day = (offset: number) => `${addDaysToDay(todayInColombia(), offset)}T00:00:00.000Z`;
 
 const messages = (result: { success: boolean; error?: { issues: { message: string }[] } }) =>
   result.error?.issues.map((issue) => issue.message) ?? [];

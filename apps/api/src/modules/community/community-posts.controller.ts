@@ -20,6 +20,7 @@ import {
   type CreatePostResult,
   type Post as PostDto,
   type PostsPage,
+  type SetPostShareableInput,
   type ToggleLikeResult,
   type UpdatePostInput,
 } from '@adoptafacil/contracts';
@@ -30,7 +31,11 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { CommunityPostsService } from './community-posts.service';
 import { CommunityCommentsService } from './community-comments.service';
 import { CommunityLikesService } from './community-likes.service';
-import { createPostSchema, updatePostSchema } from './community-posts.schemas';
+import {
+  createPostSchema,
+  setPostShareableSchema,
+  updatePostSchema,
+} from './community-posts.schemas';
 import { createCommentSchema } from './community-comments.schemas';
 import { RequireFeature } from '../../core/features';
 
@@ -95,6 +100,15 @@ export class CommunityPostsController {
     @Body(new ZodValidationPipe(updatePostSchema)) dto: UpdatePostInput,
   ): Promise<PostDto> {
     return this.posts.update(actor, id, dto);
+  }
+
+  @Patch('posts/:id/shareable')
+  async setShareable(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(setPostShareableSchema)) dto: SetPostShareableInput,
+  ): Promise<SetPostShareableInput> {
+    return { shareable: await this.posts.setShareable(actor, id, dto.shareable) };
   }
 
   @Delete('posts/:id')

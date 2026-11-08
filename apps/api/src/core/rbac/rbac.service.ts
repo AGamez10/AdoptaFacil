@@ -7,6 +7,7 @@ import {
 import type { UserRole as UserRoleRow } from '@prisma/client';
 import { Role, type RoleAssignment } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
+import { PlansService } from '../plans/plans.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
@@ -30,6 +31,7 @@ export class RbacService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
+    private readonly plans: PlansService,
   ) {}
 
   /** Roles held by a user in the caller's organization. */
@@ -53,6 +55,8 @@ export class RbacService {
     if (!organizationId) {
       throw new ForbiddenException('Missing tenant context');
     }
+    // Leído antes de abrir la transacción (como en las invitaciones).
+    const plan = this.plans.enforced ? await this.plans.effectivePlan(organizationId) : null;
     return this.prisma.withTenant(async (tx) => {
       if (role === Role.Owner) {
         const actorIsOwner = await tx.userRole.findFirst({
@@ -67,6 +71,21 @@ export class RbacService {
       const target = await tx.user.findUnique({ where: { id: userId } });
       if (!target) {
         throw new NotFoundException('User not found in this organization');
+      }
+      // Límite de miembros del plan (solo con PLAN_ENFORCEMENT): dar el PRIMER
+      // rol a alguien de la organización que hoy no tiene ninguno lo suma al
+      // equipo, igual que aceptar una invitación. Sin esto, revocar los roles
+      // de alguien e invitar a otro y luego devolverle un rol pasaba el tope.
+      // Dar un rol más a quien ya es miembro no ocupa un puesto nuevo.
+      if (plan) {
+        const alreadyMember = await tx.userRole.findFirst({
+          where: { organizationId, userId },
+          select: { userId: true },
+        });
+        if (!alreadyMember) {
+          const members = await this.plans.countMembers(tx, organizationId);
+          await this.plans.assertWithinLimit(organizationId, 'members', members + 1, plan);
+        }
       }
       const row = await tx.userRole.upsert({
         where: { organizationId_userId_role: { organizationId, userId, role } },
