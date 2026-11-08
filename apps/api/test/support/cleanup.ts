@@ -78,6 +78,8 @@ const APPEND_ONLY_TABLES = [
   'accounting_entries',
   'accounting_period_closes',
   'accounting_shares',
+  // Café: las entregas del aporte son de solo inserción (trigger).
+  'coffee_contribution_deliveries',
   // F19 · decisions before their requests, events before their tickets (FKs).
   'platform_sensitive_action_decisions',
   'platform_sensitive_actions',

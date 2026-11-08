@@ -32,6 +32,7 @@ import { AccountingModule } from './modules/accounting/accounting.module';
 import { OrgExportsModule } from './modules/org-exports/org-exports.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { CoffeeModule } from './modules/coffee/coffee.module';
 import { OrgGovernanceModule } from './modules/org/governance/org-governance.module';
 import { OrgModule } from './modules/org/org.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -118,6 +119,7 @@ import { RedisModule } from './redis/redis.module';
     ResourcesModule,
     // M10 · marketplace simplificado: catálogo por organización (Ola 3, F-7).
     MarketplaceModule,
+    CoffeeModule,
     // M11 · comunidad: publicaciones, comentarios, likes y moderación (Ola 3, F-8).
     CommunityModule,
     // M08 · voluntariado + servicio social estudiantil (RF18/RF19, Ola 3, S-6).
