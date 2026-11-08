@@ -8,11 +8,13 @@ const REVIEW_A: PublicReview = {
   rating: 5,
   comment: 'Excelente organización',
   authorName: 'Ana',
+  isCommunityMember: false,
   createdAt: '2026-09-29T00:00:00.000Z',
 };
 const REVIEW_B: PublicReview = {
   id: 'rev-b',
   rating: 3,
+  isCommunityMember: false,
   createdAt: '2026-09-20T00:00:00.000Z',
 };
 
@@ -53,6 +55,19 @@ describe('ReviewCarousel (S7-b — fila de reseñas del portal público)', () =>
     expect(screen.getAllByText('Excelente organización')).toHaveLength(1);
     expect(screen.getByText('Ana')).toBeInTheDocument();
     expect(screen.getByText('Anónimo')).toBeInTheDocument();
+  });
+
+  it('marks community members with the badge (even anonymous) and typed names as "Visitante"', () => {
+    const member: PublicReview = {
+      id: 'rev-m',
+      rating: 5,
+      isCommunityMember: true,
+      createdAt: '2026-11-05T00:00:00.000Z',
+    };
+    render(<ReviewCarousel items={[REVIEW_A, member]} />);
+
+    expect(screen.getAllByText('Miembro de la comunidad')).toHaveLength(1);
+    expect(screen.getAllByText('Visitante')).toHaveLength(1);
   });
 
   it('duplicates the row for a seamless loop ONLY once the content overflows the viewport', () => {

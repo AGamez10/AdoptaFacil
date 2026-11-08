@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   type CreatePublicReviewInput,
   type OrganizationReputationSummary,
@@ -17,6 +18,9 @@ import {
   type Review,
 } from '@adoptafacil/contracts';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import type { RequestUser } from '../../core/auth/auth.types';
+import { CurrentUser } from '../../core/auth/current-user.decorator';
+import { OptionalJwtAuthGuard } from '../../core/auth/optional-jwt-auth.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { PublicReputationService } from './public-reputation.service';
 import { createPublicReviewSchema } from './reviews.schemas';
@@ -58,20 +62,25 @@ export class PublicReputationController {
   }
 
   /**
-   * Botón "Registrar reseña" del portal público (S7-b) — sin sesión, siempre
-   * anónima, queda visible de inmediato. Deliberadamente distinto de
-   * `POST /reviews` (RF23 original: exige sesión + interacción real) — este
-   * camino es SOLO el que el cliente pidió para el portal.
+   * Botón "Registrar reseña" del portal público (S7-b) — queda visible de
+   * inmediato. Deliberadamente distinto de `POST /reviews` (RF23 original:
+   * exige sesión + interacción real, pasa por PlatformAdmin).
+   *
+   * Sesión opcional (2026-11-05, `OptionalJwtAuthGuard`, mismo patrón que
+   * `POST /donations`): con token válido la reseña se liga a la cuenta y
+   * lleva el sello "Miembro de la comunidad"; sin token (o con uno vencido)
+   * es de visitante. Al ser público y sin cuenta, se limita por IP.
    */
   @Post('public/organizations/:slug/reviews')
   @HttpCode(201)
   // Sin sesión: tope por IP contra el spam (10 reseñas cada 10 minutos).
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(OptionalJwtAuthGuard, ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 10 * 60_000 } })
   createReview(
     @Param('slug') slug: string,
     @Body(new ZodValidationPipe(createPublicReviewSchema)) dto: CreatePublicReviewInput,
+    @CurrentUser() actor: RequestUser | undefined,
   ): Promise<Review> {
-    return this.service.createPublicReview(slug, dto);
+    return this.service.createPublicReview(slug, dto, actor);
   }
 }

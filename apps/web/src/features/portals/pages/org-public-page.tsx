@@ -10,6 +10,7 @@ import type {
   PortalTemplateOptions,
   PortalTheme,
   PortalView,
+  Review,
 } from '@adoptafacil/contracts';
 import { resolveTemplateOptions } from '@adoptafacil/contracts';
 import { Skeleton } from '@adoptafacil/ui';
@@ -566,7 +567,26 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                   <PortalAboutSection aboutUs={aboutUs} />
                 </section>
               )}
-              {reputation && <PortalReviewsSection slug={slug as string} />}
+              {reputation && (
+                <PortalReviewsSection
+                  slug={slug as string}
+                  member={
+                    session.isAuthenticated && session.user
+                      ? {
+                          name: session.user.name,
+                          isOwnOrganization:
+                            session.user.organizationId === view?.profile.organization.id,
+                        }
+                      : undefined
+                  }
+                  submitAsMember={(reviewSlug, input) =>
+                    client.request<Review>(
+                      `/public/organizations/${encodeURIComponent(reviewSlug)}/reviews`,
+                      { method: 'POST', json: input },
+                    )
+                  }
+                />
+              )}
 
               {hasContactInfo && contact && (
                 <section id="portal-contact-info" style={{ scrollMarginTop: '5rem' }}>
