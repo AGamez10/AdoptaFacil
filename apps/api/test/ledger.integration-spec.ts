@@ -7,7 +7,7 @@ import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
-import { approveTestOrganization } from './support/organization-status';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * RF14 · Libro público (extremo a extremo):
@@ -60,6 +60,7 @@ describe('Public ledger (RF14: libro público, idempotencia, inmutabilidad, no-l
       .expect(201);
     orgIds.push(res.body.user.organizationId);
     await approveTestOrganization(admin, res.body.user.organizationId);
+    await formalizeTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       userId: res.body.user.id,
@@ -257,7 +258,6 @@ describe('Public ledger (RF14: libro público, idempotencia, inmutabilidad, no-l
       .send({
         organizationId: orgA.orgId,
         intendedAmount: 50000,
-        commissionPayer: 'organization',
         idempotencyKey: `ledger-${randomUUID()}`,
         payer: { fullName: 'Donante Real', documentId: '1020304050' },
       })

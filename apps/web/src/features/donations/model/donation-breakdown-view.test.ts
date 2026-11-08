@@ -1,84 +1,59 @@
 import { describe, expect, it } from 'vitest';
+import { computeBreakdown, MIN_DONATION_AMOUNT } from '@adoptafacil/contracts';
 import {
-  computeBreakdown,
-  DIRECT_COLLECTION_RATES,
-  MIN_DONATION_AMOUNT,
-} from '@adoptafacil/contracts';
-import { breakdownLines } from './donation-breakdown-view';
-import {
+  breakdownLines,
   buildDonationBreakdown,
   formatCop,
   safeBuildDonationBreakdown,
 } from './donation-breakdown-view';
 
 /**
- * §M05 — the breakdown SHOWN to the donor must be, to the peso, `computeBreakdown`
- * (the single source of the money math). This test pins that equality in BOTH
- * commission modes across several amounts, so the UI can never drift into its own
- * arithmetic.
+ * §M05 — what is SHOWN to the donor must be, to the peso, `computeBreakdown`
+ * (the single source of the money math), so the UI can never drift into its own
+ * arithmetic, and it never shows an invented fee.
  */
 const AMOUNTS = [1000, 5000, 33333, 50000, 100000, 1234567];
 
 describe('donation-breakdown-view', () => {
-  it('shows EXACTLY computeBreakdown in both commission modes (no own arithmetic)', () => {
+  it('shows EXACTLY computeBreakdown (no own arithmetic)', () => {
     for (const amount of AMOUNTS) {
-      for (const payer of ['organization', 'donor'] as const) {
-        const { breakdown } = buildDonationBreakdown(amount, payer);
-        expect(breakdown).toEqual(computeBreakdown(amount, payer, DIRECT_COLLECTION_RATES));
-      }
+      expect(buildDonationBreakdown(amount).breakdown).toEqual(computeBreakdown(amount));
     }
   });
 
-  it('lists the itemized lines whose amounts come straight from the breakdown', () => {
-    const { breakdown, lines } = buildDonationBreakdown(50000, 'donor');
-    for (const line of lines) {
-      expect(line.amount).toBe(breakdown[line.key]);
-    }
-    // The emphasised lines are what the donor pays and what the org receives.
-    expect(lines.find((l) => l.emphasis === 'charged')?.amount).toBe(breakdown.amountCharged);
-    expect(lines.find((l) => l.emphasis === 'net')?.amount).toBe(breakdown.net);
-  });
-
-  it('org mode: total charged equals the intended amount; org absorbs the fees', () => {
-    const { breakdown } = buildDonationBreakdown(50000, 'organization');
+  it('the donor pays exactly what they chose and sees no fee line', () => {
+    const { breakdown, lines } = buildDonationBreakdown(50000);
     expect(breakdown.amountCharged).toBe(50000);
-    expect(breakdown.net).toBeLessThan(50000);
+    expect(lines).toEqual([
+      { key: 'amountCharged', label: 'Total que pagas', amount: 50000, emphasis: 'charged' },
+    ]);
+    expect(lines.map((l) => l.label).join(' ')).not.toMatch(/comisi[oó]n|estimad/i);
   });
 
-  it('donor mode: total charged exceeds intended; the org nets ≈ the intended amount', () => {
-    const { breakdown } = buildDonationBreakdown(50000, 'donor');
-    expect(breakdown.amountCharged).toBeGreaterThan(50000);
-    expect(Math.abs(breakdown.net - 50000)).toBeLessThanOrEqual(2);
+  it('a stored gateway fee (if any) is shown with the net, never an AdoptaFácil fee', () => {
+    const lines = breakdownLines({
+      amountCharged: 50000,
+      gross: 50000,
+      platformFee: 0,
+      platformIva: 0,
+      gatewayFee: 1500,
+      gatewayIva: 285,
+      net: 48215,
+    });
+    expect(lines.map((l) => l.key)).toEqual(['amountCharged', 'gatewayFee', 'gatewayIva', 'net']);
+    expect(lines.find((l) => l.emphasis === 'net')?.amount).toBe(48215);
   });
 
   it('safe variant returns null below the minimum / for non-integers, never throwing', () => {
-    expect(safeBuildDonationBreakdown(MIN_DONATION_AMOUNT - 1, 'organization')).toBeNull();
-    expect(safeBuildDonationBreakdown(1000.5, 'organization')).toBeNull();
-    expect(safeBuildDonationBreakdown(Number.NaN, 'donor')).toBeNull();
-    expect(safeBuildDonationBreakdown(MIN_DONATION_AMOUNT, 'organization')).not.toBeNull();
+    expect(safeBuildDonationBreakdown(MIN_DONATION_AMOUNT - 1)).toBeNull();
+    expect(safeBuildDonationBreakdown(1000.5)).toBeNull();
+    expect(safeBuildDonationBreakdown(Number.NaN)).toBeNull();
+    expect(safeBuildDonationBreakdown(MIN_DONATION_AMOUNT)).not.toBeNull();
   });
 
   it('formats integer pesos in es-CO currency without decimals', () => {
     const out = formatCop(50000);
     expect(out).toMatch(/50\.000/);
     expect(out).not.toMatch(/,\d\d/);
-  });
-
-  it('ADR-PAG-001: a new donation shows no AdoptaFácil fee lines (direct collection)', () => {
-    const { lines } = buildDonationBreakdown(50000, 'donor');
-    expect(lines.find((l) => l.key === 'platformFee')).toBeUndefined();
-    expect(lines.find((l) => l.key === 'platformIva')).toBeUndefined();
-    expect(lines.find((l) => l.key === 'gatewayFee')?.label).toBe('Comisión pasarela (estimada)');
-  });
-
-  it('F-NOMENCLATURA: a historical donation that had the fee still labels it "Apoyo de sostenimiento", never "Comisión AdoptaFácil"', () => {
-    const lines = breakdownLines(computeBreakdown(50000, 'donor'));
-    expect(lines.find((l) => l.key === 'platformFee')?.label).toBe(
-      'Apoyo de sostenimiento a AdoptaFácil',
-    );
-    expect(lines.find((l) => l.key === 'platformIva')?.label).toBe(
-      'IVA sobre el apoyo de sostenimiento a AdoptaFácil',
-    );
-    expect(lines.map((l) => l.label).join(' ')).not.toMatch(/comisión adoptaf[aá]cil/i);
   });
 });

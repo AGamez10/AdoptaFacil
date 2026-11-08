@@ -392,10 +392,16 @@ function buildV2(
   // --- Partes (sin número, como en la práctica notarial colombiana) ---
   const partes: AdoptionContractBlock[] = [
     p(
-      `EL CEDENTE: ${org}, entidad sin ánimo de lucro identificada con NIT ` +
-        `${blank(data.organizationNit)}, con domicilio en ${blank(data.organizationAddress)}, ` +
-        `representada en este acto por ${representative ? blank(representative.fullName) : CONTRACT_BLANK}, ` +
-        'en su calidad de representante legal o persona autorizada según sus estatutos.',
+      data.organizationFormalization === 'informal'
+        ? `EL CEDENTE: ${org}, grupo de protección animal sin personería jurídica, con ` +
+            `domicilio en ${blank(data.organizationAddress)}, por medio de ` +
+            `${representative ? blank(representative.fullName) : CONTRACT_BLANK}, persona natural ` +
+            'mayor de edad responsable del grupo, quien actúa en nombre propio y responde ' +
+            'personalmente por las obligaciones del cedente en este contrato.'
+        : `EL CEDENTE: ${org}, entidad sin ánimo de lucro identificada con NIT ` +
+            `${blank(data.organizationNit)}, con domicilio en ${blank(data.organizationAddress)}, ` +
+            `representada en este acto por ${representative ? blank(representative.fullName) : CONTRACT_BLANK}, ` +
+            'en su calidad de representante legal o persona autorizada según sus estatutos.',
     ),
     p(
       `EL ADOPTANTE: ${blank(applicant.fullName)}, mayor de edad, identificado(a) con ` +

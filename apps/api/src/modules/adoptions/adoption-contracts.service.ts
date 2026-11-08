@@ -48,7 +48,8 @@ import { checkContractTransition } from './adoption-contract-status';
 import { computeContractHash } from './adoption-contract-hash';
 import { SIGNATURE_PORT } from './signature/signature.port';
 import { AdoptionContractCopyService } from './adoption-contract-copy.service';
-import { detectSignatureImageType, resolveMinimumSignerAge } from './adoption-contract-rules';
+import { resolveMinimumSignerAge } from './adoption-contract-rules';
+import { normalizeSignatureImage, SignatureImageError } from '../reports/signature-image';
 
 /** Formatea `{ city, address }` de `OrganizationLocation` en una sola línea
  *  de domicilio — mismo criterio que `VolunteerCertificatesService.getOrgCity`
@@ -133,7 +134,26 @@ export class AdoptionContractsService {
       }
 
       const applicant = req.applicant as unknown as AdoptionApplicant;
-      const animal = req.animalSnapshot as unknown as AdoptionAnimalSnapshot;
+      let animal = req.animalSnapshot as unknown as AdoptionAnimalSnapshot;
+
+      // P0-2: the organization's part is signed by ITS registered legal
+      // representative (or, for an informal group, its registered responsible
+      // person), who must approve this specific contract from their own
+      // account. Whoever generates the draft never signs in their name.
+      const representativeSigner = await this.legalRepresentatives.getCurrentSignerForOrg(
+        organizationId,
+        'legal_representative',
+      );
+      if (!representativeSigner) {
+        throw new ConflictException(
+          'Antes de generar contratos registra quién firma por la organización ' +
+            '(Organización → Representante legal).',
+        );
+      }
+      const representativeUser = await tx.user.findUnique({
+        where: { id: representativeSigner.memberId },
+        select: { email: true },
+      });
 
       // Auto-rellena `data` con lo que el sistema YA tiene (NIT/domicilio de
       // la organización, raza/sexo/edad del animal, cédula/domicilio del
@@ -150,6 +170,19 @@ export class AdoptionContractsService {
           Prisma.sql`SELECT * FROM adopter_profile_for_contract(${req.applicantUserId}::uuid)`,
         ),
       ]);
+      // P0-3: el contrato identifica al animal REAL de la organización, nunca
+      // un snapshot que haya mandado el cliente.
+      if (!animalRow || animalRow.organizationId !== organizationId || !animalRow.isActive) {
+        throw new ConflictException(
+          'No se puede generar el contrato: el animal de esta solicitud ya no existe en tu organización.',
+        );
+      }
+      animal = {
+        ...animal,
+        animalId: animalRow.id,
+        name: animalRow.name,
+        species: animalRow.species as AdoptionAnimalSnapshot['species'],
+      };
       const location = profile?.location as OrganizationLocation | null | undefined;
       const computedAge = animalRow
         ? computeAge(animalRow.birthDate, animalRow.approximateAgeMonths, new Date())
@@ -158,6 +191,11 @@ export class AdoptionContractsService {
 
       const data: AdoptionContractData = {
         organizationName: profile?.legalName?.trim() || organization?.name || undefined,
+        organizationFormalization: ['formalizada', 'esal', 'esal_rte'].includes(
+          profile?.formalizationState ?? 'informal',
+        )
+          ? 'formal'
+          : 'informal',
         organizationNit: profile?.nit ?? undefined,
         organizationAddress: formatOrgAddress(location),
         animalBreed: animalRow?.breed?.name ?? animalRow?.customBreed ?? undefined,
@@ -175,12 +213,11 @@ export class AdoptionContractsService {
         {
           id: randomUUID(),
           role: 'organization_representative',
-          // Reemplazado por el nombre REAL del representante legal vigente
-          // en el momento de firmar (`sign()`) — este placeholder solo se ve
-          // mientras nadie ha firmado todavía.
-          fullName: 'Representante de la organización',
-          email: actor.email,
-          userId: actor.id,
+          // The registered representative: only they can approve and sign
+          // this contract (`sign()` checks it again against the CURRENT one).
+          fullName: representativeSigner.fullName,
+          email: representativeUser?.email ?? actor.email,
+          userId: representativeSigner.memberId,
         },
         {
           id: randomUUID(),
@@ -439,7 +476,12 @@ export class AdoptionContractsService {
     contractId: string,
     input: SignAdoptionContractInput,
   ): Promise<AdoptionContract> {
-    const row = await this.loadForSigner(contractId, actor.id);
+    // The current legal representative can approve a draft even if it was
+    // generated while someone else held the role (they are then not yet listed
+    // as its signer): the contract is loaded through their own organization.
+    const row =
+      (await this.loadForSigner(contractId, actor.id)) ??
+      (await this.loadDraftForCurrentRepresentative(contractId, actor));
     if (!row) {
       throw new NotFoundException('Contrato no encontrado o no eres firmante.');
     }
@@ -457,7 +499,7 @@ export class AdoptionContractsService {
     if (!signer) {
       throw new NotFoundException('Firmante no encontrado en el contrato.');
     }
-    if (signer.userId !== actor.id) {
+    if (signer.role !== 'organization_representative' && signer.userId !== actor.id) {
       throw new ForbiddenException('No puedes firmar por otra persona.');
     }
     if (signer.signedAt) {
@@ -465,6 +507,7 @@ export class AdoptionContractsService {
     }
 
     let fullNameOverride: string | undefined;
+    let userIdOverride: string | undefined;
     let signatureFileRef: string | undefined;
     let signatureHash: string | undefined;
 
@@ -479,7 +522,29 @@ export class AdoptionContractsService {
             'contratos de adopción (Organización → Representante legal).',
         );
       }
+      // P0-2: only the registered representative approves THIS contract with
+      // their own session; nobody else can stamp their signature.
+      if (repSigner.memberId !== actor.id) {
+        throw new ForbiddenException(
+          `Este contrato lo aprueba y firma ${repSigner.fullName}, quien firma por la ` +
+            'organización, desde su propia cuenta.',
+        );
+      }
       fullNameOverride = repSigner.fullName;
+      userIdOverride = actor.id;
+      if (signer.userId !== actor.id) {
+        // The draft was generated under a previous representative: it now
+        // names the current one before they sign it (still a draft, unsigned).
+        const reassigned = signers.map((s) =>
+          s.id === signer.id ? { ...s, userId: actor.id, fullName: repSigner.fullName } : s,
+        );
+        await this.prisma.withOrgContext(row.organization_id, (tx) =>
+          tx.adoptionContract.updateMany({
+            where: { id: contractId, status: 'draft' },
+            data: { signers: reassigned as unknown as Prisma.InputJsonValue },
+          }),
+        );
+      }
       // Se congela QUÉ firma registrada usó el representante: si la
       // organización cambia de representante legal después, el contrato
       // sellado sigue mostrando la firma de quien realmente firmó (antes se
@@ -497,11 +562,19 @@ export class AdoptionContractsService {
       if (!input.signatureBase64) {
         throw new BadRequestException('Debes dibujar o subir tu firma para firmar el contrato.');
       }
-      const plaintext = Buffer.from(input.signatureBase64, 'base64');
-      if (plaintext.length === 0 || !detectSignatureImageType(plaintext)) {
-        throw new BadRequestException(
-          'La firma está vacía o no es una imagen válida (usa PNG o JPG).',
+      // Same normalization as every other signature: real PNG/JPG, decodable,
+      // re-encoded to PNG (no metadata), so the PDF always shows what was signed.
+      let plaintext: Buffer;
+      try {
+        plaintext = await normalizeSignatureImage(
+          Buffer.from(input.signatureBase64, 'base64'),
+          'drawn',
         );
+      } catch (error) {
+        if (error instanceof SignatureImageError) {
+          throw new BadRequestException(`${error.message} Usa una imagen PNG o JPG.`);
+        }
+        throw error;
       }
       signatureHash = hashSignature(plaintext);
       const encrypted = encryptSignature(plaintext, this.signatureConfig.signatureEncryptionKey);
@@ -527,6 +600,7 @@ export class AdoptionContractsService {
         ? {
             ...s,
             fullName: fullNameOverride ?? s.fullName,
+            userId: userIdOverride ?? s.userId,
             signedAt: result.signedAt,
             signatureId: result.signatureId,
             signatureFileRef: signatureFileRef ?? s.signatureFileRef,
@@ -617,7 +691,7 @@ export class AdoptionContractsService {
   /** PDF de un contrato ya cargado (por la organización, un firmante o el
    *  envío de copias) — firmas de TODOS los firmantes, no solo dos. */
   async renderPdfFor(
-    organizationId: string,
+    _organizationId: string,
     contract: {
       id: string;
       status: AdoptionContractStatus;
@@ -628,7 +702,7 @@ export class AdoptionContractsService {
   ): Promise<Buffer> {
     const images = await Promise.all(
       contract.signers.map(async (s) => {
-        const bytes = await this.resolveSignatureImage(organizationId, contract.signers, s.id);
+        const bytes = await this.resolveSignatureImage(contract.signers, s.id);
         return [s.id, bytes] as const;
       }),
     );
@@ -658,22 +732,20 @@ export class AdoptionContractsService {
     if (!row) {
       throw new NotFoundException('Contrato no encontrado o no eres firmante.');
     }
-    return this.resolveSignatureImage(row.organization_id, row.signers, signerId);
+    return this.resolveSignatureImage(row.signers, signerId);
   }
 
   /** Same as {@link getSignatureImage}, for ANY org manager. */
   async getSignatureImageForOrg(contractId: string, signerId: string): Promise<Buffer | null> {
     const row = await this.loadForOrg(contractId);
     const signers = row.signers as unknown as AdoptionContractSigner[];
-    return this.resolveSignatureImage(row.organizationId, signers, signerId);
+    return this.resolveSignatureImage(signers, signerId);
   }
 
-  /** Representative signers reuse the org's CURRENT legal representative
-   *  signature live (never duplicated/stored per contract — see `sign()`'s
-   *  own doc comment); any other signer reads+decrypts their own stored
-   *  encrypted file (`StoragePort`, AES-256-GCM). */
+  /** Every signer (representative included) reads+decrypts the encrypted
+   *  file frozen in THEIR signer entry when they signed (`StoragePort`,
+   *  AES-256-GCM); a later change of representative never alters it. */
   private async resolveSignatureImage(
-    organizationId: string,
     signers: AdoptionContractSigner[],
     signerId: string,
   ): Promise<Buffer | null> {
@@ -681,15 +753,8 @@ export class AdoptionContractsService {
     if (!signer?.signedAt) {
       return null;
     }
-    if (signer.role === 'organization_representative' && !signer.signatureFileRef) {
-      // Contratos firmados antes de congelar la referencia: única opción es
-      // la firma del representante vigente (comportamiento anterior).
-      const rep = await this.legalRepresentatives.getCurrentSignerForOrg(
-        organizationId,
-        'legal_representative',
-      );
-      return rep?.signatureImage ?? null;
-    }
+    // Only the signature frozen when THAT person signed is ever drawn: never
+    // the current representative's in place of whoever actually signed.
     if (!signer.signatureFileRef) {
       return null;
     }
@@ -705,6 +770,42 @@ export class AdoptionContractsService {
   }
 
   /** Load a contract for a signer via the SECURITY DEFINER function (cross-tenant). */
+  /**
+   * A DRAFT of the actor's own organization whose representative part is still
+   * unsigned — so the CURRENT legal representative can approve it even when it
+   * was generated under a previous one. Any other case returns `null`.
+   */
+  private async loadDraftForCurrentRepresentative(
+    contractId: string,
+    actor: RequestUser,
+  ): Promise<ContractRow | null> {
+    const organizationId = actor.organizationId;
+    if (!organizationId) return null;
+    const model = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.adoptionContract.findUnique({ where: { id: contractId } }),
+    );
+    if (!model || model.organizationId !== organizationId || model.status !== 'draft') {
+      return null;
+    }
+    const signers = model.signers as unknown as AdoptionContractSigner[];
+    const rep = signers.find((s) => s.role === 'organization_representative');
+    if (!rep || rep.signedAt) return null;
+    return {
+      id: model.id,
+      organization_id: model.organizationId,
+      request_id: model.requestId,
+      animal_id: model.animalId,
+      version: model.version,
+      status: model.status,
+      signers,
+      payload: model.payload as unknown as AdoptionContractPayload,
+      content_hash: model.contentHash,
+      created_at: model.createdAt,
+      updated_at: model.updatedAt,
+      signed_at: model.signedAt,
+    } as ContractRow;
+  }
+
   private async loadForSigner(contractId: string, userId: string): Promise<ContractRow | null> {
     const rows = await this.prisma.$queryRaw<ContractRow[]>(Prisma.sql`
       SELECT * FROM adoption_contract_for_signer(${contractId}::uuid, ${userId}::uuid)

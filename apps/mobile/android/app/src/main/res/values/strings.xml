@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AdoptaFácil</string>
+    <string name="title_activity_main">AdoptaFácil</string>
+    <string name="package_name">co.adoptafacil.app</string>
+    <string name="custom_url_scheme">co.adoptafacil.app</string>
+</resources>

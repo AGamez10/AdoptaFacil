@@ -19,7 +19,7 @@ export const ACCOUNTING_ENTRY_TYPES = ['donation', 'refund', 'chargeback'] as co
 export type AccountingEntryType = (typeof ACCOUNTING_ENTRY_TYPES)[number];
 
 /** Pasarela que confirmó el hecho. */
-export type AccountingSource = 'mercadopago' | 'epayco' | 'other';
+export type AccountingSource = 'mercadopago' | 'other';
 
 /** Destinación de la donación (para rendir cuentas de donaciones con destino). */
 export const ACCOUNTING_DESTINATIONS = ['general', 'animal', 'campaign'] as const;
@@ -129,7 +129,7 @@ export interface AccountingTotals {
   chargebacksCop: number;
   /** Bruto neto de reversos: donaciones + reembolsos + contracargos. */
   balanceCop: number;
-  /** Comisiones de la pasarela informadas (positivo: lo que el refugio paga). */
+  /** Tarifa de Mercado Pago informadas (positivo: lo que el refugio paga). */
   feesCop: number;
   /** Neto recibido informado por la pasarela. */
   netCop: number;

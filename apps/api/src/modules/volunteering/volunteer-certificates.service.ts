@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -65,6 +66,9 @@ function toCertificate(row: CertificateRow): VolunteerCertificate {
     schoolName: row.schoolName ?? undefined,
     schoolAgreementCode: row.schoolAgreementCode ?? undefined,
     bitacora: (row.bitacora as unknown as VolunteerCertificateBitacoraEntry[]) ?? [],
+    signerFullName: row.signerFullName ?? undefined,
+    signerPosition: row.signerPosition ?? undefined,
+    signerIsLegalRepresentative: row.signerIsLegalRepresentative ?? undefined,
   };
 }
 
@@ -101,6 +105,19 @@ function fromMineRow(row: CertificateMineRow): VolunteerCertificate {
   };
 }
 
+function frozenSignerOf(row: CertificateViewerRow): FrozenCertificateSigner | null {
+  return row.signer_legal_representative_id && row.signer_signature_hash
+    ? {
+        legalRepresentativeId: row.signer_legal_representative_id,
+        signatureHash: row.signer_signature_hash,
+      }
+    : null;
+}
+
+/** Formalizada o ESAL: firma su representante legal. Informal o en proceso:
+ *  firma la persona responsable que la organización registró. */
+const FORMAL_STATES: ReadonlySet<string> = new Set(['formalizada', 'esal', 'esal_rte']);
+
 /** Raw snake_case row from `volunteer_certificate_for_viewer(...)` — a plain
  *  `SELECT * FROM <table-returning function>`, so Prisma's `@map()` camelCase
  *  translation (which only applies to the ORM client, `tx.volunteerCertificate.*`)
@@ -124,6 +141,17 @@ interface CertificateViewerRow {
   school_name: string | null;
   school_agreement_code: string | null;
   bitacora: VolunteerCertificateBitacoraEntry[];
+  signer_legal_representative_id: string | null;
+  signer_signature_hash: string | null;
+  signer_full_name: string | null;
+  signer_position: string | null;
+  signer_is_legal_representative: boolean | null;
+}
+
+/** Firma congelada al emitir: solo para volver a dibujar el PDF. */
+interface FrozenCertificateSigner {
+  legalRepresentativeId: string;
+  signatureHash: string;
 }
 
 function fromViewerRow(row: CertificateViewerRow): VolunteerCertificate {
@@ -146,6 +174,9 @@ function fromViewerRow(row: CertificateViewerRow): VolunteerCertificate {
     schoolName: row.school_name ?? undefined,
     schoolAgreementCode: row.school_agreement_code ?? undefined,
     bitacora: row.bitacora ?? [],
+    signerFullName: row.signer_full_name ?? undefined,
+    signerPosition: row.signer_position ?? undefined,
+    signerIsLegalRepresentative: row.signer_is_legal_representative ?? undefined,
   };
 }
 
@@ -190,6 +221,27 @@ export class VolunteerCertificatesService {
   /** Issue a certificate for one enrollment (Owner/Administrator, own tenant). */
   async issue(actorUserId: string, enrollmentId: string): Promise<VolunteerCertificate> {
     const organizationId = this.requireOrgId();
+
+    // P0-2: el certificado lo firma quien firma por la organización, y solo
+    // esa persona lo emite (aprueba con su propia firma). Se congela aquí:
+    // un cambio posterior de representante nunca reescribe un certificado ya
+    // entregado.
+    const signer = await this.legalRepresentatives.getCurrentSignerForOrg(
+      organizationId,
+      'legal_representative',
+    );
+    if (!signer) {
+      throw new ConflictException(
+        'Antes de emitir certificados registra quién firma por la organización ' +
+          '(Organización → Firma del representante).',
+      );
+    }
+    if (signer.memberId !== actorUserId) {
+      throw new ForbiddenException(
+        `Este certificado lo emite y firma ${signer.fullName}, quien firma por la organización. ` +
+          'Pídele que lo emita desde su cuenta.',
+      );
+    }
 
     const created = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const enrollment = await tx.volunteerEnrollment.findUnique({ where: { id: enrollmentId } });
@@ -261,6 +313,13 @@ export class VolunteerCertificatesService {
       const organization = await tx.organization.findUniqueOrThrow({
         where: { id: organizationId },
       });
+      const profile = await tx.organizationProfile.findUnique({
+        where: { organizationId },
+        select: { formalizationState: true },
+      });
+      const signerIsLegalRepresentative = FORMAL_STATES.has(
+        profile?.formalizationState ?? 'informal',
+      );
 
       // Bitácora (FSD Doc 8): derived from the enrollment's OWN approved
       // sessions — never a separate capture. Supervisor name is a live join
@@ -309,6 +368,11 @@ export class VolunteerCertificatesService {
           schoolName: enrollment.schoolName,
           schoolAgreementCode: enrollment.schoolAgreementCode,
           bitacora: bitacora as unknown as Prisma.InputJsonValue,
+          signerLegalRepresentativeId: signer.id,
+          signerSignatureHash: signer.signatureHash,
+          signerFullName: signer.fullName,
+          signerPosition: signer.position,
+          signerIsLegalRepresentative,
         },
       });
       await this.audit.recordWithTx(tx, {
@@ -379,11 +443,18 @@ export class VolunteerCertificatesService {
   /** Dual-viewer read: the certificate's own volunteer OR a member of the
    *  issuing organization. Returns null for anyone else (⇒ 404). */
   private async forViewer(id: string, actor: RequestUser): Promise<VolunteerCertificate | null> {
+    return (await this.forViewerWithSigner(id, actor))?.certificate ?? null;
+  }
+
+  private async forViewerWithSigner(
+    id: string,
+    actor: RequestUser,
+  ): Promise<{ certificate: VolunteerCertificate; frozen: FrozenCertificateSigner | null } | null> {
     const rows = await this.prisma.$queryRaw<CertificateViewerRow[]>(
       Prisma.sql`SELECT * FROM volunteer_certificate_for_viewer(${id}::uuid, ${actor.id}::uuid, ${actor.organizationId}::uuid)`,
     );
     const row = rows[0];
-    return row ? fromViewerRow(row) : null;
+    return row ? { certificate: fromViewerRow(row), frozen: frozenSignerOf(row) } : null;
   }
 
   async get(id: string, actor: RequestUser): Promise<VolunteerCertificate> {
@@ -431,32 +502,39 @@ export class VolunteerCertificatesService {
    * before is lost.
    */
   async generatePdf(id: string, actor: RequestUser): Promise<Buffer> {
-    const stored = await this.forViewer(id, actor);
-    if (!stored) {
+    const viewed = await this.forViewerWithSigner(id, actor);
+    if (!viewed) {
       throw new NotFoundException('Volunteer certificate not found');
     }
     // Las fuentes estándar de pdf-lib solo codifican WinAnsi: un emoji o un
     // carácter fuera de ese juego en cualquier texto del usuario (nombre,
     // actividad, colegio, bitácora) hacía LANZAR `drawText` y la constancia no
     // se podía descargar (500). Todo texto variable se sanea antes de dibujar.
-    const row = sanitizeCertificateForPdf(stored);
+    const row = sanitizeCertificateForPdf(viewed.certificate);
+    const { frozen } = viewed;
 
-    const [rawSigner, rawCity] = await Promise.all([
-      this.legalRepresentatives.getCurrentSignerForOrg(row.organizationId).catch((error) => {
-        this.logger.warn(
-          `No se pudo leer la firma del representante legal: ${(error as Error).message}`,
-        );
-        return null;
-      }),
+    // P0-2: SOLO la firma congelada al emitir (verificada por su hash), nunca
+    // la del representante vigente. Un certificado anterior a este control no
+    // tiene firmante congelado y se muestra sin firma.
+    const [signatureBytes, rawCity] = await Promise.all([
+      frozen
+        ? this.legalRepresentatives.getSignatureImageById(
+            row.organizationId,
+            frozen.legalRepresentativeId,
+            frozen.signatureHash,
+          )
+        : Promise.resolve(null),
       this.getOrgCity(row.organizationId),
     ]);
-    const signer = rawSigner
-      ? {
-          ...rawSigner,
-          fullName: pdfText(rawSigner.fullName, 120),
-          position: pdfText(rawSigner.position, 120),
-        }
-      : null;
+    const signer =
+      frozen && row.signerFullName && row.signerPosition
+        ? {
+            fullName: pdfText(row.signerFullName, 120),
+            position: pdfText(row.signerPosition, 120),
+            signatureImage: signatureBytes,
+            isLegalRepresentative: row.signerIsLegalRepresentative !== false,
+          }
+        : null;
     const city = rawCity ? pdfText(rawCity, 80) : undefined;
 
     const pdf = await PDFDocument.create();
@@ -471,13 +549,13 @@ export class VolunteerCertificatesService {
     // La firma puede venir dibujada (PNG) o subida como foto (JPG): antes solo
     // se intentaba PNG y una firma en JPG se descartaba en silencio, dejando
     // el certificado sin firma aunque el representante sí la hubiera registrado.
-    const signatureImage = signer ? await embedSignatureImage(pdf, signer.signatureImage) : null;
+    const signatureImage = signer?.signatureImage
+      ? await embedSignatureImage(pdf, signer.signatureImage)
+      : null;
     if (!signer) {
-      this.logger.warn(
-        `Certificado ${row.id}: la organización no tiene firma vigente de representante legal.`,
-      );
+      this.logger.warn(`Certificado ${row.id}: emitido sin firmante congelado.`);
     } else if (!signatureImage) {
-      this.logger.warn(`Certificado ${row.id}: la firma registrada no es una imagen PNG/JPG.`);
+      this.logger.warn(`Certificado ${row.id}: la firma congelada no se pudo leer o verificar.`);
     }
 
     drawCertificatePage(pdf, {
@@ -633,12 +711,22 @@ function drawCertificatePage(
   input: {
     font: CertificateFonts;
     row: VolunteerCertificate;
-    signer: { fullName: string; position: string } | null;
+    signer: { fullName: string; position: string; isLegalRepresentative: boolean } | null;
     signatureImage: PDFImage | null;
     city?: string;
   },
 ): void {
   const { font, row, signer, signatureImage, city } = input;
+  // Una ESAL formalizada certifica por medio de su representante legal; un
+  // grupo informal o en proceso no tiene uno, y certifica por medio de la
+  // persona responsable que registró. Nunca se le atribuye una figura legal
+  // que no tiene. Sin firmante congelado (certificado antiguo) se dice "quien
+  // firma por la organización", sin suponer ninguna.
+  const signerRole = !signer
+    ? 'quien firma por la organización'
+    : signer.isLegalRepresentative
+      ? 'su representante legal'
+      : 'su responsable';
   const PAGE_WIDTH = 841.89;
   const PAGE_HEIGHT = 595.28;
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -689,7 +777,7 @@ function drawCertificatePage(
   drawCenteredParagraph(
     page,
     PAGE_WIDTH,
-    `${row.organizationName}, por medio de su representante legal, certifica que:`,
+    `${row.organizationName}, por medio de ${signerRole}, certifica que:`,
     y,
     font.serifItalic,
     13,
@@ -752,7 +840,7 @@ function drawCertificatePage(
   });
   // Quién emite y quién firma, dicho sin ambigüedad.
   for (const [i, line] of wrapText(
-    `Expide: ${row.organizationName}. Firma: su representante legal. AdoptaFácil genera el ` +
+    `Expide: ${row.organizationName}. Firma: ${signerRole}. AdoptaFácil genera el ` +
       'documento con la información que registró la organización; no lo certifica ni lo firma.',
     font.sans,
     8,
@@ -796,8 +884,8 @@ function drawCertificatePage(
       signatureBlockX,
       signatureBlockWidth,
       signer
-        ? 'Firma registrada ilegible: vuelve a registrarla'
-        : 'SIN FIRMA: falta registrar la del representante legal',
+        ? 'Firma no verificable: el certificado queda sin firma'
+        : 'SIN FIRMA: emitido antes de congelar el firmante',
       signatureLineY + 14,
       font.sansBold,
       8,
@@ -805,7 +893,6 @@ function drawCertificatePage(
     );
   }
   const signerName = signer?.fullName ?? '________________________';
-  const signerPosition = signer?.position ?? 'Representante Legal';
   drawCenteredIn(
     page,
     signatureBlockX,
@@ -820,7 +907,7 @@ function drawCertificatePage(
     page,
     signatureBlockX,
     signatureBlockWidth,
-    signer ? signerPosition : 'Representante Legal',
+    signer ? signer.position : 'Firma de la organización',
     signatureLineY - 30,
     font.sans,
     9.5,
@@ -830,7 +917,14 @@ function drawCertificatePage(
     page,
     signatureBlockX,
     signatureBlockWidth,
-    fitWidth(`Representante legal de ${row.organizationName}`, font.sans, 8, signatureBlockWidth),
+    fitWidth(
+      !signer
+        ? `Por ${row.organizationName}`
+        : `${signer.isLegalRepresentative ? 'Representante legal' : 'Responsable'} de ${row.organizationName}`,
+      font.sans,
+      8,
+      signatureBlockWidth,
+    ),
     signatureLineY - 43,
     font.sans,
     8,

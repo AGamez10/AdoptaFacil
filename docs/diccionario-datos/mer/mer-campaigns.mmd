@@ -1,4 +1,25 @@
 erDiagram
+  campaign_evidences {
+    uuid id PK
+    uuid organization_id FK
+    uuid campaign_id FK
+    text type
+    text concept
+    integer amount
+    timestamp spent_at
+    text storage_ref
+    integer order
+    timestamp created_at
+  }
+  campaign_funding_applications {
+    uuid id PK
+    uuid organization_id FK
+    uuid campaign_id FK
+    text collection_id UK
+    integer net
+    timestamp created_at
+    timestamp reversed_at
+  }
   campaigns {
     uuid id PK
     uuid organization_id FK
@@ -7,36 +28,16 @@ erDiagram
     text category
     integer goal_amount
     integer raised_amount
-    timestamp3 deadline
+    timestamp deadline
     text status
-    timestamp3 created_at
-    timestamp3 updated_at
-  }
-  campaign_funding_applications {
-    uuid id PK
-    uuid organization_id FK
-    uuid campaign_id FK
-    text collection_id UK
-    integer net
-    timestamp3 created_at
-  }
-  campaign_evidences {
-    uuid id PK
-    uuid organization_id FK
-    uuid campaign_id FK
-    text type
-    text concept
-    integer amount
-    timestamp3 spent_at
-    text storage_ref
-    integer order
-    timestamp3 created_at
+    timestamp created_at
+    timestamp updated_at
   }
   organizations {
     uuid id PK
   }
-  organizations ||--o{ campaigns : "organization_id"
-  campaigns ||--o{ campaign_funding_applications : "campaign_id"
-  organizations ||--o{ campaign_funding_applications : "organization_id"
   campaigns ||--o{ campaign_evidences : "campaign_id"
   organizations ||--o{ campaign_evidences : "organization_id"
+  campaigns ||--o{ campaign_funding_applications : "campaign_id"
+  organizations ||--o{ campaign_funding_applications : "organization_id"
+  organizations ||--o{ campaigns : "organization_id"

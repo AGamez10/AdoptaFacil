@@ -11,12 +11,11 @@
 Plataforma web **multi-tenant** para el ecosistema de rescate animal en Colombia: muchas
 organizaciones y personas conviven en un mismo sistema para adopciones, donaciones, campañas,
 apadrinamientos, voluntariado y más. Sello distintivo: **transparencia y confianza**. Gratis para
-organizaciones; ingreso por comisión sobre transacciones (4% con desglose transparente; IVA solo
-sobre la comisión). Pasarela **Mercado Pago por OAuth** (desde el 2026-11-06, ADR-PAG-003,
+organizaciones y sin comisión de plataforma sobre las donaciones (0 %, decisión del dueño); el
+ingreso de AdoptaFácil son sus planes. Pasarela **Mercado Pago por OAuth** (desde el 2026-11-06, ADR-PAG-003,
 `docs/pagos/mercadopago-oauth.md`): cada refugio conecta su propia cuenta y cada donación se cobra con su
 token, así que el dinero llega directo a su cuenta; AdoptaFácil cobra sus planes con su propia cuenta
-(suscripción). Sin split. ePayco (ADR-PAG-002) sigue disponible con `PAYMENT_DRIVER=epayco`. No hay
-adaptador de payouts real: `createPayout` no está implementado.
+(suscripción). Sin split.
 
 **Jerarquía de fuentes de verdad** (gana el de más arriba): (1) Documento base (requisitos y
 roadmap) → (2) Consolidación operativa → (3) Metodología → (4) Instructivo del desarrollador →
@@ -58,7 +57,7 @@ roadmap) → (2) Consolidación operativa → (3) Metodología → (4) Instructi
 - **Backend:** NestJS sobre Node 24 LTS.
 - **BD:** PostgreSQL 16 + Prisma (esquema dividido por módulo en `prisma/schema/*.prisma`).
 - **Frontend:** React 18 + Vite + Tailwind + shadcn/ui.
-- **Colas/caché:** Redis 7 + BullMQ (5 colas operativas: recordatorios clínicos, seguimientos de adopción, verificación DIAN, facturación de apadrinamientos y payouts).
+- **Colas/caché:** Redis 7 + BullMQ (colas operativas: recordatorios clínicos, seguimientos de adopción, verificación DIAN y facturación de apadrinamientos).
 - **Infra local:** Docker (Postgres + Redis).
 - **`packages/contracts`:** se compila **dual ESM + CJS** (la api consume CJS vía `require`; el web
   consume ESM para importar valores como `Role`). No romper esta configuración.

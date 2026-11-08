@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type { VolunteerEnrollment as EnrollmentRow } from '@prisma/client';
 import {
@@ -26,6 +27,8 @@ import {
   type NotificationPort,
 } from '../../core/notifications/notification.port';
 import { checkEnrollmentTransition } from './volunteer-enrollment-status';
+import { readFeatureFlags } from '../../core/features/feature-flags';
+import type { Env } from '../../config/env.validation';
 import {
   buildEnrollmentConfirmationBody,
   buildEnrollmentConfirmationSubject,
@@ -173,6 +176,7 @@ export class VolunteerEnrollmentsService {
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   private requireOrgId(): string {
@@ -192,6 +196,21 @@ export class VolunteerEnrollmentsService {
   ): Promise<VolunteerEnrollment> {
     await requireCompleteProfile(this.prisma, actor);
     const { opportunityId } = input;
+    // P0-1 (§3.5, F23): nada que involucre menores sale a producción sin
+    // control de edad, acudiente y consentimiento trazable. Con
+    // FEATURE_VOLUNTEERING_MINORS apagado (y en producción siempre lo está) no
+    // se acepta una inscripción de menor ni se recogen datos de su acudiente.
+    if (
+      !readFeatureFlags(this.config).volunteeringMinors &&
+      (input.isMinor === true ||
+        input.guardianName !== undefined ||
+        input.guardianDocument !== undefined)
+    ) {
+      throw new ForbiddenException(
+        'Por ahora el voluntariado es solo para personas mayores de edad. ' +
+          'La inscripción de menores aún no está habilitada.',
+      );
+    }
 
     let rows: EnrollmentRawRow[];
     try {

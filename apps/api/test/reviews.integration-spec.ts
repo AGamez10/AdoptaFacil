@@ -112,7 +112,6 @@ describe('Reviews / reputation (M12, RF23)', () => {
         donorUserId: userId,
         conceptKind: 'organization',
         conceptId: orgId,
-        commissionPayer: 'organization',
         intendedAmount: 20000,
         amountCharged: 20000,
         breakdown: { intendedAmount: 20000, commission: 800, vat: 152, net: 19200 },

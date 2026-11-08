@@ -119,6 +119,7 @@ export class OrgExportsService {
           createdAt: true,
           updatedAt: true,
           receipt: { select: { issuedAt: true } },
+          reversal: { select: { reason: true } },
         },
       }),
     );
@@ -178,6 +179,24 @@ export class OrgExportsService {
       hoursBy.set(key, (hoursBy.get(key) ?? 0) + h.hours);
     }
 
+    // Tienda: el catálogo propio de la organización (sin imágenes ni contactos).
+    const products = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.product.findMany({
+        where: { organizationId },
+        orderBy: { createdAt: 'asc' },
+        take,
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          price: true,
+          stock: true,
+          isActive: true,
+          createdAt: true,
+        },
+      }),
+    );
+
     const animalNames = new Map(animals.map((a) => [a.id, a.name]));
     const campaignTitles = new Map(campaigns.map((c) => [c.id, c.title]));
 
@@ -223,17 +242,17 @@ export class OrgExportsService {
           id: d.id,
           approvedAt: d.receipt?.issuedAt ?? (d.status === 'pending' ? d.createdAt : d.updatedAt),
           status: d.status,
+          reversedReason: d.reversal?.reason ?? null,
           conceptKind: d.conceptKind,
           conceptName,
           amountCharged: d.amountCharged,
           net: b.net ?? 0,
-          platformFee: b.platformFee ?? 0,
-          platformIva: b.platformIva ?? 0,
           gatewayFee: b.gatewayFee ?? 0,
           gatewayIva: b.gatewayIva ?? 0,
         };
       }),
       campaigns,
+      products,
       opportunities: opportunities.map((o) => ({
         ...o,
         acceptedVolunteers: acceptedBy.get(o.id) ?? 0,
@@ -329,6 +348,8 @@ export class OrgExportsService {
         where: {
           organizationId,
           status: 'approved',
+          // P1-1: lo que volvió al donante (reembolso o contracargo) no cuenta.
+          reversal: null,
           OR: [{ receipt: { issuedAt: range } }, { receipt: null, updatedAt: range }],
         },
         select: { breakdown: true, donorUserId: true },

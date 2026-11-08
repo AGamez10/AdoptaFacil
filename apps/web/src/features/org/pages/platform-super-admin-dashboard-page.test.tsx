@@ -21,9 +21,8 @@ function sessionWith(roles: Role[]) {
 
 const SUMMARY = {
   grossTotal: 1_000_000,
-  platformFeeTotal: 47_600,
   gatewayFeeTotal: 29_988,
-  netTotal: 922_412,
+  netTotal: 970_012,
   organizationsByVerificationLevel: [
     { level: 0, count: 3 },
     { level: 2, count: 5 },

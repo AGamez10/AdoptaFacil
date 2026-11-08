@@ -45,8 +45,8 @@ type SummaryState = 'loading' | 'ready' | 'error';
  * detalle público de un animal) es de `features/portals`.
  *
  * Mercado Pago retirado (2026-10-17): el cobro del apadrinamiento usaba su
- * Card Payment Brick y ePayco todavía no tiene un camino de cobro recurrente
- * para apadrinamientos. En vez de un flujo roto, la página muestra los planes
+ * Card Payment Brick y hoy no hay pasarela con cobro recurrente para
+ * apadrinamientos. En vez de un flujo roto, la página muestra los planes
  * y un aviso tranquilo ("Pronto podrás apadrinar con pago en línea"). La API
  * (`POST /sponsorships`) no cambia; solo la web deja de ofrecer el cobro.
  */

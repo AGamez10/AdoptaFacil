@@ -9,12 +9,12 @@
 | Términos y condiciones de uso                                                     | `terminos/2026-10-15.md`                   | Toda cuenta y todo donante sin cuenta (casilla 1)                           |
 | Qué es y qué no es AdoptaFácil (principios, límites, reportes)                    | `alcance/2026-10-15.md`                    | Forma parte de los términos (casilla 1)                                     |
 | Autorización para el tratamiento de datos                                         | `autorizacion-datos/2026-10-15.md`         | Toda cuenta y todo donante sin cuenta (casilla 2, separada de los términos) |
-| Política de tratamiento de datos personales                                       | `politica-de-datos/2026-10-15.md`          | Se acepta con la autorización (casilla 2)                                   |
+| Política de tratamiento de datos personales                                       | `politica-de-datos/2026-11-07.md`          | Se acepta con la autorización (casilla 2)                                   |
 | Condiciones para organizaciones y acuerdo de tratamiento de datos (transmisión)   | `condiciones-organizaciones/2026-10-15.md` | Solo cuentas de organización (casilla 3)                                    |
 | Autorización opcional para usos comerciales                                       | `autorizacion-comercial/2026-10-15.md`     | Opcional, nunca marcada, revocable (casilla 4)                              |
 | Autorización opcional para mejorar el producto y entrenar inteligencia artificial | `autorizacion-ia/2026-10-15.md`            | Opcional, aparte de la comercial, nunca marcada, revocable (casilla 5)      |
 | Aviso de privacidad                                                               | `aviso-de-privacidad/2026-10-15.md`        | Informativo                                                                 |
-| Política de cookies                                                               | `cookies/2026-10-15.md`                    | Informativo (hoy solo hay cookies necesarias)                               |
+| Política de cookies                                                               | `cookies/2026-11-07.md`                    | Informativo (hoy solo hay cookies necesarias)                               |
 
 En la web se leen en `/legal`, `/legal/<slug>` y `/legal/<slug>/<versión>`.
 
@@ -39,7 +39,7 @@ AdoptaFácil la opera, mientras se constituye la sociedad, **una persona natural
 ## Datos que faltan (marcados ⟦así⟧ en los textos o en `LEGAL_CONTROLLER`)
 
 - Nombre completo, cédula, NIT del RUT, matrícula mercantil, ciudad y dirección de la persona natural. Luego, razón social y NIT de la sociedad. Fecha de publicación. Dominio: adoptafacil.org (ya completado).
-- Encargados: Hostinger (VPS), Cloudflare (dominio y red), correo, copias de seguridad y pasarelas (Mercado Pago, ePayco), en la política, sección 7. Falta confirmar el **país del centro de datos** elegido al contratar; como Hostinger es extranjera, puede ser transferencia internacional. Proveedores de correo y copias de seguridad, y el país donde procesa cada uno: pendientes.
+- Encargados: Hostinger (VPS), Cloudflare (dominio y red), correo, copias de seguridad y Mercado Pago (cuenta propia de cada organización), en la política, sección 7. Falta confirmar el **país del centro de datos** elegido al contratar; como Hostinger es extranjera, puede ser transferencia internacional. Proveedores de correo y copias de seguridad, y el país donde procesa cada uno: pendientes.
 - Plazos: conservación de datos tras cerrar la cuenta, conservación de evidencia de reportes, atención de reportes, aviso de cambios (propuesto 15 días), aviso de precios (30 días), aviso de incidentes a organizaciones (72 horas), exportación al terminar (30 días), registro de trazabilidad (10 años).
 
 Las respuestas del asesor del cliente a estas preguntas, contrastadas con los textos, están en `revision-asesor.md`, junto con el checklist de transferencia internacional y la tabla del acuerdo encargado-responsable.
@@ -65,7 +65,7 @@ Las respuestas del asesor del cliente a estas preguntas, contrastadas con los te
 1. Contenido mínimo y firmas del certificado de donación con efectos tributarios.
 2. Régimen de facturación de los planes que AdoptaFácil cobra a las organizaciones.
 3. Plazos de conservación de soportes contables.
-4. Obligaciones de la persona natural comerciante: régimen (simple o ordinario), facturación electrónica de las comisiones y los planes, y retenciones.
+4. Obligaciones de la persona natural comerciante: régimen (simple o ordinario), facturación electrónica de los planes, y retenciones.
 5. Si el aviso de los documentos generados ("no reemplaza la certificación de contador público ni de revisor fiscal") basta, y qué reportes necesitan firma de contador.
 
 ## Qué no cubre todavía el producto
@@ -73,4 +73,4 @@ Las respuestas del asesor del cliente a estas preguntas, contrastadas con los te
 - **Supresión y exportación de datos** desde la cuenta: hoy se atienden por correo (procedimiento manual descrito en la política).
 - **Formulario de reporte** dentro de la plataforma: hoy el canal es el correo con asunto "Reporte".
 - **Voluntariado de menores**: la política dice que estará apagado hasta tener autorización del representante legal; el apagado en el producto es otra tarea (hallazgo LEG-008 de la auditoría).
-- Las afirmaciones "no custodia donaciones" y "cada organización cobra en su propia cuenta" dependen de que se fusione el cambio de pagos sin custodia (ADR-PAG-001).
+- Las afirmaciones "no custodia donaciones" y "cada organización cobra en su propia cuenta" son el modelo vigente (ADR-PAG-003: Mercado Pago por OAuth con la cuenta de cada organización).

@@ -4,7 +4,7 @@ import { FEATURE_KEYS, type PublicCapabilities } from '@adoptafacil/contracts';
 import { renderShell } from '../../test-utils';
 
 /**
- * Destino del QR de donaciones (ADR-PAG-002 §QR): `/o/:slug/donar` y `/donar`
+ * Destino del QR de donaciones (ADR-PAG-001 §QR): `/o/:slug/donar` y `/donar`
  * en un subdominio real resuelven la org pública y entran a `/donaciones`.
  */
 const ORG = { id: 'org-1', name: 'Refugio Patitas', slug: 'patitas' };

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@adoptafacil/ui';
+import { isNativeApp } from '../../../lib/native-app';
 import { useCapabilities } from '../../../shell/capabilities';
 import styles from './google-sign-in-button.module.scss';
 
@@ -61,7 +62,9 @@ function loadGoogleIdentityServices(): Promise<void> {
  * Whether a Google button can be shown at all (Ola 1, R0-2, AF-029): the API
  * must serve `POST /auth/google` (capabilities) AND either a real Client ID
  * is configured or this is the Vite dev server. A production build without a
- * Client ID shows no Google button — never the "(prueba)" one. `vite build`
+ * Client ID shows no Google button — never the "(prueba)" one. Inside the
+ * native app (Capacitor) there is no Google button either: Google refuses
+ * sign-in from embedded web views. `vite build`
  * always runs in mode "production" (even if a stray NODE_ENV=development
  * leaks in from a local .env), and `import.meta.env.MODE` is replaced at
  * build time, so that branch is dead code there.
@@ -69,6 +72,10 @@ function loadGoogleIdentityServices(): Promise<void> {
 export function useGoogleSignInAvailable(): boolean {
   const { capabilities } = useCapabilities();
   const hasClientId = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+  // Google bloquea su inicio de sesión dentro de vistas web embebidas
+  // (error 403 disallowed_useragent), así que en la app nativa el botón solo
+  // llevaría a un error: ahí se entra con correo y contraseña.
+  if (isNativeApp()) return false;
   return capabilities.googleSignIn && (hasClientId || import.meta.env.MODE !== 'production');
 }
 

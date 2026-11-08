@@ -387,14 +387,13 @@ repo (paneles de terceros).
 
 ### Externo (paneles de terceros y DNS)
 
-| Dónde                                | Estado | Qué registrar                                                                                                                                                                                   |
-| ------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DNS                                  | ❌     | `A @`, `A www`, `A *` → IP del VPS (§DNS)                                                                                                                                                       |
-| TLS                                  | ✅     | Caddy emite `adoptafacil.org` y `www` por HTTP-01 y `*.adoptafacil.org` por DNS-01 con `PORTALS_TLS=cloudflare` o `namecheap`; renueva solo                                                     |
-| Google Cloud, cliente OAuth web      | ❌     | orígenes JavaScript autorizados: `https://adoptafacil.org`. Google no acepta comodines: el inicio de sesión con Google se hace en el dominio principal                                          |
-| Mercado Pago, webhook (evento Order) | ❌     | `https://adoptafacil.org/api/donations/webhook` (`apps/api/src/modules/donations/donations.controller.ts:136`). Pagos apagados: solo documentado                                                |
-| Mercado Pago, redirect OAuth         | ❌     | `https://adoptafacil.org/api/org/mercadopago/callback`, idéntica a la que envía la API (`apps/api/src/modules/payments/mercadopago-connect.controller.ts:65`). Pagos apagados: solo documentado |
-| Mercado Pago, webhook de payouts     | ❌     | `https://adoptafacil.org/api/payments/payouts/webhook` (`apps/api/src/modules/payments/payouts.controller.ts:58`), cuando se apruebe Disbursements                                              |
+| Dónde                           | Estado | Qué registrar                                                                                                                                                                                                                |
+| ------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DNS                             | ❌     | `A @`, `A www`, `A *` → IP del VPS (§DNS)                                                                                                                                                                                    |
+| TLS                             | ✅     | Caddy emite `adoptafacil.org` y `www` por HTTP-01 y `*.adoptafacil.org` por DNS-01 con `PORTALS_TLS=cloudflare` o `namecheap`; renueva solo                                                                                  |
+| Google Cloud, cliente OAuth web | ❌     | orígenes JavaScript autorizados: `https://adoptafacil.org`. Google no acepta comodines: el inicio de sesión con Google se hace en el dominio principal                                                                       |
+| Mercado Pago, webhook (planes)  | ❌     | `https://adoptafacil.org/api/billing/webhooks/mercadopago`, evento "Planes y suscripciones". Las donaciones llevan su propia URL por pago (`/api/donations/webhook/mercadopago/:organizationId`); no se registra en el panel |
+| Mercado Pago, redirect OAuth    | ❌     | `https://adoptafacil.org/api/org/mercadopago/callback`, idéntica a la que envía la API (`apps/api/src/modules/payments/mercadopago-connect.controller.ts:65`). Pagos apagados: solo documentado                              |
 
 ### Código revisado
 

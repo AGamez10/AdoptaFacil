@@ -30,7 +30,7 @@ async function seedDonationWithReceipt(
   organizationId: string,
   payload: string,
 ) {
-  const breakdown = computeBreakdown(50000, 'organization');
+  const breakdown = computeBreakdown(50000);
   await withOrgContext(prisma, organizationId, async (tx) => {
     const donation = await tx.donation.create({
       data: {
@@ -38,7 +38,6 @@ async function seedDonationWithReceipt(
         donorUserId: randomUUID(),
         conceptKind: 'organization',
         conceptId: organizationId,
-        commissionPayer: 'organization',
         intendedAmount: 50000,
         amountCharged: breakdown.amountCharged,
         breakdown: breakdown as unknown as Prisma.InputJsonValue,

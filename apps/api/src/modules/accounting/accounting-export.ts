@@ -126,7 +126,7 @@ export function renderAccountingCsv(input: AccountingExportInput, full: boolean)
   lines.push(csvLine(['Contracargos (COP)', input.totals.chargebacksCop]));
   lines.push(csvLine(['Saldo bruto neto de reversos (COP)', input.totals.balanceCop]));
   if (full) {
-    lines.push(csvLine(['Comisiones de la pasarela (COP)', input.totals.feesCop]));
+    lines.push(csvLine(['Tarifa de Mercado Pago (COP)', input.totals.feesCop]));
     lines.push(csvLine(['Neto informado por la pasarela (COP)', input.totals.netCop]));
   }
   lines.push(csvLine(['Estado del mes', input.status === 'closed' ? 'Cerrado' : 'Abierto']));
@@ -173,7 +173,7 @@ export async function renderAccountingXlsx(
   ];
   if (full) {
     info.push(
-      ['Comisiones de la pasarela (COP)', t.feesCop],
+      ['Tarifa de Mercado Pago (COP)', t.feesCop],
       ['Neto informado por la pasarela (COP)', t.netCop],
       ['Renglones sin comisión informada', t.entriesWithoutFee],
       ['Ajustes de meses cerrados', t.adjustmentCount],

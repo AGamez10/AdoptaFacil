@@ -3,15 +3,12 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import {
-  computeBreakdown,
-  DIRECT_COLLECTION_RATES,
-  FakePaymentAdapter,
-} from '@adoptafacil/contracts';
+import { computeBreakdown, FakePaymentAdapter } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { PAYMENT_PORT } from '../src/core/payments/payment.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
@@ -46,6 +43,7 @@ describe('Organization summary (S2-08, M13)', () => {
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       orgId: res.body.user.organizationId,
@@ -146,9 +144,10 @@ describe('Organization summary (S2-08, M13)', () => {
       .expect(201);
 
     // --- adoptionRequestsPending: 'new' + 'in_review' count; 'rejected' doesn't -
+    // P0-3: solo se postula a un animal disponible; pasa a `in_process`
+    // después (abajo), como cuando la organización ya está evaluando.
     const forRequests = await createAnimal(owner.token, {
       name: 'ParaSolicitudes',
-      status: 'in_process',
     }).expect(201);
     requestAnimalId = forRequests.body.id;
     const reqBody = (animalId: string) => ({
@@ -167,7 +166,6 @@ describe('Organization summary (S2-08, M13)', () => {
 
     const animal2 = await createAnimal(owner.token, {
       name: 'ParaSolicitudes2',
-      status: 'in_process',
     }).expect(201);
     const personB = await registerPerson('solicitante2');
     const req2 = await request(server)
@@ -183,7 +181,6 @@ describe('Organization summary (S2-08, M13)', () => {
 
     const animal3 = await createAnimal(owner.token, {
       name: 'ParaSolicitudes3',
-      status: 'in_process',
     }).expect(201);
     const personC = await registerPerson('solicitante3');
     const req3 = await request(server)
@@ -201,6 +198,10 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${owner.token}`)
       .send({ targetStatus: 'rejected', reason: 'No cumple requisitos' })
       .expect(201); // terminal — does NOT count.
+    await admin.animal.updateMany({
+      where: { id: { in: [requestAnimalId, animal2.body.id, animal3.body.id] } },
+      data: { status: 'in_process' },
+    });
 
     // --- sponsorshipsActive: 1 active, 1 suspended (excluded) ------------------
     const plan1 = await request(server)
@@ -234,6 +235,8 @@ describe('Organization summary (S2-08, M13)', () => {
       .set('Authorization', `Bearer ${personB}`)
       .send({ planId: plan2.body.id })
       .expect(201);
+    // Solo organizaciones formalizadas cobran: se formaliza mientras dura el cobro.
+    await formalizeTestOrganization(admin, owner.orgId, 'formalizada');
     await request(server)
       .post(`/sponsorships/${sponsorship2.body.id}/suspend`)
       .set('Authorization', `Bearer ${owner.token}`)
@@ -268,11 +271,10 @@ describe('Organization summary (S2-08, M13)', () => {
       .send({
         organizationId: owner.orgId,
         intendedAmount: 50_000,
-        commissionPayer: 'organization',
         idempotencyKey: orgModeKey,
       })
       .expect(201);
-    net1 = computeBreakdown(50_000, 'organization', DIRECT_COLLECTION_RATES).net;
+    net1 = computeBreakdown(50_000).net;
     await request(server)
       .post('/donations/webhook')
       .set('x-signature', 'fake-sig')
@@ -290,11 +292,10 @@ describe('Organization summary (S2-08, M13)', () => {
       .send({
         organizationId: owner.orgId,
         intendedAmount: 30_000,
-        commissionPayer: 'donor',
         idempotencyKey: donorModeKey,
       })
       .expect(201);
-    net2 = computeBreakdown(30_000, 'donor', DIRECT_COLLECTION_RATES).net;
+    net2 = computeBreakdown(30_000).net;
     await request(server)
       .post('/donations/webhook')
       .set('x-signature', 'fake-sig')
@@ -312,10 +313,10 @@ describe('Organization summary (S2-08, M13)', () => {
       .send({
         organizationId: owner.orgId,
         intendedAmount: 99_000,
-        commissionPayer: 'organization',
         idempotencyKey: `s208-pending-${randomUUID()}`,
       })
       .expect(201);
+    await formalizeTestOrganization(admin, owner.orgId, 'informal');
   });
 
   afterAll(async () => {
@@ -361,9 +362,7 @@ describe('Organization summary (S2-08, M13)', () => {
       .get('/org/summary')
       .set('Authorization', `Bearer ${owner.token}`)
       .expect(200);
-    const expected =
-      computeBreakdown(50_000, 'organization', DIRECT_COLLECTION_RATES).net +
-      computeBreakdown(30_000, 'donor', DIRECT_COLLECTION_RATES).net;
+    const expected = computeBreakdown(50_000).net + computeBreakdown(30_000).net;
     expect(res.body.donationsReceivedTotal).toBe(expected);
   });
 

@@ -30,7 +30,7 @@ function stubFetch(handler: (url: string) => unknown) {
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      // Org availability (cuenta ePayco conectada) — por defecto SÍ, salvo que el test lo sobreescriba.
+      // Org availability (la organización puede recibir donaciones) — por defecto SÍ, salvo que el test lo sobreescriba.
       const body = url.includes('/availability') ? { canReceiveDonations: true } : handler(url);
       return Promise.resolve({
         ok: true,
@@ -62,18 +62,17 @@ describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
             organizationId: '08d734c6-1900-4bf4-b3e5-d6468479cf8b',
             donorUserId: 'donor-1',
             concept: { kind: 'organization', id: '08d734c6-1900-4bf4-b3e5-d6468479cf8b' },
-            commissionPayer: 'organization',
             intendedAmount: 50000,
             amountCharged: 50000,
             currency: 'COP',
             breakdown: {
               amountCharged: 50000,
               gross: 50000,
-              platformFee: 2000,
-              platformIva: 380,
+              platformFee: 0,
+              platformIva: 0,
               gatewayFee: 2025,
               gatewayIva: 385,
-              net: 45210,
+              net: 47590,
             },
             collectionId: 'test_abc123',
             status: 'approved',
@@ -105,18 +104,17 @@ describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
             organizationName: 'Refugio Patitas',
             donorUserId: 'donor-1',
             concept: { kind: 'organization', id: '08d734c6-1900-4bf4-b3e5-d6468479cf8b' },
-            commissionPayer: 'organization',
             intendedAmount: 50000,
             amountCharged: 50000,
             currency: 'COP',
             breakdown: {
               amountCharged: 50000,
               gross: 50000,
-              platformFee: 2000,
-              platformIva: 380,
+              platformFee: 0,
+              platformIva: 0,
               gatewayFee: 2025,
               gatewayIva: 385,
-              net: 45210,
+              net: 47590,
             },
             collectionId: 'test_real_name',
             status: 'approved',
@@ -166,18 +164,17 @@ describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
             organizationId: '08d734c6-1900-4bf4-b3e5-d6468479cf8b',
             donorUserId: 'donor-1',
             concept: { kind: 'organization', id: '08d734c6-1900-4bf4-b3e5-d6468479cf8b' },
-            commissionPayer: 'organization',
             intendedAmount: 50000,
             amountCharged: 50000,
             currency: 'COP',
             breakdown: {
               amountCharged: 50000,
               gross: 50000,
-              platformFee: 2000,
-              platformIva: 380,
+              platformFee: 0,
+              platformIva: 0,
               gatewayFee: 2025,
               gatewayIva: 385,
-              net: 45210,
+              net: 47590,
             },
             collectionId: 'test_abc123',
             status: 'approved',
@@ -197,11 +194,11 @@ describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
           breakdown: {
             amountCharged: 50000,
             gross: 50000,
-            platformFee: 2000,
-            platformIva: 380,
+            platformFee: 0,
+            platformIva: 0,
             gatewayFee: 2025,
             gatewayIva: 385,
-            net: 45210,
+            net: 47590,
           },
           issuedAt: '2026-07-28T22:00:00.000Z',
         };
@@ -220,7 +217,7 @@ describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
       // the session user's own name ALSO renders in the shell header (same
       // literal text here, coincidentally), so an unscoped match is ambiguous.
       expect(screen.getByText('Donante Tester', { selector: 'dd' })).toBeInTheDocument();
-      expect(screen.getByText(/45\.210/)).toBeInTheDocument();
+      expect(screen.getByText(/47\.590/)).toBeInTheDocument();
     });
   });
 
@@ -233,18 +230,17 @@ describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
             organizationId: '08d734c6-1900-4bf4-b3e5-d6468479cf8b',
             donorUserId: 'donor-1',
             concept: { kind: 'organization', id: '08d734c6-1900-4bf4-b3e5-d6468479cf8b' },
-            commissionPayer: 'organization',
             intendedAmount: 50000,
             amountCharged: 50000,
             currency: 'COP',
             breakdown: {
               amountCharged: 50000,
               gross: 50000,
-              platformFee: 2000,
-              platformIva: 380,
+              platformFee: 0,
+              platformIva: 0,
               gatewayFee: 2025,
               gatewayIva: 385,
-              net: 45210,
+              net: 47590,
             },
             collectionId: 'test_xyz',
             status: 'pending',
@@ -273,18 +269,17 @@ describe('F-MIS-DONACIONES-PLUS: detalle + acceso al certificado desde "Mis dona
       organizationName: 'Refugio Patitas',
       donorUserId: 'donor-1',
       concept: { kind: 'organization', id: '08d734c6-1900-4bf4-b3e5-d6468479cf8b' },
-      commissionPayer: 'organization',
       intendedAmount: 50000,
       amountCharged: 50000,
       currency: 'COP',
       breakdown: {
         amountCharged: 50000,
         gross: 50000,
-        platformFee: 2000,
-        platformIva: 380,
+        platformFee: 0,
+        platformIva: 0,
         gatewayFee: 2025,
         gatewayIva: 385,
-        net: 45210,
+        net: 47590,
       },
       collectionId: 'test_approved',
       status: 'approved',
@@ -308,8 +303,9 @@ describe('F-MIS-DONACIONES-PLUS: detalle + acceso al certificado desde "Mis dona
     expect(within(modal).getByText('Aprobada')).toBeInTheDocument();
     // The stored breakdown, with the same F-NOMENCLATURA labels as the checkout —
     // NOT recomputed via computeBreakdown from intendedAmount.
-    expect(within(modal).getByTestId('donation-detail-platformFee')).toHaveTextContent('2.000');
-    expect(within(modal).getByTestId('donation-detail-net')).toHaveTextContent('45.210');
+    expect(within(modal).getByTestId('donation-detail-gatewayFee')).toHaveTextContent('2.025');
+    expect(within(modal).getByTestId('donation-detail-net')).toHaveTextContent('47.590');
+    expect(within(modal).queryByTestId('donation-detail-platformFee')).toBeNull();
   });
 
   it('an APPROVED donation offers "Ver / descargar certificado", landing on the REAL certificate (RF14, F-3)', async () => {
@@ -399,18 +395,17 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
           organizationId: 'org-1',
           donorUserId: null,
           concept: { kind: 'organization', id: 'org-1' },
-          commissionPayer: 'organization',
           intendedAmount: 50000,
           amountCharged: 50000,
           currency: 'COP',
           breakdown: {
             amountCharged: 50000,
             gross: 50000,
-            platformFee: 2000,
-            platformIva: 380,
+            platformFee: 0,
+            platformIva: 0,
             gatewayFee: 2025,
             gatewayIva: 385,
-            net: 45210,
+            net: 47590,
           },
           collectionId: 'test_guest',
           status: 'pending',
@@ -436,8 +431,8 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     });
     fireEvent.click(screen.getByTestId('donation-legal-terms'));
     fireEvent.click(screen.getByTestId('donation-legal-data'));
-    // Single step (ePayco): "Donar" creates the donation; with no checkout
-    // session in the response (fake driver) the page shows the result.
+    // Single step: "Donar" creates the donation and (fake driver) the page
+    // shows the result.
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();
@@ -453,18 +448,17 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
           organizationId: 'org-1',
           donorUserId: null,
           concept: { kind: 'organization', id: 'org-1' },
-          commissionPayer: 'organization',
           intendedAmount: 50000,
           amountCharged: 50000,
           currency: 'COP',
           breakdown: {
             amountCharged: 50000,
             gross: 50000,
-            platformFee: 2000,
-            platformIva: 380,
+            platformFee: 0,
+            platformIva: 0,
             gatewayFee: 2025,
             gatewayIva: 385,
-            net: 45210,
+            net: 47590,
           },
           collectionId: 'test_declined',
           status: 'declined',
@@ -512,18 +506,17 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
           organizationId: 'org-1',
           donorUserId: 'donor-1',
           concept: { kind: 'organization', id: 'org-1' },
-          commissionPayer: 'organization',
           intendedAmount: 50000,
           amountCharged: 50000,
           currency: 'COP',
           breakdown: {
             amountCharged: 50000,
             gross: 50000,
-            platformFee: 2000,
-            platformIva: 380,
+            platformFee: 0,
+            platformIva: 0,
             gatewayFee: 2025,
             gatewayIva: 385,
-            net: 45210,
+            net: 47590,
           },
           collectionId: 'test_auth',
           status: 'pending',

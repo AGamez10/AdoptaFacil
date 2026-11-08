@@ -1,0 +1,37 @@
+erDiagram
+  email_suppressions {
+    text email_hash PK
+    text category PK
+    text source
+    timestamp created_at
+  }
+  email_template_settings {
+    text event_key PK,FK
+    integer active_version FK
+    boolean enabled
+    uuid updated_by_user_id
+    timestamp updated_at
+  }
+  email_template_versions {
+    uuid id PK
+    text event_key
+    integer version
+    text subject
+    text preheader
+    text heading
+    text body
+    text cta_label
+    text footer_note
+    text change_note
+    uuid created_by_user_id
+    timestamp created_at
+    text accent_color
+    text icon
+  }
+  users {
+    uuid id PK
+    uuid organization_id FK
+  }
+  email_template_versions ||--o| email_template_settings : "event_key, active_version"
+  users |o..o{ email_template_settings : "updated_by_user_id (lógica)"
+  users |o..o{ email_template_versions : "created_by_user_id (lógica)"

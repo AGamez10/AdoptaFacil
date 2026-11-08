@@ -51,8 +51,8 @@ export async function fetchGuestDonationAccess(token: string): Promise<GuestDona
 }
 
 /**
- * Public: whether the organization can receive donations (it has connected its
- * ePayco account). No auth. Throws on a non-2xx so the caller can tell
+ * Public: whether the organization can receive donations through the active
+ * payment driver. No auth. Throws on a non-2xx so the caller can tell
  * "not connected" (`canReceiveDonations: false`) from "could not verify".
  */
 export async function fetchOrganizationDonationAvailability(

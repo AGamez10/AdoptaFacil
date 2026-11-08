@@ -1,0 +1,31 @@
+erDiagram
+  ledger_entries {
+    uuid id PK
+    uuid organization_id FK
+    text kind
+    text category
+    date occurred_on
+    bigint amount_cop
+    text concept
+    text counterparty
+    text support_storage_ref
+    text support_filename
+    text support_content_type
+    integer support_size_bytes
+    uuid client_request_id
+    uuid created_by_user_id
+    timestamp created_at
+    timestamp voided_at
+    uuid voided_by_user_id
+    text void_reason
+  }
+  organizations {
+    uuid id PK
+  }
+  users {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organizations ||--o{ ledger_entries : "organization_id"
+  users ||..o{ ledger_entries : "created_by_user_id (lógica)"
+  users |o..o{ ledger_entries : "voided_by_user_id (lógica)"

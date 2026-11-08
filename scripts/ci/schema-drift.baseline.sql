@@ -22,9 +22,7 @@ ALTER TABLE "community_posts" DROP CONSTRAINT "community_posts_organization_id_f
 ALTER TABLE "donation_access_links" DROP CONSTRAINT "donation_access_links_donation_id_fkey";
 ALTER TABLE "donation_receipts" DROP CONSTRAINT "donation_receipts_organization_id_fkey";
 ALTER TABLE "donations" DROP CONSTRAINT "donations_organization_id_fkey";
-ALTER TABLE "organization_bank_accounts" DROP CONSTRAINT "organization_bank_accounts_organization_id_fkey";
 ALTER TABLE "organization_subscriptions" DROP CONSTRAINT "organization_subscriptions_organization_id_fkey";
-ALTER TABLE "payouts" DROP CONSTRAINT "payouts_organization_id_fkey";
 ALTER TABLE "platform_settings" ALTER COLUMN "updated_at" DROP DEFAULT;
 ALTER TABLE "portal_themes" DROP CONSTRAINT "portal_themes_organization_id_fkey";
 ALTER TABLE "product_images" DROP CONSTRAINT "product_images_organization_id_fkey";

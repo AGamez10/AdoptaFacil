@@ -286,7 +286,7 @@ describe('GeneralPortalPage (landing)', () => {
   });
 
   // El libro público (RF14) ya existe en cada portal; lo demás sigue apagado.
-  it('does not promise modules that are off in the MVP (dispersión, catálogo verificado)', async () => {
+  it('does not promise modules that are off in the MVP (catálogo verificado, apadrinamiento)', async () => {
     renderLanding();
     await settle();
     const text = document.body.textContent ?? '';

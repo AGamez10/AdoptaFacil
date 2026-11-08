@@ -9,18 +9,14 @@ describe('DisabledPaymentAdapter (R0-1, SEC-002)', () => {
     await expect(adapter.verifyAndNormalizeWebhook(forged, '')).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
-    await expect(
-      adapter.verifyAndNormalizePayoutWebhook({ payoutId: 'p', status: 'paid' }, 'sig'),
-    ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it('never creates or reports a collection or payout', async () => {
+  it('never creates or reports a collection', async () => {
     await expect(
       adapter.createCollection({
         intendedAmount: 10_000,
         currency: 'COP',
         concept: { kind: 'organization', id: 'org-1' },
-        commissionPayer: 'organization',
         idempotencyKey: 'k',
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);

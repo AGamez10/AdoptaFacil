@@ -20,7 +20,7 @@ import { volunteerSignupHref } from '../../volunteering/model/volunteering-view'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 import { CatMascot, DogMascot, Sparkle } from './illustrations';
-import { IconArrowRight } from './landing-icons';
+import { IconArrowRight, IconChat, IconHeart } from './landing-icons';
 import styles from './commerce.module.scss';
 
 /** Ancla de "Formas de ayudar" (la usa el hero). */
@@ -319,6 +319,15 @@ const POST_TYPE_LABEL: Record<PostType, string> = {
   [PostType.Event]: 'Evento',
 };
 
+/** Cuántas publicaciones muestra la portada. */
+const WALL_POSTS = 6;
+
+/** Solo imágenes por http(s) o rutas propias; cualquier otra cosa no se dibuja. */
+function safeImageUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  return /^(https?:\/\/|\/)/i.test(url) ? url : null;
+}
+
 function clip(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length > max ? `${flat.slice(0, max - 1).replace(/\s+\S*$/, '')}…` : flat;
@@ -336,6 +345,7 @@ export function CommunityPulseSection() {
   const sentinel = useRef<HTMLDivElement | null>(null);
   const [near, setNear] = useState(false);
   const [posts, setPosts] = useState<PublicCommunityPost[]>([]);
+  const [wallState, setWallState] = useState<'idle' | 'ready' | 'error'>('idle');
   const [needs, setNeeds] = useState<ResourceNeedPublic[]>([]);
 
   useEffect(() => {
@@ -359,9 +369,12 @@ export function CommunityPulseSection() {
     if (!near) return;
     const controller = new AbortController();
     if (wallOn) {
-      listPublicPosts(3, controller.signal)
-        .then((page) => setPosts(page.items.slice(0, 3)))
-        .catch(() => undefined);
+      listPublicPosts(WALL_POSTS, controller.signal)
+        .then((page) => {
+          setPosts(page.items.slice(0, WALL_POSTS));
+          setWallState('ready');
+        })
+        .catch(() => setWallState('error'));
     }
     if (resourcesOn) {
       listPublicNeeds({ limit: 3, offset: 0, signal: controller.signal })
@@ -371,7 +384,10 @@ export function CommunityPulseSection() {
     return () => controller.abort();
   }, [near, wallOn, resourcesOn]);
 
-  if (posts.length === 0 && needs.length === 0) {
+  // Con el muro encendido la sección se ve aunque aún no haya publicaciones
+  // (se invita a publicar la primera); sin muro ni necesidades, no se monta.
+  const showWall = wallOn && wallState === 'ready';
+  if (!showWall && needs.length === 0) {
     return <div ref={sentinel} aria-hidden="true" data-testid="landing-pulse-sentinel" />;
   }
 
@@ -394,29 +410,80 @@ export function CommunityPulseSection() {
             <IconArrowRight aria-hidden="true" />
           </Link>
         </div>
-        <div
-          className={styles.pulse__cols}
-          data-single={posts.length === 0 || needs.length === 0 ? 'true' : 'false'}
-        >
-          {posts.length > 0 && (
-            <div className={styles.pulse__col}>
+        {showWall && (
+          <div className={styles.wall} data-testid="landing-wall">
+            <div className={styles.wall__intro}>
               <h3 className={styles.pulse__subtitle}>Lo último de la comunidad</h3>
-              <ul className={styles.pulse__list}>
-                {posts.map((post) => (
-                  <li key={post.id}>
-                    <Link to={publicPostPath(post.id)} className={styles.pulse__item}>
-                      <span className={styles.pulse__meta}>
-                        {POST_TYPE_LABEL[post.type] ?? 'Comunidad'} · {post.authorDisplayName}
-                      </span>
-                      <span className={styles.pulse__title}>
-                        {clip(post.title ?? post.body, 90)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <p className={styles.wall__lead}>
+                Rescatistas, adoptantes y organizaciones comparten historias, avisos y eventos.
+                Entra para publicar, dar me gusta y comentar.
+              </p>
+              <div className={styles.wall__actions}>
+                <Link to="/comunidad" className={styles.wall__cta}>
+                  Entrar a la comunidad
+                  <IconArrowRight aria-hidden="true" />
+                </Link>
+              </div>
             </div>
-          )}
+            {posts.length === 0 ? (
+              <div className={styles.wall__empty} data-testid="landing-wall-empty">
+                <p>Todavía no hay publicaciones públicas. Sé la primera persona en compartir.</p>
+                <Link to="/register" className={styles.link}>
+                  Crear cuenta y publicar
+                  <IconArrowRight aria-hidden="true" />
+                </Link>
+              </div>
+            ) : (
+              <ul className={styles.wall__grid}>
+                {posts.map((post) => {
+                  const cover = safeImageUrl(post.images[0]?.url);
+                  return (
+                    <li key={post.id}>
+                      <Link to={publicPostPath(post.id)} className={styles.wallCard}>
+                        {cover && (
+                          <img
+                            src={cover}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className={styles.wallCard__img}
+                          />
+                        )}
+                        <span className={styles.wallCard__chip}>
+                          {POST_TYPE_LABEL[post.type] ?? 'Comunidad'}
+                        </span>
+                        <span className={styles.pulse__title}>
+                          {clip(post.title ?? post.body, 100)}
+                        </span>
+                        {post.title && (
+                          <span className={styles.wallCard__excerpt}>{clip(post.body, 120)}</span>
+                        )}
+                        <span className={styles.wallCard__foot}>
+                          <span className={styles.wallCard__author}>
+                            {post.authorDisplayName}
+                            {post.isOrganization ? ' · organización' : ''}
+                          </span>
+                          <span
+                            className={styles.wallCard__stats}
+                            aria-label={`${post.likeCount} me gusta, ${post.commentCount} comentarios`}
+                          >
+                            <span aria-hidden="true">
+                              <IconHeart /> {post.likeCount}
+                            </span>
+                            <span aria-hidden="true">
+                              <IconChat /> {post.commentCount}
+                            </span>
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+        <div className={styles.pulse__cols} data-single="true" hidden={needs.length === 0}>
           {needs.length > 0 && (
             <div className={styles.pulse__col}>
               <h3 className={styles.pulse__subtitle}>Lo que necesitan hoy</h3>

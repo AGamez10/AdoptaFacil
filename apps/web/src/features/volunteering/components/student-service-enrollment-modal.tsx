@@ -12,6 +12,7 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
+import { useFeature } from '../../../shell/capabilities';
 
 export interface StudentServiceEnrollmentModalProps {
   open: boolean;
@@ -42,7 +43,12 @@ export function StudentServiceEnrollmentModal({
 }: StudentServiceEnrollmentModalProps) {
   const client = useApiClient();
   const { toast } = useToast();
+  // P0-1: mientras la inscripción de menores no esté habilitada (en
+  // producción nunca lo está), solo se inscriben mayores de edad y no se
+  // recoge ningún dato de un acudiente.
+  const minorsEnabled = useFeature('volunteeringMinors');
   const [isMinor, setIsMinor] = useState(false);
+  const [confirmsAdult, setConfirmsAdult] = useState(false);
   const [guardianName, setGuardianName] = useState('');
   const [guardianDocument, setGuardianDocument] = useState('');
   const [schoolName, setSchoolName] = useState('');
@@ -51,6 +57,7 @@ export function StudentServiceEnrollmentModal({
 
   const reset = (): void => {
     setIsMinor(false);
+    setConfirmsAdult(false);
     setGuardianName('');
     setGuardianDocument('');
     setSchoolName('');
@@ -58,11 +65,12 @@ export function StudentServiceEnrollmentModal({
   };
 
   const submit = async (): Promise<void> => {
+    const minor = minorsEnabled && isMinor;
     const input: CreateVolunteerEnrollmentInput = {
       opportunityId,
-      isMinor,
-      guardianName: guardianName.trim() || undefined,
-      guardianDocument: guardianDocument.trim() || undefined,
+      isMinor: minor,
+      guardianName: minor ? guardianName.trim() || undefined : undefined,
+      guardianDocument: minor ? guardianDocument.trim() || undefined : undefined,
       schoolName: schoolName.trim() || undefined,
       schoolAgreementCode: schoolAgreementCode.trim() || undefined,
     };
@@ -104,23 +112,37 @@ export function StudentServiceEnrollmentModal({
         <DialogHeader>
           <DialogTitle>Inscripción a "{opportunityTitle}"</DialogTitle>
           <DialogDescription>
-            Esta oportunidad cuenta para el servicio social estudiantil (Resolución 4210/1996). Si
-            eres menor de edad, el nombre y documento de tu acudiente serán obligatorios antes de
-            que el refugio pueda emitir tu constancia — puedes agregarlos ahora o más adelante.
+            {minorsEnabled
+              ? 'Esta oportunidad cuenta para el servicio social (Resolución 4210/1996). Si eres ' +
+                'menor de edad, el nombre y documento de tu acudiente serán obligatorios antes de ' +
+                'que el refugio pueda emitir tu constancia; puedes agregarlos ahora o más adelante.'
+              : 'Esta oportunidad cuenta para el servicio social. Por ahora la inscripción es solo ' +
+                'para personas mayores de edad.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isMinor}
-              onChange={(e) => setIsMinor(e.target.checked)}
-            />
-            Soy menor de edad
-          </label>
+          {minorsEnabled ? (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isMinor}
+                onChange={(e) => setIsMinor(e.target.checked)}
+              />
+              Soy menor de edad
+            </label>
+          ) : (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={confirmsAdult}
+                onChange={(e) => setConfirmsAdult(e.target.checked)}
+              />
+              Confirmo que soy mayor de edad
+            </label>
+          )}
 
-          {isMinor && (
+          {minorsEnabled && isMinor && (
             <div className="space-y-2 rounded-md border border-input p-3">
               <Input
                 aria-label="Nombre completo del acudiente"
@@ -138,8 +160,8 @@ export function StudentServiceEnrollmentModal({
           )}
 
           <Input
-            aria-label="Colegio (opcional)"
-            placeholder="Colegio (opcional)"
+            aria-label="Institución educativa (opcional)"
+            placeholder="Institución educativa (opcional)"
             value={schoolName}
             onChange={(e) => setSchoolName(e.target.value)}
           />
@@ -155,7 +177,10 @@ export function StudentServiceEnrollmentModal({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
-          <Button disabled={saving} onClick={() => void submit()}>
+          <Button
+            disabled={saving || (!minorsEnabled && !confirmsAdult)}
+            onClick={() => void submit()}
+          >
             {saving ? 'Enviando…' : 'Inscribirme'}
           </Button>
         </DialogFooter>

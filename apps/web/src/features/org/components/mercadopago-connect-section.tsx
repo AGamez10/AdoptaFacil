@@ -227,7 +227,7 @@ export function MercadoPagoConnectSection() {
             <div>{connectButton('Reconectar Mercado Pago')}</div>
           </div>
         ) : (
-          <PaymentsPendingStatus draft={null} action={connectButton('Conectar Mercado Pago')} />
+          <PaymentsPendingStatus action={connectButton('Conectar Mercado Pago')} />
         )}
       </CardContent>
     </Card>

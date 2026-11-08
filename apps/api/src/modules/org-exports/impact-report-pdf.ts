@@ -132,7 +132,7 @@ export async function renderImpactReportPdf(data: ImpactReportData): Promise<Buf
 
   c.sectionTitle('Quienes nos apoyaron');
   c.paragraph(
-    `${count(data.donations.count)} ${data.donations.count === 1 ? 'donación aprobada' : 'donaciones aprobadas'} de ${count(data.donations.donors)} ${data.donations.donors === 1 ? 'persona' : 'personas'} distintas, y ${count(data.volunteers)} ${data.volunteers === 1 ? 'voluntario' : 'voluntarios'} con horas aprobadas. El neto es lo que llegó a la organización después de comisiones e impuestos.`,
+    `${count(data.donations.count)} ${data.donations.count === 1 ? 'donación aprobada' : 'donaciones aprobadas'} de ${count(data.donations.donors)} ${data.donations.donors === 1 ? 'persona' : 'personas'} distintas, y ${count(data.volunteers)} ${data.volunteers === 1 ? 'voluntario' : 'voluntarios'} con horas aprobadas. El neto es lo que llegó a la organización después de la tarifa de Mercado Pago y su IVA.`,
     MARGIN,
     10,
     PAGE_W - MARGIN * 2,

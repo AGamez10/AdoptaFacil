@@ -6,9 +6,9 @@ interface ImportMetaEnv {
    *  a "Continuar con Google (prueba)" button against the FakeIdentityAdapter
    *  instead of loading the real Google Identity Services script. */
   readonly VITE_GOOGLE_CLIENT_ID?: string;
-  /** Interruptor de pagos en línea (ADR-PAG-002). ePayco es la única pasarela;
-   *  `off`/`none`/`disabled` esconden el pago en línea. Cualquier otro valor
-   *  (o sin definir) usa ePayco. Ver features/payments/lib/payment-provider.ts. */
+  /** Interruptor de pagos en línea: `off`/`none`/`disabled` esconden el pago
+   *  en línea. Cualquier otro valor (o sin definir) deja que la API decida.
+   *  Ver features/payments/lib/payment-provider.ts. */
   readonly VITE_PAYMENT_PROVIDER?: string;
   /** Planes y suscripciones: where a shelter asks for a paid plan while billing
    *  is manual (WhatsApp or form of AdoptaFácil). Unset → the plans screen says

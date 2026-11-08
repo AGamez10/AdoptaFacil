@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PlansService } from '../src/core/plans/plans.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import { memberWithRole } from './support/signers';
 
@@ -55,6 +56,8 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
+    await formalizeTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       userId: res.body.user.id,
@@ -159,7 +162,6 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
       .send({
         organizationId: orgA.orgId,
         intendedAmount: 50_000,
-        commissionPayer: 'organization',
         idempotencyKey: `exp-${randomUUID()}`,
         payer: { fullName: DONOR_NAME, documentId: '1020304050' },
       })
@@ -194,10 +196,12 @@ describe('Org data export (dataExport: xlsx, minimización, plan, no-leak)', () 
     expect(wb.getWorksheet('Adopciones')!.rowCount).toBe(2);
     const donation = wb.getWorksheet('Donaciones')!.getRow(2);
     expect(donation.getCell(3).value).toBe('Aprobada');
-    // La organización cubre la comisión: cobrado 50.000 = neto + comisión + pasarela (con IVA).
+    // 0 % de AdoptaFácil (sin columna de comisión): cobrado = neto + tarifa de
+    // Mercado Pago + su IVA (aquí cero: sin pasarela real).
     expect(donation.getCell(6).value).toBe(50_000);
-    const parts = [7, 8, 9, 10, 11].map((c) => Number(donation.getCell(c).value));
-    expect(parts[0]).toBeLessThan(50_000);
+    expect(donation.getCell(10).value ?? null).toBeNull();
+    const parts = [7, 8, 9].map((c) => Number(donation.getCell(c).value));
+    expect(parts[0]).toBe(50_000);
     expect(parts.reduce((a, b) => a + b, 0)).toBe(50_000);
   });
 
