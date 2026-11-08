@@ -17,3 +17,22 @@ export async function approveTestOrganization(
     data: { status: 'approved', statusChangedAt: new Date() },
   });
 }
+
+/**
+ * Test fixture helper: sets the organization's formal state directly (as the
+ * platform would after approving its RUT and Cámara de Comercio certificate).
+ * Functions gated by `CAPABILITY_RULES` (p. ej. vender en la tienda, desde
+ * Formalizada) need it. The real transition flow is covered over HTTP in
+ * `formalization.integration-spec.ts`.
+ */
+export async function formalizeTestOrganization(
+  admin: PrismaClient,
+  organizationId: string,
+  formalizationState = 'formalizada',
+): Promise<void> {
+  await admin.organizationProfile.upsert({
+    where: { organizationId },
+    update: { formalizationState },
+    create: { organizationId, formalizationState },
+  });
+}
