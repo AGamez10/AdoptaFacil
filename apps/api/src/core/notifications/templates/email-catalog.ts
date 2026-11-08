@@ -190,6 +190,48 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'coffee.purchase_receipt',
+    label: 'Comprobante de compra de café',
+    description:
+      'Se envía cuando se confirma el pago de una compra de café de AdoptaFácil hecha desde el QR.',
+    audience: 'La persona que compró el café',
+    category: 'transactional',
+    theme: 'donation',
+    required: false,
+    variables: [
+      v('producto', 'Presentación', 'Café San Pedro 250 g'),
+      v('lote', 'Código del lote', 'L2-2026'),
+      v('cantidad', 'Bolsas', '2', 'number'),
+      v('total', 'Total pagado', '56000', 'money'),
+      v('campana', 'Campaña que eligió', 'Cirugía de Luna'),
+      v('organizacion_campana', 'Organización de la campaña', 'Fundación Huellitas de Amor'),
+      v('aporte', 'Aporte de AdoptaFácil a la campaña', '4400', 'money'),
+      v('referencia', 'Referencia del pedido', 'cafe-abcdefghjkmnpqrstuvwxyz2'),
+      v(
+        'enlace',
+        'Enlace al estado del pedido',
+        'https://adoptafacil.org/cafe/pedido/cafe-abcdefghjkmnpqrstuvwxyz2',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu café va en camino a apoyar a {{campana}} ☕',
+      preheader: 'Pago confirmado. AdoptaFácil aporta {{aporte}} a la campaña que elegiste.',
+      heading: '¡Gracias por tu compra!',
+      body:
+        'Hola,\n\nTu pago fue confirmado: **{{cantidad}} × {{producto}}** (lote {{lote}}), ' +
+        'total **{{total}}**.\n\n' +
+        'Con tu compra, **AdoptaFácil aporta {{aporte}}** a la campaña **{{campana}}** de ' +
+        '{{organizacion_campana}}. Es el 20 % del margen bruto de cada bolsa (precio de venta menos ' +
+        'precio de compra), y lo entrega AdoptaFácil.\n\n' +
+        'Referencia de tu pedido: {{referencia}}. Te avisaremos cuando enviemos tu café.',
+      ctaLabel: 'Ver mi pedido',
+      footerNote:
+        'Este correo es tu comprobante de compra. No es un certificado de donación: el aporte lo hace AdoptaFácil.',
+    },
+  },
+  {
     event: 'sponsorship.welcome',
     label: 'Bienvenida al apadrinamiento',
     description: 'Se envía cuando un apadrinamiento nuevo queda activo.',

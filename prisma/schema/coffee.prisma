@@ -1,0 +1,143 @@
+// Module: café de AdoptaFácil (lotes con QR fijo, checkout y aporte a campañas).
+//
+// Todo vive en la organización del EQUIPO de plataforma (el tenant donde sus
+// miembros tienen PlatformAdmin / PlatformSuperAdmin), con RLS ENABLE + FORCE +
+// tenant_isolation como cualquier tabla de negocio. Lo público (página del QR,
+// checkout, estado del pedido) pasa por funciones SECURITY DEFINER acotadas.
+// Ver migración 20261108030000_coffee_lots. Montos en COP enteros; fechas UTC.
+
+/// Presentación con QR impreso (p. ej. "Café San Pedro 250 g"). El código y el
+/// dominio son la etiqueta impresa: un trigger los vuelve inmutables.
+model CoffeeProduct {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  code              String   @unique
+  name              String
+  presentationGrams Int      @map("presentation_grams")
+  description       String?
+  qrDomain          String   @map("qr_domain")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdByUserId   String?  @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lots         CoffeeLot[]
+  visitDays    CoffeeVisitDay[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("coffee_products")
+}
+
+/// Lote que llegó de una presentación: precio, costo, stock y campaña sugerida.
+/// Publicarlo y cambiar su campaña sugerida pasan por doble aprobación. Una vez
+/// publicado, precio, costo, envío y regla quedan fijos (trigger).
+model CoffeeLot {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  productId         String    @map("product_id") @db.Uuid
+  lotCode           String    @map("lot_code")
+  /// CoffeeLotStatus.
+  status            String    @default("draft")
+  salePriceCop      Int       @map("sale_price_cop")
+  unitCostCop       Int       @map("unit_cost_cop")
+  shippingFeeCop    Int       @default(0) @map("shipping_fee_cop")
+  stockUnits        Int       @map("stock_units")
+  contributionBps   Int       @default(2000) @map("contribution_bps")
+  /// Campaña sugerida (de otra organización: sin FK, se valida al usarla).
+  defaultCampaignId String?   @map("default_campaign_id") @db.Uuid
+  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
+  publishedAt       DateTime? @map("published_at")
+  closedAt          DateTime? @map("closed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      CoffeeProduct @relation(fields: [productId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  orders       CoffeeOrder[]
+
+  @@unique([productId, lotCode])
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@map("coffee_lots")
+}
+
+/// Pedido del checkout. Los montos y la campaña se congelan al crearlo
+/// (trigger); solo cambian el estado y las fechas de pago, envío y comprobante.
+model CoffeeOrder {
+  id                     String    @id @default(uuid()) @db.Uuid
+  organizationId         String    @map("organization_id") @db.Uuid
+  lotId                  String    @map("lot_id") @db.Uuid
+  reference              String    @unique
+  /// CoffeeOrderStatus.
+  status                 String    @default("pending")
+  quantity               Int
+  unitPriceCop           Int       @map("unit_price_cop")
+  shippingFeeCop         Int       @map("shipping_fee_cop")
+  totalCop               Int       @map("total_cop")
+  contributionPerUnitCop Int       @map("contribution_per_unit_cop")
+  contributionTotalCop   Int       @map("contribution_total_cop")
+  campaignId             String    @map("campaign_id") @db.Uuid
+  campaignTitle          String    @map("campaign_title")
+  campaignOrgName        String    @map("campaign_org_name")
+  buyerName              String    @map("buyer_name")
+  buyerEmail             String    @map("buyer_email")
+  buyerPhone             String    @map("buyer_phone")
+  shippingAddress        String    @map("shipping_address")
+  shippingCity           String    @map("shipping_city")
+  shippingDepartment     String    @map("shipping_department")
+  privacyAcceptedAt      DateTime  @map("privacy_accepted_at")
+  reservedUntil          DateTime  @map("reserved_until")
+  mpPaymentId            String?   @map("mp_payment_id")
+  paidAt                 DateTime? @map("paid_at")
+  shippedAt              DateTime? @map("shipped_at")
+  receiptSentAt          DateTime? @map("receipt_sent_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lot          CoffeeLot    @relation(fields: [lotId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([lotId, status])
+  @@map("coffee_orders")
+}
+
+/// Visitas diarias a la página de una presentación, por origen ("qr" o "web").
+/// Solo totales: sin IP, navegador ni ubicación. Las escribe una función
+/// SECURITY DEFINER; el equipo solo las lee.
+model CoffeeVisitDay {
+  organizationId String   @map("organization_id") @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  day            DateTime @db.Date
+  source         String
+  visits         Int      @default(0)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      CoffeeProduct @relation(fields: [productId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([organizationId, productId, day, source])
+  @@index([organizationId])
+  @@map("coffee_visit_days")
+}
+
+/// Entrega del aporte a una campaña, con su soporte. Solo inserción: una
+/// corrección es una entrega nueva (puede ser negativa) que lo explica.
+model CoffeeContributionDelivery {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  campaignId      String   @map("campaign_id") @db.Uuid
+  campaignTitle   String   @map("campaign_title")
+  amountCop       Int      @map("amount_cop")
+  deliveredOn     DateTime @map("delivered_on") @db.Date
+  evidence        String
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([campaignId])
+  @@map("coffee_contribution_deliveries")
+}

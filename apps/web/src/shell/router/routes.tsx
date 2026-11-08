@@ -22,6 +22,7 @@ import {
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
   PLATFORM_PLANS_ROLES,
+  PLATFORM_COFFEE_ROLES,
   PLATFORM_REVIEWS_ROLES,
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
   PLATFORM_TEAM_ROLES,
@@ -128,6 +129,10 @@ const ServicesModerationPage = lazyPage(loadCommunity, 'ServicesModerationPage')
 const loadAnimals = () => import('../../features/animals');
 const AnimalsPage = lazyPage(loadAnimals, 'AnimalsPage');
 const RemindersInboxPage = lazyPage(loadAnimals, 'RemindersInboxPage');
+const loadCoffee = () => import('../../features/coffee');
+const PublicCoffeePage = lazyPage(loadCoffee, 'PublicCoffeePage');
+const CoffeeOrderPage = lazyPage(loadCoffee, 'CoffeeOrderPage');
+const PlatformCoffeePage = lazyPage(loadCoffee, 'PlatformCoffeePage');
 const loadPlatformTeam = () => import('../../features/platform-team');
 const PlatformTeamPage = lazyPage(loadPlatformTeam, 'PlatformTeamPage');
 const loadAdoptions = () => import('../../features/adoptions');
@@ -281,6 +286,10 @@ export function AppRoutes() {
           elige desde su panel si lleva a su perfil, a donar, a una campaña o a
           apadrinar un animal. La API valida el destino en cada escaneo. */}
           <Route path="/q/:code" element={<OrgQrRedirectPage />} />
+          {/* Café de AdoptaFácil: el QR impreso en la bolsa (`/c/:code`, no cambia
+          entre lotes) y el regreso desde Mercado Pago con el estado del pedido. */}
+          <Route path="/c/:code" element={<PublicCoffeePage />} />
+          <Route path="/cafe/pedido/:reference" element={<CoffeeOrderPage />} />
           <Route
             path="/donar"
             element={
@@ -722,6 +731,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={PLATFORM_PLANS_ROLES}>
                       <PlatformPlansPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Café de AdoptaFácil (presentaciones, lotes, pedidos, aportes).
+              Audiencia de PLATAFORMA. */}
+                <Route
+                  path="plataforma/cafe"
+                  element={
+                    <RequireRoles roles={PLATFORM_COFFEE_ROLES}>
+                      <PlatformCoffeePage />
                     </RequireRoles>
                   }
                 />

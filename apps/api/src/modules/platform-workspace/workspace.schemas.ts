@@ -45,12 +45,25 @@ export const auditExportPayloadSchema = z
     { message: 'At most one year per export' },
   );
 
+const cop = z.number().int().min(0).max(100_000_000);
+export const coffeeLotPublishPayloadSchema = z.object({
+  lotId: uuid,
+  salePriceCop: cop,
+  unitCostCop: cop,
+  shippingFeeCop: cop,
+  stockUnits: z.number().int().min(0).max(1_000_000),
+  defaultCampaignId: uuid,
+});
+export const coffeeLotCampaignPayloadSchema = z.object({ lotId: uuid, campaignId: uuid });
+
 export const PAYLOAD_SCHEMAS = {
   'staff.invite': staffInvitePayloadSchema,
   'staff.role_grant': staffRolePayloadSchema,
   'staff.role_revoke': staffRolePayloadSchema,
   'staff.mfa_reset': staffMfaResetPayloadSchema,
   'audit.export': auditExportPayloadSchema,
+  'coffee.lot_publish': coffeeLotPublishPayloadSchema,
+  'coffee.lot_campaign': coffeeLotCampaignPayloadSchema,
 } as const;
 
 export const createSensitiveActionSchema = z.object({
