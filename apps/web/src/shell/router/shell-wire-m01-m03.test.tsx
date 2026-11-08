@@ -60,7 +60,7 @@ const SURFACES = [
   {
     name: 'recordatorios',
     route: '/recordatorios',
-    heading: 'Recordatorios',
+    heading: 'Vacunas y tratamientos',
     allow: Role.Operator,
   },
   {
