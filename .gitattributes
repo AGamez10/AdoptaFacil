@@ -30,4 +30,3 @@ pnpm-lock.yaml -diff linguist-generated
 *.ico binary
 *.woff binary
 *.woff2 binary
-*.bat text eol=crlf

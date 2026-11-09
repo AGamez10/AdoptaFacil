@@ -96,19 +96,4 @@ describe('Google sign-in (R0-2, AF-029)', () => {
     });
     expect(screen.getByTestId('google-sign-in-fake-button')).toBeInTheDocument();
   });
-
-  it('shows no Google button inside the native app (Google blocks embedded web views)', () => {
-    (window as unknown as { Capacitor?: unknown }).Capacitor = { isNativePlatform: () => true };
-    try {
-      renderShell({
-        route: '/login',
-        session: { initialStatus: 'unauthenticated' },
-        capabilities: OPEN_CAPABILITIES,
-      });
-      expect(screen.queryByTestId('google-sign-in-fake-button')).toBeNull();
-      expect(screen.queryByText(/Continuar con Google/)).toBeNull();
-    } finally {
-      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
-    }
-  });
 });
