@@ -129,6 +129,44 @@ export class MercadoPagoOAuthClient {
       `${apiBase}/org/mercadopago/callback`;
     this.pkce = config.get('MERCADOPAGO_OAUTH_PKCE', { infer: true }) === true;
     this.testToken = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
+    if (this.isConfigured()) {
+      // Mercado Pago shows "La aplicación no está preparada para conectarse"
+      // when these do not match the app's panel EXACTLY. Log what we send
+      // (client_id and redirect_uri are public; the secret never is).
+      for (const line of this.describeOAuthSetup()) this.logger.log(line);
+    }
+  }
+
+  /**
+   * Non-secret OAuth setup to compare, character by character, with the app
+   * in Mercado Pago's developer panel. Includes warnings for the usual
+   * mismatches (non-https or localhost redirect, which the panel's Redirect
+   * URL list cannot hold).
+   */
+  describeOAuthSetup(): string[] {
+    const lines = [
+      `Mercado Pago OAuth: client_id=${this.clientId} redirect_uri=${this.redirectUri} ` +
+        `authorize=${this.authorizeUrl} pkce=${this.pkce} sandbox=${this.testToken}`,
+    ];
+    let redirect: URL | undefined;
+    try {
+      redirect = new URL(this.redirectUri);
+    } catch {
+      lines.push('Mercado Pago OAuth: redirect_uri is not a valid URL');
+    }
+    if (redirect && redirect.protocol !== 'https:') {
+      lines.push(
+        'Mercado Pago OAuth: redirect_uri is not https; register an https URL (e.g. a tunnel) ' +
+          'in the app and set MERCADOPAGO_OAUTH_REDIRECT_URI to the same value',
+      );
+    }
+    if (redirect && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(redirect.hostname)) {
+      lines.push(
+        'Mercado Pago OAuth: redirect_uri points to localhost; Mercado Pago cannot redirect there ' +
+          'unless the exact same URL is registered in the app',
+      );
+    }
+    return lines;
   }
 
   /** Whether the OAuth app credentials are configured at all. */

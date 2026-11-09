@@ -53,6 +53,27 @@ describe('MercadoPagoOAuthClient (ADR-PAG-003)', () => {
     expect(url.toString()).not.toContain('client-secret');
   });
 
+  it('describes the non-secret OAuth setup to compare with the panel', () => {
+    const client = new MercadoPagoOAuthClient(makeConfig(), jest.fn());
+    const lines = client.describeOAuthSetup();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('client_id=1234567890');
+    expect(lines[0]).toContain(
+      'redirect_uri=https://api.adoptafacil.test/org/mercadopago/callback',
+    );
+    expect(lines.join('\n')).not.toContain('client-secret');
+  });
+
+  it('warns when the redirect URI is http or localhost (the panel cannot match it)', () => {
+    const client = new MercadoPagoOAuthClient(
+      makeConfig({ API_PUBLIC_BASE_URL: 'http://localhost:3000' }),
+      jest.fn(),
+    );
+    const text = client.describeOAuthSetup().join('\n');
+    expect(text).toContain('not https');
+    expect(text).toContain('localhost');
+  });
+
   it('adds an S256 PKCE challenge when given one', () => {
     const { verifier, challenge } = createPkcePair();
     expect(challenge).toBe(createHash('sha256').update(verifier).digest('base64url'));
