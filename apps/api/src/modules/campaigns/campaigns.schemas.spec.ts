@@ -28,6 +28,13 @@ describe('campaign validation (RF15)', () => {
     expect(createCampaignSchema.safeParse({ ...valid, goalAmount: 10.5 }).success).toBe(false);
   });
 
+  it('accepts the conservation and education categories', () => {
+    expect(createCampaignSchema.safeParse({ ...valid, category: 'conservation' }).success).toBe(
+      true,
+    );
+    expect(createCampaignSchema.safeParse({ ...valid, category: 'education' }).success).toBe(true);
+  });
+
   it('rejects a category outside the closed enum', () => {
     expect(createCampaignSchema.safeParse({ ...valid, category: 'marketing' }).success).toBe(false);
   });

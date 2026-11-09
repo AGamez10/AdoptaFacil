@@ -66,6 +66,9 @@ export function PublicFooter() {
             <Link to="/campanas" className={styles.footer__link}>
               Campañas
             </Link>
+            <Link to="/voluntariados" className={styles.footer__link}>
+              Voluntariados
+            </Link>
             {payments && (
               <Link to="/donaciones" className={styles.footer__link}>
                 Donar

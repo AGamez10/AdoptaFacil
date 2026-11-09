@@ -167,6 +167,7 @@ const CertificateEmissionPage = lazyPage(loadCertificates, 'CertificateEmissionP
 const CertificateVerificationPage = lazyPage(loadCertificates, 'CertificateVerificationPage');
 const loadVolunteering = () => import('../../features/volunteering');
 const MyVolunteeringPage = lazyPage(loadVolunteering, 'MyVolunteeringPage');
+const PublicVolunteeringPage = lazyPage(loadVolunteering, 'PublicVolunteeringPage');
 const VolunteerOpportunitiesPage = lazyPage(loadVolunteering, 'VolunteerOpportunitiesPage');
 const VolunteerOpportunityDetailPage = lazyPage(loadVolunteering, 'VolunteerOpportunityDetailPage');
 const loadReputation = () => import('../../features/reputation');
@@ -334,6 +335,9 @@ export function AppRoutes() {
           <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
           <Route path="/servicios/:id" element={<ServiceDetailPage />} />
+          {/* Voluntariados PÚBLICOS (PR #43, M08 RF18): jornadas activas de todas
+          las organizaciones, sin sesión. Inscribirse lleva a /voluntariado. */}
+          <Route path="/voluntariados" element={<PublicVolunteeringPage />} />
           {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
           no auth required to read; an authenticated visitor sees a "leave a
           review" form here instead of on a separate route. */}
