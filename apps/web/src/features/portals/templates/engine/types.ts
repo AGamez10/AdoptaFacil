@@ -30,6 +30,8 @@ export interface TemplateDesign {
   kit?: boolean;
   /** Necesita WebGL/Three.js (tiene respaldo sin WebGL). */
   webgl?: boolean;
+  /** Plantilla Premium (dos experiencias, clara y oscura, con el kit `.pk`). */
+  premium?: boolean;
   html: (m: TplModel, kit: Kit) => string;
   init?: (app: HTMLElement, env: TemplateEnv) => void;
 }
