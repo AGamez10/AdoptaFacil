@@ -6,6 +6,7 @@ import {
   MERCADOPAGO_DEFAULT_TOKEN_TTL_SECONDS,
   MercadoPagoOAuthClient,
   MercadoPagoOAuthError,
+  safeOAuthDescription,
 } from './mercadopago-oauth.client';
 
 function makeConfig(overrides: Record<string, unknown> = {}): ConfigService<Env, true> {
@@ -72,6 +73,63 @@ describe('MercadoPagoOAuthClient (ADR-PAG-003)', () => {
     const text = client.describeOAuthSetup().join('\n');
     expect(text).toContain('not https');
     expect(text).toContain('localhost');
+  });
+
+  it('encodes the redirect_uri exactly once and logs it raw and encoded, hiding the state', () => {
+    const redirect = 'https://t.trycloudflare.com/api/org/mercadopago/callback';
+    const client = new MercadoPagoOAuthClient(
+      makeConfig({ MERCADOPAGO_OAUTH_REDIRECT_URI: redirect }),
+      jest.fn(),
+    );
+    const url = client.buildAuthorizeUrl('sealed-state-value');
+    // Single encoding: ':' -> %3A once, never %253A.
+    expect(url).toContain(
+      'redirect_uri=https%3A%2F%2Ft.trycloudflare.com%2Fapi%2Forg%2Fmercadopago%2Fcallback',
+    );
+    expect(url).not.toContain('%25');
+    const lines = client.describeAuthorizeUrl(url).join('\n');
+    expect(lines).toContain(`redirect_uri (raw)=${redirect}`);
+    expect(lines).toContain('encoded exactly once=true');
+    expect(lines).toContain('trailing slash=false');
+    expect(lines).toContain('state=<redacted>');
+    expect(lines).not.toContain('sealed-state-value');
+    expect(lines).not.toContain('client-secret');
+  });
+
+  it('flags a trailing slash on the redirect_uri (callback and callback/ differ for Mercado Pago)', () => {
+    const client = new MercadoPagoOAuthClient(
+      makeConfig({
+        MERCADOPAGO_OAUTH_REDIRECT_URI: 'https://t.example.com/api/org/mercadopago/callback/',
+      }),
+      jest.fn(),
+    );
+    expect(client.describeOAuthSetup().join('\n')).toContain('ends with "/"');
+    expect(client.describeAuthorizeUrl(client.buildAuthorizeUrl('s')).join('\n')).toContain(
+      'trailing slash=true',
+    );
+  });
+
+  it('shows whether the plans token belongs to the same app as the OAuth client_id', () => {
+    const same = new MercadoPagoOAuthClient(
+      makeConfig({ MERCADOPAGO_PLATFORM_ACCESS_TOKEN: 'APP_USR-1234567890-110912-abc-55' }),
+      jest.fn(),
+    );
+    expect(same.describeOAuthSetup().join('\n')).toContain('SAME as MERCADOPAGO_CLIENT_ID');
+    const other = new MercadoPagoOAuthClient(
+      makeConfig({ MERCADOPAGO_PLATFORM_ACCESS_TOKEN: 'APP_USR-999-110912-abc-55' }),
+      jest.fn(),
+    );
+    const text = other.describeOAuthSetup().join('\n');
+    expect(text).toContain('app 999 (different from MERCADOPAGO_CLIENT_ID)');
+    expect(text).not.toContain('abc-55');
+  });
+
+  it('trims error_description and removes every value we sent', () => {
+    expect(safeOAuthDescription('bad\nredirect  TG-secret-code ok', ['TG-secret-code'])).toBe(
+      'bad redirect [redacted] ok',
+    );
+    expect(safeOAuthDescription('x'.repeat(500))).toHaveLength(200);
+    expect(safeOAuthDescription(undefined)).toBeUndefined();
   });
 
   it('adds an S256 PKCE challenge when given one', () => {

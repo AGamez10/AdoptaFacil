@@ -205,6 +205,14 @@ compárala carácter por carácter con el panel. Revisa en este orden:
 5. Si todo lo anterior cuadra, prueba con `MERCADOPAGO_AUTHORIZE_URL=https://auth.mercadopago.com/authorization`
    (el host sin país que hoy muestra la documentación).
 
+Cada vez que se toca "Conectar Mercado Pago", la API también escribe en el log cuatro líneas
+`Mercado Pago OAuth authorize: …` con el `redirect_uri` crudo, el `redirect_uri` codificado tal como se envía,
+si está codificado una sola vez y si termina en `/`, y la URL completa con el `state` oculto. Al arrancar
+muestra además de qué variable sale el `client_id` y a qué app pertenece `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`
+(solo el App ID público, nunca el token). Si Mercado Pago devuelve `error` o `error_description` al callback, o
+el cambio de código por token falla, también quedan en el log, recortados y sin el código ni los secretos. El
+valor que hay que registrar en el panel es exactamente el de `redirect_uri (raw)`.
+
 **Probar en local:** Mercado Pago tiene que poder volver al navegador por https. Con el túnel de la web
 (`vite` ya reenvía `/api/*` a la API), registra en la aplicación `https://<túnel>/api/org/mercadopago/callback`
 y pon ese mismo valor en `MERCADOPAGO_OAUTH_REDIRECT_URI`. En la web pon `VITE_API_URL=/api` y abre la app por la
