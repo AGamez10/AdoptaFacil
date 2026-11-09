@@ -45,6 +45,11 @@ import {
 import { clampLimit } from './volunteer-opportunities.service';
 import { pdfText } from '../reports/report-text';
 import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
+import {
+  SIGNATURE_LINE_OVERLAP,
+  embedSignatureForPdf,
+  fitSignature,
+} from '../../core/legal/signature-render';
 
 function toCertificate(row: CertificateRow): VolunteerCertificate {
   return {
@@ -582,23 +587,9 @@ export async function embedSignatureImage(
   pdf: PDFDocument,
   bytes: Buffer | Uint8Array,
 ): Promise<PDFImage | null> {
-  if (!bytes || bytes.length < 4) return null;
-  // Copia en un arreglo propio: el lector JPEG de pdf-lib lee `bytes.buffer`
-  // desde el inicio e ignora `byteOffset`, así que un Buffer que es una vista
-  // dentro de otro (lo normal tras descifrar) se leía como basura y la firma
-  // JPG desaparecía en silencio.
-  bytes = Uint8Array.from(bytes);
-  try {
-    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-      return await pdf.embedPng(bytes);
-    }
-    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-      return await pdf.embedJpg(bytes);
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  // Recorta el lienzo vacío alrededor del trazo y normaliza PNG/JPG a PNG
+  // (copia propia de los bytes: pdf-lib ignora el `byteOffset` de las vistas).
+  return embedSignatureForPdf(pdf, bytes);
 }
 
 /** Copia del certificado con todo texto variable apto para WinAnsi (ver
@@ -864,15 +855,14 @@ function drawCertificatePage(
     // real), nunca ENCIMA del texto del nombre — igual que un documento
     // firmado a mano. Ya viene embebida (async, resuelta antes de llamar a
     // esta función síncrona) — aquí solo se posiciona.
-    const naturalWidth = signatureImage.width || 400;
-    const naturalHeight = signatureImage.height || 150;
-    const drawWidth = Math.min(160, naturalWidth);
-    const drawHeight = (drawWidth / naturalWidth) * naturalHeight;
+    // Recortada a su trazo al incrustarla: aquí se centra y se apoya sobre la
+    // línea (la cruza apenas), sin deformarla.
+    const size = fitSignature(signatureImage.width, signatureImage.height, 170, 56);
     page.drawImage(signatureImage, {
-      x: signatureBlockX + (signatureBlockWidth - drawWidth) / 2,
-      y: signatureLineY + 4,
-      width: drawWidth,
-      height: drawHeight,
+      x: signatureBlockX + (signatureBlockWidth - size.width) / 2,
+      y: signatureLineY - SIGNATURE_LINE_OVERLAP / 2,
+      width: size.width,
+      height: size.height,
     });
   }
 
