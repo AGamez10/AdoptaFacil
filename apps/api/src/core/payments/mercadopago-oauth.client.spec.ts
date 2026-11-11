@@ -164,6 +164,19 @@ describe('MercadoPagoOAuthClient (ADR-PAG-003)', () => {
     expect(body.get('redirect_uri')).toBe('https://api.adoptafacil.test/org/mercadopago/callback');
   });
 
+  it('can stay in sandbox without sending test_token (MERCADOPAGO_OAUTH_TEST_TOKEN=false)', async () => {
+    const fetchFn = jest.fn(async () => json(GRANT));
+    const client = new MercadoPagoOAuthClient(
+      makeConfig({ MERCADOPAGO_TEST: true, MERCADOPAGO_OAUTH_TEST_TOKEN: false }),
+      fetchFn,
+    );
+    await client.exchangeCode('TG-code');
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new URLSearchParams(String(init.body)).has('test_token')).toBe(false);
+    // The sandbox guard does not change: only test-user grants (live_mode=false).
+    expect(client.expectedLiveMode()).toBe(false);
+  });
+
   it('defaults the lifetime and refuses a grant without user id or token', async () => {
     const noTtl = new MercadoPagoOAuthClient(
       makeConfig(),

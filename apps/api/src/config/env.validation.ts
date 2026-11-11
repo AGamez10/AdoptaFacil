@@ -170,6 +170,16 @@ export const envSchema = z.object({
   MERCADOPAGO_OAUTH_PKCE: featureFlag(),
   // Sandbox: ask for test tokens (subscriptions still open `sandbox_init_point`). OFF unless "true".
   MERCADOPAGO_TEST: featureFlag(),
+  // Whether the OAuth code exchange sends `test_token=true`. Unset: follows
+  // MERCADOPAGO_TEST (unchanged behavior). Set it to "false" to keep sandbox
+  // (test users only) but NOT send `test_token`: Mercado Pago support says the
+  // parameter belongs to the Checkout API Marketplace test flow, not Checkout Pro.
+  MERCADOPAGO_OAUTH_TEST_TOKEN: z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) =>
+      value === undefined || value === '' ? undefined : value === true || value === 'true',
+    ),
   // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
   // AdoptaFácil's plans (subscriptions); never used for a donation.
   MERCADOPAGO_PLATFORM_ACCESS_TOKEN: z.string().min(1).optional(),

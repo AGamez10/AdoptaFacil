@@ -122,7 +122,10 @@ export class MercadoPagoOAuthClient {
   private readonly authorizeUrl: string;
   private readonly redirectUri: string;
   private readonly pkce: boolean;
-  private readonly testToken: boolean;
+  /** Sandbox: grants must belong to test users (`live_mode=false`). */
+  private readonly sandbox: boolean;
+  /** Whether the code exchange carries `test_token=true` (defaults to `sandbox`). */
+  private readonly sendTestToken: boolean;
   private readonly platformAccessToken: string | undefined;
 
   constructor(
@@ -150,7 +153,10 @@ export class MercadoPagoOAuthClient {
       (config.get('MERCADOPAGO_OAUTH_REDIRECT_URI', { infer: true }) as string | undefined) ??
       `${apiBase}/org/mercadopago/callback`;
     this.pkce = config.get('MERCADOPAGO_OAUTH_PKCE', { infer: true }) === true;
-    this.testToken = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
+    this.sandbox = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
+    const testTokenOverride = config.get('MERCADOPAGO_OAUTH_TEST_TOKEN', { infer: true }) as
+      boolean | undefined;
+    this.sendTestToken = testTokenOverride ?? this.sandbox;
     this.platformAccessToken = config.get('MERCADOPAGO_PLATFORM_ACCESS_TOKEN', {
       infer: true,
     }) as string | undefined;
@@ -172,7 +178,8 @@ export class MercadoPagoOAuthClient {
     const lines = [
       `Mercado Pago OAuth: client_id=${this.clientId} (from MERCADOPAGO_CLIENT_ID) ` +
         `redirect_uri=${this.redirectUri} ` +
-        `authorize=${this.authorizeUrl} pkce=${this.pkce} sandbox=${this.testToken}`,
+        `authorize=${this.authorizeUrl} pkce=${this.pkce} sandbox=${this.sandbox} ` +
+        `test_token=${this.sendTestToken}`,
     ];
     // The plans (Suscripciones) app has its OWN credentials. Its access token
     // starts with `APP_USR-<appId>-`; showing that public App ID lets you see
@@ -232,7 +239,7 @@ export class MercadoPagoOAuthClient {
    * accounts. A mismatched grant is refused (never stored or used).
    */
   expectedLiveMode(): boolean {
-    return !this.testToken;
+    return !this.sandbox;
   }
 
   getRedirectUri(): string {
@@ -292,8 +299,9 @@ export class MercadoPagoOAuthClient {
       redirect_uri: this.redirectUri,
     };
     if (codeVerifier) body.code_verifier = codeVerifier;
-    // Sandbox: ask for test credentials of the connected test user.
-    if (this.testToken) body.test_token = 'true';
+    // Sandbox: ask for test credentials of the connected test user. Can be
+    // switched off with MERCADOPAGO_OAUTH_TEST_TOKEN=false (Checkout Pro).
+    if (this.sendTestToken) body.test_token = 'true';
     return this.postToken(body);
   }
 
