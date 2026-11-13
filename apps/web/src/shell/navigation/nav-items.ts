@@ -10,6 +10,7 @@ import {
   PawIcon,
   ShieldIcon,
   ShoppingBagIcon,
+  UsersIcon,
   type IconProps,
 } from '../icons';
 
@@ -115,6 +116,9 @@ export const CUSTODY_VIEW_ROLES = [
 /** Planes y suscripciones · copiado VERBATIM del `@Roles` de `GET /org/plan`:
  *  el plan y su cobro son asunto del Owner/Administrator. */
 export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
+
+/** Equipo de la organización: `@Roles` de MembersController e InvitationsController. */
+export const ORG_MEMBERS_ROLES = [Role.Owner, Role.Administrator] as const;
 
 /**
  * M13 (S-8, RF24) — "Dashboard de plataforma" (conteos de colas), audiencia
@@ -515,6 +519,14 @@ export const navItems: NavItem[] = [
     label: 'Anuncios urgentes',
     icon: AlertTriangleIcon,
     roles: ORG_PLAN_ROLES,
+  },
+  // Equipo · invitar personas con un cargo fijo, cambiar su cargo o retirarlas.
+  // Mismo @Roles que /org/members y /org/invitations (Owner, Administrator).
+  {
+    path: '/organizacion/miembros',
+    label: 'Miembros del equipo',
+    icon: UsersIcon,
+    roles: ORG_MEMBERS_ROLES,
   },
   // Planes y suscripciones · plan en efecto, uso de límites y los tres planes.
   {
