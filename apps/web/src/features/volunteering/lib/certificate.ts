@@ -1,16 +1,19 @@
+import type { VolunteerCertificateTemplate } from '@adoptafacil/contracts';
 import type { ApiClient } from '../../../shell/api';
 
-/** Download a volunteer certificate PDF and trigger a browser save (RF18/RF19),
- *  same technique as `downloadClinicalCarnetPdf` (M03). */
+/** Download a volunteer certificate PDF (in the chosen design) and trigger a
+ *  browser save (RF18/RF19), same technique as `downloadClinicalCarnetPdf`. */
 export async function downloadVolunteerCertificatePdf(
   client: ApiClient,
   certificateId: string,
+  template?: VolunteerCertificateTemplate,
 ): Promise<void> {
-  const blob = await client.requestBlob(`/volunteer-certificates/${certificateId}/pdf`);
+  const query = template ? `?plantilla=${encodeURIComponent(template)}` : '';
+  const blob = await client.requestBlob(`/volunteer-certificates/${certificateId}/pdf${query}`);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `certificado-voluntariado-${certificateId}.pdf`;
+  anchor.download = `certificado-voluntariado-${template ?? 'huellitas'}.pdf`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

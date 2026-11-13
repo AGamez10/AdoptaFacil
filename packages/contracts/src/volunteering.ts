@@ -25,6 +25,10 @@
 export enum VolunteerOpportunityStatus {
   Active = 'active',
   Closed = 'closed',
+  /** Cancelada por la organización (con motivo). Nunca se borra: sus
+   *  inscripciones abiertas pasan a `cancelled` y cada persona recibe aviso.
+   *  Solo se llega por `POST /volunteer-opportunities/:id/cancel`. */
+  Cancelled = 'cancelled',
 }
 
 export interface VolunteerOpportunity {
@@ -52,6 +56,10 @@ export interface VolunteerOpportunity {
    *  ausente = cualquier día de la convocatoria (convocatorias anteriores a
    *  esta regla). Ver {@link volunteerEnabledDays}. */
   sessionDates?: string[];
+  /** ISO-8601 UTC. Solo en una jornada cancelada. */
+  cancelledAt?: string;
+  /** Motivo que la organización dio al cancelar (se avisó a los inscritos). */
+  cancellationReason?: string;
   /** ISO-8601 UTC. */
   createdAt: string;
 }
@@ -106,6 +114,21 @@ export interface UpdateVolunteerOpportunityInput {
   /** Reemplaza la lista completa de días habilitados (`[]` = todos los días de
    *  la convocatoria). */
   sessionDates?: string[];
+  /** Al REPROGRAMAR (cambian las fechas o los días de jornada): motivo opcional
+   *  que va en el aviso a las personas inscritas. */
+  rescheduleReason?: string;
+}
+
+/** Cancelar una jornada publicada. El motivo es obligatorio: se envía a cada
+ *  persona con inscripción pendiente o aceptada. */
+export interface CancelVolunteerOpportunityInput {
+  reason: string;
+}
+
+/** Resultado de reprogramar o cancelar: a cuántas personas se avisó. */
+export interface VolunteerOpportunityChangeResult {
+  opportunity: VolunteerOpportunity;
+  notifiedVolunteers: number;
 }
 
 // ============================================================================
@@ -124,6 +147,8 @@ export enum VolunteerEnrollmentStatus {
   Accepted = 'accepted',
   Rejected = 'rejected',
   Completed = 'completed',
+  /** La organización canceló la jornada (`rejectionReason` lleva el motivo). */
+  Cancelled = 'cancelled',
 }
 
 export interface VolunteerEnrollment {
@@ -370,5 +395,53 @@ export interface VolunteerCertificate {
   signerPosition?: string;
   /** true: ESAL formalizada, firma su representante legal. false: grupo
    *  informal o en proceso, firma su responsable. */
+  signerIsLegalRepresentative?: boolean;
+  /** Código público para verificar el certificado en `/verificar/<código>`. */
+  verificationCode?: string;
+}
+
+// ============================================================================
+// Certificado: código público, plantillas y verificación sin sesión.
+// ============================================================================
+
+/** Código público de un certificado de voluntariado: `VOL-XXXXXXXX-XXXXXXXX`. */
+export const VOLUNTEER_CERTIFICATE_CODE_PATTERN = /^VOL-[0-9A-F]{8}-[0-9A-F]{8}$/;
+
+export function isVolunteerCertificateCode(value: string): boolean {
+  return VOLUNTEER_CERTIFICATE_CODE_PATTERN.test(value.trim().toUpperCase());
+}
+
+/** Diseños del PDF del certificado. El contenido y los datos verificables son
+ *  los mismos; cambia solo la presentación. */
+export const VOLUNTEER_CERTIFICATE_TEMPLATES = ['huellitas', 'clasica'] as const;
+export type VolunteerCertificateTemplate = (typeof VOLUNTEER_CERTIFICATE_TEMPLATES)[number];
+export const DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE: VolunteerCertificateTemplate = 'huellitas';
+
+export const VOLUNTEER_CERTIFICATE_TEMPLATE_LABELS: Record<VolunteerCertificateTemplate, string> = {
+  huellitas: 'Huellitas (cálida, con colores de refugio)',
+  clasica: 'Clásica (formal, para colegios y empresas)',
+};
+
+/** Lo que cualquiera ve al verificar un certificado por su código (sin
+ *  sesión). Solo lo que ya está impreso en el documento: nunca correo,
+ *  documento de identidad ni datos del acudiente. */
+export interface VolunteerCertificateVerification {
+  verificationCode: string;
+  volunteerName: string;
+  organizationName: string;
+  opportunityTitle: string;
+  totalApprovedHours: number;
+  /** Número de sesiones aprobadas en la bitácora. */
+  sessions: number;
+  /** ISO-8601 UTC. */
+  periodStart: string;
+  /** ISO-8601 UTC. */
+  periodEnd: string;
+  /** ISO-8601 UTC. */
+  issuedAt: string;
+  appliesToStudentService: boolean;
+  schoolName?: string;
+  signerFullName?: string;
+  signerPosition?: string;
   signerIsLegalRepresentative?: boolean;
 }

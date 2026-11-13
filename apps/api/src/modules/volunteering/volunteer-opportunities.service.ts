@@ -1,14 +1,21 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { VolunteerOpportunity as OpportunityRow } from '@prisma/client';
 import {
+  type CancelVolunteerOpportunityInput,
   type CreateVolunteerOpportunityInput,
   dateOrderError,
+  formatDayEs,
+  type VolunteerOpportunityChangeResult,
+  VolunteerEnrollmentStatus,
   type Paginated,
   type UpdateVolunteerOpportunityInput,
   type VolunteerOpportunity,
@@ -17,6 +24,19 @@ import {
 } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
+import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
+import type { RequestUser } from '../../core/auth/auth.types';
+import {
+  NOTIFICATION_PORT,
+  type NotificationPort,
+} from '../../core/notifications/notification.port';
+import {
+  buildOpportunityCancelledBody,
+  buildOpportunityCancelledSubject,
+  buildOpportunityRescheduledBody,
+  buildOpportunityRescheduledSubject,
+} from './volunteer-notifications';
 
 const DEFAULT_PAGE = 20;
 const MAX_PAGE = 100;
@@ -71,8 +91,49 @@ function toOpportunity(row: OpportunityRow): VolunteerOpportunity {
     appliesToStudentService: row.appliesToStudentService,
     status: row.status as VolunteerOpportunityStatus,
     sessionDates: row.sessionDates.map(toDay),
+    cancelledAt: row.cancelledAt?.toISOString(),
+    cancellationReason: row.cancellationReason ?? undefined,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** Inscripciones que siguen "vivas" en una jornada: a ellas se les avisa de un
+ *  cambio y son las que una cancelación cierra. */
+const OPEN_ENROLLMENT_STATUSES: string[] = [
+  VolunteerEnrollmentStatus.Pending,
+  VolunteerEnrollmentStatus.Accepted,
+];
+
+/** "del 22 de noviembre de 2026 al 23 de noviembre de 2026" (o un solo día). */
+export function describeOpportunityDates(startDate: Date, endDate: Date): string {
+  const start = toDay(startDate);
+  const end = toDay(endDate);
+  return start === end
+    ? `el ${formatDayEs(start)}`
+    : `del ${formatDayEs(start)} al ${formatDayEs(end)}`;
+}
+
+/** Días de jornada legibles para el aviso de reprogramación. */
+export function describeSessionDays(days: readonly string[]): string {
+  if (days.length === 0) return 'todos los días de la convocatoria';
+  return days.map((day) => formatDayEs(day)).join(', ');
+}
+
+/**
+ * Horas ya registradas que una reprogramación dejaría por fuera (otra fecha o
+ * un día que deja de ser jornada). Devuelve el primer día afectado, o null.
+ */
+export function hoursLeftOutside(
+  loggedDays: readonly string[],
+  startDay: string,
+  endDay: string,
+  sessionDays: readonly string[],
+): string | null {
+  for (const day of [...loggedDays].sort()) {
+    if (day < startDay || day > endDay) return day;
+    if (sessionDays.length > 0 && !sessionDays.includes(day)) return day;
+  }
+  return null;
 }
 
 /** Raw row from `organization_public(slug)` (T-101) — only `id`/`name` used here. */
@@ -90,9 +151,14 @@ interface RawPublicOrg {
  */
 @Injectable()
 export class VolunteerOpportunitiesService {
+  private readonly logger = new Logger('VolunteerOpportunities');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
+    private readonly audit: AuditService,
+    @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly inbox: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -130,12 +196,22 @@ export class VolunteerOpportunitiesService {
     });
   }
 
-  async update(id: string, input: UpdateVolunteerOpportunityInput): Promise<VolunteerOpportunity> {
+  async update(
+    id: string,
+    input: UpdateVolunteerOpportunityInput,
+    actor?: RequestUser,
+  ): Promise<VolunteerOpportunity & { notifiedVolunteers: number }> {
     const organizationId = this.requireOrgId();
-    return this.prisma.withOrgContext(organizationId, async (tx) => {
+    const { rescheduleReason, ...changes } = input;
+    const result = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const existing = await tx.volunteerOpportunity.findUnique({ where: { id } });
       if (!existing || existing.organizationId !== organizationId) {
         throw new NotFoundException('Volunteer opportunity not found');
+      }
+      if (existing.status === VolunteerOpportunityStatus.Cancelled) {
+        throw new ConflictException(
+          'Esta jornada fue cancelada: ya no se puede editar. Publica una nueva si vuelve a realizarse.',
+        );
       }
       // Cambiar SOLO una de las dos fechas no puede dejar el fin antes del inicio.
       if (input.startDate || input.endDate) {
@@ -158,23 +234,229 @@ export class VolunteerOpportunitiesService {
               input.endDate ?? existing.endDate.toISOString(),
             )
           : undefined;
+      // ¿Cambió el calendario? Entonces es una REPROGRAMACIÓN: las horas ya
+      // registradas no pueden quedar por fuera y se avisa a los inscritos.
+      const oldDays = existing.sessionDates.map(toDay);
+      const newStart = input.startDate ? new Date(input.startDate) : existing.startDate;
+      const newEnd = input.endDate ? new Date(input.endDate) : existing.endDate;
+      const newDays = sessionDates ?? oldDays;
+      const rescheduled =
+        toDay(newStart) !== toDay(existing.startDate) ||
+        toDay(newEnd) !== toDay(existing.endDate) ||
+        newDays.join(',') !== oldDays.join(',');
+      if (rescheduled) {
+        const logged = await tx.serviceHours.findMany({
+          where: { enrollment: { opportunityId: id }, status: { not: 'rejected' } },
+          select: { date: true },
+        });
+        const outside = hoursLeftOutside(
+          logged.map((h) => toDay(h.date)),
+          toDay(newStart),
+          toDay(newEnd),
+          newDays,
+        );
+        if (outside) {
+          throw new ConflictException(
+            `Ya hay horas registradas el ${formatDayEs(outside)}: ese día debe seguir siendo parte de la jornada. ` +
+              'Reprograma solo los días que aún no han ocurrido.',
+          );
+        }
+      }
       const row = await tx.volunteerOpportunity.update({
         where: { id },
         data: {
-          title: input.title,
-          description: input.description,
-          category: input.category,
-          startDate: input.startDate ? new Date(input.startDate) : undefined,
-          endDate: input.endDate ? new Date(input.endDate) : undefined,
-          capacity: input.capacity,
-          location: input.location,
-          requirements: input.requirements,
-          status: input.status,
+          title: changes.title,
+          description: changes.description,
+          category: changes.category,
+          startDate: changes.startDate ? new Date(changes.startDate) : undefined,
+          endDate: changes.endDate ? new Date(changes.endDate) : undefined,
+          capacity: changes.capacity,
+          location: changes.location,
+          requirements: changes.requirements,
+          status: changes.status,
           sessionDates: sessionDates ? asDates(sessionDates) : undefined,
         },
       });
-      return toOpportunity(row);
+      const recipients = rescheduled
+        ? await tx.volunteerEnrollment.findMany({
+            where: { opportunityId: id, status: { in: OPEN_ENROLLMENT_STATUSES } },
+            select: { volunteerName: true, volunteerEmail: true, volunteerUserId: true },
+          })
+        : [];
+      if (rescheduled && actor) {
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId: actor.id,
+          action: 'volunteering.opportunity_rescheduled',
+          entityType: 'volunteer_opportunity',
+          entityId: id,
+          metadata: {
+            from: { start: toDay(existing.startDate), end: toDay(existing.endDate), days: oldDays },
+            to: { start: toDay(newStart), end: toDay(newEnd), days: newDays },
+            notified: recipients.length,
+          },
+        });
+      }
+      const organization = rescheduled
+        ? await tx.organization.findUnique({
+            where: { id: organizationId },
+            select: { name: true },
+          })
+        : null;
+      return { row, recipients, organizationName: organization?.name ?? '' };
     });
+
+    for (const recipient of result.recipients) {
+      const emailInput = {
+        volunteerName: recipient.volunteerName,
+        opportunityTitle: result.row.title,
+        organizationName: result.organizationName,
+        dates: describeOpportunityDates(result.row.startDate, result.row.endDate),
+        sessionDays: describeSessionDays(result.row.sessionDates.map(toDay)),
+        reason: rescheduleReason?.trim() || undefined,
+      };
+      await this.sendSafely(recipient.volunteerEmail, {
+        subject: buildOpportunityRescheduledSubject(emailInput),
+        body: buildOpportunityRescheduledBody(emailInput),
+        template: {
+          event: 'volunteering.opportunity_rescheduled',
+          organizationName: emailInput.organizationName || undefined,
+          organizationId,
+          data: {
+            nombre: emailInput.volunteerName,
+            oportunidad: emailInput.opportunityTitle,
+            organizacion: emailInput.organizationName,
+            fechas: emailInput.dates,
+            dias: emailInput.sessionDays,
+            motivo: emailInput.reason ?? 'La organización no indicó un motivo.',
+          },
+        },
+      });
+      await this.inbox.toUser(recipient.volunteerUserId, {
+        kind: 'volunteering.opportunity_rescheduled',
+        tone: 'info',
+        title: `Cambió la fecha de "${result.row.title}"`,
+        body: `Ahora es ${emailInput.dates}.${emailInput.reason ? ` Motivo: ${emailInput.reason}` : ''}`,
+        href: '/voluntariado',
+      });
+    }
+    // Forma de siempre (contrato aditivo) + a cuántas personas se avisó.
+    return { ...toOpportunity(result.row), notifiedVolunteers: result.recipients.length };
+  }
+
+  /**
+   * Cancela una jornada publicada. No se borra (sus inscripciones y su rastro
+   * de auditoría deben sobrevivir): queda `cancelled` con su motivo, sale de
+   * los listados públicos, sus inscripciones abiertas pasan a `cancelled` y
+   * cada persona recibe un correo con el motivo. Si ya hay horas registradas
+   * no se cancela: ese trabajo existe y debe poder certificarse (se cierra la
+   * convocatoria o se reprograman los días que faltan).
+   */
+  async cancel(
+    id: string,
+    input: CancelVolunteerOpportunityInput,
+    actor: RequestUser,
+  ): Promise<VolunteerOpportunityChangeResult> {
+    const organizationId = this.requireOrgId();
+    const reason = input.reason.trim();
+    const result = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const existing = await tx.volunteerOpportunity.findUnique({ where: { id } });
+      if (!existing || existing.organizationId !== organizationId) {
+        throw new NotFoundException('Volunteer opportunity not found');
+      }
+      if (existing.status === VolunteerOpportunityStatus.Cancelled) {
+        throw new ConflictException('Esta jornada ya estaba cancelada.');
+      }
+      const logged = await tx.serviceHours.count({
+        where: { enrollment: { opportunityId: id }, status: { not: 'rejected' } },
+      });
+      if (logged > 0) {
+        throw new ConflictException(
+          'Ya hay horas registradas en esta jornada, así que no se puede cancelar: ese trabajo debe ' +
+            'poder certificarse. Cierra la convocatoria o reprograma los días que aún no han ocurrido.',
+        );
+      }
+      const recipients = await tx.volunteerEnrollment.findMany({
+        where: { opportunityId: id, status: { in: OPEN_ENROLLMENT_STATUSES } },
+        select: { id: true, volunteerName: true, volunteerEmail: true, volunteerUserId: true },
+      });
+      const now = new Date();
+      await tx.volunteerEnrollment.updateMany({
+        where: { opportunityId: id, status: { in: OPEN_ENROLLMENT_STATUSES } },
+        data: {
+          status: VolunteerEnrollmentStatus.Cancelled,
+          rejectionReason: `Jornada cancelada por la organización: ${reason}`,
+          decidedByUserId: actor.id,
+          decidedAt: now,
+        },
+      });
+      const row = await tx.volunteerOpportunity.update({
+        where: { id },
+        data: {
+          status: VolunteerOpportunityStatus.Cancelled,
+          cancelledAt: now,
+          cancellationReason: reason,
+        },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId: actor.id,
+        action: 'volunteering.opportunity_cancelled',
+        entityType: 'volunteer_opportunity',
+        entityId: id,
+        metadata: { notified: recipients.length, enrollments: recipients.map((r) => r.id) },
+      });
+      const organization = await tx.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true },
+      });
+      return { row, recipients, organizationName: organization?.name ?? '' };
+    });
+
+    for (const recipient of result.recipients) {
+      const emailInput = {
+        volunteerName: recipient.volunteerName,
+        opportunityTitle: result.row.title,
+        organizationName: result.organizationName,
+        reason,
+      };
+      await this.sendSafely(recipient.volunteerEmail, {
+        subject: buildOpportunityCancelledSubject(emailInput),
+        body: buildOpportunityCancelledBody(emailInput),
+        template: {
+          event: 'volunteering.opportunity_cancelled',
+          organizationName: emailInput.organizationName || undefined,
+          organizationId,
+          data: {
+            nombre: emailInput.volunteerName,
+            oportunidad: emailInput.opportunityTitle,
+            organizacion: emailInput.organizationName,
+            motivo: reason,
+          },
+        },
+      });
+      await this.inbox.toUser(recipient.volunteerUserId, {
+        kind: 'volunteering.opportunity_cancelled',
+        tone: 'info',
+        title: `"${result.row.title}" fue cancelada`,
+        body: `Motivo: ${reason}`,
+        href: '/voluntariado',
+        dedupeKey: `volunteer_opportunity_cancelled:${id}:${recipient.volunteerUserId}`,
+      });
+    }
+    return { opportunity: toOpportunity(result.row), notifiedVolunteers: result.recipients.length };
+  }
+
+  /** Un correo que no sale nunca deshace el cambio ya guardado. */
+  private async sendSafely(
+    to: string,
+    message: Omit<Parameters<NotificationPort['send']>[0], 'to'>,
+  ): Promise<void> {
+    try {
+      await this.notifications.send({ to, ...message });
+    } catch (error) {
+      this.logger.warn(`No se pudo avisar a una persona inscrita: ${(error as Error).message}`);
+    }
   }
 
   async list(limit: number, offset: number): Promise<Paginated<VolunteerOpportunity>> {

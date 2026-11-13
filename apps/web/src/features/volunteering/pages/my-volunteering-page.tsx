@@ -6,8 +6,12 @@ import {
   type VolunteerCertificate,
   type VolunteerEnrollmentMine,
   type VolunteerOpportunityPublic,
+  DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE,
   formatDayEs,
   SERVICE_HOURS_MAX_PHOTOS,
+  VOLUNTEER_CERTIFICATE_TEMPLATE_LABELS,
+  VOLUNTEER_CERTIFICATE_TEMPLATES,
+  type VolunteerCertificateTemplate,
   todayInColombia,
   volunteerEnabledDays,
 } from '@adoptafacil/contracts';
@@ -34,6 +38,7 @@ import {
   enrollmentStatusVariant,
   formatBogota,
   formatHours,
+  hoursFormProblem,
   hoursStatusVariant,
   parseSessionHours,
 } from '../model/volunteering-view';
@@ -53,6 +58,13 @@ function loggableDays(enrollment: VolunteerEnrollmentMine): string[] | null {
     },
     todayInColombia(),
   ).reverse();
+}
+
+/** Próximo día de jornada habilitado (hoy o después), si la organización
+ *  definió días. Para decirle a la persona CUÁNDO podrá registrar horas. */
+function nextSessionDay(enrollment: VolunteerEnrollmentMine): string | null {
+  const today = todayInColombia();
+  return (enrollment.sessionDates ?? []).filter((day) => day >= today).sort()[0] ?? null;
 }
 
 /**
@@ -86,6 +98,9 @@ export function MyVolunteeringPage() {
   const [logDescription, setLogDescription] = useState('');
   const [logPhotos, setLogPhotos] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const [template, setTemplate] = useState<VolunteerCertificateTemplate>(
+    DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE,
+  );
 
   const loadAll = async (): Promise<void> => {
     const [opportunitiesPage, enrollmentsList, hoursList, certificatesList] = await Promise.all([
@@ -157,13 +172,16 @@ export function MyVolunteeringPage() {
   };
 
   const submitHours = async (enrollmentId: string): Promise<void> => {
-    const parsedHours = parseSessionHours(logHoursValue);
-    if (!logDate || parsedHours === null || !logDescription.trim()) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Fecha, horas (hasta 24) y descripción son obligatorios.',
-        variant: 'warning',
-      });
+    const enrollment = enrollments.find((e) => e.id === enrollmentId);
+    const allowed = enrollment ? loggableDays(enrollment) : null;
+    const problem = hoursFormProblem({
+      allowedDays: allowed,
+      date: logDate,
+      hoursText: logHoursValue,
+      description: logDescription,
+    });
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     const logDateError = dateError('serviceHoursDate', logDate);
@@ -171,17 +189,7 @@ export function MyVolunteeringPage() {
       toast({ title: 'Fecha no válida', description: logDateError, variant: 'warning' });
       return;
     }
-    const enrollment = enrollments.find((e) => e.id === enrollmentId);
-    const allowed = enrollment ? loggableDays(enrollment) : null;
-    if (allowed && !allowed.includes(logDate)) {
-      toast({
-        title: 'Día no habilitado',
-        description:
-          'Solo puedes registrar horas en los días de jornada que habilitó la organización.',
-        variant: 'warning',
-      });
-      return;
-    }
+    const parsedHours = parseSessionHours(logHoursValue) as number;
     setSaving(true);
     try {
       const created = await client.request<ServiceHours>('/service-hours', {
@@ -302,11 +310,12 @@ export function MyVolunteeringPage() {
                           {ENROLLMENT_STATUS_LABELS[enrollment.status]}
                         </Badge>
                       </div>
-                      {enrollment.status === 'rejected' && enrollment.rejectionReason && (
-                        <p className="text-xs text-muted-foreground">
-                          Motivo: {enrollment.rejectionReason}
-                        </p>
-                      )}
+                      {(enrollment.status === 'rejected' || enrollment.status === 'cancelled') &&
+                        enrollment.rejectionReason && (
+                          <p className="text-xs text-muted-foreground">
+                            Motivo: {enrollment.rejectionReason}
+                          </p>
+                        )}
                       {(enrollment.status === 'accepted' || enrollment.status === 'completed') && (
                         <div className="space-y-2">
                           {certifiedEnrollmentIds.has(enrollment.id) ? (
@@ -400,6 +409,17 @@ export function MyVolunteeringPage() {
                                 </Button>
                               </div>
                             </div>
+                          ) : loggableDays(enrollment)?.length === 0 ? (
+                            <p
+                              className="text-xs text-muted-foreground"
+                              data-testid="hours-not-yet"
+                            >
+                              Aún no hay un día de jornada habilitado que ya haya ocurrido.
+                              {nextSessionDay(enrollment)
+                                ? ` Próxima jornada: ${formatDayEs(nextSessionDay(enrollment) as string)}.`
+                                : ''}{' '}
+                              Podrás registrar tus horas el mismo día de la jornada o después.
+                            </p>
                           ) : (
                             <Button
                               size="sm"
@@ -486,19 +506,61 @@ export function MyVolunteeringPage() {
                               ` · Convenio ${certificate.schoolAgreementCode}`}
                           </p>
                         )}
+                        {certificate.verificationCode && (
+                          <p className="text-xs text-muted-foreground">
+                            Código de verificación:{' '}
+                            <a
+                              className="font-mono underline"
+                              href={`/verificar/${encodeURIComponent(certificate.verificationCode)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {certificate.verificationCode}
+                            </a>
+                          </p>
+                        )}
                         {certificate.guardianName && (
                           <p className="text-xs text-muted-foreground">
                             Acudiente: {certificate.guardianName}
                           </p>
                         )}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void downloadVolunteerCertificatePdf(client, certificate.id)}
-                      >
-                        Descargar PDF
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                          value={template}
+                          onChange={(e) =>
+                            setTemplate(e.target.value as VolunteerCertificateTemplate)
+                          }
+                          aria-label="Diseño del certificado"
+                        >
+                          {VOLUNTEER_CERTIFICATE_TEMPLATES.map((key) => (
+                            <option key={key} value={key}>
+                              {VOLUNTEER_CERTIFICATE_TEMPLATE_LABELS[key]}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void downloadVolunteerCertificatePdf(
+                              client,
+                              certificate.id,
+                              template,
+                            ).catch((error: unknown) =>
+                              toast({
+                                title: 'No se pudo descargar el certificado',
+                                description:
+                                  error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+                                variant: 'destructive',
+                              }),
+                            )
+                          }
+                        >
+                          Descargar PDF
+                        </Button>
+                      </div>
                     </li>
                   ))}
                 </ul>
