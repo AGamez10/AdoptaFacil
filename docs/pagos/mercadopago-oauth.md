@@ -221,6 +221,27 @@ URL del túnel, no por `localhost`. La cookie `af_mp_oauth` queda en el mismo do
 del túnel, así que el callback la recibe. Si el túnel cambia de dominio, hay que actualizar las dos cosas. Inicia
 sesión en Mercado Pago con el **vendedor de prueba** antes de tocar "Conectar" y deja `MERCADOPAGO_TEST=true`.
 
+## 7c. Diagnóstico y prueba de las suscripciones del plan (sandbox)
+
+`pnpm mp:doctor` lee tu `.env`, consulta la API real de Mercado Pago (solo lectura) y dice qué cambiar. No
+imprime secretos ni tokens: puedes pegar la salida completa en el chat. Comprueba que las variables existan, que
+`MERCADOPAGO_CLIENT_ID` y `MERCADOPAGO_CLIENT_SECRET` sean válidos, que el token de planes sea de la cuenta correcta
+(país, usuario de prueba o real, y que no sea la misma app de Checkout Pro) y muestra la `redirect_uri` y las dos
+URLs de webhook que hay que registrar. Con `pnpm mp:doctor --crear-suscripcion` (solo con `MERCADOPAGO_TEST=true`)
+crea una suscripción pendiente de prueba y muestra el motivo exacto si Mercado Pago la rechaza.
+
+Para probar el plan en sandbox:
+
+1. `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` es el Access token del **vendedor de prueba** (no el de producción).
+2. `MERCADOPAGO_TEST_PAYER_EMAIL` es el correo del **comprador de prueba**. En sandbox el pagador debe ser ese
+   usuario; solo se respeta con `MERCADOPAGO_TEST=true` y la API se niega a arrancar en producción si está definida.
+3. `WEB_BASE_URL` es la URL https del túnel (la `back_url` de la suscripción debe ser pública y https).
+4. `PLAN_ENFORCEMENT=true` y `VITE_PAYMENT_PROVIDER=mercadopago`; sin eso no aparece el botón "Pagar con Mercado Pago".
+5. Si Mercado Pago rechaza la suscripción, el log de la API trae `Plan checkout for org …: Mercado Pago preapproval
+create failed (400: <motivo>)` y la persona ve "No pudimos abrir el pago en Mercado Pago".
+6. Aprueba el pago con el comprador de prueba; el primer cobro aprobado llega por el webhook de Suscripciones y es
+   el que activa el plan.
+
 ## 8. Pendiente legal y contable
 
 - ⚖️ Los términos para refugios deben decir:
