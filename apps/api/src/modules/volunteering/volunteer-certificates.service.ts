@@ -23,6 +23,7 @@ import type {
   VolunteerCertificateBitacoraEntry,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -213,6 +214,7 @@ export class VolunteerCertificatesService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     private readonly legalRepresentatives: LegalRepresentativeService,
+    private readonly inbox: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -417,6 +419,14 @@ export class VolunteerCertificatesService {
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
     }
+    await this.inbox.toUser(created.row.volunteerUserId, {
+      kind: 'volunteering.certificate_issued',
+      tone: 'kudos',
+      title: `¡Felicitaciones! Tienes tu certificado de ${created.row.totalApprovedHours} h`,
+      body: `${created.row.organizationName} certificó tu voluntariado en "${created.row.opportunityTitle}". Descárgalo desde Voluntariado.`,
+      href: '/voluntariado',
+      dedupeKey: `volunteer_certificate:${created.row.id}`,
+    });
 
     return toCertificate(created.row);
   }
