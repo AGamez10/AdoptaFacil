@@ -39,3 +39,4 @@ export * from './invitation-roles';
 export * from './platform-workspace';
 export * from './coffee';
 export * from './accounting';
+export * from './custody';

@@ -294,10 +294,9 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
       'href',
       '/organizacion/transparencia-nacional',
     );
-    expect(within(sidebar).getByRole('link', { name: /^Reportes/ })).toHaveAttribute(
-      'href',
-      '/organizacion/reportes',
-    );
+    expect(
+      within(sidebar).getByRole('link', { name: /^Reportes(?! de animales)/ }),
+    ).toHaveAttribute('href', '/organizacion/reportes');
     // The label link itself is untouched by the chevron toggle.
     expect(link).toHaveAttribute('href', '/organizacion/documentos');
   });
@@ -321,14 +320,18 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
     expect(
       await within(sidebar).findByRole('link', { name: 'Documentos por firmar' }),
     ).toBeInTheDocument();
-    expect(within(sidebar).queryByRole('link', { name: /^Reportes/ })).not.toBeInTheDocument();
+    expect(
+      within(sidebar).queryByRole('link', { name: /^Reportes(?! de animales)/ }),
+    ).not.toBeInTheDocument();
     signer.unmount();
 
     stubReadiness({});
     const plain = renderShell({ route: '/inicio', ...sessionWith([Role.ReadOnlyAuditor]) });
     sidebar = screen.getByTestId('org-sidebar');
     fireEvent.click(await within(sidebar).findByRole('button', { name: 'Expandir Documentos' }));
-    expect(await within(sidebar).findByRole('link', { name: /^Reportes/ })).toBeInTheDocument();
+    expect(
+      await within(sidebar).findByRole('link', { name: /^Reportes(?! de animales)/ }),
+    ).toBeInTheDocument();
     expect(
       within(sidebar).queryByRole('link', { name: 'Documentos por firmar' }),
     ).not.toBeInTheDocument();
@@ -341,6 +344,8 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
     expect(
       within(sidebar).getByRole('link', { name: 'Documentos por firmar' }),
     ).toBeInTheDocument();
-    expect(within(sidebar).getByRole('link', { name: /^Reportes/ })).toBeInTheDocument();
+    expect(
+      within(sidebar).getByRole('link', { name: /^Reportes(?! de animales)/ }),
+    ).toBeInTheDocument();
   });
 });

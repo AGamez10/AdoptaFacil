@@ -1,0 +1,363 @@
+// Module: custody (documentación, ingreso, custodia y guardería de animales).
+//
+// Todo es de la organización (organization_id + RLS ENABLE + FORCE +
+// tenant_isolation). Nada se borra: la app no tiene DELETE en ninguna tabla.
+// Lo emitido es inmutable (triggers en la migración
+// 20261112150000_custody_documentation): un acta finalizada, un contrato
+// emitido, un cobro, un pago, una prórroga, una salida, un documento y un
+// evento no cambian; lo que se corrige se anula con motivo y se registra de
+// nuevo. Montos en COP enteros. Fechas de calendario (@db.Date) en hora de
+// Colombia; instantes en UTC.
+//
+// Regla de negocio: la cuenta (custody_charges) no toca la custodia
+// (animal_intakes / custody_releases). Ninguna tabla ni trigger condiciona una
+// salida a un saldo.
+
+/// Persona que entrega al animal, lo tiene a su cargo o responde por los pagos.
+model CustodyResponsible {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  fullName        String   @map("full_name")
+  /// CustodyIdType.
+  documentType    String   @map("document_type")
+  documentNumber  String   @map("document_number")
+  phone           String?
+  email           String?
+  address         String?
+  city            String?
+  notes           String?
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  intakes      AnimalIntake[]
+  contracts    CustodyContract[]
+  charges      CustodyCharge[]
+
+  @@unique([organizationId, documentType, documentNumber])
+  @@index([organizationId])
+  @@map("custody_responsibles")
+}
+
+/// Registro de ingreso y caracterización. `draft` se puede corregir; al
+/// generar el acta queda `finalized` y ya no cambia (trigger).
+model AnimalIntake {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  animalId            String    @map("animal_id") @db.Uuid
+  responsibleId       String?   @map("responsible_id") @db.Uuid
+  /// CustodyIntakeStatus.
+  status              String    @default("draft")
+  intakeAt            DateTime  @map("intake_at")
+  /// CustodyIntakeReason.
+  reason              String
+  reasonDetail        String?   @map("reason_detail")
+  origin              String?
+  /// Observación visible de la organización, nunca un diagnóstico.
+  physicalCondition   String    @map("physical_condition")
+  particularFeatures  String?   @map("particular_features")
+  /// CustodyPreventiveStatus (lo informado, no verificado).
+  vaccinationStatus   String    @default("unknown") @map("vaccination_status")
+  dewormingStatus     String    @default("unknown") @map("deworming_status")
+  preventiveNotes     String?   @map("preventive_notes")
+  foodProvided        String?   @map("food_provided")
+  medicationsReported String?   @map("medications_reported")
+  notes               String?
+  receivedByName      String    @map("received_by_name")
+  hasVetAssessment    Boolean   @default(false) @map("has_vet_assessment")
+  vetName             String?   @map("vet_name")
+  vetLicense          String?   @map("vet_license")
+  vetAssessmentDate   DateTime? @map("vet_assessment_date") @db.Date
+  isRetrospective     Boolean   @default(false) @map("is_retrospective")
+  retrospectiveSource String?   @map("retrospective_source")
+  /// Copia de los datos de quien entrega y del animal al generar el acta.
+  snapshot            Json?
+  finalizedAt         DateTime? @map("finalized_at")
+  finalizedByUserId   String?   @map("finalized_by_user_id") @db.Uuid
+  createdByUserId     String    @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal              @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  responsible  CustodyResponsible? @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
+  @@index([animalId, intakeAt])
+  @@map("animal_intakes")
+}
+
+/// Una VERSIÓN de una plantilla de contrato. Editar inserta la versión
+/// siguiente; las anteriores se conservan. Solo `archived_at` cambia.
+model CustodyContractTemplate {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  templateKey     String    @map("template_key") @db.Uuid
+  version         Int
+  name            String
+  /// CustodyClause[].
+  clauses         Json
+  /// string[].
+  annexes         Json      @default("[]")
+  archivedAt      DateTime? @map("archived_at")
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdByName   String    @map("created_by_name")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, templateKey, version])
+  @@index([organizationId])
+  @@map("custody_contract_templates")
+}
+
+/// Contrato de guardería. Al emitirse congela sus términos, sus cláusulas y
+/// los datos de las partes (`snapshot`): cambiar la plantilla o el perfil
+/// después no lo toca (trigger).
+model CustodyContract {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  animalId          String    @map("animal_id") @db.Uuid
+  responsibleId     String    @map("responsible_id") @db.Uuid
+  number            String
+  /// CustodyContractStatus.
+  status            String    @default("draft")
+  templateKey       String?   @map("template_key")
+  templateVersion   Int?      @map("template_version")
+  templateName      String    @map("template_name")
+  startDate         DateTime  @map("start_date") @db.Date
+  endDate           DateTime? @map("end_date") @db.Date
+  monthlyFeeCop     Int       @map("monthly_fee_cop")
+  foodFeeCop        Int?      @map("food_fee_cop")
+  /// CustodyPaymentFrequency.
+  paymentFrequency  String    @default("monthly") @map("payment_frequency")
+  paymentDay        Int?      @map("payment_day")
+  graceDays         Int       @default(0) @map("grace_days")
+  pickupDays        Int       @default(10) @map("pickup_days")
+  noticeDays        Int       @default(8) @map("notice_days")
+  serviceCity       String?   @map("service_city")
+  paymentConditions String?   @map("payment_conditions")
+  observations      String?
+  /// CustodyContractRepresentative.
+  representative    Json
+  /// CustodyClause[] de ESTE contrato.
+  clauses           Json
+  annexes           Json      @default("[]")
+  /// Organización, responsable y animal tal como estaban al emitir.
+  snapshot          Json?
+  issuedAt          DateTime? @map("issued_at")
+  issuedByUserId    String?   @map("issued_by_user_id") @db.Uuid
+  signedAt          DateTime? @map("signed_at")
+  endedAt           DateTime? @map("ended_at")
+  endedByUserId     String?   @map("ended_by_user_id") @db.Uuid
+  endReason         String?   @map("end_reason")
+  createdByUserId   String    @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal             @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  responsible  CustodyResponsible @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
+  charges      CustodyCharge[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+  @@index([animalId])
+  @@map("custody_contracts")
+}
+
+/// Un cobro al responsable (mensualidad, alimentación, gasto reembolsable).
+/// Nunca es una donación. Su valor y su fecha original no cambian: una
+/// prórroga es otra fila y un error se anula.
+model CustodyCharge {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  animalId            String    @map("animal_id") @db.Uuid
+  responsibleId       String    @map("responsible_id") @db.Uuid
+  contractId          String?   @map("contract_id") @db.Uuid
+  /// CustodyChargeConcept.
+  concept             String
+  description         String
+  amountCop           Int       @map("amount_cop")
+  dueDate             DateTime  @map("due_date") @db.Date
+  expenseDate         DateTime? @map("expense_date") @db.Date
+  periodLabel         String?   @map("period_label")
+  /// CustodyChargeStatus.
+  status              String    @default("pending")
+  /// Una persona decidió iniciar el cobro formal. Nunca lo fija un proceso.
+  collectionStartedAt DateTime? @map("collection_started_at")
+  collectionStartedBy String?   @map("collection_started_by") @db.Uuid
+  cancelledAt         DateTime? @map("cancelled_at")
+  cancelledByUserId   String?   @map("cancelled_by_user_id") @db.Uuid
+  cancelReason        String?   @map("cancel_reason")
+  createdByUserId     String    @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal                   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  responsible  CustodyResponsible       @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
+  contract     CustodyContract?         @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  extensions   CustodyChargeExtension[]
+  payments     CustodyPayment[]
+
+  @@index([organizationId, status, dueDate])
+  @@index([animalId])
+  @@index([responsibleId])
+  @@map("custody_charges")
+}
+
+/// Prórroga concedida por la organización. Solo inserción.
+model CustodyChargeExtension {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  chargeId           String   @map("charge_id") @db.Uuid
+  previousDueDate    DateTime @map("previous_due_date") @db.Date
+  newDueDate         DateTime @map("new_due_date") @db.Date
+  reason             String
+  requestedBy        String?  @map("requested_by")
+  authorizedByUserId String   @map("authorized_by_user_id") @db.Uuid
+  authorizedByName   String   @map("authorized_by_name")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  charge       CustodyCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([chargeId, createdAt])
+  @@map("custody_charge_extensions")
+}
+
+/// Pago recibido. No se edita: solo puede anularse con motivo.
+model CustodyPayment {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  chargeId         String    @map("charge_id") @db.Uuid
+  receiptNumber    String    @map("receipt_number")
+  amountCop        Int       @map("amount_cop")
+  paidOn           DateTime  @map("paid_on") @db.Date
+  /// CustodyPaymentMethod.
+  method           String
+  reference        String?
+  notes            String?
+  receivedByUserId String    @map("received_by_user_id") @db.Uuid
+  receivedByName   String    @map("received_by_name")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  voidedAt         DateTime? @map("voided_at")
+  voidedByUserId   String?   @map("voided_by_user_id") @db.Uuid
+  voidReason       String?   @map("void_reason")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  charge       CustodyCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, receiptNumber])
+  @@index([organizationId])
+  @@index([chargeId])
+  @@map("custody_payments")
+}
+
+/// Acta de entrega o salida. Solo inserción. `outstanding_balance_cop` es
+/// informativo: ningún saldo impide registrarla.
+model CustodyRelease {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  animalId              String   @map("animal_id") @db.Uuid
+  /// CustodyReleaseType.
+  releaseType           String   @map("release_type")
+  releasedAt            DateTime @map("released_at")
+  receivedByName        String   @map("received_by_name")
+  receivedByDocument    String?  @map("received_by_document")
+  receivedByPhone       String?  @map("received_by_phone")
+  receivedByRelation    String?  @map("received_by_relation")
+  conditionAtRelease    String   @map("condition_at_release")
+  notes                 String?
+  deliveredByName       String   @map("delivered_by_name")
+  authorityName         String?  @map("authority_name")
+  authorityBasis        String?  @map("authority_basis")
+  decidedByName         String?  @map("decided_by_name")
+  outstandingBalanceCop Int      @default(0) @map("outstanding_balance_cop")
+  isRetrospective       Boolean  @default(false) @map("is_retrospective")
+  retrospectiveSource   String?  @map("retrospective_source")
+  createdByUserId       String   @map("created_by_user_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal       @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([animalId, releasedAt])
+  @@map("custody_releases")
+}
+
+/// Documento del historial: generado desde los registros o adjuntado. Solo
+/// inserción; el archivo vive en el StoragePort (privado) y `sha256` prueba
+/// que no cambió. Una versión nueva es otra fila (`replaces_document_id`).
+model CustodyDocument {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  animalId            String?   @map("animal_id") @db.Uuid
+  /// CustodyDocumentKind.
+  kind                String
+  title               String
+  /// CustodyDocumentSource.
+  source              String
+  storageRef          String    @map("storage_ref")
+  contentType         String    @map("content_type")
+  sizeBytes           Int       @map("size_bytes")
+  sha256              String
+  version             Int       @default(1)
+  replacesDocumentId  String?   @map("replaces_document_id") @db.Uuid
+  documentDate        DateTime? @map("document_date") @db.Date
+  isRetrospective     Boolean   @default(false) @map("is_retrospective")
+  retrospectiveSource String?   @map("retrospective_source")
+  intakeId            String?   @map("intake_id") @db.Uuid
+  contractId          String?   @map("contract_id") @db.Uuid
+  chargeId            String?   @map("charge_id") @db.Uuid
+  paymentId           String?   @map("payment_id") @db.Uuid
+  releaseId           String?   @map("release_id") @db.Uuid
+  extensionId         String?   @map("extension_id") @db.Uuid
+  responsibleId       String?   @map("responsible_id") @db.Uuid
+  createdByUserId     String    @map("created_by_user_id") @db.Uuid
+  createdByName       String    @map("created_by_name")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal?      @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([animalId, createdAt])
+  @@index([contractId])
+  @@index([chargeId])
+  @@index([paymentId])
+  @@index([intakeId])
+  @@map("custody_documents")
+}
+
+/// Historial cronológico del animal: lo que pasó, cuándo, quién lo registró.
+/// Solo inserción.
+model CustodyEvent {
+  id                  String   @id @default(uuid()) @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  animalId            String   @map("animal_id") @db.Uuid
+  /// CustodyEventType.
+  type                String
+  summary             String
+  detail              String?
+  occurredAt          DateTime @map("occurred_at")
+  isRetrospective     Boolean  @default(false) @map("is_retrospective")
+  retrospectiveSource String?  @map("retrospective_source")
+  documentId          String?  @map("document_id") @db.Uuid
+  /// Ids relacionados (contrato, cobro, pago…), sin datos personales.
+  refs                Json     @default("{}")
+  actorUserId         String   @map("actor_user_id") @db.Uuid
+  actorName           String   @map("actor_name")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal       @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([animalId, occurredAt])
+  @@map("custody_events")
+}

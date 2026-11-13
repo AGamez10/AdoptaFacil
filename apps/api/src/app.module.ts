@@ -40,6 +40,7 @@ import { PlatformWorkspaceModule } from './modules/platform-workspace/platform-w
 import { PortalsModule } from './modules/portals/portals.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
+import { CustodyModule } from './modules/custody/custody.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { SponsorshipsModule } from './modules/sponsorships/sponsorships.module';
 import { VolunteeringModule } from './modules/volunteering/volunteering.module';
@@ -127,6 +128,8 @@ import { RedisModule } from './redis/redis.module';
     // M12 · reputación: reseñas, calificación e indicadores públicos (RF23, S-7).
     ReputationModule,
     LedgerModule,
+    // Documentación, ingreso, custodia y guardería de animales.
+    CustodyModule,
     // M13 · dashboards por audiencia — PlatformAdmin/PlatformSuperAdmin (RF24, S-8).
     DashboardsModule,
     // M13 · reportes sellados de donaciones y servicio social (firmas por estatutos).
