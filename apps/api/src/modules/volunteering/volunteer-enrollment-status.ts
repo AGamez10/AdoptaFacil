@@ -7,6 +7,7 @@ import { VolunteerEnrollmentStatus } from '@adoptafacil/contracts';
  *
  *   pending → accepted | rejected  (decisión de la organización)
  *   accepted → completed           (la organización cierra el ciclo)
+ *   pending | accepted → cancelled (la organización cancela la jornada)
  *
  * No se inventan estados fuera de RF18.
  */
@@ -21,6 +22,8 @@ export const ENROLLMENT_TRANSITIONS: Record<
   [VolunteerEnrollmentStatus.Accepted]: [VolunteerEnrollmentStatus.Completed],
   [VolunteerEnrollmentStatus.Rejected]: [],
   [VolunteerEnrollmentStatus.Completed]: [],
+  // Solo la cancelación de la jornada lleva aquí (nunca una decisión suelta).
+  [VolunteerEnrollmentStatus.Cancelled]: [],
 };
 
 /** ¿Es válido mover una inscripción de `from` a `to`? */

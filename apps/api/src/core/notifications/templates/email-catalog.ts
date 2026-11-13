@@ -619,6 +619,57 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'volunteering.opportunity_rescheduled',
+    label: 'Jornada de voluntariado reprogramada',
+    description:
+      'Se envía a cada persona inscrita (pendiente o aceptada) cuando la organización cambia las fechas o los días de la jornada.',
+    audience: 'Las personas inscritas en la jornada',
+    category: 'transactional',
+    theme: 'volunteering',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre del voluntario', 'Carlos'),
+      v('oportunidad', 'Jornada', 'Jornada de baño y paseo'),
+      ORG,
+      v('fechas', 'Nuevas fechas', 'del 22 de noviembre al 23 de noviembre de 2026'),
+      v('dias', 'Días de jornada', 'sábado 22 de noviembre y domingo 23 de noviembre'),
+      v('motivo', 'Motivo', 'Pronóstico de lluvia fuerte para este fin de semana.'),
+    ],
+    defaults: {
+      subject: 'Cambió la fecha de "{{oportunidad}}"',
+      preheader: 'La jornada ahora es {{fechas}}.',
+      heading: 'Tu jornada cambió de fecha 📅',
+      body:
+        'Hola {{nombre}},\n\n{{organizacion}} reprogramó **"{{oportunidad}}"**. La jornada ahora es **{{fechas}}**.\n\n' +
+        'Días de jornada: {{dias}}\n\nMotivo: {{motivo}}\n\n' +
+        'Tu inscripción sigue vigente. Si ya no puedes asistir, avísale a la organización.',
+    },
+  },
+  {
+    event: 'volunteering.opportunity_cancelled',
+    label: 'Jornada de voluntariado cancelada',
+    description:
+      'Se envía a cada persona inscrita (pendiente o aceptada) cuando la organización cancela la jornada.',
+    audience: 'Las personas inscritas en la jornada',
+    category: 'transactional',
+    theme: 'volunteering',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre del voluntario', 'Carlos'),
+      v('oportunidad', 'Jornada', 'Jornada de baño y paseo'),
+      ORG,
+      v('motivo', 'Motivo', 'No conseguimos el transporte para los perritos.'),
+    ],
+    defaults: {
+      subject: '"{{oportunidad}}" fue cancelada',
+      preheader: 'Gracias por querer ayudar: hay más jornadas esperándote.',
+      heading: 'La jornada se canceló',
+      body:
+        'Hola {{nombre}},\n\n{{organizacion}} canceló **"{{oportunidad}}"**.\n\nMotivo: {{motivo}}\n\n' +
+        'Tu inscripción quedó cerrada. Gracias por querer ayudar: en AdoptaFácil hay más jornadas esperándote.',
+    },
+  },
+  {
     event: 'resources.open_offer_claimed',
     label: 'Una organización tomó tu ofrecimiento',
     description:

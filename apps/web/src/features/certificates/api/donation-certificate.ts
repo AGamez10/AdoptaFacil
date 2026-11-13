@@ -2,6 +2,7 @@ import type {
   DonationCertificate,
   DonationCertificateVerification,
   OrgReportVerification,
+  VolunteerCertificateVerification,
 } from '@adoptafacil/contracts';
 import type { ApiClient } from '../../../shell/api';
 
@@ -43,4 +44,16 @@ export async function fetchPublicReportVerification(
 /** Los folios de reportes empiezan por `ADF-REP-`; el resto son certificados. */
 export function isReportCode(code: string): boolean {
   return code.trim().toUpperCase().startsWith('ADF-REP-');
+}
+
+/** Verificación PÚBLICA de un certificado de voluntariado (`VOL-…`) — sin sesión. */
+export async function fetchPublicVolunteerCertificateVerification(
+  code: string,
+): Promise<VolunteerCertificateVerification | null> {
+  const response = await fetch(
+    `${API_BASE}/public/volunteer-certificates/${encodeURIComponent(code)}`,
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('error');
+  return (await response.json()) as VolunteerCertificateVerification;
 }

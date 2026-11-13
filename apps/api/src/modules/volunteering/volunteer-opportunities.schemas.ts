@@ -55,10 +55,25 @@ export const updateVolunteerOpportunitySchema = z
     capacity: z.number().int().positive().optional(),
     location: z.string().trim().min(1).max(300).optional(),
     requirements: z.string().trim().max(2000).optional(),
-    status: z.nativeEnum(VolunteerOpportunityStatus).optional(),
+    // Cancelar tiene su propia acción (con motivo y aviso a los inscritos).
+    status: z
+      .enum([VolunteerOpportunityStatus.Active, VolunteerOpportunityStatus.Closed])
+      .optional(),
     sessionDates: sessionDates.optional(),
+    rescheduleReason: z.string().trim().max(500).optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field must be provided.',
   });
+
+/** Cancelar una jornada: el motivo es obligatorio (se envía a los inscritos). */
+export const cancelVolunteerOpportunitySchema = z
+  .object({
+    reason: z
+      .string({ message: 'Escribe el motivo de la cancelación.' })
+      .trim()
+      .min(5, 'Escribe el motivo de la cancelación (al menos 5 caracteres).')
+      .max(500, 'El motivo puede tener hasta 500 caracteres.'),
+  })
+  .strict();

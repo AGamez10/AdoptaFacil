@@ -46,6 +46,7 @@ import {
 } from '../model/campaigns-view';
 import { EVIDENCE_ACCEPT, uploadEvidenceFile, validateEvidenceUpload } from '../lib/storage';
 import { dateBounds, dateError } from '../../../lib/date-rules';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 const CATEGORY_OPTIONS = CAMPAIGN_CATEGORIES.map((value) => ({
   value,
@@ -156,12 +157,26 @@ export function CampaignDetailPage() {
   const submitCampaign = async (): Promise<void> => {
     if (!id) return;
     const goal = Number(goalAmount);
-    if (!title.trim() || !deadline || !Number.isInteger(goal) || goal <= 0) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Título, categoría, meta (entero COP > 0) y fecha límite son obligatorios.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      {
+        ok: Boolean(title.trim()),
+        title: 'Falta el título',
+        message: 'Escribe el nombre de la campaña.',
+      },
+      {
+        ok: Number.isInteger(goal) && goal > 0,
+        title: 'Meta no válida',
+        message:
+          'La meta debe ser un número entero en pesos mayor que 0 (sin puntos ni decimales).',
+      },
+      {
+        ok: Boolean(deadline),
+        title: 'Falta la fecha límite',
+        message: 'Elige hasta cuándo recibe donaciones.',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     setSaving(true);
@@ -201,14 +216,28 @@ export function CampaignDetailPage() {
 
   const submitEvidence = async (): Promise<void> => {
     if (!id) return;
-    if (!evConcept.trim() || !evSpentAt || !evFile) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Concepto, fecha del gasto y archivo son obligatorios.',
-        variant: 'warning',
-      });
+    const evidenceProblem = firstFormProblem([
+      {
+        ok: Boolean(evConcept.trim()),
+        title: 'Falta el concepto',
+        message: 'Escribe en qué se gastó.',
+      },
+      {
+        ok: Boolean(evSpentAt),
+        title: 'Falta la fecha del gasto',
+        message: 'Elige el día del gasto.',
+      },
+      {
+        ok: Boolean(evFile),
+        title: 'Falta el soporte',
+        message: 'Adjunta la factura, recibo o foto del gasto.',
+      },
+    ]);
+    if (evidenceProblem) {
+      toast({ ...evidenceProblem, variant: 'warning' });
       return;
     }
+    if (!evFile) return;
     const invalid = validateEvidenceUpload(evFile);
     if (invalid) {
       toast({ title: 'Archivo no válido', description: invalid, variant: 'warning' });
