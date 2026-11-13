@@ -232,7 +232,10 @@ if (crearSuscripcion) {
       body: JSON.stringify({
         reason: 'AdoptaFácil · prueba mp:doctor',
         external_reference: `mp-doctor:${Date.now()}`,
-        payer_email: payer || 'test_user@testuser.com',
+        // Sin correo configurado se usa uno inventado y único: un correo de
+        // una cuenta real de otro país (p. ej. test_user@testuser.com) hace
+        // que Mercado Pago responda "Payer is associated with a different site".
+        payer_email: payer || `mp-doctor-${Date.now()}@example.com`,
         back_url: `${(env.WEB_BASE_URL || '').replace(/\/+$/, '')}/organizacion/plan?pago=mercadopago`,
         status: 'pending',
         auto_recurring: {
