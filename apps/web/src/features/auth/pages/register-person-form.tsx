@@ -134,6 +134,21 @@ export function RegisterPersonForm({ returnTo = null }: RegisterPersonFormProps)
     <div className="space-y-4">
       {formError && <FormAlert>{formError}</FormAlert>}
 
+      {googleAvailable && (
+        <>
+          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+          <p className="text-xs text-muted-foreground">
+            Con Google es más rápido y, además, confirmamos tu correo. Si continúas, te pediremos
+            aceptar estos mismos documentos antes de usar tu cuenta.
+          </p>
+          <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            o regístrate con tus datos
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           ref={refs.firstName}
@@ -210,20 +225,6 @@ export function RegisterPersonForm({ returnTo = null }: RegisterPersonFormProps)
 
       {/* Google Sign-In NEVER creates an Organization — only offered on the
           Person tab. Registering an org stays the long NIT/legal-rep form. */}
-      {googleAvailable && (
-        <>
-          <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            o
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
-          <p className="text-xs text-muted-foreground">
-            Si continúas con Google, te pediremos aceptar estos mismos documentos antes de usar tu
-            cuenta.
-          </p>
-        </>
-      )}
     </div>
   );
 }
