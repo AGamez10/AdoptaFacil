@@ -102,16 +102,25 @@ export class RemindersService {
         if (existing) {
           return null; // idempotent: already generated
         }
-        const inserted = await tx.clinicalReminder.create({
-          data: {
-            organizationId: row.organization_id,
-            animalId: row.animal_id,
-            clinicalEventId: row.clinical_event_id,
-            reminderType: row.event_type,
-            dueDate: row.due_date,
-            status: ReminderStatus.Pending,
-          },
+        // ON CONFLICT DO NOTHING: si otro escaneo concurrente (el worker y una
+        // corrida manual, o dos workers) creó el mismo recordatorio entre la
+        // lectura y la escritura, no se duplica ni falla la transacción.
+        const [inserted] = await tx.clinicalReminder.createManyAndReturn({
+          data: [
+            {
+              organizationId: row.organization_id,
+              animalId: row.animal_id,
+              clinicalEventId: row.clinical_event_id,
+              reminderType: row.event_type,
+              dueDate: row.due_date,
+              status: ReminderStatus.Pending,
+            },
+          ],
+          skipDuplicates: true,
         });
+        if (!inserted) {
+          return null; // idempotent: created concurrently by another scan
+        }
         await this.audit.recordWithTx(tx, {
           organizationId: row.organization_id,
           actorUserId: null,
