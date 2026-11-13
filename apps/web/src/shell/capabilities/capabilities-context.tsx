@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
   CLOSED_CAPABILITIES,
+  GOOGLE_CLIENT_ID_PATTERN,
   type FeatureKey,
   type PublicCapabilities,
 } from '@adoptafacil/contracts';
@@ -30,7 +31,14 @@ export async function fetchCapabilities(): Promise<PublicCapabilities> {
     for (const key of Object.keys(features) as FeatureKey[]) {
       features[key] = body.features?.[key] === true;
     }
-    return { features, googleSignIn: body.googleSignIn === true };
+    const googleSignIn = body.googleSignIn === true;
+    const googleClientId =
+      googleSignIn &&
+      typeof body.googleClientId === 'string' &&
+      GOOGLE_CLIENT_ID_PATTERN.test(body.googleClientId)
+        ? body.googleClientId
+        : undefined;
+    return { features, googleSignIn, ...(googleClientId ? { googleClientId } : {}) };
   } catch {
     return CLOSED_CAPABILITIES;
   }

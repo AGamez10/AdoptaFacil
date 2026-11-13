@@ -149,6 +149,9 @@ export interface IncompleteProfileError {
 export interface AuthSession {
   user: AuthenticatedUser;
   tokens: AuthTokens;
+  /** Aditivo: `true` cuando esta llamada CREÓ la cuenta (Google la primera
+   *  vez, aceptar una invitación). La web lo usa para dar la bienvenida. */
+  isNewAccount?: boolean;
 }
 
 /** Claims carried inside the signed access token (JWT payload). */
@@ -287,6 +290,15 @@ export interface AcceptInvitationInput {
    *  vista). Como en el registro, la API exige los obligatorios de una cuenta
    *  de organización en su versión vigente y responde 400 si faltan
    *  (Ley 1581, autorización previa). */
+  legalAcceptances?: LegalAcceptanceItem[];
+}
+
+/** `POST /auth/invitations/accept/google` — same as accepting with a password,
+ *  but the invitee signs in with Google. The Google account's verified email
+ *  must be the invited email (403 `INVITATION_EMAIL_MISMATCH` otherwise). */
+export interface AcceptInvitationWithGoogleInput {
+  token: string;
+  idToken: string;
   legalAcceptances?: LegalAcceptanceItem[];
 }
 

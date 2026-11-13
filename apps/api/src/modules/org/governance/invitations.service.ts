@@ -3,16 +3,21 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { OrganizationInvitation as InvitationRow } from '@prisma/client';
 import {
   type AcceptInvitationInput,
+  type AcceptInvitationWithGoogleInput,
   type AuthSession,
   type CreateInvitationInput,
+  type IdentityClaims,
+  type IdentityPort,
   type InvitationPreview,
   invitationRoleCopy,
   type LegalAcceptanceItem,
@@ -28,6 +33,7 @@ import { PlansService } from '../../../core/plans/plans.service';
 import { PasswordService } from '../../../core/auth/password.service';
 import { TokenService } from '../../../core/auth/token.service';
 import { isUniqueConstraintViolation } from '../../../core/errors/prisma-conflict.util';
+import { IDENTITY_PORT } from '../../../core/identity/identity.port';
 import {
   NOTIFICATION_PORT,
   type NotificationPort,
@@ -162,6 +168,7 @@ export class InvitationsService {
     config: ConfigService<Env, true>,
     private readonly legal: LegalService,
     private readonly inbox: InboxService,
+    @Inject(IDENTITY_PORT) private readonly identity: IdentityPort,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.emailSimulated = config.get('NOTIFICATION_DRIVER', { infer: true }) !== 'smtp';
@@ -411,15 +418,79 @@ export class InvitationsService {
       requiredLegalDocuments('organization'),
     );
     const { row } = await this.resolve(input.token);
-    const { organizationId, email } = row;
+    await this.assertEmailFree(row.email);
+    return this.createInvitedAccount({
+      row,
+      displayName: input.displayName.trim(),
+      passwordHash: await this.passwords.hash(input.password),
+      acceptances,
+      context,
+    });
+  }
+
+  /**
+   * `POST /auth/invitations/accept/google`: the same acceptance, but the
+   * invitee proves who they are with Google instead of choosing a password.
+   * Google must vouch for the email (`email_verified`) AND it must be the
+   * exact email the invitation was sent to: the link alone never lets a
+   * different Google account into the organization.
+   */
+  async acceptWithGoogle(
+    input: AcceptInvitationWithGoogleInput,
+    context: LegalRequestContext = {},
+  ): Promise<AuthSession> {
+    const acceptances: LegalAcceptanceItem[] = this.legal.assertAcceptances(
+      input.legalAcceptances,
+      requiredLegalDocuments('organization'),
+    );
+    let claims: IdentityClaims;
+    try {
+      claims = await this.identity.verifyGoogleIdToken(input.idToken);
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new UnauthorizedException('Invalid Google sign-in token.');
+    }
+    if (!claims.emailVerified) {
+      throw new UnauthorizedException('Google account email is not verified.');
+    }
+    const { row } = await this.resolve(input.token);
+    if (claims.email.trim().toLowerCase() !== row.email) {
+      throw new ForbiddenException({
+        message: 'This invitation was sent to a different email',
+        code: 'INVITATION_EMAIL_MISMATCH',
+      });
+    }
+    await this.assertEmailFree(row.email);
+    return this.createInvitedAccount({
+      row,
+      displayName: claims.name.trim() || row.email,
+      // Same as a Google sign-up: a random, unusable password hash; this
+      // account enters with Google (or sets a password via "olvidé mi contraseña").
+      passwordHash: await this.passwords.hash(randomBytes(32).toString('hex')),
+      google: { sub: claims.sub },
+      acceptances,
+      context,
+    });
+  }
+
+  private async assertEmailFree(email: string): Promise<void> {
     const existing = await this.prisma.authCredential.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('This email already has an AdoptaFácil account');
     }
+  }
 
-    const passwordHash = await this.passwords.hash(input.password);
+  private async createInvitedAccount(input: {
+    row: InvitationRow;
+    displayName: string;
+    passwordHash: string;
+    google?: { sub: string };
+    acceptances: LegalAcceptanceItem[];
+    context: LegalRequestContext;
+  }): Promise<AuthSession> {
+    const { row, displayName, passwordHash, google, acceptances, context } = input;
+    const { organizationId, email } = row;
     const userId = randomUUID();
-    const displayName = input.displayName.trim();
     const plan = this.plans.enforced ? await this.plans.effectivePlan(organizationId) : null;
     try {
       await this.prisma.withOrgContext(organizationId, async (tx) => {
@@ -448,7 +519,14 @@ export class InvitationsService {
         // The unique email turns a concurrent sign-up with the same email into a
         // failed transaction (nothing is left half-created, see the catch).
         await tx.authCredential.create({
-          data: { userId, organizationId, accountType: 'organization', email, passwordHash },
+          data: {
+            userId,
+            organizationId,
+            accountType: 'organization',
+            email,
+            passwordHash,
+            ...(google ? { authProvider: 'google', googleSub: google.sub } : {}),
+          },
         });
         await tx.userRole.create({ data: { organizationId, userId, role: row.role } });
         if (row.signerRole) {
@@ -486,7 +564,11 @@ export class InvitationsService {
           action: 'invitation.accepted',
           entityType: 'organization_invitation',
           entityId: row.id,
-          metadata: { role: row.role, invitedByUserId: row.invitedByUserId },
+          metadata: {
+            role: row.role,
+            invitedByUserId: row.invitedByUserId,
+            ...(google ? { via: 'google' } : {}),
+          },
         });
       });
     } catch (error) {
@@ -527,6 +609,7 @@ export class InvitationsService {
     return {
       user: { id: userId, email, displayName, accountType: 'organization', organizationId },
       tokens,
+      isNewAccount: true,
     };
   }
 }
