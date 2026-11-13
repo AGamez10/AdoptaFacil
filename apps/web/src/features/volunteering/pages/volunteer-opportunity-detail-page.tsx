@@ -23,9 +23,11 @@ import {
   Skeleton,
   useToast,
 } from '@adoptafacil/ui';
-import { formatDayEs } from '@adoptafacil/contracts';
+import { formatDayEs, VOLUNTEER_CERTIFICATE_TEMPLATES } from '@adoptafacil/contracts';
+import { downloadVolunteerCertificatePdf } from '../lib/certificate';
 import { PageContainer, PageHeader } from '../../_layout';
 import { SessionDaysPicker } from '../components/session-days-picker';
+import { OpportunityScheduleActions } from '../components/opportunity-schedule-actions';
 import { ServiceHoursPhotoThumbs } from '../components/service-hours-photos';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
@@ -124,6 +126,24 @@ export function VolunteerOpportunityDetailPage() {
     setEnrollments(rows);
     const relevant = rows.filter((e) => e.status === 'accepted' || e.status === 'completed');
     await Promise.all(relevant.map((e) => refreshHoursFor(e.id)));
+    // Certificados ya emitidos (también los de otra sesión): para mostrarlos
+    // con su código y poder descargarlos, en vez del botón de emitir.
+    try {
+      const issued = await client.request<Partial<Paginated<VolunteerCertificate>>>(
+        '/volunteer-certificates?limit=100',
+      );
+      const ids = new Set(rows.map((e) => e.id));
+      const mine = (Array.isArray(issued?.items) ? issued.items : []).filter((c) =>
+        ids.has(c.enrollmentId),
+      );
+      setCertificates((prev) => ({
+        ...prev,
+        ...Object.fromEntries(mine.map((c) => [c.enrollmentId, c])),
+      }));
+    } catch {
+      // Solo informativo: sin la lista se sigue mostrando el botón de emitir,
+      // y la API impide emitir dos veces.
+    }
   };
 
   useEffect(() => {
@@ -284,7 +304,7 @@ export function VolunteerOpportunityDetailPage() {
                     la convocatoria. Habilita los días de jornada para controlarlo.
                   </p>
                 )}
-                {canManage && !editingDays && (
+                {canManage && !editingDays && opportunity.status !== 'cancelled' && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -317,6 +337,22 @@ export function VolunteerOpportunityDetailPage() {
                   </div>
                 )}
               </div>
+              {canManage ? (
+                <OpportunityScheduleActions
+                  opportunity={opportunity}
+                  onChanged={(next) => {
+                    setOpportunity(next);
+                    void loadEnrollments();
+                  }}
+                />
+              ) : (
+                opportunity.status === 'cancelled' && (
+                  <p className="pt-2 font-medium text-destructive">
+                    Jornada cancelada
+                    {opportunity.cancellationReason ? `: ${opportunity.cancellationReason}` : ''}
+                  </p>
+                )
+              )}
             </CardContent>
           </Card>
 
@@ -486,11 +522,33 @@ export function VolunteerOpportunityDetailPage() {
 
                                 {canManage &&
                                   (certificates[enrollment.id] ? (
-                                    <p className="text-xs text-muted-foreground">
-                                      Certificado emitido:{' '}
-                                      {certificates[enrollment.id].totalApprovedHours} horas
-                                      efectivas.
-                                    </p>
+                                    <div className="space-y-1 text-xs text-muted-foreground">
+                                      <p>
+                                        Certificado emitido:{' '}
+                                        {certificates[enrollment.id].totalApprovedHours} horas
+                                        efectivas.
+                                        {certificates[enrollment.id].verificationCode &&
+                                          ` Código: ${certificates[enrollment.id].verificationCode}.`}
+                                      </p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {VOLUNTEER_CERTIFICATE_TEMPLATES.map((key) => (
+                                          <Button
+                                            key={key}
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                              void downloadVolunteerCertificatePdf(
+                                                client,
+                                                certificates[enrollment.id].id,
+                                                key,
+                                              )
+                                            }
+                                          >
+                                            PDF {key === 'clasica' ? 'clásico' : 'huellitas'}
+                                          </Button>
+                                        ))}
+                                      </div>
+                                    </div>
                                   ) : (
                                     <div className="space-y-1">
                                       <Button
@@ -545,11 +603,12 @@ export function VolunteerOpportunityDetailPage() {
                         </div>
                       )}
 
-                      {enrollment.status === 'rejected' && enrollment.rejectionReason && (
-                        <p className="text-xs text-muted-foreground">
-                          Motivo: {enrollment.rejectionReason}
-                        </p>
-                      )}
+                      {(enrollment.status === 'rejected' || enrollment.status === 'cancelled') &&
+                        enrollment.rejectionReason && (
+                          <p className="text-xs text-muted-foreground">
+                            Motivo: {enrollment.rejectionReason}
+                          </p>
+                        )}
                     </li>
                   ))}
                 </ul>

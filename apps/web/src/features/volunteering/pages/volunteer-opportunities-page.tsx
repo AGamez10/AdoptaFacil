@@ -23,6 +23,7 @@ import { useSession } from '../../../shell/auth';
 import { VolunteerOpportunityManageCard } from '../components/volunteer-opportunity-manage-card';
 import { dateBounds, dateError } from '../../../lib/date-rules';
 import { SessionDaysPicker } from '../components/session-days-picker';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 /**
  * `/organizacion/voluntariado` (RF18, M08) — gestión de oportunidades de
@@ -90,12 +91,35 @@ export function VolunteerOpportunitiesPage() {
   };
 
   const submit = async (): Promise<void> => {
-    if (!title.trim() || !category.trim() || !startDate || !endDate || !location.trim()) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Título, categoría, rango de fechas y ubicación son obligatorios.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      {
+        ok: Boolean(title.trim()),
+        title: 'Falta el título',
+        message: 'Escribe el nombre de la jornada.',
+      },
+      {
+        ok: Boolean(category.trim()),
+        title: 'Falta la categoría',
+        message: 'Indica de qué se trata (p. ej. baños, paseos).',
+      },
+      {
+        ok: Boolean(startDate),
+        title: 'Falta la fecha de inicio',
+        message: 'Elige cuándo empieza la convocatoria.',
+      },
+      {
+        ok: Boolean(endDate),
+        title: 'Falta la fecha de fin',
+        message: 'Elige cuándo termina la convocatoria.',
+      },
+      {
+        ok: Boolean(location.trim()),
+        title: 'Falta la ubicación',
+        message: 'Indica dónde será la jornada.',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     const rangeError =

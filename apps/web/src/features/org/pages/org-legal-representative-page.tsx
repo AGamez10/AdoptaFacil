@@ -23,6 +23,7 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { TextField } from '../components/profile-fields';
 import { SignaturePad } from '../components/signature-pad';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 /**
  * TODO(client): catálogo no fijado por el documento base — mismo set mínimo
@@ -267,12 +268,25 @@ export function OrgLegalRepresentativePage() {
 
   async function handleSubmit(): Promise<void> {
     if (!role) return;
-    if (!fullName.trim() || !documentNumber.trim() || !position.trim()) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Nombre completo, número de documento y cargo son obligatorios.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      {
+        ok: Boolean(fullName.trim()),
+        title: 'Falta el nombre',
+        message: 'Escribe el nombre completo de quien firma.',
+      },
+      {
+        ok: Boolean(documentNumber.trim()),
+        title: 'Falta el documento',
+        message: 'Escribe el número de documento de quien firma.',
+      },
+      {
+        ok: Boolean(position.trim()),
+        title: 'Falta el cargo',
+        message: 'Escribe el cargo de quien firma (p. ej. Representante legal).',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     if (!signatureBase64) {

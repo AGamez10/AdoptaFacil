@@ -33,6 +33,8 @@ export const EMAIL_EVENT_KEYS = [
   'volunteering.hours_approved',
   'volunteering.hours_rejected',
   'volunteering.certificate_issued',
+  'volunteering.opportunity_rescheduled',
+  'volunteering.opportunity_cancelled',
   'community.campaign_update',
   'resources.open_offer_claimed',
   'platform.announcement',
