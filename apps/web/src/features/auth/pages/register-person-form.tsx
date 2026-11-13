@@ -31,7 +31,12 @@ type PersonErrors = Partial<
  * the backend DTO needs; first and last name are combined into the required
  * `displayName`. Phone is not part of account creation (see M01, Ola 1).
  */
-export function RegisterPersonForm() {
+export interface RegisterPersonFormProps {
+  /** Adónde volver tras crear la cuenta (intención de un enlace público). */
+  returnTo?: string | null;
+}
+
+export function RegisterPersonForm({ returnTo = null }: RegisterPersonFormProps) {
   const { register, signInWithGoogle } = useSession();
   const googleAvailable = useGoogleSignInAvailable();
   const navigate = useNavigate();
@@ -100,7 +105,7 @@ export function RegisterPersonForm() {
         description:
           'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
       });
-      navigate('/', { replace: true });
+      navigate(returnTo ?? '/', { replace: true });
     } catch (error) {
       const apiError = toApiError(error);
       setFormError(registerErrorMessage(apiError.status, apiError.code));
@@ -116,7 +121,7 @@ export function RegisterPersonForm() {
         // Same endpoint as login: auto-links by email if the account already
         // exists, otherwise creates the lightweight Person account.
         await signInWithGoogle(idToken);
-        navigate('/', { replace: true });
+        navigate(returnTo ?? '/', { replace: true });
       } catch {
         setFormError('No pudimos continuar con Google. Inténtalo de nuevo.');
         setSubmitting(false);

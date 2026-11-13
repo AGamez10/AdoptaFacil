@@ -15,7 +15,7 @@ import {
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
-import { useSession } from '../../../shell/auth';
+import { accessPathWithReturn, returnPathOf, useSession } from '../../../shell/auth';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { createDonation, fetchOrganizationDonationAvailability } from '../api/donations-api';
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
@@ -154,7 +154,10 @@ export function DonatePage() {
             />
             <p className={styles['done__hint']}>
               ¿Ya donaste antes con una cuenta?{' '}
-              <Link to="/login" className="underline">
+              <Link
+                to={accessPathWithReturn('/login', returnPathOf(location))}
+                className="underline"
+              >
                 Inicia sesión
               </Link>{' '}
               para ver tu historial.

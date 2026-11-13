@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@adoptafacil/ui';
 import type { AccountType } from '../../../shell/api';
+import { accessPathWithReturn, safeReturnTo } from '../../../shell/auth';
 import { templateDemoHref, templateName } from '../../portals/templates/demo/demo-templates';
 import { AuthLayout } from '../components/auth-layout';
 import { readSignupTemplate } from '../lib/signup-template';
@@ -18,6 +19,8 @@ export function RegisterPage() {
   const [search] = useSearchParams();
   // Plantilla elegida en la vista de ejemplo: queda como la del portal nuevo.
   const template = useMemo(() => readSignupTemplate(search), [search]);
+  // Adónde volver después de crear la cuenta (validado contra open redirect).
+  const returnTo = safeReturnTo(search.get('returnTo'));
 
   return (
     <AuthLayout
@@ -27,7 +30,10 @@ export function RegisterPage() {
       footer={
         <p>
           ¿Ya tienes cuenta?{' '}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to={accessPathWithReturn('/login', returnTo)}
+            className="font-medium text-primary hover:underline"
+          >
             Inicia sesión
           </Link>
         </p>
@@ -54,10 +60,10 @@ export function RegisterPage() {
               </Link>
             </p>
           )}
-          <RegisterOrganizationForm template={template} />
+          <RegisterOrganizationForm template={template} returnTo={returnTo} />
         </TabsContent>
         <TabsContent value="person" className="mt-4">
-          <RegisterPersonForm />
+          <RegisterPersonForm returnTo={returnTo} />
         </TabsContent>
       </Tabs>
     </AuthLayout>

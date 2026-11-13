@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { accessPathWithReturn, returnPathOf } from '../auth/return-to';
 import { cn } from '@adoptafacil/ui';
 import { ChevronDownIcon } from '../icons';
 import { Brand } from './brand';
@@ -134,7 +135,10 @@ export function PublicNavbar() {
         </nav>
 
         <div className={styles.navbar__actions}>
-          <Link to="/login" className={styles.navbar__login}>
+          <Link
+            to={accessPathWithReturn('/login', returnPathOf(location))}
+            className={styles.navbar__login}
+          >
             Ingresar
           </Link>
           <Link to="/register" className={styles.navbar__register}>
@@ -177,7 +181,10 @@ export function PublicNavbar() {
           <Link to="/register" className={styles.navbar__mobileSecondary}>
             Registrar mi organización
           </Link>
-          <Link to="/login" className={styles.navbar__mobileSecondary}>
+          <Link
+            to={accessPathWithReturn('/login', returnPathOf(location))}
+            className={styles.navbar__mobileSecondary}
+          >
             Ingresar
           </Link>
         </div>
