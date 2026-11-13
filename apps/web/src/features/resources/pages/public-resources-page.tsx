@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { ResourceNeedPublic } from '@adoptafacil/contracts';
+import type { ResourceNeedPublic, ResourceOpenOfferPublic } from '@adoptafacil/contracts';
 import { EmptyState, Skeleton } from '@adoptafacil/ui';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
-import { listPublicNeeds } from '../api/public-resources';
+import { listPublicNeeds, listPublicOpenOffers } from '../api/public-resources';
 import { NeedCard } from '../components/need-card';
+import { PublicOpenOffers } from '../components/public-open-offers';
 import { OtherWaysToHelp, OpenOfferInvite } from '../components/other-ways-to-help';
 
 type ListState = 'loading' | 'ready' | 'error';
@@ -19,6 +20,7 @@ const PAGE_SIZE = 24;
 export function PublicResourcesPage() {
   const [items, setItems] = useState<ResourceNeedPublic[]>([]);
   const [state, setState] = useState<ListState>('loading');
+  const [offers, setOffers] = useState<ResourceOpenOfferPublic[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -32,6 +34,12 @@ export function PublicResourcesPage() {
       .catch(() => {
         if (active) setState('error');
       });
+    // Ofrecimientos abiertos: complemento; si fallan, la página sigue igual.
+    listPublicOpenOffers({ limit: 12, offset: 0 })
+      .then((page) => {
+        if (active) setOffers(page.items);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -45,7 +53,8 @@ export function PublicResourcesPage() {
         <header className="mb-8 space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Banco de recursos</h1>
           <p className="text-sm text-muted-foreground">
-            Necesidades activas de las organizaciones de rescate — ofrece donaciones físicas.
+            Necesidades activas de las organizaciones de rescate y lo que la comunidad está
+            ofreciendo — dona en especie o toma lo que le sirve a tu organización.
           </p>
         </header>
 
@@ -55,6 +64,7 @@ export function PublicResourcesPage() {
         )}
         {state === 'ready' && items.length === 0 && (
           <div className="space-y-8">
+            <PublicOpenOffers items={offers} />
             <OpenOfferInvite empty />
             <OtherWaysToHelp />
           </div>
@@ -67,7 +77,8 @@ export function PublicResourcesPage() {
           </div>
         )}
         {state === 'ready' && items.length > 0 && (
-          <div className="mt-10">
+          <div className="mt-10 space-y-8">
+            <PublicOpenOffers items={offers} />
             <OpenOfferInvite />
           </div>
         )}

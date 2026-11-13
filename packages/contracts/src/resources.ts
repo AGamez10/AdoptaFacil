@@ -381,6 +381,24 @@ export interface ResourceOpenOfferBoardItem {
   city: string;
   createdAt: string;
   expiresAt: string;
+  /**
+   * Additive: lo publicó alguien del equipo de la organización que mira el
+   * tablero. Se muestra para que el equipo lo vea, pero no se puede tomar.
+   */
+  fromYourOrganization?: boolean;
+}
+
+/**
+ * Ofrecimiento abierto en la lista PÚBLICA (`GET /public/resources/open-offers`):
+ * qué, cuánto, dónde y hasta cuándo. Nunca quién lo ofrece.
+ */
+export type ResourceOpenOfferPublic = Omit<ResourceOpenOfferBoardItem, 'fromYourOrganization'>;
+
+export interface ResourceOpenOffersPublicPage {
+  items: ResourceOpenOfferPublic[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface ResourceOpenOffersBoardPage {

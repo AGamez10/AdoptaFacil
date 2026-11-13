@@ -18,6 +18,7 @@ import {
   type VolunteerEnrollmentMine,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -177,6 +178,7 @@ export class VolunteerEnrollmentsService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     private readonly config: ConfigService<Env, true>,
+    private readonly inbox: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -274,6 +276,22 @@ export class VolunteerEnrollmentsService {
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
     }
+    const title = opportunity?.title ?? 'una jornada';
+    await this.inbox.toOrgStaff(row.organization_id, {
+      kind: 'volunteering.enrollment_received',
+      title: `Nueva inscripción a "${title}"`,
+      body: `${row.volunteer_name.split(/\s+/)[0] || 'Alguien'} quiere ser voluntario(a). Acéptala o recházala.`,
+      href: `/organizacion/voluntariado/${opportunityId}`,
+      dedupeKey: `volunteer_enrollment:${row.id}`,
+    });
+    await this.inbox.toUser(actor.id, {
+      kind: 'volunteering.enrollment_sent',
+      tone: 'kudos',
+      title: `¡Gracias por sumarte a "${title}"!`,
+      body: `${organization?.name ?? 'La organización'} revisará tu inscripción y te avisaremos aquí.`,
+      href: '/voluntariado',
+      dedupeKey: `volunteer_enrollment_sent:${row.id}`,
+    });
 
     return fromRawRow(row);
   }
@@ -405,6 +423,21 @@ export class VolunteerEnrollmentsService {
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
     }
+    const accepted = input.decision === 'accept';
+    await this.inbox.toUser(updated.volunteerUserId, {
+      kind: accepted ? 'volunteering.enrollment_accepted' : 'volunteering.enrollment_rejected',
+      tone: accepted ? 'success' : 'info',
+      title: accepted
+        ? `¡Te aceptaron en "${opportunityTitle}"!`
+        : `No quedaste en "${opportunityTitle}" esta vez`,
+      body: accepted
+        ? 'Registra tus horas el día de la jornada o después, desde Voluntariado.'
+        : updated.rejectionReason
+          ? `Motivo: ${updated.rejectionReason}`
+          : 'Mira otras jornadas abiertas en Voluntariado.',
+      href: '/voluntariado',
+      dedupeKey: `volunteer_enrollment_decided:${id}`,
+    });
 
     return toEnrollment(updated);
   }

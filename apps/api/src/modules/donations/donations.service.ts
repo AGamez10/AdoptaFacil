@@ -37,6 +37,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PAYMENT_PORT } from '../../core/payments/payment.port';
 import {
   NOTIFICATION_PORT,
@@ -150,6 +151,7 @@ export class DonationsService {
     config: ConfigService<Env, true>,
     private readonly legal: LegalService,
     @Optional() private readonly mercadopagoConnections?: MercadoPagoConnectionsService,
+    @Optional() private readonly inbox?: InboxService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.certificatesEnabled =
@@ -817,6 +819,12 @@ export class DonationsService {
           `${this.webBaseUrl.replace(/\/+$/, '')}/mis-donaciones`,
         );
       }
+      await this.notifyApprovedDonation(
+        donation.id,
+        donation.organization_id,
+        donation.donor_user_id,
+        donation.intended_amount,
+      );
     }
 
     return { applied: true, status, donationId: donation.id };
@@ -915,6 +923,40 @@ export class DonationsService {
       this.logger.warn(
         `No se pudo enviar el agradecimiento de la donación: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /** Avisos en la plataforma de una donación aprobada (una sola vez por donación). */
+  private async notifyApprovedDonation(
+    donationId: string,
+    organizationId: string,
+    donorUserId: string | null | undefined,
+    amount: number,
+  ): Promise<void> {
+    if (!this.inbox) return;
+    const money = new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(amount);
+    await this.inbox.toOrgStaff(organizationId, {
+      kind: 'donations.received',
+      tone: 'success',
+      title: `Recibieron una donación de ${money}`,
+      body: 'El pago fue confirmado. Mira el detalle en Donaciones recibidas.',
+      href: '/donaciones-recibidas',
+      dedupeKey: `donation:${donationId}`,
+    });
+    if (donorUserId) {
+      const organizationName = (await this.organizationName(organizationId)) ?? 'la organización';
+      await this.inbox.toUser(donorUserId, {
+        kind: 'donations.thanks',
+        tone: 'kudos',
+        title: `¡Gracias por tu donación de ${money} a ${organizationName}!`,
+        body: 'Tu pago fue confirmado. El recibo está en "Mis donaciones".',
+        href: '/mis-donaciones',
+        dedupeKey: `donation_thanks:${donationId}`,
+      });
     }
   }
 
