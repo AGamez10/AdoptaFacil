@@ -41,3 +41,6 @@ export const acceptInvitationSchema = z
     legalAcceptances: legalAcceptancesSchema.optional(),
   })
   .strict();
+
+/** `PUT /org/members/:userId/role`. Only organization roles (never platform). */
+export const changeMemberRoleSchema = z.object({ role: orgRoleSchema }).strict();

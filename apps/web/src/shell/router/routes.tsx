@@ -15,6 +15,7 @@ import {
   ORG_SIGNERS_ROLES,
   ORG_SIGNING_ROLES,
   ORG_PLAN_ROLES,
+  ORG_MEMBERS_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
   ORG_LEDGER_ROLES,
@@ -80,6 +81,7 @@ const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
 const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
 const OrgPlanPage = lazyPage(loadOrg, 'OrgPlanPage');
+const OrgMembersPage = lazyPage(loadOrg, 'OrgMembersPage');
 const OrgAnnouncementsPage = lazyPage(loadOrg, 'OrgAnnouncementsPage');
 const OrgFormalizationPage = lazyPage(loadOrg, 'OrgFormalizationPage');
 const OrgLegalRepresentativePage = lazyPage(loadOrg, 'OrgLegalRepresentativePage');
@@ -570,6 +572,15 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={ORG_PLAN_ROLES}>
                       <OrgAnnouncementsPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Equipo · mismo gate que GET /org/members y /org/invitations. */}
+                <Route
+                  path="organizacion/miembros"
+                  element={
+                    <RequireRoles roles={ORG_MEMBERS_ROLES}>
+                      <OrgMembersPage />
                     </RequireRoles>
                   }
                 />

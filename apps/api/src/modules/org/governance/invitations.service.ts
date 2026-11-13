@@ -231,8 +231,8 @@ export class InvitationsService {
       // Límite de miembros del plan (solo con PLAN_ENFORCEMENT): cuenta el
       // equipo actual más las invitaciones pendientes de OTROS correos, porque
       // cada una ocupará un puesto al aceptarse. Reinvitar al mismo correo no
-      // ocupa un puesto nuevo.
-      if (plan) {
+      // ocupa un puesto nuevo. Un firmante no ocupa puesto.
+      if (plan && !input.signerRole) {
         const [members, pending] = await Promise.all([
           this.plans.countMembers(tx, organizationId),
           tx.organizationInvitation.count({
@@ -242,6 +242,8 @@ export class InvitationsService {
               revokedAt: null,
               expiresAt: { gt: new Date() },
               email: { not: email },
+              // Los firmantes no ocupan puesto del plan.
+              signerRole: null,
             },
           }),
         ]);
@@ -432,8 +434,9 @@ export class InvitationsService {
         if (claimed.count !== 1) {
           throw new BadRequestException(INVALID_INVITATION);
         }
-        // El plan pudo bajar entre la invitación y la aceptación.
-        if (plan) {
+        // El plan pudo bajar entre la invitación y la aceptación. Un firmante
+        // no ocupa puesto.
+        if (plan && !row.signerRole) {
           const members = await this.plans.countMembers(tx, organizationId);
           await this.plans.assertWithinLimit(organizationId, 'members', members + 1, plan);
         }

@@ -36,6 +36,7 @@ export * from './plans';
 export * from './consents';
 export * from './notifications';
 export * from './invitation-roles';
+export * from './org-members';
 export * from './platform-workspace';
 export * from './coffee';
 export * from './accounting';
