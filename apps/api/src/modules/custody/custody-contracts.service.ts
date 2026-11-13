@@ -408,7 +408,8 @@ export class CustodyContractsService {
   private async nextNumber(tx: Prisma.TransactionClient): Promise<string> {
     const organizationId = this.core.orgId();
     // Serializa la numeración de ESTA organización dentro de la transacción.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`custody_contract:${organizationId}`}))::text AS locked`;
+    const lockKey = `custody_contract:${organizationId}`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS locked`;
     const year = todayInColombia().slice(0, 4);
     const prefix = `GC-${year}-`;
     const count = await tx.custodyContract.count({

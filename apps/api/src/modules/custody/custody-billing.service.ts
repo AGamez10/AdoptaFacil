@@ -327,7 +327,8 @@ export class CustodyBillingService {
   /** Consecutivo de constancias por organización y año: RP-2026-000001. */
   private async nextReceiptNumber(tx: Prisma.TransactionClient): Promise<string> {
     const organizationId = this.core.orgId();
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`custody_receipt:${organizationId}`}))::text AS locked`;
+    const lockKey = `custody_receipt:${organizationId}`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS locked`;
     const prefix = `RP-${todayInColombia().slice(0, 4)}-`;
     const count = await tx.custodyPayment.count({
       where: { organizationId, receiptNumber: { startsWith: prefix } },
