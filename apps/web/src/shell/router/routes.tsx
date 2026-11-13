@@ -39,6 +39,7 @@ import { HomePage } from '../../features/_layout';
 import { NotFoundRoute, PublicNotFoundPage } from '../errors';
 import {
   CompleteProfilePage,
+  WelcomeNotice,
   ForgotPasswordPage,
   LoginPage,
   RegisterPage,
@@ -235,6 +236,8 @@ export function AppRoutes() {
   return (
     // Ola 1 (R1-1): switched-off modules render "not found" before any route.
     <FeatureRouteGate>
+      {/* Bienvenida / "seguimos donde ibas", una sola vez tras entrar. */}
+      <WelcomeNotice />
       {/* Las pantallas privadas llegan en su propio archivo (ver lazy-page.ts). */}
       <Suspense fallback={<Skeleton className="h-screen w-full" />}>
         <Routes>

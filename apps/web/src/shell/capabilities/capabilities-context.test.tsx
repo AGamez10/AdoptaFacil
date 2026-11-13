@@ -78,3 +78,26 @@ describe('CapabilitiesProvider', () => {
     expect(screen.getByText('ready:false')).toBeInTheDocument();
   });
 });
+
+describe('googleClientId', () => {
+  it('takes a well-formed Client ID only when Google is served', async () => {
+    const id = '123456789012-abcdefghijklmnop.apps.googleusercontent.com';
+    stubFetch(async () => ({
+      ok: true,
+      json: async () => ({ features: {}, googleSignIn: true, googleClientId: id }),
+    }));
+    expect((await fetchCapabilities()).googleClientId).toBe(id);
+
+    stubFetch(async () => ({
+      ok: true,
+      json: async () => ({ features: {}, googleSignIn: true, googleClientId: 'evil"><script>' }),
+    }));
+    expect((await fetchCapabilities()).googleClientId).toBeUndefined();
+
+    stubFetch(async () => ({
+      ok: true,
+      json: async () => ({ features: {}, googleSignIn: false, googleClientId: id }),
+    }));
+    expect((await fetchCapabilities()).googleClientId).toBeUndefined();
+  });
+});

@@ -1,35 +1,17 @@
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams, type Location } from 'react-router-dom';
+import { Link, useLocation, useSearchParams, type Location } from 'react-router-dom';
 import { Button } from '@adoptafacil/ui';
-import { toApiError, useApiClient } from '../../../shell/api';
+import { toApiError } from '../../../shell/api';
 import { accessPathWithReturn, safeReturnTo, useSession } from '../../../shell/auth';
-import { landingAfterSignIn } from '../../org/lib/portal-readiness';
 import { AuthLayout } from '../components/auth-layout';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
 import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
+import { useAfterSignIn } from '../lib/use-after-sign-in';
 import { collectErrors, loginErrorMessage, validateEmail } from '../validation';
 
 interface FromState {
   from?: Location;
-}
-
-/** Qué va a pasar en la ruta a la que se quiere volver, en palabras de la persona. */
-const INTENT_LABELS: ReadonlyArray<readonly [string, string]> = [
-  ['/donaciones', 'donar a esta organización'],
-  ['/donar', 'donar a esta organización'],
-  ['/recursos/ofrecer', 'ofrecer lo que tienes'],
-  ['/voluntariado', 'inscribirte a una jornada de voluntariado'],
-  ['/adoptar', 'solicitar la adopción de un animal'],
-  ['/apadrinar', 'apadrinar a un animal'],
-  ['/campanas', 'aportar a una campaña'],
-];
-
-function intentLabelFor(path: string | null): string | null {
-  if (!path) return null;
-  const pathname = path.split(/[?#]/)[0];
-  const match = INTENT_LABELS.find(([prefix]) => pathname.startsWith(prefix));
-  return match ? match[1] : 'seguir donde ibas';
 }
 
 /**
@@ -40,30 +22,27 @@ function intentLabelFor(path: string | null): string | null {
 export function LoginPage() {
   const { signIn, signInWithGoogle } = useSession();
   const googleAvailable = useGoogleSignInAvailable();
-  const navigate = useNavigate();
   const location = useLocation();
   // Return to the guarded origin PRESERVING its query string, so a deep link with
   // params (e.g. /donaciones?organizationId=…&organizationName=… — T-051) comes back
-  // with its context intact. Same `state.from` mechanism (RequireAuth), just no longer
-  // dropping `search`.
+  // with its context intact, and its `state` (the donation, the volunteering day
+  // or the offer already chosen).
   const origin = (location.state as FromState | null)?.from;
   const from = origin ? `${origin.pathname}${origin.search}` : null;
   // Intención explícita de un enlace público (?returnTo=), validada contra
   // open redirect. Tiene prioridad sobre state.from si llegan ambas.
   const [search] = useSearchParams();
   const target = safeReturnTo(search.get('returnTo')) ?? from;
-  const client = useApiClient();
-  // Sin una ruta pedida, quien gestiona una organización que aún no puede
-  // publicar su portal entra primero a "Mi organización" a completarlo.
-  // Al volver a la ruta que pidió, se restaura también su `state` (la donación,
-  // la jornada o la oferta ya elegida). Un `returnTo` de enlace público no trae
-  // estado: su contexto viaja en la query.
-  const originState = origin?.state;
-  const intent = intentLabelFor(target);
-  const destination = useCallback(async (): Promise<{ to: string; state?: unknown }> => {
-    if (target) return { to: target, state: originState };
-    return { to: await landingAfterSignIn(client) };
-  }, [target, originState, client]);
+  // Sin ruta en la URL, la intención guardada en esta pestaña (p. ej. tras
+  // recargar o venir de "Crear cuenta"). Sin ninguna, el inicio de su cuenta.
+  const {
+    finish,
+    intentPath,
+    intentLabel: intent,
+  } = useAfterSignIn({
+    target,
+    targetState: target === from ? origin?.state : undefined,
+  });
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -90,8 +69,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await signIn({ email, password });
-      const next = await destination();
-      navigate(next.to, { replace: true, state: next.state });
+      await finish();
     } catch (error) {
       setFormError(loginErrorMessage(toApiError(error).status));
       setSubmitting(false);
@@ -107,15 +85,14 @@ export function LoginPage() {
       setFormError(null);
       setSubmitting(true);
       try {
-        await signInWithGoogle(idToken);
-        const next = await destination();
-        navigate(next.to, { replace: true, state: next.state });
+        const result = await signInWithGoogle(idToken);
+        await finish({ isNewAccount: result?.isNewAccount === true });
       } catch {
         setFormError('No pudimos iniciar sesión con Google. Inténtalo de nuevo.');
         setSubmitting(false);
       }
     },
-    [signInWithGoogle, navigate, destination],
+    [signInWithGoogle, finish],
   );
 
   return (
@@ -127,7 +104,7 @@ export function LoginPage() {
           <p>
             ¿No tienes cuenta?{' '}
             <Link
-              to={accessPathWithReturn('/register', target)}
+              to={accessPathWithReturn('/register', intentPath)}
               className="font-medium text-primary hover:underline"
             >
               Regístrate
