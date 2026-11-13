@@ -18,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { canDecideOffer } from './resource-fulfillment';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 
 /** Raw JSONB item emitted by `resource_offers_for_donor` (already enriched). */
 interface RawOfferWithNeed {
@@ -134,7 +135,18 @@ export class ResourceOffersService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
+    private readonly inbox: InboxService,
   ) {}
+
+  /** Título de una necesidad (para el texto de los avisos). */
+  private async needTitle(organizationId: string, needId: string): Promise<string> {
+    const need = await this.prisma
+      .withOrgContext(organizationId, (tx) =>
+        tx.resourceNeed.findUnique({ where: { id: needId }, select: { title: true } }),
+      )
+      .catch(() => null);
+    return need?.title ?? 'tu necesidad';
+  }
 
   private requireOrgId(): string {
     const organizationId = this.tenant.getOrganizationId();
@@ -164,6 +176,22 @@ export class ResourceOffersService {
       entityType: 'resource_offer',
       entityId: row.id,
       metadata: { needId: input.needId, quantityOffered: input.quantityOffered },
+    });
+    const title = await this.needTitle(row.organization_id, row.need_id);
+    await this.inbox.toOrgStaff(row.organization_id, {
+      kind: 'resources.offer_received',
+      title: `Nueva oferta para "${title}"`,
+      body: `Alguien ofrece ${input.quantityOffered} para cubrir esta necesidad. Revísala y acéptala o recházala.`,
+      href: `/organizacion/recursos/${row.need_id}`,
+      dedupeKey: `resource_offer:${row.id}`,
+    });
+    await this.inbox.toUser(actor.id, {
+      kind: 'resources.offer_sent',
+      tone: 'kudos',
+      title: '¡Gracias! Tu oferta llegó a la organización',
+      body: `Ofreciste ${input.quantityOffered} para "${title}". Te avisamos cuando la acepten.`,
+      href: '/mis-ofertas',
+      dedupeKey: `resource_offer_sent:${row.id}`,
     });
     return fromSqlRow(row);
   }
@@ -198,7 +226,7 @@ export class ResourceOffersService {
     input: DecideResourceOfferInput,
   ): Promise<ResourceOffer> {
     const organizationId = this.requireOrgId();
-    return this.prisma.withOrgContext(organizationId, async (tx) => {
+    const decided = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const existing = await tx.resourceOffer.findUnique({ where: { id: offerId } });
       if (!existing) {
         throw new NotFoundException('Resource offer not found');
@@ -232,8 +260,29 @@ export class ResourceOffersService {
         entityId: offerId,
         metadata: { needId: existing.needId },
       });
-      return toOffer(updated);
+      return updated;
     });
+    const [title, org] = await Promise.all([
+      this.needTitle(organizationId, decided.needId),
+      this.prisma.organization
+        .findUnique({ where: { id: organizationId }, select: { name: true } })
+        .catch(() => null),
+    ]);
+    const orgName = org?.name ?? 'La organización';
+    const accepted = input.decision === 'accept';
+    await this.inbox.toUser(decided.donorUserId, {
+      kind: accepted ? 'resources.offer_accepted' : 'resources.offer_declined',
+      tone: accepted ? 'success' : 'info',
+      title: accepted
+        ? `${orgName} aceptó tu oferta para "${title}"`
+        : `${orgName} no pudo aceptar tu oferta para "${title}"`,
+      body: accepted
+        ? 'Coordinarán contigo la entrega. Mira el estado en "Mis ofertas".'
+        : 'Gracias por ofrecer. Puede que ya esté cubierta: mira otras necesidades del banco.',
+      href: accepted ? '/mis-ofertas' : '/recursos',
+      dedupeKey: `resource_offer_decided:${offerId}`,
+    });
+    return toOffer(decided);
   }
 
   /** El donante cancela SU PROPIA oferta, solo mientras siga `offered`. */
@@ -252,6 +301,15 @@ export class ResourceOffersService {
       entityType: 'resource_offer',
       entityId: row.id,
       metadata: { needId: row.need_id },
+    });
+    const title = await this.needTitle(row.organization_id, row.need_id);
+    await this.inbox.toOrgStaff(row.organization_id, {
+      kind: 'resources.offer_cancelled',
+      tone: 'warning',
+      title: `Una oferta para "${title}" fue retirada`,
+      body: 'Quien la ofreció la canceló antes de que la decidieran.',
+      href: `/organizacion/recursos/${row.need_id}`,
+      dedupeKey: `resource_offer_cancelled:${row.id}`,
     });
     return fromSqlRow(row);
   }

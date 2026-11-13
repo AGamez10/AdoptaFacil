@@ -25,6 +25,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import type { RequestUser } from '../../core/auth/auth.types';
 import {
   NOTIFICATION_PORT,
@@ -157,6 +158,7 @@ export class VolunteerOpportunitiesService {
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly inbox: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -278,7 +280,7 @@ export class VolunteerOpportunitiesService {
       const recipients = rescheduled
         ? await tx.volunteerEnrollment.findMany({
             where: { opportunityId: id, status: { in: OPEN_ENROLLMENT_STATUSES } },
-            select: { volunteerName: true, volunteerEmail: true },
+            select: { volunteerName: true, volunteerEmail: true, volunteerUserId: true },
           })
         : [];
       if (rescheduled && actor) {
@@ -330,6 +332,13 @@ export class VolunteerOpportunitiesService {
           },
         },
       });
+      await this.inbox.toUser(recipient.volunteerUserId, {
+        kind: 'volunteering.opportunity_rescheduled',
+        tone: 'info',
+        title: `Cambió la fecha de "${result.row.title}"`,
+        body: `Ahora es ${emailInput.dates}.${emailInput.reason ? ` Motivo: ${emailInput.reason}` : ''}`,
+        href: '/voluntariado',
+      });
     }
     // Forma de siempre (contrato aditivo) + a cuántas personas se avisó.
     return { ...toOpportunity(result.row), notifiedVolunteers: result.recipients.length };
@@ -369,7 +378,7 @@ export class VolunteerOpportunitiesService {
       }
       const recipients = await tx.volunteerEnrollment.findMany({
         where: { opportunityId: id, status: { in: OPEN_ENROLLMENT_STATUSES } },
-        select: { id: true, volunteerName: true, volunteerEmail: true },
+        select: { id: true, volunteerName: true, volunteerEmail: true, volunteerUserId: true },
       });
       const now = new Date();
       await tx.volunteerEnrollment.updateMany({
@@ -425,6 +434,14 @@ export class VolunteerOpportunitiesService {
             motivo: reason,
           },
         },
+      });
+      await this.inbox.toUser(recipient.volunteerUserId, {
+        kind: 'volunteering.opportunity_cancelled',
+        tone: 'info',
+        title: `"${result.row.title}" fue cancelada`,
+        body: `Motivo: ${reason}`,
+        href: '/voluntariado',
+        dedupeKey: `volunteer_opportunity_cancelled:${id}:${recipient.volunteerUserId}`,
       });
     }
     return { opportunity: toOpportunity(result.row), notifiedVolunteers: result.recipients.length };

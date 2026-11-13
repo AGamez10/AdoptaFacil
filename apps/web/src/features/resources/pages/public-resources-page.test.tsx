@@ -36,10 +36,16 @@ function need(
   };
 }
 
-function stub(body: unknown) {
+function stub(body: unknown, offers: unknown = { items: [], total: 0, limit: 12, offset: 0 }) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve({ ok: true, status: 200, json: async () => body })),
+    vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => (String(input).includes('/open-offers') ? offers : body),
+      }),
+    ),
   );
 }
 
@@ -124,5 +130,39 @@ describe('PublicResourcesPage', () => {
     renderList();
     await screen.findByTestId('need-card');
     expect(screen.getByTestId('need-progress')).toHaveTextContent('40%');
+  });
+
+  it('shows what people are offering (no donor identity) next to the needs', async () => {
+    stub(
+      { items: [need('n1', 'Alimento para gatos')], total: 1, limit: 24, offset: 0 },
+      {
+        items: [
+          {
+            id: 'o1',
+            title: 'Cobijas medianas',
+            category: ResourceCategory.Supplies,
+            quantity: 4,
+            unit: 'unidades',
+            department: 'Antioquia',
+            city: 'Medellín',
+            createdAt: '2026-11-01T00:00:00.000Z',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+          },
+        ],
+        total: 1,
+        limit: 12,
+        offset: 0,
+      },
+    );
+    renderList();
+
+    const section = await screen.findByTestId('public-open-offers');
+    expect(section).toHaveTextContent('Cobijas medianas');
+    expect(section).toHaveTextContent('4 unidades');
+    expect(section).toHaveTextContent('Medellín, Antioquia');
+    expect(screen.getByRole('link', { name: /tomar un ofrecimiento/i })).toHaveAttribute(
+      'href',
+      '/organizacion/recursos/ofrecimientos',
+    );
   });
 });

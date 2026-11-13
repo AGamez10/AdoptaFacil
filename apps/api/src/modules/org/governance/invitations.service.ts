@@ -33,6 +33,7 @@ import {
   type NotificationPort,
 } from '../../../core/notifications/notification.port';
 import { TenantContextService } from '../../../core/tenant/tenant-context.service';
+import { InboxService } from '../../../core/notifications/inbox/inbox.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 /**
@@ -160,6 +161,7 @@ export class InvitationsService {
     private readonly plans: PlansService,
     config: ConfigService<Env, true>,
     private readonly legal: LegalService,
+    private readonly inbox: InboxService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.emailSimulated = config.get('NOTIFICATION_DRIVER', { infer: true }) !== 'smtp';
@@ -495,6 +497,26 @@ export class InvitationsService {
       throw error;
     }
     await this.legal.notifyAcceptance(email, acceptances);
+    await this.inbox.toOrgStaff(
+      organizationId,
+      {
+        kind: 'org.member_joined',
+        tone: 'success',
+        title: `${displayName} se unió al equipo`,
+        body: 'Aceptó la invitación y ya puede entrar con su cargo.',
+        href: '/organizacion/miembros',
+        dedupeKey: `member_joined:${userId}`,
+      },
+      { roles: [Role.Owner, Role.Administrator], excludeUserId: userId },
+    );
+    await this.inbox.toUser(userId, {
+      kind: 'org.welcome',
+      tone: 'kudos',
+      title: '¡Bienvenido(a) al equipo!',
+      body: 'Desde aquí verás los avisos de tu organización: solicitudes, ofertas, voluntariado y más.',
+      href: '/inicio',
+      dedupeKey: 'welcome',
+    });
 
     const tokens = await this.tokens.issueTokens({
       userId,

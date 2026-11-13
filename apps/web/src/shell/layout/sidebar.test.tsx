@@ -73,11 +73,14 @@ describe('Sidebar — org identity chip (REFACTOR-VISUAL v2, Fase 3)', () => {
       },
     });
 
-    // La compuerta legal consulta `/legal/me` para toda sesión; lo que no debe
-    // pasar para una Persona es pedir el perfil de la organización.
+    // La compuerta legal consulta `/legal/me` y la campana `/me/notifications`
+    // para toda sesión; lo que no debe pasar para una Persona es pedir el
+    // perfil de la organización.
     await waitFor(() =>
       expect(
-        fetchMock.mock.calls.filter(([url]) => !String(url).endsWith('/legal/me')),
+        fetchMock.mock.calls.filter(
+          ([url]) => !/\/(legal\/me|me\/notifications)$/.test(String(url)),
+        ),
       ).toHaveLength(0),
     );
   });
