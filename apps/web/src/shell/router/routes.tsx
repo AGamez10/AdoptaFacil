@@ -127,6 +127,7 @@ const MyPetsPage = lazyPage(loadCommunity, 'MyPetsPage');
 const MyServicesPage = lazyPage(loadCommunity, 'MyServicesPage');
 const ServiceDetailPage = lazyPage(loadCommunity, 'ServiceDetailPage');
 const ServicesDirectoryPage = lazyPage(loadCommunity, 'ServicesDirectoryPage');
+const BusinessPreRegistrationPage = lazyPage(loadCommunity, 'BusinessPreRegistrationPage');
 const ServicesModerationPage = lazyPage(loadCommunity, 'ServicesModerationPage');
 const loadAnimals = () => import('../../features/animals');
 const AnimalsPage = lazyPage(loadAnimals, 'AnimalsPage');
@@ -338,6 +339,8 @@ export function AppRoutes() {
           (sin sesión): destino de los enlaces compartidos en redes (`/c/:id`). */}
           <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
+          {/* Pre-registro público (sin cuenta). Estático: gana a /servicios/:id. */}
+          <Route path="/servicios/prerregistro" element={<BusinessPreRegistrationPage />} />
           <Route path="/servicios/:id" element={<ServiceDetailPage />} />
           {/* Voluntariados PÚBLICOS (PR #43, M08 RF18): jornadas activas de todas
           las organizaciones, sin sesión. Inscribirse lleva a /voluntariado. */}

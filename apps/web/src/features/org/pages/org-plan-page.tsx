@@ -331,6 +331,13 @@ export function OrgPlanPage() {
             {LIMIT_LABELS.members}: <strong>{view.usage.members}</strong>
             {membersMax !== null && ` de ${membersMax}`}
           </p>
+          {membersMax !== null && (
+            <p className="text-xs text-muted-foreground">
+              Cuentan las personas con un rol en tu organización (tú incluido, más las invitaciones
+              aceptadas). Un contador o revisor fiscal que solo firma con designación de firma o por
+              enlace no ocupa un puesto.
+            </p>
+          )}
           {view.usage.storageMb !== undefined && (
             <p className="text-sm">
               {LIMIT_LABELS.storageMb}:{' '}

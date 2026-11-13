@@ -165,3 +165,30 @@ export interface PetProfile extends PetProfileInput {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Quién se pre-registra para aparecer en la Comunidad (MVP, sin cuenta):
+ *  un comercio o establecimiento, o un profesional independiente. */
+export const COMMUNITY_PRE_REGISTRATION_KINDS = ['commerce', 'professional'] as const;
+export type CommunityPreRegistrationKind = (typeof COMMUNITY_PRE_REGISTRATION_KINDS)[number];
+
+/** Categoría del pre-registro: una de las del directorio o "otra". */
+export const COMMUNITY_PRE_REGISTRATION_OTHER_CATEGORY = 'other' as const;
+
+/** Lo que llena quien pre-registra su negocio. No hay cuenta ni sesión. */
+export interface CommunityPreRegistrationInput {
+  kind: CommunityPreRegistrationKind;
+  businessName: string;
+  category: ServiceCategory | typeof COMMUNITY_PRE_REGISTRATION_OTHER_CATEGORY;
+  city: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone?: string;
+  message?: string;
+  /** Autorización de tratamiento de datos (Ley 1581). Debe ser `true`. */
+  consent: true;
+}
+
+/** Respuesta: solo confirma que el interés quedó registrado. */
+export interface CommunityPreRegistrationReceipt {
+  received: true;
+}

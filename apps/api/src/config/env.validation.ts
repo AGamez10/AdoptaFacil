@@ -180,6 +180,11 @@ export const envSchema = z.object({
     .transform((value) =>
       value === undefined || value === '' ? undefined : value === true || value === 'true',
     ),
+  // Sandbox only: email of the Mercado Pago TEST BUYER. A plan subscription is
+  // created for this email instead of the logged-in user's, because in the
+  // sandbox the payer email must be the test buyer's. Ignored unless
+  // MERCADOPAGO_TEST=true and refused in production.
+  MERCADOPAGO_TEST_PAYER_EMAIL: z.string().email().optional(),
   // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
   // AdoptaFácil's plans (subscriptions); never used for a donation.
   MERCADOPAGO_PLATFORM_ACCESS_TOKEN: z.string().min(1).optional(),
@@ -432,6 +437,12 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     // The client secret, the OAuth codes and every org token go to these
     // hosts: in production they are pinned to Mercado Pago's own (the
     // overrides exist only for tests), so a typo can never ship them elsewhere.
+    if (env.MERCADOPAGO_TEST_PAYER_EMAIL) {
+      fail(
+        'MERCADOPAGO_TEST_PAYER_EMAIL',
+        'sandbox-only override of the plan payer email: remove it in production',
+      );
+    }
     if (!isMercadoPagoApiBase(env.MERCADOPAGO_BASE_URL)) {
       fail('MERCADOPAGO_BASE_URL', 'must be https://api.mercadopago.com in production');
     }

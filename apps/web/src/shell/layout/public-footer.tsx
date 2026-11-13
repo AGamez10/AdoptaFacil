@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { accessPathWithReturn, returnPathOf } from '../auth/return-to';
 import {
   OFFICIAL_EMAIL,
   OFFICIAL_WHATSAPP_DISPLAY,
@@ -17,6 +18,7 @@ import styles from './public-footer.module.scss';
  * AdoptaFácil no tiene.
  */
 export function PublicFooter() {
+  const location = useLocation();
   const resources = useFeature('resources');
   const marketplace = useFeature('marketplace');
   const payments = useFeature('payments');
@@ -93,7 +95,10 @@ export function PublicFooter() {
             <Link to="/register" className={styles.footer__link}>
               Registrar mi organización
             </Link>
-            <Link to="/login" className={styles.footer__link}>
+            <Link
+              to={accessPathWithReturn('/login', returnPathOf(location))}
+              className={styles.footer__link}
+            >
               Ingresar
             </Link>
           </div>

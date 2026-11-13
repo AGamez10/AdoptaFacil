@@ -31,7 +31,12 @@ type PersonErrors = Partial<
  * the backend DTO needs; first and last name are combined into the required
  * `displayName`. Phone is not part of account creation (see M01, Ola 1).
  */
-export function RegisterPersonForm() {
+export interface RegisterPersonFormProps {
+  /** Adónde volver tras crear la cuenta (intención de un enlace público). */
+  returnTo?: string | null;
+}
+
+export function RegisterPersonForm({ returnTo = null }: RegisterPersonFormProps) {
   const { register, signInWithGoogle } = useSession();
   const googleAvailable = useGoogleSignInAvailable();
   const navigate = useNavigate();
@@ -100,7 +105,7 @@ export function RegisterPersonForm() {
         description:
           'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
       });
-      navigate('/', { replace: true });
+      navigate(returnTo ?? '/', { replace: true });
     } catch (error) {
       const apiError = toApiError(error);
       setFormError(registerErrorMessage(apiError.status, apiError.code));
@@ -116,7 +121,7 @@ export function RegisterPersonForm() {
         // Same endpoint as login: auto-links by email if the account already
         // exists, otherwise creates the lightweight Person account.
         await signInWithGoogle(idToken);
-        navigate('/', { replace: true });
+        navigate(returnTo ?? '/', { replace: true });
       } catch {
         setFormError('No pudimos continuar con Google. Inténtalo de nuevo.');
         setSubmitting(false);
@@ -128,6 +133,21 @@ export function RegisterPersonForm() {
   return (
     <div className="space-y-4">
       {formError && <FormAlert>{formError}</FormAlert>}
+
+      {googleAvailable && (
+        <>
+          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+          <p className="text-xs text-muted-foreground">
+            Con Google es más rápido y, además, confirmamos tu correo. Si continúas, te pediremos
+            aceptar estos mismos documentos antes de usar tu cuenta.
+          </p>
+          <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            o regístrate con tus datos
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
@@ -205,20 +225,6 @@ export function RegisterPersonForm() {
 
       {/* Google Sign-In NEVER creates an Organization — only offered on the
           Person tab. Registering an org stays the long NIT/legal-rep form. */}
-      {googleAvailable && (
-        <>
-          <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            o
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
-          <p className="text-xs text-muted-foreground">
-            Si continúas con Google, te pediremos aceptar estos mismos documentos antes de usar tu
-            cuenta.
-          </p>
-        </>
-      )}
     </div>
   );
 }
