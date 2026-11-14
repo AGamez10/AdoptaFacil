@@ -301,7 +301,11 @@ export function MyVolunteeringPage() {
               ) : (
                 <ul className="space-y-3">
                   {enrollments.map((enrollment) => (
-                    <li key={enrollment.id} className="space-y-2 rounded-md border p-3 text-sm">
+                    <li
+                      key={enrollment.id}
+                      data-foco={enrollment.id}
+                      className="space-y-2 rounded-md border p-3 text-sm"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-medium">
                           {enrollment.opportunityTitle} · {enrollment.organizationName}
@@ -450,6 +454,7 @@ export function MyVolunteeringPage() {
                   {hours.map((entry) => (
                     <li
                       key={entry.id}
+                      data-foco={entry.id}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
                     >
                       <div>
@@ -489,6 +494,7 @@ export function MyVolunteeringPage() {
                   {certificates.map((certificate) => (
                     <li
                       key={certificate.id}
+                      data-foco={certificate.id}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
                     >
                       <div>

@@ -954,7 +954,7 @@ export class DonationsService {
         tone: 'kudos',
         title: `¡Gracias por tu donación de ${money} a ${organizationName}!`,
         body: 'Tu pago fue confirmado. El recibo está en "Mis donaciones".',
-        href: '/mis-donaciones',
+        href: `/mis-donaciones?foco=${donationId}`,
         dedupeKey: `donation_thanks:${donationId}`,
       });
     }

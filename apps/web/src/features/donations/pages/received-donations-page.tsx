@@ -83,9 +83,9 @@ export function ReceivedDonationsPage() {
               {donations.map((donation) => (
                 <li
                   key={donation.id}
+                  data-foco={donation.id}
                   className={styles.row}
                   data-testid="received-donation-row"
-                  data-focus-id={donation.id}
                 >
                   <div className={styles.row__top}>
                     <span className={styles.row__donor} data-testid="received-donation-donor">

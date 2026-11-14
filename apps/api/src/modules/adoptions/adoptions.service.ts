@@ -149,7 +149,7 @@ export class AdoptionsService {
       tone: 'kudos',
       title: `¡Gracias por querer adoptar a ${animalName}!`,
       body: 'La organización ya recibió tu solicitud. Te avisaremos aquí y por correo cada vez que avance.',
-      href: '/mis-solicitudes',
+      href: `/mis-solicitudes?foco=${row.id}`,
       dedupeKey: `adoption_request_sent:${row.id}`,
     });
 
@@ -326,7 +326,7 @@ export class AdoptionsService {
       tone: status === 'approved' ? 'success' : status === 'rejected' ? 'warning' : 'info',
       title: `Tu solicitud para adoptar a ${snapshot.name} avanzó: ${label}`,
       body: `${organizationName ?? 'La organización'} actualizó tu solicitud.`,
-      href: '/mis-solicitudes',
+      href: `/mis-solicitudes?foco=${id}`,
       dedupeKey: `adoption_status:${id}:${status}`,
     });
     return this.fromModel(updated);

@@ -281,7 +281,7 @@ export class VolunteerEnrollmentsService {
       kind: 'volunteering.enrollment_received',
       title: `Nueva inscripción a "${title}"`,
       body: `${row.volunteer_name.split(/\s+/)[0] || 'Alguien'} quiere ser voluntario(a). Acéptala o recházala.`,
-      href: `/organizacion/voluntariado/${opportunityId}?foco=${row.id}`,
+      href: `/organizacion/voluntariado/${opportunityId}?inscripcion=${row.id}&foco=${row.id}`,
       dedupeKey: `volunteer_enrollment:${row.id}`,
     });
     await this.inbox.toUser(actor.id, {
@@ -289,7 +289,7 @@ export class VolunteerEnrollmentsService {
       tone: 'kudos',
       title: `¡Gracias por sumarte a "${title}"!`,
       body: `${organization?.name ?? 'La organización'} revisará tu inscripción y te avisaremos aquí.`,
-      href: '/voluntariado',
+      href: `/voluntariado?foco=${row.id}`,
       dedupeKey: `volunteer_enrollment_sent:${row.id}`,
     });
 
@@ -435,7 +435,7 @@ export class VolunteerEnrollmentsService {
         : updated.rejectionReason
           ? `Motivo: ${updated.rejectionReason}`
           : 'Mira otras jornadas abiertas en Voluntariado.',
-      href: '/voluntariado',
+      href: `/voluntariado?foco=${id}`,
       dedupeKey: `volunteer_enrollment_decided:${id}`,
     });
 

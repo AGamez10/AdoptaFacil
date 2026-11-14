@@ -138,7 +138,7 @@ export function OpenOffersBoardPage() {
       {page && page.items.length > 0 && (
         <ul className="grid gap-4 sm:grid-cols-2" aria-label="Ofrecimientos abiertos">
           {page.items.map((item) => (
-            <li key={item.id}>
+            <li key={item.id} data-foco={item.id}>
               <OpenOfferCard
                 item={item}
                 needs={compatibleNeeds(needs, item)}

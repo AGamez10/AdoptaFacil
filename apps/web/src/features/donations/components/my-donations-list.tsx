@@ -121,7 +121,7 @@ export function MyDonationsList() {
         {!error && donations.length > 0 && (
           <ul className="space-y-3">
             {donations.map((donation) => (
-              <li key={donation.id} className={styles.row}>
+              <li key={donation.id} data-foco={donation.id} className={styles.row}>
                 <div className={styles.row__top}>
                   <span className={styles.row__org}>{organizationLabel(donation)}</span>
                   <Badge variant={DONATION_STATUS_BADGE_VARIANT[donation.status]}>

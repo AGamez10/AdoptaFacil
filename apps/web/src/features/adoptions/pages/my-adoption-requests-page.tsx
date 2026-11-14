@@ -67,7 +67,11 @@ export function MyAdoptionRequestsPage() {
             {!error && requests.length > 0 && (
               <ul className="space-y-3">
                 {requests.map((request) => (
-                  <li key={request.id} className="border-b pb-3 text-sm last:border-b-0">
+                  <li
+                    key={request.id}
+                    data-foco={request.id}
+                    className="border-b pb-3 text-sm last:border-b-0"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{request.animalSnapshot.name}</span>
                       <Badge variant={adoptionStatusVariant(request.status)}>

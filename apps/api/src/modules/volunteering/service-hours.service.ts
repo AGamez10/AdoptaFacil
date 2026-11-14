@@ -236,7 +236,7 @@ export class ServiceHoursService {
       title: `${who} registró ${input.hours} h en "${context?.title ?? 'una jornada'}"`,
       body: 'Revisa la bitácora y aprueba o rechaza las horas para que cuenten en su certificado.',
       href: context?.enrollment
-        ? `/organizacion/voluntariado/${context.enrollment.opportunityId}?foco=${input.enrollmentId}`
+        ? `/organizacion/voluntariado/${context.enrollment.opportunityId}?inscripcion=${row.enrollment_id}&foco=${row.id}`
         : '/organizacion/voluntariado',
       dedupeKey: `service_hours:${row.id}`,
     });
@@ -366,7 +366,7 @@ export class ServiceHoursService {
         : updated.rejectionReason
           ? `Motivo: ${updated.rejectionReason}`
           : 'Revisa la bitácora en Voluntariado.',
-      href: '/voluntariado',
+      href: `/voluntariado?foco=${id}`,
       dedupeKey: `service_hours_decided:${id}`,
     });
 

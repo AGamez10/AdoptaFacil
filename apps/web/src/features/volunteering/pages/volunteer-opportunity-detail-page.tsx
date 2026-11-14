@@ -31,6 +31,7 @@ import { OpportunityScheduleActions } from '../components/opportunity-schedule-a
 import { ServiceHoursPhotoThumbs } from '../components/service-hours-photos';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { useFocusParam } from '../../../shell/focus';
 import { useFocusTarget } from '../../../shell/use-focus-target';
 import {
   canIssueCertificate,
@@ -214,6 +215,15 @@ export function VolunteerOpportunityDetailPage() {
     }
   };
 
+  // Aviso "registró horas" o "nueva inscripción": abre las horas de esa
+  // inscripción para aprobarlas ahí mismo (`?inscripcion=<id>&foco=<horas>`).
+  const enrollmentToOpen = useFocusParam('inscripcion');
+  useEffect(() => {
+    if (enrollmentToOpen && enrollments.some((e) => e.id === enrollmentToOpen)) {
+      setExpandedId(enrollmentToOpen);
+    }
+  }, [enrollmentToOpen, enrollments]);
+
   const toggleHours = (enrollmentId: string): void => {
     setExpandedId((current) => (current === enrollmentId ? null : enrollmentId));
   };
@@ -374,7 +384,7 @@ export function VolunteerOpportunityDetailPage() {
                   {enrollments.map((enrollment) => (
                     <li
                       key={enrollment.id}
-                      data-focus-id={enrollment.id}
+                      data-foco={enrollment.id}
                       className="space-y-3 rounded-md border p-3 text-sm"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -460,6 +470,7 @@ export function VolunteerOpportunityDetailPage() {
                                       entries.map((entry) => (
                                         <div
                                           key={entry.id}
+                                          data-foco={entry.id}
                                           className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 last:border-0"
                                         >
                                           <div>
