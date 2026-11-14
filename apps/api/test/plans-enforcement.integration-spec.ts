@@ -58,6 +58,8 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     Object.defineProperty(plans, 'enforced', { value, configurable: true });
   const setPromoEnd = (value: Date | null) =>
     Object.defineProperty(plans, 'promoEndsAt', { value, configurable: true });
+  const setTrialDays = (value: number) =>
+    Object.defineProperty(plans, 'trialDays', { value, configurable: true });
 
   const inDays = (n: number) => new Date(Date.now() + n * 86_400_000);
   const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -93,6 +95,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
   afterEach(async () => {
     setEnforced(false);
     setPromoEnd(null);
+    setTrialDays(0);
     await admin.organizationSubscription.deleteMany({ where: { organizationId: owner.orgId } });
   });
 
@@ -147,6 +150,50 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
       .expect(200);
     const stored = await admin.portalTheme.findUnique({ where: { organizationId: owner.orgId } });
     expect((stored?.tokens as Record<string, unknown>).__template).toBe('historias');
+  });
+
+  it('prueba de 14 días: la organización nueva es Pro con su plantilla Pro y al vencer vuelve a Gratis sin perderla', async () => {
+    setEnforced(true);
+    setPromoEnd(null);
+    setTrialDays(14);
+    const created = (
+      await admin.organization.findUniqueOrThrow({
+        where: { id: owner.orgId },
+        select: { createdAt: true },
+      })
+    ).createdAt;
+    try {
+      const view = await request(server).get('/org/plan').set(auth(owner.token)).expect(200);
+      expect(view.body.effectivePlan).toBe('pro');
+      expect(view.body.launchPromoEndsAt).toBeNull();
+      expect(new Date(view.body.trialEndsAt).getTime()).toBe(created.getTime() + 14 * 86_400_000);
+      const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+      expect(pub.body.template).toBe('historias');
+
+      // Hace 15 días: la prueba venció.
+      await admin.organization.update({
+        where: { id: owner.orgId },
+        data: { createdAt: inDays(-15) },
+      });
+      const after = await request(server).get('/org/plan').set(auth(owner.token)).expect(200);
+      expect(after.body.effectivePlan).toBe('free');
+      expect(after.body.trialEndsAt).toBeNull();
+      const own = await request(server).get('/portals/theme').set(auth(owner.token)).expect(200);
+      expect(own.body.template).toBe('clasica');
+      expect(own.body.lockedTemplate).toBe('historias');
+    } finally {
+      await admin.organization.update({ where: { id: owner.orgId }, data: { createdAt: created } });
+    }
+  });
+
+  it('la promoción de lanzamiento manda si termina después de la prueba', async () => {
+    setEnforced(true);
+    setTrialDays(14);
+    setPromoEnd(inDays(60));
+    const view = await request(server).get('/org/plan').set(auth(owner.token)).expect(200);
+    expect(view.body.effectivePlan).toBe('pro');
+    expect(view.body.launchPromoEndsAt).not.toBeNull();
+    expect(view.body.trialEndsAt).toBeNull();
   });
 
   it('choosing a paid template without a paid plan answers 403 PLAN_REQUIRED', async () => {
