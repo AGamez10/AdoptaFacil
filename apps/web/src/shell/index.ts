@@ -10,3 +10,4 @@ export * from './navigation';
 export * from './transparency';
 export * from './layout';
 export * from './theme';
+export { useFocusTarget, FOCUS_PARAM } from './use-focus-target';

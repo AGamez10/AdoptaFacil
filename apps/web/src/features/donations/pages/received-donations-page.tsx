@@ -3,6 +3,7 @@ import type { DonationWithReceipt } from '@adoptafacil/contracts';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
+import { useFocusTarget } from '../../../shell/use-focus-target';
 import { listReceivedDonations } from '../api/donations-api';
 import { ReceivedDonationDetailModal } from '../components/received-donation-detail-modal';
 import { formatBogota, formatCop } from '../model/donation-breakdown-view';
@@ -34,6 +35,8 @@ export function ReceivedDonationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  // Desde el aviso "Recibieron una donación" se llega directo a esa donación.
+  useFocusTarget(!loading && donations.length > 0);
   const detailDonation = donations.find((d) => d.id === detailId) ?? null;
 
   useEffect(() => {

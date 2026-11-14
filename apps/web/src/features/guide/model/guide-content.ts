@@ -61,6 +61,21 @@ const ANIMAL_WRITE_ROLES = [Role.Owner, Role.Administrator, Role.Operator, Role.
 const ORG_DOCUMENT_ROLES = [Role.Owner, Role.Administrator];
 const PLATFORM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin];
 
+/** Qué hace cada rol, en una línea: el asistente lo muestra para que la persona sepa desde dónde mira. */
+export const ROLE_SUMMARY: Record<Role, string> = {
+  [Role.Owner]: 'Propietario(a): acceso completo a la organización, su equipo y sus planes.',
+  [Role.Administrator]: 'Administrador(a): gestionas la organización junto al propietario.',
+  [Role.Operator]:
+    'Operador(a): atiendes el trabajo diario, como animales, adopciones y donaciones.',
+  [Role.Volunteer]: 'Voluntario(a): apoyas a la organización con las tareas que te asignan.',
+  [Role.TemporaryCollaborator]: 'Colaborador(a) temporal: acceso limitado a lo que te asignaron.',
+  [Role.Veterinarian]:
+    'Veterinario(a): registras y consultas el expediente clínico de los animales.',
+  [Role.ReadOnlyAuditor]: 'Auditor(a) de solo lectura: puedes consultar, no modificar.',
+  [Role.PlatformAdmin]: 'Equipo de AdoptaFácil: revisas organizaciones y documentos.',
+  [Role.PlatformSuperAdmin]: 'Equipo de AdoptaFácil: administración completa de la plataforma.',
+};
+
 export const GUIDE_FLOWS: readonly GuideFlow[] = [
   {
     id: 'adoptar',
@@ -529,7 +544,7 @@ export const PAGE_HELP: readonly PageHelp[] = [
     related: [DOCUMENTS_LINK, LEGAL_REP_LINK],
   },
   {
-    match: /^\/organizacion\/documentos/,
+    match: /^\/organizacion\/documentos(\/|$)/,
     title: 'Documentos de la organización',
     tips: [
       'Cada documento muestra su estado: pendiente, en revisión, observado, aprobado o rechazado.',
@@ -634,6 +649,49 @@ export const PAGE_HELP: readonly PageHelp[] = [
     match: /^\/organizacion\/anuncios/,
     title: 'Anuncios urgentes',
     tips: ['Escribe a tus donantes, adoptantes y voluntarios cuando algo no puede esperar.'],
+  },
+  {
+    match: /^\/organizacion\/contabilidad/,
+    title: 'Contabilidad: libros del mes',
+    tips: [
+      'Aquí se ordena mes a mes lo que entró por donaciones: cada pago, reembolso o contracargo confirmado por Mercado Pago.',
+      'Plan Gratis: descargas el libro del mes en Excel o CSV con folio, fecha, tipo y valor, más los totales del mes.',
+      'Planes Crece y Pro: además el paquete completo para tu contador, con comisión y neto, forma de pago, destinación, conciliación contra Mercado Pago y los donantes que autorizaron identificarse.',
+      'Cerrar el mes lo deja sellado: lo que llegue después se registra como ajuste del mes siguiente. AdoptaFácil prepara la información; la contabilidad oficial le corresponde a tu contador.',
+    ],
+    related: [REPORTS_LINK, SIGNERS_LINK],
+  },
+  {
+    match: /^\/organizacion\/miembros/,
+    title: 'Miembros del equipo',
+    tips: [
+      'Invita a tu equipo por correo y elige su rol: cada persona ve en el menú solo lo que su rol permite.',
+      'La invitación llega con un enlace; quien la acepta entra directo a tu organización con ese rol.',
+      'Puedes cambiar el rol o retirar a alguien cuando quieras.',
+    ],
+  },
+  {
+    match: /^\/organizacion\/custodia/,
+    title: 'Custodia y guardería',
+    tips: [
+      'Gestiona la guardería: animales que cuidas, sus vencimientos, pagos, contratos y plantillas.',
+      'Cada contrato y movimiento queda documentado para que todos tengan el mismo soporte.',
+    ],
+    related: [ANIMALS_LINK],
+  },
+  {
+    match: /^\/reportes-animales/,
+    title: 'Reportes de animales',
+    tips: [
+      'Reporte consolidado de los animales de tu organización y reporte individual de cada uno.',
+      'Descárgalos en PDF, CSV o Excel para rendir cuentas o compartirlos.',
+    ],
+    related: [ANIMALS_LINK],
+  },
+  {
+    match: /^\/organizacion\/transparencia-nacional/,
+    title: 'Transparencia nacional',
+    tips: ['Esta sección todavía está en construcción: aquí verás tu indicador a nivel nacional.'],
   },
   {
     match: /^\/organizacion\/plan/,

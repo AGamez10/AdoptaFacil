@@ -218,6 +218,33 @@ describe('report-payloads', () => {
     expect(p.rows[0].concept).toBe('Campaña: Cirugía de Luna');
   });
 
+  it('donaciones: si el pago no trajo documento se usa el del perfil de quien autorizó', () => {
+    const p = buildDonationsPayload({
+      consentedUserIds: new Set(['u-ana']),
+      profileDocuments: new Map([['u-ana', '52111222']]),
+      organization: ORG,
+      period: { start: '2026-09-01', end: '2026-09-30' },
+      campaignNames: new Map(),
+      animalNames: new Map(),
+      donations: [
+        {
+          id: 'd1',
+          conceptKind: 'organization',
+          conceptId: 'org',
+          amountCharged: 2000,
+          breakdown: breakdown(2000),
+          payer: { fullName: 'Ana Gámez' },
+          donorUserId: 'u-ana',
+          anonymous: false,
+          approvedAt: new Date('2026-09-10T15:00:00Z'),
+        },
+      ],
+    });
+    expect(p.rows[0].donor).toBe('Ana Gámez');
+    expect(p.rows[0].donorDocument).toBe('••••1222');
+    expect(JSON.stringify(p)).not.toContain('52111222');
+  });
+
   it('donaciones: sin consentimiento vigente no se identifica al donante, pero los montos se conservan', () => {
     const p = donationsPayload(new Set());
     expect(p.rows.map((r) => r.donor)).toEqual(['Donante anónimo', 'Donante']);

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { loadConsentedDocuments } from '../reports/consented-documents';
 import {
   ACCOUNTING_ENTRY_TYPE_LABEL,
   ACCOUNTING_DESTINATION_LABEL,
@@ -759,12 +760,18 @@ export class AccountingService {
       }),
     ]);
     const consented = new Set(consents.map((c) => c.subjectUserId));
+    const profileDocs = await loadConsentedDocuments(
+      tx,
+      organizationId,
+      donations.map((d) => d.donorUserId),
+    );
     const out = new Map<string, DonorIdentity>();
     for (const d of donations) {
       if (d.anonymous || !d.donorUserId || !consented.has(d.donorUserId)) continue;
       const payer = (d.payer ?? {}) as DonationDonor;
-      if (!payer.fullName && !payer.documentId) continue;
-      out.set(d.id, { name: payer.fullName ?? '', document: payer.documentId ?? '' });
+      const document = payer.documentId?.trim() || profileDocs.get(d.donorUserId) || '';
+      if (!payer.fullName && !document) continue;
+      out.set(d.id, { name: payer.fullName ?? '', document });
     }
     return out;
   }

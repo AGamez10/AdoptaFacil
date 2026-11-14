@@ -1,3 +1,4 @@
+import { loadConsentedDocuments } from './consented-documents';
 import {
   BadRequestException,
   ConflictException,
@@ -1155,6 +1156,11 @@ export class ReportsService {
       campaignNames: new Map(campaigns.map((c) => [c.id, c.title])),
       animalNames: new Map(animals.map((a) => [a.id, a.name])),
       consentedUserIds: await this.consentedUserIds(tx, organizationId),
+      profileDocuments: await loadConsentedDocuments(
+        tx,
+        organizationId,
+        donations.map((d) => d.donorUserId),
+      ),
     });
   }
 

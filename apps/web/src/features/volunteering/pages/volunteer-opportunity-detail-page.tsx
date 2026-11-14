@@ -32,6 +32,7 @@ import { ServiceHoursPhotoThumbs } from '../components/service-hours-photos';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { useFocusParam } from '../../../shell/focus';
+import { useFocusTarget } from '../../../shell/use-focus-target';
 import {
   canIssueCertificate,
   ENROLLMENT_STATUS_LABELS,
@@ -81,6 +82,11 @@ export function VolunteerOpportunityDetailPage() {
   const [rejectHoursReason, setRejectHoursReason] = useState('');
   const [certificates, setCertificates] = useState<Record<string, VolunteerCertificate>>({});
   const [editingDays, setEditingDays] = useState(false);
+  // Desde un aviso ("registró horas" / "nueva inscripción") se llega directo a esa persona.
+  const focusId = useFocusTarget(enrollments.length > 0);
+  useEffect(() => {
+    if (focusId && enrollments.some((e) => e.id === focusId)) setExpandedId(focusId);
+  }, [focusId, enrollments]);
   const [draftDays, setDraftDays] = useState<string[]>([]);
   const [savingDays, setSavingDays] = useState(false);
 
