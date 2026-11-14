@@ -366,6 +366,96 @@ export const PAGE_HELP: readonly PageHelp[] = [
     ],
   },
   {
+    match: /^\/donaciones\/resultado/,
+    title: 'Tu donación',
+    tips: [
+      'Mercado Pago está confirmando tu pago. Cuando lo apruebe, te llega el comprobante por correo.',
+      'No necesitas quedarte en esta página ni volver a pagar.',
+    ],
+  },
+  {
+    match: /^\/donaciones\/comprobante/,
+    title: 'Tu comprobante de donación',
+    tips: [
+      'Aquí ves el estado de tu donación con el enlace que te enviamos por correo; no necesitas cuenta.',
+      'Si la organización emite certificado de donación, también lo encuentras aquí cuando esté listo.',
+    ],
+  },
+  {
+    match: /^\/cafe\/pedido/,
+    title: 'Tu pedido de café',
+    tips: [
+      'Mientras Mercado Pago confirma el pago, esta página se actualiza sola.',
+      'Parte de lo que pagaste va a la campaña que se muestra en el pedido.',
+    ],
+  },
+  {
+    match: /^\/tengo-para-donar/,
+    title: 'Tengo algo para donar',
+    tips: [
+      'Describe lo que tienes (alimento, medicinas, cobijas…) y en qué ciudad está.',
+      'Las organizaciones lo ven y te escriben si les sirve. La entrega la acuerdan entre ustedes.',
+    ],
+    related: [{ to: '/recursos', label: 'Ver necesidades de las organizaciones' }],
+  },
+  {
+    match: /^\/invitacion/,
+    title: 'Te invitaron a un equipo',
+    tips: [
+      'Arriba ves la organización que te invitó y tu cargo: qué podrás hacer y qué no.',
+      'Crea tu cuenta o ingresa con la que ya tienes para aceptar. El menú te mostrará solo lo de tu cargo.',
+      'Si el enlace venció o no lo esperabas, pídele a la organización una invitación nueva.',
+    ],
+  },
+  {
+    match: /^\/(forgot|reset-password)/,
+    title: 'Recuperar tu contraseña',
+    tips: [
+      'Escribe el correo de tu cuenta y te enviamos un enlace para crear una contraseña nueva.',
+      'Si ingresas con Google, no necesitas contraseña: usa "Continuar con Google".',
+    ],
+  },
+  {
+    match: /^\/firmar/,
+    title: 'Firmar un documento',
+    tips: [
+      'Una organización te pidió tu firma. Revisa el documento completo antes de firmar.',
+      'Nadie puede firmar a tu nombre: el enlace es personal y solo sirve una vez.',
+    ],
+  },
+  {
+    match: /^\/contabilidad-compartida/,
+    title: 'Contabilidad compartida',
+    tips: [
+      'Una organización compartió contigo su contabilidad del mes, en modo de solo lectura.',
+      'Puedes descargar el libro para revisarlo; no puedes cambiar nada.',
+    ],
+  },
+  {
+    match: /^\/organizaciones\/[^/]+\/resenas/,
+    title: 'Reseñas de la organización',
+    tips: [
+      'Opiniones de personas que adoptaron, donaron o hicieron voluntariado con esta organización.',
+      'Cada reseña pasa por moderación antes de publicarse.',
+    ],
+  },
+  {
+    match: /^\/correo\/baja/,
+    title: 'Dejar de recibir correos',
+    tips: [
+      'Confirma y no te volvemos a enviar ese tipo de correo.',
+      'Los correos de seguridad de tu cuenta y los comprobantes de pago siguen llegando.',
+    ],
+  },
+  {
+    match: /^\/legal/,
+    title: 'Documentos legales',
+    tips: [
+      'Términos, política de datos y autorizaciones de AdoptaFácil, con su versión y fecha.',
+      'Lo que aceptaste y cuándo lo ves en "Uso de mis datos".',
+    ],
+  },
+  {
     match: /^\/verificar/,
     title: 'Verificar un certificado',
     tips: ['Escribe el código impreso en el certificado para confirmar que es auténtico.'],
@@ -408,6 +498,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
       { to: '/adoptar', label: 'Buscar un animal para adoptar' },
       { to: '/mis-solicitudes', label: 'Mis solicitudes' },
     ],
+  },
+  {
+    match: /^\/mis-adopciones\/entrega/,
+    title: 'Confirma la entrega',
+    tips: [
+      'La organización registró que el animal ya está contigo. Revisa el resumen y confírmalo.',
+      'Después lo encuentras en "Mis animales", con sus seguimientos.',
+    ],
+    related: [{ to: '/mis-animales', label: 'Mis animales' }],
   },
   {
     match: /^\/perfil\/completar/,

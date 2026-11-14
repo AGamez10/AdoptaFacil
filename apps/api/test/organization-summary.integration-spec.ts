@@ -306,6 +306,13 @@ describe('Organization summary (S2-08, M13)', () => {
       })
       .expect(200);
 
+    // The 2nd one went to a CAMPAIGN: it is still money the organization
+    // received, so it counts in the total (the Inicio showed $0 before).
+    await admin.donation.updateMany({
+      where: { organizationId: owner.orgId, idempotencyKey: donorModeKey },
+      data: { conceptKind: 'campaign' },
+    });
+
     // A 3rd donation left PENDING (no webhook) — must NOT count.
     await request(server)
       .post('/donations')
@@ -339,7 +346,7 @@ describe('Organization summary (S2-08, M13)', () => {
     expect(res.body.sponsorshipsActive).toBe(1); // not the suspended one
     expect(res.body.documentsExpiringSoon).toBe(1); // only the near-expiry Approved one
     expect(res.body.documentsRejected).toBe(1);
-    expect(res.body.donationsReceivedTotal).toBe(net1 + net2); // not the pending one
+    expect(res.body.donationsReceivedTotal).toBe(net1 + net2); // org + campaign, not the pending one
     expect(res.body.formalizationLevel).toBe(2); // Rut + ExistenceCert approved, Informal blocks tier 3
     expect(res.body.formalizationPercent).toBe(0); // Informal = position 0 of 5
   });
