@@ -115,7 +115,7 @@ export function AdoptionsKanbanPage() {
                 <p className={styles.column__empty}>Sin solicitudes.</p>
               ) : (
                 items.map((request) => (
-                  <Card key={request.id} data-testid="adoption-card">
+                  <Card key={request.id} data-testid="adoption-card" data-foco={request.id}>
                     <CardContent className="space-y-2 p-3">
                       <div className={styles.card__top}>
                         <span className={styles.card__animal}>{request.animalSnapshot.name}</span>

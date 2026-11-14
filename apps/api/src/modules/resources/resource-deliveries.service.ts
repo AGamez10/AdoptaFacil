@@ -63,20 +63,24 @@ export class ResourceDeliveriesService {
   private async notifyDonor(
     organizationId: string,
     deliveryId: string,
-    build: (ctx: { need: string; org: string }) => InboxNotice,
+    build: (ctx: { need: string; org: string; offerId: string }) => InboxNotice,
   ): Promise<void> {
     const found = await this.prisma
       .withOrgContext(organizationId, async (tx) => {
         const delivery = await tx.resourceDelivery.findUnique({
           where: { id: deliveryId },
-          select: { needId: true, offer: { select: { donorUserId: true } } },
+          select: { needId: true, offerId: true, offer: { select: { donorUserId: true } } },
         });
         if (!delivery) return null;
         const need = await tx.resourceNeed.findUnique({
           where: { id: delivery.needId },
           select: { title: true },
         });
-        return { donorUserId: delivery.offer.donorUserId, need: need?.title };
+        return {
+          donorUserId: delivery.offer.donorUserId,
+          need: need?.title,
+          offerId: delivery.offerId,
+        };
       })
       .catch(() => null);
     if (!found?.donorUserId) return;
@@ -85,7 +89,11 @@ export class ResourceDeliveriesService {
       .catch(() => null);
     await this.inbox.toUser(
       found.donorUserId,
-      build({ need: found.need ?? 'la necesidad', org: org?.name ?? 'La organización' }),
+      build({
+        need: found.need ?? 'la necesidad',
+        org: org?.name ?? 'La organización',
+        offerId: found.offerId,
+      }),
     );
   }
 
@@ -166,13 +174,13 @@ export class ResourceDeliveriesService {
           timeStyle: 'short',
         })
       : null;
-    await this.notifyDonor(organizationId, id, ({ need, org }) => ({
+    await this.notifyDonor(organizationId, id, ({ need, org, offerId }) => ({
       kind: 'resources.delivery_scheduled',
       title: `${org} programó la entrega para "${need}"`,
       body: when
         ? `Fecha acordada: ${when} (hora Colombia).`
         : 'Revisa los detalles en "Mis ofertas".',
-      href: '/mis-ofertas',
+      href: `/mis-ofertas?foco=${offerId}`,
       // Una reprogramación es un aviso nuevo.
       dedupeKey: `resource_delivery_scheduled:${id}:${result.scheduledAt ?? ''}:${result.method ?? ''}`,
     }));
@@ -253,12 +261,12 @@ export class ResourceDeliveriesService {
       });
       return toDelivery(updated);
     });
-    await this.notifyDonor(organizationId, id, ({ need, org }) => ({
+    await this.notifyDonor(organizationId, id, ({ need, org, offerId }) => ({
       kind: 'resources.delivery_completed',
       tone: 'kudos',
       title: `¡Gracias! ${org} recibió tu donación`,
       body: `Tu aporte para "${need}" ya está con los animales. Gestos así sostienen a los refugios.`,
-      href: '/mis-ofertas',
+      href: `/mis-ofertas?foco=${offerId}`,
       dedupeKey: `resource_delivery_completed:${id}`,
     }));
     return result;
@@ -293,12 +301,12 @@ export class ResourceDeliveriesService {
       });
       return toDelivery(updated);
     });
-    await this.notifyDonor(organizationId, id, ({ need, org }) => ({
+    await this.notifyDonor(organizationId, id, ({ need, org, offerId }) => ({
       kind: 'resources.delivery_cancelled',
       tone: 'warning',
       title: `${org} canceló la entrega para "${need}"`,
       body: 'Si crees que es un error, escríbele a la organización desde su portal.',
-      href: '/mis-ofertas',
+      href: `/mis-ofertas?foco=${offerId}`,
       dedupeKey: `resource_delivery_cancelled:${id}`,
     }));
     return result;

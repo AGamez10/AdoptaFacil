@@ -473,7 +473,7 @@ export class VolunteerCertificatesService {
       tone: 'kudos',
       title: `¡Felicitaciones! Tienes tu certificado de ${created.row.totalApprovedHours} h`,
       body: `${created.row.organizationName} certificó tu voluntariado en "${created.row.opportunityTitle}". Descárgalo desde Voluntariado.`,
-      href: '/voluntariado',
+      href: `/voluntariado?foco=${created.row.id}`,
       dedupeKey: `volunteer_certificate:${created.row.id}`,
     });
 

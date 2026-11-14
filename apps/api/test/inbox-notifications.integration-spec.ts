@@ -203,7 +203,7 @@ describe('Inbox notifications + visible resource bank', () => {
     const near = await inbox(nearbyOrg.token);
     expect(near.body.items[0]).toMatchObject({
       kind: 'resources.open_offer_published',
-      href: '/organizacion/recursos/ofrecimientos',
+      href: `/organizacion/recursos/ofrecimientos?foco=${openId}`,
     });
     const far = await inbox(farOrg.token);
     expect(
@@ -221,7 +221,7 @@ describe('Inbox notifications + visible resource bank', () => {
   });
 
   it('claiming the open offer tells the team member who offered it', async () => {
-    await request(server)
+    const claim = await request(server)
       .post(`/resources/open-offers/${openId}/claim`)
       .set('Authorization', `Bearer ${nearbyOrg.token}`)
       .send({})
@@ -229,7 +229,7 @@ describe('Inbox notifications + visible resource bank', () => {
     const author = await inbox(teammate.token);
     expect(author.body.items[0]).toMatchObject({
       kind: 'resources.open_offer_claimed',
-      href: '/mis-ofertas',
+      href: `/mis-ofertas?foco=${claim.body.offerId}`,
     });
   });
 
@@ -251,7 +251,7 @@ describe('Inbox notifications + visible resource bank', () => {
     const staff = await inbox(org.token);
     expect(staff.body.items[0]).toMatchObject({
       kind: 'resources.offer_received',
-      href: `/organizacion/recursos/${need.body.id}`,
+      href: `/organizacion/recursos/${need.body.id}?foco=${offerId}`,
     });
     expect(staff.body.items[0].title).toContain('Arena para gatos');
     const mate = await inbox(teammate.token);
@@ -265,7 +265,11 @@ describe('Inbox notifications + visible resource bank', () => {
       .send({ decision: 'accept' })
       .expect(200);
     const mine = await inbox(donor.token);
-    expect(mine.body.items[0]).toMatchObject({ kind: 'resources.offer_accepted', tone: 'success' });
+    expect(mine.body.items[0]).toMatchObject({
+      kind: 'resources.offer_accepted',
+      tone: 'success',
+      href: `/mis-ofertas?foco=${offerId}`,
+    });
     expect(mine.body.unread).toBeGreaterThanOrEqual(2);
   });
 

@@ -493,6 +493,7 @@ export function ResourceNeedDetailPage() {
                   key={offer.id}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
                   data-testid="received-offer-row"
+                  data-foco={offer.id}
                 >
                   <div>
                     <p className="font-medium">

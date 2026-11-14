@@ -182,7 +182,7 @@ export class ResourceOffersService {
       kind: 'resources.offer_received',
       title: `Nueva oferta para "${title}"`,
       body: `Alguien ofrece ${input.quantityOffered} para cubrir esta necesidad. Revísala y acéptala o recházala.`,
-      href: `/organizacion/recursos/${row.need_id}`,
+      href: `/organizacion/recursos/${row.need_id}?foco=${row.id}`,
       dedupeKey: `resource_offer:${row.id}`,
     });
     await this.inbox.toUser(actor.id, {
@@ -190,7 +190,7 @@ export class ResourceOffersService {
       tone: 'kudos',
       title: '¡Gracias! Tu oferta llegó a la organización',
       body: `Ofreciste ${input.quantityOffered} para "${title}". Te avisamos cuando la acepten.`,
-      href: '/mis-ofertas',
+      href: `/mis-ofertas?foco=${row.id}`,
       dedupeKey: `resource_offer_sent:${row.id}`,
     });
     return fromSqlRow(row);
@@ -279,7 +279,7 @@ export class ResourceOffersService {
       body: accepted
         ? 'Coordinarán contigo la entrega. Mira el estado en "Mis ofertas".'
         : 'Gracias por ofrecer. Puede que ya esté cubierta: mira otras necesidades del banco.',
-      href: accepted ? '/mis-ofertas' : '/recursos',
+      href: `/mis-ofertas?foco=${offerId}`,
       dedupeKey: `resource_offer_decided:${offerId}`,
     });
     return toOffer(decided);
@@ -308,7 +308,7 @@ export class ResourceOffersService {
       tone: 'warning',
       title: `Una oferta para "${title}" fue retirada`,
       body: 'Quien la ofreció la canceló antes de que la decidieran.',
-      href: `/organizacion/recursos/${row.need_id}`,
+      href: `/organizacion/recursos/${row.need_id}?foco=${row.id}`,
       dedupeKey: `resource_offer_cancelled:${row.id}`,
     });
     return fromSqlRow(row);

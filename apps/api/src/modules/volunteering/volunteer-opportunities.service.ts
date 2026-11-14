@@ -280,7 +280,7 @@ export class VolunteerOpportunitiesService {
       const recipients = rescheduled
         ? await tx.volunteerEnrollment.findMany({
             where: { opportunityId: id, status: { in: OPEN_ENROLLMENT_STATUSES } },
-            select: { volunteerName: true, volunteerEmail: true, volunteerUserId: true },
+            select: { id: true, volunteerName: true, volunteerEmail: true, volunteerUserId: true },
           })
         : [];
       if (rescheduled && actor) {
@@ -337,7 +337,7 @@ export class VolunteerOpportunitiesService {
         tone: 'info',
         title: `Cambió la fecha de "${result.row.title}"`,
         body: `Ahora es ${emailInput.dates}.${emailInput.reason ? ` Motivo: ${emailInput.reason}` : ''}`,
-        href: '/voluntariado',
+        href: `/voluntariado?foco=${recipient.id}`,
       });
     }
     // Forma de siempre (contrato aditivo) + a cuántas personas se avisó.
@@ -440,7 +440,7 @@ export class VolunteerOpportunitiesService {
         tone: 'info',
         title: `"${result.row.title}" fue cancelada`,
         body: `Motivo: ${reason}`,
-        href: '/voluntariado',
+        href: `/voluntariado?foco=${recipient.id}`,
         dedupeKey: `volunteer_opportunity_cancelled:${id}:${recipient.volunteerUserId}`,
       });
     }

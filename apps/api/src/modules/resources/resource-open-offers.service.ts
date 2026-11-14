@@ -181,7 +181,7 @@ export class ResourceOpenOffersService {
       kind: 'resources.open_offer_published',
       title: `Nuevo ofrecimiento en ${row.city}: ${row.title}`,
       body: `Alguien ofrece ${what}. Si le sirve a tu organización, puedes tomarlo desde el tablero.`,
-      href: '/organizacion/recursos/ofrecimientos',
+      href: `/organizacion/recursos/ofrecimientos?foco=${row.id}`,
       dedupeKey: `open_offer:${row.id}`,
     });
     if (actor.accountType === 'organization') {
@@ -191,7 +191,7 @@ export class ResourceOpenOffersService {
           kind: 'resources.open_offer_published',
           title: `Alguien de tu equipo ofreció: ${row.title}`,
           body: `${what} en ${row.city}. Lo verán las demás organizaciones en el tablero de ofrecimientos.`,
-          href: '/organizacion/recursos/ofrecimientos',
+          href: `/organizacion/recursos/ofrecimientos?foco=${row.id}`,
           dedupeKey: `open_offer:${row.id}`,
         },
         { roles: [Role.Owner, Role.Administrator, Role.Operator], excludeUserId: actor.id },
@@ -202,7 +202,7 @@ export class ResourceOpenOffersService {
       tone: 'kudos',
       title: '¡Gracias por compartir! Tu ofrecimiento ya está publicado',
       body: `"${row.title}" lo ven las organizaciones y aparece en el banco de recursos durante ${OPEN_OFFER_TTL_DAYS} días.`,
-      href: '/mis-ofertas',
+      href: `/mis-ofertas?foco=${row.id}`,
       dedupeKey: `open_offer_mine:${row.id}`,
     });
   }
@@ -346,7 +346,7 @@ export class ResourceOpenOffersService {
         tone: 'success',
         title: `${orgName} quiere recibir lo que ofreciste`,
         body: `Tomó tu ofrecimiento "${offered}". Coordinarán contigo la entrega.`,
-        href: '/mis-ofertas',
+        href: `/mis-ofertas?foco=${claimed.offer_id}`,
         dedupeKey: `open_offer_claimed:${claimed.offer_id}`,
       },
       (donor) => ({

@@ -324,4 +324,28 @@ describe('VolunteerOpportunityDetailPage (RF18/RF19)', () => {
     expect(screen.queryByRole('button', { name: 'Aceptar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
   });
+
+  it('desde el aviso "registró horas" abre las horas de esa inscripción y resalta el registro', async () => {
+    stubFetch((url) => {
+      if (url.includes('/service-hours?')) {
+        return { items: [PENDING_HOURS], total: 1, limit: 100, offset: 0 };
+      }
+      if (url.includes('/volunteer-enrollments')) {
+        return { items: [ACCEPTED_ENROLLMENT], total: 1, limit: 100, offset: 0 };
+      }
+      if (url.includes('/volunteer-opportunities/')) return OPPORTUNITY;
+      return {};
+    });
+    renderShell({
+      route: '/organizacion/voluntariado/op-1?inscripcion=en-1&foco=h-1',
+      ...sessionWith([Role.Owner]),
+    });
+
+    // Sin hacer clic en "Ver horas": las horas ya están abiertas para aprobar.
+    expect(await screen.findByRole('button', { name: 'Aprobar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ocultar horas' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.querySelector('[data-foco="h-1"]')).toHaveAttribute('data-foco-activo'),
+    );
+  });
 });

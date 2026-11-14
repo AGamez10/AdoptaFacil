@@ -78,7 +78,12 @@ export function ReceivedDonationsPage() {
           {!loading && !error && donations.length > 0 && (
             <ul className="space-y-3">
               {donations.map((donation) => (
-                <li key={donation.id} className={styles.row} data-testid="received-donation-row">
+                <li
+                  key={donation.id}
+                  data-foco={donation.id}
+                  className={styles.row}
+                  data-testid="received-donation-row"
+                >
                   <div className={styles.row__top}>
                     <span className={styles.row__donor} data-testid="received-donation-donor">
                       {receivedDonorLabel(donation)}
