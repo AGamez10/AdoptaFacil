@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  PUBLIC_ANIMAL_STATUSES,
   DocumentStatus,
   FORMALIZATION_SEQUENCE,
   FormalizationState,
@@ -62,24 +63,35 @@ export class OrganizationSummaryService {
     const [aggregates, verification] = await Promise.all([
       this.prisma.withOrgContext(organizationId, (tx) =>
         Promise.all([
-          tx.animal.count({ where: { organizationId, isActive: true, status: 'available' } }),
+          tx.animal.count({
+            where: { organizationId, isActive: true, status: { in: [...PUBLIC_ANIMAL_STATUSES] } },
+          }),
           tx.adoptionRequest.count({
             where: { organizationId, status: { in: ['new', 'in_review'] } },
           }),
-          tx.adoptionRequest.count({ where: { organizationId, status: 'new' } }),
+          tx.adoptionRequest.aggregate({
+            where: { organizationId, status: 'new' },
+            _count: { _all: true },
+            _max: { createdAt: true },
+          }),
           tx.sponsorship.count({ where: { organizationId, status: 'active' } }),
           tx.organizationDocument.findMany({
             where: { organizationId },
-            select: { type: true, version: true, status: true, expiresAt: true },
+            select: {
+              type: true,
+              version: true,
+              status: true,
+              expiresAt: true,
+              reviewedAt: true,
+              updatedAt: true,
+            },
           }),
           tx.donation.findMany({
-            // P1-1: lo reembolsado o contracargado no suma.
-            where: {
-              organizationId,
-              status: 'approved',
-              conceptKind: 'organization',
-              reversal: null,
-            },
+            // Todo lo que llegó a la organización (donación general, campaña o
+            // animal). Antes solo contaba la general, así que una donación a una
+            // campaña dejaba el tablero en $0. P1-1: lo reembolsado o
+            // contracargado no suma.
+            where: { organizationId, status: 'approved', reversal: null },
             select: { breakdown: true },
           }),
           tx.organizationProfile.findUnique({
@@ -95,15 +107,21 @@ export class OrganizationSummaryService {
     const [
       animalsActive,
       adoptionRequestsPending,
-      adoptionRequestsNew,
+      adoptionRequestsNewAgg,
       sponsorshipsActive,
       documentRows,
       donationRows,
       formalizationProfile,
     ] = aggregates;
 
+    const adoptionRequestsNew = adoptionRequestsNewAgg._count._all;
     let documentsExpiringSoon = 0;
     let documentsRejected = 0;
+    // Campana: el momento más reciente en que apareció cada aviso. Un documento
+    // "entra" a por vencer cuando su vencimiento queda dentro de la ventana.
+    let expiringSince: Date | null = null;
+    let rejectedSince: Date | null = null;
+    const later = (a: Date | null, b: Date): Date => (a && a > b ? a : b);
     // Ola 3: solo cuenta la ÚLTIMA versión de cada tipo de documento. Antes un
     // documento rechazado (o por vencer) seguía en los pendientes aunque la
     // organización ya hubiera subido el reemplazo.
@@ -116,11 +134,17 @@ export class OrganizationSummaryService {
       const status = effectiveStatus(row.status as DocumentStatus, row.expiresAt, now);
       if (status === DocumentStatus.Rejected) {
         documentsRejected += 1;
+        rejectedSince = later(rejectedSince, row.reviewedAt ?? row.updatedAt);
       } else if (
         status === DocumentStatus.Approved &&
-        classifyDue(row.expiresAt, now, expiringSoonWindowDays) === 'upcoming'
+        classifyDue(row.expiresAt, now, expiringSoonWindowDays) === 'upcoming' &&
+        row.expiresAt
       ) {
         documentsExpiringSoon += 1;
+        expiringSince = later(
+          expiringSince,
+          new Date(row.expiresAt.getTime() - expiringSoonWindowDays * 86_400_000),
+        );
       }
     }
 
@@ -143,6 +167,9 @@ export class OrganizationSummaryService {
       donationsReceivedTotal,
       formalizationLevel: verification.level,
       formalizationPercent: formalizationPercent(formalizationState),
+      adoptionRequestsNewSince: adoptionRequestsNewAgg._max.createdAt?.toISOString() ?? null,
+      documentsExpiringSoonSince: expiringSince?.toISOString() ?? null,
+      documentsRejectedSince: rejectedSince?.toISOString() ?? null,
     };
   }
 }

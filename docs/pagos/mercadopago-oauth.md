@@ -60,23 +60,34 @@
 
 - Si el refugio no tiene cuenta conectada y activa, `POST /donations` responde 409 y el portal oculta el pago
   en línea. No hay respaldo con la cuenta de la plataforma.
-- La preferencia de Checkout Pro se crea con el token **del refugio** e incluye:
+- El pedido de Checkout Pro (`POST /v1/orders`, API de Orders) se crea con el token **del refugio** e incluye:
   - `external_reference` = `af-<hash>`;
-  - `notification_url` = `https://<api>/donations/webhook/mercadopago/<orgId>`;
-  - `back_urls` a `/donaciones/resultado`;
-  - vencimiento a 72 h.
+  - `total_amount` y un solo ítem, en pesos con decimales (`"50000.00"`);
+  - `config.online.success_url`, `pending_url` y `failure_url` hacia `/donaciones/resultado`, con
+    `auto_return: approved`;
+  - `expiration_time` de 3 días (`P3D`);
+  - el correo del donante solo si lo dio. La respuesta trae `checkout_url`, adonde se redirige.
+- Orders no tiene una URL de notificación por pedido: avisa a la única URL de la aplicación (sección 7).
 - La web solo redirige a hosts de checkout de Mercado Pago (`isMercadoPagoCheckoutUrl`).
-- **Webhook** (`POST /donations/webhook/mercadopago/:orgId`):
-  1. Valida `x-signature` con HMAC-SHA256 sobre `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`. Si
-     falla, responde 403.
-  2. Vuelve a consultar `GET /v1/payments/:id` con el token **de esa organización**. Exige que
-     `collector_id` sea la cuenta conectada y que `live_mode` coincida con `MERCADOPAGO_TEST`: un pago de
-     prueba nunca aprueba una donación real.
-  3. Guarda el pago en `mercadopago_payments` (sección 5).
-  4. Compara monto, moneda, organización y colector con la donación. Si algo no cuadra, audita
-     `donation.payment_mismatch` y no aprueba.
-  5. Aprueba la donación una sola vez y emite un solo recibo. La idempotencia es por organización y
-     `mercadopago:<id>:<status>`.
+- **Webhook de Orders** (`POST /donations/webhook/mercadopago`, tópico `order`):
+  1. Busca la donación por el `external_reference` que trae el aviso. Ese valor solo sirve para decidir con
+     qué organización se consulta; no se confía en él para nada más.
+  2. Valida `x-signature` con la clave de la aplicación de Orders
+     (`MERCADOPAGO_ORDERS_WEBHOOK_SECRET`), con HMAC-SHA256 sobre
+     `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`. Si falla, responde 403.
+  3. Vuelve a consultar `GET /v1/orders/:id` con el token **de esa organización**: un pedido de otra cuenta
+     no se puede leer (404) y se rechaza. Si el pedido informa `live_mode`, debe coincidir con
+     `MERCADOPAGO_TEST`.
+  4. Solo `processed` aprueba, y solo si lo pagado (`total_paid_amount`) es el total. `refunded`,
+     `charged_back` y `canceled` anulan; `failed` rechaza; todo lo demás queda pendiente.
+  5. Guarda el pago en `mercadopago_payments` (sección 5) con el id del pago del pedido (`PAY…`). La API de
+     Orders no entrega comisión ni neto recibido: el desglose de la donación queda con el estimado de la
+     creación, no con el real.
+  6. Compara monto, moneda, organización y colector con la donación; aprueba una sola vez y emite un solo
+     recibo. La idempotencia es `mercadopago:<id del pedido>:<status>`.
+- **Webhook de preferencias** (`POST /donations/webhook/mercadopago/:orgId`): se conserva para los pagos
+  creados antes de pasar a Orders. Valida con la clave compartida y consulta `GET /v1/payments/:id` con el
+  token de la organización, exigiendo `collector_id` y `live_mode`. Mismo cierre que arriba.
 - **Reembolsos y contracargos** (`refunded`, `charged_back`, `cancelled`): quedan una vez en
   `donation_reversals` (append-only, con RLS) y se auditan como `donation.reversed_at_gateway`. La donación
   aprobada y su recibo no se reescriben, porque son el registro de lo que pasó. Pero:
@@ -118,43 +129,55 @@ la conciliación tiene que ver.
 
 Nunca van en el repositorio. Se cargan como secretos del despliegue.
 
-| Variable                                     | Obligatoria             | Para qué                                                             |
-| -------------------------------------------- | ----------------------- | -------------------------------------------------------------------- |
-| `PAYMENT_DRIVER=mercadopago`                 | sí                      | Activa el adaptador                                                  |
-| `MERCADOPAGO_CLIENT_ID`                      | sí 👤                   | App ID de la aplicación de AdoptaFácil en Mercado Pago               |
-| `MERCADOPAGO_CLIENT_SECRET`                  | sí 👤                   | Client secret de esa aplicación                                      |
-| `MERCADOPAGO_WEBHOOK_SECRET`                 | sí 👤                   | "Clave secreta" de Webhooks de la aplicación (firma `x-signature`)   |
-| `SIGNATURE_ENCRYPTION_KEY`                   | sí (ya existe)          | De ella se derivan la llave del `state` y la del cifrado de tokens   |
-| `API_PUBLIC_BASE_URL`                        | sí 👤                   | URL pública de la API, por ejemplo `https://api.adoptafacil.co`      |
-| `WEB_BASE_URL`                               | sí (ya existe)          | Destino de `back_urls` y del regreso del OAuth                       |
-| `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`          | para cobrar planes 👤   | Access token de producción de la cuenta de **AdoptaFácil**           |
-| `MERCADOPAGO_OAUTH_REDIRECT_URI`             | no                      | Por defecto `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`        |
-| `MERCADOPAGO_OAUTH_PKCE`                     | no (recomendado `true`) | Activa PKCE; debe coincidir con la app                               |
-| `MERCADOPAGO_TEST`                           | no                      | `true` = sandbox: pide `test_token` y usa `sandbox_init_point`       |
-| `MERCADOPAGO_STATEMENT_DESCRIPTOR`           | no                      | Texto en el extracto (hasta 22 caracteres)                           |
-| `MERCADOPAGO_BASE_URL` / `_AUTHORIZE_URL`    | no                      | Solo para pruebas; en producción solo se aceptan los de Mercado Pago |
-| `MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS`      | no                      | 30 por defecto                                                       |
-| `MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS` | no                      | Una vez al día por defecto                                           |
+| Variable                                     | Obligatoria             | Para qué                                                                                                                                              |
+| -------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PAYMENT_DRIVER=mercadopago`                 | sí                      | Activa el adaptador                                                                                                                                   |
+| `MERCADOPAGO_CLIENT_ID`                      | sí 👤                   | App ID de la aplicación de AdoptaFácil en Mercado Pago                                                                                                |
+| `MERCADOPAGO_CLIENT_SECRET`                  | sí 👤                   | Client secret de esa aplicación                                                                                                                       |
+| `MERCADOPAGO_WEBHOOK_SECRET`                 | sí 👤                   | "Clave secreta" de Webhooks de la aplicación de **Suscripciones** (planes)                                                                            |
+| `MERCADOPAGO_ORDERS_WEBHOOK_SECRET`          | recomendada 👤          | "Clave secreta" de Webhooks de la aplicación de **Checkout Pro (Orders)**; si falta se usa `MERCADOPAGO_WEBHOOK_SECRET`                               |
+| `SIGNATURE_ENCRYPTION_KEY`                   | sí (ya existe)          | De ella se derivan la llave del `state` y la del cifrado de tokens                                                                                    |
+| `API_PUBLIC_BASE_URL`                        | sí 👤                   | URL pública de la API, por ejemplo `https://api.adoptafacil.co`                                                                                       |
+| `WEB_BASE_URL`                               | sí (ya existe)          | Destino de `back_urls` y del regreso del OAuth                                                                                                        |
+| `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`          | para cobrar planes 👤   | Access token de producción de la cuenta de **AdoptaFácil**                                                                                            |
+| `MERCADOPAGO_OAUTH_REDIRECT_URI`             | no                      | Por defecto `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`                                                                                         |
+| `MERCADOPAGO_OAUTH_PKCE`                     | no (recomendado `true`) | Activa PKCE; debe coincidir con la app                                                                                                                |
+| `MERCADOPAGO_TEST`                           | no                      | `true` = sandbox: pide `test_token` (las suscripciones usan `sandbox_init_point`)                                                                     |
+| `MERCADOPAGO_OAUTH_TEST_TOKEN`               | no                      | Sin definir, sigue a `MERCADOPAGO_TEST`. Con `false` el intercambio no envía `test_token` (el modo sandbox y su validación de `live_mode` no cambian) |
+| `MERCADOPAGO_STATEMENT_DESCRIPTOR`           | no                      | Hoy sin efecto en donaciones: la API de Orders no lo recibe en el pedido                                                                              |
+| `MERCADOPAGO_BASE_URL` / `_AUTHORIZE_URL`    | no                      | Solo para pruebas; en producción solo se aceptan los de Mercado Pago                                                                                  |
+| `MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS`      | no                      | 30 por defecto                                                                                                                                        |
+| `MERCADOPAGO_TOKEN_REFRESH_SCAN_INTERVAL_MS` | no                      | Una vez al día por defecto                                                                                                                            |
 
 Web: `VITE_PAYMENT_PROVIDER=mercadopago` (es el valor por defecto; `off` apaga el botón de donar).
 
 ## 7. 👤 Pasos en el panel de desarrolladores de Mercado Pago
 
 1. En [Tus integraciones](https://www.mercadopago.com.co/developers/panel/app), con la cuenta de AdoptaFácil,
-   crea una aplicación de tipo "Pagos online" con **Checkout Pro** y **Suscripciones**. Marca que es una
-   plataforma o marketplace que cobra en nombre de terceros, para que se habilite OAuth.
-2. En **Redirect URL** (OAuth) pon exactamente `https://<api>/org/mercadopago/callback`, con el mismo valor
-   que `MERCADOPAGO_OAUTH_REDIRECT_URI`.
+   crea **dos aplicaciones**. El panel solo deja elegir una solución por aplicación:
+   - **Checkout Pro** con **API de Orders**. Es la aplicación de OAuth: marca que es una plataforma o
+     marketplace que cobra en nombre de terceros, para que se habilite. De ella salen `MERCADOPAGO_CLIENT_ID`,
+     `MERCADOPAGO_CLIENT_SECRET` y `MERCADOPAGO_ORDERS_WEBHOOK_SECRET`.
+   - **Suscripciones**. Cobra los planes de AdoptaFácil. De ella salen `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` y
+     `MERCADOPAGO_WEBHOOK_SECRET`.
+2. En la aplicación de **Checkout Pro**, en **Redirect URL** (OAuth) pon exactamente
+   `https://<api>/org/mercadopago/callback`, con el mismo valor que `MERCADOPAGO_OAUTH_REDIRECT_URI`.
 3. Activa **PKCE** si vas a usar `MERCADOPAGO_OAUTH_PKCE=true`.
 4. En **Webhooks** → Modo productivo (y de prueba):
-   - URL: `https://<api>/billing/webhooks/mercadopago`;
-   - eventos: **Planes y suscripciones** (`subscription_preapproval`, `subscription_authorized_payment`);
-   - copia la **clave secreta** a `MERCADOPAGO_WEBHOOK_SECRET`.
+   - aplicación de **Checkout Pro (Orders)**: URL `https://<api>/donations/webhook/mercadopago`, evento
+     **Order (Mercado Pago)** (tópico `order`). Orders no admite una URL por pedido: esta es la única, y la
+     organización se identifica por el `external_reference` del pedido. Copia su **clave secreta** a
+     `MERCADOPAGO_ORDERS_WEBHOOK_SECRET`;
+   - aplicación de **Suscripciones**: URL `https://<api>/billing/webhooks/mercadopago`, eventos
+     **Planes y suscripciones** (`subscription_preapproval`, `subscription_authorized_payment`). Copia su
+     **clave secreta** a `MERCADOPAGO_WEBHOOK_SECRET`.
 
-   Las donaciones no necesitan esta configuración, porque cada preferencia lleva su propia `notification_url`.
+   Los pagos creados antes de pasar a Orders (preferencias) siguen avisando a su propia URL
+   `/donations/webhook/mercadopago/<organizationId>`, que se conserva hasta que venzan (72 horas).
 
-5. Copia el App ID y el Client secret (en Credenciales de producción) a `MERCADOPAGO_CLIENT_ID` y
-   `MERCADOPAGO_CLIENT_SECRET`. Copia el Access token de producción a `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`.
+5. Copia el App ID y el Client secret de la aplicación de Checkout Pro (Credenciales de producción) a
+   `MERCADOPAGO_CLIENT_ID` y `MERCADOPAGO_CLIENT_SECRET`. Copia el Access token de producción de la aplicación
+   de Suscripciones a `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`.
 6. **Sandbox antes de producción:**
    - crea usuarios de prueba (un vendedor por refugio de prueba y un comprador);
    - pon `MERCADOPAGO_TEST=true`;
@@ -164,6 +187,60 @@ Web: `VITE_PAYMENT_PROVIDER=mercadopago` (es el valor por defecto; `off` apaga e
    Si el entorno tiene una política de red, permite `api.mercadopago.com` y `auth.mercadopago.com.co`.
 
 7. Entrega las credenciales por el gestor de secretos del despliegue, nunca en el chat ni en el repositorio.
+
+## 7b. "La aplicación no está preparada para conectarse a Mercado Pago"
+
+Es la página que muestra Mercado Pago cuando la URL de autorización no cuadra con la aplicación. Al arrancar,
+la API registra la línea `Mercado Pago OAuth: client_id=… redirect_uri=… pkce=… sandbox=…` (sin secretos);
+compárala carácter por carácter con el panel. Revisa en este orden:
+
+1. **`redirect_uri` idéntico.** Tiene que estar en "URLs de redireccionamiento" de la **misma** aplicación cuyo
+   App ID es `MERCADOPAGO_CLIENT_ID`: mismo esquema, host, puerto, ruta y sin `/` final de más. Si la API no
+   tiene `API_PUBLIC_BASE_URL` ni `MERCADOPAGO_OAUTH_REDIRECT_URI`, el valor por defecto es
+   `http://localhost:3000/org/mercadopago/callback`, que no está registrado y casi seguro no se puede registrar.
+2. **`client_id` correcto.** Es el App ID (número) de la aplicación de **Checkout Pro**, no el de la de
+   Suscripciones ni el de un usuario de prueba, y no el Access token.
+3. **La aplicación admite OAuth.** Al crearla se marcó que es una plataforma o marketplace que cobra en nombre de
+   terceros. Si no, hay que crear otra aplicación con esa opción.
+4. **PKCE igual en los dos lados.** Si la aplicación tiene PKCE activo, `MERCADOPAGO_OAUTH_PKCE=true`.
+5. Si todo lo anterior cuadra, prueba con `MERCADOPAGO_AUTHORIZE_URL=https://auth.mercadopago.com/authorization`
+   (el host sin país que hoy muestra la documentación).
+
+Cada vez que se toca "Conectar Mercado Pago", la API también escribe en el log cuatro líneas
+`Mercado Pago OAuth authorize: …` con el `redirect_uri` crudo, el `redirect_uri` codificado tal como se envía,
+si está codificado una sola vez y si termina en `/`, y la URL completa con el `state` oculto. Al arrancar
+muestra además de qué variable sale el `client_id` y a qué app pertenece `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`
+(solo el App ID público, nunca el token). Si Mercado Pago devuelve `error` o `error_description` al callback, o
+el cambio de código por token falla, también quedan en el log, recortados y sin el código ni los secretos. El
+valor que hay que registrar en el panel es exactamente el de `redirect_uri (raw)`.
+
+**Probar en local:** Mercado Pago tiene que poder volver al navegador por https. Con el túnel de la web
+(`vite` ya reenvía `/api/*` a la API), registra en la aplicación `https://<túnel>/api/org/mercadopago/callback`
+y pon ese mismo valor en `MERCADOPAGO_OAUTH_REDIRECT_URI`. En la web pon `VITE_API_URL=/api` y abre la app por la
+URL del túnel, no por `localhost`. La cookie `af_mp_oauth` queda en el mismo dominio
+del túnel, así que el callback la recibe. Si el túnel cambia de dominio, hay que actualizar las dos cosas. Inicia
+sesión en Mercado Pago con el **vendedor de prueba** antes de tocar "Conectar" y deja `MERCADOPAGO_TEST=true`.
+
+## 7c. Diagnóstico y prueba de las suscripciones del plan (sandbox)
+
+`pnpm mp:doctor` lee tu `.env`, consulta la API real de Mercado Pago (solo lectura) y dice qué cambiar. No
+imprime secretos ni tokens: puedes pegar la salida completa en el chat. Comprueba que las variables existan, que
+`MERCADOPAGO_CLIENT_ID` y `MERCADOPAGO_CLIENT_SECRET` sean válidos, que el token de planes sea de la cuenta correcta
+(país, usuario de prueba o real, y que no sea la misma app de Checkout Pro) y muestra la `redirect_uri` y las dos
+URLs de webhook que hay que registrar. Con `pnpm mp:doctor --crear-suscripcion` (solo con `MERCADOPAGO_TEST=true`)
+crea una suscripción pendiente de prueba y muestra el motivo exacto si Mercado Pago la rechaza.
+
+Para probar el plan en sandbox:
+
+1. `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` es el Access token del **vendedor de prueba** (no el de producción).
+2. `MERCADOPAGO_TEST_PAYER_EMAIL` es el correo del **comprador de prueba**. En sandbox el pagador debe ser ese
+   usuario; solo se respeta con `MERCADOPAGO_TEST=true` y la API se niega a arrancar en producción si está definida.
+3. `WEB_BASE_URL` es la URL https del túnel (la `back_url` de la suscripción debe ser pública y https).
+4. `PLAN_ENFORCEMENT=true` y `VITE_PAYMENT_PROVIDER=mercadopago`; sin eso no aparece el botón "Pagar con Mercado Pago".
+5. Si Mercado Pago rechaza la suscripción, el log de la API trae `Plan checkout for org …: Mercado Pago preapproval
+create failed (400: <motivo>)` y la persona ve "No pudimos abrir el pago en Mercado Pago".
+6. Aprueba el pago con el comprador de prueba; el primer cobro aprobado llega por el webhook de Suscripciones y es
+   el que activa el plan.
 
 ## 8. Pendiente legal y contable
 

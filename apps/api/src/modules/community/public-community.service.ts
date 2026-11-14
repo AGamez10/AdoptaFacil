@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
   PostType,
+  PublicCommunityLeader,
   PublicCommunityPost,
   PublicCommunityPostsPage,
 } from '@adoptafacil/contracts';
@@ -10,6 +11,8 @@ import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port'
 
 const MAX_PUBLIC_PAGE = 24;
 const DEFAULT_PUBLIC_PAGE = 6;
+const MAX_LEADERS = 10;
+const DEFAULT_LEADERS = 5;
 
 /** Row emitted by `public_community_post_json` (already minimized in SQL). */
 interface RawPublicPost {
@@ -77,6 +80,27 @@ export class PublicCommunityService {
       limit: take,
       offset: skip,
     };
+  }
+
+  /** Escalafón público: quienes más publican y reciben respuesta, solo con
+   *  lo que ya es público (ver `public_community_leaders`). */
+  async leaders(limit: number): Promise<PublicCommunityLeader[]> {
+    const take =
+      !limit || Number.isNaN(limit)
+        ? DEFAULT_LEADERS
+        : Math.min(Math.max(Math.trunc(limit), 1), MAX_LEADERS);
+    const rows = await this.prisma.$queryRaw<Array<{ data: PublicCommunityLeader[] | null }>>(
+      Prisma.sql`SELECT public_community_leaders(${take}::int) AS data`,
+    );
+    const items = rows[0]?.data ?? [];
+    return items.map((r) => ({
+      displayName: r.displayName,
+      isOrganization: Boolean(r.isOrganization),
+      publicPosts: Number(r.publicPosts ?? 0),
+      likesReceived: Number(r.likesReceived ?? 0),
+      commentsReceived: Number(r.commentsReceived ?? 0),
+      points: Number(r.points ?? 0),
+    }));
   }
 
   async get(id: string): Promise<PublicCommunityPost | null> {

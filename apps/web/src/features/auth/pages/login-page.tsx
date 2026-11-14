@@ -1,13 +1,13 @@
 import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
-import { Link, useLocation, useNavigate, type Location } from 'react-router-dom';
+import { Link, useLocation, useSearchParams, type Location } from 'react-router-dom';
 import { Button } from '@adoptafacil/ui';
-import { toApiError, useApiClient } from '../../../shell/api';
-import { useSession } from '../../../shell/auth';
-import { landingAfterSignIn } from '../../org/lib/portal-readiness';
+import { toApiError } from '../../../shell/api';
+import { accessPathWithReturn, safeReturnTo, useSession } from '../../../shell/auth';
 import { AuthLayout } from '../components/auth-layout';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
 import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
+import { useAfterSignIn } from '../lib/use-after-sign-in';
 import { collectErrors, loginErrorMessage, validateEmail } from '../validation';
 
 interface FromState {
@@ -22,21 +22,27 @@ interface FromState {
 export function LoginPage() {
   const { signIn, signInWithGoogle } = useSession();
   const googleAvailable = useGoogleSignInAvailable();
-  const navigate = useNavigate();
   const location = useLocation();
   // Return to the guarded origin PRESERVING its query string, so a deep link with
   // params (e.g. /donaciones?organizationId=…&organizationName=… — T-051) comes back
-  // with its context intact. Same `state.from` mechanism (RequireAuth), just no longer
-  // dropping `search`.
+  // with its context intact, and its `state` (the donation, the volunteering day
+  // or the offer already chosen).
   const origin = (location.state as FromState | null)?.from;
   const from = origin ? `${origin.pathname}${origin.search}` : null;
-  const client = useApiClient();
-  // Sin una ruta pedida, quien gestiona una organización que aún no puede
-  // publicar su portal entra primero a "Mi organización" a completarlo.
-  const destination = useCallback(
-    async () => from ?? (await landingAfterSignIn(client)),
-    [from, client],
-  );
+  // Intención explícita de un enlace público (?returnTo=), validada contra
+  // open redirect. Tiene prioridad sobre state.from si llegan ambas.
+  const [search] = useSearchParams();
+  const target = safeReturnTo(search.get('returnTo')) ?? from;
+  // Sin ruta en la URL, la intención guardada en esta pestaña (p. ej. tras
+  // recargar o venir de "Crear cuenta"). Sin ninguna, el inicio de su cuenta.
+  const {
+    finish,
+    intentPath,
+    intentLabel: intent,
+  } = useAfterSignIn({
+    target,
+    targetState: target === from ? origin?.state : undefined,
+  });
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,7 +69,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await signIn({ email, password });
-      navigate(await destination(), { replace: true });
+      await finish();
     } catch (error) {
       setFormError(loginErrorMessage(toApiError(error).status));
       setSubmitting(false);
@@ -79,14 +85,14 @@ export function LoginPage() {
       setFormError(null);
       setSubmitting(true);
       try {
-        await signInWithGoogle(idToken);
-        navigate(await destination(), { replace: true });
+        const result = await signInWithGoogle(idToken);
+        await finish({ isNewAccount: result?.isNewAccount === true });
       } catch {
         setFormError('No pudimos iniciar sesión con Google. Inténtalo de nuevo.');
         setSubmitting(false);
       }
     },
-    [signInWithGoogle, navigate, destination],
+    [signInWithGoogle, finish],
   );
 
   return (
@@ -97,7 +103,10 @@ export function LoginPage() {
         <>
           <p>
             ¿No tienes cuenta?{' '}
-            <Link to="/register" className="font-medium text-primary hover:underline">
+            <Link
+              to={accessPathWithReturn('/register', intentPath)}
+              className="font-medium text-primary hover:underline"
+            >
               Regístrate
             </Link>
           </p>
@@ -110,6 +119,29 @@ export function LoginPage() {
       }
     >
       {formError && <FormAlert>{formError}</FormAlert>}
+
+      {intent && (
+        <div
+          className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm"
+          data-testid="login-intent"
+        >
+          <p className="font-medium text-foreground">
+            Para {intent}, crea tu cuenta o entra. Es rápido y, después, volverás directo a esta
+            acción con lo que ya elegiste.
+          </p>
+        </div>
+      )}
+
+      {googleAvailable && (
+        <>
+          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
+          <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            o entra con tu correo
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
 
       <Field
         ref={emailRef}
@@ -145,16 +177,6 @@ export function LoginPage() {
         {submitting ? 'Ingresando…' : 'Iniciar sesión'}
       </Button>
 
-      {googleAvailable && (
-        <>
-          <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            o
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
-        </>
-      )}
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Al usar AdoptaFácil aplican los{' '}
         <Link to="/legal/terminos" className="underline underline-offset-2">

@@ -16,6 +16,11 @@ import {
   type AdoptionContractStatus,
 } from '@adoptafacil/contracts';
 import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
+import {
+  SIGNATURE_LINE_OVERLAP,
+  embedSignatureForPdf,
+  fitSignature,
+} from '../../core/legal/signature-render';
 
 /**
  * PDF del Contrato de Adopción. El TEXTO legal no vive aquí: sale de
@@ -289,24 +294,10 @@ class Cursor {
   }
 }
 
-/** Incrusta una firma PNG o JPEG; `null` si los bytes no son una imagen válida
- *  (una firma rota nunca impide generar el documento). */
+/** Incrusta una firma PNG o JPEG recortada a su trazo; `null` si los bytes no
+ *  son una imagen válida (una firma rota nunca impide generar el documento). */
 async function embedSignature(pdf: PDFDocumentType, raw: Buffer | null): Promise<PDFImage | null> {
-  if (!raw || raw.length < 4) return null;
-  // Copia propia: el lector JPEG de pdf-lib ignora el `byteOffset` de un Buffer
-  // que es vista de otro (lo normal tras descifrar la firma).
-  const bytes = Uint8Array.from(raw);
-  try {
-    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-      return await pdf.embedPng(bytes);
-    }
-    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-      return await pdf.embedJpg(bytes);
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  return embedSignatureForPdf(pdf, raw);
 }
 
 export interface RenderAdoptionContractPdfInput {
@@ -382,9 +373,15 @@ export async function renderAdoptionContractPdf(
       const x = MARGIN + j * (blockWidth + columnGap);
       const image = images.get(signer.id) ?? null;
       if (image && signer.signedAt) {
-        const drawWidth = Math.min(140, image.width || 140);
-        const drawHeight = Math.min(42, (drawWidth / (image.width || 1)) * (image.height || 42));
-        page.drawImage(image, { x, y: topY - 44, width: drawWidth, height: drawHeight });
+        // Proporción intacta (antes se aplastaba al topar la altura) y apoyada
+        // sobre la línea de firma, que la cruza apenas, como una firma a mano.
+        const size = fitSignature(image.width, image.height, 150, 42);
+        page.drawImage(image, {
+          x: x + 6,
+          y: topY - 48 - SIGNATURE_LINE_OVERLAP / 2,
+          width: size.width,
+          height: size.height,
+        });
       }
       page.drawLine({
         start: { x, y: topY - 48 },

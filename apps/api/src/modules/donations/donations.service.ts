@@ -37,6 +37,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PAYMENT_PORT } from '../../core/payments/payment.port';
 import {
   NOTIFICATION_PORT,
@@ -50,7 +51,10 @@ import { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { buildDonationAccessLink } from './donation-access-link';
 import { MercadoPagoConnectionsService } from '../payments/mercadopago-connections.service';
-import { mercadoPagoNotificationType } from '../../core/payments/mercadopago-payment.adapter';
+import {
+  MERCADOPAGO_REFERENCE_PREFIX,
+  mercadoPagoNotificationType,
+} from '../../core/payments/mercadopago-payment.adapter';
 import { isFormalState } from '../reports/report-legal-effect';
 
 /**
@@ -147,6 +151,7 @@ export class DonationsService {
     config: ConfigService<Env, true>,
     private readonly legal: LegalService,
     @Optional() private readonly mercadopagoConnections?: MercadoPagoConnectionsService,
+    @Optional() private readonly inbox?: InboxService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.certificatesEnabled =
@@ -442,7 +447,8 @@ export class DonationsService {
       throw new NotFoundException();
     }
     const type = mercadoPagoNotificationType(payload, context.query);
-    if (type !== 'payment') {
+    // `payment`: preferences created before the move to Orders; `order`: Orders.
+    if (type !== 'payment' && type !== 'order') {
       return noop;
     }
     const mercadopagoCollector = await this.resolveMercadoPagoCollector(organizationId);
@@ -471,6 +477,42 @@ export class DonationsService {
     }
     await this.applyMercadoPagoSettledBreakdown(organizationId, event);
     return this.settle(event);
+  }
+
+  /**
+   * Orders notification (PUBLIC, one URL for the whole application). Orders has
+   * no per-order notification URL, so the organization is found through the
+   * `external_reference` the notification names. That value is only a HINT of
+   * whose token to read the order back with: nothing is settled unless the
+   * signature verifies and the order is readable with THAT organization's own
+   * token (a forged reference fails the read-back), and the amount and
+   * receiver still have to match the donation.
+   */
+  async applyMercadoPagoOrderWebhook(
+    payload: unknown,
+    signature: string,
+    context: WebhookVerificationContext = {},
+  ): Promise<WebhookOutcome> {
+    const noop: WebhookOutcome = { applied: false, status: null, donationId: null };
+    if (!this.mercadopago) {
+      throw new NotFoundException();
+    }
+    if (mercadoPagoNotificationType(payload, context.query) !== 'order') {
+      return noop;
+    }
+    const reference = (payload as { data?: { external_reference?: unknown } } | null)?.data
+      ?.external_reference;
+    if (typeof reference !== 'string' || !reference.startsWith(MERCADOPAGO_REFERENCE_PREFIX)) {
+      return noop;
+    }
+    const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
+      SELECT * FROM donation_by_collection_id(${reference})
+    `);
+    const donation = rows[0];
+    if (!donation) {
+      return noop; // not a donation of ours
+    }
+    return this.applyMercadoPagoWebhook(donation.organization_id, payload, signature, context);
   }
 
   /**
@@ -777,6 +819,12 @@ export class DonationsService {
           `${this.webBaseUrl.replace(/\/+$/, '')}/mis-donaciones`,
         );
       }
+      await this.notifyApprovedDonation(
+        donation.id,
+        donation.organization_id,
+        donation.donor_user_id,
+        donation.intended_amount,
+      );
     }
 
     return { applied: true, status, donationId: donation.id };
@@ -875,6 +923,40 @@ export class DonationsService {
       this.logger.warn(
         `No se pudo enviar el agradecimiento de la donación: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /** Avisos en la plataforma de una donación aprobada (una sola vez por donación). */
+  private async notifyApprovedDonation(
+    donationId: string,
+    organizationId: string,
+    donorUserId: string | null | undefined,
+    amount: number,
+  ): Promise<void> {
+    if (!this.inbox) return;
+    const money = new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(amount);
+    await this.inbox.toOrgStaff(organizationId, {
+      kind: 'donations.received',
+      tone: 'success',
+      title: `Recibieron una donación de ${money}`,
+      body: 'El pago fue confirmado. Mira el detalle en Donaciones recibidas.',
+      href: `/donaciones-recibidas?foco=${donationId}`,
+      dedupeKey: `donation:${donationId}`,
+    });
+    if (donorUserId) {
+      const organizationName = (await this.organizationName(organizationId)) ?? 'la organización';
+      await this.inbox.toUser(donorUserId, {
+        kind: 'donations.thanks',
+        tone: 'kudos',
+        title: `¡Gracias por tu donación de ${money} a ${organizationName}!`,
+        body: 'Tu pago fue confirmado. El recibo está en "Mis donaciones".',
+        href: '/mis-donaciones',
+        dedupeKey: `donation_thanks:${donationId}`,
+      });
     }
   }
 

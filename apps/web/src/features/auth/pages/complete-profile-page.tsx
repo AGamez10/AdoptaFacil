@@ -98,7 +98,14 @@ export function CompleteProfilePage() {
                 type="button"
                 className="w-full"
                 onClick={() =>
-                  navigate(state?.from ? `${state.from.pathname}${state.from.search}` : '/inicio')
+                  // Vuelve a la acción con lo que ya había elegido (la donación,
+                  // la jornada o la oferta viajan en el `state` de esa ruta).
+                  state?.from
+                    ? navigate(`${state.from.pathname}${state.from.search}`, {
+                        replace: true,
+                        state: state.from.state,
+                      })
+                    : navigate('/inicio')
                 }
               >
                 {state?.from ? 'Volver a intentarlo' : 'Ir al inicio'}

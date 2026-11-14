@@ -141,7 +141,11 @@ export class MockAuthApi implements AuthApi {
     const email = normalizeEmail(rawEmail);
     const existing = this.accounts.get(email);
     if (existing) {
-      return Promise.resolve({ user: existing.user, tokens: this.issueTokens() });
+      return Promise.resolve({
+        user: existing.user,
+        tokens: this.issueTokens(),
+        isNewAccount: false,
+      });
     }
     const user: AuthenticatedUser = {
       id: this.nextId('usr'),
@@ -151,7 +155,7 @@ export class MockAuthApi implements AuthApi {
       organizationId: this.nextId('org'),
     };
     this.accounts.set(email, { password: this.nextId('google-nopwd'), user });
-    return Promise.resolve({ user, tokens: this.issueTokens() });
+    return Promise.resolve({ user, tokens: this.issueTokens(), isNewAccount: true });
   }
 
   completeProfile(request: CompleteProfileRequest): Promise<AuthenticatedUser> {

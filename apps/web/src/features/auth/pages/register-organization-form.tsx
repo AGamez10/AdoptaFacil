@@ -36,9 +36,14 @@ type OrgErrors = Partial<
 export interface RegisterOrganizationFormProps {
   /** Plantilla elegida en la vista de ejemplo, si llegó con una. */
   template?: PortalTemplateId | null;
+  /** Adónde volver tras crear la cuenta, si llegó con una intención. */
+  returnTo?: string | null;
 }
 
-export function RegisterOrganizationForm({ template = null }: RegisterOrganizationFormProps) {
+export function RegisterOrganizationForm({
+  template = null,
+  returnTo = null,
+}: RegisterOrganizationFormProps) {
   const { register } = useSession();
   const client = useApiClient();
   const navigate = useNavigate();
@@ -134,7 +139,7 @@ export function RegisterOrganizationForm({ template = null }: RegisterOrganizati
     }
     // Primer paso de una organización nueva: completar su perfil para que el
     // portal pueda mostrar lo que registre.
-    navigate('/organizacion', { replace: true });
+    navigate(returnTo ?? '/organizacion', { replace: true });
   };
 
   return (

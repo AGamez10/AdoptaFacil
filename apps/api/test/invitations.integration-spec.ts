@@ -293,6 +293,57 @@ describe('Member invitations (R2-3, AF-017)', () => {
     expect(JSON.stringify(audit)).not.toContain(inv.token);
   });
 
+  const acceptWithGoogle = (token: string, idToken: string, extra: Record<string, unknown> = {}) =>
+    request(server)
+      .post('/auth/invitations/accept/google')
+      .send({ token, idToken, ...LEGAL_ORG, ...extra });
+
+  it('accepting with Google creates the same account when Google vouches for the invited email', async () => {
+    const inv = await invited(Role.Volunteer);
+    const res = await acceptWithGoogle(inv.token, `fake:${inv.email}:Persona Google`).expect(201);
+    expect(res.body.isNewAccount).toBe(true);
+    expect(String(res.headers['set-cookie'])).toMatch(/af_refresh=.+HttpOnly/i);
+    expect(res.body.user).toMatchObject({
+      email: inv.email,
+      displayName: 'Persona Google',
+      accountType: 'organization',
+      organizationId: owner.orgId,
+    });
+    const credential = await admin.authCredential.findUnique({ where: { email: inv.email } });
+    expect(credential?.authProvider).toBe('google');
+    // Afterwards the person simply signs in with Google into that account.
+    const again = await request(server)
+      .post('/auth/google')
+      .send({ idToken: `fake:${inv.email}:Persona Google` })
+      .expect(200);
+    expect(again.body.user.organizationId).toBe(owner.orgId);
+    // Single use, like the password path.
+    await acceptWithGoogle(inv.token, `fake:${inv.email}:Otra`).expect(400);
+  });
+
+  it('a Google account with another email cannot use the link (403), and nothing is created', async () => {
+    const inv = await invited();
+    const res = await acceptWithGoogle(inv.token, 'fake:alguien-mas@test.local:Intrusa').expect(
+      403,
+    );
+    expect(res.body.code).toBe('INVITATION_EMAIL_MISMATCH');
+    expect(await admin.authCredential.count({ where: { email: inv.email } })).toBe(0);
+    expect(await admin.authCredential.count({ where: { email: 'alguien-mas@test.local' } })).toBe(
+      0,
+    );
+    // The link still works for the right person.
+    await preview(inv.token).expect(200);
+  });
+
+  it('accepting with Google still requires the legal authorization (Ley 1581)', async () => {
+    const inv = await invited();
+    const res = await acceptWithGoogle(inv.token, `fake:${inv.email}:X`, {
+      legalAcceptances: undefined,
+    }).expect(400);
+    expect(res.body.code).toBe('LEGAL_ACCEPTANCE_REQUIRED');
+    expect(await admin.authCredential.count({ where: { email: inv.email } })).toBe(0);
+  });
+
   it('a new password must meet the policy (12 characters)', async () => {
     const inv = await invited();
     await accept(inv.token, { password: 'corta' }).expect(400);

@@ -32,6 +32,7 @@
     "db:deploy": "prisma migrate deploy",
     "smoke": "node scripts/smoke/smoke-by-role.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "mp:doctor": "node scripts/mp-doctor.mjs",
     "postinstall": "prisma generate",
     "prepare": "husky"
   },

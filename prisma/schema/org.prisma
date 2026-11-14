@@ -52,6 +52,12 @@ model Organization {
   sensitiveActionDecisions PlatformSensitiveActionDecision[]
   qrLink                   OrganizationQrLink?
   qrScanDays               OrganizationQrScanDay[]
+  // Café de AdoptaFácil (solo en la org del equipo de plataforma). See coffee.prisma.
+  coffeeProducts           CoffeeProduct[]
+  coffeeLots               CoffeeLot[]
+  coffeeOrders             CoffeeOrder[]
+  coffeeVisitDays          CoffeeVisitDay[]
+  coffeeDeliveries         CoffeeContributionDelivery[]
   mercadopagoConnection    OrganizationMercadoPagoConnection?
   mercadopagoPayments      MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.
@@ -60,6 +66,20 @@ model Organization {
   petProfiles              PetProfile[]
   resourceOpenOffers       ResourceOpenOffer[]
   emailUsage               OrganizationEmailUsage[]
+  // Campana de pendientes: qué avisos leyó cada persona. See notifications.prisma.
+  notificationReads        NotificationRead[]
+  userNotifications        UserNotification[]
+  // Documentación, custodia y guardería. See custody.prisma.
+  custodyResponsibles      CustodyResponsible[]
+  animalIntakes            AnimalIntake[]
+  custodyContractTemplates CustodyContractTemplate[]
+  custodyContracts         CustodyContract[]
+  custodyCharges           CustodyCharge[]
+  custodyChargeExtensions  CustodyChargeExtension[]
+  custodyPayments          CustodyPayment[]
+  custodyReleases          CustodyRelease[]
+  custodyDocuments         CustodyDocument[]
+  custodyEvents            CustodyEvent[]
 
   @@index([status])
   @@map("organizations")
@@ -260,6 +280,8 @@ model User {
   accountingSharesCreated   AccountingShare[]       @relation("AccountingShareCreatedBy")
   reportPoliciesUpdated     OrgReportPolicy[]       @relation("ReportPolicyUpdatedBy")
   mfaFactor                 AuthMfaFactor?
+  notificationReads         NotificationRead[]
+  userNotifications         UserNotification[]
 
   @@unique([organizationId, email])
   @@index([organizationId])

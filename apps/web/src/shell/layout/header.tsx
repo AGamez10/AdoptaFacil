@@ -38,11 +38,13 @@ export function Header() {
 
       {/* Brand on móvil/tablet (the sidebar carries it on escritorio) */}
       {/* En celulares angostos solo el ícono: con el nombre completo el
-          encabezado no cabía y toda la página se desplazaba de lado. */}
-      <span className="hidden min-[480px]:inline-flex lg:hidden">
+          encabezado no cabía y toda la página se desplazaba de lado. Por
+          debajo de 380 px ni el ícono cabe junto al indicador, la campana y
+          la cuenta; la marca sigue en el menú lateral. */}
+      <span className="hidden min-[560px]:inline-flex lg:hidden">
         <Brand to="/inicio" />
       </span>
-      <span className="inline-flex min-[480px]:hidden">
+      <span className="hidden min-[380px]:inline-flex min-[560px]:hidden">
         <Brand to="/inicio" withWordmark={false} />
       </span>
 

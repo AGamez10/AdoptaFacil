@@ -160,17 +160,37 @@ export const envSchema = z.object({
   // Secret signature of the application's webhooks ("Tus integraciones" →
   // Webhooks → Clave secreta). Verifies `x-signature` on every notification.
   MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Webhook secret of the Checkout Pro (Orders) application; falls back to the shared one. */
+  MERCADOPAGO_ORDERS_WEBHOOK_SECRET: z.string().min(1).optional(),
   // Exact redirect URI registered in the application. Optional: falls back to
   // `${API_PUBLIC_BASE_URL}/org/mercadopago/callback`.
   MERCADOPAGO_OAUTH_REDIRECT_URI: z.string().url().optional(),
   // PKCE (S256) on the OAuth flow. Turn on ONLY after enabling PKCE in the
   // application's settings in Mercado Pago (otherwise the exchange fails).
   MERCADOPAGO_OAUTH_PKCE: featureFlag(),
-  // Sandbox: ask for test tokens and open `sandbox_init_point`. OFF unless "true".
+  // Sandbox: ask for test tokens (subscriptions still open `sandbox_init_point`). OFF unless "true".
   MERCADOPAGO_TEST: featureFlag(),
+  // Whether the OAuth code exchange sends `test_token=true`. Unset: follows
+  // MERCADOPAGO_TEST (unchanged behavior). Set it to "false" to keep sandbox
+  // (test users only) but NOT send `test_token`: Mercado Pago support says the
+  // parameter belongs to the Checkout API Marketplace test flow, not Checkout Pro.
+  MERCADOPAGO_OAUTH_TEST_TOKEN: z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) =>
+      value === undefined || value === '' ? undefined : value === true || value === 'true',
+    ),
+  // Sandbox only: email of the Mercado Pago TEST BUYER. A plan subscription is
+  // created for this email instead of the logged-in user's, because in the
+  // sandbox the payer email must be the test buyer's. Ignored unless
+  // MERCADOPAGO_TEST=true and refused in production.
+  MERCADOPAGO_TEST_PAYER_EMAIL: z.string().email().optional(),
   // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
   // AdoptaFácil's plans (subscriptions); never used for a donation.
   MERCADOPAGO_PLATFORM_ACCESS_TOKEN: z.string().min(1).optional(),
+  // Café de AdoptaFácil: dominios que el equipo puede imprimir en el QR de una
+  // presentación (separados por coma). El dominio queda fijo al crearla.
+  COFFEE_QR_DOMAINS: z.string().default('adoptafacil.org'),
   // Optional statement descriptor shown on the donor's card statement.
   MERCADOPAGO_STATEMENT_DESCRIPTOR: z.string().min(1).max(22).optional(),
   // Token renewal: scan interval (default daily) and how many days before
@@ -417,6 +437,12 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     // The client secret, the OAuth codes and every org token go to these
     // hosts: in production they are pinned to Mercado Pago's own (the
     // overrides exist only for tests), so a typo can never ship them elsewhere.
+    if (env.MERCADOPAGO_TEST_PAYER_EMAIL) {
+      fail(
+        'MERCADOPAGO_TEST_PAYER_EMAIL',
+        'sandbox-only override of the plan payer email: remove it in production',
+      );
+    }
     if (!isMercadoPagoApiBase(env.MERCADOPAGO_BASE_URL)) {
       fail('MERCADOPAGO_BASE_URL', 'must be https://api.mercadopago.com in production');
     }

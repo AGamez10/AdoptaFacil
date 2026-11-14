@@ -89,6 +89,7 @@ import {
   getLegalDocument,
   type LegalAcceptanceItem,
   OrganizationType,
+  PostType,
   requiredLegalDocuments,
 } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
@@ -98,6 +99,10 @@ import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OrgProfileService } from '../src/modules/org/org-profile.service';
 import { AnimalsService } from '../src/modules/animals/animals.service';
+import { CommunityPostsService } from '../src/modules/community/community-posts.service';
+import { CommunityLikesService } from '../src/modules/community/community-likes.service';
+import { CommunityCommentsService } from '../src/modules/community/community-comments.service';
+import type { RequestUser } from '../src/core/auth/auth.types';
 import { computeContractHash } from '../src/modules/adoptions/adoption-contract-hash';
 import { runLocalPreflight } from '../src/config/local-preflight';
 import { simplePng } from './seed-assets';
@@ -627,6 +632,100 @@ interface Person {
   userId: string;
 }
 
+/**
+ * Comunidad: publicaciones PÚBLICAS (compartibles) de personas y
+ * organizaciones ficticias, con me gusta y comentarios, para ver el muro y el
+ * escalafón de la landing. Ninguna es de tipo campaña (esas avisan por correo
+ * a los donantes de la organización). Idempotente por (autora, título).
+ */
+const PERSON_POSTS: Array<{
+  person: number;
+  type: 'general' | 'event' | 'notice';
+  title: string;
+  body: string;
+}> = [
+  {
+    person: 0,
+    type: 'general',
+    title: 'Un año con Toby',
+    body: 'Hoy cumple un año en casa. Llegó con miedo a todo y ahora duerme panza arriba en el sofá. Gracias a quienes lo cuidaron antes.',
+  },
+  {
+    person: 0,
+    type: 'general',
+    title: 'Toby aprendió a dar la pata',
+    body: 'Tres semanas de premios y paciencia. Les cuento que sí se puede con perros adultos.',
+  },
+  {
+    person: 0,
+    type: 'notice',
+    title: 'Encontré una perrita en Laureles',
+    body: 'Criolla, mediana, collar rojo, muy mansa. Está conmigo mientras aparece su familia. Escríbanme por aquí.',
+  },
+  {
+    person: 1,
+    type: 'general',
+    title: 'Misha y su primera cita al veterinario',
+    body: 'Todo salió bien: vacunas al día y un peso sano. Ya es oficialmente la jefa de la casa.',
+  },
+  {
+    person: 1,
+    type: 'event',
+    title: 'Caminata perruna el domingo',
+    body: 'Nos vemos a las 8 a. m. en el parque del barrio para caminar con nuestros adoptados. Traigan agua y bolsitas.',
+  },
+  {
+    person: 2,
+    type: 'general',
+    title: 'Antes y después de Lola',
+    body: 'Llegó con la piel muy maltratada y hoy tiene el pelo brillante. El cambio que hace un hogar.',
+  },
+  {
+    person: 3,
+    type: 'general',
+    title: 'Consejos para gatos tímidos',
+    body: 'Un cuarto tranquilo, una caja para esconderse y nada de prisa. A Nube le tomó dos semanas salir y valió la pena.',
+  },
+];
+
+/** Una lista por organización (las dos primeras), para no repetir textos. */
+const ORG_POSTS: Array<
+  Array<{ type: 'general' | 'event' | 'notice'; title: string; body: string }>
+> = [
+  [
+    {
+      type: 'event',
+      title: 'Jornada de adopción este sábado',
+      body: 'Ven a conocer a los perros y gatos que buscan hogar. Habrá charla sobre adopción responsable y punto de hidratación.',
+    },
+    {
+      type: 'general',
+      title: 'Así se despidió Canela del refugio',
+      body: 'Después de ocho meses con nosotros encontró familia. Gracias a todas las personas que la apadrinaron.',
+    },
+  ],
+  [
+    {
+      type: 'notice',
+      title: 'Necesitamos hogares de paso',
+      body: 'Llegaron cinco cachorros rescatados de la quebrada. Si puedes recibir uno por dos semanas, escríbenos.',
+    },
+    {
+      type: 'event',
+      title: 'Feria de esterilización a bajo costo',
+      body: 'El último domingo del mes, con cupos limitados para perros y gatos del barrio. Inscripciones abiertas.',
+    },
+  ],
+];
+
+const COMMENTS = [
+  '¡Qué belleza! Gracias por compartir.',
+  'Me encanta ver estas historias.',
+  'Cuenten conmigo para la próxima.',
+  'Qué buena noticia 🧡',
+  'Compartido con mis amigos.',
+];
+
 async function main(): Promise<void> {
   await runLocalPreflight(['postgres', 'redis'], 'seed:trafico no puede cargar los datos');
   const app = await NestFactory.createApplicationContext(AppModule, {
@@ -649,7 +748,9 @@ async function main(): Promise<void> {
     enrollments: 0,
     hours: 0,
     clinical: 0,
+    posts: 0,
   };
+  const orgActors: RequestUser[] = [];
 
   try {
     // --- 1. Personas ficticias (adoptantes, donantes y voluntarios) ---------
@@ -1140,8 +1241,74 @@ async function main(): Promise<void> {
           }
         });
       }
+      orgActors.push({
+        id: ownerUserId,
+        organizationId,
+        accountType: 'organization',
+        email: def.ownerEmail,
+      });
       console.log(`[seed:trafico] Portal público: /o/${def.key}`);
     }
+
+    // --- Comunidad: publicaciones públicas, me gusta y comentarios ----------
+    const postsService = app.get(CommunityPostsService);
+    const likesService = app.get(CommunityLikesService);
+    const commentsService = app.get(CommunityCommentsService);
+    const personActor = async (person: Person): Promise<RequestUser> => {
+      const cred = await prisma.authCredential.findUnique({ where: { email: person.def.email } });
+      return {
+        id: person.userId,
+        organizationId: cred?.organizationId ?? '',
+        accountType: 'person',
+        email: person.def.email,
+      };
+    };
+    const ensurePost = async (
+      actor: RequestUser,
+      post: { type: 'general' | 'event' | 'notice'; title: string; body: string },
+    ): Promise<string | null> => {
+      const mine = await postsService.mine(actor, 50, 0);
+      if (mine.items.some((p) => p.title === post.title)) return null;
+      const created = await postsService.create(actor, {
+        type: post.type as PostType,
+        title: post.title,
+        body: post.body,
+        shareable: true,
+      });
+      totals.posts += 1;
+      return created.post.id;
+    };
+    const newPosts: string[] = [];
+    for (const def of PERSON_POSTS) {
+      const person = people[def.person];
+      if (!person) continue;
+      const id = await ensurePost(await personActor(person), def);
+      if (id) newPosts.push(id);
+    }
+    for (const [orgIndex, actor] of orgActors.slice(0, ORG_POSTS.length).entries()) {
+      for (const def of ORG_POSTS[orgIndex] ?? []) {
+        const id = await ensurePost(actor, def);
+        if (id) newPosts.push(id);
+      }
+    }
+    // Solo sobre lo recién creado, para que volver a correrlo no duplique nada.
+    for (const [index, postId] of newPosts.entries()) {
+      const rand = rng(`${SEED_TAG}:post:${index}`);
+      const fans = 2 + Math.floor(rand() * 8);
+      for (let f = 0; f < fans; f += 1) {
+        const fan = people[(index * 3 + f + 4) % people.length];
+        if (fan) await likesService.toggle(fan.userId, postId);
+      }
+      const talkers = Math.floor(rand() * 4);
+      for (let c = 0; c < talkers; c += 1) {
+        const fan = people[(index * 5 + c + 7) % people.length];
+        if (!fan) continue;
+        await commentsService.create(await personActor(fan), postId, {
+          body: COMMENTS[(index + c) % COMMENTS.length] ?? COMMENTS[0],
+        });
+      }
+    }
+    console.log(`[seed:trafico] Comunidad: ${newPosts.length} publicaciones públicas nuevas.`);
 
     console.log('\n[seed:trafico] Listo. Creado en esta corrida (0 = ya existía):');
     console.table(totals);

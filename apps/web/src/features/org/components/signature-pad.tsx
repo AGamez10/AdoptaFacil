@@ -41,8 +41,17 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
   }, []);
 
   function pointFromEvent(event: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    // El lienzo mide 400×150 px pero en pantalla se estira o encoge con el
+    // ancho disponible (en el celular, mucho menos). Sin escalar, el trazo
+    // quedaba corrido respecto al dedo y la firma guardada, descuadrada.
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    };
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>): void {

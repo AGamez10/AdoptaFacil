@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PORTAL_TEMPLATE_IDS } from '@adoptafacil/contracts';
+import { PORTAL_TEMPLATE_IDS, PORTAL_TEMPLATES } from '@adoptafacil/contracts';
 import { PROFILES, FIXTURE_NOW } from './__fixtures__/profiles';
 import { createKit } from './engine/kit';
 import { buildTemplateModel } from './engine/model';
@@ -50,8 +50,13 @@ describe('registro de plantillas', () => {
     }
   });
 
-  it('son 14 diseños nuevos además de la clásica', () => {
-    expect(DESIGN_IDS).toHaveLength(14);
+  it('son 14 diseños gratuitos y 5 Premium además de la clásica', () => {
+    expect(DESIGN_IDS).toHaveLength(19);
+    const premium = PORTAL_TEMPLATES.filter((t) => t.tier === 'paid').map((t) => t.id);
+    for (const id of ['album', 'linterna', 'revelado', 'velitas', 'terminal']) {
+      expect(DESIGN_IDS).toContain(id);
+      expect(premium).toContain(id);
+    }
     expect(ENGINE_TEMPLATE_IDS).not.toContain('clasica');
   });
 

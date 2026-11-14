@@ -62,3 +62,56 @@ model EmailSuppression {
   @@id([emailHash, category])
   @@map("email_suppressions")
 }
+
+/// Campana de pendientes del panel: qué aviso marcó como leído cada persona
+/// (por organización). Los avisos no se guardan aquí: se calculan en vivo
+/// (solicitudes sin revisar, documentos, recordatorios de salud). Esta tabla
+/// solo guarda "esta persona ya lo vio" para sacarlo del contador:
+///   * `itemKey` 'adoptions' | 'expiring' | 'rejected' | 'reminder:<uuid>'.
+///   * `readAt`  cuándo lo marcó. Un aviso agregado vuelve a aparecer si llega
+///     algo nuevo después de esa fecha (otra solicitud, otro rechazo).
+/// Tenant-scoped (RLS); cada persona solo lee y escribe las suyas (servicio).
+model NotificationRead {
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  itemKey        String   @map("item_key")
+  readAt         DateTime @default(now()) @map("read_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId, itemKey])
+  @@index([organizationId])
+  @@map("notification_reads")
+}
+
+/// Bandeja de avisos por persona (campana para todas las cuentas): qué pasó,
+/// un texto corto y a qué pantalla llevar. Vive en el tenant de quien lo
+/// RECIBE (RLS). Los avisos a otra cuenta se escriben con las funciones
+/// SECURITY DEFINER `notify_user`, `notify_org_staff` y
+/// `notify_orgs_in_department` (migración 20261113200000). La app solo
+/// puede marcar `readAt`; nunca borra ni reescribe un aviso.
+model UserNotification {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// `<dominio>.<evento>`, p. ej. `resources.offer_received`.
+  kind           String
+  /// 'info' | 'success' | 'warning' | 'kudos' (reconocimiento).
+  tone           String    @default("info")
+  title          String
+  body           String?
+  /// Ruta interna de la app (empieza por "/"), nunca un enlace externo.
+  href           String?
+  dedupeKey      String?   @map("dedupe_key")
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey], map: "user_notifications_user_dedupe_key")
+  @@index([organizationId])
+  @@index([userId, createdAt(sort: Desc)], map: "user_notifications_user_created_idx")
+  @@map("user_notifications")
+}

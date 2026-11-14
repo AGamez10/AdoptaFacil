@@ -1,3 +1,4 @@
+import { loadConsentedDocuments } from './consented-documents';
 import {
   BadRequestException,
   ConflictException,
@@ -1155,6 +1156,11 @@ export class ReportsService {
       campaignNames: new Map(campaigns.map((c) => [c.id, c.title])),
       animalNames: new Map(animals.map((a) => [a.id, a.name])),
       consentedUserIds: await this.consentedUserIds(tx, organizationId),
+      profileDocuments: await loadConsentedDocuments(
+        tx,
+        organizationId,
+        donations.map((d) => d.donorUserId),
+      ),
     });
   }
 
@@ -1445,21 +1451,14 @@ export class ReportsService {
     return out;
   }
 
-  /** Firmantes sellados con la imagen que cada uno aprobó (por id + hash).
-   *  Un borrador, o un firmante que aún no aprobó, va sin imagen. */
-  private async signersWithImages(
+  /** Firmantes sellados con la imagen de la firma que cada uno aprobó (por id +
+   *  hash). Un borrador nunca lleva firmas. */
+  private signersWithImages(
     organizationId: string,
     sealed: SealedSigner[],
-    approvals: Awaited<ReturnType<ReportsService['findOwn']>>['approvals'],
-    draft: ReturnType<ReportsService['draftOf']>,
-  ): Promise<
-    Array<{
-      role: SealedSigner['role'];
-      fullName: string;
-      position: string;
-      image: Buffer | null;
-    }>
-  > {
+    approvals: ApprovalRecord[],
+    draft: 'pending_signatures' | 'rejected' | undefined,
+  ) {
     return Promise.all(
       sealed.map(async (s) => {
         const approval = approvals.find(
@@ -1511,15 +1510,14 @@ export class ReportsService {
     const { row, approvals } = await this.findOwn(id, actorUserId);
     const sealed = row.signers as unknown as SealedSigner[];
     const draft = this.draftOf(sealed, approvals);
-    const withImages = await this.signersWithImages(row.organizationId, sealed, approvals, draft);
     const data = await renderReportXlsx({
       code: row.code,
       contentHash: row.contentHash,
       createdAt: row.createdAt,
       legalEffect: row.legalEffect as OrgReportLegalEffect,
       payload: row.payload as unknown as OrgReportPayload,
-      signers: sealed.map(({ role, fullName, position }) => ({ role, fullName, position })),
-      signerImages: withImages.map((s) => s.image),
+      // Las mismas firmas aprobadas que el PDF: el Excel conserva el diseño.
+      signers: await this.signersWithImages(row.organizationId, sealed, approvals, draft),
       verifyUrl: this.verifyUrl(row.code),
       ...(draft ? { draft } : {}),
     });

@@ -62,6 +62,7 @@ const REPORT = {
 
 type Call = { url: string; init?: RequestInit };
 let calls: Call[] = [];
+let planView: unknown = [];
 
 function stubApi(
   readiness = READINESS,
@@ -92,7 +93,8 @@ function stubApi(
           blob: async () => new Blob(['xlsx']),
         });
       }
-      if (url.includes('/org/reports/readiness')) body = readiness;
+      if (url.endsWith('/org/plan')) body = planView;
+      else if (url.includes('/org/reports/readiness')) body = readiness;
       else if (url.includes('/org/reports/') && /\/(pdf|xlsx)$/.test(url)) {
         return Promise.resolve({
           ok: true,
@@ -121,6 +123,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  planView = [];
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -260,5 +263,33 @@ describe('OrgReportsPage (M13)', () => {
     const url = calls.find((c) => c.url.includes('impact-report.pdf'))!.url;
     expect(url).toMatch(/start=\d{4}-01-01&end=\d{4}-\d{2}-\d{2}$/);
     expect(screen.getByTestId('impact-report-card')).toHaveTextContent('Solo cifras');
+  });
+});
+
+describe('Exportar e impacto: de qué plan vienen', () => {
+  const capabilities = (on: boolean) => ({ dataExport: on, impactReport: on });
+
+  it('sin cobro de planes dice que es del plan Crece y que hoy viene incluido por el lanzamiento', async () => {
+    planView = { enforced: false, effectivePlan: 'pro', capabilities: capabilities(true) };
+    stubApi();
+    renderShell({ route: '/organizacion/reportes', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByTestId('plan-note-dataExport')).toHaveTextContent(
+      'Es del plan Crece. Por el lanzamiento, hoy todas las organizaciones lo tienen incluido sin costo.',
+    );
+    expect(screen.getByTestId('plan-note-impactReport')).toHaveTextContent('plan Crece');
+    expect(screen.getByRole('button', { name: 'Exportar mis datos' })).toBeEnabled();
+  });
+
+  it('con planes activos y sin la función, deshabilita el botón y lleva a los planes', async () => {
+    planView = { enforced: true, effectivePlan: 'free', capabilities: capabilities(false) };
+    stubApi();
+    renderShell({ route: '/organizacion/reportes', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByTestId('plan-note-dataExport')).toHaveTextContent(
+      'Disponible desde el plan Crece.',
+    );
+    expect(screen.getByRole('button', { name: 'Exportar mis datos' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Descargar este año' })).toBeDisabled();
   });
 });

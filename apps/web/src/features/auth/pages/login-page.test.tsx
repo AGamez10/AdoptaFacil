@@ -16,6 +16,27 @@ describe('LoginPage', () => {
     expect(screen.getByText('La contraseña es obligatoria.')).toBeInTheDocument();
   });
 
+  it('keeps the intention when the person goes on to register from the login screen', async () => {
+    renderShell({
+      route: '/login?returnTo=%2Fcampanas%2Fabc%3Fvista%3D1',
+      session: { initialStatus: 'unauthenticated' },
+    });
+
+    expect(screen.getByRole('link', { name: 'Regístrate' })).toHaveAttribute(
+      'href',
+      '/register?returnTo=%2Fcampanas%2Fabc%3Fvista%3D1',
+    );
+  });
+
+  it('ignores an unsafe returnTo and keeps the plain register link', async () => {
+    renderShell({
+      route: '/login?returnTo=https%3A%2F%2Fevil.example',
+      session: { initialStatus: 'unauthenticated' },
+    });
+
+    expect(screen.getByRole('link', { name: 'Regístrate' })).toHaveAttribute('href', '/register');
+  });
+
   it('shows a generic error on invalid credentials without leaking details', async () => {
     const user = userEvent.setup();
     renderShell({ route: '/login', session: { initialStatus: 'unauthenticated' } });

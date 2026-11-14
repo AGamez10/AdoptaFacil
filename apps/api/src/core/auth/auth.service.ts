@@ -342,7 +342,7 @@ export class AuthService {
         accountType,
         email: existing.email,
       });
-      return { user, tokens };
+      return { user, tokens, isNewAccount: false };
     }
 
     // First time: create a lightweight PERSON account. The password hash is a
@@ -400,7 +400,7 @@ export class AuthService {
       accountType: 'person',
       email: normalizedEmail,
     });
-    return { user, tokens };
+    return { user, tokens, isNewAccount: true };
   }
 
   /**

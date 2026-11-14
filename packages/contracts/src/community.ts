@@ -200,6 +200,49 @@ export interface PublicCommunityPostsPage {
   offset: number;
 }
 
+/**
+ * Escalafón público de la comunidad (landing). Sale solo de publicaciones
+ * compartibles: una organización con su nombre, una persona con su primer
+ * nombre; nunca ids.
+ */
+export interface PublicCommunityLeader {
+  displayName: string;
+  isOrganization: boolean;
+  publicPosts: number;
+  likesReceived: number;
+  commentsReceived: number;
+  points: number;
+}
+
+/** Puntos del escalafón (los mismos que calcula `public_community_leaders`). */
+export const COMMUNITY_POINTS = { post: 5, comment: 2, like: 1 } as const;
+
+export type CommunityTierKey = 'newcomer' | 'friend' | 'guardian' | 'legend';
+
+export interface CommunityTier {
+  key: CommunityTierKey;
+  label: string;
+  /** Puntos desde los que se alcanza este nivel. */
+  minPoints: number;
+}
+
+/** Niveles de reconocimiento, de menor a mayor. */
+export const COMMUNITY_TIERS: readonly CommunityTier[] = [
+  { key: 'newcomer', label: 'Huella nueva', minPoints: 0 },
+  { key: 'friend', label: 'Amigo de la manada', minPoints: 25 },
+  { key: 'guardian', label: 'Guardián', minPoints: 100 },
+  { key: 'legend', label: 'Leyenda', minPoints: 300 },
+];
+
+/** Nivel que corresponde a unos puntos (negativos o inválidos → el primero). */
+export function communityTier(points: number): CommunityTier {
+  const safe = Number.isFinite(points) ? points : 0;
+  return COMMUNITY_TIERS.reduce(
+    (tier, candidate) => (safe >= candidate.minPoints ? candidate : tier),
+    COMMUNITY_TIERS[0] as CommunityTier,
+  );
+}
+
 /** Cambiar si la publicación propia es pública y compartible. */
 export interface SetPostShareableInput {
   shareable: boolean;

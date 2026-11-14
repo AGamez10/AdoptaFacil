@@ -7,6 +7,7 @@ import { IncompleteProfileException } from '../../core/auth/require-complete-pro
 import type { NotificationPort } from '../../core/notifications/notification.port';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { TenantContextService } from '../../core/tenant/tenant-context.service';
+import type { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { VolunteerEnrollmentsService } from './volunteer-enrollments.service';
 
 /**
@@ -66,7 +67,18 @@ function makeService(
   const config = {
     get: (key: string) => (key === 'FEATURE_VOLUNTEERING_MINORS' ? minorsEnabled : undefined),
   } as unknown as ConfigService<Env, true>;
-  const service = new VolunteerEnrollmentsService(prisma, tenant, audit, notifications, config);
+  const inbox = {
+    toUser: jest.fn().mockResolvedValue(undefined),
+    toOrgStaff: jest.fn().mockResolvedValue(0),
+  } as unknown as InboxService;
+  const service = new VolunteerEnrollmentsService(
+    prisma,
+    tenant,
+    audit,
+    notifications,
+    config,
+    inbox,
+  );
   return { service, queryRaw };
 }
 

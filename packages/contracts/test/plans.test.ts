@@ -57,7 +57,7 @@ describe('plan catalog', () => {
   it('premium portal designs need a paid plan (decisión 2026-10-17)', () => {
     expect(minimumPlanFor('portalPremiumDesigns')).toBe('crece');
     const premium = PORTAL_TEMPLATES.filter((t) => isPremiumTemplate(t.id)).map((t) => t.id);
-    expect(premium).toEqual(['historias']);
+    expect(premium).toEqual(['historias', 'album', 'linterna', 'revelado', 'velitas', 'terminal']);
   });
 
   it('finds the cheapest plan for a limit', () => {

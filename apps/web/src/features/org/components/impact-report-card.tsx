@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import type { OrganizationPlanView } from '@adoptafacil/contracts';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
 import { ExportMessage } from './data-export-card';
 import { downloadOrgExport, exportErrorMessage } from './org-export-download';
+import { PlanFeatureNote, planAllows } from './plan-feature-note';
 
 /** Hoy en Colombia (UTC-5, sin horario de verano), `YYYY-MM-DD`. */
 function todayCO(): string {
@@ -26,7 +28,8 @@ export function impactPeriod(
  * logró en el año, para donantes, empresas y su junta. Solo cifras agregadas:
  * nunca nombres ni datos de contacto de personas (`GET /org/exports/impact-report.pdf`).
  */
-export function ImpactReportCard() {
+export function ImpactReportCard({ plan = null }: { plan?: OrganizationPlanView | null }) {
+  const allowed = planAllows(plan, 'impactReport');
   const client = useApiClient();
   const [busy, setBusy] = useState<ImpactPeriod | null>(null);
   const [message, setMessage] = useState<{ text: string; needsPlan: boolean } | null>(null);
@@ -60,18 +63,19 @@ export function ImpactReportCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
-        <Button onClick={() => void download('this_year')} disabled={busy !== null}>
+        <Button onClick={() => void download('this_year')} disabled={busy !== null || !allowed}>
           {busy === 'this_year' ? 'Generando…' : 'Descargar este año'}
         </Button>
         <Button
           variant="outline"
           onClick={() => void download('last_year')}
-          disabled={busy !== null}
+          disabled={busy !== null || !allowed}
         >
           {busy === 'last_year' ? 'Generando…' : 'Descargar el año pasado'}
         </Button>
         <div className="w-full">
           <ExportMessage message={message} />
+          <PlanFeatureNote plan={plan} capability="impactReport" />
         </div>
       </CardContent>
     </Card>

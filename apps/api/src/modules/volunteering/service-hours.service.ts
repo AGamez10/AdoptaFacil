@@ -19,6 +19,7 @@ import type {
   ServiceHoursStatus,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -173,6 +174,7 @@ export class ServiceHoursService {
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly inbox: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -212,6 +214,31 @@ export class ServiceHoursService {
       entityType: 'service_hours',
       entityId: row.id,
       metadata: { enrollmentId: input.enrollmentId, hours: input.hours },
+    });
+    const context = await this.prisma
+      .withOrgContext(row.organization_id, async (tx) => {
+        const enrollment = await tx.volunteerEnrollment.findUnique({
+          where: { id: row.enrollment_id },
+          select: { opportunityId: true, volunteerName: true },
+        });
+        const opportunity = enrollment
+          ? await tx.volunteerOpportunity.findUnique({
+              where: { id: enrollment.opportunityId },
+              select: { title: true },
+            })
+          : null;
+        return { enrollment, title: opportunity?.title };
+      })
+      .catch(() => null);
+    const who = context?.enrollment?.volunteerName?.split(/\s+/)[0] || 'Un voluntario(a)';
+    await this.inbox.toOrgStaff(row.organization_id, {
+      kind: 'volunteering.hours_logged',
+      title: `${who} registró ${input.hours} h en "${context?.title ?? 'una jornada'}"`,
+      body: 'Revisa la bitácora y aprueba o rechaza las horas para que cuenten en su certificado.',
+      href: context?.enrollment
+        ? `/organizacion/voluntariado/${context.enrollment.opportunityId}?foco=${input.enrollmentId}`
+        : '/organizacion/voluntariado',
+      dedupeKey: `service_hours:${row.id}`,
     });
     return fromRawRow(row);
   }
@@ -328,6 +355,20 @@ export class ServiceHoursService {
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
     }
+    await this.inbox.toUser(updated.volunteerUserId, {
+      kind: approved ? 'volunteering.hours_approved' : 'volunteering.hours_rejected',
+      tone: approved ? 'kudos' : 'warning',
+      title: approved
+        ? `¡Gracias por tu tiempo! Aprobaron tus ${updated.hours} h en "${opportunityTitle}"`
+        : `No aprobaron ${updated.hours} h en "${opportunityTitle}"`,
+      body: approved
+        ? 'Ya cuentan para tu certificado de horas de voluntariado.'
+        : updated.rejectionReason
+          ? `Motivo: ${updated.rejectionReason}`
+          : 'Revisa la bitácora en Voluntariado.',
+      href: '/voluntariado',
+      dedupeKey: `service_hours_decided:${id}`,
+    });
 
     return toServiceHours(updated);
   }

@@ -10,6 +10,7 @@ import {
   PawIcon,
   ShieldIcon,
   ShoppingBagIcon,
+  UsersIcon,
   type IconProps,
 } from '../icons';
 
@@ -102,9 +103,22 @@ export const ORG_LEDGER_ROLES = [
   Role.ReadOnlyAuditor,
 ] as const;
 
+/** Custodia y guardería · copiado VERBATIM del `@Roles` de las lecturas de
+ *  `CustodyController` (`GET /custody/...`). Escribir y decidir exige roles
+ *  más angostos, en la API y en la UI. */
+export const CUSTODY_VIEW_ROLES = [
+  Role.Owner,
+  Role.Administrator,
+  Role.Operator,
+  Role.ReadOnlyAuditor,
+] as const;
+
 /** Planes y suscripciones · copiado VERBATIM del `@Roles` de `GET /org/plan`:
  *  el plan y su cobro son asunto del Owner/Administrator. */
 export const ORG_PLAN_ROLES = [Role.Owner, Role.Administrator] as const;
+
+/** Equipo de la organización: `@Roles` de MembersController e InvitationsController. */
+export const ORG_MEMBERS_ROLES = [Role.Owner, Role.Administrator] as const;
 
 /**
  * M13 (S-8, RF24) — "Dashboard de plataforma" (conteos de colas), audiencia
@@ -122,6 +136,10 @@ export const PLATFORM_TEAM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin]
 /** Planes de organizaciones · copiado VERBATIM del `@Roles` de
  *  `PlatformPlansController` (`GET`/`PUT /platform/organizations/:id/plan`). */
 export const PLATFORM_PLANS_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
+
+/** Café de AdoptaFácil · copiado VERBATIM del `@Roles` de
+ *  `PlatformCoffeeController` (`/platform/coffee/*`). */
+export const PLATFORM_COFFEE_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
 
 export const PLATFORM_ADMIN_DASHBOARD_ROLES = [
   Role.PlatformAdmin,
@@ -439,6 +457,20 @@ export const navItems: NavItem[] = [
   // M03 · animales + recordatorios clínicos (T-031, wires T-104/T-106). Reuses
   // PawIcon; a dedicated "bell" for reminders is a reported gap in shell/icons.
   { path: '/animales', label: 'Animales', icon: PawIcon, roles: ANIMAL_VIEW_ROLES },
+  // Reporte consolidado (PDF, CSV, Excel) e individual de animales.
+  {
+    path: '/reportes-animales',
+    label: 'Reportes de animales',
+    icon: PawIcon,
+    roles: CUSTODY_VIEW_ROLES,
+  },
+  // Guardería: vencimientos, pagos, contratos y plantillas.
+  {
+    path: '/organizacion/custodia',
+    label: 'Custodia y guardería',
+    icon: ShieldIcon,
+    roles: CUSTODY_VIEW_ROLES,
+  },
   // "Recordatorios" salió del menú: se consulta desde la campana del encabezado (Inicio).
   {
     path: '/adopciones',
@@ -487,6 +519,14 @@ export const navItems: NavItem[] = [
     label: 'Anuncios urgentes',
     icon: AlertTriangleIcon,
     roles: ORG_PLAN_ROLES,
+  },
+  // Equipo · invitar personas con un cargo fijo, cambiar su cargo o retirarlas.
+  // Mismo @Roles que /org/members y /org/invitations (Owner, Administrator).
+  {
+    path: '/organizacion/miembros',
+    label: 'Miembros del equipo',
+    icon: UsersIcon,
+    roles: ORG_MEMBERS_ROLES,
   },
   // Planes y suscripciones · plan en efecto, uso de límites y los tres planes.
   {
@@ -687,6 +727,13 @@ export const navItems: NavItem[] = [
     label: 'Banner del portal',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
+  },
+  // Café de AdoptaFácil: presentaciones con QR fijo, lotes, pedidos y aportes.
+  {
+    path: '/plataforma/cafe',
+    label: 'Café de AdoptaFácil',
+    icon: ShoppingBagIcon,
+    roles: PLATFORM_COFFEE_ROLES,
   },
   // F19 · espacio de trabajo del equipo de plataforma: tareas, doble
   // aprobación, personas del equipo, bitácora y "Mi seguridad".

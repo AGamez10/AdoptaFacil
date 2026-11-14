@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
@@ -348,6 +349,77 @@ describe('Open offers (M09) + public shareable community (M11)', () => {
       .send({ shareable: false })
       .expect(200);
     await request(server).get(`/public/community/posts/${id}`).expect(404);
+  });
+
+  it('no-leak: the public leaderboard ranks only shareable posts, with first names and no ids', async () => {
+    const person = await request(server)
+      .post('/auth/register/person')
+      .send({
+        ...LEGAL_PERSON,
+        displayName: 'Zoila Ranking Pérez',
+        email: `oo-rank-${randomUUID()}@test.local`,
+        password,
+      })
+      .expect(201);
+    orgIds.push(person.body.user.organizationId);
+    const token = person.body.tokens.accessToken;
+    // Ten shareable posts puts her at the top (50 points); a private one never counts.
+    for (let i = 0; i < 10; i += 1) {
+      await createPost(token, { shareable: true, title: `Historia ${i}` }).expect(201);
+    }
+    await createPost(token, { title: 'Privada' }).expect(201);
+
+    const res = await request(server).get('/public/community/leaders?limit=50').expect(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeLessThanOrEqual(10);
+    const zoila = res.body.find((l: { displayName: string }) => l.displayName === 'Zoila');
+    expect(zoila).toMatchObject({ isOrganization: false, publicPosts: 10 });
+    expect(zoila.points).toBe(10 * 5 + zoila.commentsReceived * 2 + zoila.likesReceived);
+    const json = JSON.stringify(res.body);
+    expect(json).not.toContain('Pérez');
+    expect(json).not.toContain(person.body.user.id);
+    expect(json).not.toContain(person.body.user.organizationId);
+    const points = res.body.map((l: { points: number }) => l.points);
+    expect([...points].sort((a: number, b: number) => b - a)).toEqual(points);
+  });
+
+  it('the share card of an organization post uses its real photo (and stays a 1200×630 PNG)', async () => {
+    const created = await createPost(org.token, {
+      shareable: true,
+      title: 'Jornada con foto',
+      images: [{ filename: 'jornada.jpg', contentType: 'image/jpeg' }],
+    }).expect(201);
+    const { key } = created.body.imageUploads[0];
+    const bytes = await sharp({
+      create: { width: 600, height: 800, channels: 3, background: { r: 220, g: 40, b: 40 } },
+    })
+      .jpeg()
+      .toBuffer();
+    await request(server)
+      .put('/storage/upload')
+      .query({ key })
+      .set('Authorization', `Bearer ${org.token}`)
+      .attach('file', bytes, { filename: 'jornada.jpg', contentType: 'image/jpeg' })
+      .expect(200);
+
+    const card = await request(server)
+      .get(`/public/community/posts/${created.body.post.id}/card.png`)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const png = sharp(card.body as Buffer);
+    expect((await png.metadata()).width).toBe(1200);
+    // The photo panel (right side) is the red photo, not the brand illustration.
+    const { data } = await png
+      .extract({ left: 940, top: 300, width: 8, height: 8 })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    expect(data[0]).toBeGreaterThan(180);
+    expect(data[1]).toBeLessThan(90);
   });
 
   it('only the author can change whether a post is shareable', async () => {

@@ -13,6 +13,8 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   type AuditExportPayload,
+  type CoffeeLotCampaignPayload,
+  type CoffeeLotPublishPayload,
   type CreateSensitiveActionInput,
   PLATFORM_ROLES,
   invitationRoleCopy,
@@ -45,6 +47,12 @@ import {
   hashInvitationToken,
   INVITATION_TTL_MS,
 } from '../org/governance/invitations.service';
+import {
+  executeCoffeeLotCampaign,
+  executeCoffeeLotPublish,
+  precheckCoffeeLotCampaign,
+  precheckCoffeeLotPublish,
+} from '../coffee/coffee-lot-approvals';
 import { PAYLOAD_SCHEMAS } from './workspace.schemas';
 import { isConcurrentAppend, triggerRejection } from './workspace.errors';
 
@@ -300,6 +308,12 @@ export class SensitiveActionsService {
       return;
     }
     if (type === 'audit.export') return;
+    if (type === 'coffee.lot_publish') {
+      return precheckCoffeeLotPublish(tx, payload as CoffeeLotPublishPayload);
+    }
+    if (type === 'coffee.lot_campaign') {
+      return precheckCoffeeLotCampaign(tx, payload as CoffeeLotCampaignPayload);
+    }
     const { userId } = payload as StaffRolePayload | StaffMfaResetPayload;
     // RLS: only users of the caller's team are visible.
     const target = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
@@ -461,6 +475,32 @@ export class SensitiveActionsService {
         await this.mfa.resetFactor(userId);
       });
       return { userId };
+    }
+
+    if (type === 'coffee.lot_publish') {
+      const result = await executeCoffeeLotPublish(tx, payload as CoffeeLotPublishPayload);
+      await this.audit.recordWithTx(tx, {
+        organizationId: teamId,
+        actorUserId: actor.user.id,
+        action: 'coffee.lot_published',
+        entityType: 'coffee_lot',
+        entityId: (payload as CoffeeLotPublishPayload).lotId,
+        metadata: { ...result, ...base },
+      });
+      return result;
+    }
+
+    if (type === 'coffee.lot_campaign') {
+      const result = await executeCoffeeLotCampaign(tx, payload as CoffeeLotCampaignPayload);
+      await this.audit.recordWithTx(tx, {
+        organizationId: teamId,
+        actorUserId: actor.user.id,
+        action: 'coffee.lot_campaign_changed',
+        entityType: 'coffee_lot',
+        entityId: (payload as CoffeeLotCampaignPayload).lotId,
+        metadata: { ...result, ...base },
+      });
+      return result;
     }
 
     // audit.export: nothing runs now; the requester downloads it afterwards.

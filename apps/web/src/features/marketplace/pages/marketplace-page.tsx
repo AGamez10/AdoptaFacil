@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  OrganizationCapability,
   type CreateProductInput,
   type Organization,
   PRODUCT_CATEGORIES,
@@ -24,11 +25,13 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { FormalStateLock, useFormalCapability } from '../../org/components/formal-state-lock';
 import { SelectField, TextAreaField } from '../components/product-form-fields';
 import { ProductManageCard } from '../components/product-manage-card';
 import { ProductPhotosField } from '../components/product-photos-field';
 import { addProductImage, MAX_PRODUCT_PHOTOS, validateImageUpload } from '../lib/storage';
 import { CATEGORY_LABELS } from '../model/marketplace-view';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
   value,
@@ -40,11 +43,16 @@ const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
  * de la organización, usando SOLO endpoints ya existentes (`GET`/`POST
  * /marketplace/products`). Crear/editar: Owner/Administrator/Operator; ver:
  * + ReadOnlyAuditor (calcado de `MarketplaceProductsController`'s @Roles).
+ * Vender exige estar Formalizada: antes de eso la página explica cómo
+ * desbloquearlo y no ofrece publicar (la API lo rechaza igual).
  */
 export function MarketplacePage() {
   const client = useApiClient();
   const { hasRole } = useSession();
-  const canManage = hasRole(Role.Owner) || hasRole(Role.Administrator) || hasRole(Role.Operator);
+  const isManager = hasRole(Role.Owner) || hasRole(Role.Administrator) || hasRole(Role.Operator);
+  const sales = useFormalCapability(OrganizationCapability.MarketplaceSales);
+  const locked = sales.decision?.enabled === false;
+  const canManage = isManager && !locked;
   const { toast } = useToast();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -138,18 +146,26 @@ export function MarketplacePage() {
   const submit = async (): Promise<void> => {
     const priceValue = Number(price);
     const stockValue = stock.trim() ? Number(stock) : undefined;
-    if (
-      !name.trim() ||
-      !Number.isInteger(priceValue) ||
-      priceValue <= 0 ||
-      (stockValue !== undefined && (!Number.isInteger(stockValue) || stockValue < 0))
-    ) {
-      toast({
-        title: 'Datos incompletos',
-        description:
-          'Nombre, categoría y precio (entero COP > 0) son obligatorios; el stock no puede ser negativo.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      {
+        ok: Boolean(name.trim()),
+        title: 'Falta el nombre',
+        message: 'Escribe el nombre del producto.',
+      },
+      {
+        ok: Number.isInteger(priceValue) && priceValue > 0,
+        title: 'Precio no válido',
+        message:
+          'El precio debe ser un número entero en pesos mayor que 0 (sin puntos ni decimales).',
+      },
+      {
+        ok: stockValue === undefined || (Number.isInteger(stockValue) && stockValue >= 0),
+        title: 'Stock no válido',
+        message: 'El stock debe ser un número entero de 0 en adelante.',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     setSaving(true);
@@ -221,12 +237,19 @@ export function MarketplacePage() {
       {loading && <Skeleton className="h-64 w-full" />}
       {!loading && (
         <div className="space-y-6">
+          {locked && sales.decision && (
+            <FormalStateLock decision={sales.decision} data={sales.data} />
+          )}
           {products.length === 0 ? (
             <EmptyState
               icon={<span aria-hidden>🛍️</span>}
               title="Aún no hay productos publicados"
               description={
-                canManage ? 'Publica tu primer producto para empezar a vender.' : undefined
+                canManage
+                  ? 'Publica tu primer producto para empezar a vender.'
+                  : locked
+                    ? 'Cuando tu organización esté Formalizada podrás publicar aquí tus productos.'
+                    : undefined
               }
               action={
                 canManage ? (

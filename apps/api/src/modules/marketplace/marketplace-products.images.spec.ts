@@ -1,3 +1,4 @@
+import type { FormalCapabilitiesService } from '../../core/formalization/formal-capabilities.service';
 import { ForbiddenException } from '@nestjs/common';
 import sharp from 'sharp';
 import type { ConfigService } from '@nestjs/config';
@@ -35,6 +36,7 @@ function build(plansReject: Error) {
     prisma,
     { getOrganizationId: () => ORG } as unknown as TenantContextService,
     { recordWithTx: jest.fn() } as unknown as AuditService,
+    { assertCapability: jest.fn() } as unknown as FormalCapabilitiesService,
     plans,
     storage,
     { get: () => 15 } as unknown as ConfigService<never, true>,

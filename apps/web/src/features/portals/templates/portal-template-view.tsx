@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { AnimalSummary, Review } from '@adoptafacil/contracts';
 import { RegisterReviewDialog } from '../components/register-review-dialog';
 import { PublicLedgerDialog } from '../../ledger/components/public-ledger-dialog';
@@ -226,17 +226,29 @@ export function PortalTemplateView({
     <>
       <div
         ref={rootRef}
-        className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}`}
+        className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}${design.premium ? ' pk' : ''}`}
         style={themeStyle}
         data-testid="portal-template"
         data-template={design.id}
       />
+      {!demo && source.animalTotal > source.animals.length && (
+        <p className="mx-auto w-full max-w-[1320px] px-4 py-6 text-center text-sm">
+          Aquí ves {source.animals.length} de los {source.animalTotal} animales en adopción.{' '}
+          <Link
+            to={{ search: '?vista=todos' }}
+            className="font-semibold underline"
+            data-testid="portal-template-all-animals"
+          >
+            Ver los {source.animalTotal}
+          </Link>
+        </p>
+      )}
       {reputation && !demo && onReviewCreated && (
         <RegisterReviewDialog
           slug={source.slug}
           open={reviewOpen}
           onOpenChange={setReviewOpen}
-          onSubmitted={onReviewCreated}
+          onSubmitted={(submitted) => onReviewCreated(submitted.review)}
         />
       )}
       {demo ? (

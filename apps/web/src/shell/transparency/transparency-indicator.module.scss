@@ -7,6 +7,11 @@
   background-color: var(--bg-surface);
   padding: 0.375rem 0.75rem;
   font-size: var(--fs-xs);
+  white-space: nowrap;
+
+  @media (max-width: 379px) {
+    padding: 0.375rem 0.5rem;
+  }
 
   @media (min-width: 640px) {
     gap: 0.5rem;
@@ -34,15 +39,17 @@
 .indicator__label--short {
   display: inline;
 
-  @media (min-width: 640px) {
+  @media (min-width: 1024px) {
     display: none;
   }
 }
 
+/* Las etiquetas largas y "Rendición" solo caben con el encabezado de
+   escritorio: entre 640 y 1023 px empujaban la campana fuera de la pantalla. */
 .indicator__label--long {
   display: none;
 
-  @media (min-width: 640px) {
+  @media (min-width: 1024px) {
     display: inline;
   }
 }
@@ -54,7 +61,7 @@
 .indicator__wide-only {
   display: none;
 
-  @media (min-width: 640px) {
+  @media (min-width: 1024px) {
     display: flex;
   }
 }

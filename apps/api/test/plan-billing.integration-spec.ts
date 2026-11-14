@@ -30,6 +30,7 @@ class FakeBillingClient {
   charges = new Map<string, MercadoPagoAuthorizedPayment>();
   cancelled: string[] = [];
   failCancel = false;
+  failCreate = false;
   private seq = 0;
 
   isConfigured(): boolean {
@@ -40,6 +41,7 @@ class FakeBillingClient {
     externalReference: string;
     amountCop: number;
   }): Promise<{ id: string; checkoutUrl: string }> {
+    if (this.failCreate) throw new Error('Mercado Pago preapproval create failed (400: back_url)');
     const id = `pre${++this.seq}${randomUUID().slice(0, 6)}`;
     this.preapprovals.set(id, {
       id,
@@ -208,6 +210,23 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
       .set(auth(org.token))
       .send({ plan: 'crece' })
       .expect(409);
+  });
+
+  it('si Mercado Pago rechaza crear la suscripción responde 503 claro (el motivo queda en el log)', async () => {
+    // Reutiliza una organización ya registrada: el registro tiene límite de intentos.
+    const org = actors[0];
+    setEnforced(true);
+    fake.failCreate = true;
+    try {
+      const res = await request(server)
+        .post('/org/plan/checkout')
+        .set(auth(org.token))
+        .send({ plan: 'crece' })
+        .expect(503);
+      expect(JSON.stringify(res.body)).not.toContain('back_url');
+    } finally {
+      fake.failCreate = false;
+    }
   });
 
   it('contratar: el primer cobro aprobado activa el plan con el monto con IVA', async () => {

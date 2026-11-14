@@ -97,7 +97,26 @@ export function ReviewCarousel({ items }: ReviewCarouselProps) {
       </p>
       {review.comment && <p className={styles.card__comment}>{review.comment}</p>}
       <div className={styles.card__meta}>
-        <span>{review.authorName ?? 'Anónimo'}</span>
+        <span className={styles.card__author}>
+          <span>{review.authorName ?? 'Anónimo'}</span>
+          {review.isCommunityMember ? (
+            <span
+              className={styles.badge}
+              title="Escrita con una cuenta de AdoptaFácil con sesión iniciada"
+            >
+              Miembro de la comunidad
+            </span>
+          ) : (
+            review.authorName && (
+              <span
+                className={styles.visitorTag}
+                title="Nombre escrito por quien comenta, sin verificar"
+              >
+                Visitante
+              </span>
+            )
+          )}
+        </span>
         <span>{formatBogota(review.createdAt)}</span>
       </div>
     </article>

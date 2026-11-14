@@ -94,6 +94,7 @@ describe('validateEnv — PAYMENT_DRIVER fail-fast (T-052)', () => {
     expect(env.PAYMENT_DRIVER).toBe('mercadopago');
     expect(env.MERCADOPAGO_TOKEN_REFRESH_WINDOW_DAYS).toBe(30);
     expect(env.MERCADOPAGO_OAUTH_PKCE).toBe(false);
+    expect(env.MERCADOPAGO_OAUTH_TEST_TOKEN).toBeUndefined();
   });
 
   it('ignores the vars of the retired integration (MERCADOPAGO_ACCESS_TOKEN/PUBLIC_KEY)', () => {

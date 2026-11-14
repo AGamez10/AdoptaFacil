@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import type {
   AnimalSummary,
   Organization,
@@ -10,9 +10,10 @@ import type {
   PortalTemplateOptions,
   PortalTheme,
   PortalView,
+  Review,
 } from '@adoptafacil/contracts';
 import { resolveTemplateOptions } from '@adoptafacil/contracts';
-import { EmptyState, Skeleton } from '@adoptafacil/ui';
+import { Skeleton } from '@adoptafacil/ui';
 import { brandTokensToStyle } from '../../../shell/theme';
 import { buildPortalView } from '../model/portal-view';
 import {
@@ -58,6 +59,7 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { ownerPreviewOrganization } from '../model/owner-preview';
 import { PortalPreviewContext } from '../model/portal-preview-context';
+import { PublicErrorPage, PublicNotFoundPage } from '../../../shell/errors';
 import { TemplatePortal } from '../templates/template-portal';
 import { isEngineTemplate } from '../templates/registry';
 import { useGuideContext } from '../../guide/model/guide-context';
@@ -133,6 +135,11 @@ export interface OrgPublicPageProps {
 export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   const { slug: slugParam } = useParams<{ slug: string }>();
   const slug = slugOverride ?? slugParam;
+  // `?vista=todos`: lista completa y paginada de animales (portal clásico),
+  // aunque la organización use una plantilla. Las plantillas cargan hasta
+  // ANIMAL_CAP animales; si hay más, enlazan aquí para no dejar a nadie fuera.
+  const [searchParams] = useSearchParams();
+  const fullList = searchParams.get('vista') === 'todos';
   const [view, setView] = useState<PortalView | null>(null);
   const [theme, setTheme] = useState<PortalTheme>({});
   const [layout, setLayout] = useState<Layout>(DEFAULT_LAYOUT);
@@ -162,6 +169,14 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // desplazan a la sección real "Mascotas en adopción" (rediseño T-D04, ya
   // sin tabs) donde el visitante elige el animal y sigue la ruta que ya
   // existe (ver `PortalHeaderActions`).
+  useEffect(() => {
+    if (!fullList || state !== 'ready') return;
+    const timer = window.setTimeout(() => {
+      document.getElementById('portal-section-pets')?.scrollIntoView({ block: 'start' });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fullList, state]);
+
   const goToCatalog = () => {
     document
       .getElementById('portal-section-pets')
@@ -432,15 +447,6 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           style={{ ...themeStyle, scrollMarginTop: '5rem' }}
         >
           {state === 'loading' && <Skeleton className="h-72 w-full" />}
-          {state === 'not-found' && (
-            <EmptyState
-              title="Organización no encontrada"
-              description="El enlace no corresponde a ninguna organización."
-            />
-          )}
-          {state === 'error' && (
-            <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
-          )}
           {state === 'ready' && view && heroProps && (
             <div className="space-y-8">
               {ownerPreview && (
@@ -561,7 +567,26 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                   <PortalAboutSection aboutUs={aboutUs} />
                 </section>
               )}
-              {reputation && <PortalReviewsSection slug={slug as string} />}
+              {reputation && (
+                <PortalReviewsSection
+                  slug={slug as string}
+                  member={
+                    session.isAuthenticated && session.user
+                      ? {
+                          name: session.user.name,
+                          isOwnOrganization:
+                            session.user.organizationId === view?.profile.organization.id,
+                        }
+                      : undefined
+                  }
+                  submitAsMember={(reviewSlug, input) =>
+                    client.request<Review>(
+                      `/public/organizations/${encodeURIComponent(reviewSlug)}/reviews`,
+                      { method: 'POST', json: input },
+                    )
+                  }
+                />
+              )}
 
               {hasContactInfo && contact && (
                 <section id="portal-contact-info" style={{ scrollMarginTop: '5rem' }}>
@@ -599,7 +624,32 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // Plantillas del motor (14 gratuitas nuevas): pintan el mismo contenido con su
   // propio diseño. Si la plantilla no carga o los datos fallan, se muestra el
   // portal clásico de arriba: nunca queda un portal caído por el diseño elegido.
-  if (state === 'ready' && view && slug && isEngineTemplate(layout.template)) {
+  // Organización inexistente, suspendida o sin portal publicado: la API
+  // responde igual (404) y no se distingue a propósito, para no revelar qué
+  // organizaciones existen. Página completa con marco público y salidas.
+  if (state === 'not-found') {
+    return (
+      <PublicNotFoundPage
+        title="Organización no encontrada"
+        message="Este enlace no corresponde a ninguna organización activa. Puede que haya cambiado de dirección o que su portal aún no esté publicado."
+      />
+    );
+  }
+  if (state === 'error') {
+    return (
+      <PublicErrorPage
+        kind={typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'server'}
+        title="No se pudo cargar el portal"
+        message="Tuvimos un problema al traer la información de esta organización. Intenta de nuevo en un momento."
+        actions={[
+          { label: 'Reintentar', onClick: () => window.location.reload() },
+          { label: 'Volver al inicio', to: '/', variant: 'secondary' },
+        ]}
+      />
+    );
+  }
+
+  if (state === 'ready' && view && slug && !fullList && isEngineTemplate(layout.template)) {
     return (
       <TemplatePortal
         template={layout.template}

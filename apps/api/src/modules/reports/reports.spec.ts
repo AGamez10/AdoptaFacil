@@ -1,5 +1,6 @@
 import * as ExcelJS from 'exceljs';
 import { PDFDocument } from 'pdf-lib';
+import sharp from 'sharp';
 import { computeLegalEffect, defaultSignerRoles, nextStepsFor } from './report-legal-effect';
 import { buildDonationsPayload, buildSocialServicePayload } from './report-payloads';
 import { resolveReportPeriod, todayInColombia } from './report-period';
@@ -217,6 +218,33 @@ describe('report-payloads', () => {
     expect(p.rows[0].concept).toBe('Campaña: Cirugía de Luna');
   });
 
+  it('donaciones: si el pago no trajo documento se usa el del perfil de quien autorizó', () => {
+    const p = buildDonationsPayload({
+      consentedUserIds: new Set(['u-ana']),
+      profileDocuments: new Map([['u-ana', '52111222']]),
+      organization: ORG,
+      period: { start: '2026-09-01', end: '2026-09-30' },
+      campaignNames: new Map(),
+      animalNames: new Map(),
+      donations: [
+        {
+          id: 'd1',
+          conceptKind: 'organization',
+          conceptId: 'org',
+          amountCharged: 2000,
+          breakdown: breakdown(2000),
+          payer: { fullName: 'Ana Gámez' },
+          donorUserId: 'u-ana',
+          anonymous: false,
+          approvedAt: new Date('2026-09-10T15:00:00Z'),
+        },
+      ],
+    });
+    expect(p.rows[0].donor).toBe('Ana Gámez');
+    expect(p.rows[0].donorDocument).toBe('••••1222');
+    expect(JSON.stringify(p)).not.toContain('52111222');
+  });
+
   it('donaciones: sin consentimiento vigente no se identifica al donante, pero los montos se conservan', () => {
     const p = donationsPayload(new Set());
     expect(p.rows.map((r) => r.donor)).toEqual(['Donante anónimo', 'Donante']);
@@ -414,63 +442,82 @@ describe('render PDF / Excel', () => {
     expect(sheet.getRow(3).getCell(3).value).toBe('\'=cmd|"/c calc"!A1');
     expect(sheet.getRow(2).getCell(8).value).toBe(41670);
   });
-});
 
-describe('Excel del reporte: se ve y se imprime igual en cualquier equipo', () => {
-  const pngSignature = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    'base64',
-  );
-
-  it('estampa la firma de cada firmante aprobado y deja el papel listo para imprimir', async () => {
-    const bytes = await renderReportXlsx({
+  it('el Excel conserva el diseño del PDF: hoja "Reporte" con QR, firmas e impresión A4', async () => {
+    // Firma con tinta: basta para comprobar que viaja al Excel.
+    const signature = await sharp({
+      create: { width: 40, height: 20, channels: 4, background: { r: 20, g: 20, b: 20, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+    const signers = [
+      {
+        role: 'legal_representative' as const,
+        fullName: 'Ana Pérez',
+        position: 'Representante legal',
+        image: signature,
+      },
+      {
+        role: 'fiscal_reviewer' as const,
+        fullName: 'Luis Gómez',
+        position: 'Revisor fiscal',
+        image: signature,
+      },
+    ];
+    const base = {
       code: 'ADF-REP-2026-ABCDEFGH',
       contentHash: 'c'.repeat(64),
-      createdAt: new Date(),
-      legalEffect: 'certified',
+      createdAt: new Date('2026-10-01T12:00:00Z'),
+      legalEffect: 'certified' as const,
       payload: donationsPayload(),
-      signers: [
-        { role: 'legal_representative', fullName: 'Ana Pérez', position: 'Representante legal' },
-        { role: 'fiscal_reviewer', fullName: 'Blanca Navarro', position: 'Revisora fiscal' },
-      ],
-      signerImages: [pngSignature, null],
+      signers,
       verifyUrl: 'http://x/verificar/ADF-REP-2026-ABCDEFGH',
-    });
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(bytes as unknown as ArrayBuffer);
-    const summary = wb.getWorksheet('Resumen')!;
-    // Una imagen por firma que sí existe; la otra queda solo con nombre y cargo.
-    expect(summary.getImages()).toHaveLength(1);
-    const all = summary.getSheetValues().flat().map(String).join('|');
-    expect(all).toContain('Ana Pérez');
-    expect(all).toContain('Blanca Navarro');
-    // Cada hoja cabe en el ancho de una página A4 apaisada y repite su encabezado.
-    for (const name of ['Resumen', 'Donaciones', 'Por destino']) {
-      const setup = wb.getWorksheet(name)!.pageSetup;
-      expect(setup.orientation).toBe('landscape');
-      expect(setup.fitToPage).toBe(true);
-      expect(setup.fitToWidth).toBe(1);
-    }
-    expect(wb.getWorksheet('Donaciones')!.pageSetup.printTitlesRow).toBe('1:1');
-  });
+    };
+    const load = async (bytes: Buffer) => {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(bytes as unknown as ArrayBuffer);
+      return wb;
+    };
 
-  it('un borrador no lleva firmas ni sus imágenes', async () => {
-    const bytes = await renderReportXlsx({
-      code: 'ADF-REP-2026-ABCDEFGH',
-      contentHash: 'd'.repeat(64),
-      createdAt: new Date(),
-      legalEffect: 'certified',
-      payload: donationsPayload(),
-      signers: [
-        { role: 'legal_representative', fullName: 'Ana Pérez', position: 'Representante legal' },
-      ],
-      signerImages: [pngSignature],
-      verifyUrl: 'http://x/verificar/ADF-REP-2026-ABCDEFGH',
-      draft: 'pending_signatures',
+    const wb = await load(await renderReportXlsx(base));
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Reporte', 'Donaciones', 'Por destino']);
+    const sheet = wb.getWorksheet('Reporte')!;
+    // QR + una imagen por firmante.
+    expect(sheet.getImages()).toHaveLength(3);
+    expect(sheet.pageSetup).toMatchObject({
+      orientation: 'landscape',
+      fitToWidth: 1,
+      paperSize: 9,
     });
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(bytes as unknown as ArrayBuffer);
-    expect(wb.getWorksheet('Resumen')!.getImages()).toHaveLength(0);
+    const texts = sheet
+      .getSheetValues()
+      .flatMap((row) => (Array.isArray(row) ? row : []))
+      .filter((v): v is string => typeof v === 'string');
+    expect(texts).toEqual(
+      expect.arrayContaining([
+        'INFORME CERTIFICADO (ART. 125-2 DEL ESTATUTO TRIBUTARIO)',
+        'Ana Pérez',
+        'Luis Gómez',
+        'Detalle de donaciones',
+      ]),
+    );
+    // Los montos siguen siendo números con formato de moneda.
+    const net = sheet
+      .getSheetValues()
+      .flatMap((row) => (Array.isArray(row) ? row : []))
+      .includes(base.payload.totals.net);
+    expect(net).toBe(true);
+
+    // La firma queda apoyada en la fila de la línea (la fila del nombre va justo debajo).
+    const nameRow = sheet
+      .getSheetValues()
+      .findIndex((row) => Array.isArray(row) && row.includes('Ana Pérez'));
+    const sigs = sheet.getImages().slice(1);
+    for (const img of sigs) expect(img.range.tl.nativeRow).toBe(nameRow - 2);
+
+    // Borrador: sin imágenes de firma (solo el QR).
+    const draft = await load(await renderReportXlsx({ ...base, draft: 'pending_signatures' }));
+    expect(draft.getWorksheet('Reporte')!.getImages()).toHaveLength(1);
   });
 });
 

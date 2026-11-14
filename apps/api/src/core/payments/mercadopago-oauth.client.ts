@@ -48,6 +48,27 @@ export class MercadoPagoOAuthError extends Error {
   }
 }
 
+/**
+ * Text Mercado Pago sends back (`error_description`) made safe to log: control
+ * characters dropped, at most 200 chars, and any value we ourselves sent
+ * (code, secrets, verifier, tokens) replaced by `[redacted]` in case it is
+ * echoed.
+ */
+export function safeOAuthDescription(
+  text: unknown,
+  secrets: Array<string | undefined> = [],
+): string | undefined {
+  if (typeof text !== 'string' || text.length === 0) return undefined;
+  let out = Array.from(text, (ch) => (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127 ? ' ' : ch))
+    .join('')
+    .replace(/ +/g, ' ')
+    .trim();
+  for (const secret of secrets) {
+    if (secret && secret.length >= 6) out = out.split(secret).join('[redacted]');
+  }
+  return out.slice(0, 200);
+}
+
 /** RFC 7636 PKCE pair (S256). The verifier is 43 url-safe chars. */
 export function createPkcePair(): { verifier: string; challenge: string } {
   const verifier = randomBytes(32).toString('base64url');
@@ -101,7 +122,11 @@ export class MercadoPagoOAuthClient {
   private readonly authorizeUrl: string;
   private readonly redirectUri: string;
   private readonly pkce: boolean;
-  private readonly testToken: boolean;
+  /** Sandbox: grants must belong to test users (`live_mode=false`). */
+  private readonly sandbox: boolean;
+  /** Whether the code exchange carries `test_token=true` (defaults to `sandbox`). */
+  private readonly sendTestToken: boolean;
+  private readonly platformAccessToken: string | undefined;
 
   constructor(
     config: ConfigService<Env, true>,
@@ -128,7 +153,75 @@ export class MercadoPagoOAuthClient {
       (config.get('MERCADOPAGO_OAUTH_REDIRECT_URI', { infer: true }) as string | undefined) ??
       `${apiBase}/org/mercadopago/callback`;
     this.pkce = config.get('MERCADOPAGO_OAUTH_PKCE', { infer: true }) === true;
-    this.testToken = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
+    this.sandbox = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
+    const testTokenOverride = config.get('MERCADOPAGO_OAUTH_TEST_TOKEN', { infer: true }) as
+      boolean | undefined;
+    this.sendTestToken = testTokenOverride ?? this.sandbox;
+    this.platformAccessToken = config.get('MERCADOPAGO_PLATFORM_ACCESS_TOKEN', {
+      infer: true,
+    }) as string | undefined;
+    if (this.isConfigured()) {
+      // Mercado Pago shows "La aplicación no está preparada para conectarse"
+      // when these do not match the app's panel EXACTLY. Log what we send
+      // (client_id and redirect_uri are public; the secret never is).
+      for (const line of this.describeOAuthSetup()) this.logger.log(line);
+    }
+  }
+
+  /**
+   * Non-secret OAuth setup to compare, character by character, with the app
+   * in Mercado Pago's developer panel. Includes warnings for the usual
+   * mismatches (non-https or localhost redirect, which the panel's Redirect
+   * URL list cannot hold).
+   */
+  describeOAuthSetup(): string[] {
+    const lines = [
+      `Mercado Pago OAuth: client_id=${this.clientId} (from MERCADOPAGO_CLIENT_ID) ` +
+        `redirect_uri=${this.redirectUri} ` +
+        `authorize=${this.authorizeUrl} pkce=${this.pkce} sandbox=${this.sandbox} ` +
+        `test_token=${this.sendTestToken}`,
+    ];
+    // The plans (Suscripciones) app has its OWN credentials. Its access token
+    // starts with `APP_USR-<appId>-`; showing that public App ID lets you see
+    // whether it is the same app as MERCADOPAGO_CLIENT_ID (the Redirect URL
+    // must be registered in the app whose App ID is MERCADOPAGO_CLIENT_ID).
+    const platformAppId = /^APP_USR-(\d+)-/.exec(this.platformAccessToken ?? '')?.[1];
+    if (platformAppId) {
+      lines.push(
+        `Mercado Pago OAuth: MERCADOPAGO_PLATFORM_ACCESS_TOKEN belongs to app ${platformAppId} ` +
+          `(${platformAppId === this.clientId ? 'SAME as' : 'different from'} MERCADOPAGO_CLIENT_ID)`,
+      );
+    }
+    if (this.redirectUri.endsWith('/')) {
+      lines.push(
+        'Mercado Pago OAuth: redirect_uri ends with "/"; the panel entry must end with "/" too ' +
+          '(callback and callback/ are different URLs for Mercado Pago)',
+      );
+    }
+    if (this.redirectUri.includes('?') || this.redirectUri.includes('#')) {
+      lines.push(
+        'Mercado Pago OAuth: redirect_uri has a query or fragment; Mercado Pago wants a static URL',
+      );
+    }
+    let redirect: URL | undefined;
+    try {
+      redirect = new URL(this.redirectUri);
+    } catch {
+      lines.push('Mercado Pago OAuth: redirect_uri is not a valid URL');
+    }
+    if (redirect && redirect.protocol !== 'https:') {
+      lines.push(
+        'Mercado Pago OAuth: redirect_uri is not https; register an https URL (e.g. a tunnel) ' +
+          'in the app and set MERCADOPAGO_OAUTH_REDIRECT_URI to the same value',
+      );
+    }
+    if (redirect && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(redirect.hostname)) {
+      lines.push(
+        'Mercado Pago OAuth: redirect_uri points to localhost; Mercado Pago cannot redirect there ' +
+          'unless the exact same URL is registered in the app',
+      );
+    }
+    return lines;
   }
 
   /** Whether the OAuth app credentials are configured at all. */
@@ -144,9 +237,14 @@ export class MercadoPagoOAuthClient {
    * `live_mode` every grant must carry in this deployment: sandbox
    * (`MERCADOPAGO_TEST=true`) accepts only test users, production only real
    * accounts. A mismatched grant is refused (never stored or used).
+   *
+   * Mercado Pago only marks a grant `live_mode=false` when the exchange sent
+   * `test_token=true`. Without it (`MERCADOPAGO_OAUTH_TEST_TOKEN=false`, what
+   * Mercado Pago support asked for, ticket WCS-58365) a TEST seller's grant
+   * comes back `live_mode=true`, so that is what sandbox expects then.
    */
   expectedLiveMode(): boolean {
-    return !this.testToken;
+    return this.sandbox ? !this.sendTestToken : true;
   }
 
   getRedirectUri(): string {
@@ -166,7 +264,34 @@ export class MercadoPagoOAuthClient {
       params.set('code_challenge', codeChallenge);
       params.set('code_challenge_method', 'S256');
     }
-    return `${this.authorizeUrl}?${params.toString()}`;
+    const url = `${this.authorizeUrl}?${params.toString()}`;
+    for (const line of this.describeAuthorizeUrl(url)) this.logger.log(line);
+    return url;
+  }
+
+  /**
+   * What the browser is about to send, for the logs: the redirect_uri before
+   * and after URL-encoding, whether it is encoded exactly once, and the whole
+   * authorize URL with the sealed `state` hidden. No secret is in this URL
+   * (`client_secret` only ever goes in the server-to-server token call).
+   */
+  describeAuthorizeUrl(url: string): string[] {
+    const encoded = /[?&]redirect_uri=([^&]*)/.exec(url)?.[1] ?? '';
+    let decodedOnce = '';
+    try {
+      decodedOnce = decodeURIComponent(encoded);
+    } catch {
+      decodedOnce = '';
+    }
+    const singleEncoded = decodedOnce === this.redirectUri && !/%25[0-9A-Fa-f]{2}/.test(encoded);
+    const shown = url.replace(/([?&]state=)[^&]*/, '$1<redacted>');
+    return [
+      `Mercado Pago OAuth authorize: redirect_uri (raw)=${this.redirectUri}`,
+      `Mercado Pago OAuth authorize: redirect_uri (url-encoded as sent)=${encoded}`,
+      `Mercado Pago OAuth authorize: encoded exactly once=${singleEncoded}, ` +
+        `trailing slash=${this.redirectUri.endsWith('/')}`,
+      `Mercado Pago OAuth authorize: url=${shown}`,
+    ];
   }
 
   /** Exchange the authorization `code` for a token pair. */
@@ -179,8 +304,9 @@ export class MercadoPagoOAuthClient {
       redirect_uri: this.redirectUri,
     };
     if (codeVerifier) body.code_verifier = codeVerifier;
-    // Sandbox: ask for test credentials of the connected test user.
-    if (this.testToken) body.test_token = 'true';
+    // Sandbox: ask for test credentials of the connected test user. Can be
+    // switched off with MERCADOPAGO_OAUTH_TEST_TOKEN=false (Checkout Pro).
+    if (this.sendTestToken) body.test_token = 'true';
     return this.postToken(body);
   }
 
@@ -211,8 +337,17 @@ export class MercadoPagoOAuthClient {
       // Only the error CODE, never the body (it can echo request context).
       const err = (await response.json().catch(() => null)) as Record<string, unknown> | null;
       const code = typeof err?.error === 'string' ? err.error.slice(0, 60) : 'unknown';
+      // `error_description` is Mercado Pago's own text; it is logged only
+      // trimmed and with every value WE sent (code, secrets, tokens) removed.
+      const description = safeOAuthDescription(err?.error_description ?? err?.message, [
+        body.code,
+        body.client_secret,
+        body.code_verifier,
+        body.refresh_token,
+      ]);
       this.logger.warn(
-        `Mercado Pago OAuth ${body.grant_type} failed: status=${response.status} error=${code}`,
+        `Mercado Pago OAuth ${body.grant_type} failed: status=${response.status} error=${code}` +
+          (description ? ` error_description=${description}` : ''),
       );
       const invalidGrant =
         code === 'invalid_grant' ||
