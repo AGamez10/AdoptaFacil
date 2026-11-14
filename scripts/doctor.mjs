@@ -7,7 +7,8 @@
  * contenedores `adoptafacil-postgres` y `adoptafacil-redis`, que Postgres y
  * Redis respondan de verdad en sus puertos (no basta con que el puerto esté
  * abierto: en Windows, Docker Desktop lo abre aunque el contenedor esté
- * apagado), las migraciones pendientes y los puertos 3000 y 5173.
+ * apagado), las migraciones pendientes, los puertos 3000 y 5173 y la
+ * configuración del inicio con Google (driver, Client ID, orígenes a autorizar).
  *
  * Solo lee: no arranca, no borra ni migra nada. Sale con código 1 si algo falla.
  */
@@ -37,6 +38,75 @@ function readEnv() {
     if (match) values[match[1]] = match[2].replace(/^(['"])(.*)\1$/, '$2');
   }
   return values;
+}
+
+/** Claves repetidas en .env: Node/dotenv se queda con un valor y Vite podría
+ *  leer otro, lo que da errores que no se ven (p. ej. AUTH_IDENTITY_DRIVER). */
+function duplicateKeys() {
+  const file = resolve(ROOT, '.env');
+  if (!existsSync(file)) return [];
+  const seen = new Map();
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const match = /^\s*([A-Z0-9_]+)\s*=/.exec(line);
+    if (match) seen.set(match[1], (seen.get(match[1]) ?? 0) + 1);
+  }
+  return [...seen].filter(([, count]) => count > 1).map(([key]) => key);
+}
+
+const GOOGLE_CLIENT_ID = /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+
+/** Inicio con Google: driver, Client ID y orígenes que Google debe autorizar. */
+function checkGoogle(env) {
+  const driver = env.AUTH_IDENTITY_DRIVER || 'fake';
+  const api = (env.GOOGLE_OAUTH_CLIENT_ID ?? '').trim();
+  const web = (env.VITE_GOOGLE_CLIENT_ID ?? '').trim();
+  if (driver === 'disabled') {
+    ok('Google', 'apagado (AUTH_IDENTITY_DRIVER=disabled): no se muestra el botón');
+    return;
+  }
+  if (driver === 'fake') {
+    ok('Google', 'modo prueba (AUTH_IDENTITY_DRIVER=fake): botón "Continuar con Google (prueba)"');
+    if (api || web)
+      warn(
+        'Hay un Client ID de Google pero el driver sigue en fake',
+        'Para el Google real pon AUTH_IDENTITY_DRIVER=google en .env y reinicia pnpm dev',
+      );
+    return;
+  }
+  if (!api) {
+    bad(
+      'AUTH_IDENTITY_DRIVER=google sin GOOGLE_OAUTH_CLIENT_ID: la API no arranca',
+      'Copia en .env el ID de cliente (termina en .apps.googleusercontent.com)',
+    );
+    return;
+  }
+  if (!GOOGLE_CLIENT_ID.test(api)) {
+    bad(
+      'GOOGLE_OAUTH_CLIENT_ID no parece un ID de cliente web de Google',
+      'Debe terminar en .apps.googleusercontent.com (no pegues el "secreto del cliente")',
+    );
+    return;
+  }
+  if (web && web !== api)
+    warn(
+      'VITE_GOOGLE_CLIENT_ID y GOOGLE_OAUTH_CLIENT_ID son distintos',
+      'La web usa el de la API; deja ambos iguales o borra VITE_GOOGLE_CLIENT_ID',
+    );
+  ok('Google', `real · ${api.slice(0, 12)}…`);
+  const web_url = env.WEB_BASE_URL || 'http://localhost:5173';
+  let origins = ['http://localhost:5173', 'http://localhost'];
+  try {
+    const origin = new URL(web_url).origin;
+    if (!origins.includes(origin)) origins = [origin, ...origins];
+  } catch {
+    // WEB_BASE_URL inválida: se reportan solo los orígenes locales
+  }
+  console.log(
+    '        → En Google Cloud Console › APIs y servicios › Credenciales › este ID de cliente,\n' +
+      '          "Orígenes autorizados de JavaScript" debe incluir:\n' +
+      origins.map((o) => `            ${o}`).join('\n') +
+      '\n          (y la URL de ngrok si la usas). Los cambios en Google tardan unos minutos.',
+  );
 }
 
 function run(command, args, timeout = 15_000) {
@@ -116,6 +186,13 @@ async function main() {
     bad('.env no existe', 'Créalo con: pnpm setup:env');
   } else {
     ok('.env');
+    const dupes = duplicateKeys();
+    if (dupes.length)
+      bad(
+        `Claves repetidas en .env: ${dupes.join(', ')}`,
+        'Deja una sola línea por clave (si no, la API y la web pueden leer valores distintos)',
+      );
+    checkGoogle(env);
   }
 
   // Docker

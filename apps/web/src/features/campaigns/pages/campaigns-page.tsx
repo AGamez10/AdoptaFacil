@@ -26,6 +26,7 @@ import { SelectField, TextAreaField } from '../components/campaign-form-fields';
 import { CampaignManageCard } from '../components/campaign-manage-card';
 import { CATEGORY_LABELS } from '../model/campaigns-view';
 import { dateBounds, dateError } from '../../../lib/date-rules';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 const CATEGORY_OPTIONS = CAMPAIGN_CATEGORIES.map((value) => ({
   value,
@@ -89,12 +90,26 @@ export function CampaignsPage() {
 
   const submit = async (): Promise<void> => {
     const goal = Number(goalAmount);
-    if (!title.trim() || !deadline || !Number.isInteger(goal) || goal <= 0) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Título, categoría, meta (entero COP > 0) y fecha límite son obligatorios.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      {
+        ok: Boolean(title.trim()),
+        title: 'Falta el título',
+        message: 'Escribe el nombre de la campaña.',
+      },
+      {
+        ok: Number.isInteger(goal) && goal > 0,
+        title: 'Meta no válida',
+        message:
+          'La meta debe ser un número entero en pesos mayor que 0 (sin puntos ni decimales).',
+      },
+      {
+        ok: Boolean(deadline),
+        title: 'Falta la fecha límite',
+        message: 'Elige hasta cuándo recibe donaciones.',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     const deadlineError = dateError('campaignDeadline', deadline);

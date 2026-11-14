@@ -111,7 +111,7 @@ export function MyResourceOffersPage() {
       {!loading && !error && offers.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2">
           {offers.map((offer) => (
-            <Card key={offer.id} data-testid="my-offer-card">
+            <Card key={offer.id} data-testid="my-offer-card" data-foco={offer.id}>
               <CardHeader className="gap-2">
                 <CardTitle className="text-base">{offer.needTitle}</CardTitle>
                 <p className="text-xs text-muted-foreground">{offer.organizationName}</p>

@@ -254,7 +254,7 @@ function buildPreviewDoc(
   const fonts = design.fonts
     ? `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${design.fonts}&display=swap">`
     : '';
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${fonts}<style>html,body{margin:0}${BASE_CSS}${design.css}${PREVIEW_STATIC_CSS}</style></head><body><div class="af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}" style="${vars}">${body}</div></body></html>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${fonts}<style>html,body{margin:0}${BASE_CSS}${design.css}${PREVIEW_STATIC_CSS}</style></head><body><div class="af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}${design.premium ? ' pk" data-mode="light' : ''}" style="${vars}">${body}</div></body></html>`;
 }
 
 /**

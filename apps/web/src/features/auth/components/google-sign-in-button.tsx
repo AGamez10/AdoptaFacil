@@ -8,6 +8,8 @@ export interface GoogleSignInButtonProps {
    *  token in dev) once the user picks an account. */
   onCredential: (idToken: string) => void | Promise<void>;
   disabled?: boolean;
+  /** Google's button label: "Continuar con Google" (default) or "Registrarse con Google". */
+  text?: 'continue_with' | 'signup_with' | 'signin_with';
 }
 
 /** Minimal shape of the `google.accounts.id` API this component uses (Google
@@ -19,6 +21,9 @@ interface GoogleIdentityServices {
       initialize: (config: {
         client_id: string;
         callback: (response: { credential: string }) => void;
+        ux_mode?: 'popup' | 'redirect';
+        context?: 'signin' | 'signup' | 'use';
+        itp_support?: boolean;
       }) => void;
       renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
     };
@@ -34,18 +39,17 @@ declare global {
 const GIS_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 const GIS_SCRIPT_ID = 'google-identity-services';
 
+let gisPromise: Promise<void> | null = null;
+
 /** Load the Google Identity Services script once (shared across every mount
- *  of this component on the page) and resolve when it's ready. */
+ *  of this component on the page) and resolve when it's ready. A failed load
+ *  is forgotten so the next mount tries again instead of waiting forever on a
+ *  script tag whose `error` event already fired. */
 function loadGoogleIdentityServices(): Promise<void> {
   if (window.google?.accounts?.id) return Promise.resolve();
-  const existing = document.getElementById(GIS_SCRIPT_ID) as HTMLScriptElement | null;
-  if (existing) {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Failed to load Google script')));
-    });
-  }
-  return new Promise((resolve, reject) => {
+  if (gisPromise) return gisPromise;
+  gisPromise = new Promise<void>((resolve, reject) => {
+    document.getElementById(GIS_SCRIPT_ID)?.remove();
     const script = document.createElement('script');
     script.id = GIS_SCRIPT_ID;
     script.src = GIS_SCRIPT_SRC;
@@ -54,13 +58,27 @@ function loadGoogleIdentityServices(): Promise<void> {
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Failed to load Google script'));
     document.head.appendChild(script);
+  }).catch((error: unknown) => {
+    gisPromise = null;
+    throw error;
   });
+  return gisPromise;
+}
+
+/**
+ * The Google OAuth Client ID to use. The API's own value comes first (it is
+ * the audience the API verifies the token against, so the two can never
+ * disagree); `VITE_GOOGLE_CLIENT_ID` is the build-time fallback.
+ */
+export function useGoogleClientId(): string | undefined {
+  const { capabilities } = useCapabilities();
+  return capabilities.googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || undefined;
 }
 
 /**
  * Whether a Google button can be shown at all (Ola 1, R0-2, AF-029): the API
  * must serve `POST /auth/google` (capabilities) AND either a real Client ID
- * is configured or this is the Vite dev server. A production build without a
+ * is known or this is the Vite dev server. A production build without a
  * Client ID shows no Google button — never the "(prueba)" one. `vite build`
  * always runs in mode "production" (even if a stray NODE_ENV=development
  * leaks in from a local .env), and `import.meta.env.MODE` is replaced at
@@ -68,44 +86,67 @@ function loadGoogleIdentityServices(): Promise<void> {
  */
 export function useGoogleSignInAvailable(): boolean {
   const { capabilities } = useCapabilities();
-  const hasClientId = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
-  return capabilities.googleSignIn && (hasClientId || import.meta.env.MODE !== 'production');
+  const clientId = useGoogleClientId();
+  return capabilities.googleSignIn && (Boolean(clientId) || import.meta.env.MODE !== 'production');
 }
 
 /**
- * "Continuar con Google" (T-Google-SignIn). With a real `VITE_GOOGLE_CLIENT_ID`
- * configured, renders the REAL Google Identity Services button and forwards
- * its ID token to `onCredential`. With no Client ID (the client hasn't
- * provided one yet — dev/test default), renders a plain button that prompts
- * for a test email and calls `onCredential` with the FakeIdentityAdapter's
- * documented token format (`fake:<email>:<name>`), so the WHOLE flow —
- * auto-link or new lightweight Person account — can be exercised locally
- * with NO real Google account, against `AUTH_IDENTITY_DRIVER=fake` on the API.
- * That fallback exists only on the dev server (see useGoogleSignInAvailable);
- * callers render this component only when that hook says so.
+ * "Continuar con Google" (T-Google-SignIn). With a real Client ID (from the
+ * API or `VITE_GOOGLE_CLIENT_ID`), renders the REAL Google Identity Services
+ * button and forwards its ID token to `onCredential`. Popup mode: the page
+ * never navigates away, so whatever the person was doing (the donation, the
+ * volunteering day, the offer, the invitation) is still in memory when the
+ * token comes back. With no Client ID (dev default against
+ * `AUTH_IDENTITY_DRIVER=fake`), renders a plain button that prompts for a
+ * test email and sends the FakeIdentityAdapter's documented token
+ * (`fake:<email>:<name>`). That fallback exists only on the dev server (see
+ * useGoogleSignInAvailable); callers render this component only when that
+ * hook says so.
  */
-export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButtonProps) {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+export function GoogleSignInButton({
+  onCredential,
+  disabled,
+  text = 'continue_with',
+}: GoogleSignInButtonProps) {
+  const clientId = useGoogleClientId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [scriptError, setScriptError] = useState(false);
   const buttonId = useId();
+  // The latest callback, read when Google answers: re-rendering the parent
+  // (every keystroke in the form) must not re-initialize and re-draw Google's
+  // button.
+  const onCredentialRef = useRef(onCredential);
+  onCredentialRef.current = onCredential;
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
-    void loadGoogleIdentityServices()
+    setScriptError(false);
+    loadGoogleIdentityServices()
       .then(() => {
         if (cancelled || !containerRef.current || !window.google) return;
         window.google.accounts.id.initialize({
           client_id: clientId,
-          callback: (response) => void onCredential(response.credential),
+          ux_mode: 'popup',
+          context: text === 'signup_with' ? 'signup' : 'signin',
+          itp_support: true,
+          callback: (response) => {
+            if (disabledRef.current) return;
+            void onCredentialRef.current(response.credential);
+          },
         });
+        const width = Math.min(400, Math.max(200, containerRef.current.offsetWidth || 320));
         window.google.accounts.id.renderButton(containerRef.current, {
           type: 'standard',
           theme: 'outline',
           size: 'large',
-          text: 'continue_with',
-          width: 320,
+          shape: 'pill',
+          text,
+          locale: 'es-419',
+          logo_alignment: 'center',
+          width,
         });
       })
       .catch(() => {
@@ -114,13 +155,34 @@ export function GoogleSignInButton({ onCredential, disabled }: GoogleSignInButto
     return () => {
       cancelled = true;
     };
-  }, [clientId, onCredential]);
+  }, [clientId, text]);
 
   if (clientId) {
     if (scriptError) {
-      return <p className={styles.error}>No pudimos cargar el inicio de sesión con Google.</p>;
+      return (
+        <p className={styles.error} role="alert">
+          No pudimos cargar el inicio de sesión con Google. Revisa tu conexión o recarga la página;
+          también puedes usar tu correo y contraseña.
+        </p>
+      );
     }
-    return <div ref={containerRef} data-testid="google-sign-in-container" />;
+    return (
+      <div className={styles.wrapper}>
+        <div
+          ref={containerRef}
+          className={styles.gis}
+          data-testid="google-sign-in-container"
+          aria-busy={disabled || undefined}
+        />
+        {import.meta.env.MODE !== 'production' && (
+          <p className={styles.hint} data-testid="google-sign-in-dev-hint">
+            Solo en desarrollo: si el botón no aparece, agrega{' '}
+            <code>{typeof window === 'undefined' ? '' : window.location.origin}</code> a los
+            «Orígenes autorizados de JavaScript» de este Client ID en Google Cloud Console.
+          </p>
+        )}
+      </div>
+    );
   }
 
   // Dev-server fallback: no real Client ID configured (see .env.example).

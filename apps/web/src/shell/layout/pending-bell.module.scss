@@ -251,3 +251,18 @@
     flex-wrap: wrap;
   }
 }
+
+/* Avisos personales: leídos en gris, reconocimientos con acento dorado. */
+.bell__item--read {
+  background-color: transparent;
+  border: 1px solid var(--border-hairline);
+  opacity: 0.85;
+}
+
+.bell__item--kudos {
+  box-shadow: inset 3px 0 0 hsl(var(--brand-gold, 40 90% 55%));
+}
+
+.bell__star {
+  color: hsl(var(--brand-gold, 40 90% 55%));
+}

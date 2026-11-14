@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type {
   AcceptInvitationInput,
+  AcceptInvitationWithGoogleInput,
   FormalizationState,
   FormalizationStatus,
   VerificationLevel,
@@ -139,6 +140,9 @@ export interface SessionContextValue {
    * member's session. Optional so existing test doubles stay valid.
    */
   acceptInvitation?: (input: AcceptInvitationInput) => Promise<void>;
+  /** Accept the invitation signing in with Google (the Google email must be
+   *  the invited one). Optional so existing test doubles stay valid. */
+  acceptInvitationWithGoogle?: (input: AcceptInvitationWithGoogleInput) => Promise<void>;
   /**
    * Google Sign-In (T-Google-SignIn): logs into an existing account (any
    * account type, matched by email) or creates a lightweight new Person
@@ -146,7 +150,7 @@ export interface SessionContextValue {
    * Identity Services credential or (dev, no VITE_GOOGLE_CLIENT_ID) the
    * FakeIdentityAdapter's documented test token.
    */
-  signInWithGoogle: (idToken: string) => Promise<void>;
+  signInWithGoogle: (idToken: string) => Promise<GoogleSignInResult | void>;
   /**
    * Complete/update the caller's own Person profile (`phone`/`documentId`/
    * `address`) — the fields gated before donating/apadrinar, requesting an
@@ -185,6 +189,11 @@ export interface SessionContextValue {
    * tokens change. Optional so existing test doubles stay valid.
    */
   adoptTokens?: (tokens: AuthTokens) => void;
+}
+
+/** What a Google sign-in tells the screen: whether it just created the account. */
+export interface GoogleSignInResult {
+  isNewAccount: boolean;
 }
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
@@ -414,9 +423,21 @@ export function SessionProvider({
     [api, establish],
   );
 
+  const acceptInvitationWithGoogle = useCallback(
+    async (input: AcceptInvitationWithGoogleInput) => {
+      if (!api.authApi.acceptInvitationWithGoogle) {
+        throw new Error('Este entorno no puede aceptar invitaciones.');
+      }
+      await establish(await api.authApi.acceptInvitationWithGoogle(input));
+    },
+    [api, establish],
+  );
+
   const signInWithGoogle = useCallback(
-    async (idToken: string) => {
-      await establish(await api.authApi.googleSignIn({ idToken }));
+    async (idToken: string): Promise<GoogleSignInResult> => {
+      const session = await api.authApi.googleSignIn({ idToken });
+      await establish(session);
+      return { isNewAccount: session.isNewAccount === true };
     },
     [api, establish],
   );
@@ -508,6 +529,7 @@ export function SessionProvider({
       signIn,
       register,
       acceptInvitation,
+      acceptInvitationWithGoogle,
       signInWithGoogle,
       completeProfile,
       requestPasswordReset,
@@ -528,6 +550,7 @@ export function SessionProvider({
       signIn,
       register,
       acceptInvitation,
+      acceptInvitationWithGoogle,
       signInWithGoogle,
       completeProfile,
       requestPasswordReset,

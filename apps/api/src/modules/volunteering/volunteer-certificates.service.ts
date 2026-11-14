@@ -8,21 +8,22 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type VolunteerCertificate as CertificateRow } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
+import { type PDFImage, PDFDocument } from 'pdf-lib';
+import sharp from 'sharp';
 import {
-  type PDFFont,
-  type PDFImage,
-  type PDFPage,
-  PDFDocument,
-  StandardFonts,
-  rgb,
-} from 'pdf-lib';
-import type {
-  OrganizationLocation,
-  Paginated,
-  VolunteerCertificate,
-  VolunteerCertificateBitacoraEntry,
+  DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE,
+  isVolunteerCertificateCode,
+  type OrganizationLocation,
+  type Paginated,
+  type VolunteerCertificate,
+  type VolunteerCertificateBitacoraEntry,
+  type VolunteerCertificateTemplate,
+  type VolunteerCertificateVerification,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -45,11 +46,23 @@ import {
 import { clampLimit } from './volunteer-opportunities.service';
 import { pdfText } from '../reports/report-text';
 import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
+import { embedSignatureForPdf } from '../../core/legal/signature-render';
+import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
+import { parseStorageKey } from '../../core/storage/storage-keys';
 import {
-  SIGNATURE_LINE_OVERLAP,
-  embedSignatureForPdf,
-  fitSignature,
-} from '../../core/legal/signature-render';
+  type CertificatePhoto,
+  formatDay,
+  renderVolunteerCertificate,
+} from './volunteer-certificate-pdf';
+
+/** Fotos de la jornada que se imprimen en el anexo (las demás se cuentan). */
+const MAX_CERTIFICATE_PHOTOS = 6;
+
+/** Código público del certificado: `VOL-XXXXXXXX-XXXXXXXX` (64 bits aleatorios). */
+export function generateVolunteerCertificateCode(): string {
+  const hex = randomBytes(8).toString('hex').toUpperCase();
+  return `VOL-${hex.slice(0, 8)}-${hex.slice(8)}`;
+}
 
 function toCertificate(row: CertificateRow): VolunteerCertificate {
   return {
@@ -74,6 +87,7 @@ function toCertificate(row: CertificateRow): VolunteerCertificate {
     signerFullName: row.signerFullName ?? undefined,
     signerPosition: row.signerPosition ?? undefined,
     signerIsLegalRepresentative: row.signerIsLegalRepresentative ?? undefined,
+    verificationCode: row.verificationCode ?? undefined,
   };
 }
 
@@ -97,11 +111,13 @@ interface CertificateMineRow {
   schoolName: string | null;
   schoolAgreementCode: string | null;
   bitacora: VolunteerCertificateBitacoraEntry[];
+  verificationCode?: string | null;
 }
 
 function fromMineRow(row: CertificateMineRow): VolunteerCertificate {
   return {
     ...row,
+    verificationCode: row.verificationCode ?? undefined,
     guardianName: row.guardianName ?? undefined,
     guardianDocument: row.guardianDocument ?? undefined,
     schoolName: row.schoolName ?? undefined,
@@ -151,6 +167,7 @@ interface CertificateViewerRow {
   signer_full_name: string | null;
   signer_position: string | null;
   signer_is_legal_representative: boolean | null;
+  verification_code: string | null;
 }
 
 /** Firma congelada al emitir: solo para volver a dibujar el PDF. */
@@ -182,16 +199,8 @@ function fromViewerRow(row: CertificateViewerRow): VolunteerCertificate {
     signerFullName: row.signer_full_name ?? undefined,
     signerPosition: row.signer_position ?? undefined,
     signerIsLegalRepresentative: row.signer_is_legal_representative ?? undefined,
+    verificationCode: row.verification_code ?? undefined,
   };
-}
-
-function formatCO(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-CO', {
-    timeZone: 'America/Bogota',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
 }
 
 /**
@@ -213,7 +222,48 @@ export class VolunteerCertificatesService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     private readonly legalRepresentatives: LegalRepresentativeService,
-  ) {}
+    private readonly inbox: InboxService,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    config: ConfigService,
+  ) {
+    this.webBaseUrl = String(config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(
+      /\/$/,
+      '',
+    );
+  }
+
+  private readonly webBaseUrl: string;
+
+  /** Enlace público de verificación impreso en el QR del certificado. */
+  verifyUrl(code: string): string {
+    return `${this.webBaseUrl}/verificar/${encodeURIComponent(code)}`;
+  }
+
+  /**
+   * Verificación PÚBLICA (sin sesión) por el código impreso. Solo lo que ya
+   * está en el documento (`volunteer_certificate_public`, SECURITY DEFINER).
+   */
+  async verifyPublic(code: string): Promise<VolunteerCertificateVerification> {
+    const normalized = code.trim().toUpperCase();
+    if (!isVolunteerCertificateCode(normalized)) {
+      throw new NotFoundException('No encontramos un certificado con ese código.');
+    }
+    const rows = await this.prisma.$queryRaw<
+      Array<{ data: VolunteerCertificateVerification | null }>
+    >(Prisma.sql`SELECT volunteer_certificate_public(${normalized}) AS data`);
+    const data = rows[0]?.data;
+    if (!data) {
+      throw new NotFoundException('No encontramos un certificado con ese código.');
+    }
+    const clean = <T>(value: T | null | undefined): T | undefined => value ?? undefined;
+    return {
+      ...data,
+      schoolName: clean(data.schoolName),
+      signerFullName: clean(data.signerFullName),
+      signerPosition: clean(data.signerPosition),
+      signerIsLegalRepresentative: clean(data.signerIsLegalRepresentative),
+    };
+  }
 
   private requireOrgId(): string {
     const organizationId = this.tenant.getOrganizationId();
@@ -378,6 +428,7 @@ export class VolunteerCertificatesService {
           signerFullName: signer.fullName,
           signerPosition: signer.position,
           signerIsLegalRepresentative,
+          verificationCode: generateVolunteerCertificateCode(),
         },
       });
       await this.audit.recordWithTx(tx, {
@@ -417,6 +468,14 @@ export class VolunteerCertificatesService {
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
     }
+    await this.inbox.toUser(created.row.volunteerUserId, {
+      kind: 'volunteering.certificate_issued',
+      tone: 'kudos',
+      title: `¡Felicitaciones! Tienes tu certificado de ${created.row.totalApprovedHours} h`,
+      body: `${created.row.organizationName} certificó tu voluntariado en "${created.row.opportunityTitle}". Descárgalo desde Voluntariado.`,
+      href: `/voluntariado?foco=${created.row.id}`,
+      dedupeKey: `volunteer_certificate:${created.row.id}`,
+    });
 
     return toCertificate(created.row);
   }
@@ -470,43 +529,102 @@ export class VolunteerCertificatesService {
     return row;
   }
 
-  /** Best-effort: the issuing org's city (for "Emitido en <ciudad>, el
-   *  <fecha>"), read fresh at render time — absent rather than fabricated
-   *  when the org never filled it in, or on any read failure. */
-  private async getOrgCity(organizationId: string): Promise<string | undefined> {
+  /** Best-effort: ciudad, NIT y logo de la organización, leídos al generar
+   *  el PDF. Ausentes (nunca inventados) si no los registró o si algo falla. */
+  private async getOrgLetterhead(
+    organizationId: string,
+  ): Promise<{ city?: string; nit?: string; logo: Buffer | null }> {
     try {
       const profile = await this.prisma.withOrgContext(organizationId, (tx) =>
         tx.organizationProfile.findUnique({
           where: { organizationId },
-          select: { location: true },
+          select: { location: true, nit: true, logoUrl: true },
         }),
       );
       const location = profile?.location as OrganizationLocation | null | undefined;
-      return location?.city?.trim() || undefined;
+      return {
+        city: location?.city?.trim() || undefined,
+        nit: profile?.nit?.trim() || undefined,
+        logo: await this.readLogo(organizationId, profile?.logoUrl ?? null),
+      };
     } catch {
-      return undefined;
+      return { logo: null };
     }
   }
 
   /**
-   * Renders the certificate as an actual diploma-style document (S-14,
-   * pedido del cliente: "debe ser realmente un verdadero certificado de horas
-   * sociales"), landscape A4 — organization letterhead, the volunteer's name
-   * as the honoree (diploma convention), hours/dates/opportunity, and a real
-   * signature block: the org's CURRENT legal representative's name +
-   * DECRYPTED signature image (`LegalRepresentativeService`, S-14), never
-   * fabricated — falls back to a generic "Representante Legal" label when no
-   * legal representative has been registered yet, or if the signature can't
-   * be read/decrypted for any reason.
-   *
-   * Same `pdf-lib` technique already used for the M03 vaccination carnet
-   * (`CarnetService`), generated on demand from the stored (immutable)
-   * record, never persisted as a separate file via StoragePort. The
-   * bitácora (hour-by-hour log) moves to a plain portrait appendix page —
-   * it doesn't belong on the ornate certificate page, but nothing it showed
-   * before is lost.
+   * El logo se guarda como URL pública del propio almacenamiento. Se lee por
+   * el StoragePort (nunca por HTTP) y solo si la clave es pública y de ESTA
+   * organización; cualquier otra URL se ignora.
    */
-  async generatePdf(id: string, actor: RequestUser): Promise<Buffer> {
+  private async readLogo(organizationId: string, logoUrl: string | null): Promise<Buffer | null> {
+    if (!logoUrl) return null;
+    let key: string | null = null;
+    try {
+      key = new URL(logoUrl, 'http://local').searchParams.get('key');
+    } catch {
+      return null;
+    }
+    if (!key) {
+      const match = /(public\/[0-9a-f-]{36}\/[^?#]+)/i.exec(logoUrl);
+      key = match ? decodeURIComponent(match[1]) : null;
+    }
+    const parsed = key ? parseStorageKey(key) : null;
+    if (
+      !key ||
+      !parsed ||
+      parsed.visibility !== 'public' ||
+      parsed.organizationId !== organizationId
+    ) {
+      return null;
+    }
+    try {
+      return (await this.storage.readObject(key))?.data ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Fotos de las sesiones APROBADAS de la inscripción (las únicas que el
+   *  certificado respalda), en orden de fecha. Una foto ilegible se omite. */
+  private async loadApprovedSessionPhotos(
+    organizationId: string,
+    enrollmentId: string,
+  ): Promise<{ items: Array<{ data: Buffer; date: Date }>; total: number }> {
+    const photos = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.serviceHoursPhoto.findMany({
+        where: { organizationId, serviceHours: { enrollmentId, status: 'approved' } },
+        include: { serviceHours: { select: { date: true } } },
+        orderBy: [{ serviceHours: { date: 'asc' } }, { createdAt: 'asc' }],
+      }),
+    );
+    const items: Array<{ data: Buffer; date: Date }> = [];
+    for (const photo of photos) {
+      if (items.length >= MAX_CERTIFICATE_PHOTOS) break;
+      try {
+        const stored = await this.storage.readObject(photo.storageRef);
+        if (stored) items.push({ data: stored.data, date: photo.serviceHours.date });
+      } catch {
+        // Una foto que no se puede leer no impide entregar el certificado.
+      }
+    }
+    return { items, total: photos.length };
+  }
+
+  /**
+   * PDF del certificado (S-14 + rediseño 2026-11-13): dos plantillas
+   * (`huellitas`, `clasica`) con el MISMO contenido verificable — membrete con
+   * logo, NIT y ciudad; la persona como protagonista; horas, fechas y
+   * jornadas; firma CONGELADA al emitir; código público + QR a
+   * `/verificar/<código>`; y anexos con la bitácora en tabla y el registro
+   * fotográfico de las sesiones aprobadas. Se genera al vuelo desde el
+   * registro inmutable; nunca se guarda como archivo aparte.
+   */
+  async generatePdf(
+    id: string,
+    actor: RequestUser,
+    template: VolunteerCertificateTemplate = DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE,
+  ): Promise<Buffer> {
     const viewed = await this.forViewerWithSigner(id, actor);
     if (!viewed) {
       throw new NotFoundException('Volunteer certificate not found');
@@ -521,7 +639,7 @@ export class VolunteerCertificatesService {
     // P0-2: SOLO la firma congelada al emitir (verificada por su hash), nunca
     // la del representante vigente. Un certificado anterior a este control no
     // tiene firmante congelado y se muestra sin firma.
-    const [signatureBytes, rawCity] = await Promise.all([
+    const [signatureBytes, letterhead, photos] = await Promise.all([
       frozen
         ? this.legalRepresentatives.getSignatureImageById(
             row.organizationId,
@@ -529,55 +647,82 @@ export class VolunteerCertificatesService {
             frozen.signatureHash,
           )
         : Promise.resolve(null),
-      this.getOrgCity(row.organizationId),
+      this.getOrgLetterhead(row.organizationId),
+      this.loadApprovedSessionPhotos(row.organizationId, row.enrollmentId).catch(() => ({
+        items: [],
+        total: 0,
+      })),
     ]);
     const signer =
       frozen && row.signerFullName && row.signerPosition
         ? {
             fullName: pdfText(row.signerFullName, 120),
             position: pdfText(row.signerPosition, 120),
-            signatureImage: signatureBytes,
             isLegalRepresentative: row.signerIsLegalRepresentative !== false,
           }
         : null;
-    const city = rawCity ? pdfText(rawCity, 80) : undefined;
 
     const pdf = await PDFDocument.create();
-    const serif = await pdf.embedFont(StandardFonts.TimesRoman);
-    const serifBold = await pdf.embedFont(StandardFonts.TimesRomanBold);
-    const serifItalic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
-    const sans = await pdf.embedFont(StandardFonts.Helvetica);
-    const sansBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-    // Embebido ANTES de dibujar (pdf-lib es async aquí) — nunca dentro de la
-    // función de dibujo, que debe quedar síncrona. Una firma corrupta/no-PNG
-    // nunca rompe la generación: se sigue sin imagen (fallback de texto).
-    // La firma puede venir dibujada (PNG) o subida como foto (JPG): antes solo
-    // se intentaba PNG y una firma en JPG se descartaba en silencio, dejando
-    // el certificado sin firma aunque el representante sí la hubiera registrado.
-    const signatureImage = signer?.signatureImage
-      ? await embedSignatureImage(pdf, signer.signatureImage)
-      : null;
+    pdf.setTitle(`Certificado de voluntariado - ${row.volunteerName}`);
+    pdf.setAuthor(row.organizationName);
+    pdf.setCreator('AdoptaFácil');
+    if (row.verificationCode) pdf.setSubject(`Código de verificación ${row.verificationCode}`);
+    // Una firma corrupta/no-PNG nunca rompe la generación: se sigue sin imagen.
+    const signatureImage =
+      signer && signatureBytes ? await embedSignatureImage(pdf, signatureBytes) : null;
     if (!signer) {
       this.logger.warn(`Certificado ${row.id}: emitido sin firmante congelado.`);
     } else if (!signatureImage) {
       this.logger.warn(`Certificado ${row.id}: la firma congelada no se pudo leer o verificar.`);
     }
+    const logo = letterhead.logo ? await embedJpegImage(pdf, letterhead.logo, 400) : null;
+    const embeddedPhotos: CertificatePhoto[] = [];
+    for (const photo of photos.items) {
+      const image = await embedJpegImage(pdf, photo.data, 900);
+      if (image)
+        embeddedPhotos.push({
+          image,
+          caption: `Sesión del ${formatDay(photo.date.toISOString())}`,
+        });
+    }
 
-    drawCertificatePage(pdf, {
-      font: { serif, serifBold, serifItalic, sans, sansBold },
+    await renderVolunteerCertificate(pdf, {
+      template,
       row,
       signer,
       signatureImage,
-      city,
+      logo,
+      city: letterhead.city ? pdfText(letterhead.city, 80) : undefined,
+      nit: letterhead.nit ? pdfText(letterhead.nit, 30) : undefined,
+      verificationCode: row.verificationCode,
+      verifyUrl: row.verificationCode ? this.verifyUrl(row.verificationCode) : undefined,
+      photos: embeddedPhotos,
+      totalPhotos: photos.total,
     });
-
-    if (row.bitacora.length > 0) {
-      drawBitacoraAppendix(pdf, { font: { sans, sansBold }, row });
-    }
 
     await stampPlatformDocumentNotice(pdf);
     const bytes = await pdf.save();
     return Buffer.from(bytes);
+  }
+}
+
+/** Reduce una imagen (logo o foto) a JPEG y la incrusta; null si no se puede
+ *  leer (una imagen dañada nunca impide generar el certificado). */
+async function embedJpegImage(
+  pdf: PDFDocument,
+  bytes: Buffer,
+  maxSide: number,
+): Promise<PDFImage | null> {
+  try {
+    const jpeg = await sharp(bytes, { limitInputPixels: 80_000_000 })
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .resize(maxSide, maxSide, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    return await pdf.embedJpg(jpeg);
+  } catch {
+    return null;
   }
 }
 
@@ -612,390 +757,4 @@ function sanitizeCertificateForPdf(row: VolunteerCertificate): VolunteerCertific
       supervisorName: opt(entry.supervisorName, 120),
     })),
   };
-}
-
-// ---------------------------------------------------------------------------
-// Dibujo del PDF (S-14) — funciones libres (no dependen de `this`), reciben
-// todo lo que necesitan por parámetro. Separado de la clase para que el
-// layout del certificado se pueda leer/ajustar sin tocar la lógica de datos.
-// ---------------------------------------------------------------------------
-
-const NAVY = rgb(0.08, 0.16, 0.3);
-const GOLD = rgb(0.62, 0.5, 0.22);
-const INK = rgb(0.15, 0.15, 0.15);
-const MUTED = rgb(0.42, 0.42, 0.42);
-
-interface CertificateFonts {
-  serif: PDFFont;
-  serifBold: PDFFont;
-  serifItalic: PDFFont;
-  sans: PDFFont;
-  sansBold: PDFFont;
-}
-
-function drawCentered(
-  page: PDFPage,
-  pageWidth: number,
-  text: string,
-  y: number,
-  font: PDFFont,
-  size: number,
-  color = INK,
-): void {
-  const width = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x: (pageWidth - width) / 2, y, size, font, color });
-}
-
-/** Word-wraps `text` to fit within `maxWidth` at `size` — pdf-lib never wraps
- *  text on its own. Never splits a single word, however long. */
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    const attempt = current ? `${current} ${word}` : word;
-    if (current && font.widthOfTextAtSize(attempt, size) > maxWidth) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = attempt;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function drawCenteredParagraph(
-  page: PDFPage,
-  pageWidth: number,
-  text: string,
-  startY: number,
-  font: PDFFont,
-  size: number,
-  maxWidth: number,
-  lineHeight: number,
-  color = INK,
-): number {
-  let y = startY;
-  for (const line of wrapText(text, font, size, maxWidth)) {
-    drawCentered(page, pageWidth, line, y, font, size, color);
-    y -= lineHeight;
-  }
-  return y;
-}
-
-function drawCenteredRule(
-  page: PDFPage,
-  pageWidth: number,
-  y: number,
-  width: number,
-  color: ReturnType<typeof rgb>,
-  thickness = 1,
-): void {
-  const x = (pageWidth - width) / 2;
-  page.drawLine({ start: { x, y }, end: { x: x + width, y }, thickness, color });
-}
-
-/** El certificado en sí: una sola página apaisada (diploma). */
-function drawCertificatePage(
-  pdf: PDFDocument,
-  input: {
-    font: CertificateFonts;
-    row: VolunteerCertificate;
-    signer: { fullName: string; position: string; isLegalRepresentative: boolean } | null;
-    signatureImage: PDFImage | null;
-    city?: string;
-  },
-): void {
-  const { font, row, signer, signatureImage, city } = input;
-  // Una ESAL formalizada certifica por medio de su representante legal; un
-  // grupo informal o en proceso no tiene uno, y certifica por medio de la
-  // persona responsable que registró. Nunca se le atribuye una figura legal
-  // que no tiene. Sin firmante congelado (certificado antiguo) se dice "quien
-  // firma por la organización", sin suponer ninguna.
-  const signerRole = !signer
-    ? 'quien firma por la organización'
-    : signer.isLegalRepresentative
-      ? 'su representante legal'
-      : 'su responsable';
-  const PAGE_WIDTH = 841.89;
-  const PAGE_HEIGHT = 595.28;
-  const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  const outerMargin = 28;
-  const innerMargin = 40;
-  const contentWidth = PAGE_WIDTH - innerMargin * 2;
-
-  // Marco decorativo doble: borde grueso azul + filete dorado interior — el
-  // aspecto de "documento oficial" que pedía el cliente, sin depender de
-  // ningún color de marca dinámico (esto es un documento formal, no el
-  // portal público).
-  page.drawRectangle({
-    x: outerMargin,
-    y: outerMargin,
-    width: PAGE_WIDTH - outerMargin * 2,
-    height: PAGE_HEIGHT - outerMargin * 2,
-    borderColor: NAVY,
-    borderWidth: 2.5,
-  });
-  page.drawRectangle({
-    x: outerMargin + 8,
-    y: outerMargin + 8,
-    width: PAGE_WIDTH - (outerMargin + 8) * 2,
-    height: PAGE_HEIGHT - (outerMargin + 8) * 2,
-    borderColor: GOLD,
-    borderWidth: 1,
-  });
-
-  let y = PAGE_HEIGHT - innerMargin - 46;
-
-  // Membrete: nombre de la organización.
-  drawCentered(page, PAGE_WIDTH, row.organizationName.toUpperCase(), y, font.sansBold, 13, NAVY);
-  y -= 10;
-  drawCenteredRule(page, PAGE_WIDTH, y, 90, GOLD, 1.5);
-  y -= 42;
-
-  // Título — distingue constancia de servicio social estudiantil vs. certificado general.
-  const title = row.appliesToStudentService
-    ? 'CONSTANCIA DE SERVICIO SOCIAL ESTUDIANTIL'
-    : 'CERTIFICADO DE HORAS DE VOLUNTARIADO';
-  drawCentered(page, PAGE_WIDTH, title, y, font.serifBold, 25, NAVY);
-  y -= 30;
-  drawCenteredRule(page, PAGE_WIDTH, y, 220, GOLD, 1);
-  y -= 40;
-
-  // Quien certifica es la ORGANIZACIÓN (por medio de su representante
-  // legal), nunca AdoptaFácil: la plataforma solo genera el documento.
-  drawCenteredParagraph(
-    page,
-    PAGE_WIDTH,
-    `${row.organizationName}, por medio de ${signerRole}, certifica que:`,
-    y,
-    font.serifItalic,
-    13,
-    contentWidth - 160,
-    16,
-    MUTED,
-  );
-  y -= 36;
-
-  // El nombre del voluntario, protagonista del documento (convención de diploma).
-  drawCentered(page, PAGE_WIDTH, row.volunteerName, y, font.serifBold, 26, INK);
-  y -= 14;
-  drawCenteredRule(page, PAGE_WIDTH, y, 320, NAVY, 0.75);
-  y -= 34;
-
-  const bodyMaxWidth = contentWidth - 160;
-  const guardianClause = row.guardianName
-    ? ` quien actuó con la debida autorización de su acudiente ${row.guardianName}` +
-      (row.guardianDocument ? ` (documento ${row.guardianDocument}),` : ',')
-    : '';
-  const body =
-    `por su participación voluntaria en "${row.opportunityTitle}",${guardianClause} ` +
-    `desarrollada del ${formatCO(row.periodStart)} al ${formatCO(row.periodEnd)}, durante la cual ` +
-    `completó un total de ${row.totalApprovedHours} horas de servicio efectivamente verificadas.`;
-  y = drawCenteredParagraph(page, PAGE_WIDTH, body, y, font.serif, 13, bodyMaxWidth, 20);
-
-  if (row.appliesToStudentService) {
-    y -= 8;
-    y = drawCenteredParagraph(
-      page,
-      PAGE_WIDTH,
-      'Válido para servicio social estudiantil (Resolución 4210 de 1996, artículo 6°).' +
-        (row.schoolName
-          ? ` Institución educativa: ${row.schoolName}` +
-            (row.schoolAgreementCode ? ` (convenio ${row.schoolAgreementCode})` : '') +
-            '.'
-          : ''),
-      y,
-      font.serifItalic,
-      10.5,
-      bodyMaxWidth,
-      15,
-      MUTED,
-    );
-  }
-
-  // --- Pie: fecha/lugar de emisión (izquierda) + bloque de firma (derecha) ---
-  const footerY = outerMargin + 70;
-  const leftX = innerMargin + 20;
-  const issuedLine = city
-    ? `Emitido en ${city}, el ${formatCO(row.issuedAt)}.`
-    : `Emitido el ${formatCO(row.issuedAt)}.`;
-  page.drawText(issuedLine, { x: leftX, y: footerY, size: 10, font: font.sans, color: MUTED });
-  page.drawText(`Certificado N.° ${row.id.slice(0, 8).toUpperCase()}`, {
-    x: leftX,
-    y: footerY - 16,
-    size: 9,
-    font: font.sans,
-    color: MUTED,
-  });
-  // Quién emite y quién firma, dicho sin ambigüedad.
-  for (const [i, line] of wrapText(
-    `Expide: ${row.organizationName}. Firma: ${signerRole}. AdoptaFácil genera el ` +
-      'documento con la información que registró la organización; no lo certifica ni lo firma.',
-    font.sans,
-    8,
-    300,
-  ).entries()) {
-    page.drawText(line, {
-      x: leftX,
-      y: footerY - 32 - i * 10,
-      size: 8,
-      font: font.sans,
-      color: MUTED,
-    });
-  }
-
-  const signatureBlockWidth = 220;
-  const signatureBlockX = PAGE_WIDTH - innerMargin - 20 - signatureBlockWidth;
-  const signatureLineY = footerY + 6;
-
-  if (signatureImage) {
-    // La imagen de la firma se dibuja ENCIMA de la línea (como una firma
-    // real), nunca ENCIMA del texto del nombre — igual que un documento
-    // firmado a mano. Ya viene embebida (async, resuelta antes de llamar a
-    // esta función síncrona) — aquí solo se posiciona.
-    // Recortada a su trazo al incrustarla: aquí se centra y se apoya sobre la
-    // línea (la cruza apenas), sin deformarla.
-    const size = fitSignature(signatureImage.width, signatureImage.height, 170, 56);
-    page.drawImage(signatureImage, {
-      x: signatureBlockX + (signatureBlockWidth - size.width) / 2,
-      y: signatureLineY - SIGNATURE_LINE_OVERLAP / 2,
-      width: size.width,
-      height: size.height,
-    });
-  }
-
-  drawCenteredRuleAt(page, signatureBlockX, signatureBlockWidth, signatureLineY, INK, 0.75);
-  if (!signer || !signatureImage) {
-    // Sin firma registrada no se simula una: el documento lo dice de frente.
-    drawCenteredIn(
-      page,
-      signatureBlockX,
-      signatureBlockWidth,
-      signer
-        ? 'Firma no verificable: el certificado queda sin firma'
-        : 'SIN FIRMA: emitido antes de congelar el firmante',
-      signatureLineY + 14,
-      font.sansBold,
-      8,
-      rgb(0.7, 0.1, 0.1),
-    );
-  }
-  const signerName = signer?.fullName ?? '________________________';
-  drawCenteredIn(
-    page,
-    signatureBlockX,
-    signatureBlockWidth,
-    signerName,
-    signatureLineY - 16,
-    font.sansBold,
-    11,
-    INK,
-  );
-  drawCenteredIn(
-    page,
-    signatureBlockX,
-    signatureBlockWidth,
-    signer ? signer.position : 'Firma de la organización',
-    signatureLineY - 30,
-    font.sans,
-    9.5,
-    MUTED,
-  );
-  drawCenteredIn(
-    page,
-    signatureBlockX,
-    signatureBlockWidth,
-    fitWidth(
-      !signer
-        ? `Por ${row.organizationName}`
-        : `${signer.isLegalRepresentative ? 'Representante legal' : 'Responsable'} de ${row.organizationName}`,
-      font.sans,
-      8,
-      signatureBlockWidth,
-    ),
-    signatureLineY - 43,
-    font.sans,
-    8,
-    MUTED,
-  );
-}
-
-/** Recorta un texto con "…" para que quepa en `maxWidth`. */
-function fitWidth(text: string, font: PDFFont, size: number, maxWidth: number): string {
-  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text;
-  let cut = text;
-  while (cut.length > 1 && font.widthOfTextAtSize(`${cut}…`, size) > maxWidth) {
-    cut = cut.slice(0, -1);
-  }
-  return `${cut.trimEnd()}…`;
-}
-
-function drawCenteredRuleAt(
-  page: PDFPage,
-  blockX: number,
-  blockWidth: number,
-  y: number,
-  color: ReturnType<typeof rgb>,
-  thickness: number,
-): void {
-  page.drawLine({
-    start: { x: blockX, y },
-    end: { x: blockX + blockWidth, y },
-    thickness,
-    color,
-  });
-}
-
-function drawCenteredIn(
-  page: PDFPage,
-  blockX: number,
-  blockWidth: number,
-  text: string,
-  y: number,
-  font: PDFFont,
-  size: number,
-  color: ReturnType<typeof rgb>,
-): void {
-  const width = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x: blockX + (blockWidth - width) / 2, y, size, font, color });
-}
-
-/** Anexo con la bitácora hora a hora — página aparte, en vertical, con el
- *  mismo estilo simple y legible que el generador anterior ya usaba (nada de
- *  esto se pierde, solo se separa de la página del certificado). */
-function drawBitacoraAppendix(
-  pdf: PDFDocument,
-  input: { font: { sans: PDFFont; sansBold: PDFFont }; row: VolunteerCertificate },
-): void {
-  const { font, row } = input;
-  const margin = 50;
-  const pageSize: [number, number] = [595.28, 841.89]; // A4 vertical
-  let page = pdf.addPage(pageSize);
-  let y = pageSize[1] - margin - 20;
-
-  page.drawText(`Anexo — Bitácora de horas certificadas (${row.volunteerName})`, {
-    x: margin,
-    y,
-    size: 13,
-    font: font.sansBold,
-    color: INK,
-  });
-  y -= 26;
-
-  for (const entry of row.bitacora) {
-    const supervisor = entry.supervisorName ? ` · Supervisor: ${entry.supervisorName}` : '';
-    const line = `${formatCO(entry.date)} — ${entry.hours}h — ${entry.description}${supervisor}`;
-    for (const wrapped of wrapText(line, font.sans, 10, pageSize[0] - margin * 2)) {
-      if (y < margin) {
-        // Antes se cortaba en una sola página y las sesiones restantes se
-        // perdían en silencio: el anexo ahora continúa en páginas nuevas.
-        page = pdf.addPage(pageSize);
-        y = pageSize[1] - margin - 20;
-      }
-      page.drawText(wrapped, { x: margin, y, size: 10, font: font.sans, color: INK });
-      y -= 14;
-    }
-  }
 }

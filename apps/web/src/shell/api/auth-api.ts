@@ -1,4 +1,8 @@
-import type { AcceptInvitationInput, AuthSession } from '@adoptafacil/contracts';
+import type {
+  AcceptInvitationInput,
+  AcceptInvitationWithGoogleInput,
+  AuthSession,
+} from '@adoptafacil/contracts';
 import type {
   AuthTokens,
   AuthenticatedUser,
@@ -53,6 +57,9 @@ export interface AuthApi {
    * have no invitations.
    */
   acceptInvitation?(input: AcceptInvitationInput): Promise<AuthSession>;
+  /** Same, signing in with Google instead of choosing a password (the Google
+   *  email must be the invited one). Optional for the same reason. */
+  acceptInvitationWithGoogle?(input: AcceptInvitationWithGoogleInput): Promise<AuthSession>;
   /** Exchange a refresh token for a fresh pair (no access token required). */
   refresh(refreshToken: string): Promise<AuthTokens>;
   /**
@@ -180,6 +187,14 @@ export class HttpAuthApi implements AuthApi {
     // response also sets the httpOnly refresh cookie, like register.
     const response = await this.fetchFn(
       endpoint(this.baseUrl, '/auth/invitations/accept'),
+      jsonRequestInit('POST', input),
+    );
+    return parseJsonResponse<AuthSession>(response);
+  }
+
+  async acceptInvitationWithGoogle(input: AcceptInvitationWithGoogleInput): Promise<AuthSession> {
+    const response = await this.fetchFn(
+      endpoint(this.baseUrl, '/auth/invitations/accept/google'),
       jsonRequestInit('POST', input),
     );
     return parseJsonResponse<AuthSession>(response);

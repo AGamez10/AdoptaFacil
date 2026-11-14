@@ -8,6 +8,7 @@ import {
   GUIDE_FLOWS,
   MAP_DESCRIPTIONS,
   PUBLIC_MAP,
+  ROLE_SUMMARY,
   helpForPath,
   type GuideAudience,
   type GuideFlow,
@@ -17,6 +18,7 @@ import {
 } from '../model/guide-content';
 import { useCurrentGuideContext, type GuideContext } from '../model/guide-context';
 import {
+  orgRoleHelp,
   organizationContact,
   portalHelp,
   reportProblemUrl,
@@ -94,10 +96,58 @@ function useLinkFilter(isVisitor: boolean): (link: GuideLink) => boolean {
   };
 }
 
-function PageHelpView({ help, canOpen }: { help: PageHelp; canOpen: (l: GuideLink) => boolean }) {
+/**
+ * "Lo que puedes hacer": quien entra a un equipo (también por invitación) ve en TODA
+ * pantalla qué puede hacer con su cargo, con el mismo texto de su invitación.
+ */
+function RoleSummary() {
+  const { user } = useSession();
+  const copy = orgRoleHelp(user?.roles ?? []);
+  if (!copy) return null;
+  return (
+    <details className={styles.related} data-testid="guide-role">
+      <summary className={styles.related__title}>
+        Lo que puedes hacer como <strong>{copy.label}</strong>
+      </summary>
+      <p>{copy.summary}</p>
+      <ul className={styles.tips}>
+        {copy.duties.map((duty) => (
+          <li key={duty}>{duty}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** Quién está mirando: su rol (o cuenta de persona), para que la ayuda siempre diga desde dónde habla. */
+function useWhoAmI(): string | null {
+  const { status, user } = useSession();
+  if (status !== 'authenticated' || !user) return null;
+  const roles = user.roles ?? [];
+  const lines = roles.map((role) => ROLE_SUMMARY[role]).filter(Boolean);
+  if (lines.length > 0) return lines.join(' ');
+  return user.accountType === 'person'
+    ? 'Cuenta de persona: adoptas, donas, apadrinas y te inscribes como voluntario(a).'
+    : null;
+}
+
+function PageHelpView({
+  help,
+  canOpen,
+  whoAmI,
+}: {
+  help: PageHelp;
+  canOpen: (l: GuideLink) => boolean;
+  whoAmI?: string | null;
+}) {
   const related = (help.related ?? []).filter(canOpen);
   return (
     <div data-testid="guide-page-help">
+      {whoAmI && (
+        <p className={styles.panel__note} data-testid="guide-who-am-i">
+          {whoAmI}
+        </p>
+      )}
       <h3 className={styles.section__title}>{help.title}</h3>
       <ul className={styles.tips}>
         {help.tips.map((tip) =>
@@ -197,6 +247,7 @@ export function GuideAssistant() {
   const isVisitor = audiences.has('visitor');
   const { hasAnyRole } = useSession();
   const siteMap = useSiteMap(isVisitor);
+  const whoAmI = useWhoAmI();
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('page');
@@ -233,6 +284,9 @@ export function GuideAssistant() {
   // Cambiar de página cierra el panel: la ayuda que mostraba ya no aplica.
   useEffect(() => {
     setOpen(false);
+    // Al volver a abrir, la ayuda es la de la página nueva (no una guía a medias).
+    setTab('page');
+    setFlowId(null);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -298,7 +352,10 @@ export function GuideAssistant() {
           )}
 
           <div className={styles.panel__body}>
-            {(focused || tab === 'page') && <PageHelpView help={pageHelp} canOpen={canOpen} />}
+            {(focused || tab === 'page') && (
+              <PageHelpView help={pageHelp} canOpen={canOpen} whoAmI={focused ? null : whoAmI} />
+            )}
+            {!focused && tab === 'page' && <RoleSummary />}
 
             {!focused && tab === 'flows' && !activeFlow && (
               <ul className={styles.flows} aria-label="Guías disponibles">

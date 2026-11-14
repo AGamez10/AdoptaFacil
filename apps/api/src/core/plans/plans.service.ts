@@ -272,9 +272,18 @@ export class PlansService {
 
   /** Team size = distinct people holding a role in the org (the `members`
    *  limit counts the same thing when invitations are accepted). */
+  /** Personas del equipo que ocupan puesto: con algún cargo y sin designación
+   *  vigente de firmante (el contador y el revisor fiscal no ocupan puesto). */
   async countMembers(tx: Prisma.TransactionClient, organizationId: string): Promise<number> {
+    const signers = await tx.orgSignerDesignation.findMany({
+      where: { organizationId, revokedAt: null },
+      select: { userId: true },
+    });
     const rows = await tx.userRole.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(signers.length ? { userId: { notIn: signers.map((s) => s.userId) } } : {}),
+      },
       distinct: ['userId'],
       select: { userId: true },
     });

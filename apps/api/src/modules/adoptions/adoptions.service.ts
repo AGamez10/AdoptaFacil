@@ -20,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import {
   NOTIFICATION_PORT,
   type NotificationPort,
@@ -66,6 +67,7 @@ export class AdoptionsService {
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     config: ConfigService<Env, true>,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    private readonly inbox: InboxService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
   }
@@ -132,6 +134,23 @@ export class AdoptionsService {
       entityType: 'adoption_request',
       entityId: row.id,
       metadata: { animalId: input.animalId },
+    });
+
+    const animalName = animalSnapshot.name;
+    await this.inbox.toOrgStaff(input.organizationId, {
+      kind: 'adoptions.request_received',
+      title: `Nueva solicitud de adopción para ${animalName}`,
+      body: 'Revísala en el tablero de adopciones y avanza a "evaluar" cuando la estudies.',
+      href: `/adopciones?foco=${row.id}`,
+      dedupeKey: `adoption_request:${row.id}`,
+    });
+    await this.inbox.toUser(actor.id, {
+      kind: 'adoptions.request_sent',
+      tone: 'kudos',
+      title: `¡Gracias por querer adoptar a ${animalName}!`,
+      body: 'La organización ya recibió tu solicitud. Te avisaremos aquí y por correo cada vez que avance.',
+      href: `/mis-solicitudes?foco=${row.id}`,
+      dedupeKey: `adoption_request_sent:${row.id}`,
     });
 
     return this.fromRow(row);
@@ -299,6 +318,17 @@ export class AdoptionsService {
       organizationId,
     );
     await this.notifyApplicant(updated, organizationName);
+    const snapshot = updated.animalSnapshot as unknown as AdoptionAnimalSnapshot;
+    const status = updated.status as AdoptionStatus;
+    const label = ADOPTION_STATUS_EMAIL_LABELS[status] ?? status;
+    await this.inbox.toUser(updated.applicantUserId, {
+      kind: 'adoptions.status_changed',
+      tone: status === 'approved' ? 'success' : status === 'rejected' ? 'warning' : 'info',
+      title: `Tu solicitud para adoptar a ${snapshot.name} avanzó: ${label}`,
+      body: `${organizationName ?? 'La organización'} actualizó tu solicitud.`,
+      href: `/mis-solicitudes?foco=${id}`,
+      dedupeKey: `adoption_status:${id}:${status}`,
+    });
     return this.fromModel(updated);
   }
 

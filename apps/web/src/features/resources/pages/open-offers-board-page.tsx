@@ -138,7 +138,7 @@ export function OpenOffersBoardPage() {
       {page && page.items.length > 0 && (
         <ul className="grid gap-4 sm:grid-cols-2" aria-label="Ofrecimientos abiertos">
           {page.items.map((item) => (
-            <li key={item.id}>
+            <li key={item.id} data-foco={item.id}>
               <OpenOfferCard
                 item={item}
                 needs={compatibleNeeds(needs, item)}
@@ -209,6 +209,7 @@ function OpenOfferCard({
           <Badge variant="secondary">
             {item.city}, {item.department}
           </Badge>
+          {item.fromYourOrganization && <Badge variant="outline">De tu equipo</Badge>}
         </div>
         <CardTitle className="text-base">{item.title}</CardTitle>
         <p className="text-sm font-medium">
@@ -220,7 +221,12 @@ function OpenOfferCard({
         <p className="text-xs text-muted-foreground">
           Disponible {daysLeft(item.expiresAt)} días más.
         </p>
-        {!open ? (
+        {item.fromYourOrganization ? (
+          <p className="text-xs text-muted-foreground" data-testid="open-offer-own">
+            Lo ofreció alguien de tu equipo: lo ven las demás organizaciones y el público en el
+            banco de recursos. Tu organización no puede tomarlo.
+          </p>
+        ) : !open ? (
           <Button onClick={() => setOpen(true)}>Me sirve, tomarlo</Button>
         ) : (
           <div className="space-y-3 rounded-md border border-border p-3">

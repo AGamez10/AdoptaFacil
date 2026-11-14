@@ -237,9 +237,14 @@ export class MercadoPagoOAuthClient {
    * `live_mode` every grant must carry in this deployment: sandbox
    * (`MERCADOPAGO_TEST=true`) accepts only test users, production only real
    * accounts. A mismatched grant is refused (never stored or used).
+   *
+   * Mercado Pago only marks a grant `live_mode=false` when the exchange sent
+   * `test_token=true`. Without it (`MERCADOPAGO_OAUTH_TEST_TOKEN=false`, what
+   * Mercado Pago support asked for, ticket WCS-58365) a TEST seller's grant
+   * comes back `live_mode=true`, so that is what sandbox expects then.
    */
   expectedLiveMode(): boolean {
-    return !this.sandbox;
+    return this.sandbox ? !this.sendTestToken : true;
   }
 
   getRedirectUri(): string {

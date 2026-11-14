@@ -173,8 +173,9 @@ describe('MercadoPagoOAuthClient (ADR-PAG-003)', () => {
     await client.exchangeCode('TG-code');
     const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
     expect(new URLSearchParams(String(init.body)).has('test_token')).toBe(false);
-    // The sandbox guard does not change: only test-user grants (live_mode=false).
-    expect(client.expectedLiveMode()).toBe(false);
+    // Without test_token Mercado Pago returns the test seller's grant as
+    // live_mode=true, so that is what this mode expects.
+    expect(client.expectedLiveMode()).toBe(true);
   });
 
   it('defaults the lifetime and refuses a grant without user id or token', async () => {
@@ -211,6 +212,13 @@ describe('MercadoPagoOAuthClient (ADR-PAG-003)', () => {
         jest.fn(),
       ).expectedLiveMode(),
     ).toBe(false);
+    // Production always expects live grants, whatever the test_token flag says.
+    expect(
+      new MercadoPagoOAuthClient(
+        makeConfig({ MERCADOPAGO_OAUTH_TEST_TOKEN: true }),
+        jest.fn(),
+      ).expectedLiveMode(),
+    ).toBe(true);
     const fetchFn = jest.fn(async () => json(GRANT));
     await new MercadoPagoOAuthClient(makeConfig(), fetchFn).refreshToken('TG-refresh');
     const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];

@@ -15,9 +15,11 @@ import {
   ORG_SIGNERS_ROLES,
   ORG_SIGNING_ROLES,
   ORG_PLAN_ROLES,
+  ORG_MEMBERS_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
   ORG_LEDGER_ROLES,
+  CUSTODY_VIEW_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
@@ -37,6 +39,7 @@ import { HomePage } from '../../features/_layout';
 import { NotFoundRoute, PublicNotFoundPage } from '../errors';
 import {
   CompleteProfilePage,
+  WelcomeNotice,
   ForgotPasswordPage,
   LoginPage,
   RegisterPage,
@@ -79,6 +82,7 @@ const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
 const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
 const OrgPlanPage = lazyPage(loadOrg, 'OrgPlanPage');
+const OrgMembersPage = lazyPage(loadOrg, 'OrgMembersPage');
 const OrgAnnouncementsPage = lazyPage(loadOrg, 'OrgAnnouncementsPage');
 const OrgFormalizationPage = lazyPage(loadOrg, 'OrgFormalizationPage');
 const OrgLegalRepresentativePage = lazyPage(loadOrg, 'OrgLegalRepresentativePage');
@@ -175,6 +179,9 @@ const loadReputation = () => import('../../features/reputation');
 const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
 const loadLedger = () => import('../../features/ledger');
 const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
+const loadCustody = () => import('../../features/custody');
+const OrgCustodyPage = lazyPage(loadCustody, 'OrgCustodyPage');
+const AnimalReportsPage = lazyPage(loadCustody, 'AnimalReportsPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -229,6 +236,8 @@ export function AppRoutes() {
   return (
     // Ola 1 (R1-1): switched-off modules render "not found" before any route.
     <FeatureRouteGate>
+      {/* Bienvenida / "seguimos donde ibas", una sola vez tras entrar. */}
+      <WelcomeNotice />
       {/* Las pantallas privadas llegan en su propio archivo (ver lazy-page.ts). */}
       <Suspense fallback={<Skeleton className="h-screen w-full" />}>
         <Routes>
@@ -569,6 +578,15 @@ export function AppRoutes() {
                     </RequireRoles>
                   }
                 />
+                {/* Equipo · mismo gate que GET /org/members y /org/invitations. */}
+                <Route
+                  path="organizacion/miembros"
+                  element={
+                    <RequireRoles roles={ORG_MEMBERS_ROLES}>
+                      <OrgMembersPage />
+                    </RequireRoles>
+                  }
+                />
                 {/* Planes y suscripciones · mismo gate que GET /org/plan. */}
                 <Route
                   path="organizacion/plan"
@@ -672,6 +690,24 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
                       <ProductDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Custodia y guardería: cuenta, contratos, plantillas y reportes
+              de animales. La API vuelve a exigir el rol en cada acción. */}
+                <Route
+                  path="organizacion/custodia"
+                  element={
+                    <RequireRoles roles={CUSTODY_VIEW_ROLES}>
+                      <OrgCustodyPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="reportes-animales"
+                  element={
+                    <RequireRoles roles={CUSTODY_VIEW_ROLES}>
+                      <AnimalReportsPage />
                     </RequireRoles>
                   }
                 />

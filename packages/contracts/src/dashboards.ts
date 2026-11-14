@@ -36,10 +36,10 @@ export interface OrganizationDashboardSummary {
   /** Documentos institucionales con status 'rejected' (pendientes de
    *  subsanar, S2-06). */
   documentsRejected: number;
-  /** Suma histórica de `breakdown.net` de donaciones APROBADAS atribuidas
-   *  directamente a la organización (`PaymentConcept.kind === 'organization'`,
-   *  P1) — el dinero atribuido a campañas específicas ya se refleja en
-   *  `Campaign.raisedAmount` (S2-07) y no se duplica aquí. */
+  /** Suma histórica de `breakdown.net` de las donaciones APROBADAS y sin
+   *  reembolso que recibió la organización, de cualquier concepto (general,
+   *  campaña o animal): es todo lo que entró a su cuenta. El avance de cada
+   *  campaña se sigue mostrando aparte (`Campaign.raisedAmount`). */
   donationsReceivedTotal: number;
   /** Nivel de verificación (VerificationLevel.level) — el mismo que ya expone
    *  `GET /org/documents/verification` (0 si aún no alcanza ningún nivel). */
@@ -199,8 +199,8 @@ export interface PlatformSuperAdminDashboardSummary {
  * Conteo de DONACIONES por estado — NO es un conteo de "contratos de
  * donación": ese concepto no existe todavía en el sistema (pendiente, módulo
  * de Fabián). `netReceivedTotal` es la MISMA definición de
- * `OrganizationDashboardSummary.donationsReceivedTotal` (aprobadas,
- * `conceptKind === 'organization'`, nunca duplica lo atribuido a campañas);
+ * `OrganizationDashboardSummary.donationsReceivedTotal` (aprobadas y sin
+ * reembolso, de cualquier concepto: general, campaña o animal);
  * los conteos por estado, en cambio, SÍ incluyen todas las donaciones de la
  * organización sin importar el concepto — reflejan el embudo de revisión, no
  * una cifra financiera.

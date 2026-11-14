@@ -387,7 +387,8 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     expect(call.body).toMatchObject({
       type: 'online',
       external_reference: reference,
-      total_amount: expected.amountCharged.toFixed(2),
+      // COP sin decimales: la orden lleva el monto en pesos enteros.
+      total_amount: String(expected.amountCharged),
       config: {
         online: {
           success_url: expect.stringContaining(`/donaciones/resultado?reference=${reference}`),
@@ -397,7 +398,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     // Orders has no per-order notification URL: it is set on the application.
     expect(call.body.notification_url).toBeUndefined();
     expect((call.body.items as Record<string, unknown>[])[0].unit_price).toBe(
-      expected.amountCharged.toFixed(2),
+      String(expected.amountCharged),
     );
   });
 

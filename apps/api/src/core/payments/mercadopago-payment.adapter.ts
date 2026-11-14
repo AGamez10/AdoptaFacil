@@ -18,6 +18,7 @@ import {
 } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { mercadoPagoTimeoutSignal } from './mercadopago-http';
+import { safeOAuthDescription } from './mercadopago-oauth.client';
 
 /** Injectable fetch surface so tests run with ZERO network. */
 export type MercadoPagoFetch = typeof fetch;
@@ -153,6 +154,29 @@ export function mercadoPagoOrderStatus(raw: unknown): PaymentStatus {
   }
 }
 
+/**
+ * Mercado Pago's error reason on a failed order create, trimmed and without
+ * any value we sent (token, payer email). Empty when there is none.
+ */
+function orderErrorDetail(body: Record<string, unknown> | null, sent: unknown[]): string {
+  if (!body) return '';
+  const errors = Array.isArray(body.errors) ? (body.errors as Record<string, unknown>[]) : [];
+  const parts = [
+    body.message,
+    body.error,
+    ...errors.flatMap((e) => [
+      e?.code,
+      e?.message,
+      ...(Array.isArray(e?.details) ? e.details : []),
+    ]),
+  ].filter((v): v is string => typeof v === 'string' && v !== '');
+  const detail = safeOAuthDescription(
+    [...new Set(parts)].join(' · '),
+    sent.filter((v): v is string => typeof v === 'string' && v !== ''),
+  );
+  return detail ? `: ${detail}` : '';
+}
+
 /** The order's status in the legacy payment vocabulary kept by the ledger. */
 function ledgerStatusOf(raw: unknown): string {
   switch (raw) {
@@ -258,6 +282,15 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
   /** Secret of the Orders application's webhook (falls back to the shared one). */
   private readonly ordersWebhookSecret: string | undefined;
   private readonly test: boolean;
+  /**
+   * Sandbox with the OAuth exchange WITHOUT `test_token`: Mercado Pago then
+   * does not report test orders/payments reliably as `live_mode=false`, so
+   * `live_mode` is not used to refuse them (sandbox only; production keeps
+   * the strict check).
+   */
+  private readonly sandboxWithoutTestToken: boolean;
+  /** Sandbox only: the TEST buyer's email (a real account's email is refused). */
+  private readonly testPayerEmail: string | undefined;
 
   constructor(
     config: ConfigService<Env, true>,
@@ -283,6 +316,16 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       (config.get('MERCADOPAGO_ORDERS_WEBHOOK_SECRET', { infer: true }) as string | undefined) ??
       this.webhookSecret;
     this.test = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
+    this.testPayerEmail = config.get('MERCADOPAGO_TEST_PAYER_EMAIL', { infer: true }) as
+      string | undefined;
+    this.sandboxWithoutTestToken =
+      this.test && config.get('MERCADOPAGO_OAUTH_TEST_TOKEN', { infer: true }) === false;
+  }
+
+  /** Whether a read-back `live_mode` belongs to this deployment's mode. */
+  private liveModeMatches(liveMode: unknown): boolean {
+    if (this.sandboxWithoutTestToken) return true;
+    return liveMode === !this.test;
   }
 
   /** Where Mercado Pago notifies payments of THIS organization. */
@@ -332,8 +375,10 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     const back = new URL(`${this.webBase}/donaciones/resultado`);
     back.searchParams.set('reference', reference);
     const backUrl = back.toString();
-    // Orders amounts are decimal strings ("1000.00").
-    const amount = breakdown.amountCharged.toFixed(2);
+    // Orders amounts are strings. COP has no cents: Mercado Pago Colombia
+    // refuses "100000.00" ("does not match pattern"), so the whole peso
+    // amount is sent ("100000").
+    const amount = String(breakdown.amountCharged);
 
     const body: Record<string, unknown> = {
       type: 'online',
@@ -351,8 +396,12 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       },
       expiration_time: `P${ORDER_TTL_DAYS}D`,
     };
-    // Nothing personal beyond what the payer gave.
-    if (input.payer?.email) body.payer = { email: input.payer.email };
+    // Nothing personal beyond what the payer gave. In sandbox the donor's
+    // email is NOT sent: it usually belongs to a real Mercado Pago account
+    // (or to another country), which the test seller cannot charge; the
+    // person signs in with the test buyer on Mercado Pago's page instead.
+    const payerEmail = this.test ? this.testPayerEmail : input.payer?.email;
+    if (payerEmail) body.payer = { email: payerEmail };
 
     const response = await this.fetchFn(`${this.baseUrl}/v1/orders`, {
       method: 'POST',
@@ -364,10 +413,17 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       body: JSON.stringify(body),
       signal: mercadoPagoTimeoutSignal(),
     });
-    if (!response.ok) {
-      throw new Error(`Mercado Pago order create failed (${response.status})`);
-    }
     const order = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!response.ok) {
+      // Mercado Pago's own reason (never the token or the payer) so the API
+      // log says WHY, e.g. "invalid users involved".
+      throw new Error(
+        `Mercado Pago order create failed (${response.status}${orderErrorDetail(order, [
+          collector.accessToken,
+          input.payer?.email,
+        ])})`,
+      );
+    }
     const link = order?.checkout_url as string | undefined;
     if (!order?.id || !isMercadoPagoCheckoutUrl(link)) {
       throw new Error('Mercado Pago order create returned no usable checkout link');
@@ -462,7 +518,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     collectorId: string,
     fallbackId: string,
   ): NormalizedWebhookEvent {
-    if (typeof order?.live_mode === 'boolean' && order.live_mode !== !this.test) {
+    if (typeof order?.live_mode === 'boolean' && !this.liveModeMatches(order.live_mode)) {
       throw new Error(
         'Mercado Pago webhook rejected: order live_mode does not match MERCADOPAGO_TEST.',
       );
@@ -541,7 +597,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     }
     // A sandbox (test user) payment must never settle a real donation, nor a
     // real payment a sandbox one: `live_mode` has to match this deployment.
-    if (payment?.live_mode !== !this.test) {
+    if (!this.liveModeMatches(payment?.live_mode)) {
       throw new Error(
         'Mercado Pago webhook rejected: payment live_mode does not match MERCADOPAGO_TEST.',
       );

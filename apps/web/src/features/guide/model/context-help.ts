@@ -1,3 +1,4 @@
+import { Role, invitationRoleCopy, type InvitationRoleCopy } from '@adoptafacil/contracts';
 import { officialMailtoUrl } from '../../../lib/contact';
 import { orgMailtoUrl, orgWhatsappUrl } from '../../portals/model/org-contact';
 import {
@@ -122,4 +123,25 @@ export function organizationContact(
 /** Para reportar una falla de la página (no para dudas sobre la organización). */
 export function reportProblemUrl(organizationName: string): string {
   return officialMailtoUrl(`Problema en el portal de ${organizationName}`);
+}
+
+/** Del cargo con más permisos al de menos: el que la ayuda presenta como "tu cargo". */
+const ORG_ROLE_PRECEDENCE: readonly Role[] = [
+  Role.Owner,
+  Role.Administrator,
+  Role.Operator,
+  Role.Veterinarian,
+  Role.ReadOnlyAuditor,
+  Role.Volunteer,
+  Role.TemporaryCollaborator,
+];
+
+/**
+ * Cargo de la persona dentro de su organización, con el MISMO texto que leyó
+ * en su invitación (`invitationRoleCopy`): así la ayuda nunca le promete algo
+ * que su cargo no permite, en cualquier pantalla. `null` si no es de un equipo.
+ */
+export function orgRoleHelp(roles: readonly Role[]): (InvitationRoleCopy & { role: Role }) | null {
+  const role = ORG_ROLE_PRECEDENCE.find((candidate) => roles.includes(candidate));
+  return role ? { role, ...invitationRoleCopy(role) } : null;
 }
