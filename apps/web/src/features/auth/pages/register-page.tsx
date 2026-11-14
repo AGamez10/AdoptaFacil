@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { NEW_ORG_TRIAL_DAYS, PORTAL_TEMPLATES } from '@adoptafacil/contracts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@adoptafacil/ui';
 import type { AccountType } from '../../../shell/api';
 import { accessPathWithReturn, safeReturnTo, useSession } from '../../../shell/auth';
@@ -116,6 +117,13 @@ export function RegisterPage() {
             >
               Tu portal empezará con la plantilla <strong>{templateName(template)}</strong>. Podrás
               cambiarla cuando quieras.{' '}
+              {PORTAL_TEMPLATES.find((t) => t.id === template)?.tier === 'paid' && (
+                <span data-testid="register-template-pro">
+                  Es una plantilla Pro: la usas gratis durante tus primeros {NEW_ORG_TRIAL_DAYS}{' '}
+                  días; después necesitas el plan Crece o Pro, o tu portal pasa solo a una gratuita
+                  sin perder nada.{' '}
+                </span>
+              )}
               <Link
                 to={templateDemoHref(template)}
                 className="font-medium text-primary hover:underline"

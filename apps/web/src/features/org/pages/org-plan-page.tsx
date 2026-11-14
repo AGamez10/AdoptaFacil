@@ -307,15 +307,17 @@ export function OrgPlanPage() {
           <CardDescription>
             {!view.enforced
               ? 'Durante el piloto tienes todas las funciones sin costo.'
-              : view.launchPromoEndsAt
-                ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
-                : periodEnd && view.subscription?.status === 'canceled'
-                  ? `Cancelaste tu plan: lo puedes usar hasta el ${colombiaDate.format(new Date(periodEnd))} y no se te volverá a cobrar. Después pasas a Gratis sin perder tus datos.`
-                  : periodEnd
-                    ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
-                    : current === 'free'
-                      ? 'Sin costo y sin fecha de vencimiento.'
-                      : 'Sin fecha de vencimiento.'}
+              : view.trialEndsAt
+                ? `Prueba gratis: tienes Pro, plantillas Pro incluidas, hasta el ${colombiaDate.format(new Date(view.trialEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
+                : view.launchPromoEndsAt
+                  ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
+                  : periodEnd && view.subscription?.status === 'canceled'
+                    ? `Cancelaste tu plan: lo puedes usar hasta el ${colombiaDate.format(new Date(periodEnd))} y no se te volverá a cobrar. Después pasas a Gratis sin perder tus datos.`
+                    : periodEnd
+                      ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
+                      : current === 'free'
+                        ? 'Sin costo y sin fecha de vencimiento.'
+                        : 'Sin fecha de vencimiento.'}
             {view.graceEndsAt && view.subscription?.status === 'past_due' && (
               <>
                 {' '}

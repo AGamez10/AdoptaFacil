@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
-import { Role, type AnimalSummary, type PortalTemplateId } from '@adoptafacil/contracts';
+import {
+  NEW_ORG_TRIAL_DAYS,
+  PORTAL_TEMPLATES,
+  Role,
+  type AnimalSummary,
+  type PortalTemplateId,
+} from '@adoptafacil/contracts';
 import { buttonVariants, cn, Skeleton } from '@adoptafacil/ui';
 import { useSeo } from '../../../seo/seo';
 import { useSession } from '../../../shell/auth';
@@ -88,6 +94,7 @@ function DemoBar({ template, ownData }: { template: PortalTemplateId; ownData: b
   const prev = DEMO_TEMPLATE_IDS[(index - 1 + DEMO_TEMPLATE_IDS.length) % DEMO_TEMPLATE_IDS.length];
   const next = DEMO_TEMPLATE_IDS[(index + 1) % DEMO_TEMPLATE_IDS.length];
   const name = templateName(template);
+  const pro = PORTAL_TEMPLATES.find((t) => t.id === template)?.tier === 'paid';
   // Quien ya tiene organización no se registra otra vez: prueba la plantilla en
   // su editor, sin guardar nada hasta que lo decida.
   const signedIn = status === 'authenticated';
@@ -127,13 +134,22 @@ function DemoBar({ template, ownData }: { template: PortalTemplateId; ownData: b
             ‹
           </Link>
           <div className="min-w-0 text-center sm:text-left">
-            <p className="truncate text-sm font-bold text-foreground">Plantilla {name}</p>
+            <p className="truncate text-sm font-bold text-foreground">
+              Plantilla {name}
+              {pro && (
+                <span className="ml-1.5 rounded-full bg-[#f2b94d] px-1.5 py-0.5 align-middle text-[10px] font-bold tracking-wider text-[#14253f]">
+                  PRO
+                </span>
+              )}
+            </p>
             <p className="truncate text-xs text-muted-foreground">
-              {ownData
-                ? 'Con los datos de tu organización. Los botones del portal no llevan a ninguna parte.'
-                : isOrg
-                  ? 'Datos de ejemplo: cuando registres tu primer animal verás aquí los tuyos.'
-                  : 'Ejemplo con datos de prueba. Los botones del portal no llevan a ninguna parte.'}
+              {pro && !signedIn
+                ? `Gratis tus primeros ${NEW_ORG_TRIAL_DAYS} días; luego en Crece o Pro.`
+                : ownData
+                  ? 'Con los datos de tu organización. Los botones del portal no llevan a ninguna parte.'
+                  : isOrg
+                    ? 'Datos de ejemplo: cuando registres tu primer animal verás aquí los tuyos.'
+                    : 'Ejemplo con datos de prueba. Los botones del portal no llevan a ninguna parte.'}
             </p>
           </div>
           <Link

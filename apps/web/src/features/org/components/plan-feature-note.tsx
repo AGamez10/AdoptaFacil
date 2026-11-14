@@ -63,6 +63,8 @@ export function PlanFeatureNote({
     text = `Disponible desde el plan ${required}.`;
   } else if (!plan.enforced) {
     text = `Es del plan ${required}. Por el lanzamiento, hoy todas las organizaciones lo tienen incluido sin costo.`;
+  } else if (plan.trialEndsAt) {
+    text = `Es del plan ${required}. Lo tienes incluido en tu prueba gratis hasta el ${formatDate(plan.trialEndsAt)}.`;
   } else if (plan.launchPromoEndsAt) {
     text = `Es del plan ${required}. Lo tienes incluido sin costo por el lanzamiento hasta el ${formatDate(plan.launchPromoEndsAt)}.`;
   } else {

@@ -38,6 +38,10 @@ process.env.THROTTLER_STORAGE ??= 'memory';
 // switches enforcement off unless CI or a suite set it; the MFA suites
 // (platform-mfa / platform-workspace) build their app with it ON.
 process.env.PLATFORM_MFA_REQUIRED ??= 'false';
+// Prueba Pro de 14 días de cada organización nueva: las suites que encienden
+// los planes registran organizaciones y esperan verlas en Gratis, así que aquí
+// la prueba arranca apagada; plans-enforcement la enciende para probarla.
+process.env.PLAN_NEW_ORG_TRIAL_DAYS ??= '0';
 
 const envPath = join(__dirname, '..', '..', '..', '.env');
 if (existsSync(envPath)) {

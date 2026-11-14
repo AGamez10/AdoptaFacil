@@ -282,6 +282,9 @@ export const envSchema = z.object({
     .refine((value) => value === undefined || !Number.isNaN(Date.parse(value)), {
       message: 'PLAN_LAUNCH_DATE debe ser una fecha ISO-8601 (por ejemplo 2026-11-01)',
     }),
+  // Días de prueba Pro de cada organización nueva. Sin valor rige
+  // NEW_ORG_TRIAL_DAYS (packages/contracts, 14 días); 0 apaga la prueba.
+  PLAN_NEW_ORG_TRIAL_DAYS: z.coerce.number().int().min(0).max(365).optional(),
   // Written approval reference (PSP confirmation + legal review, D1–D7/D17)
   // that production requires before FEATURE_PAYMENTS or FEATURE_SPONSORSHIPS
   // can be turned on. Free text (ticket, email date, document id); it is only
