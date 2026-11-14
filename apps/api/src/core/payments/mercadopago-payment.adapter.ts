@@ -282,6 +282,13 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
   /** Secret of the Orders application's webhook (falls back to the shared one). */
   private readonly ordersWebhookSecret: string | undefined;
   private readonly test: boolean;
+  /**
+   * Sandbox with the OAuth exchange WITHOUT `test_token`: Mercado Pago then
+   * does not report test orders/payments reliably as `live_mode=false`, so
+   * `live_mode` is not used to refuse them (sandbox only; production keeps
+   * the strict check).
+   */
+  private readonly sandboxWithoutTestToken: boolean;
   /** Sandbox only: the TEST buyer's email (a real account's email is refused). */
   private readonly testPayerEmail: string | undefined;
 
@@ -311,6 +318,14 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     this.test = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
     this.testPayerEmail = config.get('MERCADOPAGO_TEST_PAYER_EMAIL', { infer: true }) as
       string | undefined;
+    this.sandboxWithoutTestToken =
+      this.test && config.get('MERCADOPAGO_OAUTH_TEST_TOKEN', { infer: true }) === false;
+  }
+
+  /** Whether a read-back `live_mode` belongs to this deployment's mode. */
+  private liveModeMatches(liveMode: unknown): boolean {
+    if (this.sandboxWithoutTestToken) return true;
+    return liveMode === !this.test;
   }
 
   /** Where Mercado Pago notifies payments of THIS organization. */
@@ -501,7 +516,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     collectorId: string,
     fallbackId: string,
   ): NormalizedWebhookEvent {
-    if (typeof order?.live_mode === 'boolean' && order.live_mode !== !this.test) {
+    if (typeof order?.live_mode === 'boolean' && !this.liveModeMatches(order.live_mode)) {
       throw new Error(
         'Mercado Pago webhook rejected: order live_mode does not match MERCADOPAGO_TEST.',
       );
@@ -580,7 +595,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     }
     // A sandbox (test user) payment must never settle a real donation, nor a
     // real payment a sandbox one: `live_mode` has to match this deployment.
-    if (payment?.live_mode !== !this.test) {
+    if (!this.liveModeMatches(payment?.live_mode)) {
       throw new Error(
         'Mercado Pago webhook rejected: payment live_mode does not match MERCADOPAGO_TEST.',
       );

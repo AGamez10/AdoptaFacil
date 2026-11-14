@@ -295,6 +295,15 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     await expect(
       sandbox.verifyAndNormalizeWebhook({}, signed7.signature, signed7.context),
     ).rejects.toThrow(/live_mode/);
+    // Sandbox whose OAuth skips test_token (MP support, WCS-58365): the test
+    // seller's payments may come back live_mode=true, so they are accepted.
+    const noTestToken = new MercadoPagoPaymentAdapter(
+      makeConfig({ MERCADOPAGO_TEST: true, MERCADOPAGO_OAUTH_TEST_TOKEN: false }),
+      makeFetch({ ...sandboxPayment, live_mode: true }),
+    );
+    await expect(
+      noTestToken.verifyAndNormalizeWebhook({}, signed7.signature, signed7.context),
+    ).resolves.toMatchObject({ status: 'approved' });
   });
 
   it('every call to Mercado Pago carries a timeout signal', async () => {
