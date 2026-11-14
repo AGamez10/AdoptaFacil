@@ -375,8 +375,10 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     const back = new URL(`${this.webBase}/donaciones/resultado`);
     back.searchParams.set('reference', reference);
     const backUrl = back.toString();
-    // Orders amounts are decimal strings ("1000.00").
-    const amount = breakdown.amountCharged.toFixed(2);
+    // Orders amounts are strings. COP has no cents: Mercado Pago Colombia
+    // refuses "100000.00" ("does not match pattern"), so the whole peso
+    // amount is sent ("100000").
+    const amount = String(breakdown.amountCharged);
 
     const body: Record<string, unknown> = {
       type: 'online',

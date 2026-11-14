@@ -118,7 +118,7 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     expect(headers.Authorization).toBe(`Bearer ${ORG.accessToken}`);
     expect(headers['X-Idempotency-Key']).toBe(reference);
     const body = JSON.parse(String(init?.body));
-    const amount = breakdown.amountCharged.toFixed(2);
+    const amount = String(breakdown.amountCharged);
     expect(body).toMatchObject({
       type: 'online',
       processing_mode: 'manual',
