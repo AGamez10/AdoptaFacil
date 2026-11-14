@@ -387,7 +387,8 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     expect(call.body).toMatchObject({
       type: 'online',
       external_reference: reference,
-      total_amount: expected.amountCharged.toFixed(2),
+      // COP sin decimales: la orden lleva el monto en pesos enteros.
+      total_amount: String(expected.amountCharged),
       config: {
         online: {
           success_url: expect.stringContaining(`/donaciones/resultado?reference=${reference}`),
