@@ -31,6 +31,7 @@ import { OpportunityScheduleActions } from '../components/opportunity-schedule-a
 import { ServiceHoursPhotoThumbs } from '../components/service-hours-photos';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { useFocusTarget } from '../../../shell/use-focus-target';
 import {
   canIssueCertificate,
   ENROLLMENT_STATUS_LABELS,
@@ -80,6 +81,11 @@ export function VolunteerOpportunityDetailPage() {
   const [rejectHoursReason, setRejectHoursReason] = useState('');
   const [certificates, setCertificates] = useState<Record<string, VolunteerCertificate>>({});
   const [editingDays, setEditingDays] = useState(false);
+  // Desde un aviso ("registró horas" / "nueva inscripción") se llega directo a esa persona.
+  const focusId = useFocusTarget(enrollments.length > 0);
+  useEffect(() => {
+    if (focusId && enrollments.some((e) => e.id === focusId)) setExpandedId(focusId);
+  }, [focusId, enrollments]);
   const [draftDays, setDraftDays] = useState<string[]>([]);
   const [savingDays, setSavingDays] = useState(false);
 
@@ -366,7 +372,11 @@ export function VolunteerOpportunityDetailPage() {
               ) : (
                 <ul className="space-y-3">
                   {enrollments.map((enrollment) => (
-                    <li key={enrollment.id} className="space-y-3 rounded-md border p-3 text-sm">
+                    <li
+                      key={enrollment.id}
+                      data-focus-id={enrollment.id}
+                      className="space-y-3 rounded-md border p-3 text-sm"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="font-medium">{enrollment.volunteerName}</p>

@@ -87,8 +87,8 @@ export class OrgDonationsDashboardService {
 
   /** `netReceivedTotal` reutiliza EXACTAMENTE la definición de
    *  `OrganizationDashboardSummary.donationsReceivedTotal`
-   *  (`organization-summary.service.ts`): aprobadas y sin reembolso, de
-   *  cualquier concepto (general, campaña o animal). Los conteos por estado, en cambio,
+   *  (`organization-summary.service.ts`): todas las aprobadas y no reversadas
+   *  (donación general, a una campaña o a un animal). Los conteos por estado, en cambio,
    *  cubren TODAS las donaciones de la organización (el embudo de revisión es
    *  un eje distinto del total financiero). */
   private async getDonationsSection(

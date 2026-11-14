@@ -284,6 +284,18 @@ describe('exportes y documento firmable', () => {
     expect(full).toContain("'=cmd|calc");
   });
 
+  it('el CSV separa con punto y coma, parte fecha y hora y alinea los totales', () => {
+    const csv = renderAccountingCsv(input, false)
+      .toString('utf8')
+      .replace(/^\uFEFF/, '');
+    const lines = csv.split('\r\n');
+    expect(lines[0]).toBe('sep=;');
+    expect(lines[1]).toBe('Folio;Fecha;Hora (Colombia);Tipo;Valor bruto (COP)');
+    expect(lines[2]).toMatch(/^1;\d{4}-\d{2}-\d{2};\d{2}:\d{2};Donación;/);
+    expect(csv).toContain('SALDO bruto neto de reversos;');
+    expect(csv).toContain('NIT;');
+  });
+
   it('el Excel completo trae libro, destinación, forma de pago y donantes autorizados', async () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load((await renderAccountingXlsx(input, true)) as unknown as ArrayBuffer);

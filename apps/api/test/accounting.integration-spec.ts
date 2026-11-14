@@ -440,9 +440,9 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
         .set(auth(owner)),
     ).expect(200);
     const text = (csv.body as Buffer).toString('utf8');
-    expect(text).toContain('Folio,Fecha (hora Colombia),Tipo,Valor bruto (COP)');
+    expect(text).toContain('Folio;Fecha;Hora (Colombia);Tipo;Valor bruto (COP)');
     expect(text).not.toContain('Comisión pasarela');
-    expect(text).toContain(`,Donación,${d1.amountCharged}`);
+    expect(text).toContain(`;Donación;${d1.amountCharged}`);
 
     for (const [method, path, body, capability] of [
       ['post', `/org/accounting/periods/${PAST}/close`, {}, 'accountingClose'],

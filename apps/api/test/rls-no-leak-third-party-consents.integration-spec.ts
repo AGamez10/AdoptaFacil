@@ -141,6 +141,16 @@ describe('RLS cross-org no-leak (consentimiento de terceros)', () => {
     expect(none).toBe(0);
   });
 
+  it('el documento de la persona solo sale con consentimiento vigente para ESA organización', async () => {
+    await admin.user.update({ where: { id: person }, data: { documentId: '52111222' } });
+    const docs = (org: string) =>
+      prisma.$queryRaw<Array<{ user_id: string; document_id: string }>>`
+        SELECT user_id, document_id FROM consented_person_documents(${org}::uuid, ARRAY[${person}]::uuid[])`;
+    expect(await docs(orgA)).toEqual([{ user_id: person, document_id: '52111222' }]);
+    // Otra organización no recibe el documento de quien autorizó a la Org A.
+    expect(await docs(orgB)).toEqual([]);
+  });
+
   it('otorgar dos veces es idempotente; revocar conserva el historial y no se reactiva', async () => {
     const again = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT grant_third_party_consent(${person}::uuid, ${orgA}::uuid, 'org_report_identification',
@@ -168,5 +178,12 @@ describe('RLS cross-org no-leak (consentimiento de terceros)', () => {
         '2026-10-10', ${TEXT_HASH}, 'preferences') AS id`;
     expect(fresh[0]?.id).not.toBe(consentA);
     expect(await admin.thirdPartyConsent.count({ where: { subjectUserId: person } })).toBe(2);
+
+    // Revocado (y luego re-otorgado) el vigente es el nuevo; al revocar de nuevo, no hay documento.
+    await prisma.$queryRaw`
+      SELECT revoke_third_party_consent(${person}::uuid, ${orgA}::uuid, 'org_report_identification')`;
+    const afterRevoke = await prisma.$queryRaw<Array<{ document_id: string }>>`
+      SELECT document_id FROM consented_person_documents(${orgA}::uuid, ARRAY[${person}]::uuid[])`;
+    expect(afterRevoke).toEqual([]);
   });
 });

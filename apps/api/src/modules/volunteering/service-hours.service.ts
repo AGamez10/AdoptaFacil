@@ -236,7 +236,7 @@ export class ServiceHoursService {
       title: `${who} registró ${input.hours} h en "${context?.title ?? 'una jornada'}"`,
       body: 'Revisa la bitácora y aprueba o rechaza las horas para que cuenten en su certificado.',
       href: context?.enrollment
-        ? `/organizacion/voluntariado/${context.enrollment.opportunityId}`
+        ? `/organizacion/voluntariado/${context.enrollment.opportunityId}?foco=${input.enrollmentId}`
         : '/organizacion/voluntariado',
       dedupeKey: `service_hours:${row.id}`,
     });

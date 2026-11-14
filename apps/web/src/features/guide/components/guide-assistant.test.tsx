@@ -356,13 +356,15 @@ describe('GuideAssistant · "Dónde se gestiona" respeta el rol', () => {
     renderGuide('/organizacion/campanas', { session: orgSession([Role.Volunteer]) });
     fireEvent.click(screen.getByTestId('guide-toggle'));
     const role = screen.getByTestId('guide-role');
-    expect(role).toHaveTextContent('Tu cargo: Voluntario/a');
+    expect(role).toHaveTextContent('Lo que puedes hacer como Voluntario/a');
     expect(role).toHaveTextContent(/no da acceso a datos de animales, donantes ni adoptantes/);
   });
 
   it('con varios cargos muestra el de más permisos, y una persona sin equipo no ve cargo', () => {
     renderGuide('/inicio', { session: orgSession([Role.Volunteer, Role.Operator]) });
     fireEvent.click(screen.getByTestId('guide-toggle'));
-    expect(screen.getByTestId('guide-role')).toHaveTextContent('Tu cargo: Operador/a');
+    expect(screen.getByTestId('guide-role')).toHaveTextContent(
+      'Lo que puedes hacer como Operador/a',
+    );
   });
 });

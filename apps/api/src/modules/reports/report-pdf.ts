@@ -217,6 +217,28 @@ function fit(raw: string, font: PDFFont, size: number, maxWidth: number): string
   return `${out}…`;
 }
 
+/** Como `wrap`, pero parte también las palabras más anchas que la columna (códigos, URLs). */
+function wrapAll(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const lines: string[] = [];
+  for (const line of wrap(text, font, size, maxWidth)) {
+    if (font.widthOfTextAtSize(line, size) <= maxWidth) {
+      lines.push(line);
+      continue;
+    }
+    let chunk = '';
+    for (const ch of line) {
+      if (chunk && font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
+        lines.push(chunk);
+        chunk = ch;
+      } else {
+        chunk += ch;
+      }
+    }
+    if (chunk) lines.push(chunk);
+  }
+  return lines.length > 0 ? lines : [''];
+}
+
 function wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = toWinAnsi(text).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -353,25 +375,36 @@ export class ReportCanvas {
       return;
     }
     rows.forEach((row, r) => {
-      if (this.ensure(rowH)) drawHeader();
+      // Un PDF es estático: nada se recorta con "…". El texto largo baja a
+      // más renglones y la fila crece lo necesario.
+      const cells = columns.map((_col, i) =>
+        wrapAll(row[i] ?? '', this.font.regular, size, widths[i] - 8),
+      );
+      const lineH = size + 2.5;
+      const maxLines = Math.max(...cells.map((l) => l.length));
+      const height = Math.max(rowH, maxLines * lineH + 6);
+      if (this.ensure(height)) drawHeader();
       if (r % 2 === 1) {
         this.page.drawRectangle({
           x: MARGIN,
-          y: this.y - rowH + size * 0.2,
+          y: this.y - height + size * 0.2,
           width: PAGE_W - MARGIN * 2,
-          height: rowH,
+          height,
           color: ZEBRA,
         });
       }
       let x = MARGIN;
       columns.forEach((col, i) => {
-        const label = fit(row[i] ?? '', this.font.regular, size, widths[i] - 8);
-        const w = this.font.regular.widthOfTextAtSize(label, size);
-        const tx = col.align === 'right' ? x + widths[i] - 4 - w : x + 4;
-        this.text(label, tx, size, { y: this.y - rowH + 5 + size * 0.2 });
+        cells[i].forEach((label, li) => {
+          const w = this.font.regular.widthOfTextAtSize(label, size);
+          const tx = col.align === 'right' ? x + widths[i] - 4 - w : x + 4;
+          this.text(label, tx, size, {
+            y: this.y - height + 5 + size * 0.2 + (maxLines - 1 - li) * lineH,
+          });
+        });
         x += widths[i];
       });
-      this.y -= rowH;
+      this.y -= height;
     });
     this.page.drawLine({
       start: { x: MARGIN, y: this.y + size * 0.2 },
@@ -507,7 +540,7 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
       { header: 'Donaciones', width: 15, align: 'right' },
       { header: 'Neto recibido', width: 25, align: 'right' },
     ],
-    p.byConcept.map((r) => [pdfText(r.concept, 120), String(r.count), money(r.net)]),
+    p.byConcept.map((r) => [pdfText(r.concept, 300), String(r.count), money(r.net)]),
   );
 
   if (p.byMonth.length > 1) {
@@ -527,20 +560,20 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
     [
       { header: 'Fecha', width: 9 },
       { header: 'Recibo', width: 8 },
-      { header: 'Donante', width: 19 },
+      { header: 'Donante', width: 16 },
       { header: 'Documento', width: 9 },
-      { header: 'Destino', width: 16 },
+      { header: 'Destino', width: 20 },
       { header: 'Valor donado', width: 11, align: 'right' },
-      { header: 'Tarifa MP', width: 10, align: 'right' },
-      { header: 'Neto', width: 11, align: 'right' },
-      { header: 'Certificado', width: 17 },
+      { header: 'Tarifa MP', width: 9, align: 'right' },
+      { header: 'Neto', width: 10, align: 'right' },
+      { header: 'Certificado', width: 16 },
     ],
     p.rows.map((r) => [
       formatShortDate(r.date),
       pdfText(r.receiptNo, 12),
-      pdfText(r.donor, 80),
-      pdfText(r.donorDocument, 20),
-      pdfText(r.concept, 80),
+      pdfText(r.donor, 200),
+      pdfText(r.donorDocument, 30),
+      pdfText(r.concept, 300),
       money(r.amountCharged),
       money(r.fees),
       money(r.net),
@@ -688,7 +721,7 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
       { header: 'Estudiantes / voluntarios', width: 20, align: 'right' },
       { header: 'Horas en el período', width: 20, align: 'right' },
     ],
-    p.bySchool.map((r) => [pdfText(r.school, 120), String(r.volunteers), hours(r.hours)]),
+    p.bySchool.map((r) => [pdfText(r.school, 300), String(r.volunteers), hours(r.hours)]),
   );
 
   c.sectionTitle('Detalle por voluntario');
@@ -707,10 +740,10 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
       { header: 'Certificado', width: 6 },
     ],
     p.rows.map((r) => [
-      pdfText(r.volunteerName, 80),
-      pdfText(r.opportunity, 80),
+      pdfText(r.volunteerName, 200),
+      pdfText(r.opportunity, 200),
       r.studentService ? 'Serv. social' : 'Voluntariado',
-      pdfText(r.school, 80) || '-',
+      pdfText(r.school, 200) || '-',
       pdfText(r.agreementCode, 30) || '-',
       r.sessionsInPeriod === undefined ? '-' : String(r.sessionsInPeriod),
       hours(r.hoursInPeriod),
