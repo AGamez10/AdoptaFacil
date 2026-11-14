@@ -87,11 +87,13 @@ export class OrganizationSummaryService {
             },
           }),
           tx.donation.findMany({
+            // Todo lo que entró a la cuenta de la organización: donaciones
+            // generales, a campañas y a animales. Antes solo contaba las
+            // generales y el Inicio mostraba $0 con donaciones a campañas.
             // P1-1: lo reembolsado o contracargado no suma.
             where: {
               organizationId,
               status: 'approved',
-              conceptKind: 'organization',
               reversal: null,
             },
             select: { breakdown: true },

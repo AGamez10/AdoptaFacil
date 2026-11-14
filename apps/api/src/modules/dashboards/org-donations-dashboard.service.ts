@@ -87,8 +87,8 @@ export class OrgDonationsDashboardService {
 
   /** `netReceivedTotal` reutiliza EXACTAMENTE la definición de
    *  `OrganizationDashboardSummary.donationsReceivedTotal`
-   *  (`organization-summary.service.ts`): aprobadas, `conceptKind='organization'`,
-   *  nunca duplica lo atribuido a campañas. Los conteos por estado, en cambio,
+   *  (`organization-summary.service.ts`): aprobadas y sin reembolso, de
+   *  cualquier concepto (general, campaña o animal). Los conteos por estado, en cambio,
    *  cubren TODAS las donaciones de la organización (el embudo de revisión es
    *  un eje distinto del total financiero). */
   private async getDonationsSection(
@@ -103,7 +103,7 @@ export class OrgDonationsDashboardService {
       }),
       tx.donation.findMany({
         // P1-1: lo que volvió al donante (reembolso o contracargo) no suma.
-        where: { organizationId, status: 'approved', conceptKind: 'organization', reversal: null },
+        where: { organizationId, status: 'approved', reversal: null },
         select: { breakdown: true },
       }),
     ]);
