@@ -17,6 +17,7 @@ import {
 } from '../model/guide-content';
 import { useCurrentGuideContext, type GuideContext } from '../model/guide-context';
 import {
+  orgRoleHelp,
   organizationContact,
   portalHelp,
   reportProblemUrl,
@@ -92,6 +93,29 @@ function useLinkFilter(isVisitor: boolean): (link: GuideLink) => boolean {
     if (isVisitor) return !link.roles && PUBLIC_PATH.test(link.to);
     return !link.roles || hasAnyRole(...link.roles);
   };
+}
+
+/**
+ * "Tu cargo": quien entra a un equipo (también por invitación) ve en TODA
+ * pantalla qué puede hacer con su cargo, con el mismo texto de su invitación.
+ */
+function RoleSummary() {
+  const { user } = useSession();
+  const copy = orgRoleHelp(user?.roles ?? []);
+  if (!copy) return null;
+  return (
+    <details className={styles.related} data-testid="guide-role">
+      <summary className={styles.related__title}>
+        Tu cargo: <strong>{copy.label}</strong>
+      </summary>
+      <p>{copy.summary}</p>
+      <ul className={styles.tips}>
+        {copy.duties.map((duty) => (
+          <li key={duty}>{duty}</li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 function PageHelpView({ help, canOpen }: { help: PageHelp; canOpen: (l: GuideLink) => boolean }) {
@@ -299,6 +323,7 @@ export function GuideAssistant() {
 
           <div className={styles.panel__body}>
             {(focused || tab === 'page') && <PageHelpView help={pageHelp} canOpen={canOpen} />}
+            {!focused && tab === 'page' && <RoleSummary />}
 
             {!focused && tab === 'flows' && !activeFlow && (
               <ul className={styles.flows} aria-label="Guías disponibles">

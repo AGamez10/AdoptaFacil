@@ -7,6 +7,8 @@ import { OPEN_CAPABILITIES } from '../../../test-utils';
 import { helpForPath } from '../model/guide-content';
 import { useGuideContext, type GuideContext } from '../model/guide-context';
 import { GuideAssistant } from './guide-assistant';
+// Código fuente de las rutas, para comprobar que ninguna pantalla queda sin ayuda.
+import routesSource from '../../../shell/router/routes.tsx?raw';
 
 function renderGuide(
   route: string,
@@ -327,5 +329,40 @@ describe('GuideAssistant · "Dónde se gestiona" respeta el rol', () => {
     ]) {
       expect(helpForPath(path).title, path).not.toBe('Ayuda');
     }
+  });
+
+  it('TODAS las rutas de la app tienen su propia ayuda: ninguna cae en la genérica', () => {
+    const source = routesSource;
+    // Redirecciones y comodines: no son pantallas, nunca se ve la ayuda ahí.
+    const notScreens = new Set([
+      '/*',
+      '/c/:code',
+      '/q/:code',
+      '/transparencia',
+      '/organizacion/dashboard-donaciones',
+      '/organizacion/reporte-exogeno',
+    ]);
+    const paths = [...source.matchAll(/path="([^"]+)"/g)]
+      .map((match) => (match[1].startsWith('/') ? match[1] : `/${match[1]}`))
+      .filter((path) => !notScreens.has(path));
+    expect(paths.length).toBeGreaterThan(100);
+    const generic = paths.filter(
+      (path) => helpForPath(path.replace(/:[a-zA-Z]+/g, 'x')).title === 'Ayuda',
+    );
+    expect(generic).toEqual([]);
+  });
+
+  it('quien entra a un equipo ve su cargo en la ayuda, con el texto de su invitación', () => {
+    renderGuide('/organizacion/campanas', { session: orgSession([Role.Volunteer]) });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    const role = screen.getByTestId('guide-role');
+    expect(role).toHaveTextContent('Tu cargo: Voluntario/a');
+    expect(role).toHaveTextContent(/no da acceso a datos de animales, donantes ni adoptantes/);
+  });
+
+  it('con varios cargos muestra el de más permisos, y una persona sin equipo no ve cargo', () => {
+    renderGuide('/inicio', { session: orgSession([Role.Volunteer, Role.Operator]) });
+    fireEvent.click(screen.getByTestId('guide-toggle'));
+    expect(screen.getByTestId('guide-role')).toHaveTextContent('Tu cargo: Operador/a');
   });
 });
