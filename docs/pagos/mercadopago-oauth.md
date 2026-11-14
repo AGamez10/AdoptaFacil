@@ -187,6 +187,60 @@ Web: `VITE_PAYMENT_PROVIDER=mercadopago` (es el valor por defecto; `off` apaga e
 
 7. Entrega las credenciales por el gestor de secretos del despliegue, nunca en el chat ni en el repositorio.
 
+## 7b. "La aplicación no está preparada para conectarse a Mercado Pago"
+
+Es la página que muestra Mercado Pago cuando la URL de autorización no cuadra con la aplicación. Al arrancar,
+la API registra la línea `Mercado Pago OAuth: client_id=… redirect_uri=… pkce=… sandbox=…` (sin secretos);
+compárala carácter por carácter con el panel. Revisa en este orden:
+
+1. **`redirect_uri` idéntico.** Tiene que estar en "URLs de redireccionamiento" de la **misma** aplicación cuyo
+   App ID es `MERCADOPAGO_CLIENT_ID`: mismo esquema, host, puerto, ruta y sin `/` final de más. Si la API no
+   tiene `API_PUBLIC_BASE_URL` ni `MERCADOPAGO_OAUTH_REDIRECT_URI`, el valor por defecto es
+   `http://localhost:3000/org/mercadopago/callback`, que no está registrado y casi seguro no se puede registrar.
+2. **`client_id` correcto.** Es el App ID (número) de la aplicación de **Checkout Pro**, no el de la de
+   Suscripciones ni el de un usuario de prueba, y no el Access token.
+3. **La aplicación admite OAuth.** Al crearla se marcó que es una plataforma o marketplace que cobra en nombre de
+   terceros. Si no, hay que crear otra aplicación con esa opción.
+4. **PKCE igual en los dos lados.** Si la aplicación tiene PKCE activo, `MERCADOPAGO_OAUTH_PKCE=true`.
+5. Si todo lo anterior cuadra, prueba con `MERCADOPAGO_AUTHORIZE_URL=https://auth.mercadopago.com/authorization`
+   (el host sin país que hoy muestra la documentación).
+
+Cada vez que se toca "Conectar Mercado Pago", la API también escribe en el log cuatro líneas
+`Mercado Pago OAuth authorize: …` con el `redirect_uri` crudo, el `redirect_uri` codificado tal como se envía,
+si está codificado una sola vez y si termina en `/`, y la URL completa con el `state` oculto. Al arrancar
+muestra además de qué variable sale el `client_id` y a qué app pertenece `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`
+(solo el App ID público, nunca el token). Si Mercado Pago devuelve `error` o `error_description` al callback, o
+el cambio de código por token falla, también quedan en el log, recortados y sin el código ni los secretos. El
+valor que hay que registrar en el panel es exactamente el de `redirect_uri (raw)`.
+
+**Probar en local:** Mercado Pago tiene que poder volver al navegador por https. Con el túnel de la web
+(`vite` ya reenvía `/api/*` a la API), registra en la aplicación `https://<túnel>/api/org/mercadopago/callback`
+y pon ese mismo valor en `MERCADOPAGO_OAUTH_REDIRECT_URI`. En la web pon `VITE_API_URL=/api` y abre la app por la
+URL del túnel, no por `localhost`. La cookie `af_mp_oauth` queda en el mismo dominio
+del túnel, así que el callback la recibe. Si el túnel cambia de dominio, hay que actualizar las dos cosas. Inicia
+sesión en Mercado Pago con el **vendedor de prueba** antes de tocar "Conectar" y deja `MERCADOPAGO_TEST=true`.
+
+## 7c. Diagnóstico y prueba de las suscripciones del plan (sandbox)
+
+`pnpm mp:doctor` lee tu `.env`, consulta la API real de Mercado Pago (solo lectura) y dice qué cambiar. No
+imprime secretos ni tokens: puedes pegar la salida completa en el chat. Comprueba que las variables existan, que
+`MERCADOPAGO_CLIENT_ID` y `MERCADOPAGO_CLIENT_SECRET` sean válidos, que el token de planes sea de la cuenta correcta
+(país, usuario de prueba o real, y que no sea la misma app de Checkout Pro) y muestra la `redirect_uri` y las dos
+URLs de webhook que hay que registrar. Con `pnpm mp:doctor --crear-suscripcion` (solo con `MERCADOPAGO_TEST=true`)
+crea una suscripción pendiente de prueba y muestra el motivo exacto si Mercado Pago la rechaza.
+
+Para probar el plan en sandbox:
+
+1. `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` es el Access token del **vendedor de prueba** (no el de producción).
+2. `MERCADOPAGO_TEST_PAYER_EMAIL` es el correo del **comprador de prueba**. En sandbox el pagador debe ser ese
+   usuario; solo se respeta con `MERCADOPAGO_TEST=true` y la API se niega a arrancar en producción si está definida.
+3. `WEB_BASE_URL` es la URL https del túnel (la `back_url` de la suscripción debe ser pública y https).
+4. `PLAN_ENFORCEMENT=true` y `VITE_PAYMENT_PROVIDER=mercadopago`; sin eso no aparece el botón "Pagar con Mercado Pago".
+5. Si Mercado Pago rechaza la suscripción, el log de la API trae `Plan checkout for org …: Mercado Pago preapproval
+create failed (400: <motivo>)` y la persona ve "No pudimos abrir el pago en Mercado Pago".
+6. Aprueba el pago con el comprador de prueba; el primer cobro aprobado llega por el webhook de Suscripciones y es
+   el que activa el plan.
+
 ## 8. Pendiente legal y contable
 
 - ⚖️ Los términos para refugios deben decir:
