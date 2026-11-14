@@ -152,6 +152,47 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).payer).toBeUndefined();
   });
 
+  it('in sandbox never sends the donor email (only the configured test buyer)', async () => {
+    const fetchFn = makeFetch();
+    const sandbox = new MercadoPagoPaymentAdapter(makeConfig({ MERCADOPAGO_TEST: true }), fetchFn);
+    await sandbox.createCollection(INPUT);
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).payer).toBeUndefined();
+
+    const withBuyer = makeFetch();
+    const configured = new MercadoPagoPaymentAdapter(
+      makeConfig({ MERCADOPAGO_TEST: true, MERCADOPAGO_TEST_PAYER_EMAIL: 'buyer@testuser.com' }),
+      withBuyer,
+    );
+    await configured.createCollection(INPUT);
+    expect(JSON.parse(String(withBuyer.mock.calls[0][1]?.body)).payer).toEqual({
+      email: 'buyer@testuser.com',
+    });
+  });
+
+  it('says why Mercado Pago refused the order, without the token or the payer', async () => {
+    const failing = new MercadoPagoPaymentAdapter(
+      makeConfig(),
+      jest.fn(async () =>
+        json(
+          {
+            errors: [
+              {
+                code: 'invalid_users_involved',
+                message: `payer donante@test.local cannot pay ${ORG.accessToken}`,
+                details: [],
+              },
+            ],
+          },
+          400,
+        ),
+      ),
+    );
+    const error = await failing.createCollection(INPUT).catch((e: Error) => e);
+    expect(String(error)).toMatch(/order create failed \(400: invalid_users_involved/);
+    expect(String(error)).not.toContain(ORG.accessToken);
+    expect(String(error)).not.toContain('donante@test.local');
+  });
+
   it('uses the same checkout_url in test mode (the order id carries the mode)', async () => {
     const adapter = new MercadoPagoPaymentAdapter(
       makeConfig({ MERCADOPAGO_TEST: true }),
