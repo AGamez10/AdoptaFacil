@@ -40,7 +40,7 @@ import {
   safeTemplate,
   type PortalThemeField,
 } from '../model/theme';
-import { TemplatePicker, TemplateUpsell } from '../components/templates/template-picker';
+import { TemplatePicker } from '../components/templates/template-picker';
 import { TemplateOptionsForm } from '../components/templates/template-options-form';
 import { TemplateLivePreview } from '../components/templates/template-live-preview';
 import { CoverVideoField } from '../components/templates/cover-video-field';
@@ -204,6 +204,12 @@ function PositionToggle<T extends string>({
     </fieldset>
   );
 }
+
+/** Selector rápido del móvil: primero las gratuitas y al final las Pro, como en el selector. */
+const QUICK_SWITCH_TEMPLATES = [
+  ...PORTAL_TEMPLATES.filter((info) => info.tier === 'free'),
+  ...PORTAL_TEMPLATES.filter((info) => info.tier === 'paid'),
+];
 
 const LOGO_POSITION_OPTIONS = [
   { value: 'left' as const, label: 'Izquierda', dotClass: 'left-1' },
@@ -475,8 +481,6 @@ export function PortalThemePage() {
       ) : (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
           <div className="space-y-6">
-            <TemplateUpsell premiumAvailable={premiumAvailable} lockedTemplate={lockedTemplate} />
-
             {/* Ola 3: plantilla del portal. Mismo contenido, otra estructura;
                 el nivel de plan es un parámetro (TODO(client)). */}
             <Card>
@@ -491,6 +495,7 @@ export function PortalThemePage() {
                   value={template}
                   onChange={chooseTemplate}
                   premiumAvailable={premiumAvailable}
+                  lockedTemplate={lockedTemplate}
                 />
               </CardContent>
             </Card>
@@ -573,21 +578,32 @@ export function PortalThemePage() {
               aria-label="Cambiar plantilla"
               data-testid="template-quick-switch"
             >
-              {PORTAL_TEMPLATES.map((info) => (
-                <button
-                  key={info.id}
-                  type="button"
-                  aria-pressed={template === info.id}
-                  onClick={() => chooseTemplate(info.id)}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${
-                    template === info.id
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'bg-background text-foreground'
-                  }`}
-                >
-                  {info.name}
-                </button>
-              ))}
+              {QUICK_SWITCH_TEMPLATES.map((info) => {
+                const pro = info.tier === 'paid';
+                const locked = pro && !premiumAvailable;
+                return (
+                  <button
+                    key={info.id}
+                    type="button"
+                    aria-pressed={template === info.id}
+                    disabled={locked}
+                    title={locked ? 'Necesitas un plan que incluya las plantillas Pro' : undefined}
+                    onClick={() => chooseTemplate(info.id)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+                      template === info.id
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'bg-background text-foreground'
+                    }`}
+                  >
+                    {info.name}
+                    {pro && (
+                      <span className="rounded-full bg-[#f2b94d] px-1.5 text-[10px] font-bold tracking-wider text-[#14253f]">
+                        {locked ? '🔒 PRO' : 'PRO'}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <Card>
               <CardHeader>
