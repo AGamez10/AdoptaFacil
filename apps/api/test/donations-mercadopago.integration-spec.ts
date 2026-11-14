@@ -398,7 +398,7 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     // Orders has no per-order notification URL: it is set on the application.
     expect(call.body.notification_url).toBeUndefined();
     expect((call.body.items as Record<string, unknown>[])[0].unit_price).toBe(
-      expected.amountCharged.toFixed(2),
+      String(expected.amountCharged),
     );
   });
 
