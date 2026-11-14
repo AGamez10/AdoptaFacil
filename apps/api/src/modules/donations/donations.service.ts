@@ -944,7 +944,7 @@ export class DonationsService {
       tone: 'success',
       title: `Recibieron una donación de ${money}`,
       body: 'El pago fue confirmado. Mira el detalle en Donaciones recibidas.',
-      href: '/donaciones-recibidas',
+      href: `/donaciones-recibidas?foco=${donationId}`,
       dedupeKey: `donation:${donationId}`,
     });
     if (donorUserId) {

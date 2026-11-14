@@ -95,6 +95,8 @@ export function buildDonationsPayload(input: {
   animalNames: Map<string, string>;
   /** Personas con consentimiento vigente para esta organización; sin él, no se identifica. */
   consentedUserIds?: ReadonlySet<string>;
+  /** Documento del perfil de quien autorizó; se usa si el pago no trajo uno. */
+  profileDocuments?: ReadonlyMap<string, string>;
 }): DonationsReportPayload {
   const consented = input.consentedUserIds ?? new Set<string>();
   const sorted = [...input.donations].sort(
@@ -114,7 +116,12 @@ export function buildDonationsPayload(input: {
         : identified
           ? d.payer?.fullName?.trim() || 'Donante'
           : 'Donante',
-      donorDocument: identified ? maskDocument(d.payer?.documentId) : '',
+      donorDocument: identified
+        ? maskDocument(
+            d.payer?.documentId?.trim() ||
+              (d.donorUserId && input.profileDocuments?.get(d.donorUserId)),
+          )
+        : '',
       concept: conceptLabel(d.conceptKind, d.conceptId, names),
       amountCharged: d.amountCharged,
       fees,

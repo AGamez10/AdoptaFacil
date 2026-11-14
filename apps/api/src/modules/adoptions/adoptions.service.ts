@@ -141,7 +141,7 @@ export class AdoptionsService {
       kind: 'adoptions.request_received',
       title: `Nueva solicitud de adopción para ${animalName}`,
       body: 'Revísala en el tablero de adopciones y avanza a "evaluar" cuando la estudies.',
-      href: '/adopciones',
+      href: `/adopciones?foco=${row.id}`,
       dedupeKey: `adoption_request:${row.id}`,
     });
     await this.inbox.toUser(actor.id, {

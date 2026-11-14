@@ -281,7 +281,7 @@ export class VolunteerEnrollmentsService {
       kind: 'volunteering.enrollment_received',
       title: `Nueva inscripción a "${title}"`,
       body: `${row.volunteer_name.split(/\s+/)[0] || 'Alguien'} quiere ser voluntario(a). Acéptala o recházala.`,
-      href: `/organizacion/voluntariado/${opportunityId}`,
+      href: `/organizacion/voluntariado/${opportunityId}?foco=${row.id}`,
       dedupeKey: `volunteer_enrollment:${row.id}`,
     });
     await this.inbox.toUser(actor.id, {

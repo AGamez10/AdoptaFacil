@@ -13,6 +13,7 @@ import {
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
+import { useFocusTarget } from '../../../shell/use-focus-target';
 import { listAdoptionRequests, transitionAdoptionRequest } from '../api/adoptions-api';
 import { AdoptionContractPanel } from '../components/adoption-contract-panel';
 import { ApplicantDetailModal } from '../components/applicant-detail-modal';
@@ -44,6 +45,11 @@ export function AdoptionsKanbanPage() {
   // refleja el estado más reciente de `requests` tras avanzar (p. ej. permite
   // mover new → in_review → approved sin cerrar y reabrir).
   const [detailRequestId, setDetailRequestId] = useState<string | null>(null);
+  // Desde el aviso "Nueva solicitud de adopción" se abre directo esa solicitud.
+  const focusId = useFocusTarget(!loading && requests.length > 0);
+  useEffect(() => {
+    if (focusId && requests.some((r) => r.id === focusId)) setDetailRequestId(focusId);
+  }, [focusId, requests]);
   const detailRequest = requests.find((r) => r.id === detailRequestId) ?? null;
 
   const load = useCallback(() => {
@@ -115,7 +121,7 @@ export function AdoptionsKanbanPage() {
                 <p className={styles.column__empty}>Sin solicitudes.</p>
               ) : (
                 items.map((request) => (
-                  <Card key={request.id} data-testid="adoption-card">
+                  <Card key={request.id} data-testid="adoption-card" data-focus-id={request.id}>
                     <CardContent className="space-y-2 p-3">
                       <div className={styles.card__top}>
                         <span className={styles.card__animal}>{request.animalSnapshot.name}</span>
