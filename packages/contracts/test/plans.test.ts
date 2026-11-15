@@ -57,10 +57,21 @@ describe('plan catalog', () => {
     expect(minimumPlanFor('customDomain')).toBe('pro');
   });
 
-  it('premium portal designs need a paid plan (decisión 2026-10-17)', () => {
+  it('premium portal designs need a paid plan (decisiones 2026-10-17 y 2026-11-15)', () => {
     expect(minimumPlanFor('portalPremiumDesigns')).toBe('crece');
     const premium = PORTAL_TEMPLATES.filter((t) => isPremiumTemplate(t.id)).map((t) => t.id);
-    expect(premium).toEqual(['historias', 'album', 'linterna', 'revelado', 'velitas', 'terminal']);
+    // 2026-11-15: Historias pasa a gratis; Sistema solar e Hilo pasan a Pro; llega Documental.
+    expect(premium).toEqual([
+      'solar',
+      'hilo',
+      'album',
+      'linterna',
+      'revelado',
+      'velitas',
+      'terminal',
+      'documental',
+    ]);
+    expect(isPremiumTemplate('historias')).toBe(false);
   });
 
   it('finds the cheapest plan for a limit', () => {
