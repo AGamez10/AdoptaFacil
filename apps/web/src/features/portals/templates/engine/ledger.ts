@@ -8,6 +8,11 @@ import { EMPTY, type TplModel } from './model';
  */
 export function ledgerBlock(m: TplModel, emptyClass: string): string {
   const L = m.LEDGER;
+  // Si el libro no cargó, nunca se afirma que no hay movimientos: los datos
+  // existen y están en el libro completo, que el donante puede abrir.
+  if (L.unavailable) {
+    return `<p class="${emptyClass}">No pudimos cargar los movimientos en este momento. <button type="button" data-ledger>Ver libro completo</button></p>`;
+  }
   if (L.rows.length === 0) return `<p class="${emptyClass}">${EMPTY.libro}</p>`;
   const rows = L.rows
     .map((r) => {

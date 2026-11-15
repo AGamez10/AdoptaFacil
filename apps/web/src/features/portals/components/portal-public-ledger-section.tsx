@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PublicLedgerPage } from '@adoptafacil/contracts';
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@adoptafacil/ui';
-import { fetchPublicLedger } from '../../ledger/api/public-ledger';
+import { fetchPublicLedgerReliable } from '../../ledger/api/public-ledger';
 import { LedgerEntryList } from '../../ledger/components/ledger-entry-list';
 import { LedgerSummary } from '../../ledger/components/ledger-summary';
 import { PublicLedgerDialog } from '../../ledger/components/public-ledger-dialog';
@@ -47,7 +47,7 @@ export function PortalPublicLedgerSection({ slug, orgName }: PortalPublicLedgerS
   useEffect(() => {
     const ctl = new AbortController();
     setState('loading');
-    fetchPublicLedger(slug, { limit: PREVIEW, signal: ctl.signal })
+    fetchPublicLedgerReliable(slug, { limit: PREVIEW, signal: ctl.signal })
       .then((p) => {
         setPage(p);
         setState('ready');

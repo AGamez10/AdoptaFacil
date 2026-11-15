@@ -174,6 +174,8 @@ export interface TplLedger {
   balance: string;
   count: number;
   last: string;
+  /** El libro no se pudo leer (no es lo mismo que "sin movimientos"). */
+  unavailable: boolean;
 }
 
 export interface TplSocial {
@@ -574,6 +576,7 @@ function buildLedger(page: PublicLedgerPage | null | undefined): TplLedger {
     balance: esc(COP.format(totals?.balanceCop ?? 0)),
     count: totals?.entryCount ?? 0,
     last: totals?.lastEntryOn ? esc(ledgerDate(totals.lastEntryOn)) : '',
+    unavailable: page === null,
   };
 }
 
