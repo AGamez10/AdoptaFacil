@@ -14,6 +14,7 @@ import {
   FormalizationState,
   type FormalizationTransition,
   type RequestFormalizationTransitionInput,
+  rteValidUntilFrom,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
@@ -77,6 +78,7 @@ export class FormalizationService {
       return {
         state: (profile?.formalizationState as FormalizationState) ?? FormalizationState.Informal,
         rteVigente: profile?.rteVigente ?? false,
+        ...(profile?.rteValidUntil ? { rteValidUntil: profile.rteValidUntil.toISOString() } : {}),
         dianVerification: parseDianVerification(organizationId, profile?.dianVerification),
       };
     });
@@ -200,10 +202,18 @@ export class FormalizationService {
       }
 
       const rteVigente = rteVigenteFor(input.targetState);
+      // Reverificación anual: el RTE reconocido vale hasta el próximo plazo de
+      // la DIAN; fuera de ESAL con RTE no hay fecha.
+      const rteValidUntil = rteVigente ? rteValidUntilFrom(new Date()) : null;
       await tx.organizationProfile.upsert({
         where: { organizationId },
-        create: { organizationId, formalizationState: input.targetState, rteVigente },
-        update: { formalizationState: input.targetState, rteVigente },
+        create: {
+          organizationId,
+          formalizationState: input.targetState,
+          rteVigente,
+          rteValidUntil,
+        },
+        update: { formalizationState: input.targetState, rteVigente, rteValidUntil },
       });
 
       // S1-05: the verification level is a computed effect of formalization +

@@ -133,6 +133,10 @@ model OrganizationProfile {
   slug               String?  @unique
   formalizationState String   @default("informal") @map("formalization_state")
   rteVigente         Boolean  @default(false) @map("rte_vigente")
+  /// Hasta cuándo vale el RTE reconocido: el próximo plazo anual de la DIAN
+  /// (`rteValidUntilFrom`). Al vencer sin RUT nuevo aprobado, `rteVigente` pasa
+  /// a false y se suspenden solo los certificados con beneficio tributario.
+  rteValidUntil      DateTime? @map("rte_valid_until")
   /// { level, label?, criteria[] } — VerificationLevel contract.
   verificationLevel  Json?    @map("verification_level")
   /// Legal/organizational type (OrganizationType contract, RF01/T-030). Public

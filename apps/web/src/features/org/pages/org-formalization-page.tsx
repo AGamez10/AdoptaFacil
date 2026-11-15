@@ -33,7 +33,7 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { formalizationSteps } from '../../_layout/model/formalization-stepper-view';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
-import { Role } from '@adoptafacil/contracts';
+import { Role, rteReminderStage } from '@adoptafacil/contracts';
 import { TextField } from '../components/profile-fields';
 import { CapabilitiesPanel } from '../components/capabilities-panel';
 import { DOCUMENT_NAMES } from '../components/legal-labels';
@@ -96,6 +96,51 @@ const DIAN_STATUS_META: Record<
 /** Formatea un instante UTC en hora de Colombia para la UI. */
 function formatCO(iso: string): string {
   return new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+}
+
+function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'America/Bogota',
+  });
+}
+
+const RUT_UPLOAD_PATH = `/organizacion/documentos?subir=${DocumentType.Rut}`;
+
+/** Reverificación anual del RTE: avisa desde 60 días antes del vencimiento y,
+ *  vencido, explica que solo se pausó el certificado tributario. */
+function RteRenewalNotice({ status }: { status: FormalizationStatus }) {
+  if (status.state !== FormalizationState.ESAL_RTE || !status.rteValidUntil) return null;
+  const date = formatDay(status.rteValidUntil);
+  if (!status.rteVigente) {
+    return (
+      <div className={styles.rte} role="alert" data-testid="rte-renewal">
+        <p>
+          Tu RTE venció el {date}. Pausamos solo los certificados de donación con beneficio
+          tributario: tus donantes reciben el comprobante mientras tanto. Sube tu RUT reciente con
+          la responsabilidad 04 y, apenas el equipo lo apruebe, vuelves a emitirlos.
+        </p>
+        <Link to={RUT_UPLOAD_PATH} className={styles.requirements__link}>
+          Subir RUT actualizado
+        </Link>
+      </div>
+    );
+  }
+  if (!rteReminderStage(new Date(status.rteValidUntil), new Date())) return null;
+  return (
+    <div className={styles.rte} role="status" data-testid="rte-renewal">
+      <p>
+        Cada año la DIAN pide actualizar el Régimen Tributario Especial. Sube tu RUT reciente con la
+        responsabilidad 04 antes del {date} para seguir emitiendo certificados con beneficio
+        tributario.
+      </p>
+      <Link to={RUT_UPLOAD_PATH} className={styles.requirements__link}>
+        Subir RUT actualizado
+      </Link>
+    </div>
+  );
 }
 
 /** `/organizacion/formalizacion` — progreso de formalización (RF02). Cualquier
@@ -275,7 +320,13 @@ export function OrgFormalizationPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <ProgressStepper steps={formalizationSteps()} currentIndex={currentIndex} />
-              {status.rteVigente && <Badge>RTE vigente</Badge>}
+              {status.rteVigente && (
+                <Badge>
+                  RTE vigente
+                  {status.rteValidUntil && ` hasta el ${formatDay(status.rteValidUntil)}`}
+                </Badge>
+              )}
+              <RteRenewalNotice status={status} />
 
               {status.dianVerification && (
                 <div className={styles['dian-verification']}>

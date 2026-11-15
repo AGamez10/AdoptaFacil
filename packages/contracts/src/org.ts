@@ -189,8 +189,12 @@ export const FORMALIZATION_SEQUENCE: readonly FormalizationState[] = [
 /** Current formalization status of an organization. */
 export interface FormalizationStatus {
   state: FormalizationState;
-  /** True iff `state === ESAL_RTE` (RTE registration current). */
+  /** True iff `state === ESAL_RTE` (RTE registration current). Pasa a `false`
+   *  si vence {@link rteValidUntil} sin un RUT nuevo aprobado. */
   rteVigente: boolean;
+  /** Hasta cuándo vale el RTE reconocido (ISO-8601 UTC): el próximo plazo
+   *  anual de actualización ante la DIAN. Solo en ESAL con RTE. */
+  rteValidUntil?: string;
   /** Present only once the org has reached ESAL (S-2) — `undefined` before
    *  that, since no verification has ever been attempted yet. */
   dianVerification?: DianVerificationStatus;

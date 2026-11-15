@@ -41,6 +41,12 @@ import { PlatformSettingsController } from './platform-settings.controller';
 import { PlatformSettingsService } from './platform-settings.service';
 import { PublicPlatformSettingsController } from './public-platform-settings.controller';
 
+import { RteReverificationService } from './rte-reverification.service';
+import {
+  RTE_REVERIFICATION_QUEUE,
+  RteReverificationProcessor,
+  RteReverificationScheduler,
+} from './rte-reverification.scheduler';
 /**
  * M01 · Organization profile (CRUD) + public portal read + formalization state
  * machine (RF02) + documentary management (RF03, T-103) + organization type badge
@@ -53,7 +59,11 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
   // BullMQ↔Redis connection (QueueModule, core) — it does not touch or
   // reconfigure that shared module, same pattern AnimalsModule already uses
   // for REMINDERS_QUEUE.
-  imports: [AuthModule, BullModule.registerQueue({ name: DIAN_VERIFICATION_QUEUE })],
+  imports: [
+    AuthModule,
+    BullModule.registerQueue({ name: DIAN_VERIFICATION_QUEUE }),
+    BullModule.registerQueue({ name: RTE_REVERIFICATION_QUEUE }),
+  ],
   controllers: [
     OrgController,
     AnnouncementsController,
@@ -88,6 +98,9 @@ import { PublicPlatformSettingsController } from './public-platform-settings.con
     PlatformSettingsService,
     DianVerificationService,
     DianVerificationProcessor,
+    RteReverificationService,
+    RteReverificationScheduler,
+    RteReverificationProcessor,
     {
       provide: DIAN_PORT,
       useFactory: () => {
