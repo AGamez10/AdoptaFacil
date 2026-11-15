@@ -7,8 +7,10 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { formatDayEs } from '@adoptafacil/contracts';
 import {
   type AdoptionContractSigner,
   type AdoptionFollowUpEvidence,
@@ -21,6 +23,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import {
   NOTIFICATION_PORT,
   type NotificationPort,
@@ -67,6 +70,7 @@ export class FollowUpService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -144,6 +148,14 @@ export class FollowUpService {
       return row;
     });
 
+    await this.inbox?.toUser(created.adopterUserId, {
+      kind: 'adoptions.followup_scheduled',
+      tone: 'info',
+      title: `Nuevo seguimiento: ${created.title}`,
+      body: `La organización te pide contarle cómo va todo antes del ${formatDayEs(created.dueAt.toISOString().slice(0, 10))}. Responde desde Mis seguimientos.`,
+      href: `/mis-seguimientos?foco=${created.id}`,
+      dedupeKey: `adoption_followup_scheduled:${created.id}`,
+    });
     return this.fromModel(created);
   }
 
@@ -309,6 +321,15 @@ export class FollowUpService {
         metadata: { by: 'adopter' },
       });
     }
+    await this.inbox?.toOrgStaff(organizationId, {
+      kind: 'adoptions.followup_answered',
+      tone: 'info',
+      title: `${current.adopter_name.split(/\s+/)[0] || 'El adoptante'} respondió el seguimiento "${current.title}"`,
+      body: hasPhoto
+        ? 'Incluyó evidencia. Revísala en el seguimiento de la adopción.'
+        : 'Revisa sus respuestas en el seguimiento de la adopción.',
+      href: `/adopciones?foco=${current.request_id}`,
+    });
 
     return this.fromRow(updated, []);
   }
@@ -394,6 +415,22 @@ export class FollowUpService {
         metadata: { result: sent ? 'sent' : 'failed' },
       });
 
+      await this.inbox?.toUser(row.adopter_user_id, {
+        kind: 'adoptions.followup_overdue',
+        tone: 'warning',
+        title: `Tienes un seguimiento vencido: ${row.title}`,
+        body: 'Cuéntale a la organización cómo va todo; solo toma un par de minutos.',
+        href: `/mis-seguimientos?foco=${row.id}`,
+        dedupeKey: `adoption_followup_overdue:${row.id}`,
+      });
+      await this.inbox?.toOrgStaff(row.organization_id, {
+        kind: 'adoptions.followup_overdue',
+        tone: 'warning',
+        title: `Seguimiento vencido: ${row.title}`,
+        body: `${row.adopter_name.split(/\s+/)[0] || 'El adoptante'} aún no responde. Ya le recordamos; puedes contactarle desde la solicitud.`,
+        href: `/adopciones?foco=${row.request_id}`,
+        dedupeKey: `adoption_followup_overdue:${row.id}`,
+      });
       overdue.push({ id: row.id, organizationId: row.organization_id });
     }
     return overdue;

@@ -8,6 +8,7 @@ import { hashInvitationToken } from '../src/modules/org/governance/invitations.s
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
+import { completeTestProfile } from './support/profile';
 
 const APP_DATABASE_URL =
   process.env.DATABASE_URL_APP ??
@@ -271,6 +272,60 @@ describe('Inbox notifications + visible resource bank', () => {
       href: `/mis-ofertas?foco=${offerId}`,
     });
     expect(mine.body.unread).toBeGreaterThanOrEqual(2);
+  });
+
+  it('punto 9: sin días de jornada el voluntario sabe por qué no registra horas y la organización recibe el recordatorio', async () => {
+    const today = new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
+    const day = (offset: number) =>
+      new Date(Date.parse(`${today}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10);
+    const created = await request(server)
+      .post('/volunteer-opportunities')
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({
+        title: 'Jornada sin días',
+        category: 'care',
+        startDate: `${day(5)}T00:00:00.000Z`,
+        endDate: `${day(20)}T00:00:00.000Z`,
+        location: 'Refugio',
+      })
+      .expect(201);
+    const opportunityId = created.body.id as string;
+    await completeTestProfile(admin, donor.userId);
+    const enrolled = await request(server)
+      .post('/volunteer-enrollments')
+      .set('Authorization', `Bearer ${donor.token}`)
+      .send({ opportunityId })
+      .expect(201);
+    await request(server)
+      .post(`/volunteer-enrollments/${enrolled.body.id}/decision`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ decision: 'accept' })
+      .expect(200);
+
+    const accepted = (await inbox(donor.token)).body.items.find(
+      (n: { kind: string }) => n.kind === 'volunteering.enrollment_accepted',
+    );
+    expect(accepted.body).toContain('aún no ha asignado los días de jornada');
+
+    const reminder = (await inbox(teammate.token)).body.items.find(
+      (n: { kind: string }) => n.kind === 'volunteering.session_days_missing',
+    );
+    expect(reminder).toMatchObject({
+      tone: 'warning',
+      href: `/organizacion/voluntariado/${opportunityId}?foco=dias-jornada`,
+    });
+
+    await request(server)
+      .patch(`/volunteer-opportunities/${opportunityId}`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .send({ sessionDates: [day(6), day(8)] })
+      .expect(200);
+    const assigned = (await inbox(donor.token)).body.items[0];
+    expect(assigned).toMatchObject({
+      kind: 'volunteering.session_days_assigned',
+      href: `/voluntariado?foco=${enrolled.body.id}`,
+    });
+    expect(assigned.body).toContain('Tu próxima jornada');
   });
 
   it('marks as read only the own notifications', async () => {

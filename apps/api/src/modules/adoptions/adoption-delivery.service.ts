@@ -9,6 +9,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -29,6 +30,7 @@ import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import {
   NOTIFICATION_PORT,
   type NotificationPort,
@@ -96,6 +98,7 @@ export class AdoptionDeliveryService {
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     config: ConfigService<Env, true>,
+    @Optional() private readonly inbox?: InboxService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
   }
@@ -333,6 +336,14 @@ export class AdoptionDeliveryService {
       });
       return cancelled;
     });
+    await this.inbox?.toUser(row.adopterUserId, {
+      kind: 'adoptions.delivery_cancelled',
+      tone: 'info',
+      title: `Se canceló la entrega de ${row.animalName}`,
+      body: 'La organización canceló esta entrega pendiente. Te avisaremos cuando la programe de nuevo.',
+      href: `/mis-solicitudes?foco=${row.requestId}`,
+      dedupeKey: `adoption_delivery_cancelled:${row.id}`,
+    });
     return this.fromModel(row);
   }
 
@@ -406,6 +417,22 @@ export class AdoptionDeliveryService {
         milestonesPlanned: row.milestone_plan.length,
       },
     });
+    await this.inbox?.toUser(actor.id, {
+      kind: 'adoptions.delivery_confirmed',
+      tone: 'kudos',
+      title: `¡Bienvenido a casa, ${row.animal_name}!`,
+      body: 'La entrega quedó confirmada y el acta sellada. Encontrarás su historia clínica en Mis adopciones; la organización te acompañará con los seguimientos.',
+      href: `/mis-adopciones/entrega/${id}`,
+      dedupeKey: `adoption_delivery_confirmed:${id}`,
+    });
+    await this.inbox?.toOrgStaff(row.organization_id, {
+      kind: 'adoptions.delivery_confirmed',
+      tone: 'kudos',
+      title: `${row.animal_name} ya está con su familia`,
+      body: 'El adoptante confirmó la entrega. Los seguimientos programados quedan en Seguimientos.',
+      href: `/adopciones?foco=${row.request_id}`,
+      dedupeKey: `adoption_delivery_confirmed:${id}`,
+    });
     return this.fromRow(row);
   }
 
@@ -451,6 +478,13 @@ export class AdoptionDeliveryService {
       // La organización igual ve el código y el QR en pantalla.
       this.logger.warn(`No se pudo enviar el código de entrega ${row.id}: ${String(error)}`);
     }
+    await this.inbox?.toUser(row.adopterUserId, {
+      kind: 'adoptions.delivery_ready',
+      tone: 'success',
+      title: `Confirma que recibiste a ${row.animalName}`,
+      body: `Cuando tengas a ${row.animalName} contigo, confirma la entrega con el código que te mostró la organización o que te llegó al correo. Vence en ${ADOPTION_DELIVERY_CODE_TTL_MINUTES} minutos; si vence, pide uno nuevo.`,
+      href: `/mis-adopciones/entrega/${row.id}`,
+    });
     return { delivery: this.fromModel(row), code, confirmUrl };
   }
 
