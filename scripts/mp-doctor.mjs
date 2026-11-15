@@ -184,9 +184,37 @@ if (token) {
   info('sin MERCADOPAGO_PLATFORM_ACCESS_TOKEN no se puede cobrar el plan en línea');
 }
 
+// 4b) Interruptores: sin ellos el cobro existe pero no se ofrece.
+console.log('\nInterruptores de cobro');
+const on = (key) => env[key] === 'true';
+if (on('PLAN_ENFORCEMENT')) {
+  ok('PLAN_ENFORCEMENT=true', 'el botón "Pagar Crece/Pro con Mercado Pago" aparece en Plan');
+} else {
+  warn(
+    'PLAN_ENFORCEMENT no está en true: todas las organizaciones tienen Pro gratis y Plan no ofrece pagar Crece ni Pro',
+    'ponlo en `true` cuando quieras cobrar los planes (usa MERCADOPAGO_PLATFORM_ACCESS_TOKEN, la cuenta de AdoptaFácil)',
+  );
+}
+if (on('FEATURE_SPONSORSHIPS')) {
+  ok('FEATURE_SPONSORSHIPS=true', 'apadrinar cobra cada mes en la cuenta de la organización');
+} else {
+  warn(
+    'FEATURE_SPONSORSHIPS no está en true: los apadrinamientos no se muestran',
+    'ponlo en `true` para apadrinar con Mercado Pago (no necesita otra app ni otro webhook)',
+  );
+}
+const webProvider = (env.VITE_PAYMENT_PROVIDER || '').trim().toLowerCase();
+if (['off', 'none', 'disabled'].includes(webProvider)) {
+  warn(
+    `VITE_PAYMENT_PROVIDER=${webProvider}: la web no ofrece ningún pago`,
+    'déjala vacía o en `mercadopago`',
+  );
+}
+
 // 5) URLs de webhooks que hay que registrar.
 console.log('\nWebhooks (se registran en el panel, uno por aplicación)');
 info(`Checkout Pro (evento Order):  ${apiBase}/donations/webhook/mercadopago`);
+info('  (el mismo aviso confirma donaciones y cada mes de un apadrinamiento)');
 info(`Suscripciones (planes):       ${apiBase}/billing/webhooks/mercadopago`);
 if (
   env.API_PUBLIC_BASE_URL &&
