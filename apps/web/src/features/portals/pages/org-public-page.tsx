@@ -74,8 +74,10 @@ interface Layout {
   /** Ola 3: plantilla visual del portal (mismo contenido, otra estructura). */
   template: PortalTemplateId;
   templateOptions: PortalTemplateOptions;
-  /** Historias: video de portada opcional (URL pública ya resuelta). */
+  /** Historias y Documental: video de portada opcional (URL pública ya resuelta). */
   coverVideoUrl?: string;
+  /** Imagen de portada de ese video, si el servidor la sacó al comprimirlo. */
+  coverVideoPosterUrl?: string;
   /** Sin el sello "Hecho con AdoptaFácil" (plan con `portalRemoveSeal`). */
   hideSeal?: boolean;
 }
@@ -211,6 +213,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               template?: unknown;
               templateOptions?: unknown;
               coverVideoUrl?: unknown;
+              coverVideoPosterUrl?: unknown;
               hideSeal?: unknown;
             }>)
           : null,
@@ -227,6 +230,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
             body?.templateOptions,
           ),
           coverVideoUrl: safeMediaUrl(body?.coverVideoUrl),
+          coverVideoPosterUrl: safeMediaUrl(body?.coverVideoPosterUrl),
           // La API ya cruzó la elección con el plan; ante la duda, sello.
           hideSeal: body?.hideSeal === true,
         },
@@ -290,6 +294,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           template,
           templateOptions: resolveTemplateOptions(template, themeConfig?.templateOptions),
           coverVideoUrl: safeMediaUrl(themeConfig?.coverVideoUrl),
+          coverVideoPosterUrl: safeMediaUrl(themeConfig?.coverVideoPosterUrl),
           // La lectura propia trae la elección; se aplica solo si el plan la incluye.
           hideSeal: themeConfig?.hideSeal === true && themeConfig.removeSealAvailable !== false,
         });
@@ -659,6 +664,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         slug={slug}
         organization={view.profile.organization}
         themeStyle={themeStyle}
+        coverVideo={
+          layout.coverVideoUrl
+            ? { url: layout.coverVideoUrl, poster: layout.coverVideoPosterUrl }
+            : null
+        }
         fallback={classic}
       />
     );

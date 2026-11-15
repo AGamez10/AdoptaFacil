@@ -13,6 +13,7 @@ import {
   type PortalTemplateOptions,
   type PortalTheme,
   type PortalThemeConfig,
+  templateUsesVideo,
 } from '@adoptafacil/contracts';
 import {
   Button,
@@ -255,6 +256,7 @@ export function PortalThemePage() {
   const [templateOptions, setTemplateOptions] = useState<PortalTemplateOptions>({});
   // Historias: video de portada. `coverVideoKey` undefined = sin cambios.
   const [coverVideoUrl, setCoverVideoUrl] = useState<string | undefined>(undefined);
+  const [coverVideoPosterUrl, setCoverVideoPosterUrl] = useState<string | undefined>(undefined);
   const [coverVideoKey, setCoverVideoKey] = useState<string | null | undefined>(undefined);
   // Sello del pie (`portalRemoveSeal`). Solo se envía si la organización lo
   // tocó: así guardar colores con el plan vencido no choca con el 403.
@@ -302,6 +304,7 @@ export function PortalThemePage() {
           });
         }
         setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
+        setCoverVideoPosterUrl(safeMediaUrl(config.coverVideoPosterUrl));
         setPremiumAvailable(config.premiumDesignsAvailable !== false);
         setLockedTemplate(config.lockedTemplate);
         setHideSeal(config.hideSeal === true);
@@ -398,6 +401,7 @@ export function PortalThemePage() {
       setSealTouched(false);
       if (coverVideoKey !== undefined) {
         setCoverVideoUrl(safeMediaUrl(themeConfig.coverVideoUrl));
+        setCoverVideoPosterUrl(safeMediaUrl(themeConfig.coverVideoPosterUrl));
         setCoverVideoKey(undefined);
       }
       toast({
@@ -512,12 +516,14 @@ export function PortalThemePage() {
                     onChange={setTemplateOptions}
                   />
                 )}
-                {template === 'historias' && (
+                {templateUsesVideo(template) && (
                   <CoverVideoField
+                    template={template}
                     url={coverVideoUrl}
                     onChange={({ key, url }) => {
                       setCoverVideoKey(key);
                       setCoverVideoUrl(url);
+                      setCoverVideoPosterUrl(undefined);
                     }}
                   />
                 )}
@@ -618,6 +624,7 @@ export function PortalThemePage() {
                   tokens={previewTokens}
                   logoPosition={logoPosition}
                   coverVideoUrl={coverVideoUrl}
+                  coverVideoPosterUrl={coverVideoPosterUrl}
                 />
               </CardContent>
             </Card>

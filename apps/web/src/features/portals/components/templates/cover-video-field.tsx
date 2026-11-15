@@ -1,9 +1,11 @@
 import { useId, useRef, useState } from 'react';
 import { Button, useToast } from '@adoptafacil/ui';
 import { useApiClient } from '../../../../shell/api';
+import type { PortalTemplateId } from '@adoptafacil/contracts';
 import {
   COVER_VIDEO_ACCEPT,
   COVER_VIDEO_MAX_MB,
+  COVER_VIDEO_MAX_SECONDS,
   uploadCoverVideo,
   validateCoverVideo,
 } from '../../api/cover-video';
@@ -13,15 +15,24 @@ export interface CoverVideoFieldProps {
   url?: string;
   /** Llave recién subida (string) o `null` para quitar el video al guardar. */
   onChange: (next: { key: string | null; url?: string }) => void;
+  /** Plantilla que lo muestra: cambia la recomendación de duración y formato. */
+  template?: PortalTemplateId;
 }
 
+const HINTS: Partial<Record<PortalTemplateId, string>> = {
+  historias:
+    'Se ve en la primera historia, sin sonido y en bucle. Lo ideal son 10 a 20 segundos grabados en vertical.',
+  documental:
+    'Abre tu portal a pantalla completa y te acompaña mientras bajas. Lo ideal son 30 a 60 segundos grabados en horizontal; quien visita puede activar el sonido.',
+};
+
 /**
- * Video de portada de la plantilla Historias (opcional). Se sube al momento
- * (llave pública de la organización) y se guarda con "Guardar y publicar".
- * Sin sonido y en bucle en el portal; no se reproduce si el visitante pidió
- * menos movimiento o ahorrar datos.
+ * Video de portada (opcional) de Historias y Documental. Se sube al momento
+ * (llave pública de la organización), el servidor lo comprime y se guarda con
+ * "Guardar y publicar". Arranca sin sonido; no se reproduce solo si el
+ * visitante pidió menos movimiento o ahorrar datos.
  */
-export function CoverVideoField({ url, onChange }: CoverVideoFieldProps) {
+export function CoverVideoField({ url, onChange, template = 'historias' }: CoverVideoFieldProps) {
   const client = useApiClient();
   const { toast } = useToast();
   const inputId = useId();
@@ -30,6 +41,7 @@ export function CoverVideoField({ url, onChange }: CoverVideoFieldProps) {
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
+    // La duración la revisa el servidor al comprimir (responde el motivo).
     const problem = validateCoverVideo(file);
     if (problem) {
       toast({ title: 'No se pudo usar ese video', description: problem, variant: 'destructive' });
@@ -57,8 +69,8 @@ export function CoverVideoField({ url, onChange }: CoverVideoFieldProps) {
         Video de portada (opcional)
       </label>
       <p className="text-sm text-muted-foreground">
-        Se ve en la primera historia, sin sonido y en bucle. MP4 o WebM de hasta{' '}
-        {COVER_VIDEO_MAX_MB} MB; lo ideal son 10 a 20 segundos grabados en vertical.
+        {HINTS[template] ?? HINTS.historias} MP4, MOV o WebM de hasta {COVER_VIDEO_MAX_SECONDS}{' '}
+        segundos y {COVER_VIDEO_MAX_MB} MB; lo comprimimos para que cargue rápido.
       </p>
       {url && (
         <video
@@ -67,7 +79,11 @@ export function CoverVideoField({ url, onChange }: CoverVideoFieldProps) {
           loop
           playsInline
           autoPlay
-          className="aspect-[9/16] max-h-64 rounded-xl bg-muted object-cover"
+          className={
+            template === 'documental'
+              ? 'aspect-video w-full max-w-sm rounded-xl bg-muted object-cover'
+              : 'aspect-[9/16] max-h-64 rounded-xl bg-muted object-cover'
+          }
           data-testid="cover-video-preview"
         />
       )}
@@ -87,7 +103,7 @@ export function CoverVideoField({ url, onChange }: CoverVideoFieldProps) {
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
         >
-          {uploading ? 'Subiendo…' : url ? 'Cambiar video' : 'Subir video'}
+          {uploading ? 'Subiendo y comprimiendo…' : url ? 'Cambiar video' : 'Subir video'}
         </Button>
         {url && !uploading && (
           <Button

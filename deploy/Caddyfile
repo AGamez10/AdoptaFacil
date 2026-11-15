@@ -55,9 +55,12 @@
 		-X-Powered-By
 	}
 
-	# Subidas: el tope de la API es STORAGE_MAX_FILE_MB (15 MB por defecto).
+	# Subidas: el tope general de la API es STORAGE_MAX_FILE_MB (15 MB). Los
+	# videos (comunidad, hasta 80 MB, y portada del portal, hasta 80 MB) se
+	# comprimen en el servidor, así que el original puede pesar más: el techo
+	# es el límite duro del multipart de la API (100 MB).
 	request_body {
-		max_size 20MB
+		max_size 100MB
 	}
 
 	handle_path /api/* {
