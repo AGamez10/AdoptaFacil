@@ -515,6 +515,8 @@ export function AdoptionContractPage() {
           <AdoptionDeliveryPanel
             contractId={contract.id}
             animalName={contract.payload.animal.name}
+            contractHealthStatus={contract.payload.data.healthStatusAtDelivery}
+            contractWeightKg={contract.payload.data.weightKg}
           />
         )}
 

@@ -778,8 +778,10 @@ export interface AdoptionDelivery {
 /** `POST /adoptions/deliveries` (org). */
 export interface StartAdoptionDeliveryInput {
   contractId: string;
-  healthStatus: string;
-  weightKg: number;
+  /** Solo para contratos antiguos sellados sin estos datos: el acta copia el
+   *  estado de salud y el peso del contrato firmado (deben ser idénticos). */
+  healthStatus?: string;
+  weightKg?: number;
   identityVerified: boolean;
   identificationChecked: boolean;
   items: AdoptionDeliveryItem[];
