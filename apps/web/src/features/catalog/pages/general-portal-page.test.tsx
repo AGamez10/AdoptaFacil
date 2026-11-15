@@ -217,7 +217,8 @@ describe('GeneralPortalPage (landing)', () => {
     expect(volunteering).toHaveTextContent('12 cupos');
     expect(within(volunteering).getByRole('link', { name: /Jornada de baño/ })).toHaveAttribute(
       'href',
-      '/voluntariado?oportunidad=v1',
+      // Ver una jornada no pide cuenta: lleva al listado público con ella señalada.
+      '/voluntariados?oportunidad=v1',
     );
     const ledger = await screen.findByTestId('landing-ledger');
     expect(await within(ledger).findByRole('link', { name: /Huellas Felices/ })).toHaveAttribute(
@@ -250,8 +251,8 @@ describe('GeneralPortalPage (landing)', () => {
       await within(volunteering).findByText('Hoy no hay voluntariados abiertos'),
     ).toBeVisible();
     expect(
-      within(volunteering).getByRole('link', { name: 'Inscribirme como voluntario' }),
-    ).toHaveAttribute('href', '/voluntariado');
+      within(volunteering).getByRole('link', { name: 'Ver todos los voluntariados' }),
+    ).toHaveAttribute('href', '/voluntariados');
   });
 
   it('links every guide (SEO) and the public ledger of the organizations', async () => {

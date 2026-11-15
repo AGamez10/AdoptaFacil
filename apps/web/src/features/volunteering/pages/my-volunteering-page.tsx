@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   type Paginated,
   type ServiceHours,
@@ -28,12 +28,14 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
-import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
+import { useApiClient } from '../../../shell/api';
+import { isProfileGateCancelled, useProfileGate } from '../../auth/components/profile-gate';
 import { StudentServiceEnrollmentModal } from '../components/student-service-enrollment-modal';
 import { downloadVolunteerCertificatePdf } from '../lib/certificate';
 import {
   ENROLLMENT_STATUS_LABELS,
   HOURS_STATUS_LABELS,
+  ENROLL_QUERY_PARAM,
   OPPORTUNITY_QUERY_PARAM,
   enrollmentStatusVariant,
   formatBogota,
@@ -76,12 +78,15 @@ function nextSessionDay(enrollment: VolunteerEnrollmentMine): string | null {
  */
 export function MyVolunteeringPage() {
   const client = useApiClient();
+  const profileGate = useProfileGate();
   const { toast } = useToast();
-  const navigate = useNavigate();
   // Jornada elegida desde la landing (`?oportunidad=<id>`): se resalta y se
   // lleva a la vista para que la persona la encuentre sin buscarla.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const highlightedId = searchParams.get(OPPORTUNITY_QUERY_PARAM);
+  // `&inscribirme=1`: la persona ya pulsó «Quiero participar» (antes de entrar
+  // o crear su cuenta). Se le muestra ESA jornada lista para confirmar.
+  const wantsToEnroll = searchParams.get(ENROLL_QUERY_PARAM) === '1';
 
   const [opportunities, setOpportunities] = useState<VolunteerOpportunityPublic[]>([]);
   const [enrollments, setEnrollments] = useState<VolunteerEnrollmentMine[]>([]);
@@ -140,21 +145,16 @@ export function MyVolunteeringPage() {
 
   const enroll = async (opportunityId: string): Promise<void> => {
     try {
-      await client.request('/volunteer-enrollments', { method: 'POST', json: { opportunityId } });
+      // Faltan datos del perfil: se piden en una ventana y la inscripción a ESTA
+      // jornada sigue sola al guardarlos (sin pasar por otra pantalla).
+      await profileGate.run(
+        () => client.request('/volunteer-enrollments', { method: 'POST', json: { opportunityId } }),
+        'Para inscribirte necesitamos tu teléfono, documento de identidad y dirección.',
+      );
       await loadAll();
       toast({ title: 'Inscripción enviada', variant: 'success' });
     } catch (error) {
-      // T-Google-SignIn (business rule #3): enrolling as a volunteer requires
-      // a complete profile (phone/documentId/address).
-      if (isIncompleteProfileError(error)) {
-        navigate('/perfil/completar', {
-          state: {
-            reason:
-              'Antes de inscribirte como voluntario necesitamos tu teléfono, documento de identidad y dirección.',
-          },
-        });
-        return;
-      }
+      if (isProfileGateCancelled(error)) return;
       toast({
         title: 'No se pudo completar la inscripción',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
@@ -231,6 +231,24 @@ export function MyVolunteeringPage() {
   };
 
   const enrolledOpportunityIds = new Set(enrollments.map((e) => e.opportunityId));
+  const pendingChoice =
+    wantsToEnroll && highlightedId && !enrolledOpportunityIds.has(highlightedId)
+      ? (opportunities.find((o) => o.id === highlightedId) ?? null)
+      : null;
+  const dismissChoice = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete(ENROLL_QUERY_PARAM);
+    setSearchParams(next, { replace: true });
+  };
+  const confirmChoice = () => {
+    if (!pendingChoice) return;
+    if (pendingChoice.appliesToStudentService) {
+      setStudentServiceTarget(pendingChoice);
+    } else {
+      void enroll(pendingChoice.id);
+    }
+    dismissChoice();
+  };
   // Nuevo requerimiento: una vez la organización emite el certificado de una
   // inscripción, el voluntario ya no puede registrar más horas sobre ella.
   const certifiedEnrollmentIds = new Set(certificates.map((c) => c.enrollmentId));
@@ -242,6 +260,31 @@ export function MyVolunteeringPage() {
         description="Explora oportunidades, inscríbete, registra tus horas y descarga tus certificados."
       />
       {loading && <Skeleton className="h-64 w-full" />}
+      {!loading && pendingChoice && (
+        <div
+          role="status"
+          data-testid="volunteer-pending-choice"
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/5 p-4"
+        >
+          <div className="text-sm">
+            <p className="font-semibold text-foreground">
+              Seguimos con tu inscripción a «{pendingChoice.title}»
+            </p>
+            <p className="text-muted-foreground">
+              {pendingChoice.organizationName} · {formatBogota(pendingChoice.startDate)} –{' '}
+              {formatBogota(pendingChoice.endDate)} · {pendingChoice.location}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={dismissChoice}>
+              Ahora no
+            </Button>
+            <Button size="sm" onClick={confirmChoice}>
+              Confirmar inscripción
+            </Button>
+          </div>
+        </div>
+      )}
       {!loading && (
         <div className="space-y-6">
           <Card>
@@ -583,16 +626,9 @@ export function MyVolunteeringPage() {
           opportunityId={studentServiceTarget.id}
           opportunityTitle={studentServiceTarget.title}
           onEnrolled={() => void loadAll()}
-          onIncompleteProfile={() =>
-            navigate('/perfil/completar', {
-              state: {
-                reason:
-                  'Antes de inscribirte como voluntario necesitamos tu teléfono, documento de identidad y dirección.',
-              },
-            })
-          }
         />
       )}
+      {profileGate.dialog}
     </PageContainer>
   );
 }
