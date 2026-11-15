@@ -97,6 +97,23 @@
     🧾 Pendiente de definir con el contador: un estado propio `refunded`/`charged_back` en la donación (sería
     un PR de seguimiento).
 
+## 3b. Apadrinamientos (cuenta del refugio, mes a mes)
+
+- PAY-001: cada mes se paga con una **orden de la cuenta del refugio** (su token OAuth), igual que una
+  donación. AdoptaFácil no recibe ni guarda ese dinero y nunca usa su propia cuenta como respaldo.
+- `POST /sponsorships` crea el apadrinamiento y abre la orden del primer mes; la web lleva al padrino a
+  Mercado Pago y vuelve a `/apadrinar/resultado`. Si el refugio no conectó Mercado Pago, responde 409 con
+  un mensaje claro y el apadrinamiento no queda activo.
+- Cada mes el job diario abre el periodo **sin orden** (no hay nadie presente para pagar) y avisa al
+  padrino. `POST /sponsorships/:id/pay` ("Pagar este mes") crea la orden de ese intento, una sola vez:
+  el enlace se reutiliza mientras el intento vive y la orden vence con él. "Ponerme al día"
+  (`POST /sponsorships/:id/retry-payment`) reactiva una suspensión por impago.
+- La confirmación llega por **el mismo aviso de Orders ya registrado** en la app de Checkout Pro: si la
+  referencia no es una donación, se busca entre los intentos de apadrinamiento pendientes. Se verifica la
+  firma, se relee la orden con el token del refugio y se exige el monto del plan, COP y la cuenta del
+  refugio. No hay que registrar otro webhook ni crear otra app.
+- Se activa con `FEATURE_SPONSORSHIPS=true` (y `PAYMENT_DRIVER=mercadopago`).
+
 ## 4. Planes (cuenta de AdoptaFácil)
 
 - `POST /org/plan/checkout` (Owner/Admin) crea un preapproval mensual en COP, IVA incluido, con el

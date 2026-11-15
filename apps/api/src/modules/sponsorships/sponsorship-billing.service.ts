@@ -86,6 +86,11 @@ export class SponsorshipBillingService {
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
   ) {}
 
+  /** Where the padrino pays the open month ("Mis apadrinamientos"). */
+  private payLink(): string {
+    return `${this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '')}/apadrinar`;
+  }
+
   private ladderConfig(): LadderConfig {
     return {
       reminderDay1: this.config.get('SPONSORSHIP_REMINDER_DAY_1', { infer: true }),
@@ -180,7 +185,7 @@ export class SponsorshipBillingService {
         animalName: row.animal_name,
         amount: row.plan_amount,
       }),
-      sponsorshipTemplate('sponsorship.charge', row),
+      sponsorshipTemplate('sponsorship.charge', row, this.payLink()),
     );
   }
 
@@ -262,7 +267,11 @@ export class SponsorshipBillingService {
         amount: row.plan_amount,
         isFinal,
       }),
-      sponsorshipTemplate(isFinal ? 'sponsorship.final_reminder' : 'sponsorship.reminder', row),
+      sponsorshipTemplate(
+        isFinal ? 'sponsorship.final_reminder' : 'sponsorship.reminder',
+        row,
+        this.payLink(),
+      ),
     );
   }
 
@@ -318,7 +327,7 @@ export class SponsorshipBillingService {
         animalName: row.animal_name,
         amount: row.plan_amount,
       }),
-      sponsorshipTemplate('sponsorship.charge', row),
+      sponsorshipTemplate('sponsorship.charge', row, this.payLink()),
     );
   }
 
@@ -437,6 +446,7 @@ function addDays(date: Date, days: number): Date {
 function sponsorshipTemplate(
   event: EmailEventKey,
   row: { organization_name: string; animal_name: string; plan_amount?: number },
+  payLink?: string,
 ): NotificationTemplateRequest {
   return {
     event,
@@ -445,6 +455,7 @@ function sponsorshipTemplate(
       organizacion: row.organization_name,
       animal: row.animal_name,
       monto: row.plan_amount,
+      ...(payLink ? { enlace: payLink } : {}),
     },
   };
 }

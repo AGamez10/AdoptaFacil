@@ -79,6 +79,13 @@ export interface CreateCollectionInput {
    * charge without it (no fallback to the platform account: that is custody).
    */
   mercadopagoCollector?: MercadoPagoCollectorCredentials;
+  /**
+   * Until when the checkout link may be paid. Optional: without it the driver
+   * uses its own default (a donation's link lives a few days). A sponsorship
+   * period passes the expiry of its billing attempt, so the link and the
+   * attempt die together.
+   */
+  expiresAt?: Date;
 }
 
 /**

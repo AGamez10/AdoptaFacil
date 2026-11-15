@@ -11,9 +11,10 @@ import { renderShell } from '../../../test-utils';
 /**
  * S2-03 — `/apadrinar`, mismo doble-propósito que `/donaciones` (T-064): SIN
  * animalId → "Mis apadrinamientos" (`GET /sponsorships/mine`); CON animalId →
- * ver los planes (`GET /public/sponsorships/animals/:id`). Mercado Pago se
- * retiró (2026-10-17) y hoy ninguna pasarela cobra apadrinamientos: la web muestra
- * "Pronto podrás apadrinar con pago en línea" en vez de un flujo roto.
+ * ver los planes (`GET /public/sponsorships/animals/:id`). "Apadrinar" abre el
+ * pago del primer mes en Mercado Pago (cuenta de la organización) y "Mis
+ * apadrinamientos" ofrece "Pagar este mes" / "Ponerme al día". Con la pasarela
+ * apagada (`VITE_PAYMENT_PROVIDER=off`) se ve un aviso tranquilo.
  */
 function personSession() {
   return {
@@ -65,7 +66,18 @@ function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
   );
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+const CHECKOUT = 'https://www.mercadopago.com.co/checkout/v1/redirect?order_id=ORD1';
+
+function stubAssign() {
+  const assign = vi.fn();
+  vi.stubGlobal('location', { ...window.location, assign });
+  return assign;
+}
 
 describe('SponsorPage — sin animalId muestra "Mis apadrinamientos"', () => {
   it('lista los apadrinamientos propios con animal, org, monto y estado', async () => {
@@ -137,7 +149,52 @@ describe('SponsorPage — sin animalId muestra "Mis apadrinamientos"', () => {
     expect(screen.queryByRole('button', { name: /Pagar de nuevo/ })).not.toBeInTheDocument();
   });
 
-  it('un apadrinamiento suspendido por pago fallido muestra un aviso tranquilo (sin "Pagar de nuevo" roto)', async () => {
+  it('"Pagar este mes" abre en Mercado Pago el mes pendiente', async () => {
+    const assign = stubAssign();
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/sponsorships/mine')) {
+        return [sponsorship({ currentPeriodStatus: SponsorshipPaymentStatus.Pending })];
+      }
+      if (url.includes('/sponsorships/s-1/pay'))
+        return { checkoutUrl: CHECKOUT, period: '2026-11' };
+      return [];
+    });
+    renderShell({ route: '/apadrinar', ...personSession() });
+
+    (await screen.findByTestId('sponsorship-pay-month')).click();
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(CHECKOUT));
+    expect(calls.find((c) => c.url.includes('/pay'))?.init?.method).toBe('POST');
+  });
+
+  it('"Ponerme al día" reactiva un apadrinamiento suspendido por impago con el enlace nuevo', async () => {
+    const assign = stubAssign();
+    stubFetch((url) => {
+      if (url.includes('/sponsorships/mine')) {
+        return [
+          sponsorship({
+            status: SponsorshipStatus.Suspended,
+            currentPeriodStatus: SponsorshipPaymentStatus.Failed,
+          }),
+        ];
+      }
+      if (url.includes('/retry-payment')) {
+        return {
+          attempts: [{ paymentLinkUrl: 'https://otro.test/x' }, { paymentLinkUrl: CHECKOUT }],
+        };
+      }
+      return [];
+    });
+    renderShell({ route: '/apadrinar', ...personSession() });
+
+    expect(await screen.findByText('Suspendido por pago fallido.')).toBeInTheDocument();
+    screen.getByTestId('sponsorship-retry-pay').click();
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(CHECKOUT));
+  });
+
+  it('con la pasarela apagada, un suspendido por impago muestra un aviso tranquilo (sin botón roto)', async () => {
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', 'off');
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     stubFetch((url, init) => {
       calls.push({ url, init });
@@ -180,8 +237,73 @@ function publicSummary() {
   };
 }
 
-describe('SponsorPage — con animalId muestra los planes y "Pronto podrás apadrinar"', () => {
-  it('lista el plan real y un aviso tranquilo en vez del cobro (sin Brick, sin POST)', async () => {
+describe('SponsorPage — con animalId muestra los planes y el botón "Apadrinar"', () => {
+  it('"Apadrinar" crea el apadrinamiento y lleva a pagar el primer mes en Mercado Pago', async () => {
+    const assign = stubAssign();
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/public/sponsorships/animals/')) return publicSummary();
+      if (url.endsWith('/sponsorships') && init?.method === 'POST') {
+        return { ...sponsorship(), firstPaymentStatus: 'pending', firstPaymentLinkUrl: CHECKOUT };
+      }
+      return [];
+    });
+    renderShell({
+      route: '/apadrinar?animalId=animal-1&animalName=Firulais&organizationName=Refugio%20Patitas',
+      ...personSession(),
+    });
+
+    expect(await screen.findByTestId('sponsorship-checkout')).toHaveTextContent(
+      'el dinero llega directo a Refugio Patitas',
+    );
+    screen.getByRole('button', { name: /Apadrinar por \$\s?30\.000 al mes/ }).click();
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(CHECKOUT));
+    const post = calls.find((c) => c.init?.method === 'POST');
+    expect(JSON.parse(String(post?.init?.body))).toEqual({ planId: 'plan-1' });
+  });
+
+  it('dice en palabras claras por qué no se pudo (p. ej. la organización no conectó Mercado Pago)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/public/sponsorships/animals/')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => publicSummary(),
+          });
+        }
+        if (init?.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            headers: { get: () => null },
+            json: async () => ({
+              statusCode: 409,
+              message:
+                'Esta organización todavía no recibe pagos en línea. Podrás apadrinar en cuanto conecte su cuenta de Mercado Pago.',
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => [],
+        });
+      }),
+    );
+    renderShell({ route: '/apadrinar?animalId=animal-1', ...personSession() });
+
+    (await screen.findByTestId('sponsor-plan-plan-1')).click();
+    expect(await screen.findByRole('alert')).toHaveTextContent('todavía no recibe pagos en línea');
+  });
+
+  it('con la pasarela apagada lista el plan y un aviso tranquilo (sin POST)', async () => {
+    vi.stubEnv('VITE_PAYMENT_PROVIDER', 'off');
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     stubFetch((url, init) => {
       calls.push({ url, init });

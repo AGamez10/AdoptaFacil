@@ -1,5 +1,6 @@
 // M07 · Sponsorships (RF17 · T-056) — frontend feature surface (S2-03).
 export { SponsorPage } from './pages/sponsor-page';
+export { SponsorshipResultPage } from './pages/sponsorship-result-page';
 export { SponsorshipsPage } from './pages/sponsorships-page';
 export { MySponsorshipsList } from './components/my-sponsorships-list';
 export {

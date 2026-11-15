@@ -393,6 +393,57 @@ describe('Sponsorship recurring billing (S-5-REDISEÑO, M07/RF17, T-057)', () =>
     expect(finalPayment.status).toBe('paid');
   });
 
+  it('"Pagar este mes": the padrino gets the open month\'s link (reused while it lives, new for a new attempt); nobody else does', async () => {
+    const org = await registerOrg('pay-now');
+    const sponsor = await registerPerson('pay-now');
+    const planId = await createPlan(org);
+    const sponsorshipId = await subscribe(sponsor, planId);
+
+    const [opened] = await fetchOpenPayment(org.token, sponsorshipId);
+    const first = await request(server)
+      .post(`/sponsorships/${sponsorshipId}/pay`)
+      .set('Authorization', `Bearer ${sponsor.token}`)
+      .expect(200);
+    // Attempt 1 already has its order: the same link, never a second order.
+    expect(first.body).toEqual({
+      checkoutUrl: opened.attempts[0].paymentLinkUrl,
+      period: opened.period,
+    });
+
+    // Anyone but the padrino (here, the organization itself) gets a 404.
+    await request(server)
+      .post(`/sponsorships/${sponsorshipId}/pay`)
+      .set('Authorization', `Bearer ${org.token}`)
+      .expect(404);
+
+    // Day 10: attempt 1 expires and the ladder opens attempt 2 WITHOUT an
+    // order (an unattended job opens none); paying now creates it.
+    await backdatePeriodStart(opened.id, 10);
+    await billing.runDailyScan();
+    const [withAttempt2] = await fetchOpenPayment(org.token, sponsorshipId);
+    const attempt2 = withAttempt2.attempts.find(
+      (a: { attemptNumber: number }) => a.attemptNumber === 2,
+    );
+    expect(attempt2.paymentLinkUrl).toBeUndefined();
+
+    const second = await request(server)
+      .post(`/sponsorships/${sponsorshipId}/pay`)
+      .set('Authorization', `Bearer ${sponsor.token}`)
+      .expect(200);
+    expect(second.body.checkoutUrl).toEqual(expect.any(String));
+    expect(second.body.checkoutUrl).not.toBe(first.body.checkoutUrl);
+    const [afterPay] = await fetchOpenPayment(org.token, sponsorshipId);
+    const updated = afterPay.attempts.find((a: { attemptNumber: number }) => a.attemptNumber === 2);
+    expect(updated.paymentLinkUrl).toBe(second.body.checkoutUrl);
+
+    // Once the month is confirmed there is nothing left to pay.
+    await poller.pollPending();
+    await request(server)
+      .post(`/sponsorships/${sponsorshipId}/pay`)
+      .set('Authorization', `Bearer ${sponsor.token}`)
+      .expect(409);
+  });
+
   it('a manually-suspended sponsorship (organization-initiated) does NOT auto-reactivate on retry-payment', async () => {
     const org = await registerOrg('manual-susp');
     const sponsor = await registerPerson('manual-susp');

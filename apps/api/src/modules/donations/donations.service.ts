@@ -51,6 +51,7 @@ import { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { buildDonationAccessLink } from './donation-access-link';
 import { MercadoPagoConnectionsService } from '../payments/mercadopago-connections.service';
+import { SponsorshipSettlementService } from '../sponsorships/sponsorship-settlement.service';
 import {
   MERCADOPAGO_REFERENCE_PREFIX,
   mercadoPagoNotificationType,
@@ -152,6 +153,7 @@ export class DonationsService {
     private readonly legal: LegalService,
     @Optional() private readonly mercadopagoConnections?: MercadoPagoConnectionsService,
     @Optional() private readonly inbox?: InboxService,
+    @Optional() private readonly sponsorshipSettlement?: SponsorshipSettlementService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.certificatesEnabled =
@@ -510,7 +512,16 @@ export class DonationsService {
     `);
     const donation = rows[0];
     if (!donation) {
-      return noop; // not a donation of ours
+      // Not a donation: maybe a month of a sponsorship (same Orders URL).
+      const sponsorship = await this.sponsorshipSettlement?.applyMercadoPagoOrder(
+        reference,
+        payload,
+        signature,
+        context,
+      );
+      return sponsorship?.confirmed
+        ? { applied: true, status: 'approved', donationId: null }
+        : noop;
     }
     return this.applyMercadoPagoWebhook(donation.organization_id, payload, signature, context);
   }

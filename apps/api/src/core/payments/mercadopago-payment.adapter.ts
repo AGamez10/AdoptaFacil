@@ -36,6 +36,14 @@ const MAX_SEARCH_PAGES = 50;
 /** Days a donation's Checkout Pro order stays payable (`expiration_time`, ISO 8601). */
 const ORDER_TTL_DAYS = 3;
 
+/** Whole days the order stays payable: until `expiresAt` when given (at
+ *  least one day), else {@link ORDER_TTL_DAYS}. */
+export function orderTtlDays(expiresAt?: Date, now: Date = new Date()): number {
+  if (!expiresAt) return ORDER_TTL_DAYS;
+  const days = Math.floor((expiresAt.getTime() - now.getTime()) / 86_400_000);
+  return Math.max(1, days);
+}
+
 /**
  * Stable reference sent as `external_reference` and returned as
  * `collectionId`. Derived from the organization AND the caller's idempotency
@@ -372,7 +380,10 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
 
     const breakdown = computeBreakdown(input.intendedAmount);
     const reference = mercadoPagoReferenceFor(collector.organizationId, input.idempotencyKey);
-    const back = new URL(`${this.webBase}/donaciones/resultado`);
+    const sponsorship = input.concept.kind === 'sponsorship';
+    const back = new URL(
+      `${this.webBase}${sponsorship ? '/apadrinar/resultado' : '/donaciones/resultado'}`,
+    );
     back.searchParams.set('reference', reference);
     const backUrl = back.toString();
     // Orders amounts are strings. COP has no cents: Mercado Pago Colombia
@@ -385,7 +396,9 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       processing_mode: 'manual',
       total_amount: amount,
       external_reference: reference,
-      items: [{ title: 'Donación', unit_price: amount, quantity: 1 }],
+      items: [
+        { title: sponsorship ? 'Apadrinamiento' : 'Donación', unit_price: amount, quantity: 1 },
+      ],
       config: {
         online: {
           success_url: backUrl,
@@ -394,7 +407,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
           auto_return: 'approved',
         },
       },
-      expiration_time: `P${ORDER_TTL_DAYS}D`,
+      expiration_time: `P${orderTtlDays(input.expiresAt)}D`,
     };
     // Nothing personal beyond what the payer gave. In sandbox the donor's
     // email is NOT sent: it usually belongs to a real Mercado Pago account
