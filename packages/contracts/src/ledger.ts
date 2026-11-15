@@ -152,3 +152,68 @@ export interface OrgLedgerPage {
   items: LedgerEntry[];
   totals: LedgerTotals;
 }
+
+// ============================================================================
+// Transparencia Nacional (nivel macro). El libro público es el detalle de UNA
+// organización; esto es el consolidado de TODAS las aprobadas: solo sumas y
+// conteos, nunca filas, conceptos, contrapartes ni donantes.
+// `GET /public/transparency/national` (sin sesión).
+// ============================================================================
+
+/** Destino que eligió quien donó en línea (PaymentConcept.kind). */
+export type NationalDonationDestination = 'organization' | 'campaign' | 'animal';
+
+export interface NationalTransparencyMonth {
+  /** `YYYY-MM` (mes de Colombia). */
+  month: string;
+  incomeCop: number;
+  expenseCop: number;
+}
+
+export interface NationalTransparency {
+  /** ISO-8601 UTC de cuándo se calculó (la respuesta puede venir de caché). */
+  generatedAt: string;
+  organizations: {
+    /** Organizaciones aprobadas en la plataforma. */
+    approved: number;
+    /** De ellas, las que ya tienen al menos un movimiento vigente en su libro. */
+    reporting: number;
+  };
+  /** Todo lo publicado (solo movimientos vigentes: los anulados no suman). */
+  totals: {
+    incomeCop: number;
+    expenseCop: number;
+    movementCount: number;
+    onlineDonationsCop: number;
+    onlineDonationsCount: number;
+  };
+  thisMonth: {
+    month: string;
+    incomeCop: number;
+    expenseCop: number;
+    movementCount: number;
+    onlineDonationsCount: number;
+  };
+  /** Los últimos 12 meses, del más antiguo al actual (meses sin movimientos en 0). */
+  months: NationalTransparencyMonth[];
+  /** Totales por categoría del libro (ingresos y gastos). */
+  categories: Array<{ kind: LedgerEntryKind; category: LedgerCategory; amountCop: number }>;
+  /** Donaciones en línea según su destino. */
+  donationDestinations: Array<{
+    destination: NationalDonationDestination;
+    amountCop: number;
+    count: number;
+  }>;
+  /** Por departamento de la organización (`null` = sin departamento registrado). */
+  departments: Array<{
+    department: string | null;
+    organizations: number;
+    incomeCop: number;
+    expenseCop: number;
+  }>;
+  animals: {
+    /** En adopción ahora (disponibles o en proceso). */
+    inAdoption: number;
+    adopted: number;
+  };
+}

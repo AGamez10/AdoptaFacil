@@ -388,7 +388,6 @@ export const navItems: NavItem[] = [
         label: 'Transparencia nacional',
         icon: ShieldIcon,
         roles: ORG_MEMBER_ROLES,
-        comingSoon: true,
       },
       {
         path: '/organizacion/reportes',

@@ -461,6 +461,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
     tips: ['Escribe el código impreso en el certificado para confirmar que es auténtico.'],
   },
   {
+    match: /^\/transparencia-nacional/,
+    title: 'Transparencia Nacional',
+    tips: [
+      'Es la suma de los libros públicos de todas las organizaciones aprobadas del país.',
+      'El detalle de cada organización está en su portal, en "Libro público".',
+      'Nunca muestra movimientos sueltos ni datos de quienes donan.',
+    ],
+  },
+  {
     match: /^\/guias/,
     title: 'Guías',
     tips: ['Lecturas cortas para adoptar bien y cuidar a tu animal después de la adopción.'],
@@ -790,7 +799,11 @@ export const PAGE_HELP: readonly PageHelp[] = [
   {
     match: /^\/organizacion\/transparencia-nacional/,
     title: 'Transparencia nacional',
-    tips: ['Esta sección todavía está en construcción: aquí verás tu indicador a nivel nacional.'],
+    tips: [
+      'Es la suma de los libros públicos de todas las organizaciones aprobadas del país.',
+      'Tus movimientos suman aquí en cuanto los registras en tu libro público.',
+      'Cualquiera puede verlo sin cuenta, y nunca muestra datos de quienes donan.',
+    ],
   },
   {
     match: /^\/organizacion\/plan/,

@@ -29,7 +29,7 @@ export declare function animalDescription(
   city: string | null | undefined,
 ): string;
 export declare const STATIC_PAGES: Record<
-  '/' | '/campanas' | '/guias',
+  '/' | '/campanas' | '/guias' | '/transparencia-nacional',
   { title: string; description: string }
 >;
 export declare const HOME_FAQ: { q: string; a: string }[];
