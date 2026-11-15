@@ -34,9 +34,11 @@ export function publicPostPath(id: string): string {
  *   GET public/community/posts/:id        → una publicación compartible
  *   GET public/community/leaders          → escalafón (solo lo ya público)
  *   GET public/community/posts/:id/card.png → tarjeta 1200×630 para og:image
- *   GET public/share/c/:id?s=<red>        → HTML con Open Graph + redirección
+ *   GET public/share/p/:id?s=<red>        → HTML con Open Graph + redirección
  *                                            a la web con parámetros UTM
- * (Caddy publica el puente como `/c/:id` en el dominio principal.)
+ *   GET public/share/c/:id?s=<red>        → lo mismo (enlaces ya compartidos)
+ * Caddy publica el puente como `/p/<uuid>` en el dominio principal, y
+ * `/c/<uuid>` solo para los enlaces viejos: `/c/<código>` es el QR del café.
  */
 @RequireFeature('community', 'communityWall')
 @Controller('public')
@@ -104,7 +106,7 @@ export class PublicCommunityController {
     return new StreamableFile(png, { type: 'image/png', length: png.length });
   }
 
-  @Get('share/c/:id')
+  @Get(['share/p/:id', 'share/c/:id'])
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'public, max-age=600')
   // El puente solo lleva metadatos y un enlace: sin scripts ni recursos externos.

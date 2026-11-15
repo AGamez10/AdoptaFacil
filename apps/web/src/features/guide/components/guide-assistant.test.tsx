@@ -337,6 +337,7 @@ describe('GuideAssistant · "Dónde se gestiona" respeta el rol', () => {
     const notScreens = new Set([
       '/*',
       '/c/:code',
+      '/p/:id',
       '/q/:code',
       '/transparencia',
       '/organizacion/dashboard-donaciones',
