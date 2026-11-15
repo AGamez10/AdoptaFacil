@@ -125,10 +125,16 @@ export function AnimalDetailPanel({
 
         <div className={styles.detail__actions}>
           {canManage && (
-            <IconButton icon={<PencilIcon />} label="Editar" onClick={() => onEdit(animal)} />
+            <IconButton
+              tooltipAlign="end"
+              icon={<PencilIcon />}
+              label="Editar"
+              onClick={() => onEdit(animal)}
+            />
           )}
           {canManage && (
             <IconButton
+              tooltipAlign="end"
               icon={<FolderIcon />}
               label="Expediente médico"
               onClick={() => setTab('registro')}
@@ -136,6 +142,7 @@ export function AnimalDetailPanel({
           )}
           {!isInactive && canDelete && (
             <IconButton
+              tooltipAlign="end"
               icon={<TrashIcon />}
               label="Eliminar"
               variant="danger"
@@ -144,6 +151,7 @@ export function AnimalDetailPanel({
           )}
           {!isInactive && canManageSponsorship && (
             <IconButton
+              tooltipAlign="end"
               icon={<HeartIcon />}
               label="Apadrinamiento"
               onClick={() => onSponsor(animal)}
@@ -151,6 +159,7 @@ export function AnimalDetailPanel({
           )}
           {canManage && (
             <IconButton
+              tooltipAlign="end"
               icon={<ShieldIcon />}
               label="Declaración de comportamiento"
               onClick={() => onDeclareBehavior(animal)}

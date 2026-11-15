@@ -16,6 +16,9 @@
   font-family: var(--font-sans);
   font-size: var(--fs-xs);
   font-weight: var(--fw-medium);
+  // Oculto de verdad (no solo transparente): un globo invisible pero presente
+  // ensanchaba la página y hacía aparecer un desplazamiento horizontal.
+  display: none;
   opacity: 0;
   pointer-events: none;
   transition: var(--transition-base);
@@ -24,6 +27,20 @@
 
 .tooltip:hover .tooltip__bubble,
 .tooltip:focus-within .tooltip__bubble {
+  display: block;
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+// Para botones pegados al borde derecho: el globo crece hacia la izquierda y
+// nunca se sale de la pantalla.
+.tooltip__bubble--end {
+  left: auto;
+  right: 0;
+  transform: translateY(0.25rem);
+}
+
+.tooltip:hover .tooltip__bubble--end,
+.tooltip:focus-within .tooltip__bubble--end {
+  transform: translateY(0);
 }

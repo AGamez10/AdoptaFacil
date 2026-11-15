@@ -216,7 +216,7 @@ export function AnimalCustodySection({
 
   return (
     <div className="min-w-0 space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr))]">
         <StatusTile label="Custodia">
           <Badge variant={CUSTODY_STATUS_TONE[overview.custodyStatus]}>
             {CUSTODY_STATUS_LABELS[overview.custodyStatus]}
