@@ -173,6 +173,9 @@ jobs:
             echo "SMTP_USER=ci"
             echo "SMTP_PASS=$(openssl rand -hex 16)"
             echo "SMTP_FROM=ci@example.com"
+            # Este arranque vive en https://localhost: única excepción a la
+            # guarda que prohíbe URLs públicas en localhost en producción.
+            echo "ALLOW_LOOPBACK_PUBLIC_URLS=true"
           } > deploy/api.env
 
       # Proyecto propio de compose (`-p adoptafacil-ci`): en un runner propio,

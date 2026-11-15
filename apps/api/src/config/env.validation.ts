@@ -149,6 +149,11 @@ export const envSchema = z.object({
   // Public origin of THIS API (OAuth redirect and notification URLs). Optional:
   // falls back to STORAGE_PUBLIC_BASE_URL.
   API_PUBLIC_BASE_URL: z.string().url().optional(),
+  // SOLO para el arranque de punta a punta del CI (compose de producción en
+  // https://localhost con la CA interna de Caddy). Fuera de eso, en producción
+  // ninguna URL pública puede apuntar a localhost: los enlaces a archivos y los
+  // correos llevarían a una dirección que solo existe en el servidor.
+  ALLOW_LOOPBACK_PUBLIC_URLS: featureFlag(),
   // Mercado Pago (ADR-PAG-003). Credentials of AdoptaFácil's application in
   // "Tus integraciones" (developers panel). Optional at the schema level so
   // the other drivers boot without them; required when
@@ -462,13 +467,58 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   // Every emailed link (invitations, password reset, receipts, contracts) is
   // built from WEB_BASE_URL: the forgotten dev default (http://localhost:5173)
   // would email links nobody can open, and plain http would expose the tokens.
-  // `https://localhost` stays allowed: the CI boots this same production
-  // compose on localhost behind Caddy's internal CA.
   if (!isHttpsUrl(env.WEB_BASE_URL)) {
     fail(
       'WEB_BASE_URL',
       'WEB_BASE_URL must be the public https origin of the web app in production',
     );
+  }
+  // Every file link the API hands out (photos, logos, campaign evidences, the
+  // "Ver soporte" of a rendición de cuentas) is built from
+  // STORAGE_PUBLIC_BASE_URL (or the CDN host for public files). The dev
+  // default http://localhost:3000 would send visitors to an address that only
+  // exists on the server.
+  if (!isHttpsUrl(env.STORAGE_PUBLIC_BASE_URL)) {
+    fail(
+      'STORAGE_PUBLIC_BASE_URL',
+      'STORAGE_PUBLIC_BASE_URL must be the public https URL of the API in production (e.g. https://<dominio>/api)',
+    );
+  }
+  for (const key of ['STORAGE_PUBLIC_CDN_BASE_URL', 'API_PUBLIC_BASE_URL'] as const) {
+    const value = env[key];
+    if (value !== undefined && !isHttpsUrl(value)) {
+      fail(key, `${key} must be an https URL in production`);
+    }
+  }
+  // No public URL may point to this machine. Only the CI end-to-end boot of
+  // this same compose on https://localhost opts out, explicitly.
+  if (!env.ALLOW_LOOPBACK_PUBLIC_URLS) {
+    for (const key of PUBLIC_URL_KEYS) {
+      const value = env[key];
+      if (value !== undefined && isLoopbackUrl(value)) {
+        fail(key, `${key} points to localhost; use the public domain in production`);
+      }
+    }
+  }
+}
+
+/** Env keys whose value ends up in a link that someone outside the server opens. */
+export const PUBLIC_URL_KEYS = [
+  'WEB_BASE_URL',
+  'STORAGE_PUBLIC_BASE_URL',
+  'STORAGE_PUBLIC_CDN_BASE_URL',
+  'API_PUBLIC_BASE_URL',
+] as const;
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '::1']);
+
+/** `localhost`, `*.localhost`, 127.x.x.x, 0.0.0.0 or ::1. Pure. */
+export function isLoopbackUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return LOOPBACK_HOSTS.has(host) || host.endsWith('.localhost') || /^127\./.test(host);
+  } catch {
+    return false;
   }
 }
 
