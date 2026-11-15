@@ -25,6 +25,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { parseStorageKey } from '../../core/storage/storage-keys';
+import { posterKeyFor } from '../../core/media/video-transcoder';
 
 /**
  * Ola 3: la plantilla elegida viaja DENTRO del JSON `tokens` bajo esta clave
@@ -36,8 +37,10 @@ import { parseStorageKey } from '../../core/storage/storage-keys';
 const TEMPLATE_KEY = '__template';
 /** Ajustes de la plantilla, guardados igual que la plantilla (sin migración). */
 const OPTIONS_KEY = '__templateOptions';
-/** Llave del video de portada (plantilla Historias), guardada igual. */
+/** Llave del video de portada (Historias, Documental), guardada igual. */
 const VIDEO_KEY = '__coverVideo';
+/** Llave de la imagen de portada de ese video (la saca el servidor al comprimirlo). */
+const POSTER_KEY = '__coverVideoPoster';
 
 /** Solo un video PÚBLICO de la propia organización, en mp4 o webm. */
 function assertCoverVideoKey(key: string, organizationId: string): void {
@@ -61,12 +64,14 @@ function splitStored(raw: unknown): {
   template?: PortalTemplateId;
   options?: unknown;
   coverVideoKey?: string;
+  coverVideoPosterKey?: string;
 } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { tokens: {} };
   const {
     [TEMPLATE_KEY]: template,
     [OPTIONS_KEY]: options,
     [VIDEO_KEY]: coverVideoKey,
+    [POSTER_KEY]: coverVideoPosterKey,
     ...tokens
   } = raw as Record<string, unknown>;
   return {
@@ -74,6 +79,9 @@ function splitStored(raw: unknown): {
     ...(isTemplate(template) ? { template } : {}),
     ...(options !== undefined ? { options } : {}),
     ...(typeof coverVideoKey === 'string' ? { coverVideoKey } : {}),
+    ...(typeof coverVideoKey === 'string' && typeof coverVideoPosterKey === 'string'
+      ? { coverVideoPosterKey }
+      : {}),
   };
 }
 
@@ -119,6 +127,9 @@ function present(
       : {}),
     ...(stored.coverVideoKey && !locked
       ? { coverVideoUrl: storage.resolvePublicUrl(stored.coverVideoKey) }
+      : {}),
+    ...(stored.coverVideoPosterKey && !locked
+      ? { coverVideoPosterUrl: storage.resolvePublicUrl(stored.coverVideoPosterKey) }
       : {}),
     ...(locked ? { lockedTemplate: chosen } : {}),
   };
@@ -203,6 +214,15 @@ export class PortalThemeService {
       throw planRequired('portalRemoveSeal', 'Quitar el sello "Hecho con AdoptaFácil"');
     }
 
+    // Video de portada: omitido se conserva, `null` lo quita. Si el servidor
+    // lo comprimió, dejó su imagen de portada al lado (`.poster.webp`).
+    let newPosterKey: string | undefined;
+    if (typeof input.coverVideoKey === 'string') {
+      assertCoverVideoKey(input.coverVideoKey, organizationId);
+      const poster = posterKeyFor(input.coverVideoKey);
+      if (await this.storage.readObject(poster)) newPosterKey = poster;
+    }
+
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       // `tokens` se reemplaza entero; la plantilla guardada se conserva si
       // la petición no trae una nueva.
@@ -219,17 +239,16 @@ export class PortalThemeService {
       } else if (template === previous.template && template) {
         options = resolveTemplateOptions(template, previous.options);
       }
-      // Video de portada: omitido se conserva, `null` lo quita.
-      if (typeof input.coverVideoKey === 'string') {
-        assertCoverVideoKey(input.coverVideoKey, organizationId);
-      }
       const coverVideoKey =
         input.coverVideoKey === undefined ? previous.coverVideoKey : input.coverVideoKey;
+      const coverVideoPosterKey =
+        input.coverVideoKey === undefined ? previous.coverVideoPosterKey : newPosterKey;
       const tokens = {
         ...input.tokens,
         ...(template ? { [TEMPLATE_KEY]: template } : {}),
         ...(options && Object.keys(options).length > 0 ? { [OPTIONS_KEY]: options } : {}),
         ...(coverVideoKey ? { [VIDEO_KEY]: coverVideoKey } : {}),
+        ...(coverVideoKey && coverVideoPosterKey ? { [POSTER_KEY]: coverVideoPosterKey } : {}),
       } as unknown as Prisma.InputJsonValue;
       const row = await tx.portalTheme.upsert({
         where: { organizationId },

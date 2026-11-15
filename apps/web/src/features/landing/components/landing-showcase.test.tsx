@@ -14,7 +14,7 @@ describe('Galería de plantillas de la landing', () => {
     );
     const free = screen.getByRole('list', { name: 'Plantillas gratuitas' });
     const pro = screen.getByRole('list', { name: 'Plantillas Pro' });
-    // Las Pro con vista de ejemplo (Historias aún no tiene una pública).
+    // Las Pro con vista de ejemplo.
     const paid = PORTAL_TEMPLATES.filter(
       (t) => t.tier === 'paid' && DEMO_TEMPLATE_IDS.includes(t.id),
     );

@@ -337,7 +337,7 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     const editorial = await screen.findByRole('radio', { name: /Editorial/ });
     expect(editorial).toBeChecked();
     // Decisión del cliente: las 5 plantillas actuales son gratis; solo los diseños
-    // Pro (p. ej. Historias) llevan la marca y el aviso de la promoción.
+    // Pro (p. ej. Documental) llevan la marca y el aviso de la promoción.
     expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-option-carnet')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-upsell')).toHaveTextContent(/incluidas gratis/i);
@@ -347,9 +347,20 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     const pro = screen.getByTestId('template-group-pro');
     expect(pro).toHaveTextContent(/Plantillas Pro/);
     expect(pro).toHaveTextContent(/planes Crece y Pro/);
-    for (const id of ['historias', 'album', 'linterna', 'revelado', 'velitas', 'terminal']) {
+    for (const id of [
+      'documental',
+      'solar',
+      'hilo',
+      'album',
+      'linterna',
+      'revelado',
+      'velitas',
+      'terminal',
+    ]) {
       expect(within(pro).getByTestId(`template-option-${id}`)).toHaveTextContent('Pro');
     }
+    // Desde 2026-11-15 Historias es gratuita.
+    expect(within(pro).queryByTestId('template-option-historias')).not.toBeInTheDocument();
     expect(within(pro).queryByTestId('template-option-clasica')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));
@@ -362,12 +373,12 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     expect(screen.getByRole('radio', { name: /Carnet/ })).toBeChecked();
   });
 
-  it('planes: sin plan que incluya Historias la bloquea, explica la vuelta a Clásica y no la borra al guardar', async () => {
+  it('planes: sin plan que incluya Documental la bloquea, explica la vuelta a Clásica y no la borra al guardar', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const locked = {
       tokens: {},
       template: 'clasica',
-      lockedTemplate: 'historias',
+      lockedTemplate: 'documental',
       premiumDesignsAvailable: false,
     };
     stubFetch((url, init) => {
@@ -379,13 +390,13 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
 
     expect(await screen.findByRole('radio', { name: /Clásica/ })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /Historias/ })).toBeDisabled();
-    expect(screen.getByTestId('template-option-historias')).toHaveAttribute('data-locked', 'true');
+    expect(screen.getByRole('radio', { name: /Documental/ })).toBeDisabled();
+    expect(screen.getByTestId('template-option-documental')).toHaveAttribute('data-locked', 'true');
     expect(screen.getByRole('radio', { name: /Álbum/ })).toBeDisabled();
     expect(screen.getByRole('radio', { name: /Carnet/ })).not.toBeDisabled();
     // Selector rápido del móvil: las Pro también quedan bloqueadas sin plan.
     const quick = screen.getByTestId('template-quick-switch');
-    expect(within(quick).getByRole('button', { name: /Historias/ })).toBeDisabled();
+    expect(within(quick).getByRole('button', { name: /Documental/ })).toBeDisabled();
     expect(within(quick).getByRole('button', { name: /Carnet/ })).not.toBeDisabled();
     expect(screen.getByTestId('template-upsell')).toHaveTextContent(
       /volvió a la plantilla Clásica/,
@@ -486,7 +497,8 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     await screen.findByRole('radio', { name: /Clásica/ });
     expect(screen.queryByTestId('cover-video-field')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: /Historias/ }));
-    expect(screen.getByTestId('template-option-historias')).toHaveTextContent('Pro');
+    // Desde 2026-11-15 Historias es gratuita (clásicas).
+    expect(screen.getByTestId('template-option-historias')).toHaveTextContent('Gratis');
 
     const file = new File(['video'], 'portada.mp4', { type: 'video/mp4' });
     fireEvent.change(screen.getByTestId('cover-video-input'), { target: { files: [file] } });
@@ -496,7 +508,13 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
       filename: 'portada.mp4',
       contentType: 'video/mp4',
     });
-    expect(calls.some((c) => c.url.includes('/storage/upload?key=public%2Forg-1'))).toBe(true);
+    // `media=portal`: el servidor lo comprime y le saca la imagen de portada.
+    expect(
+      calls.some(
+        (c) =>
+          c.url.includes('/storage/upload?key=public%2Forg-1') && c.url.includes('media=portal'),
+      ),
+    ).toBe(true);
 
     fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
     await waitFor(() => {
@@ -528,7 +546,11 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     const input = await screen.findByTestId('cover-video-input');
     const file = new File(['x'], 'foto.png', { type: 'image/png' });
     fireEvent.change(input, { target: { files: [file] } });
-    expect(await screen.findByText('El video debe ser MP4 o WebM.')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'El video debe ser MP4, WebM o MOV (el formato de la cámara del celular).',
+      ),
+    ).toBeInTheDocument();
     expect(calls.some((url) => url.includes('/org/profile/uploads'))).toBe(false);
   });
 });

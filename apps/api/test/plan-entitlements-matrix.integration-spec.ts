@@ -241,14 +241,14 @@ describe('Plan entitlements matrix (free / crece / pro, enforced)', () => {
       }
     });
 
-    it(`portalPremiumDesigns (plantilla "historias") → ${def.capabilities.portalPremiumDesigns ? '200' : '403'}`, async () => {
+    it(`portalPremiumDesigns (plantilla "documental") → ${def.capabilities.portalPremiumDesigns ? '200' : '403'}`, async () => {
       const res = await request(server)
         .put('/portals/theme')
         .set(auth(org.token))
-        .send({ tokens: {}, template: 'historias' });
+        .send({ tokens: {}, template: 'documental' });
       if (def.capabilities.portalPremiumDesigns) {
         expect(res.status).toBe(200);
-        expect((await publicTheme(slug)).body.template).toBe('historias');
+        expect((await publicTheme(slug)).body.template).toBe('documental');
       } else {
         expect(res.status).toBe(403);
         expect(res.body).toMatchObject({
@@ -435,10 +435,10 @@ describe('Plan entitlements matrix (free / crece / pro, enforced)', () => {
       await request(server)
         .put('/portals/theme')
         .set(auth(org.token))
-        .send({ tokens: {}, template: 'historias', hideSeal: true })
+        .send({ tokens: {}, template: 'documental', hideSeal: true })
         .expect(200);
       expect((await publicTheme(slug)).body).toMatchObject({
-        template: 'historias',
+        template: 'documental',
         hideSeal: true,
       });
 
@@ -448,11 +448,11 @@ describe('Plan entitlements matrix (free / crece / pro, enforced)', () => {
       expect(pub.hideSeal).toBe(false);
       const stored = await admin.portalTheme.findUnique({ where: { organizationId: org.orgId } });
       expect(stored?.hideSeal).toBe(true);
-      expect((stored?.tokens as Record<string, unknown>).__template).toBe('historias');
+      expect((stored?.tokens as Record<string, unknown>).__template).toBe('documental');
 
       await onPlan(org.orgId, 'crece');
       expect((await publicTheme(slug)).body).toMatchObject({
-        template: 'historias',
+        template: 'documental',
         hideSeal: true,
       });
     });

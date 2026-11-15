@@ -19,7 +19,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { COMMUNITY_MEDIA_LIMITS, Role } from '@adoptafacil/contracts';
+import { COMMUNITY_MEDIA_LIMITS, PORTAL_COVER_VIDEO_LIMITS, Role } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -112,59 +112,83 @@ export class StorageController {
     if (!file || !file.buffer) {
       throw new BadRequestException('A file is required (multipart field "file")');
     }
-    // Un video de la comunidad puede pesar más antes de comprimirse; el resto
-    // de archivos sigue con el límite general.
-    const videoMaxBytes = COMMUNITY_MEDIA_LIMITS.maxVideoMb * 1024 * 1024;
-    if (file.size > Math.max(this.maxBytes, media === 'post' ? videoMaxBytes : 0)) {
+    // Un video de la comunidad (`media=post`) o el de portada del portal
+    // (`media=portal`) puede pesar más antes de comprimirse; el resto de
+    // archivos sigue con el límite general.
+    const videoLimits =
+      media === 'post'
+        ? { mb: COMMUNITY_MEDIA_LIMITS.maxVideoMb, seconds: COMMUNITY_MEDIA_LIMITS.maxVideoSeconds }
+        : media === 'portal'
+          ? { mb: PORTAL_COVER_VIDEO_LIMITS.maxMb, seconds: PORTAL_COVER_VIDEO_LIMITS.maxSeconds }
+          : null;
+    const videoMaxBytes = (videoLimits?.mb ?? 0) * 1024 * 1024;
+    if (file.size > Math.max(this.maxBytes, videoMaxBytes)) {
       throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);
     }
     // El tipo se decide por el CONTENIDO, no por lo que declara el navegador ni
     // por la extensión: un "rut.pdf" que en realidad es HTML o un ejecutable no
     // entra, y lo guardado siempre se sirve con su tipo real.
     const realType = sniffContentType(file.buffer);
-    const isPostVideo =
-      media === 'post' && parsed.visibility === 'public' && realType?.startsWith('video/');
-    if (!realType || !(isPostVideo || isAllowedUpload(realType, parsed.visibility))) {
+    const isMediaVideo =
+      videoLimits !== null && parsed.visibility === 'public' && realType?.startsWith('video/');
+    if (!realType || !(isMediaVideo || isAllowedUpload(realType, parsed.visibility))) {
       throw new BadRequestException(
         'El archivo no es un PDF ni una imagen válida (JPG, PNG, WebP o GIF). Revisa que no esté dañado y vuelve a intentarlo.',
       );
     }
-    // Video de una publicación de la comunidad: se comprime a MP4 y se le saca
-    // la portada (sharp no procesa video; se usa ffmpeg). Solo a llaves públicas.
-    if (media === 'post' && realType.startsWith('video/') && parsed.visibility === 'public') {
+    // Video de una publicación de la comunidad o de la portada del portal: se
+    // comprime a MP4 y se le saca la portada (sharp no procesa video; se usa
+    // ffmpeg). Solo a llaves públicas.
+    if (videoLimits && realType.startsWith('video/') && parsed.visibility === 'public') {
       if (file.size > videoMaxBytes) {
-        throw new PayloadTooLargeException(
-          `El video supera el límite de ${COMMUNITY_MEDIA_LIMITS.maxVideoMb} MB.`,
-        );
+        throw new PayloadTooLargeException(`El video supera el límite de ${videoLimits.mb} MB.`);
       }
       let result;
       try {
-        result = await this.videos.transcode(file.buffer, {
-          maxSeconds: COMMUNITY_MEDIA_LIMITS.maxVideoSeconds,
-        });
+        result = await this.videos.transcode(file.buffer, { maxSeconds: videoLimits.seconds });
       } catch (error) {
         if (error instanceof VideoRejectedError) {
-          if (error.kind === 'unavailable') throw new ServiceUnavailableException(error.message);
-          throw new BadRequestException(error.message);
+          // Sin ffmpeg en el equipo (desarrollo local sin instalarlo): el video
+          // de portada se guarda tal cual si ya es liviano y el navegador lo
+          // reproduce. Un video grande o .mov sí necesita comprimirse.
+          if (
+            error.kind === 'unavailable' &&
+            media === 'portal' &&
+            file.size <= this.maxBytes &&
+            (realType === 'video/mp4' || realType === 'video/webm')
+          ) {
+            result = null;
+          } else if (error.kind === 'unavailable') {
+            throw new ServiceUnavailableException(error.message);
+          } else {
+            throw new BadRequestException(error.message);
+          }
+        } else {
+          throw error;
         }
-        throw error;
       }
-      await this.plans.assertStorageAvailable(
-        parsed.organizationId,
-        result.video.length + result.poster.length,
-      );
-      const stored = { maxBytes: Math.max(this.maxBytes, videoMaxBytes) };
-      await this.storage.saveObject(key, result.video, 'video/mp4', stored);
-      await this.storage.saveObject(posterKeyFor(key), result.poster, 'image/webp', stored);
-      await this.audit.record({
-        organizationId: parsed.organizationId,
-        actorUserId: user.id,
-        action: 'storage.uploaded',
-        entityType: 'storage_object',
-        entityId: key,
-        metadata: { visibility: parsed.visibility, kind: 'video', seconds: result.durationSeconds },
-      });
-      return { key, url: this.storage.resolvePublicUrl(key) };
+      if (result) {
+        await this.plans.assertStorageAvailable(
+          parsed.organizationId,
+          result.video.length + result.poster.length,
+        );
+        const stored = { maxBytes: Math.max(this.maxBytes, videoMaxBytes) };
+        await this.storage.saveObject(key, result.video, 'video/mp4', stored);
+        await this.storage.saveObject(posterKeyFor(key), result.poster, 'image/webp', stored);
+        await this.audit.record({
+          organizationId: parsed.organizationId,
+          actorUserId: user.id,
+          action: 'storage.uploaded',
+          entityType: 'storage_object',
+          entityId: key,
+          metadata: {
+            visibility: parsed.visibility,
+            kind: 'video',
+            seconds: result.durationSeconds,
+          },
+        });
+        return { key, url: this.storage.resolvePublicUrl(key) };
+      }
     }
     if (realType.startsWith('video/') && file.size > this.maxBytes) {
       throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);

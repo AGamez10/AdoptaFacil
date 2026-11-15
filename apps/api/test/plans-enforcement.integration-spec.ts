@@ -88,7 +88,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     await request(server)
       .put('/portals/theme')
       .set(auth(owner.token))
-      .send({ tokens: {}, template: 'historias' })
+      .send({ tokens: {}, template: 'documental' })
       .expect(200);
   });
 
@@ -107,11 +107,11 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
 
   it('with plans off nothing changes: the paid template shows and is not locked', async () => {
     const own = await request(server).get('/portals/theme').set(auth(owner.token)).expect(200);
-    expect(own.body.template).toBe('historias');
+    expect(own.body.template).toBe('documental');
     expect(own.body.lockedTemplate).toBeUndefined();
     expect(own.body.premiumDesignsAvailable).toBe(true);
     const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
-    expect(pub.body.template).toBe('historias');
+    expect(pub.body.template).toBe('documental');
   });
 
   it('during the launch promo an org without subscription is Pro and keeps the paid template', async () => {
@@ -121,7 +121,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     expect(view.body.effectivePlan).toBe('pro');
     expect(view.body.launchPromoEndsAt).not.toBeNull();
     const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
-    expect(pub.body.template).toBe('historias');
+    expect(pub.body.template).toBe('documental');
   });
 
   it('after the promo the portal falls back to a free template and the choice is kept', async () => {
@@ -133,7 +133,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
 
     const own = await request(server).get('/portals/theme').set(auth(owner.token)).expect(200);
     expect(own.body.template).toBe('clasica');
-    expect(own.body.lockedTemplate).toBe('historias');
+    expect(own.body.lockedTemplate).toBe('documental');
     expect(own.body.premiumDesignsAvailable).toBe(false);
     expect(own.body.coverVideoUrl).toBeUndefined();
 
@@ -149,7 +149,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
       .send({ tokens: { primary: '142 72% 29%' } })
       .expect(200);
     const stored = await admin.portalTheme.findUnique({ where: { organizationId: owner.orgId } });
-    expect((stored?.tokens as Record<string, unknown>).__template).toBe('historias');
+    expect((stored?.tokens as Record<string, unknown>).__template).toBe('documental');
   });
 
   it('prueba de 14 días: la organización nueva es Pro con su plantilla Pro y al vencer vuelve a Gratis sin perderla', async () => {
@@ -168,7 +168,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
       expect(view.body.launchPromoEndsAt).toBeNull();
       expect(new Date(view.body.trialEndsAt).getTime()).toBe(created.getTime() + 14 * 86_400_000);
       const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
-      expect(pub.body.template).toBe('historias');
+      expect(pub.body.template).toBe('documental');
 
       // Hace 15 días: la prueba venció.
       await admin.organization.update({
@@ -180,7 +180,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
       expect(after.body.trialEndsAt).toBeNull();
       const own = await request(server).get('/portals/theme').set(auth(owner.token)).expect(200);
       expect(own.body.template).toBe('clasica');
-      expect(own.body.lockedTemplate).toBe('historias');
+      expect(own.body.lockedTemplate).toBe('documental');
     } finally {
       await admin.organization.update({ where: { id: owner.orgId }, data: { createdAt: created } });
     }
@@ -202,7 +202,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     const res = await request(server)
       .put('/portals/theme')
       .set(auth(owner.token))
-      .send({ tokens: {}, template: 'historias' })
+      .send({ tokens: {}, template: 'documental' })
       .expect(403);
     expect(res.body).toMatchObject({
       code: 'PLAN_REQUIRED',
@@ -218,7 +218,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     await request(server)
       .put('/portals/theme')
       .set(auth(owner.token))
-      .send({ tokens: {}, template: 'historias' })
+      .send({ tokens: {}, template: 'documental' })
       .expect(403);
   });
 
@@ -229,10 +229,10 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     await request(server)
       .put('/portals/theme')
       .set(auth(owner.token))
-      .send({ tokens: {}, template: 'historias' })
+      .send({ tokens: {}, template: 'documental' })
       .expect(200);
     const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
-    expect(pub.body.template).toBe('historias');
+    expect(pub.body.template).toBe('documental');
 
     // Vence el pago y pasan los 15 días de gracia: vuelve a la gratuita.
     await subscribe(owner.orgId, 'crece', inDays(-16));

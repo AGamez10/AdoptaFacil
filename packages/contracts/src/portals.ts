@@ -167,6 +167,8 @@ export const PORTAL_TEMPLATE_IDS = [
   'revelado',
   'velitas',
   'terminal',
+  // Premium con video de portada largo (30 a 60 s) como eje de toda la página.
+  'documental',
 ] as const;
 export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
@@ -223,7 +225,8 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     id: 'historias',
     name: 'Historias',
     tagline: 'Tus animales a pantalla completa: se pasan con el dedo, con video de portada.',
-    tier: 'paid',
+    // Decisión del cliente (2026-11-15): pasa a las clásicas (gratis).
+    tier: 'free',
   },
   {
     id: 'hogar',
@@ -253,7 +256,8 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     id: 'solar',
     name: 'Sistema solar',
     tagline: 'Sistema solar 3D: cada animal es un planeta.',
-    tier: 'free',
+    // Decisión del cliente (2026-11-15): pasa a Pro.
+    tier: 'paid',
   },
   {
     id: 'galeria',
@@ -307,7 +311,8 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     id: 'hilo',
     name: 'Hilo',
     tagline: 'Neo-brutalista: un hilo recorre la página y stickers con física.',
-    tier: 'free',
+    // Decisión del cliente (2026-11-15): pasa a Pro.
+    tier: 'paid',
   }, // Premium: dos experiencias (clara y oscura) sobre las mismas secciones.
   {
     id: 'album',
@@ -337,6 +342,13 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     id: 'terminal',
     name: 'Terminal',
     tagline: 'Pases de abordar hacia un hogar y un tablero de salidas con letras que giran.',
+    tier: 'paid',
+  },
+  {
+    id: 'documental',
+    name: 'Documental',
+    tagline:
+      'Tu video abre el portal a pantalla completa y te acompaña mientras bajas: de día, una película de campo; de noche, una sala de cine.',
     tier: 'paid',
   },
 ];
@@ -436,15 +448,35 @@ export const PORTAL_TEMPLATE_OPTIONS: Readonly<
   revelado: [],
   velitas: [],
   terminal: [],
+  documental: [],
 };
 
 /**
- * Video de portada de la plantilla Historias (opcional). Se sube al
+ * Video de portada (opcional) de las plantillas que lo usan. Se sube al
  * almacenamiento público de la organización (StoragePort) y se guarda solo su
  * llave; nunca una URL libre de otro sitio.
  */
-export const PORTAL_COVER_VIDEO_TYPES = ['video/mp4', 'video/webm'] as const;
+export const PORTAL_COVER_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'] as const;
 export type PortalCoverVideoType = (typeof PORTAL_COVER_VIDEO_TYPES)[number];
+
+/**
+ * Límites del video de portada. El servidor lo comprime (MP4 de hasta 720p) y
+ * le saca una imagen de portada; así un video de 30 a 60 s grabado con el
+ * celular pesa poco para quien visita el portal.
+ */
+export const PORTAL_COVER_VIDEO_LIMITS = {
+  /** Peso máximo del archivo original. */
+  maxMb: 80,
+  /** Duración máxima. Documental está pensada para 30 a 60 s. */
+  maxSeconds: 60,
+} as const;
+
+/** Plantillas que muestran el video de portada. */
+export const PORTAL_VIDEO_TEMPLATES: readonly PortalTemplateId[] = ['historias', 'documental'];
+
+export function templateUsesVideo(id: PortalTemplateId | undefined): boolean {
+  return id !== undefined && PORTAL_VIDEO_TEMPLATES.includes(id);
+}
 
 /** Ajustes efectivos: los guardados válidos sobre los valores por defecto. */
 export function resolveTemplateOptions(
@@ -490,8 +522,10 @@ export interface PortalThemeConfig {
   template?: PortalTemplateId;
   /** Ajustes de esa plantilla (Ola 3), ya resueltos con sus valores por defecto. */
   templateOptions?: PortalTemplateOptions;
-  /** Video de portada (plantilla Historias), URL pública lista para `<video>`. */
+  /** Video de portada (Historias, Documental), URL pública lista para `<video>`. */
   coverVideoUrl?: string;
+  /** Imagen de portada del video (primer cuadro), cuando el servidor la sacó. */
+  coverVideoPosterUrl?: string;
   /**
    * Plantilla de pago elegida que hoy no está disponible porque el plan de la
    * organización no la incluye (terminó el lanzamiento o la suscripción). El

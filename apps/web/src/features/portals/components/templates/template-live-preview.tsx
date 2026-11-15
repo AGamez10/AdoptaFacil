@@ -44,8 +44,9 @@ export interface TemplateLivePreviewProps {
   options: PortalTemplateOptions;
   tokens: PortalTheme;
   logoPosition: PortalLogoPosition;
-  /** Historias: video de portada elegido en el editor (aún sin guardar). */
+  /** Video de portada elegido en el editor (aún sin guardar): Historias y Documental. */
   coverVideoUrl?: string;
+  coverVideoPosterUrl?: string;
 }
 
 /**
@@ -63,6 +64,7 @@ export function TemplateLivePreview({
   tokens,
   logoPosition,
   coverVideoUrl,
+  coverVideoPosterUrl,
 }: TemplateLivePreviewProps) {
   // En pantallas pequeñas se abre la vista de celular (el editor usa el ancho del dispositivo).
   const [device, setDevice] = useState<Device>(() =>
@@ -79,7 +81,15 @@ export function TemplateLivePreview({
   const own = useOwnPortalSource(true);
   const demoSource = useMemo(() => buildDemoSource(), []);
   const usingDemo = own.status !== 'ready';
-  const source = own.status === 'ready' ? own.data : demoSource;
+  const baseSource = own.status === 'ready' ? own.data : demoSource;
+  // El video del editor (aún sin guardar) entra a la vista previa de las plantillas del motor.
+  const source = useMemo(
+    () =>
+      coverVideoUrl
+        ? { ...baseSource, coverVideo: { url: coverVideoUrl, poster: coverVideoPosterUrl } }
+        : baseSource,
+    [baseSource, coverVideoUrl, coverVideoPosterUrl],
+  );
   const organization = source.organization;
   const animals = source.animals;
   const total = source.animalTotal;

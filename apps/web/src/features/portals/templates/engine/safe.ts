@@ -84,6 +84,18 @@ export function safeImgSrc(raw: string | null | undefined): string | null {
   return safeHref(trimmed.replace(/^http:\/\//i, 'https://'));
 }
 
+/**
+ * Fuente segura y YA escapada para `<video src>` / `poster`: lo mismo que una
+ * imagen, más `blob:` (el video que el dueño acaba de elegir en el editor, que
+ * aún no se ha guardado). Nunca `javascript:` ni `data:`.
+ */
+export function safeMediaSrc(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  if (/^blob:https?:\/\/[^\s"'<>]+$/i.test(value) && !CONTROL_CHARS.test(value)) return esc(value);
+  return safeImgSrc(value);
+}
+
 /** `tel:` construido solo con dígitos y "+" inicial; `null` si no hay dígitos. */
 export function telHref(raw: string | null | undefined): string | null {
   if (typeof raw !== 'string') return null;

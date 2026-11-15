@@ -2,10 +2,11 @@ import type { PortalTemplateId } from '@adoptafacil/contracts';
 import type { TemplateDesign } from './engine/types';
 
 /**
- * Diseños del motor de plantillas del portal público (las 14 gratuitas nuevas).
- * Todas son gratuitas. Muestran el mismo contenido que el portal clásico: solo
- * cambia el diseño. La lista de identificadores la define el contrato
- * `PORTAL_TEMPLATE_IDS`; aquí solo se mapea cada id nuevo a su diseño.
+ * Diseños del motor de plantillas del portal público. Muestran el mismo
+ * contenido que el portal clásico: solo cambia el diseño. La lista de
+ * identificadores y si cada uno es gratis o de pago la define el contrato
+ * (`PORTAL_TEMPLATE_IDS` y `PORTAL_TEMPLATES[].tier`); aquí solo se mapea cada
+ * id a su diseño.
  */
 export const ENGINE_TEMPLATE_IDS = [
   'hogar',
@@ -28,6 +29,7 @@ export const ENGINE_TEMPLATE_IDS = [
   'revelado',
   'velitas',
   'terminal',
+  'documental',
 ] as const satisfies readonly PortalTemplateId[];
 
 export type EngineTemplateId = (typeof ENGINE_TEMPLATE_IDS)[number];
@@ -53,6 +55,7 @@ const LOADERS: Record<EngineTemplateId, () => Promise<TemplateDesign>> = {
   revelado: () => import('./designs/revelado').then((x) => x.revelado),
   velitas: () => import('./designs/velitas').then((x) => x.velitas),
   terminal: () => import('./designs/terminal').then((x) => x.terminal),
+  documental: () => import('./designs/documental').then((x) => x.documental),
 };
 
 export function isEngineTemplate(id: string): id is EngineTemplateId {

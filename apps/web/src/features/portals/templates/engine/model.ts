@@ -29,7 +29,7 @@ import {
 } from '../../model/animals-catalog';
 import { buildDonateHref } from '../../components/portal-donate-cta';
 import { googleMapsEmbedFromAddress, toGoogleMapsEmbedUrl } from '../../model/google-maps';
-import { esc, mailHref, safeHref, safeImgSrc, telHref, waHref } from './safe';
+import { esc, mailHref, safeHref, safeImgSrc, safeMediaSrc, telHref, waHref } from './safe';
 
 /**
  * View-model de las plantillas (M14, plantillas gratuitas). Se arma SOLO con los
@@ -57,6 +57,8 @@ export interface TemplateSourceData {
   reviews: PublicReview[];
   /** RF14: libro público (null/ausente si no cargó: la sección muestra su texto vacío). */
   ledger?: PublicLedgerPage | null;
+  /** Video de portada guardado en el tema (Historias, Documental) y su imagen. */
+  coverVideo?: { url: string; poster?: string } | null;
 }
 
 export type Species = 'perro' | 'gato' | 'otro';
@@ -252,6 +254,8 @@ export interface TplModel {
   LEDGER: TplLedger;
   SOCIALS: TplSocial[];
   BADGES: TplBadge[];
+  /** Video de portada de la organización (ya saneado), o `null` si no subió uno. */
+  VIDEO: { src: string; poster: string | null } | null;
   /** Reglas de visibilidad (idénticas a `OrgPublicPage`). */
   SHOW: {
     transparencia: boolean;
@@ -580,6 +584,12 @@ function buildLedger(page: PublicLedgerPage | null | undefined): TplLedger {
   };
 }
 
+function buildVideo(raw: TemplateSourceData['coverVideo']): TplModel['VIDEO'] {
+  const src = safeMediaSrc(raw?.url);
+  if (!src) return null;
+  return { src, poster: safeMediaSrc(raw?.poster) };
+}
+
 export function buildTemplateModel(src: TemplateSourceData, now: Date = new Date()): TplModel {
   const org = src.organization;
   const name = org.name ?? '';
@@ -711,6 +721,7 @@ export function buildTemplateModel(src: TemplateSourceData, now: Date = new Date
     LEDGER: buildLedger(src.ledger),
     SOCIALS: socials,
     BADGES: badges,
+    VIDEO: buildVideo(src.coverVideo),
     SHOW: {
       transparencia: level > 0,
       nosotros: about.length > 0,

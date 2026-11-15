@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
+import { HAS_FFMPEG, makeTestVideo } from './support/test-video';
 
 /**
  * M14 portal personalization (T-027): the owner saves brand tokens (validated:
@@ -268,6 +269,53 @@ describe('Portal theme (M14: tokens + RBAC + public read)', () => {
         .send({ tokens: { __templateOptions: 'x' } })
         .expect(400);
     });
+
+    (HAS_FFMPEG ? it : it.skip)(
+      'video de portada largo (media=portal): se comprime, deja su imagen de portada y el tema la expone',
+      async () => {
+        const reserve = await request(server)
+          .post('/org/profile/uploads')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ filename: 'portada.mp4', contentType: 'video/mp4' })
+          .expect(201);
+        const key: string = reserve.body.key;
+        await request(server)
+          .put('/storage/upload')
+          .query({ key, media: 'portal' })
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .attach('file', makeTestVideo(3), {
+            filename: 'portada.mov',
+            contentType: 'video/quicktime',
+          })
+          .expect(200);
+
+        const saved = await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ tokens: {}, template: 'historias', coverVideoKey: key })
+          .expect(200);
+        expect(saved.body.coverVideoUrl).toContain('portada');
+        expect(saved.body.coverVideoPosterUrl).toContain('.poster.webp');
+        expect(saved.body.tokens).not.toHaveProperty('__coverVideoPoster');
+
+        const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+        expect(pub.body.coverVideoPosterUrl).toContain('.poster.webp');
+        const served = await request(server)
+          .get('/storage/public')
+          .query({ key })
+          .set('Range', 'bytes=0-99')
+          .expect(206);
+        expect(served.headers['content-type']).toContain('video/mp4');
+
+        // Quitar el video quita también su portada.
+        await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ tokens: {}, coverVideoKey: null })
+          .expect(200)
+          .expect((res) => expect(res.body).not.toHaveProperty('coverVideoPosterUrl'));
+      },
+    );
 
     it('Historias: guarda un video de portada propio y público, lo expone como URL y lo quita con null', async () => {
       const orgId = createdOrgIds[0];

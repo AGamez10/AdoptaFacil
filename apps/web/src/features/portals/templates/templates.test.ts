@@ -50,10 +50,20 @@ describe('registro de plantillas', () => {
     }
   });
 
-  it('son 14 diseños gratuitos y 5 Premium además de la clásica', () => {
-    expect(DESIGN_IDS).toHaveLength(19);
+  it('son 20 diseños del motor (12 gratuitos y 8 Premium) además de la clásica', () => {
+    expect(DESIGN_IDS).toHaveLength(20);
     const premium = PORTAL_TEMPLATES.filter((t) => t.tier === 'paid').map((t) => t.id);
-    for (const id of ['album', 'linterna', 'revelado', 'velitas', 'terminal']) {
+    // Decisión del cliente (2026-11-15): Sistema solar e Hilo pasan a Pro y llega Documental.
+    for (const id of [
+      'album',
+      'linterna',
+      'revelado',
+      'velitas',
+      'terminal',
+      'solar',
+      'hilo',
+      'documental',
+    ]) {
       expect(DESIGN_IDS).toContain(id);
       expect(premium).toContain(id);
     }
@@ -176,5 +186,44 @@ describe('libro público en las plantillas', () => {
       expect(text, id).not.toMatch(/aún no ha registrado movimientos/i);
       expect(root.querySelector('[data-ledger]'), id).not.toBeNull();
     }
+  });
+});
+
+describe('Documental: el video de la organización abre el portal', () => {
+  const withVideo = (coverVideo: unknown) =>
+    buildTemplateModel({ ...PROFILES.completa, coverVideo } as never, FIXTURE_NOW);
+
+  it('con video: lo pinta a pantalla completa (silenciado y en bucle) con su portada', async () => {
+    const design = await loadDesign('documental');
+    const model = withVideo({
+      url: 'https://cdn.example.org/storage/public?key=portada.mp4',
+      poster: 'https://cdn.example.org/storage/public?key=portada.poster.webp',
+    });
+    const root = document.createElement('div');
+    root.innerHTML = design.html(model, createKit(model));
+    const video = root.querySelector('video');
+    expect(video).not.toBeNull();
+    expect(video?.getAttribute('src')).toContain('portada.mp4');
+    expect(video?.getAttribute('poster')).toContain('portada.poster.webp');
+    for (const attr of ['autoplay', 'muted', 'loop', 'playsinline']) {
+      expect(video?.hasAttribute(attr)).toBe(true);
+    }
+    // Siempre se puede pausar (WCAG 2.2.2) y activar el sonido.
+    expect(root.querySelector('[data-dc-play]')).not.toBeNull();
+    expect(root.querySelector('[data-dc-sound]')).not.toBeNull();
+    expect(root.querySelector('.dc-reel')).toBeNull();
+  });
+
+  it('sin video: carrete con las fotos reales y sin botón de sonido', async () => {
+    const { root } = await render('documental', 'completa');
+    expect(root.querySelector('video')).toBeNull();
+    expect(root.querySelector('.dc-reel')).not.toBeNull();
+    expect(root.querySelector('[data-dc-sound]')).toBeNull();
+  });
+
+  it('descarta un video que no es http(s) ni blob', () => {
+    expect(withVideo({ url: 'javascript:alert(1)' }).VIDEO).toBeNull();
+    expect(withVideo(null).VIDEO).toBeNull();
+    expect(withVideo({ url: 'blob:https://adoptafacil.org/abc' }).VIDEO?.src).toContain('blob:');
   });
 });
