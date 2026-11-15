@@ -597,7 +597,10 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 </section>
               )}
 
-              <PortalPublicLedgerSection slug={slug as string} />
+              <PortalPublicLedgerSection
+                slug={slug as string}
+                orgName={view.profile.organization.name}
+              />
             </div>
           )}
         </main>
