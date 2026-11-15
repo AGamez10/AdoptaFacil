@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   ORG_ANNOUNCEMENT_DAILY_LIMIT,
   type AnnouncementAudience,
@@ -18,6 +18,7 @@ import {
   orgCategory,
 } from '../../../core/notifications/templates/email-template.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { InboxService } from '../../../core/notifications/inbox/inbox.service';
 
 /** Upper bound of recipients per announcement (one org's own contacts). */
 const MAX_RECIPIENTS = 5000;
@@ -28,6 +29,8 @@ export const ANNOUNCEMENT_AUDIT_ACTION = 'org.announcement_sent';
 interface Contact {
   email: string;
   name?: string;
+  /** Cuenta de la persona, si la tiene: también recibe el aviso en su campana. */
+  userId?: string;
 }
 
 /**
@@ -46,6 +49,7 @@ export class AnnouncementsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
   async audience(organizationId: string, now = new Date()): Promise<OrgAnnouncementAudience> {
@@ -140,6 +144,19 @@ export class AnnouncementsService {
         }),
       );
     }
+    // También en la campana de quienes tienen cuenta (punto 9).
+    const noticed = new Set<string>();
+    for (const { userId } of list) {
+      if (!userId || noticed.has(userId)) continue;
+      noticed.add(userId);
+      await this.inbox?.toUser(userId, {
+        kind: 'org.urgent_announcement',
+        tone: 'warning',
+        title: `${orgName}: ${input.title}`,
+        body: input.message,
+        dedupeKey: `org_urgent_announcement:${announcementId}`,
+      });
+    }
     return { recipients: list.length };
   }
 
@@ -151,34 +168,34 @@ export class AnnouncementsService {
         Promise.all([
           tx.donation.findMany({
             where: { organizationId, status: 'approved', reversal: null },
-            select: { payer: true },
+            select: { payer: true, donorUserId: true },
             take: MAX_RECIPIENTS * 2,
           }),
           tx.adoptionRequest.findMany({
             where: { organizationId },
-            select: { applicant: true },
+            select: { applicant: true, applicantUserId: true },
             take: MAX_RECIPIENTS * 2,
           }),
           tx.volunteerEnrollment.findMany({
             where: { organizationId, status: { not: 'rejected' } },
-            select: { volunteerEmail: true, volunteerName: true },
+            select: { volunteerEmail: true, volunteerName: true, volunteerUserId: true },
             take: MAX_RECIPIENTS * 2,
           }),
         ]),
     );
-    const fromJson = (value: unknown, nameKey: string): Contact | null => {
+    const fromJson = (value: unknown, nameKey: string, userId?: string | null): Contact | null => {
       const obj = value as Record<string, unknown> | null;
       const email = typeof obj?.email === 'string' ? obj.email.trim() : '';
       const name = typeof obj?.[nameKey] === 'string' ? (obj[nameKey] as string).trim() : undefined;
-      return isEmail(email) ? { email, name } : null;
+      return isEmail(email) ? { email, name, userId: userId ?? undefined } : null;
     };
     return {
-      donors: unique(donations.map((d) => fromJson(d.payer, 'fullName'))),
-      adopters: unique(requests.map((r) => fromJson(r.applicant, 'fullName'))),
+      donors: unique(donations.map((d) => fromJson(d.payer, 'fullName', d.donorUserId))),
+      adopters: unique(requests.map((r) => fromJson(r.applicant, 'fullName', r.applicantUserId))),
       volunteers: unique(
         enrollments.map((e) =>
           isEmail(e.volunteerEmail.trim())
-            ? { email: e.volunteerEmail.trim(), name: e.volunteerName }
+            ? { email: e.volunteerEmail.trim(), name: e.volunteerName, userId: e.volunteerUserId }
             : null,
         ),
       ),

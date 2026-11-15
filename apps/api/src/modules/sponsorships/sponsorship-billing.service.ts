@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
@@ -7,6 +7,7 @@ import {
   type EmailEventKey,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -84,6 +85,7 @@ export class SponsorshipBillingService {
     private readonly config: ConfigService<Env, true>,
     private readonly sponsorships: SponsorshipsService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
   /** Where the padrino pays the open month ("Mis apadrinamientos"). */
@@ -187,6 +189,7 @@ export class SponsorshipBillingService {
       }),
       sponsorshipTemplate('sponsorship.charge', row, this.payLink()),
     );
+    await this.billingNotice('sponsorship.charge', row);
   }
 
   private async advanceOpenPeriods(): Promise<void> {
@@ -273,6 +276,7 @@ export class SponsorshipBillingService {
         this.payLink(),
       ),
     );
+    await this.billingNotice(isFinal ? 'sponsorship.final_reminder' : 'sponsorship.reminder', row);
   }
 
   private async expireAndCreateNextAttempt(
@@ -329,6 +333,7 @@ export class SponsorshipBillingService {
       }),
       sponsorshipTemplate('sponsorship.charge', row, this.payLink()),
     );
+    await this.billingNotice('sponsorship.charge', row);
   }
 
   private async expireFinalAttemptAndFailPeriod(
@@ -375,12 +380,14 @@ export class SponsorshipBillingService {
       buildSuspensionSponsorBody(suspensionInput),
       sponsorshipTemplate('sponsorship.suspended_sponsor', row),
     );
+    await this.billingNotice('sponsorship.suspended_sponsor', row);
     await this.notifyBestEffort(
       `org:${row.organization_id}`,
       buildSuspensionOrgSubject(),
       buildSuspensionOrgBody(suspensionInput),
       sponsorshipTemplate('sponsorship.suspended_org', row),
     );
+    await this.billingNotice('sponsorship.suspended_org', row);
   }
 
   /**
@@ -420,6 +427,75 @@ export class SponsorshipBillingService {
   ): { collectionId: string; idempotencyKey: string; paymentLinkUrl?: string } {
     const idempotencyKey = buildAttemptIdempotencyKey(sponsorshipId, period, attemptNumber);
     return { collectionId: `pending-${idempotencyKey}`, idempotencyKey };
+  }
+
+  /**
+   * Aviso de campana que acompaña cada correo del ciclo de cobro (punto 9):
+   * quien apadrina ve el cobro, los recordatorios y la suspensión en su
+   * campana; la organización, la suspensión por falta de pago.
+   */
+  private async billingNotice(
+    event: EmailEventKey,
+    row: {
+      sponsorship_id: string;
+      organization_id: string;
+      sponsor_user_id: string;
+      animal_name: string;
+      organization_name: string;
+      plan_amount?: number;
+    },
+  ): Promise<void> {
+    if (!this.inbox) return;
+    const animal = row.animal_name;
+    const amount =
+      typeof row.plan_amount === 'number'
+        ? ` de ${'$'}${Math.round(row.plan_amount).toLocaleString('es-CO')}`
+        : '';
+    const mine = `/apadrinar?foco=${row.sponsorship_id}`;
+    switch (event) {
+      case 'sponsorship.charge':
+        await this.inbox.toUser(row.sponsor_user_id, {
+          kind: 'sponsorships.charge',
+          tone: 'info',
+          title: `Es momento de tu aporte mensual para ${animal}`,
+          body: `Tu apadrinamiento${amount} con ${row.organization_name} tiene un pago pendiente. Págalo desde Mis apadrinamientos.`,
+          href: mine,
+        });
+        return;
+      case 'sponsorship.reminder':
+      case 'sponsorship.final_reminder':
+        await this.inbox.toUser(row.sponsor_user_id, {
+          kind: 'sponsorships.reminder',
+          tone: 'warning',
+          title:
+            event === 'sponsorship.final_reminder'
+              ? `Último aviso: el apadrinamiento de ${animal} está por suspenderse`
+              : `Recuerda tu aporte para ${animal}`,
+          body: `Aún no registramos el pago${amount} de este mes. Págalo desde Mis apadrinamientos.`,
+          href: mine,
+        });
+        return;
+      case 'sponsorship.suspended_sponsor':
+        await this.inbox.toUser(row.sponsor_user_id, {
+          kind: 'sponsorships.suspended',
+          tone: 'warning',
+          title: `Se suspendió tu apadrinamiento de ${animal}`,
+          body: 'No recibimos el pago del mes. Puedes retomarlo cuando quieras desde Mis apadrinamientos.',
+          href: mine,
+        });
+        return;
+      case 'sponsorship.suspended_org':
+        await this.inbox.toOrgStaff(row.organization_id, {
+          kind: 'sponsorships.suspended',
+          tone: 'warning',
+          title: `Se suspendió un apadrinamiento de ${animal}`,
+          body: 'Quien apadrina no pagó el mes después de los recordatorios.',
+          href: `/organizacion/apadrinamientos?foco=${row.sponsorship_id}`,
+        });
+        return;
+      default:
+        return;
+    }
   }
 
   private async notifyBestEffort(

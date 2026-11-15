@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
@@ -33,6 +34,7 @@ import type {
 } from '../../core/notifications/notification.port';
 import { NOTIFICATION_PORT } from '../../core/notifications/notification.port';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
@@ -62,6 +64,7 @@ export class AnimalsService {
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     private readonly sponsorships: SponsorshipsService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -410,6 +413,14 @@ export class AnimalsService {
           data: { animal: animal.name, organizacion: organizationName ?? 'La organización' },
         },
       );
+      await this.inbox?.toUser(sponsor.sponsor_user_id, {
+        kind: 'sponsorships.animal_deceased',
+        tone: 'info',
+        title: `${animal.name} falleció`,
+        body: `Gracias por acompañarle. Tu apadrinamiento quedó suspendido y no se te cobrará más. ${organizationName ?? 'La organización'} se pondrá en contacto contigo.`,
+        href: `/apadrinar?foco=${sponsor.sponsorship_id}`,
+        dedupeKey: `sponsorship_animal_deceased:${sponsor.sponsorship_id}`,
+      });
     }
 
     return animal;

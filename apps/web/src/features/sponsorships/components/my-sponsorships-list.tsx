@@ -90,7 +90,7 @@ export function MySponsorshipsList() {
         {!error && sponsorships.length > 0 && (
           <ul className="space-y-3">
             {sponsorships.map((sponsorship) => (
-              <li key={sponsorship.id} className={styles.row}>
+              <li key={sponsorship.id} className={styles.row} data-foco={sponsorship.id}>
                 <div className={styles.row__top}>
                   <span className={styles.row__name}>
                     {sponsorship.animalName ?? sponsorship.animalId}

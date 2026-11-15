@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  Optional,
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -31,6 +32,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import {
@@ -100,6 +102,7 @@ export class AdoptionContractsService {
     private readonly legalRepresentatives: LegalRepresentativeService,
     @Inject(forwardRef(() => AdoptionContractCopyService))
     private readonly copies: AdoptionContractCopyService,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -293,7 +296,123 @@ export class AdoptionContractsService {
       return row;
     });
 
+    await this.notifyContract(this.noticeView(created), 'prepared');
     return this.fromModel(created);
+  }
+
+  /**
+   * Avisos de campana del contrato (punto 9/14): el adoptante sabe cuándo tiene
+   * un contrato por firmar y cuándo quedó sellado; la organización, cuándo el
+   * adoptante firmó. Best-effort: nunca rompe la acción que lo origina.
+   */
+  private async notifyContract(
+    contract: {
+      id: string;
+      organizationId: string;
+      requestId: string;
+      signers: AdoptionContractSigner[];
+      animalName: string;
+    },
+    event: 'prepared' | 'ready_to_sign' | 'party_signed' | 'sealed' | 'cancelled',
+    signerName?: string,
+  ): Promise<void> {
+    if (!this.inbox) return;
+    const animal = contract.animalName || 'tu peludo';
+    const toSign = `/adopciones/contratos/${contract.id}`;
+    const parties = contract.signers.filter(
+      (s) => s.role !== 'organization_representative' && s.userId,
+    );
+    const forParties = async (
+      notice: (s: AdoptionContractSigner) => Parameters<InboxService['toUser']>[1] | null,
+    ): Promise<void> => {
+      for (const party of parties) {
+        const n = notice(party);
+        if (n && party.userId) await this.inbox?.toUser(party.userId, n);
+      }
+    };
+    switch (event) {
+      case 'prepared':
+        await forParties(() => ({
+          kind: 'adoptions.contract_prepared',
+          tone: 'info',
+          title: `La organización está preparando tu contrato para adoptar a ${animal}`,
+          body: 'Primero lo firma la organización. Te avisaremos apenas esté listo para tu firma.',
+          href: `/mis-solicitudes?foco=${contract.requestId}`,
+          dedupeKey: `adoption_contract_prepared:${contract.id}`,
+        }));
+        return;
+      case 'ready_to_sign':
+        await forParties((s) =>
+          s.signedAt
+            ? null
+            : {
+                kind: 'adoptions.contract_ready',
+                tone: 'success',
+                title: `Tu contrato para adoptar a ${animal} está listo para firmar`,
+                body: 'Revísalo con calma y firma tu parte. Cuando todas las partes firmen, te enviamos una copia a tu correo.',
+                href: toSign,
+                dedupeKey: `adoption_contract_ready:${contract.id}:${s.id}`,
+              },
+        );
+        return;
+      case 'party_signed':
+        await this.inbox.toOrgStaff(contract.organizationId, {
+          kind: 'adoptions.contract_party_signed',
+          tone: 'info',
+          title: `${signerName?.split(/\s+/)[0] || 'El adoptante'} firmó el contrato de ${animal}`,
+          body: 'Falta la firma de otra parte para sellarlo.',
+          href: toSign,
+        });
+        return;
+      case 'sealed':
+        await forParties(() => ({
+          kind: 'adoptions.contract_signed',
+          tone: 'kudos',
+          title: `¡Contrato firmado! ${animal} ya casi está en casa`,
+          body: 'Próximos pasos: 1) te llegará una copia del contrato a tu correo; 2) la organización coordinará contigo la entrega y te dará un código para recibir a tu peludo; 3) después habrá seguimientos para acompañarte.',
+          href: toSign,
+          dedupeKey: `adoption_contract_signed:${contract.id}`,
+        }));
+        await this.inbox.toOrgStaff(contract.organizationId, {
+          kind: 'adoptions.contract_signed',
+          tone: 'success',
+          title: `Contrato de ${animal} firmado por todas las partes`,
+          body: 'Próximo paso: coordina la entrega con el adoptante y programa los seguimientos.',
+          href: `/adopciones?foco=${contract.requestId}`,
+          dedupeKey: `adoption_contract_signed:${contract.id}`,
+        });
+        return;
+      case 'cancelled':
+        await forParties(() => ({
+          kind: 'adoptions.contract_cancelled',
+          tone: 'info',
+          title: `Se anuló el contrato para adoptar a ${animal}`,
+          body: 'La organización anuló este contrato. Si tienes dudas, escríbele desde tu solicitud.',
+          href: `/mis-solicitudes?foco=${contract.requestId}`,
+          dedupeKey: `adoption_contract_cancelled:${contract.id}`,
+        }));
+        return;
+    }
+  }
+
+  /** Datos mínimos de un contrato (fila de Prisma o de SQL) para sus avisos. */
+  private noticeView(row: {
+    id: string;
+    organizationId?: string;
+    organization_id?: string;
+    requestId?: string;
+    request_id?: string;
+    signers: unknown;
+    payload: unknown;
+  }) {
+    const payload = row.payload as { animal?: { name?: string } } | null;
+    return {
+      id: row.id,
+      organizationId: (row.organizationId ?? row.organization_id) as string,
+      requestId: (row.requestId ?? row.request_id) as string,
+      signers: (row.signers as AdoptionContractSigner[]) ?? [],
+      animalName: payload?.animal?.name ?? '',
+    };
   }
 
   /** The contract of a given request, for the OWNING org (RLS-scoped). */
@@ -402,6 +521,11 @@ export class AdoptionContractsService {
       });
       return next;
     });
+    if (input.targetStatus === 'pending_signatures') {
+      await this.notifyContract(this.noticeView(updated), 'ready_to_sign');
+    } else if (input.targetStatus === 'cancelled') {
+      await this.notifyContract(this.noticeView(updated), 'cancelled');
+    }
     return this.fromModel(updated);
   }
 
@@ -656,6 +780,9 @@ export class AdoptionContractsService {
       // actualiza un contrato `signed`), y el envío es idempotente por
       // firmante — ver AdoptionContractCopyService.
       await this.copies.schedule(organizationId, contractId);
+      await this.notifyContract(this.noticeView(updated), 'sealed');
+    } else if (signer.role !== 'organization_representative') {
+      await this.notifyContract(this.noticeView(updated), 'party_signed', signer.fullName);
     }
 
     return this.fromRow(updated);

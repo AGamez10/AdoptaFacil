@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -23,6 +24,7 @@ import {
   type SponsorshipStatusHistoryEntry,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import type { Env } from '../../config/env.validation';
 import {
   NOTIFICATION_PORT,
@@ -176,6 +178,7 @@ export class SponsorshipsService {
     private readonly config: ConfigService<Env, true>,
     private readonly checkout: SponsorshipCheckoutService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -316,6 +319,7 @@ export class SponsorshipsService {
         row.organization_id,
         row.animal_id,
         plan.amount,
+        actor.id,
       );
     }
 
@@ -335,6 +339,7 @@ export class SponsorshipsService {
     organizationId: string,
     animalId: string,
     amount: number,
+    sponsorUserId?: string,
   ): Promise<void> {
     try {
       const [org, animal] = await Promise.all([
@@ -360,6 +365,24 @@ export class SponsorshipsService {
           organizationId,
           data: { animal: animalName, organizacion: organizationName, monto: amount, enlace: link },
         },
+      });
+      if (sponsorUserId) {
+        await this.inbox?.toUser(sponsorUserId, {
+          kind: 'sponsorships.welcome',
+          tone: 'kudos',
+          title: `¡Ahora apadrinas a ${animalName}!`,
+          body: 'Gracias por sostener su cuidado cada mes. Verás sus pagos y novedades en Mis apadrinamientos.',
+          href: `/apadrinar?foco=${sponsorshipId}`,
+          dedupeKey: `sponsorship_welcome:${sponsorshipId}`,
+        });
+      }
+      await this.inbox?.toOrgStaff(organizationId, {
+        kind: 'sponsorships.new',
+        tone: 'kudos',
+        title: `${animalName} tiene un nuevo padrino o madrina`,
+        body: 'El primer pago quedó aprobado.',
+        href: `/organizacion/apadrinamientos?foco=${sponsorshipId}`,
+        dedupeKey: `sponsorship_welcome:${sponsorshipId}`,
       });
     } catch (error) {
       this.logger.warn(

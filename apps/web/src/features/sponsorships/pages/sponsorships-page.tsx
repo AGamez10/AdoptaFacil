@@ -252,7 +252,7 @@ export function SponsorshipsPage() {
                 const plan = plansById.get(sponsorship.planId);
                 const animalName = animalNamesById.get(sponsorship.animalId);
                 return (
-                  <TableRow key={sponsorship.id}>
+                  <TableRow key={sponsorship.id} data-foco={sponsorship.id}>
                     <TableCell>
                       <div>
                         <p className={styles['cell__primary']}>{sponsorDisplayName(sponsorship)}</p>

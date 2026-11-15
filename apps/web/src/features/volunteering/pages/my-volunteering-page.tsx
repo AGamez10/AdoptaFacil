@@ -69,6 +69,24 @@ function nextSessionDay(enrollment: VolunteerEnrollmentMine): string | null {
   return (enrollment.sessionDates ?? []).filter((day) => day >= today).sort()[0] ?? null;
 }
 
+/** Por qué todavía no puede registrar horas, en palabras de la persona: si la
+ *  organización aún no asignó días, se dice así (y desde cuándo podrá); si los
+ *  asignó, cuál es la próxima jornada. */
+function notYetMessage(enrollment: VolunteerEnrollmentMine): string {
+  const after = 'Podrás registrar tus horas el mismo día de la jornada o después.';
+  if (!enrollment.sessionDates || enrollment.sessionDates.length === 0) {
+    const start = enrollment.opportunityStartDate?.slice(0, 10);
+    return (
+      'La organización aún no ha asignado los días de jornada; te avisaremos cuando los publique.' +
+      (start ? ` La convocatoria empieza el ${formatDayEs(start)}.` : '')
+    );
+  }
+  const next = nextSessionDay(enrollment);
+  return next
+    ? `Tu próxima jornada es el ${formatDayEs(next)}. ${after}`
+    : `Aún no hay un día de jornada habilitado que ya haya ocurrido. ${after}`;
+}
+
 /**
  * `/voluntariado` (RF18/RF19, M08) — experiencia del voluntario (Persona):
  * explorar oportunidades públicas e inscribirse, ver "mis inscripciones",
@@ -388,9 +406,7 @@ export function MyVolunteeringPage() {
                                 if (days.length === 0) {
                                   return (
                                     <p className="text-xs text-muted-foreground sm:col-span-3">
-                                      Aún no hay un día de jornada habilitado que ya haya ocurrido.
-                                      Podrás registrar tus horas el mismo día de la jornada o
-                                      después.
+                                      {notYetMessage(enrollment)}
                                     </p>
                                   );
                                 }
@@ -461,11 +477,7 @@ export function MyVolunteeringPage() {
                               className="text-xs text-muted-foreground"
                               data-testid="hours-not-yet"
                             >
-                              Aún no hay un día de jornada habilitado que ya haya ocurrido.
-                              {nextSessionDay(enrollment)
-                                ? ` Próxima jornada: ${formatDayEs(nextSessionDay(enrollment) as string)}.`
-                                : ''}{' '}
-                              Podrás registrar tus horas el mismo día de la jornada o después.
+                              {notYetMessage(enrollment)}
                             </p>
                           ) : (
                             <Button

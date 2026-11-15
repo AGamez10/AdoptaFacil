@@ -1,4 +1,11 @@
-import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Post as PostRow, PostImage as PostImageRow } from '@prisma/client';
 import {
@@ -12,6 +19,7 @@ import {
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import {
   NOTIFICATION_PORT,
@@ -76,6 +84,7 @@ export class CommunityPostsService {
     private readonly prisma: PrismaService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
   private toImage(row: PostImageRow): PostImage {
@@ -209,7 +218,7 @@ export class CommunityPostsService {
       if (input.type === PostType.Campaign) {
         const donations = await tx.donation.findMany({
           where: { organizationId, status: 'approved', reversal: null },
-          select: { payer: true },
+          select: { payer: true, donorUserId: true },
         });
         // One entry per address (first name seen wins), for a personal greeting.
         const recipients = new Map<string, CampaignRecipient>();
@@ -217,7 +226,11 @@ export class CommunityPostsService {
           const payer = d.payer as { email?: string; fullName?: string } | null;
           const email = payer?.email?.trim();
           if (!email || recipients.has(email.toLowerCase())) continue;
-          recipients.set(email.toLowerCase(), { email, name: payer?.fullName?.trim() });
+          recipients.set(email.toLowerCase(), {
+            email,
+            name: payer?.fullName?.trim(),
+            userId: d.donorUserId ?? undefined,
+          });
           if (recipients.size >= MAX_CAMPAIGN_NOTIFY_RECIPIENTS) break;
         }
         const emails = [...recipients.values()];
@@ -258,6 +271,19 @@ export class CommunityPostsService {
     const orgName = org?.name ?? 'una organización de AdoptaFácil';
     const subject = `${orgName} publicó novedades sobre una campaña`;
     const body = post.title ? `"${post.title}": ${post.body}` : post.body;
+    const noticed = new Set<string>();
+    for (const { userId } of recipients) {
+      if (!userId || noticed.has(userId)) continue;
+      noticed.add(userId);
+      await this.inbox?.toUser(userId, {
+        kind: 'community.campaign_update',
+        tone: 'info',
+        title: `${orgName} publicó novedades de una campaña que apoyaste`,
+        body: post.title ?? post.body.slice(0, 200),
+        href: `/comunidad/${post.id}`,
+        dedupeKey: `community_campaign_update:${post.id}`,
+      });
+    }
     for (let i = 0; i < recipients.length; i += NOTIFY_ENQUEUE_BATCH) {
       const batch = recipients.slice(i, i + NOTIFY_ENQUEUE_BATCH);
       await Promise.all(
@@ -408,6 +434,8 @@ export class CommunityPostsService {
 interface CampaignRecipient {
   email: string;
   name?: string;
+  /** Cuenta de quien donó (si donó con sesión): también recibe el aviso en su campana. */
+  userId?: string;
 }
 
 function firstName(fullName: string | undefined): string | undefined {
