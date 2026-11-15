@@ -87,23 +87,26 @@ describe('PostDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Eliminar' })).toBeInTheDocument();
   });
 
-  it('toggling like updates the button label and count from the REAL response', async () => {
+  it('reacting updates the summary and the button from the REAL response', async () => {
     stubFetch((url, init) => {
       if (url.includes('/comments')) return { items: [], total: 0, limit: 50, offset: 0 };
-      if (init?.method === 'POST' && url.includes('/like')) {
-        return { liked: true, likeCount: 4 };
+      if (url.includes('/reactions/mine')) return {};
+      if (init?.method === 'PUT' && url.includes('/reaction')) {
+        return { myReaction: 'like', likeCount: 4, reactionCounts: { like: 4 } };
       }
       return post();
     });
     renderShell({ route: '/comunidad/p1', ...sessionAs('viewer-1') });
 
     await screen.findByTestId('post-detail');
-    expect(screen.getByText('3 me gusta')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Me gusta' }));
+    expect(await screen.findByText('3 personas')).toBeInTheDocument();
+    const button = screen.getByTestId('reaction-button');
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(button);
 
     await waitFor(() => {
-      expect(screen.getByText('4 me gusta')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Ya te gusta' })).toBeInTheDocument();
+      expect(screen.getByText('Tú y 3 personas más')).toBeInTheDocument();
+      expect(screen.getByTestId('reaction-button')).toHaveAttribute('aria-pressed', 'true');
     });
   });
 

@@ -191,4 +191,43 @@ describe('OrgFormalizationPage', () => {
       '/organizacion/documentos?subir=existence_representation_certificate',
     );
   });
+
+  it('si el servidor no deja avanzar, el motivo queda visible junto a los enlaces de Documentos', async () => {
+    const reason = 'Para pasar a Formalizada falta que la plataforma apruebe: RUT.';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const fail = init?.method === 'POST' && url.includes('/org/formalization/transitions');
+        const body = fail
+          ? { statusCode: 400, message: reason }
+          : url.includes('/org/formalization/history')
+            ? []
+            : url.includes('/org/documents')
+              ? []
+              : url.includes('/org/formalization/capabilities')
+                ? {}
+                : url.includes('/org/formalization')
+                  ? { state: FormalizationState.EnProceso, rteVigente: false }
+                  : {};
+        return Promise.resolve({
+          ok: !fail,
+          status: fail ? 400 : 200,
+          headers: { get: () => null },
+          json: async () => body,
+        });
+      }),
+    );
+    renderShell({ route: '/organizacion/formalizacion', ...ownerSession() });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Avanzar a Formalizada' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /Avanzar a Formalizada/ }));
+
+    // Con documentos pendientes, el motivo dice cuáles faltan en vez del texto del servidor.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Aún falta que el equipo apruebe: RUT y Certificado de existencia y representación legal.',
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

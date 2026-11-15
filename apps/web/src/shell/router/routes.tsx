@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { EmptyState, Skeleton } from '@adoptafacil/ui';
+import { Skeleton } from '@adoptafacil/ui';
 import { RequireAuth, RequireRoles } from '../auth';
 import { FeatureRouteGate } from '../capabilities';
 import { AppLayout } from '../layout';
@@ -15,13 +15,16 @@ import {
   ORG_SIGNERS_ROLES,
   ORG_SIGNING_ROLES,
   ORG_PLAN_ROLES,
+  ORG_MEMBERS_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
   ORG_LEDGER_ROLES,
+  CUSTODY_VIEW_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
   PLATFORM_PLANS_ROLES,
+  PLATFORM_COFFEE_ROLES,
   PLATFORM_REVIEWS_ROLES,
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
   PLATFORM_TEAM_ROLES,
@@ -32,9 +35,11 @@ import {
 } from '../navigation';
 import { AdoptPage, GeneralPortalPage } from '../../features/catalog';
 import { GuidePage, GuidesIndexPage } from '../../features/guias';
-import { HomePage, NotFoundPage } from '../../features/_layout';
+import { HomePage } from '../../features/_layout';
+import { NotFoundRoute, PublicNotFoundPage } from '../errors';
 import {
   CompleteProfilePage,
+  WelcomeNotice,
   ForgotPasswordPage,
   LoginPage,
   RegisterPage,
@@ -77,6 +82,7 @@ const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
 const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
 const OrgPlanPage = lazyPage(loadOrg, 'OrgPlanPage');
+const OrgMembersPage = lazyPage(loadOrg, 'OrgMembersPage');
 const OrgAnnouncementsPage = lazyPage(loadOrg, 'OrgAnnouncementsPage');
 const OrgFormalizationPage = lazyPage(loadOrg, 'OrgFormalizationPage');
 const OrgLegalRepresentativePage = lazyPage(loadOrg, 'OrgLegalRepresentativePage');
@@ -124,10 +130,15 @@ const MyPetsPage = lazyPage(loadCommunity, 'MyPetsPage');
 const MyServicesPage = lazyPage(loadCommunity, 'MyServicesPage');
 const ServiceDetailPage = lazyPage(loadCommunity, 'ServiceDetailPage');
 const ServicesDirectoryPage = lazyPage(loadCommunity, 'ServicesDirectoryPage');
+const BusinessPreRegistrationPage = lazyPage(loadCommunity, 'BusinessPreRegistrationPage');
 const ServicesModerationPage = lazyPage(loadCommunity, 'ServicesModerationPage');
 const loadAnimals = () => import('../../features/animals');
 const AnimalsPage = lazyPage(loadAnimals, 'AnimalsPage');
 const RemindersInboxPage = lazyPage(loadAnimals, 'RemindersInboxPage');
+const loadCoffee = () => import('../../features/coffee');
+const PublicCoffeePage = lazyPage(loadCoffee, 'PublicCoffeePage');
+const CoffeeOrderPage = lazyPage(loadCoffee, 'CoffeeOrderPage');
+const PlatformCoffeePage = lazyPage(loadCoffee, 'PlatformCoffeePage');
 const loadPlatformTeam = () => import('../../features/platform-team');
 const PlatformTeamPage = lazyPage(loadPlatformTeam, 'PlatformTeamPage');
 const loadAdoptions = () => import('../../features/adoptions');
@@ -161,12 +172,16 @@ const CertificateEmissionPage = lazyPage(loadCertificates, 'CertificateEmissionP
 const CertificateVerificationPage = lazyPage(loadCertificates, 'CertificateVerificationPage');
 const loadVolunteering = () => import('../../features/volunteering');
 const MyVolunteeringPage = lazyPage(loadVolunteering, 'MyVolunteeringPage');
+const PublicVolunteeringPage = lazyPage(loadVolunteering, 'PublicVolunteeringPage');
 const VolunteerOpportunitiesPage = lazyPage(loadVolunteering, 'VolunteerOpportunitiesPage');
 const VolunteerOpportunityDetailPage = lazyPage(loadVolunteering, 'VolunteerOpportunityDetailPage');
 const loadReputation = () => import('../../features/reputation');
 const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
 const loadLedger = () => import('../../features/ledger');
 const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
+const loadCustody = () => import('../../features/custody');
+const OrgCustodyPage = lazyPage(loadCustody, 'OrgCustodyPage');
+const AnimalReportsPage = lazyPage(loadCustody, 'AnimalReportsPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -211,9 +226,9 @@ export function AppRoutes() {
   }
   if (portalSubdomain.status === 'not-found') {
     return (
-      <EmptyState
+      <PublicNotFoundPage
         title="Organización no encontrada"
-        description="Este subdominio no corresponde a ninguna organización activa."
+        message="Esta dirección no corresponde a ninguna organización activa. Puede que haya cambiado o que su portal aún no esté publicado."
       />
     );
   }
@@ -221,6 +236,8 @@ export function AppRoutes() {
   return (
     // Ola 1 (R1-1): switched-off modules render "not found" before any route.
     <FeatureRouteGate>
+      {/* Bienvenida / "seguimos donde ibas", una sola vez tras entrar. */}
+      <WelcomeNotice />
       {/* Las pantallas privadas llegan en su propio archivo (ver lazy-page.ts). */}
       <Suspense fallback={<Skeleton className="h-screen w-full" />}>
         <Routes>
@@ -281,6 +298,10 @@ export function AppRoutes() {
           elige desde su panel si lleva a su perfil, a donar, a una campaña o a
           apadrinar un animal. La API valida el destino en cada escaneo. */}
           <Route path="/q/:code" element={<OrgQrRedirectPage />} />
+          {/* Café de AdoptaFácil: el QR impreso en la bolsa (`/c/:code`, no cambia
+          entre lotes) y el regreso desde Mercado Pago con el estado del pedido. */}
+          <Route path="/c/:code" element={<PublicCoffeePage />} />
+          <Route path="/cafe/pedido/:reference" element={<CoffeeOrderPage />} />
           <Route
             path="/donar"
             element={
@@ -323,7 +344,12 @@ export function AppRoutes() {
           (sin sesión): destino de los enlaces compartidos en redes (`/c/:id`). */}
           <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
+          {/* Pre-registro público (sin cuenta). Estático: gana a /servicios/:id. */}
+          <Route path="/servicios/prerregistro" element={<BusinessPreRegistrationPage />} />
           <Route path="/servicios/:id" element={<ServiceDetailPage />} />
+          {/* Voluntariados PÚBLICOS (PR #43, M08 RF18): jornadas activas de todas
+          las organizaciones, sin sesión. Inscribirse lleva a /voluntariado. */}
+          <Route path="/voluntariados" element={<PublicVolunteeringPage />} />
           {/* Public reputation indicators for ONE organization (M12, RF23, S-7) —
           no auth required to read; an authenticated visitor sees a "leave a
           review" form here instead of on a separate route. */}
@@ -552,6 +578,15 @@ export function AppRoutes() {
                     </RequireRoles>
                   }
                 />
+                {/* Equipo · mismo gate que GET /org/members y /org/invitations. */}
+                <Route
+                  path="organizacion/miembros"
+                  element={
+                    <RequireRoles roles={ORG_MEMBERS_ROLES}>
+                      <OrgMembersPage />
+                    </RequireRoles>
+                  }
+                />
                 {/* Planes y suscripciones · mismo gate que GET /org/plan. */}
                 <Route
                   path="organizacion/plan"
@@ -658,6 +693,24 @@ export function AppRoutes() {
                     </RequireRoles>
                   }
                 />
+                {/* Custodia y guardería: cuenta, contratos, plantillas y reportes
+              de animales. La API vuelve a exigir el rol en cada acción. */}
+                <Route
+                  path="organizacion/custodia"
+                  element={
+                    <RequireRoles roles={CUSTODY_VIEW_ROLES}>
+                      <OrgCustodyPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="reportes-animales"
+                  element={
+                    <RequireRoles roles={CUSTODY_VIEW_ROLES}>
+                      <AnimalReportsPage />
+                    </RequireRoles>
+                  }
+                />
                 {/* RF14 · libro público de la organización (registrar/anular solo
               Owner/Administrator; la API vuelve a exigirlo). */}
                 <Route
@@ -722,6 +775,16 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={PLATFORM_PLANS_ROLES}>
                       <PlatformPlansPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Café de AdoptaFácil (presentaciones, lotes, pedidos, aportes).
+              Audiencia de PLATAFORMA. */}
+                <Route
+                  path="plataforma/cafe"
+                  element={
+                    <RequireRoles roles={PLATFORM_COFFEE_ROLES}>
+                      <PlatformCoffeePage />
                     </RequireRoles>
                   }
                 />
@@ -901,10 +964,11 @@ export function AppRoutes() {
                     </RequireRoles>
                   }
                 />
-                <Route path="*" element={<NotFoundPage />} />
               </Route>
             </Route>
           </Route>
+          {/* 404 de toda la app (con o sin sesión): ver NotFoundRoute. */}
+          <Route path="*" element={<NotFoundRoute />} />
         </Routes>
       </Suspense>
     </FeatureRouteGate>

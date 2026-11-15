@@ -11,6 +11,7 @@ export {
   WaitingAnimalsSection,
 } from './components/landing-sections';
 export { HeroVisual } from './components/hero-visual';
+export { CommunityWallSection, LANDING_SOCIAL_ID } from './components/community-wall-section';
 export {
   ActiveCampaignsSection,
   CommunityPulseSection,

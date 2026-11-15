@@ -54,45 +54,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('muro de la comunidad en la landing', () => {
-  it('muestra las publicaciones públicas con autora y contadores', async () => {
-    renderWall([
-      post(),
-      post({
-        id: 'p2',
-        title: 'Jornada de adopción',
-        authorDisplayName: 'Refugio Sol',
-        isOrganization: true,
-      }),
-    ]);
-    await settle();
-    expect(screen.getByTestId('landing-wall')).toBeInTheDocument();
-    expect(screen.getByText('Luna encontró hogar', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText('Laura')).toBeInTheDocument();
-    expect(screen.getByText(/Refugio Sol · organización/)).toBeInTheDocument();
-    expect(screen.getAllByLabelText('12 me gusta, 3 comentarios')).toHaveLength(2);
-    expect(screen.getByRole('link', { name: /Entrar a la comunidad/ })).toHaveAttribute(
-      'href',
-      '/comunidad',
-    );
-  });
-
-  it('sin publicaciones invita a crear la primera', async () => {
-    renderWall([]);
-    await settle();
-    expect(screen.getByTestId('landing-wall-empty')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Crear cuenta y publicar/ })).toHaveAttribute(
-      'href',
-      '/register',
-    );
-  });
-
-  it('ignora portadas con esquemas peligrosos', async () => {
-    renderWall([post({ images: [{ url: 'javascript:alert(1)', alt: '' }] })]);
-    await settle();
-    expect(document.querySelector('img')).toBeNull();
-  });
-
+describe('sección de comunidad de la landing (PR 101) — muro retirado', () => {
   it('con el muro apagado no se monta ni pide datos', async () => {
     renderWall([post()], {
       ...OPEN_CAPABILITIES,

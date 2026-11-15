@@ -265,4 +265,36 @@ describe('Reviews / portal público sin sesión (M12, S7-b)', () => {
     const person = await registerPerson('sin-rol');
     await listOrgReviews(person.token).expect(403);
   });
+
+  // 2026-11-05: nombre opcional + sello "Miembro de la comunidad".
+  it('a signed-in member gets linked by the token and the community badge, anonymous by default', async () => {
+    const member = await registerPerson('miembro');
+    const created = await request(server)
+      .post(`/public/organizations/${slug}/reviews`)
+      .set('Authorization', `Bearer ${member.token}`)
+      .send({ rating: 5, comment: 'Me ayudaron a adoptar.' })
+      .expect(201);
+    expect(created.body).toMatchObject({ authorUserId: member.userId, isAnonymous: true });
+
+    const list = await publicReviews(slug).expect(200);
+    const item = list.body.items.find((i: { id: string }) => i.id === created.body.id);
+    expect(item).toMatchObject({ isCommunityMember: true });
+    expect(item.authorName).toBeUndefined();
+
+    // Un miembro nunca firma con un nombre libre.
+    await request(server)
+      .post(`/public/organizations/${slug}/reviews`)
+      .set('Authorization', `Bearer ${member.token}`)
+      .send({ rating: 4, authorName: 'Otra Persona' })
+      .expect(400);
+  });
+
+  it('a visitor may sign with an optional name — shown without the badge', async () => {
+    const created = await createPublicReview(slug, { rating: 3, authorName: 'Laura Gómez' }).expect(
+      201,
+    );
+    const list = await publicReviews(slug).expect(200);
+    const item = list.body.items.find((i: { id: string }) => i.id === created.body.id);
+    expect(item).toMatchObject({ authorName: 'Laura Gómez', isCommunityMember: false });
+  });
 });

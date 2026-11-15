@@ -1,5 +1,6 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import {
+  PUBLIC_ANIMAL_STATUSES,
   FormalizationState,
   type AnimalSex,
   type AnimalSize,
@@ -98,7 +99,8 @@ export class PortalPreviewService {
     });
   }
 
-  /** Same catalog as `public_org_adoptable_animals`: active, available animals. */
+  /** Same catalog as `public_org_adoptable_animals`: active animals that are
+   *  available or in process (only adopted/unavailable ones are hidden). */
   async listAnimals(query: PublicAnimalsQuery): Promise<AnimalSummaryPage> {
     const organizationId = this.requireOrgId();
     const limit = Math.min(Math.max(query.limit ?? 20, 1), MAX_PAGE);
@@ -106,7 +108,7 @@ export class PortalPreviewService {
     const where = {
       organizationId,
       isActive: true,
-      status: 'available',
+      status: { in: [...PUBLIC_ANIMAL_STATUSES] },
       ...(query.species ? { species: query.species } : {}),
     };
     const now = new Date();

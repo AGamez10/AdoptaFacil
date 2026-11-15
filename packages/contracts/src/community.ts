@@ -52,7 +52,54 @@ export interface PostImage {
   storageRef: string;
   order: number;
   url: string;
+  /** Ausente en datos viejos = 'image'. Un 'video' ya viene comprimido (MP4). */
+  kind?: PostMediaKind;
+  /** Solo videos: imagen de portada que genera el servidor. */
+  posterUrl?: string;
+  /** Solo videos: duración en segundos. */
+  durationSeconds?: number;
 }
+
+export type PostMediaKind = 'image' | 'video';
+
+/** Límites de lo que se adjunta a una publicación (la web y la API los comparten). */
+export const COMMUNITY_MEDIA_LIMITS = {
+  maxItems: 6,
+  maxVideos: 1,
+  maxPhotoMb: 8,
+  maxVideoMb: 80,
+  maxVideoSeconds: 60,
+} as const;
+
+/** Reacciones a una publicación. `like` es el "me gusta" de siempre. */
+export const POST_REACTIONS = ['like', 'love', 'tender', 'celebrate', 'sad'] as const;
+export type PostReaction = (typeof POST_REACTIONS)[number];
+export type PostReactionCounts = Partial<Record<PostReaction, number>>;
+
+export const POST_REACTION_LABELS: Record<PostReaction, string> = {
+  like: 'Me gusta',
+  love: 'Me encanta',
+  tender: 'Ternura',
+  celebrate: 'Celebro',
+  sad: 'Me entristece',
+};
+
+/** Poner (o cambiar) la reacción propia; `null` la quita. */
+export interface SetReactionInput {
+  reaction: PostReaction | null;
+}
+
+export interface SetReactionResult {
+  myReaction: PostReaction | null;
+  likeCount: number;
+  reactionCounts: PostReactionCounts;
+}
+
+/** Mis reacciones sobre varias publicaciones: `{ [postId]: reacción }`. */
+export interface MyReactionsInput {
+  postIds: string[];
+}
+export type MyReactions = Record<string, PostReaction>;
 
 /**
  * Publicación de la comunidad. `organizationId`/`organizationName` están
@@ -73,7 +120,9 @@ export interface Post {
   body: string;
   images: PostImage[];
   commentCount: number;
+  /** Total de reacciones (incluye los "me gusta"). */
   likeCount: number;
+  reactionCounts?: PostReactionCounts;
   status: PostStatus;
   /** Presente solo cuando `status === 'removed'`. */
   moderationReason?: string;
@@ -87,7 +136,9 @@ export interface Post {
  *  resto de la plataforma). Solo JPEG/PNG — enum cerrado por el formulario. */
 export interface PostImageInput {
   filename: string;
-  contentType: 'image/jpeg' | 'image/png';
+  /** Fotos JPG/PNG/WebP o video MP4/MOV/WebM (el servidor lo comprime a MP4). */
+  contentType:
+    'image/jpeg' | 'image/png' | 'image/webp' | 'video/mp4' | 'video/quicktime' | 'video/webm';
   order?: number;
 }
 
@@ -173,7 +224,9 @@ export interface ModeratePostInput {
 // ============================================================================
 // Comunidad PÚBLICA (sin sesión) — solo publicaciones que su autora marcó como
 // compartibles. Nunca lleva el id de la autora; una persona aparece solo con
-// su primer nombre y nunca adjunta fotos (solo las organizaciones lo hacen).
+// su primer nombre. Las fotos y videos que adjunta se ven porque ella decidió
+// hacer pública esa publicación (el formulario le recuerda pedir permiso si
+// aparecen otras personas, sobre todo menores).
 // ============================================================================
 
 /** Publicación vista sin sesión y en las tarjetas para redes sociales. */
@@ -186,10 +239,10 @@ export interface PublicCommunityPost {
   type: PostType;
   title?: string;
   body: string;
-  /** Solo publicaciones de organizaciones. */
   images: PostImage[];
   commentCount: number;
   likeCount: number;
+  reactionCounts?: PostReactionCounts;
   createdAt: string;
 }
 
@@ -198,6 +251,49 @@ export interface PublicCommunityPostsPage {
   total: number;
   limit: number;
   offset: number;
+}
+
+/**
+ * Escalafón público de la comunidad (landing). Sale solo de publicaciones
+ * compartibles: una organización con su nombre, una persona con su primer
+ * nombre; nunca ids.
+ */
+export interface PublicCommunityLeader {
+  displayName: string;
+  isOrganization: boolean;
+  publicPosts: number;
+  likesReceived: number;
+  commentsReceived: number;
+  points: number;
+}
+
+/** Puntos del escalafón (los mismos que calcula `public_community_leaders`). */
+export const COMMUNITY_POINTS = { post: 5, comment: 2, like: 1 } as const;
+
+export type CommunityTierKey = 'newcomer' | 'friend' | 'guardian' | 'legend';
+
+export interface CommunityTier {
+  key: CommunityTierKey;
+  label: string;
+  /** Puntos desde los que se alcanza este nivel. */
+  minPoints: number;
+}
+
+/** Niveles de reconocimiento, de menor a mayor. */
+export const COMMUNITY_TIERS: readonly CommunityTier[] = [
+  { key: 'newcomer', label: 'Huella nueva', minPoints: 0 },
+  { key: 'friend', label: 'Amigo de la manada', minPoints: 25 },
+  { key: 'guardian', label: 'Guardián', minPoints: 100 },
+  { key: 'legend', label: 'Leyenda', minPoints: 300 },
+];
+
+/** Nivel que corresponde a unos puntos (negativos o inválidos → el primero). */
+export function communityTier(points: number): CommunityTier {
+  const safe = Number.isFinite(points) ? points : 0;
+  return COMMUNITY_TIERS.reduce(
+    (tier, candidate) => (safe >= candidate.minPoints ? candidate : tier),
+    COMMUNITY_TIERS[0] as CommunityTier,
+  );
 }
 
 /** Cambiar si la publicación propia es pública y compartible. */

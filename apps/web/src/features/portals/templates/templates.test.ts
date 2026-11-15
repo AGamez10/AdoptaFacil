@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PORTAL_TEMPLATE_IDS } from '@adoptafacil/contracts';
+import { PORTAL_TEMPLATE_IDS, PORTAL_TEMPLATES } from '@adoptafacil/contracts';
 import { PROFILES, FIXTURE_NOW } from './__fixtures__/profiles';
 import { createKit } from './engine/kit';
-import { buildTemplateModel } from './engine/model';
+import { EMPTY, buildTemplateModel } from './engine/model';
 import { ENGINE_TEMPLATE_IDS, isEngineTemplate, loadDesign } from './registry';
 
 /**
@@ -50,8 +50,13 @@ describe('registro de plantillas', () => {
     }
   });
 
-  it('son 14 diseños nuevos además de la clásica', () => {
-    expect(DESIGN_IDS).toHaveLength(14);
+  it('son 14 diseños gratuitos y 5 Premium además de la clásica', () => {
+    expect(DESIGN_IDS).toHaveLength(19);
+    const premium = PORTAL_TEMPLATES.filter((t) => t.tier === 'paid').map((t) => t.id);
+    for (const id of ['album', 'linterna', 'revelado', 'velitas', 'terminal']) {
+      expect(DESIGN_IDS).toContain(id);
+      expect(premium).toContain(id);
+    }
     expect(ENGINE_TEMPLATE_IDS).not.toContain('clasica');
   });
 
@@ -120,5 +125,42 @@ describe.each(DESIGN_IDS)('plantilla %s', (id) => {
     root.querySelectorAll('a[target="_blank"]').forEach((a) => {
       expect(a.getAttribute('rel') ?? '').toMatch(/noopener/);
     });
+  });
+});
+
+/**
+ * Mismos datos en TODAS las plantillas: cambiar de diseño nunca esconde lo que
+ * la organización publicó (el libro público, necesidades, productos, reseñas y
+ * campaña). Lo que muestra el portal sale del mismo modelo, sin importar el diseño.
+ */
+/** Texto visible sin espacios: un diseño puede partir un título en dos líneas. */
+const plain = (html: string) => {
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  return (el.textContent ?? '').replace(/\s+/g, '');
+};
+const textOf = (root: HTMLElement) => (root.textContent ?? '').replace(/\s+/g, '');
+
+describe.each(DESIGN_IDS)('plantilla %s: datos intactos al cambiar de diseño', (id) => {
+  it('pinta el libro público con sus totales y sus últimos movimientos', async () => {
+    const { root, model } = await render(id, 'completa');
+    const text = textOf(root);
+    expect(model.LEDGER.rows.length).toBeGreaterThan(0);
+    for (const row of model.LEDGER.rows) expect(text).toContain(plain(row.concept));
+    for (const total of [model.LEDGER.income, model.LEDGER.expense, model.LEDGER.balance]) {
+      expect(text).toContain(plain(total));
+    }
+    expect(root.querySelector('[data-sec~="libro"] [data-ledger]')).not.toBeNull();
+    const libro = root.querySelector<HTMLElement>('[data-sec~="libro"]');
+    expect(libro && textOf(libro)).not.toContain(plain(EMPTY.libro));
+  });
+
+  it('pinta todas las necesidades, productos, reseñas y la campaña activa', async () => {
+    const { root, model } = await render(id, 'completa');
+    const text = textOf(root);
+    for (const n of model.NEEDS) expect(text, `necesidad ${n.title}`).toContain(plain(n.title));
+    for (const p of model.PRODUCTS) expect(text, `producto ${p.name}`).toContain(plain(p.name));
+    for (const r of model.REVIEWS) expect(text, `reseña ${r.name}`).toContain(plain(r.text));
+    expect(text).toContain(plain(model.CAMPAIGN.title));
   });
 });

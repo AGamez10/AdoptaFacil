@@ -159,15 +159,24 @@ export function ServicesDirectoryPage() {
           <div>
             <h2 className="text-xl font-bold">¿Tienes un negocio para mascotas?</h2>
             <p className="text-sm text-muted-foreground">
-              Publica tu perfil gratis. Lo revisamos antes de mostrarlo.
+              Déjanos tus datos sin crear cuenta, o publica tu perfil si ya tienes una. Lo revisamos
+              antes de mostrarlo.
             </p>
           </div>
-          <Link
-            to="/mi-negocio"
-            className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            Publicar mi negocio
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/servicios/prerregistro"
+              className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Quiero aparecer aquí
+            </Link>
+            <Link
+              to="/mi-negocio"
+              className="rounded-xl border border-border px-5 py-3 font-semibold hover:bg-muted"
+            >
+              Publicar mi negocio
+            </Link>
+          </div>
         </section>
       </main>
 

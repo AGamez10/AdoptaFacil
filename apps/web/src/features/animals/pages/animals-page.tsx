@@ -263,7 +263,7 @@ export function AnimalsPage() {
             }
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
+          <div className="grid gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
             <div className={cn('space-y-3', selectedId && 'hidden lg:block')}>
               <div className="flex flex-row items-center gap-2">
                 <div className="relative flex-1">
@@ -336,7 +336,7 @@ export function AnimalsPage() {
               )}
             </div>
 
-            <div className={cn(!selectedId && 'hidden lg:block')}>
+            <div className={cn('min-w-0', !selectedId && 'hidden lg:block')}>
               {selected ? (
                 <AnimalDetailPanel
                   animal={selected}

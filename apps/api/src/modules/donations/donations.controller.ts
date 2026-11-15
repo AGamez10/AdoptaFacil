@@ -154,11 +154,30 @@ export class DonationsController {
   }
 
   /**
-   * ADR-PAG-003 — Mercado Pago notification for a payment of ONE
-   * organization (PUBLIC — no JWT). Each Checkout Pro preference carries this
-   * URL as `notification_url`. `x-signature` is verified with the
-   * application's secret and the payment is read back with THAT org's token;
-   * settlement is idempotent per payment and status.
+   * ADR-PAG-003 — Mercado Pago notification of an ORDER (PUBLIC — no JWT). One
+   * URL for the whole Checkout Pro application (Orders has no per-order URL):
+   * the organization is resolved from the notified `external_reference`, the
+   * order is read back with THAT organization's token, and `x-signature` is
+   * verified with the application's secret. Idempotent per order and status.
+   */
+  @Post('webhook/mercadopago')
+  @HttpCode(200)
+  applyMercadoPagoOrderWebhook(
+    @Body() payload: unknown,
+    @Headers('x-signature') signature: string | undefined,
+    @Headers('x-request-id') requestId: string | undefined,
+    @Query() query: Record<string, string | undefined>,
+  ): Promise<WebhookOutcome> {
+    return this.service.applyMercadoPagoOrderWebhook(payload, signature ?? '', {
+      headers: { 'x-request-id': requestId },
+      query,
+    });
+  }
+
+  /**
+   * Notification of ONE organization's payment, for preferences created before
+   * the move to Orders (they carry this URL as `notification_url`). Same checks
+   * as above, with the organization taken from the path.
    */
   @Post('webhook/mercadopago/:organizationId')
   @HttpCode(200)

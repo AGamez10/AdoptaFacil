@@ -587,6 +587,14 @@ describe('OrgPublicPage — rich public portal', () => {
     expect(await screen.findByText('Organización no encontrada')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Refugio Patitas/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Mascotas en adopción' })).not.toBeInTheDocument();
+    // Página completa con marco público y salidas (no un callejón sin salida).
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Organización no encontrada' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Volver al inicio' })).toHaveAttribute('href', '/');
+    expect(
+      screen.getByRole('navigation', { name: 'Lugares que te pueden servir' }),
+    ).toBeInTheDocument();
   });
 
   describe('S2-PORTAL: secciones ancladas (rediseño T-D04, sin tabs)', () => {

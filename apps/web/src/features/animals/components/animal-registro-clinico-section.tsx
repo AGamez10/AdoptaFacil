@@ -13,7 +13,7 @@ import { dateBounds } from '../../../lib/date-rules';
  * pantalla porque aquí ya los provee `AnimalDetailPanel`.
  */
 export function AnimalRegistroClinicoSection({ animalId }: { animalId: string }) {
-  const { canEdit, events, eventsLoading, form } = useAnimalClinicalRecord(animalId);
+  const { canEdit, events, eventsLoading, loadFailed, form } = useAnimalClinicalRecord(animalId);
 
   return (
     <div className="space-y-6">
@@ -31,19 +31,27 @@ export function AnimalRegistroClinicoSection({ animalId }: { animalId: string })
               </option>
             ))}
           </select>
-          <Input
-            type="date"
-            aria-label="Fecha del evento"
-            value={form.occurredAt}
-            {...dateBounds('clinicalOccurred')}
-            onChange={(e) => form.setOccurredAt(e.target.value)}
-          />
-          <Input
-            type="date"
-            aria-label="Próxima fecha (p. ej. próxima vacuna)"
-            value={form.nextDueDate}
-            onChange={(e) => form.setNextDueDate(e.target.value)}
-          />
+          <label className="block space-y-1 text-sm">
+            <span className="text-muted-foreground">Fecha en que se hizo</span>
+            <Input
+              type="date"
+              aria-label="Fecha del evento"
+              value={form.occurredAt}
+              {...dateBounds('clinicalOccurred')}
+              onChange={(e) => form.setOccurredAt(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="text-muted-foreground">
+              Próxima fecha (opcional): crea un recordatorio de vacuna o tratamiento
+            </span>
+            <Input
+              type="date"
+              aria-label="Próxima fecha (p. ej. próxima vacuna)"
+              value={form.nextDueDate}
+              onChange={(e) => form.setNextDueDate(e.target.value)}
+            />
+          </label>
           <ClinicalAttachmentsField
             id="clinical-attachment-registro"
             files={form.files}
@@ -59,6 +67,11 @@ export function AnimalRegistroClinicoSection({ animalId }: { animalId: string })
 
       {eventsLoading ? (
         <Skeleton className="h-24 w-full" />
+      ) : loadFailed ? (
+        <p role="alert" className="text-sm text-destructive">
+          No pudimos cargar el expediente de este animal. Revisa tu conexión y vuelve a
+          seleccionarlo.
+        </p>
       ) : events.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin eventos clínicos.</p>
       ) : (

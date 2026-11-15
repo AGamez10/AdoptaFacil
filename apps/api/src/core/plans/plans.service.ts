@@ -13,6 +13,8 @@ import {
   PLAN_KEYS,
   PLAN_REQUIRED_CODE,
   graceEnd,
+  freeProPeriod,
+  NEW_ORG_TRIAL_DAYS,
   launchPromoEnd,
   minimumPlanFor,
   minimumPlanForLimit,
@@ -64,6 +66,8 @@ export class PlansService {
   readonly enforced: boolean;
   /** End of the launch promotion (Pro for free), or null without a launch date. */
   readonly promoEndsAt: Date | null;
+  /** Días de prueba Pro de cada organización nueva ({@link NEW_ORG_TRIAL_DAYS}). */
+  readonly trialDays: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -74,12 +78,25 @@ export class PlansService {
     this.enforced = config.get('PLAN_ENFORCEMENT', { infer: true }) === true;
     const launch = config.get('PLAN_LAUNCH_DATE', { infer: true });
     this.promoEndsAt = launch ? launchPromoEnd(new Date(launch)) : null;
+    this.trialDays = config.get('PLAN_NEW_ORG_TRIAL_DAYS', { infer: true }) ?? NEW_ORG_TRIAL_DAYS;
   }
 
-  private async findSubscription(organizationId: string): Promise<SubscriptionRow | null> {
-    return this.prisma.withOrgContext(organizationId, (tx) =>
-      tx.organizationSubscription.findUnique({ where: { organizationId } }),
-    );
+  /** Suscripción guardada y fecha de registro de la organización (para su prueba). */
+  private async findSubscription(
+    organizationId: string,
+  ): Promise<{ row: SubscriptionRow | null; createdAt: Date | null }> {
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      const [row, org] = await Promise.all([
+        tx.organizationSubscription.findUnique({ where: { organizationId } }),
+        tx.organization.findUnique({ where: { id: organizationId }, select: { createdAt: true } }),
+      ]);
+      return { row, createdAt: org?.createdAt ?? null };
+    });
+  }
+
+  /** Pro gratis sin suscripción: promoción de lanzamiento o prueba de la organización nueva. */
+  freeProFor(createdAt: Date | null): { endsAt: Date; reason: 'launch' | 'trial' } | null {
+    return freeProPeriod(this.promoEndsAt, createdAt, this.trialDays);
   }
 
   /** The plan in effect right now for `organizationId`. */
@@ -87,8 +104,13 @@ export class PlansService {
     if (!this.enforced) {
       return 'pro';
     }
-    const row = await this.findSubscription(organizationId);
-    return resolveEffectivePlan(row ? toContract(row) : null, now, true, this.promoEndsAt);
+    const { row, createdAt } = await this.findSubscription(organizationId);
+    return resolveEffectivePlan(
+      row ? toContract(row) : null,
+      now,
+      true,
+      this.freeProFor(createdAt)?.endsAt ?? null,
+    );
   }
 
   /** Whether the org's plan includes `capability` (no exception). */
@@ -153,7 +175,7 @@ export class PlansService {
 
   /** `GET /org/plan`: plan, limits, usage and catalog for the caller's org. */
   async view(organizationId: string, now = new Date()): Promise<OrganizationPlanView> {
-    const [row, members, emailUsage] = await this.prisma.withOrgContext(organizationId, (tx) =>
+    const [row, members, emailUsage, org] = await this.prisma.withOrgContext(organizationId, (tx) =>
       Promise.all([
         tx.organizationSubscription.findUnique({ where: { organizationId } }),
         this.countMembers(tx, organizationId),
@@ -163,16 +185,23 @@ export class PlansService {
           },
           select: { brandedCount: true },
         }),
+        tx.organization.findUnique({ where: { id: organizationId }, select: { createdAt: true } }),
       ]),
     );
     const subscription = row ? toContract(row) : null;
-    const effectivePlan = resolveEffectivePlan(subscription, now, this.enforced, this.promoEndsAt);
+    const free = this.freeProFor(org?.createdAt ?? null);
+    const effectivePlan = resolveEffectivePlan(
+      subscription,
+      now,
+      this.enforced,
+      free?.endsAt ?? null,
+    );
     const definition = PLAN_CATALOG[effectivePlan];
-    const inPromo =
+    const inFreePro =
       this.enforced &&
       subscription === null &&
-      this.promoEndsAt !== null &&
-      now.getTime() <= this.promoEndsAt.getTime();
+      free !== null &&
+      now.getTime() <= free.endsAt.getTime();
     const lapsing =
       this.enforced &&
       subscription !== null &&
@@ -189,7 +218,8 @@ export class PlansService {
       effectivePlan,
       subscription,
       graceEndsAt: fallsBackAt ? fallsBackAt.toISOString() : null,
-      launchPromoEndsAt: inPromo ? (this.promoEndsAt as Date).toISOString() : null,
+      launchPromoEndsAt: inFreePro && free?.reason === 'launch' ? free.endsAt.toISOString() : null,
+      trialEndsAt: inFreePro && free?.reason === 'trial' ? free.endsAt.toISOString() : null,
       limits: definition.limits,
       capabilities: definition.capabilities,
       usage: {
@@ -272,9 +302,18 @@ export class PlansService {
 
   /** Team size = distinct people holding a role in the org (the `members`
    *  limit counts the same thing when invitations are accepted). */
+  /** Personas del equipo que ocupan puesto: con algún cargo y sin designación
+   *  vigente de firmante (el contador y el revisor fiscal no ocupan puesto). */
   async countMembers(tx: Prisma.TransactionClient, organizationId: string): Promise<number> {
+    const signers = await tx.orgSignerDesignation.findMany({
+      where: { organizationId, revokedAt: null },
+      select: { userId: true },
+    });
     const rows = await tx.userRole.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(signers.length ? { userId: { notIn: signers.map((s) => s.userId) } } : {}),
+      },
       distinct: ['userId'],
       select: { userId: true },
     });

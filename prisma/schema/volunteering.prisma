@@ -39,6 +39,11 @@ model VolunteerOpportunity {
   /// (convocatorias publicadas antes de esta regla). `create_service_hours`
   /// lo aplica en la base de datos.
   sessionDates             DateTime[] @default([]) @map("session_dates") @db.Date
+  /// Jornada cancelada por la organización (status `cancelled`): nunca se
+  /// borra; sus inscripciones abiertas pasan a `cancelled` y se avisa a cada
+  /// persona con este motivo.
+  cancelledAt              DateTime? @map("cancelled_at")
+  cancellationReason       String?   @map("cancellation_reason")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
 
@@ -199,6 +204,11 @@ model VolunteerCertificate {
   signerFullName              String?  @map("signer_full_name")
   signerPosition              String?  @map("signer_position")
   signerIsLegalRepresentative Boolean? @map("signer_is_legal_representative")
+  /// Código público (`VOL-XXXXXXXX-XXXXXXXX`, 64 bits aleatorios) impreso en el
+  /// certificado y en su QR; `volunteer_certificate_public` lo verifica sin
+  /// sesión. La app lo genera al emitir; los anteriores se rellenaron en la
+  /// migración que creó la columna.
+  verificationCode            String?  @unique @map("verification_code")
 
   enrollment VolunteerEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 

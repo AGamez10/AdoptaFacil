@@ -16,6 +16,8 @@ import { CommunityDirectoryService } from './community-directory.service';
 import { CommunityPetsService } from './community-pets.service';
 import { PublicCommunityController } from './public-community.controller';
 import { PublicCommunityService } from './public-community.service';
+import { CommunityPreRegistrationController } from './community-pre-registration.controller';
+import { CommunityPreRegistrationService } from './community-pre-registration.service';
 
 /**
  * M11 · Comunidad (Ola 3, F-8): publicaciones, comentarios, likes y
@@ -36,6 +38,7 @@ import { PublicCommunityService } from './public-community.service';
     CommunityPetsController,
     CommunityDirectoryModerationController,
     PublicCommunityController,
+    CommunityPreRegistrationController,
   ],
   providers: [
     CommunityPostsService,
@@ -45,6 +48,7 @@ import { PublicCommunityService } from './public-community.service';
     CommunityDirectoryService,
     CommunityPetsService,
     PublicCommunityService,
+    CommunityPreRegistrationService,
   ],
 })
 export class CommunityModule {}

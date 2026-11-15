@@ -4,13 +4,14 @@ import type {
   PublicAnimalOrganizationSummary,
   PublicLedgerPage,
   ResourceNeedPublic,
+  ResourceOpenOfferPublic,
   VolunteerOpportunityPublic,
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
 import { fetchPublicLedger } from '../../ledger/api/public-ledger';
 import { formatCop } from '../../ledger/model/ledger-view';
-import { listPublicNeeds } from '../../resources/api/public-resources';
+import { listPublicNeeds, listPublicOpenOffers } from '../../resources/api/public-resources';
 import { CATEGORY_LABELS, publicResourceNeedHref } from '../../resources/model/resources-view';
 import { volunteerSignupHref } from '../../volunteering/model/volunteering-view';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
@@ -141,6 +142,10 @@ function NeedsPanel({ near }: { near: boolean }) {
   const { status, items } = useLazyList<ResourceNeedPublic>(near && resources, (signal) =>
     listPublicNeeds({ limit: PREVIEW, signal }).then((page) => page.items.slice(0, PREVIEW)),
   );
+  // Lo que la comunidad ofrece también es noticia: a una organización le puede servir.
+  const offers = useLazyList<ResourceOpenOfferPublic>(near && resources, (signal) =>
+    listPublicOpenOffers({ limit: 2, signal }).then((page) => page.items.slice(0, 2)),
+  );
 
   return (
     <article className={cn(styles.panel, 'af-reveal')} data-testid="landing-needs">
@@ -191,6 +196,27 @@ function NeedsPanel({ near }: { near: boolean }) {
           })}
         </ul>
       )}
+      {resources && offers.items.length > 0 ? (
+        <ul
+          className={styles.list}
+          aria-label="Ofrecido por la comunidad"
+          data-testid="landing-open-offers"
+        >
+          {offers.items.map((offer, index) => (
+            <li key={offer.id} style={{ '--i': index } as CSSProperties}>
+              <Link to="/recursos" className={styles.row}>
+                <span className={styles.row__chip}>
+                  Ofrecido · {CATEGORY_LABELS[offer.category]}
+                </span>
+                <span className={styles.row__title}>{offer.title}</span>
+                <span className={styles.row__meta}>
+                  {offer.quantity} {offer.unit} · {offer.city}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {resources ? (
         <Link to="/recursos" className={styles.panel__link}>
           Ver el banco de recursos

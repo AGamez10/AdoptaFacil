@@ -9,12 +9,17 @@ import {
 } from '@adoptafacil/ui';
 import { LedgerEntryList } from '../../../ledger/components/ledger-entry-list';
 import { LedgerSummary } from '../../../ledger/components/ledger-summary';
-import { LEDGER_HOW_IT_WORKS } from '../../../ledger/components/public-ledger-dialog';
+import { ThemedLedgerDialog } from '../../../ledger/components/themed-ledger-dialog';
+import type { LedgerTheme } from '../../../ledger/model/ledger-theme';
+import { LEDGER_HOW_IT_WORKS } from '../../../ledger/model/ledger-view';
 
 export interface PreviewLedgerDialogProps {
   ledger: PublicLedgerPage | null | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Apariencia de la plantilla que se está previsualizando. */
+  theme?: LedgerTheme | null;
+  orgName?: string;
 }
 
 /**
@@ -22,7 +27,27 @@ export interface PreviewLedgerDialogProps {
  * del portal, con los movimientos que trae la vista previa (sin consultar la
  * API, que no conoce el portal de ejemplo).
  */
-export function PreviewLedgerDialog({ ledger, open, onOpenChange }: PreviewLedgerDialogProps) {
+export function PreviewLedgerDialog({
+  ledger,
+  open,
+  onOpenChange,
+  theme,
+  orgName,
+}: PreviewLedgerDialogProps) {
+  if (theme) {
+    return (
+      <ThemedLedgerDialog
+        theme={theme}
+        open={open}
+        onOpenChange={onOpenChange}
+        testId="preview-ledger-dialog"
+        orgName={orgName}
+        totals={ledger?.totals ?? null}
+        items={ledger?.items ?? []}
+        zIndex={70}
+      />
+    );
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

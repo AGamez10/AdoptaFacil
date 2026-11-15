@@ -106,3 +106,61 @@ export function buildCertificateIssuedBody(input: CertificateIssuedInput): strin
     '— El equipo de AdoptaFácil',
   ].join('\n');
 }
+
+export interface OpportunityRescheduledInput {
+  volunteerName: string;
+  opportunityTitle: string;
+  organizationName: string;
+  /** "del 22 de noviembre al 23 de noviembre de 2026". */
+  dates: string;
+  /** Días de jornada legibles, o "todos los días de la convocatoria". */
+  sessionDays: string;
+  reason?: string;
+}
+
+export function buildOpportunityRescheduledSubject(input: OpportunityRescheduledInput): string {
+  return `Cambió la fecha de "${input.opportunityTitle}"`;
+}
+
+export function buildOpportunityRescheduledBody(input: OpportunityRescheduledInput): string {
+  const lines = [
+    `Hola ${input.volunteerName},`,
+    '',
+    `${input.organizationName} reprogramó "${input.opportunityTitle}". La jornada ahora es ${input.dates}.`,
+    '',
+    `Días de jornada: ${input.sessionDays}`,
+  ];
+  if (input.reason) lines.push('', `Motivo: ${input.reason}`);
+  lines.push(
+    '',
+    'Tu inscripción sigue vigente. Si ya no puedes asistir, avísale a la organización.',
+    '',
+    '— El equipo de AdoptaFácil',
+  );
+  return lines.join('\n');
+}
+
+export interface OpportunityCancelledInput {
+  volunteerName: string;
+  opportunityTitle: string;
+  organizationName: string;
+  reason: string;
+}
+
+export function buildOpportunityCancelledSubject(input: OpportunityCancelledInput): string {
+  return `"${input.opportunityTitle}" fue cancelada`;
+}
+
+export function buildOpportunityCancelledBody(input: OpportunityCancelledInput): string {
+  return [
+    `Hola ${input.volunteerName},`,
+    '',
+    `${input.organizationName} canceló "${input.opportunityTitle}".`,
+    '',
+    `Motivo: ${input.reason}`,
+    '',
+    'Tu inscripción quedó cerrada. Gracias por querer ayudar: en AdoptaFácil hay más jornadas esperándote.',
+    '',
+    '— El equipo de AdoptaFácil',
+  ].join('\n');
+}

@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { accessPathWithReturn, returnPathOf } from '../auth/return-to';
 import {
   OFFICIAL_EMAIL,
   OFFICIAL_WHATSAPP_DISPLAY,
@@ -6,6 +7,7 @@ import {
   officialWhatsappUrl,
 } from '../../lib/contact';
 import { useFeature } from '../capabilities';
+import { openCookieSettings } from '../consent';
 import { Brand } from './brand';
 import styles from './public-footer.module.scss';
 
@@ -16,6 +18,7 @@ import styles from './public-footer.module.scss';
  * AdoptaFácil no tiene.
  */
 export function PublicFooter() {
+  const location = useLocation();
   const resources = useFeature('resources');
   const marketplace = useFeature('marketplace');
   const payments = useFeature('payments');
@@ -65,6 +68,9 @@ export function PublicFooter() {
             <Link to="/campanas" className={styles.footer__link}>
               Campañas
             </Link>
+            <Link to="/voluntariados" className={styles.footer__link}>
+              Voluntariados
+            </Link>
             {payments && (
               <Link to="/donaciones" className={styles.footer__link}>
                 Donar
@@ -89,7 +95,10 @@ export function PublicFooter() {
             <Link to="/register" className={styles.footer__link}>
               Registrar mi organización
             </Link>
-            <Link to="/login" className={styles.footer__link}>
+            <Link
+              to={accessPathWithReturn('/login', returnPathOf(location))}
+              className={styles.footer__link}
+            >
               Ingresar
             </Link>
           </div>
@@ -108,6 +117,13 @@ export function PublicFooter() {
             <Link to="/legal/cookies" className={styles.footer__link}>
               Cookies
             </Link>
+            <button
+              type="button"
+              onClick={openCookieSettings}
+              className={`${styles.footer__link} ${styles['footer__link--button']}`}
+            >
+              Configurar cookies
+            </button>
             <Link to="/legal/alcance" className={styles.footer__link}>
               Qué es y qué no es AdoptaFácil
             </Link>

@@ -11,11 +11,13 @@ import {
 export const OPPORTUNITY_STATUS_LABELS: Record<VolunteerOpportunityStatus, string> = {
   [VolunteerOpportunityStatus.Active]: 'Activa',
   [VolunteerOpportunityStatus.Closed]: 'Cerrada',
+  [VolunteerOpportunityStatus.Cancelled]: 'Cancelada',
 };
 
 export function opportunityStatusVariant(
   status: VolunteerOpportunityStatus,
-): 'success' | 'secondary' {
+): 'success' | 'secondary' | 'destructive' {
+  if (status === VolunteerOpportunityStatus.Cancelled) return 'destructive';
   return status === VolunteerOpportunityStatus.Active ? 'success' : 'secondary';
 }
 
@@ -24,6 +26,7 @@ export const ENROLLMENT_STATUS_LABELS: Record<VolunteerEnrollmentStatus, string>
   [VolunteerEnrollmentStatus.Accepted]: 'Aceptada',
   [VolunteerEnrollmentStatus.Rejected]: 'Rechazada',
   [VolunteerEnrollmentStatus.Completed]: 'Completada',
+  [VolunteerEnrollmentStatus.Cancelled]: 'Jornada cancelada',
 };
 
 export function enrollmentStatusVariant(
@@ -37,6 +40,7 @@ export function enrollmentStatusVariant(
     case VolunteerEnrollmentStatus.Rejected:
       return 'destructive';
     case VolunteerEnrollmentStatus.Completed:
+    case VolunteerEnrollmentStatus.Cancelled:
       return 'secondary';
   }
 }
@@ -105,4 +109,63 @@ export const OPPORTUNITY_QUERY_PARAM = 'oportunidad';
  *  con su query intacta, así la jornada sigue señalada. */
 export function volunteerSignupHref(id: string): string {
   return `/voluntariado?${OPPORTUNITY_QUERY_PARAM}=${encodeURIComponent(id)}`;
+}
+
+export interface HoursFormInput {
+  /** Días en que se puede registrar; `null` = calendario libre (regla general). */
+  allowedDays: string[] | null;
+  date: string;
+  hoursText: string;
+  description: string;
+}
+
+/**
+ * Valida el registro de horas y devuelve el PRIMER problema real, con su
+ * propio mensaje (antes un único "Datos incompletos" tapaba la causa: p. ej.
+ * que aún no había ningún día de jornada habilitado que ya hubiera ocurrido).
+ */
+export function hoursFormProblem(
+  input: HoursFormInput,
+): { title: string; description: string } | null {
+  const { allowedDays, date, hoursText, description } = input;
+  if (allowedDays !== null && allowedDays.length === 0) {
+    return {
+      title: 'Aún no puedes registrar horas',
+      description:
+        'Todavía no ha ocurrido ningún día de jornada habilitado. Podrás registrar tus horas el mismo día de la jornada o después.',
+    };
+  }
+  if (!date) {
+    return {
+      title: 'Falta el día',
+      description:
+        allowedDays === null
+          ? 'Elige la fecha de la sesión.'
+          : 'Elige el día de la jornada en que trabajaste.',
+    };
+  }
+  if (allowedDays !== null && !allowedDays.includes(date)) {
+    return {
+      title: 'Día no habilitado',
+      description:
+        'Solo puedes registrar horas en los días de jornada que habilitó la organización.',
+    };
+  }
+  if (!hoursText.trim()) {
+    return { title: 'Faltan las horas', description: 'Escribe cuántas horas trabajaste ese día.' };
+  }
+  if (parseSessionHours(hoursText) === null) {
+    return {
+      title: 'Horas no válidas',
+      description:
+        'Las horas deben ser un número mayor que 0 y de máximo 24 (por ejemplo 2 o 2.5).',
+    };
+  }
+  if (!description.trim()) {
+    return {
+      title: 'Falta la descripción',
+      description: 'Cuenta brevemente qué hiciste en la jornada.',
+    };
+  }
+  return null;
 }

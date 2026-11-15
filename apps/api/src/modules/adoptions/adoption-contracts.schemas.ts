@@ -58,46 +58,48 @@ export const signAdoptionContractSchema = z
  * `PATCH /adoptions/contracts/:id/data` — cualquier subconjunto de
  * `AdoptionContractData` (requerimiento: diligenciar peso/estado de salud +
  * corregir cualquier campo auto-rellenado). Todos opcionales: el cliente
- * envía solo lo que cambió.
+ * envía solo lo que cambió. `null` BORRA el dato (dejar un campo en blanco).
  */
 export const updateAdoptionContractDataSchema = z
   .object({
-    organizationNit: text(50).optional(),
-    organizationAddress: text(300).optional(),
-    animalBreed: text(200).optional(),
-    animalSex: text(50).optional(),
-    animalAgeYears: z.number().min(0).max(100).optional(),
-    weightKg: z.number().positive().max(500).optional(),
-    healthStatusAtDelivery: text(2000).optional(),
-    adopterDocumentNumber: text(50).optional(),
-    adopterAddress: text(300).optional(),
-    followUpMonths: z.number().int().positive().max(60).optional(),
-    signatureCity: text(200).optional(),
+    organizationNit: text(50).nullable().optional(),
+    organizationAddress: text(300).nullable().optional(),
+    animalBreed: text(200).nullable().optional(),
+    animalSex: text(50).nullable().optional(),
+    animalAgeYears: z.number().min(0).max(100).nullable().optional(),
+    weightKg: z.number().positive().max(500).nullable().optional(),
+    healthStatusAtDelivery: text(2000).nullable().optional(),
+    adopterDocumentNumber: text(50).nullable().optional(),
+    adopterAddress: text(300).nullable().optional(),
+    followUpMonths: z.number().int().positive().max(60).nullable().optional(),
+    signatureCity: text(200).nullable().optional(),
     // --- plantilla v2 (aditivos) ---
-    organizationName: text(200).optional(),
-    adopterDocumentType: z.enum(['CC', 'CE', 'PPT', 'PA']).optional(),
-    identityDocumentVerified: z.boolean().optional(),
-    minimumSignerAge: z.number().int().min(18).max(30).optional(),
-    animalIdentificationType: z.enum(['microchip', 'tag', 'none']).optional(),
+    organizationName: text(200).nullable().optional(),
+    adopterDocumentType: z.enum(['CC', 'CE', 'PPT', 'PA']).nullable().optional(),
+    identityDocumentVerified: z.boolean().nullable().optional(),
+    minimumSignerAge: z.number().int().min(18).max(30).nullable().optional(),
+    animalIdentificationType: z.enum(['microchip', 'tag', 'none']).nullable().optional(),
     animalIdentificationNumber: z
       .string()
       .trim()
       .regex(/^[A-Za-z0-9 -]{1,40}$/, 'Solo letras, números, espacios y guiones.')
+      .nullable()
       .optional(),
-    animalSterilized: z.boolean().optional(),
-    sterilizationCommitmentMonths: z.number().int().min(1).max(24).optional(),
-    trialPeriodDays: z.number().int().min(1).max(30).optional(),
-    followUpPlan: z.enum(['light', 'standard']).optional(),
-    backupCaregiverName: text(200).optional(),
+    animalSterilized: z.boolean().nullable().optional(),
+    sterilizationCommitmentMonths: z.number().int().min(1).max(24).nullable().optional(),
+    trialPeriodDays: z.number().int().min(1).max(30).nullable().optional(),
+    followUpPlan: z.enum(['light', 'standard']).nullable().optional(),
+    backupCaregiverName: text(200).nullable().optional(),
     backupCaregiverPhone: z
       .string()
       .trim()
       .regex(/^\+?[0-9 ()-]{7,20}$/, 'Celular no válido.')
+      .nullable()
       .optional(),
-    backupCaregiverInformed: z.boolean().optional(),
-    recoveryFeeCop: z.number().int().min(0).max(5_000_000).optional(),
+    backupCaregiverInformed: z.boolean().nullable().optional(),
+    recoveryFeeCop: z.number().int().min(0).max(5_000_000).nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
-    message: 'At least one field must be provided.',
+    message: 'No hay cambios para guardar.',
   });

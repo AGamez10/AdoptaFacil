@@ -61,6 +61,21 @@ const ANIMAL_WRITE_ROLES = [Role.Owner, Role.Administrator, Role.Operator, Role.
 const ORG_DOCUMENT_ROLES = [Role.Owner, Role.Administrator];
 const PLATFORM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin];
 
+/** Qué hace cada rol, en una línea: el asistente lo muestra para que la persona sepa desde dónde mira. */
+export const ROLE_SUMMARY: Record<Role, string> = {
+  [Role.Owner]: 'Propietario(a): acceso completo a la organización, su equipo y sus planes.',
+  [Role.Administrator]: 'Administrador(a): gestionas la organización junto al propietario.',
+  [Role.Operator]:
+    'Operador(a): atiendes el trabajo diario, como animales, adopciones y donaciones.',
+  [Role.Volunteer]: 'Voluntario(a): apoyas a la organización con las tareas que te asignan.',
+  [Role.TemporaryCollaborator]: 'Colaborador(a) temporal: acceso limitado a lo que te asignaron.',
+  [Role.Veterinarian]:
+    'Veterinario(a): registras y consultas el expediente clínico de los animales.',
+  [Role.ReadOnlyAuditor]: 'Auditor(a) de solo lectura: puedes consultar, no modificar.',
+  [Role.PlatformAdmin]: 'Equipo de AdoptaFácil: revisas organizaciones y documentos.',
+  [Role.PlatformSuperAdmin]: 'Equipo de AdoptaFácil: administración completa de la plataforma.',
+};
+
 export const GUIDE_FLOWS: readonly GuideFlow[] = [
   {
     id: 'adoptar',
@@ -351,6 +366,96 @@ export const PAGE_HELP: readonly PageHelp[] = [
     ],
   },
   {
+    match: /^\/donaciones\/resultado/,
+    title: 'Tu donación',
+    tips: [
+      'Mercado Pago está confirmando tu pago. Cuando lo apruebe, te llega el comprobante por correo.',
+      'No necesitas quedarte en esta página ni volver a pagar.',
+    ],
+  },
+  {
+    match: /^\/donaciones\/comprobante/,
+    title: 'Tu comprobante de donación',
+    tips: [
+      'Aquí ves el estado de tu donación con el enlace que te enviamos por correo; no necesitas cuenta.',
+      'Si la organización emite certificado de donación, también lo encuentras aquí cuando esté listo.',
+    ],
+  },
+  {
+    match: /^\/cafe\/pedido/,
+    title: 'Tu pedido de café',
+    tips: [
+      'Mientras Mercado Pago confirma el pago, esta página se actualiza sola.',
+      'Parte de lo que pagaste va a la campaña que se muestra en el pedido.',
+    ],
+  },
+  {
+    match: /^\/tengo-para-donar/,
+    title: 'Tengo algo para donar',
+    tips: [
+      'Describe lo que tienes (alimento, medicinas, cobijas…) y en qué ciudad está.',
+      'Las organizaciones lo ven y te escriben si les sirve. La entrega la acuerdan entre ustedes.',
+    ],
+    related: [{ to: '/recursos', label: 'Ver necesidades de las organizaciones' }],
+  },
+  {
+    match: /^\/invitacion/,
+    title: 'Te invitaron a un equipo',
+    tips: [
+      'Arriba ves la organización que te invitó y tu cargo: qué podrás hacer y qué no.',
+      'Crea tu cuenta o ingresa con la que ya tienes para aceptar. El menú te mostrará solo lo de tu cargo.',
+      'Si el enlace venció o no lo esperabas, pídele a la organización una invitación nueva.',
+    ],
+  },
+  {
+    match: /^\/(forgot|reset-password)/,
+    title: 'Recuperar tu contraseña',
+    tips: [
+      'Escribe el correo de tu cuenta y te enviamos un enlace para crear una contraseña nueva.',
+      'Si ingresas con Google, no necesitas contraseña: usa "Continuar con Google".',
+    ],
+  },
+  {
+    match: /^\/firmar/,
+    title: 'Firmar un documento',
+    tips: [
+      'Una organización te pidió tu firma. Revisa el documento completo antes de firmar.',
+      'Nadie puede firmar a tu nombre: el enlace es personal y solo sirve una vez.',
+    ],
+  },
+  {
+    match: /^\/contabilidad-compartida/,
+    title: 'Contabilidad compartida',
+    tips: [
+      'Una organización compartió contigo su contabilidad del mes, en modo de solo lectura.',
+      'Puedes descargar el libro para revisarlo; no puedes cambiar nada.',
+    ],
+  },
+  {
+    match: /^\/organizaciones\/[^/]+\/resenas/,
+    title: 'Reseñas de la organización',
+    tips: [
+      'Opiniones de personas que adoptaron, donaron o hicieron voluntariado con esta organización.',
+      'Cada reseña pasa por moderación antes de publicarse.',
+    ],
+  },
+  {
+    match: /^\/correo\/baja/,
+    title: 'Dejar de recibir correos',
+    tips: [
+      'Confirma y no te volvemos a enviar ese tipo de correo.',
+      'Los correos de seguridad de tu cuenta y los comprobantes de pago siguen llegando.',
+    ],
+  },
+  {
+    match: /^\/legal/,
+    title: 'Documentos legales',
+    tips: [
+      'Términos, política de datos y autorizaciones de AdoptaFácil, con su versión y fecha.',
+      'Lo que aceptaste y cuándo lo ves en "Uso de mis datos".',
+    ],
+  },
+  {
     match: /^\/verificar/,
     title: 'Verificar un certificado',
     tips: ['Escribe el código impreso en el certificado para confirmar que es auténtico.'],
@@ -393,6 +498,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
       { to: '/adoptar', label: 'Buscar un animal para adoptar' },
       { to: '/mis-solicitudes', label: 'Mis solicitudes' },
     ],
+  },
+  {
+    match: /^\/mis-adopciones\/entrega/,
+    title: 'Confirma la entrega',
+    tips: [
+      'La organización registró que el animal ya está contigo. Revisa el resumen y confírmalo.',
+      'Después lo encuentras en "Mis animales", con sus seguimientos.',
+    ],
+    related: [{ to: '/mis-animales', label: 'Mis animales' }],
   },
   {
     match: /^\/perfil\/completar/,
@@ -529,7 +643,7 @@ export const PAGE_HELP: readonly PageHelp[] = [
     related: [DOCUMENTS_LINK, LEGAL_REP_LINK],
   },
   {
-    match: /^\/organizacion\/documentos/,
+    match: /^\/organizacion\/documentos(\/|$)/,
     title: 'Documentos de la organización',
     tips: [
       'Cada documento muestra su estado: pendiente, en revisión, observado, aprobado o rechazado.',
@@ -634,6 +748,49 @@ export const PAGE_HELP: readonly PageHelp[] = [
     match: /^\/organizacion\/anuncios/,
     title: 'Anuncios urgentes',
     tips: ['Escribe a tus donantes, adoptantes y voluntarios cuando algo no puede esperar.'],
+  },
+  {
+    match: /^\/organizacion\/contabilidad/,
+    title: 'Contabilidad: libros del mes',
+    tips: [
+      'Aquí se ordena mes a mes lo que entró por donaciones: cada pago, reembolso o contracargo confirmado por Mercado Pago.',
+      'Plan Gratis: descargas el libro del mes en Excel o CSV con folio, fecha, tipo y valor, más los totales del mes.',
+      'Planes Crece y Pro: además el paquete completo para tu contador, con comisión y neto, forma de pago, destinación, conciliación contra Mercado Pago y los donantes que autorizaron identificarse.',
+      'Cerrar el mes lo deja sellado: lo que llegue después se registra como ajuste del mes siguiente. AdoptaFácil prepara la información; la contabilidad oficial le corresponde a tu contador.',
+    ],
+    related: [REPORTS_LINK, SIGNERS_LINK],
+  },
+  {
+    match: /^\/organizacion\/miembros/,
+    title: 'Miembros del equipo',
+    tips: [
+      'Invita a tu equipo por correo y elige su rol: cada persona ve en el menú solo lo que su rol permite.',
+      'La invitación llega con un enlace; quien la acepta entra directo a tu organización con ese rol.',
+      'Puedes cambiar el rol o retirar a alguien cuando quieras.',
+    ],
+  },
+  {
+    match: /^\/organizacion\/custodia/,
+    title: 'Custodia y guardería',
+    tips: [
+      'Gestiona la guardería: animales que cuidas, sus vencimientos, pagos, contratos y plantillas.',
+      'Cada contrato y movimiento queda documentado para que todos tengan el mismo soporte.',
+    ],
+    related: [ANIMALS_LINK],
+  },
+  {
+    match: /^\/reportes-animales/,
+    title: 'Reportes de animales',
+    tips: [
+      'Reporte consolidado de los animales de tu organización y reporte individual de cada uno.',
+      'Descárgalos en PDF, CSV o Excel para rendir cuentas o compartirlos.',
+    ],
+    related: [ANIMALS_LINK],
+  },
+  {
+    match: /^\/organizacion\/transparencia-nacional/,
+    title: 'Transparencia nacional',
+    tips: ['Esta sección todavía está en construcción: aquí verás tu indicador a nivel nacional.'],
   },
   {
     match: /^\/organizacion\/plan/,

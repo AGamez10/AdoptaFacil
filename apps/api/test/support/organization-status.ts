@@ -26,7 +26,7 @@ export async function approveTestOrganization(
 export async function formalizeTestOrganization(
   admin: PrismaClient,
   organizationId: string,
-  state: 'formalizada' | 'informal' = 'formalizada',
+  state: string = 'formalizada',
 ): Promise<void> {
   await admin.organizationProfile.upsert({
     where: { organizationId },

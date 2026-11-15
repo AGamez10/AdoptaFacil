@@ -149,7 +149,8 @@ export class ReviewsService {
   }
 
   /**
-   * Reseñas PÚBLICAS (anónimas, `author_user_id IS NULL`) de la PROPIA
+   * Reseñas del PORTAL (`origin = 'portal'`, de visitantes o de miembros
+   * con sesión desde 2026-11-05) de la PROPIA
    * organización del actor — lo que el Owner/Administrator necesita para
    * poder usar `markSpam` (antes no existía ningún read para encontrar esos
    * ids: el botón de moderación no tenía qué mostrar). Tenant-scoped vía RLS
@@ -161,14 +162,15 @@ export class ReviewsService {
   async listForOrg(): Promise<Review[]> {
     const rows = await this.prisma.withTenant((tx) =>
       tx.review.findMany({
-        where: { authorUserId: null },
+        where: { origin: 'portal' },
         orderBy: { createdAt: 'desc' },
       }),
     );
     return rows.map((row) => ({
       id: row.id,
       organizationId: row.organizationId,
-      authorUserId: row.authorUserId ?? undefined,
+      // Sin `authorUserId`: la organización no necesita la cuenta del
+      // miembro que la reseñó para moderar.
       rating: row.rating,
       comment: row.comment ?? undefined,
       isAnonymous: row.isAnonymous,
@@ -198,9 +200,9 @@ export class ReviewsService {
       if (/review not found/i.test(message)) {
         throw new NotFoundException('Review not found');
       }
-      if (/only a public \(anonymous\) review/i.test(message)) {
+      if (/only a public \((?:anonymous|portal)\) review/i.test(message)) {
         throw new BadRequestException(
-          'Solo una reseña pública (anónima) puede marcarse como spam por la organización.',
+          'Solo una reseña hecha desde el portal público puede marcarse como spam por la organización.',
         );
       }
       if (/only an approved review/i.test(message)) {

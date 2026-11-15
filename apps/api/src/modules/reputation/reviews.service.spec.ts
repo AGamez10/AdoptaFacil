@@ -144,7 +144,7 @@ describe('ReviewsService.markSpam (S7-b — Owner moderation of PUBLIC reviews o
   it('maps the "only a public review" DB guard to 400 (never a verified/authenticated review)', async () => {
     const h = makeService();
     h.queryRaw.mockRejectedValueOnce(
-      new Error('only a public (anonymous) review can be marked as spam by the organization'),
+      new Error('only a public (portal) review can be marked as spam by the organization'),
     );
 
     await expect(h.service.markSpam(actor, 'rev-verified')).rejects.toBeInstanceOf(
@@ -165,7 +165,7 @@ describe('ReviewsService.markSpam (S7-b — Owner moderation of PUBLIC reviews o
 });
 
 describe('ReviewsService.listForOrg (fix: the Owner had mark-spam but nothing to find an id with)', () => {
-  it('lists only PUBLIC (anonymous) reviews, tenant-scoped via withTenant — never the authenticated ones', async () => {
+  it('lists only PORTAL reviews (origin=portal), tenant-scoped via withTenant — never the verified ones, and never exposes the author account', async () => {
     const h = makeService();
     const findMany = jest.fn().mockResolvedValue([
       {
@@ -186,11 +186,8 @@ describe('ReviewsService.listForOrg (fix: the Owner had mark-spam but nothing to
 
     const result = await h.service.listForOrg();
 
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { authorUserId: null } }),
-    );
-    expect(result).toEqual([
-      expect.objectContaining({ id: 'rev-public-1', status: 'approved', authorUserId: undefined }),
-    ]);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { origin: 'portal' } }));
+    expect(result).toEqual([expect.objectContaining({ id: 'rev-public-1', status: 'approved' })]);
+    expect(result[0]).not.toHaveProperty('authorUserId');
   });
 });

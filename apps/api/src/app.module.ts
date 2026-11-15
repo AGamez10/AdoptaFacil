@@ -11,6 +11,7 @@ import { RateLimitModule } from './core/rate-limit/rate-limit.module';
 import { ObservabilityModule } from './core/observability/observability.module';
 import { FeaturesModule } from './core/features/features.module';
 import { PlansModule } from './core/plans/plans.module';
+import { FormalizationGateModule } from './core/formalization';
 import { IdentityModule } from './core/identity/identity.module';
 import { EmailTemplatesModule } from './core/notifications/email-templates.module';
 import { LegalModule } from './core/legal/legal.module';
@@ -31,6 +32,7 @@ import { AccountingModule } from './modules/accounting/accounting.module';
 import { OrgExportsModule } from './modules/org-exports/org-exports.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { CoffeeModule } from './modules/coffee/coffee.module';
 import { OrgGovernanceModule } from './modules/org/governance/org-governance.module';
 import { OrgModule } from './modules/org/org.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -38,6 +40,7 @@ import { PlatformWorkspaceModule } from './modules/platform-workspace/platform-w
 import { PortalsModule } from './modules/portals/portals.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
+import { CustodyModule } from './modules/custody/custody.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { SponsorshipsModule } from './modules/sponsorships/sponsorships.module';
 import { VolunteeringModule } from './modules/volunteering/volunteering.module';
@@ -93,6 +96,7 @@ import { RedisModule } from './redis/redis.module';
     // Receives Content-Security-Policy violation reports (deploy/Caddyfile).
     CspReportModule,
     PlansModule,
+    FormalizationGateModule,
     // Feature modules (registered last; core modules above are unchanged).
     OrgModule,
     // Ola 1 · organization review status/suspension + member invitations.
@@ -116,6 +120,7 @@ import { RedisModule } from './redis/redis.module';
     ResourcesModule,
     // M10 · marketplace simplificado: catálogo por organización (Ola 3, F-7).
     MarketplaceModule,
+    CoffeeModule,
     // M11 · comunidad: publicaciones, comentarios, likes y moderación (Ola 3, F-8).
     CommunityModule,
     // M08 · voluntariado + servicio social estudiantil (RF18/RF19, Ola 3, S-6).
@@ -123,6 +128,8 @@ import { RedisModule } from './redis/redis.module';
     // M12 · reputación: reseñas, calificación e indicadores públicos (RF23, S-7).
     ReputationModule,
     LedgerModule,
+    // Documentación, ingreso, custodia y guardería de animales.
+    CustodyModule,
     // M13 · dashboards por audiencia — PlatformAdmin/PlatformSuperAdmin (RF24, S-8).
     DashboardsModule,
     // M13 · reportes sellados de donaciones y servicio social (firmas por estatutos).

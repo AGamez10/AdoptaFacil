@@ -39,6 +39,8 @@ export const ACTION_TYPE_LABEL: Record<SensitiveActionType, string> = {
   'staff.role_revoke': 'Quitar un rol de plataforma',
   'staff.mfa_reset': 'Reiniciar la verificación en dos pasos',
   'audit.export': 'Exportar la bitácora del equipo',
+  'coffee.lot_publish': 'Publicar un lote de café',
+  'coffee.lot_campaign': 'Cambiar la campaña sugerida de un lote de café',
 };
 
 export const ROLE_LABEL: Partial<Record<Role, string>> = {
@@ -67,6 +69,16 @@ export function describeApproval(
       return `Reiniciar la verificación en dos pasos de ${nameOf(payload.userId)}`;
     case 'audit.export':
       return `Exportar la bitácora del ${payload.from} al ${payload.to}`;
+    case 'coffee.lot_publish': {
+      const terms = request.payload as unknown as Record<string, number>;
+      const cop = (n: number) => `$${Number(n).toLocaleString('es-CO')}`;
+      return (
+        `Publicar un lote de café: ${terms.stockUnits} bolsas a ${cop(terms.salePriceCop)} ` +
+        `(compra ${cop(terms.unitCostCop)}, envío ${cop(terms.shippingFeeCop)}). Detalle en Café.`
+      );
+    }
+    case 'coffee.lot_campaign':
+      return 'Cambiar la campaña sugerida de un lote de café. Detalle en Café.';
     default:
       return ACTION_TYPE_LABEL[request.type] ?? request.type;
   }

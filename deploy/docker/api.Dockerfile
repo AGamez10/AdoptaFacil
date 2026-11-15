@@ -57,10 +57,13 @@ ARG APT_PACKAGES
 # Fuentes para la tarjeta de redes de la comunidad (sharp/librsvg dibuja el
 # texto con fontconfig; la imagen slim no trae ninguna fuente).
 ARG FONT_PACKAGES="fonts-inter fonts-dejavu-core"
+# ffmpeg: comprime los videos de la comunidad a MP4 de hasta 720p y saca su
+# portada (sharp solo procesa imágenes). Viene del paquete de Debian.
+ARG MEDIA_PACKAGES="ffmpeg"
 ENV NODE_ENV=production
-RUN if [ -n "$APT_PACKAGES$FONT_PACKAGES" ]; then \
+RUN if [ -n "$APT_PACKAGES$FONT_PACKAGES$MEDIA_PACKAGES" ]; then \
       apt-get update \
-      && apt-get install -y --no-install-recommends $APT_PACKAGES $FONT_PACKAGES \
+      && apt-get install -y --no-install-recommends $APT_PACKAGES $FONT_PACKAGES $MEDIA_PACKAGES \
       && rm -rf /var/lib/apt/lists/*; \
     fi \
  && mkdir -p /var/lib/adoptafacil/storage \

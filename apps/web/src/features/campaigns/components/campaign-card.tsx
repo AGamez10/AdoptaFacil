@@ -25,6 +25,8 @@ const CATEGORY_TONE: Record<CampaignPublic['category'], string> = {
   [CampaignCategory.Sterilizations]: 'sky',
   [CampaignCategory.Infrastructure]: 'sun',
   [CampaignCategory.Emergencies]: 'coral',
+  [CampaignCategory.Conservation]: 'mint',
+  [CampaignCategory.Education]: 'sky',
 };
 
 /**

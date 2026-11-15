@@ -26,6 +26,7 @@ import { SelectField, TextAreaField } from '../components/product-form-fields';
 import { CATEGORY_LABELS, formatCop } from '../model/marketplace-view';
 import { ProductPhotosField } from '../components/product-photos-field';
 import { addProductImage, replaceProductImage, validateImageUpload } from '../lib/storage';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
   value,
@@ -102,18 +103,26 @@ export function ProductDetailPage() {
     if (!id) return;
     const priceValue = Number(price);
     const stockValue = Number(stock);
-    if (
-      !name.trim() ||
-      !Number.isInteger(priceValue) ||
-      priceValue <= 0 ||
-      !Number.isInteger(stockValue) ||
-      stockValue < 0
-    ) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Nombre obligatorio; precio entero COP > 0; stock entero >= 0.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      {
+        ok: Boolean(name.trim()),
+        title: 'Falta el nombre',
+        message: 'Escribe el nombre del producto.',
+      },
+      {
+        ok: Number.isInteger(priceValue) && priceValue > 0,
+        title: 'Precio no válido',
+        message:
+          'El precio debe ser un número entero en pesos mayor que 0 (sin puntos ni decimales).',
+      },
+      {
+        ok: Number.isInteger(stockValue) && stockValue >= 0,
+        title: 'Stock no válido',
+        message: 'El stock debe ser un número entero de 0 en adelante.',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     setSaving(true);

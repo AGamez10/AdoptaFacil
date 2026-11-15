@@ -20,6 +20,7 @@ import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
 import { canTransitionDelivery, deriveNeedStatus } from './resource-fulfillment';
 import { clampLimit } from './resource-needs.service';
+import { InboxService, type InboxNotice } from '../../core/notifications/inbox/inbox.service';
 
 function toDelivery(row: ResourceDeliveryRow): ResourceDelivery {
   return {
@@ -52,7 +53,49 @@ export class ResourceDeliveriesService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
+    private readonly inbox: InboxService,
   ) {}
+
+  /**
+   * Avisa a quien donó sobre su entrega (best-effort): busca la oferta, la
+   * necesidad y la organización en el tenant y deja el aviso en su bandeja.
+   */
+  private async notifyDonor(
+    organizationId: string,
+    deliveryId: string,
+    build: (ctx: { need: string; org: string; offerId: string }) => InboxNotice,
+  ): Promise<void> {
+    const found = await this.prisma
+      .withOrgContext(organizationId, async (tx) => {
+        const delivery = await tx.resourceDelivery.findUnique({
+          where: { id: deliveryId },
+          select: { needId: true, offerId: true, offer: { select: { donorUserId: true } } },
+        });
+        if (!delivery) return null;
+        const need = await tx.resourceNeed.findUnique({
+          where: { id: delivery.needId },
+          select: { title: true },
+        });
+        return {
+          donorUserId: delivery.offer.donorUserId,
+          need: need?.title,
+          offerId: delivery.offerId,
+        };
+      })
+      .catch(() => null);
+    if (!found?.donorUserId) return;
+    const org = await this.prisma.organization
+      .findUnique({ where: { id: organizationId }, select: { name: true } })
+      .catch(() => null);
+    await this.inbox.toUser(
+      found.donorUserId,
+      build({
+        need: found.need ?? 'la necesidad',
+        org: org?.name ?? 'La organización',
+        offerId: found.offerId,
+      }),
+    );
+  }
 
   private requireOrgId(): string {
     const organizationId = this.tenant.getOrganizationId();
@@ -99,7 +142,7 @@ export class ResourceDeliveriesService {
     input: ScheduleResourceDeliveryInput,
   ): Promise<ResourceDelivery> {
     const organizationId = this.requireOrgId();
-    return this.prisma.withOrgContext(organizationId, async (tx) => {
+    const result = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const existing = await tx.resourceDelivery.findUnique({ where: { id } });
       if (!existing) {
         throw new NotFoundException('Resource delivery not found');
@@ -124,6 +167,24 @@ export class ResourceDeliveriesService {
       });
       return toDelivery(updated);
     });
+    const when = result.scheduledAt
+      ? new Date(result.scheduledAt).toLocaleString('es-CO', {
+          timeZone: 'America/Bogota',
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        })
+      : null;
+    await this.notifyDonor(organizationId, id, ({ need, org, offerId }) => ({
+      kind: 'resources.delivery_scheduled',
+      title: `${org} programó la entrega para "${need}"`,
+      body: when
+        ? `Fecha acordada: ${when} (hora Colombia).`
+        : 'Revisa los detalles en "Mis ofertas".',
+      href: `/mis-ofertas?foco=${offerId}`,
+      // Una reprogramación es un aviso nuevo.
+      dedupeKey: `resource_delivery_scheduled:${id}:${result.scheduledAt ?? ''}:${result.method ?? ''}`,
+    }));
+    return result;
   }
 
   /**
@@ -137,7 +198,7 @@ export class ResourceDeliveriesService {
     input: CompleteResourceDeliveryInput,
   ): Promise<ResourceDelivery> {
     const organizationId = this.requireOrgId();
-    return this.prisma.withOrgContext(organizationId, async (tx) => {
+    const result = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const existing = await tx.resourceDelivery.findUnique({
         where: { id },
         include: { offer: true },
@@ -200,12 +261,21 @@ export class ResourceDeliveriesService {
       });
       return toDelivery(updated);
     });
+    await this.notifyDonor(organizationId, id, ({ need, org, offerId }) => ({
+      kind: 'resources.delivery_completed',
+      tone: 'kudos',
+      title: `¡Gracias! ${org} recibió tu donación`,
+      body: `Tu aporte para "${need}" ya está con los animales. Gestos así sostienen a los refugios.`,
+      href: `/mis-ofertas?foco=${offerId}`,
+      dedupeKey: `resource_delivery_completed:${id}`,
+    }));
+    return result;
   }
 
   /** Cancelar la entrega — solo mientras sigue `scheduled`. */
   async cancel(actorUserId: string, id: string): Promise<ResourceDelivery> {
     const organizationId = this.requireOrgId();
-    return this.prisma.withOrgContext(organizationId, async (tx) => {
+    const result = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const existing = await tx.resourceDelivery.findUnique({ where: { id } });
       if (!existing) {
         throw new NotFoundException('Resource delivery not found');
@@ -231,5 +301,14 @@ export class ResourceDeliveriesService {
       });
       return toDelivery(updated);
     });
+    await this.notifyDonor(organizationId, id, ({ need, org, offerId }) => ({
+      kind: 'resources.delivery_cancelled',
+      tone: 'warning',
+      title: `${org} canceló la entrega para "${need}"`,
+      body: 'Si crees que es un error, escríbele a la organización desde su portal.',
+      href: `/mis-ofertas?foco=${offerId}`,
+      dedupeKey: `resource_delivery_cancelled:${id}`,
+    }));
+    return result;
   }
 }

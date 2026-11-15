@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { MERCADOPAGO_RESOURCE_ID_PATTERN, isMercadoPagoCheckoutUrl } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { mercadoPagoTimeoutSignal } from './mercadopago-http';
+import { safeOAuthDescription } from './mercadopago-oauth.client';
 
 /** Injectable fetch surface so tests run with ZERO network. */
 export type MercadoPagoBillingFetch = typeof fetch;
@@ -60,6 +61,7 @@ export class MercadoPagoBillingClient {
   private readonly baseUrl: string;
   private readonly token: string | undefined;
   private readonly test: boolean;
+  private readonly testPayerEmail: string | undefined;
 
   constructor(
     config: ConfigService<Env, true>,
@@ -73,6 +75,8 @@ export class MercadoPagoBillingClient {
     this.token = config.get('MERCADOPAGO_PLATFORM_ACCESS_TOKEN', { infer: true }) as
       string | undefined;
     this.test = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
+    this.testPayerEmail = config.get('MERCADOPAGO_TEST_PAYER_EMAIL', { infer: true }) as
+      string | undefined;
   }
 
   isConfigured(): boolean {
@@ -104,7 +108,9 @@ export class MercadoPagoBillingClient {
       body: JSON.stringify({
         reason: input.reason,
         external_reference: input.externalReference,
-        payer_email: input.payerEmail,
+        // Sandbox: the payer must be the Mercado Pago TEST BUYER, not the
+        // logged-in user. Never honored in production (env validation).
+        payer_email: this.test && this.testPayerEmail ? this.testPayerEmail : input.payerEmail,
         back_url: input.backUrl,
         status: 'pending',
         auto_recurring: {
@@ -116,10 +122,19 @@ export class MercadoPagoBillingClient {
       }),
       signal: mercadoPagoTimeoutSignal(),
     });
-    if (!response.ok) {
-      throw new Error(`Mercado Pago preapproval create failed (${response.status})`);
-    }
     const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!response.ok) {
+      // Mercado Pago says WHY a subscription is refused (back_url, payer email,
+      // test vs real user…). Keep its message, trimmed, for the server log;
+      // never the token or the request.
+      const cause = Array.isArray(body?.cause) ? (body?.cause[0] as Record<string, unknown>) : null;
+      const detail = safeOAuthDescription(
+        [str(body?.message), str(body?.error), str(cause?.description)].filter(Boolean).join(' · '),
+      );
+      throw new Error(
+        `Mercado Pago preapproval create failed (${response.status}${detail ? `: ${detail}` : ''})`,
+      );
+    }
     const id = str(body?.id);
     const link = str(this.test ? (body?.sandbox_init_point ?? body?.init_point) : body?.init_point);
     if (!id || !isMercadoPagoCheckoutUrl(link)) {

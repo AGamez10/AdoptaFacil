@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { Comment, CommentsPage, Post, ToggleLikeResult } from '@adoptafacil/contracts';
+import type { Comment, CommentsPage, Post } from '@adoptafacil/contracts';
 import {
   Badge,
   Button,
@@ -15,13 +15,17 @@ import {
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { SharePost } from '../components/share-post';
+import { AuthorAvatar } from '../components/author-avatar';
+import { MediaGallery } from '../components/media-gallery';
+import { ReactionBar, ReactionSummary } from '../components/reaction-bar';
+import { useReactions } from '../hooks/use-reactions';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import {
   TYPE_LABELS,
   commentCountLabel,
   formatBogota,
-  likeCountLabel,
+  timeAgo,
   typeVariant,
 } from '../model/community-view';
 
@@ -43,7 +47,6 @@ export function PostDetailPage() {
 
   const [state, setState] = useState<LoadState>('loading');
   const [post, setPost] = useState<Post | null>(null);
-  const [liked, setLiked] = useState(false);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentBody, setCommentBody] = useState('');
@@ -55,6 +58,7 @@ export function PostDetailPage() {
   const [saving, setSaving] = useState(false);
   const [togglingShare, setTogglingShare] = useState(false);
 
+  const { stateOf, react } = useReactions(post ? [post] : []);
   const myUserId = user?.id;
   const isAuthor = !!post && !!myUserId && post.authorUserId === myUserId;
 
@@ -90,24 +94,6 @@ export function PostDetailPage() {
       active = false;
     };
   }, [client, id]);
-
-  const toggleLike = async (): Promise<void> => {
-    if (!id || !post) return;
-    try {
-      const result = await client.request<ToggleLikeResult>(
-        `/community/posts/${encodeURIComponent(id)}/like`,
-        { method: 'POST' },
-      );
-      setLiked(result.liked);
-      setPost({ ...post, likeCount: result.likeCount });
-    } catch (error) {
-      toast({
-        title: 'No se pudo actualizar el like',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
-        variant: 'destructive',
-      });
-    }
-  };
 
   const submitComment = async (): Promise<void> => {
     if (!id || !commentBody.trim()) return;
@@ -222,7 +208,7 @@ export function PostDetailPage() {
 
   return (
     <PageContainer>
-      <PageHeader title="Publicación" description="Detalle, comentarios y likes." />
+      <PageHeader title="Publicación" description="Detalle, reacciones y comentarios." />
       <Link
         to="/comunidad"
         className="mb-4 inline-block text-sm text-muted-foreground underline-offset-4 hover:underline"
@@ -281,34 +267,34 @@ export function PostDetailPage() {
                 <p className="whitespace-pre-wrap text-sm text-foreground">{post.body}</p>
               )}
 
-              {post.images.length > 0 && (
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {post.images.map((image) => (
-                    <img
-                      key={image.id}
-                      src={image.url}
-                      alt=""
-                      className="aspect-square w-full rounded-md border object-cover"
-                    />
-                  ))}
-                </div>
-              )}
+              <MediaGallery
+                media={post.images}
+                authorName={post.organizationName ?? post.authorName}
+              />
 
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  variant={liked ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => void toggleLike()}
-                >
-                  {liked ? 'Ya te gusta' : 'Me gusta'}
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {likeCountLabel(post.likeCount)}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {commentCountLabel(post.commentCount)}
-                </span>
-              </div>
+              {(() => {
+                const reaction = stateOf(post);
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <ReactionSummary
+                        counts={reaction.counts}
+                        total={reaction.total}
+                        mine={reaction.mine !== null}
+                      />
+                      <a href="#comentarios" className="text-muted-foreground hover:underline">
+                        {commentCountLabel(post.commentCount)}
+                      </a>
+                    </div>
+                    <div className="flex gap-1 border-y py-1">
+                      <ReactionBar
+                        value={reaction.mine}
+                        onChange={(next) => void react(post, next)}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
 
               {isAuthor && (
                 <label className="flex items-start gap-2 text-sm" htmlFor="post-detail-shareable">
@@ -344,7 +330,7 @@ export function PostDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="comentarios">
             <CardHeader>
               <CardTitle className="text-base">Comentarios</CardTitle>
             </CardHeader>
@@ -368,23 +354,30 @@ export function PostDetailPage() {
               ) : (
                 <ul className="space-y-3">
                   {comments.map((comment) => (
-                    <li key={comment.id} className="rounded-md border p-3 text-sm">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium">{comment.authorName}</p>
-                        {myUserId === comment.authorUserId && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void removeComment(comment.id)}
-                          >
-                            Eliminar
-                          </Button>
-                        )}
+                    <li key={comment.id} className="flex gap-2.5 text-sm">
+                      <AuthorAvatar name={comment.authorName} className="h-9 w-9" />
+                      <div className="min-w-0 flex-1">
+                        <div className="inline-block max-w-full rounded-2xl bg-muted px-3.5 py-2">
+                          <p className="font-semibold">{comment.authorName}</p>
+                          <p className="whitespace-pre-wrap break-words text-foreground">
+                            {comment.body}
+                          </p>
+                        </div>
+                        <p className="mt-1 flex items-center gap-3 pl-2 text-xs text-muted-foreground">
+                          <span title={formatBogota(comment.createdAt)}>
+                            {timeAgo(comment.createdAt, new Date())}
+                          </span>
+                          {myUserId === comment.authorUserId && (
+                            <button
+                              type="button"
+                              className="font-semibold hover:underline"
+                              onClick={() => void removeComment(comment.id)}
+                            >
+                              Eliminar
+                            </button>
+                          )}
+                        </p>
                       </div>
-                      <p className="mt-1 text-foreground">{comment.body}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatBogota(comment.createdAt)}
-                      </p>
                     </li>
                   ))}
                 </ul>

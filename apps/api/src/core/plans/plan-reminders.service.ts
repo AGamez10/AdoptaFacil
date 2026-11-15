@@ -1,6 +1,12 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Role, PLAN_CATALOG, graceEnd, type PlanKey } from '@adoptafacil/contracts';
+import {
+  Role,
+  PLAN_CATALOG,
+  TRIAL_REMINDER_DAYS_BEFORE,
+  graceEnd,
+  type PlanKey,
+} from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { NOTIFICATION_PORT, type NotificationPort } from '../notifications/notification.port';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -48,6 +54,22 @@ export function planReminderFor(
   return null;
 }
 
+/** Aviso del fin del Pro gratis (prueba de la organización nueva o lanzamiento). */
+export type FreeProReminderStage = 'soon' | 'today';
+
+/**
+ * Qué aviso necesita una organización SIN suscripción cuyo Pro gratis termina
+ * en `endsAt`. Puro. `soon`: faltan entre 1 y {@link TRIAL_REMINDER_DAYS_BEFORE}
+ * días; `today`: termina en las próximas 24 horas. Ya vencido, ninguno.
+ */
+export function freeProReminderFor(endsAt: Date, now: Date): FreeProReminderStage | null {
+  const left = endsAt.getTime() - now.getTime();
+  if (left < 0) return null;
+  if (left <= DAY) return 'today';
+  if (left <= TRIAL_REMINDER_DAYS_BEFORE * DAY) return 'soon';
+  return null;
+}
+
 const colombiaDate = new Intl.DateTimeFormat('es-CO', {
   timeZone: 'America/Bogota',
   day: 'numeric',
@@ -86,6 +108,22 @@ export function planReminderMessage(
   }
 }
 
+/** Asunto y cuerpo del aviso de fin del Pro gratis. Puro. */
+export function freeProReminderMessage(
+  stage: FreeProReminderStage,
+  reason: 'launch' | 'trial',
+  organizationName: string,
+  endsAt: Date,
+  planUrl: string,
+): { subject: string; body: string } {
+  const what = reason === 'trial' ? 'Tu prueba gratis de Pro' : 'Tu Pro gratis del lanzamiento';
+  const when = stage === 'today' ? 'termina hoy' : `termina el ${colombiaDate.format(endsAt)}`;
+  return {
+    subject: `${what} ${when}`,
+    body: `Hola, equipo de ${organizationName}:\n\n${what} en AdoptaFácil ${when}. Después tu organización pasa al plan Gratis.\n\nNo se borra nada: tus animales, adopciones y documentos siguen ahí. Si tu portal usa una plantilla Pro, vuelve solo a una gratuita; la que elegiste queda guardada y regresa en cuanto actives Crece o Pro en ${planUrl}.`,
+  };
+}
+
 /**
  * Daily scan: emails the Owners of each organization whose plan needs a
  * reminder (see {@link planReminderFor}). Only with `PLAN_ENFORCEMENT` on.
@@ -111,11 +149,13 @@ export class PlanRemindersService {
   /** Returns how many emails were queued. */
   async sendDueReminders(now = new Date()): Promise<number> {
     if (!this.plans.enforced) return 0;
-    const orgs = await this.prisma.organization.findMany({ select: { id: true, name: true } });
+    const orgs = await this.prisma.organization.findMany({
+      select: { id: true, name: true, createdAt: true },
+    });
     let sent = 0;
     for (const org of orgs) {
       try {
-        sent += await this.remindOrganization(org.id, org.name, now);
+        sent += await this.remindOrganization(org.id, org.name, org.createdAt, now);
       } catch (error) {
         this.logger.warn(`plan reminder skipped for an organization: ${(error as Error).message}`);
       }
@@ -126,13 +166,16 @@ export class PlanRemindersService {
   private async remindOrganization(
     organizationId: string,
     organizationName: string,
+    createdAt: Date,
     now: Date,
   ): Promise<number> {
+    const free = this.plans.freeProFor(createdAt);
     const found = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const sub = await tx.organizationSubscription.findUnique({ where: { organizationId } });
-      if (!sub) return null;
-      const due = planReminderFor(sub, now);
-      if (!due) return null;
+      // Sin suscripción: el aviso es el del fin del Pro gratis (prueba o lanzamiento).
+      const stage = !sub && free ? freeProReminderFor(free.endsAt, now) : null;
+      const due = sub ? planReminderFor(sub, now) : null;
+      if (!due && !stage) return null;
       const owners = await tx.userRole.findMany({
         where: { organizationId, role: Role.Owner },
         select: { userId: true },
@@ -141,9 +184,28 @@ export class PlanRemindersService {
         where: { id: { in: owners.map((o) => o.userId) } },
         select: { email: true },
       });
-      return { sub, due, emails: users.map((u) => u.email).filter(Boolean) };
+      return { sub, due, stage, emails: users.map((u) => u.email).filter(Boolean) };
     });
-    if (!found) return 0;
+    if (found?.stage && free) {
+      const { subject, body } = freeProReminderMessage(
+        found.stage,
+        free.reason,
+        organizationName,
+        free.endsAt,
+        this.planUrl,
+      );
+      const day = free.endsAt.toISOString().slice(0, 10);
+      for (const to of found.emails) {
+        await this.notifications.send({
+          to,
+          subject,
+          body,
+          idempotencyKey: `plan.free-pro:${organizationId}:${found.stage}:${day}:${to}`,
+        });
+      }
+      return found.emails.length;
+    }
+    if (!found?.due || !found.sub) return 0;
     const { subject, body } = planReminderMessage(
       found.due.kind,
       organizationName,

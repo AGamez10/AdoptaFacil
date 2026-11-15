@@ -12,6 +12,7 @@ import { NOTIFICATION_PORT, type NotificationPort } from './notification.port';
 import { TemplatedNotificationAdapter } from './templated-notification.adapter';
 import { OrgEmailBrandingService } from './branding/org-email-branding.service';
 import { EmailTemplateService } from './templates/email-template.service';
+import { InboxService } from './inbox/inbox.service';
 
 /** The raw transport (log stub or SMTP), before the template layer. */
 export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
@@ -38,6 +39,7 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
   imports: [BullModule.registerQueue({ name: EMAIL_DELIVERY_QUEUE })],
   providers: [
     EmailTemplateService,
+    InboxService,
     EmailDeliveryWorker,
     OrgEmailBrandingService,
     {
@@ -72,6 +74,6 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
         ),
     },
   ],
-  exports: [NOTIFICATION_PORT, NOTIFICATION_TRANSPORT, EmailTemplateService],
+  exports: [NOTIFICATION_PORT, NOTIFICATION_TRANSPORT, EmailTemplateService, InboxService],
 })
 export class NotificationModule {}

@@ -24,6 +24,13 @@ model Review {
   isAnonymous       Boolean   @default(false) @map("is_anonymous")
   // pending | approved | rejected | hidden — ver ReviewStatus en contracts.
   status            String    @default("pending")
+  /// 'verified' (RF23, `create_review`, cola de PlatformAdmin) | 'portal'
+  /// (botón del portal público, nace approved, la modera el Owner). Desde
+  /// 2026-11-05 una reseña del portal puede tener autor (miembro con sesión).
+  origin            String    @default("verified")
+  /// Nombre que un VISITANTE sin cuenta escribe voluntariamente (2-60). Nunca
+  /// para filas con autor: el miembro usa el nombre de su cuenta.
+  authorDisplayName String?   @map("author_display_name")
   moderatedByUserId String?   @map("moderated_by_user_id") @db.Uuid
   moderatedAt       DateTime? @map("moderated_at")
   // Motivo del rechazo, o de un ocultamiento posterior (approved -> hidden).

@@ -1,4 +1,9 @@
-import type { ResourceNeedPublic, ResourceNeedsPage } from '@adoptafacil/contracts';
+import type {
+  ResourceNeedPublic,
+  ResourceNeedsPage,
+  ResourceOpenOfferPublic,
+  ResourceOpenOffersPublicPage,
+} from '@adoptafacil/contracts';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -55,4 +60,31 @@ export async function getPublicNeed(
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('error');
   return (await response.json()) as ResourceNeedPublic;
+}
+
+/**
+ * Ofrecimientos abiertos PÚBLICOS: `GET /public/resources/open-offers` (qué,
+ * cuánto, dónde y hasta cuándo; nunca quién lo ofrece). Sin token. Mismo
+ * blindaje: `.items` siempre es un array.
+ */
+export async function listPublicOpenOffers({
+  limit,
+  offset,
+  signal,
+}: Omit<ListPublicNeedsParams, 'organizationId'> = {}): Promise<ResourceOpenOffersPublicPage> {
+  const params = new URLSearchParams();
+  if (typeof limit === 'number') params.set('limit', String(limit));
+  if (typeof offset === 'number') params.set('offset', String(offset));
+  const qs = params.toString();
+  const url = `${API_BASE}/public/resources/open-offers${qs ? `?${qs}` : ''}`;
+  const response = await fetch(url, signal ? { signal } : undefined);
+  if (!response.ok) throw new Error('error');
+  const body = (await response.json()) as Partial<ResourceOpenOffersPublicPage> | null;
+  const items: ResourceOpenOfferPublic[] = Array.isArray(body?.items) ? body.items : [];
+  return {
+    items,
+    total: typeof body?.total === 'number' ? body.total : items.length,
+    limit: typeof body?.limit === 'number' ? body.limit : items.length,
+    offset: typeof body?.offset === 'number' ? body.offset : 0,
+  };
 }

@@ -6,6 +6,7 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { useSession } from '../../../shell/auth';
 import { useSeo } from '../../../seo/seo';
 import { getPublicPost } from '../api/public-community';
+import { MediaGallery } from '../components/media-gallery';
 import { SharePost } from '../components/share-post';
 import { publicPostPath } from '../lib/share';
 import {
@@ -88,16 +89,8 @@ export function PublicPostPage() {
             </header>
             <p className="whitespace-pre-wrap leading-relaxed">{post.body}</p>
             {post.images.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {post.images.map((image) => (
-                  <img
-                    key={image.id}
-                    src={image.url}
-                    alt=""
-                    loading="lazy"
-                    className="aspect-[4/3] w-full rounded-lg border object-cover"
-                  />
-                ))}
+              <div data-testid="public-post-images">
+                <MediaGallery media={post.images} authorName={post.authorDisplayName} />
               </div>
             )}
             <p className="text-xs text-muted-foreground">

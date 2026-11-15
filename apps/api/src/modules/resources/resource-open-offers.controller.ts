@@ -16,6 +16,7 @@ import {
   type CreateResourceOpenOfferInput,
   type ResourceOpenOffer,
   type ResourceOpenOffersBoardPage,
+  type ResourceOpenOffersPublicPage,
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { CurrentUser } from '../../core/auth/current-user.decorator';
@@ -24,6 +25,7 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { RequireFeature } from '../../core/features';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 import { ResourceOpenOffersService } from './resource-open-offers.service';
 import {
   claimResourceOpenOfferSchema,
@@ -91,5 +93,25 @@ export class ResourceOpenOffersController {
     @Body(new ZodValidationPipe(claimResourceOpenOfferSchema)) dto: ClaimResourceOpenOfferInput,
   ): Promise<ClaimResourceOpenOfferResult> {
     return this.service.claim(actor, id, dto);
+  }
+}
+
+/**
+ * Lista PÚBLICA de ofrecimientos abiertos (sin sesión): qué hay, cuánto, en
+ * qué municipio y hasta cuándo. Nunca quién lo ofrece. Alimenta /recursos y
+ * la landing para que todos vean que hay una oportunidad publicada.
+ */
+@RequireFeature('resources')
+@Controller('public/resources/open-offers')
+export class PublicResourceOpenOffersController {
+  constructor(private readonly service: ResourceOpenOffersService) {}
+
+  @Get()
+  @PublicCache()
+  list(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<ResourceOpenOffersPublicPage> {
+    return this.service.publicList(Number(limit), Number(offset));
   }
 }

@@ -649,7 +649,9 @@ export function CommunitySection() {
       <div className={cn(styles.container, styles.community)}>
         <div className={styles.community__copy}>
           <SectionHeading
-            eyebrow={communityOn ? 'Comunidad' : 'Comunidad · muy pronto'}
+            eyebrow={
+              communityOn ? 'Servicios para mascotas' : 'Servicios para mascotas · muy pronto'
+            }
             title="Todo el mundo de tu mascota, en un solo lugar."
             id="landing-community-title"
           >

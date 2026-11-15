@@ -42,6 +42,16 @@ export const ANIMAL_STATUSES: readonly AnimalStatus[] = [
 ];
 
 /**
+ * States shown to the public (portal of the organization, public animal page,
+ * /adoptar): available AND in process. An animal in process may have several
+ * interested people and one can drop out while another moves forward, so it
+ * stays visible. Adopted, unavailable and deceased animals are never shown.
+ * MUST match the filter of the SQL functions `public_org_adoptable_animals`,
+ * `public_org_adoptable_animal` and `public_adoptable_animals`.
+ */
+export const PUBLIC_ANIMAL_STATUSES: readonly AnimalStatus[] = ['available', 'in_process'];
+
+/**
  * An animal's record (expediente). The base fields are STABLE — M04 and the
  * portal may rely on them. Optional fields are part of the base model but not
  * guaranteed to be present on every record yet; they are declared now so adding

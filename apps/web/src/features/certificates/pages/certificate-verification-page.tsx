@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import type {
-  DonationCertificateVerification,
-  OrgReportLegalEffect,
-  OrgReportVerification,
+import {
+  type DonationCertificateVerification,
+  isVolunteerCertificateCode,
+  type OrgReportLegalEffect,
+  type OrgReportVerification,
+  type VolunteerCertificateVerification,
 } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -20,6 +22,7 @@ import {
 import {
   fetchPublicCertificateVerification,
   fetchPublicReportVerification,
+  fetchPublicVolunteerCertificateVerification,
   isReportCode,
 } from '../api/donation-certificate';
 import { formatBogota, formatCop } from '../model/certificate-format';
@@ -73,6 +76,7 @@ export function CertificateVerificationPage() {
   const [state, setState] = useState<VerifyState>('idle');
   const [result, setResult] = useState<DonationCertificateVerification | null>(null);
   const [report, setReport] = useState<OrgReportVerification | null>(null);
+  const [volunteer, setVolunteer] = useState<VolunteerCertificateVerification | null>(null);
 
   const verify = (value: string) => {
     const trimmed = value.trim();
@@ -80,6 +84,17 @@ export function CertificateVerificationPage() {
     setState('loading');
     setResult(null);
     setReport(null);
+    setVolunteer(null);
+    // Certificados de voluntariado (VOL-…).
+    if (isVolunteerCertificateCode(trimmed)) {
+      fetchPublicVolunteerCertificateVerification(trimmed.toUpperCase())
+        .then((data) => {
+          setVolunteer(data);
+          setState(data ? 'valid' : 'invalid');
+        })
+        .catch(() => setState('error'));
+      return;
+    }
     // M13: el mismo verificador acepta los folios de reportes sellados.
     if (isReportCode(trimmed)) {
       fetchPublicReportVerification(trimmed.toUpperCase())
@@ -112,8 +127,8 @@ export function CertificateVerificationPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className={styles.intro}>
-              Ingresa el código del certificado de donación o el folio del reporte (ADF-REP-…) para
-              comprobar su autenticidad.
+              Ingresa el código del certificado de donación, del certificado de voluntariado (VOL-…)
+              o el folio del reporte (ADF-REP-…) para comprobar su autenticidad.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
@@ -242,6 +257,81 @@ export function CertificateVerificationPage() {
                 <div className={styles['evidence__wide']}>
                   <dt className={styles['evidence__label']}>Huella SHA-256 del contenido</dt>
                   <dd className={styles['evidence__hash']}>{report.contentHash}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+        )}
+
+        {state === 'valid' && volunteer && (
+          <Card data-testid="volunteer-verification-result" className={styles.result}>
+            <CardHeader className="gap-2">
+              <div className={styles['result__title-row']}>
+                <CardTitle>
+                  {volunteer.appliesToStudentService
+                    ? 'Constancia de servicio social auténtica'
+                    : 'Certificado de voluntariado auténtico'}
+                </CardTitle>
+                <Badge variant="success">Auténtico</Badge>
+              </div>
+              <p className={styles['result__intro']}>
+                Este certificado lo expidió la organización en AdoptaFácil y no se puede modificar
+                después de emitido. Compara los datos con el documento que tienes: deben coincidir.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <dl className={styles.evidence}>
+                <div>
+                  <dt className={styles['evidence__label']}>Voluntario(a)</dt>
+                  <dd className={styles['evidence__value']}>{volunteer.volunteerName}</dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Organización</dt>
+                  <dd className={styles['evidence__value']}>{volunteer.organizationName}</dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Jornada</dt>
+                  <dd className={styles['evidence__value']}>{volunteer.opportunityTitle}</dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Horas certificadas</dt>
+                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                    {volunteer.totalApprovedHours} h en {volunteer.sessions}{' '}
+                    {volunteer.sessions === 1 ? 'sesión aprobada' : 'sesiones aprobadas'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Período</dt>
+                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                    {formatDay(volunteer.periodStart.slice(0, 10))} al{' '}
+                    {formatDay(volunteer.periodEnd.slice(0, 10))}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Fecha de emisión</dt>
+                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                    {formatBogota(volunteer.issuedAt)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={styles['evidence__label']}>Firmado por</dt>
+                  <dd className={styles['evidence__value']}>
+                    {volunteer.signerFullName
+                      ? `${volunteer.signerFullName}${
+                          volunteer.signerPosition ? ` (${volunteer.signerPosition})` : ''
+                        }`
+                      : 'Sin firma registrada'}
+                  </dd>
+                </div>
+                {volunteer.schoolName && (
+                  <div>
+                    <dt className={styles['evidence__label']}>Institución educativa</dt>
+                    <dd className={styles['evidence__value']}>{volunteer.schoolName}</dd>
+                  </div>
+                )}
+                <div className={styles['evidence__wide']}>
+                  <dt className={styles['evidence__label']}>Código</dt>
+                  <dd className={styles['evidence__hash']}>{volunteer.verificationCode}</dd>
                 </div>
               </dl>
             </CardContent>

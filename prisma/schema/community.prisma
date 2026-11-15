@@ -45,6 +45,7 @@ model Post {
   status            String    @default("published")
   commentCount      Int       @default(0) @map("comment_count")
   likeCount         Int       @default(0) @map("like_count")
+  reactionCounts    Json      @default("{}") @map("reaction_counts")
   /// La autora autorizó que se vea sin sesión y se comparta en redes. Se
   /// cambia solo vía `community_post_set_shareable` (por identidad de autora).
   shareable         Boolean   @default(false)
@@ -70,12 +71,16 @@ model Post {
 /// StoragePort. Reservada al crear la publicación (sin add/remove posterior
 /// en este alcance).
 model PostImage {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String?  @map("organization_id") @db.Uuid
-  postId         String   @map("post_id") @db.Uuid
-  storageRef     String   @map("storage_ref")
-  order          Int      @default(0)
-  createdAt      DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String?  @map("organization_id") @db.Uuid
+  postId          String   @map("post_id") @db.Uuid
+  storageRef      String   @map("storage_ref")
+  order           Int      @default(0)
+  /// 'image' | 'video'. Un video se comprime en el servidor y trae su póster.
+  kind            String   @default("image")
+  posterRef       String?  @map("poster_ref")
+  durationSeconds Int?     @map("duration_seconds")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
@@ -110,6 +115,8 @@ model PostLike {
   postId         String   @map("post_id") @db.Uuid
   userId         String   @map("user_id") @db.Uuid
   organizationId String?  @map("organization_id") @db.Uuid
+  /// like | love | tender | celebrate | sad (una por persona y publicación).
+  reaction       String   @default("like")
   createdAt      DateTime @default(now()) @map("created_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -215,4 +222,27 @@ model PetProfile {
   @@index([organizationId])
   @@index([ownerUserId])
   @@map("community_pet_profiles")
+}
+
+/// Pre-registro de comercios y profesionales que quieren aparecer en la
+/// Comunidad (MVP: solo se captura su interés; no tienen cuenta ni
+/// organización todavía). NO es dato de tenant: no lleva `organization_id`, así
+/// que no tiene RLS. La app solo INSERTA (privilegio mínimo): nunca lee ni
+/// modifica estas filas. El equipo las revisa directamente en la base.
+model CommunityPreRegistration {
+  id           String   @id @default(uuid()) @db.Uuid
+  kind         String   @db.VarChar(20)
+  businessName String   @map("business_name") @db.VarChar(120)
+  category     String   @db.VarChar(60)
+  city         String   @db.VarChar(80)
+  contactName  String   @map("contact_name") @db.VarChar(120)
+  contactEmail String   @map("contact_email") @db.VarChar(200)
+  contactPhone String?  @map("contact_phone") @db.VarChar(30)
+  message      String?  @db.VarChar(500)
+  /// Autorización de tratamiento de datos (Ley 1581) aceptada en el formulario.
+  consentAt    DateTime @map("consent_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("community_pre_registrations")
 }

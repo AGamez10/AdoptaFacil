@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import type {
   PublicAnimalSummary,
   ServiceListingPublic,
@@ -8,7 +8,7 @@ import type {
 import { EmptyState, Skeleton, useToast } from '@adoptafacil/ui';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { useApiClient } from '../../../shell/api';
-import { useSession } from '../../../shell/auth';
+import { accessPathWithReturn, returnPathOf, useSession } from '../../../shell/auth';
 import { fetchGlobalPublicAnimals } from '../../catalog/api/public-animals';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { getPublicService, listPublicServiceReviews } from '../api/public-services';
@@ -40,6 +40,7 @@ function Stars({ value }: { value: number }) {
  */
 export function ServiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  const location = useLocation();
   const client = useApiClient();
   const { status: sessionStatus } = useSession();
   const { toast } = useToast();
@@ -290,7 +291,10 @@ export function ServiceDetailPage() {
               )}
               {sessionStatus === 'unauthenticated' && (
                 <p className="text-sm">
-                  <Link to="/login" className="font-semibold text-primary hover:underline">
+                  <Link
+                    to={accessPathWithReturn('/login', returnPathOf(location))}
+                    className="font-semibold text-primary hover:underline"
+                  >
                     Inicia sesión
                   </Link>{' '}
                   para dejar una reseña.

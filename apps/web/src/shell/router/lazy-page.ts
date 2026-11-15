@@ -18,15 +18,26 @@ export function lazyPage<M extends Record<string, any>, K extends keyof M>(
   name: K,
 ): M[K] {
   let Loaded: ComponentType | null = null;
+  let failure: unknown = null;
   let promise: Promise<void> | null = null;
   const preload = () =>
-    (promise ??= load().then((module) => {
-      Loaded = module[name] as ComponentType;
-    }));
+    (promise ??= load().then(
+      (module) => {
+        Loaded = module[name] as ComponentType;
+      },
+      (error: unknown) => {
+        // El archivo no llegó (despliegue nuevo, sin red): se guarda el error
+        // para LANZARLO en el próximo render y que lo atrape la pantalla de
+        // error. Sin esto, Suspense reintentaba en bucle con la carga eterna.
+        failure = error;
+        throw error;
+      },
+    ));
   pending.add(preload);
 
   function LazyPage(props: object) {
     if (Loaded) return createElement(Loaded, props);
+    if (failure) throw failure;
     // Protocolo de Suspense: se suspende hasta que llega el archivo.
     throw preload();
   }

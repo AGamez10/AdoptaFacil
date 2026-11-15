@@ -193,11 +193,10 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
           live_mode: true,
         });
       }
-      if (u === 'https://api.mp.test/checkout/preferences') {
+      if (u === 'https://api.mp.test/v1/orders') {
         return json({
-          id: `pref-${randomUUID()}`,
-          collector_id: Number(mpUserId),
-          init_point: 'https://www.mercadopago.com.co/checkout/v1/redirect?pref_id=x',
+          id: `ORDTEST${randomUUID()}`,
+          checkout_url: 'https://www.mercadopago.com.co/checkout/v1/redirect?order_id=x',
         });
       }
       if (u.startsWith('https://api.mp.test/v1/payments/search?')) {
@@ -441,9 +440,9 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
         .set(auth(owner)),
     ).expect(200);
     const text = (csv.body as Buffer).toString('utf8');
-    expect(text).toContain('Folio,Fecha (hora Colombia),Tipo,Valor bruto (COP)');
+    expect(text).toContain('Folio;Fecha;Hora (Colombia);Tipo;Valor bruto (COP)');
     expect(text).not.toContain('Comisión pasarela');
-    expect(text).toContain(`,Donación,${d1.amountCharged}`);
+    expect(text).toContain(`;Donación;${d1.amountCharged}`);
 
     for (const [method, path, body, capability] of [
       ['post', `/org/accounting/periods/${PAST}/close`, {}, 'accountingClose'],

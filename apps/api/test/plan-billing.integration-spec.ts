@@ -30,6 +30,7 @@ class FakeBillingClient {
   charges = new Map<string, MercadoPagoAuthorizedPayment>();
   cancelled: string[] = [];
   failCancel = false;
+  failCreate = false;
   private seq = 0;
 
   isConfigured(): boolean {
@@ -40,6 +41,7 @@ class FakeBillingClient {
     externalReference: string;
     amountCop: number;
   }): Promise<{ id: string; checkoutUrl: string }> {
+    if (this.failCreate) throw new Error('Mercado Pago preapproval create failed (400: back_url)');
     const id = `pre${++this.seq}${randomUUID().slice(0, 6)}`;
     this.preapprovals.set(id, {
       id,
@@ -208,6 +210,23 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
       .set(auth(org.token))
       .send({ plan: 'crece' })
       .expect(409);
+  });
+
+  it('si Mercado Pago rechaza crear la suscripción responde 503 claro (el motivo queda en el log)', async () => {
+    // Reutiliza una organización ya registrada: el registro tiene límite de intentos.
+    const org = actors[0];
+    setEnforced(true);
+    fake.failCreate = true;
+    try {
+      const res = await request(server)
+        .post('/org/plan/checkout')
+        .set(auth(org.token))
+        .send({ plan: 'crece' })
+        .expect(503);
+      expect(JSON.stringify(res.body)).not.toContain('back_url');
+    } finally {
+      fake.failCreate = false;
+    }
   });
 
   it('contratar: el primer cobro aprobado activa el plan con el monto con IVA', async () => {
@@ -418,6 +437,51 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
       expect(to(failed.email)[0].subject).toMatch(/No pudimos cobrar/);
       expect(to(ending.email)[0].subject).toMatch(/termina/);
       expect(to(renewing.email)).toHaveLength(0);
+    });
+
+    it('avisa del fin de la prueba Pro 3 días antes y el mismo día; sin plan pagado', async () => {
+      const [soon, today, later] = actors.slice(0, 3);
+      await admin.organizationSubscription.deleteMany({
+        where: { organizationId: { in: [soon.orgId, today.orgId, later.orgId] } },
+      });
+      Object.defineProperty(plans, 'trialDays', { value: 14, configurable: true });
+      const original = await admin.organization.findMany({
+        where: { id: { in: [soon.orgId, today.orgId, later.orgId] } },
+        select: { id: true, createdAt: true },
+      });
+      try {
+        await admin.organization.update({
+          where: { id: soon.orgId },
+          data: { createdAt: inDays(-12) },
+        });
+        await admin.organization.update({
+          where: { id: today.orgId },
+          data: { createdAt: inDays(-13.5) },
+        });
+        await admin.organization.update({
+          where: { id: later.orgId },
+          data: { createdAt: inDays(-5) },
+        });
+        const send = jest.spyOn(notifications, 'send');
+        await reminders.sendDueReminders();
+        const to = (email: string) =>
+          send.mock.calls.filter(([m]) => m.to === email).map(([m]) => m);
+
+        expect(to(soon.email)).toHaveLength(1);
+        expect(to(soon.email)[0].subject).toMatch(/^Tu prueba gratis de Pro termina el /);
+        expect(to(soon.email)[0].body).toMatch(/No se borra nada/);
+        expect(to(soon.email)[0].idempotencyKey).toContain(`plan.free-pro:${soon.orgId}:soon`);
+        expect(to(today.email)[0].subject).toBe('Tu prueba gratis de Pro termina hoy');
+        expect(to(later.email)).toHaveLength(0);
+      } finally {
+        Object.defineProperty(plans, 'trialDays', { value: 0, configurable: true });
+        for (const org of original) {
+          await admin.organization.update({
+            where: { id: org.id },
+            data: { createdAt: org.createdAt },
+          });
+        }
+      }
     });
 
     it('con los planes apagados no se envía ningún aviso', async () => {

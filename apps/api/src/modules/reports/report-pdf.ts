@@ -17,6 +17,11 @@ import type {
 import { SIGNER_ROLE_LABEL } from './report-legal-effect';
 import { pdfText, toWinAnsi } from './report-text';
 import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
+import {
+  SIGNATURE_LINE_OVERLAP,
+  embedSignatureForPdf,
+  fitSignature,
+} from '../../core/legal/signature-render';
 
 /**
  * Dibujo del PDF de un reporte (M13). Todo sale del snapshot sellado y TODA
@@ -89,7 +94,10 @@ const EFFECT_STYLE: Record<
   },
 };
 
-function effectExplanation(kind: OrgReportPayload['kind'], effect: OrgReportLegalEffect): string {
+export function effectExplanation(
+  kind: OrgReportPayload['kind'],
+  effect: OrgReportLegalEffect,
+): string {
   if (effect === 'informative') {
     return 'Este documento resume información registrada en AdoptaFácil por la organización. No está firmado por un representante legal y no sirve como soporte legal ni tributario.';
   }
@@ -103,6 +111,45 @@ function effectExplanation(kind: OrgReportPayload['kind'], effect: OrgReportLega
   return kind === 'social_service'
     ? 'Firmado por el representante legal. Hace constar las horas de servicio prestadas y verificadas por la organización (Resolución 4210 de 1996).'
     : 'Firmado por el representante legal de una organización formalizada. Sirve como soporte de rendición de cuentas; no reemplaza el certificado tributario de donación.';
+}
+
+/** Título y texto de la franja de valor legal (o de borrador), igual en PDF y Excel. */
+export function reportBanner(
+  kind: OrgReportPayload['kind'],
+  effect: OrgReportLegalEffect,
+  draft?: 'pending_signatures' | 'rejected',
+): { title: string; explanation: string } {
+  if (draft) {
+    return {
+      title:
+        draft === 'rejected'
+          ? 'BORRADOR RECHAZADO — SIN VALOR'
+          : 'BORRADOR — PENDIENTE DE FIRMAS, SIN VALOR HASTA QUE SE EMITA',
+      explanation:
+        'Este documento todavía no está emitido: cada firmante requerido debe aprobarlo con su propia cuenta en AdoptaFácil. No lo presentes ante terceros como documento firmado.',
+    };
+  }
+  return { title: EFFECT_STYLE[effect].title, explanation: effectExplanation(kind, effect) };
+}
+
+/** Constancia que antecede a las firmas, igual en PDF y Excel. */
+export function signatureStatement(kind: OrgReportPayload['kind']): string {
+  if (kind === 'accounting') {
+    // TODO(client) 🧾: redacción de la constancia a validar por un contador público.
+    return 'Los suscritos revisaron este libro auxiliar de donaciones del mes indicado, preparado a partir de los pagos confirmados por la pasarela de la organización, y lo aprueban como soporte de su contabilidad.';
+  }
+  return kind === 'donations'
+    ? 'Los suscritos hacen constar que la información de este informe corresponde a las donaciones recibidas por la entidad en el período indicado, tal como quedaron registradas en AdoptaFácil.'
+    : 'El suscrito hace constar que las horas aquí relacionadas fueron prestadas en la organización y verificadas por ella en el período indicado.';
+}
+
+/** Título del documento según su tipo. */
+export function reportTitle(kind: OrgReportPayload['kind']): string {
+  return kind === 'donations'
+    ? 'Informe de donaciones recibidas'
+    : kind === 'accounting'
+      ? 'Libro auxiliar de donaciones'
+      : 'Reporte de servicio social y voluntariado';
 }
 
 const money = (n: number): string => `$ ${Math.round(n).toLocaleString('es-CO')}`;
@@ -168,6 +215,28 @@ function fit(raw: string, font: PDFFont, size: number, maxWidth: number): string
     out = out.slice(0, -1);
   }
   return `${out}…`;
+}
+
+/** Como `wrap`, pero parte también las palabras más anchas que la columna (códigos, URLs). */
+function wrapAll(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const lines: string[] = [];
+  for (const line of wrap(text, font, size, maxWidth)) {
+    if (font.widthOfTextAtSize(line, size) <= maxWidth) {
+      lines.push(line);
+      continue;
+    }
+    let chunk = '';
+    for (const ch of line) {
+      if (chunk && font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
+        lines.push(chunk);
+        chunk = ch;
+      } else {
+        chunk += ch;
+      }
+    }
+    if (chunk) lines.push(chunk);
+  }
+  return lines.length > 0 ? lines : [''];
 }
 
 function wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
@@ -306,25 +375,36 @@ export class ReportCanvas {
       return;
     }
     rows.forEach((row, r) => {
-      if (this.ensure(rowH)) drawHeader();
+      // Un PDF es estático: nada se recorta con "…". El texto largo baja a
+      // más renglones y la fila crece lo necesario.
+      const cells = columns.map((_col, i) =>
+        wrapAll(row[i] ?? '', this.font.regular, size, widths[i] - 8),
+      );
+      const lineH = size + 2.5;
+      const maxLines = Math.max(...cells.map((l) => l.length));
+      const height = Math.max(rowH, maxLines * lineH + 6);
+      if (this.ensure(height)) drawHeader();
       if (r % 2 === 1) {
         this.page.drawRectangle({
           x: MARGIN,
-          y: this.y - rowH + size * 0.2,
+          y: this.y - height + size * 0.2,
           width: PAGE_W - MARGIN * 2,
-          height: rowH,
+          height,
           color: ZEBRA,
         });
       }
       let x = MARGIN;
       columns.forEach((col, i) => {
-        const label = fit(row[i] ?? '', this.font.regular, size, widths[i] - 8);
-        const w = this.font.regular.widthOfTextAtSize(label, size);
-        const tx = col.align === 'right' ? x + widths[i] - 4 - w : x + 4;
-        this.text(label, tx, size, { y: this.y - rowH + 5 + size * 0.2 });
+        cells[i].forEach((label, li) => {
+          const w = this.font.regular.widthOfTextAtSize(label, size);
+          const tx = col.align === 'right' ? x + widths[i] - 4 - w : x + 4;
+          this.text(label, tx, size, {
+            y: this.y - height + 5 + size * 0.2 + (maxLines - 1 - li) * lineH,
+          });
+        });
         x += widths[i];
       });
-      this.y -= rowH;
+      this.y -= height;
     });
     this.page.drawLine({
       start: { x: MARGIN, y: this.y + size * 0.2 },
@@ -426,18 +506,9 @@ function drawHeader(c: ReportCanvas, input: RenderReportInput, title: string): v
   );
   c.y = Math.min(c.y - 14, PAGE_H - MARGIN - qrSize - 12);
 
-  const style = input.draft
-    ? {
-        ...DRAFT_STYLE,
-        title:
-          input.draft === 'rejected'
-            ? 'BORRADOR RECHAZADO — SIN VALOR'
-            : 'BORRADOR — PENDIENTE DE FIRMAS, SIN VALOR HASTA QUE SE EMITA',
-      }
-    : EFFECT_STYLE[input.legalEffect];
-  const explanation = input.draft
-    ? 'Este documento todavía no está emitido: cada firmante requerido debe aprobarlo con su propia cuenta en AdoptaFácil. No lo presentes ante terceros como documento firmado.'
-    : effectExplanation(payload.kind, input.legalEffect);
+  const banner = reportBanner(payload.kind, input.legalEffect, input.draft);
+  const style = input.draft ? DRAFT_STYLE : EFFECT_STYLE[input.legalEffect];
+  const explanation = banner.explanation;
   const lines = wrap(explanation, c.font.regular, 8.5, PAGE_W - MARGIN * 2 - 20);
   const boxH = 22 + lines.length * 11;
   c.page.drawRectangle({
@@ -447,7 +518,7 @@ function drawHeader(c: ReportCanvas, input: RenderReportInput, title: string): v
     height: boxH,
     color: style.bg,
   });
-  c.text(style.title, MARGIN + 10, 9.5, { font: c.font.bold, color: style.fg, y: c.y - 14 });
+  c.text(banner.title, MARGIN + 10, 9.5, { font: c.font.bold, color: style.fg, y: c.y - 14 });
   lines.forEach((line, i) => {
     c.text(line, MARGIN + 10, 8.5, { color: style.fg, y: c.y - 27 - i * 11 });
   });
@@ -469,7 +540,7 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
       { header: 'Donaciones', width: 15, align: 'right' },
       { header: 'Neto recibido', width: 25, align: 'right' },
     ],
-    p.byConcept.map((r) => [pdfText(r.concept, 120), String(r.count), money(r.net)]),
+    p.byConcept.map((r) => [pdfText(r.concept, 300), String(r.count), money(r.net)]),
   );
 
   if (p.byMonth.length > 1) {
@@ -489,20 +560,20 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
     [
       { header: 'Fecha', width: 9 },
       { header: 'Recibo', width: 8 },
-      { header: 'Donante', width: 19 },
+      { header: 'Donante', width: 16 },
       { header: 'Documento', width: 9 },
-      { header: 'Destino', width: 16 },
+      { header: 'Destino', width: 20 },
       { header: 'Valor donado', width: 11, align: 'right' },
-      { header: 'Tarifa MP', width: 10, align: 'right' },
-      { header: 'Neto', width: 11, align: 'right' },
-      { header: 'Certificado', width: 17 },
+      { header: 'Tarifa MP', width: 9, align: 'right' },
+      { header: 'Neto', width: 10, align: 'right' },
+      { header: 'Certificado', width: 16 },
     ],
     p.rows.map((r) => [
       formatShortDate(r.date),
       pdfText(r.receiptNo, 12),
-      pdfText(r.donor, 80),
-      pdfText(r.donorDocument, 20),
-      pdfText(r.concept, 80),
+      pdfText(r.donor, 200),
+      pdfText(r.donorDocument, 30),
+      pdfText(r.concept, 300),
       money(r.amountCharged),
       money(r.fees),
       money(r.net),
@@ -650,7 +721,7 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
       { header: 'Estudiantes / voluntarios', width: 20, align: 'right' },
       { header: 'Horas en el período', width: 20, align: 'right' },
     ],
-    p.bySchool.map((r) => [pdfText(r.school, 120), String(r.volunteers), hours(r.hours)]),
+    p.bySchool.map((r) => [pdfText(r.school, 300), String(r.volunteers), hours(r.hours)]),
   );
 
   c.sectionTitle('Detalle por voluntario');
@@ -669,10 +740,10 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
       { header: 'Certificado', width: 6 },
     ],
     p.rows.map((r) => [
-      pdfText(r.volunteerName, 80),
-      pdfText(r.opportunity, 80),
+      pdfText(r.volunteerName, 200),
+      pdfText(r.opportunity, 200),
       r.studentService ? 'Serv. social' : 'Voluntariado',
-      pdfText(r.school, 80) || '-',
+      pdfText(r.school, 200) || '-',
       pdfText(r.agreementCode, 30) || '-',
       r.sessionsInPeriod === undefined ? '-' : String(r.sessionsInPeriod),
       hours(r.hoursInPeriod),
@@ -737,7 +808,7 @@ async function embedImage(pdf: PDFDocument, raw: Buffer | null): Promise<PDFImag
 
 /** "Revisora fiscal · T.P. 145872-T" — el cargo registrado si ya nombra el
  *  rol; si no, "Rol · cargo" (nunca "Revisor fiscal · Revisora fiscal"). */
-function signerRoleLine(role: LegalRepresentativeRole, position: string): string {
+export function signerRoleLine(role: LegalRepresentativeRole, position: string): string {
   const label = SIGNER_ROLE_LABEL[role];
   const clean = pdfText(position, 80);
   if (!clean) return label;
@@ -778,34 +849,34 @@ async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promis
     return;
   }
 
-  const statement =
-    input.payload.kind === 'accounting'
-      ? // TODO(client) 🧾: redacción de la constancia a validar por un contador público.
-        'Los suscritos revisaron este libro auxiliar de donaciones del mes indicado, preparado a partir de los pagos confirmados por la pasarela de la organización, y lo aprueban como soporte de su contabilidad.'
-      : input.payload.kind === 'donations'
-        ? 'Los suscritos hacen constar que la información de este informe corresponde a las donaciones recibidas por la entidad en el período indicado, tal como quedaron registradas en AdoptaFácil.'
-        : 'El suscrito hace constar que las horas aquí relacionadas fueron prestadas en la organización y verificadas por ella en el período indicado.';
-  const blockH = 120;
-  c.ensure(blockH + 20);
+  const statement = signatureStatement(input.payload.kind);
+  // La constancia y las firmas viajan juntas: si no caben completas sobre el
+  // pie, pasan a la página siguiente (nunca una firma partida ni pisando el pie).
+  const statementLines = wrap(statement, c.font.regular, 9.5, PAGE_W - MARGIN * 2).length;
+  const sigAreaH = 60;
+  const blockH = 10 + statementLines * 13 + 4 + sigAreaH + 34;
+  c.ensure(blockH);
   c.y -= 10;
   c.paragraph(statement, MARGIN, 9.5, PAGE_W - MARGIN * 2, 13);
   c.y -= 4;
 
-  const images = await Promise.all(input.signers.map((s) => embedImage(c.pdf, s.image)));
+  const images = await Promise.all(input.signers.map((s) => embedSignatureForPdf(c.pdf, s.image)));
   const count = input.signers.length;
   const blockW = 210;
   const gap = Math.max(20, (PAGE_W - MARGIN * 2 - blockW * count) / Math.max(1, count + 1));
-  const lineY = c.y - 72;
+  const lineY = c.y - sigAreaH;
   input.signers.forEach((signer, i) => {
     const x = MARGIN + gap + i * (blockW + gap);
     const image = images[i];
     if (image) {
-      const maxW = 150;
-      const maxH = 58;
-      const ratio = Math.min(maxW / image.width, maxH / image.height, 1);
-      const w = image.width * ratio;
-      const h = image.height * ratio;
-      c.page.drawImage(image, { x: x + (blockW - w) / 2, y: lineY + 3, width: w, height: h });
+      // Centrada en su bloque y apoyada sobre la línea, que la cruza apenas.
+      const size = fitSignature(image.width, image.height, 170, sigAreaH - 2);
+      c.page.drawImage(image, {
+        x: x + (blockW - size.width) / 2,
+        y: lineY - SIGNATURE_LINE_OVERLAP,
+        width: size.width,
+        height: size.height,
+      });
     }
     c.page.drawLine({
       start: { x, y: lineY },
@@ -815,12 +886,12 @@ async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promis
     });
     const name = fit(pdfText(signer.fullName, 120), c.font.bold, 10, blockW);
     const nameW = c.font.bold.widthOfTextAtSize(name, 10);
-    c.text(name, x + (blockW - nameW) / 2, 10, { font: c.font.bold, y: lineY - 13 });
+    c.text(name, x + (blockW - nameW) / 2, 10, { font: c.font.bold, y: lineY - 14 });
     const role = fit(signerRoleLine(signer.role, signer.position), c.font.regular, 8.5, blockW);
     const roleW = c.font.regular.widthOfTextAtSize(role, 8.5);
-    c.text(role, x + (blockW - roleW) / 2, 8.5, { color: MUTED, y: lineY - 25 });
+    c.text(role, x + (blockW - roleW) / 2, 8.5, { color: MUTED, y: lineY - 26 });
   });
-  c.y = lineY - 40;
+  c.y = lineY - 34;
 }
 
 function drawFooters(c: ReportCanvas, input: RenderReportInput): void {
@@ -900,12 +971,7 @@ function formatDayLabel(day: string): string {
 
 export async function renderReportPdf(input: RenderReportInput): Promise<Buffer> {
   const pdf = await PDFDocument.create();
-  const kindTitle =
-    input.payload.kind === 'donations'
-      ? 'Informe de donaciones recibidas'
-      : input.payload.kind === 'accounting'
-        ? 'Libro auxiliar de donaciones'
-        : 'Reporte de servicio social y voluntariado';
+  const kindTitle = reportTitle(input.payload.kind);
   pdf.setTitle(`${kindTitle} · ${input.code}`);
   pdf.setAuthor(pdfText(input.payload.organization.name));
   pdf.setProducer('AdoptaFácil');

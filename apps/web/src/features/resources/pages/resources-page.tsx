@@ -29,6 +29,7 @@ import { SelectField, TextAreaField } from '../components/resource-form-fields';
 import { NeedManageCard } from '../components/need-manage-card';
 import { CATEGORY_LABELS } from '../model/resources-view';
 import { OPEN_OFFERS_BOARD_PATH } from '../model/open-offers-view';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 const CATEGORY_OPTIONS = RESOURCE_CATEGORIES.map((value) => ({
   value,
@@ -92,12 +93,21 @@ export function ResourcesPage() {
 
   const submit = async (): Promise<void> => {
     const quantity = Number(quantityNeeded);
-    if (!title.trim() || !unit.trim() || !Number.isInteger(quantity) || quantity <= 0) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Título, categoría, cantidad (entero > 0) y unidad son obligatorios.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      { ok: Boolean(title.trim()), title: 'Falta el título', message: 'Escribe qué necesitan.' },
+      {
+        ok: Number.isInteger(quantity) && quantity > 0,
+        title: 'Cantidad no válida',
+        message: 'La cantidad debe ser un número entero mayor que 0.',
+      },
+      {
+        ok: Boolean(unit.trim()),
+        title: 'Falta la unidad',
+        message: 'Indica la unidad (p. ej. bultos, kilos, unidades).',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     setSaving(true);

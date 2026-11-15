@@ -190,6 +190,48 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     },
   },
   {
+    event: 'coffee.purchase_receipt',
+    label: 'Comprobante de compra de café',
+    description:
+      'Se envía cuando se confirma el pago de una compra de café de AdoptaFácil hecha desde el QR.',
+    audience: 'La persona que compró el café',
+    category: 'transactional',
+    theme: 'donation',
+    required: false,
+    variables: [
+      v('producto', 'Presentación', 'Café San Pedro 250 g'),
+      v('lote', 'Código del lote', 'L2-2026'),
+      v('cantidad', 'Bolsas', '2', 'number'),
+      v('total', 'Total pagado', '56000', 'money'),
+      v('campana', 'Campaña que eligió', 'Cirugía de Luna'),
+      v('organizacion_campana', 'Organización de la campaña', 'Fundación Huellitas de Amor'),
+      v('aporte', 'Aporte de AdoptaFácil a la campaña', '4400', 'money'),
+      v('referencia', 'Referencia del pedido', 'cafe-abcdefghjkmnpqrstuvwxyz2'),
+      v(
+        'enlace',
+        'Enlace al estado del pedido',
+        'https://adoptafacil.org/cafe/pedido/cafe-abcdefghjkmnpqrstuvwxyz2',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu café va en camino a apoyar a {{campana}} ☕',
+      preheader: 'Pago confirmado. AdoptaFácil aporta {{aporte}} a la campaña que elegiste.',
+      heading: '¡Gracias por tu compra!',
+      body:
+        'Hola,\n\nTu pago fue confirmado: **{{cantidad}} × {{producto}}** (lote {{lote}}), ' +
+        'total **{{total}}**.\n\n' +
+        'Con tu compra, **AdoptaFácil aporta {{aporte}}** a la campaña **{{campana}}** de ' +
+        '{{organizacion_campana}}. Es el 20 % del margen bruto de cada bolsa (precio de venta menos ' +
+        'precio de compra), y lo entrega AdoptaFácil.\n\n' +
+        'Referencia de tu pedido: {{referencia}}. Te avisaremos cuando enviemos tu café.',
+      ctaLabel: 'Ver mi pedido',
+      footerNote:
+        'Este correo es tu comprobante de compra. No es un certificado de donación: el aporte lo hace AdoptaFácil.',
+    },
+  },
+  {
     event: 'sponsorship.welcome',
     label: 'Bienvenida al apadrinamiento',
     description: 'Se envía cuando un apadrinamiento nuevo queda activo.',
@@ -574,6 +616,57 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       body:
         'Hola {{nombre}},\n\n{{organizacion}} emitió tu certificado de voluntariado en **"{{oportunidad}}"**, que refleja **{{horas}} horas efectivas**.\n\n' +
         'Puedes descargarlo desde "Mi voluntariado" en AdoptaFácil. ¡Gracias por tu tiempo!',
+    },
+  },
+  {
+    event: 'volunteering.opportunity_rescheduled',
+    label: 'Jornada de voluntariado reprogramada',
+    description:
+      'Se envía a cada persona inscrita (pendiente o aceptada) cuando la organización cambia las fechas o los días de la jornada.',
+    audience: 'Las personas inscritas en la jornada',
+    category: 'transactional',
+    theme: 'volunteering',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre del voluntario', 'Carlos'),
+      v('oportunidad', 'Jornada', 'Jornada de baño y paseo'),
+      ORG,
+      v('fechas', 'Nuevas fechas', 'del 22 de noviembre al 23 de noviembre de 2026'),
+      v('dias', 'Días de jornada', 'sábado 22 de noviembre y domingo 23 de noviembre'),
+      v('motivo', 'Motivo', 'Pronóstico de lluvia fuerte para este fin de semana.'),
+    ],
+    defaults: {
+      subject: 'Cambió la fecha de "{{oportunidad}}"',
+      preheader: 'La jornada ahora es {{fechas}}.',
+      heading: 'Tu jornada cambió de fecha 📅',
+      body:
+        'Hola {{nombre}},\n\n{{organizacion}} reprogramó **"{{oportunidad}}"**. La jornada ahora es **{{fechas}}**.\n\n' +
+        'Días de jornada: {{dias}}\n\nMotivo: {{motivo}}\n\n' +
+        'Tu inscripción sigue vigente. Si ya no puedes asistir, avísale a la organización.',
+    },
+  },
+  {
+    event: 'volunteering.opportunity_cancelled',
+    label: 'Jornada de voluntariado cancelada',
+    description:
+      'Se envía a cada persona inscrita (pendiente o aceptada) cuando la organización cancela la jornada.',
+    audience: 'Las personas inscritas en la jornada',
+    category: 'transactional',
+    theme: 'volunteering',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre del voluntario', 'Carlos'),
+      v('oportunidad', 'Jornada', 'Jornada de baño y paseo'),
+      ORG,
+      v('motivo', 'Motivo', 'No conseguimos el transporte para los perritos.'),
+    ],
+    defaults: {
+      subject: '"{{oportunidad}}" fue cancelada',
+      preheader: 'Gracias por querer ayudar: hay más jornadas esperándote.',
+      heading: 'La jornada se canceló',
+      body:
+        'Hola {{nombre}},\n\n{{organizacion}} canceló **"{{oportunidad}}"**.\n\nMotivo: {{motivo}}\n\n' +
+        'Tu inscripción quedó cerrada. Gracias por querer ayudar: en AdoptaFácil hay más jornadas esperándote.',
     },
   },
   {

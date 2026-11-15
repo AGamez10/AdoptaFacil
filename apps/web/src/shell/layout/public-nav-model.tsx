@@ -94,6 +94,13 @@ export const PUBLIC_NAV_GROUPS: PublicNavGroup[] = [
         Icon: MegaphoneIcon,
       },
       {
+        key: 'voluntariados',
+        label: 'Voluntariados',
+        description: 'Jornadas abiertas de las organizaciones; inscríbete con tu cuenta.',
+        to: '/voluntariados',
+        Icon: PawIcon,
+      },
+      {
         key: 'recursos',
         label: 'Banco de recursos',
         description: 'Comparte cobijas, guacales o alimento con quien lo necesita.',

@@ -97,6 +97,7 @@ export class MercadoPagoConnectController {
     @Query('code') code: string | undefined,
     @Query('state') state: string | undefined,
     @Query('error') error: string | undefined,
+    @Query('error_description') errorDescription: string | undefined,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
@@ -104,6 +105,7 @@ export class MercadoPagoConnectController {
       code: typeof code === 'string' ? code : undefined,
       state: typeof state === 'string' ? state : undefined,
       error: typeof error === 'string' ? error : undefined,
+      errorDescription: typeof errorDescription === 'string' ? errorDescription : undefined,
       binding: readCookie(req.headers.cookie, MERCADOPAGO_OAUTH_BINDING_COOKIE),
     });
     res.clearCookie(MERCADOPAGO_OAUTH_BINDING_COOKIE, bindingCookieOptions(0));

@@ -1,4 +1,9 @@
-import { createReviewSchema, decideReviewSchema, hideReviewSchema } from './reviews.schemas';
+import {
+  createPublicReviewSchema,
+  createReviewSchema,
+  decideReviewSchema,
+  hideReviewSchema,
+} from './reviews.schemas';
 
 describe('createReviewSchema', () => {
   const base = { organizationId: '11111111-1111-1111-1111-111111111111', rating: 5 };
@@ -55,5 +60,56 @@ describe('hideReviewSchema', () => {
     expect(hideReviewSchema.safeParse({ reason: 'Reportada por la organización' }).success).toBe(
       true,
     );
+  });
+});
+
+describe('createPublicReviewSchema (nombre opcional del visitante, 2026-11-05)', () => {
+  const parse = (input: Record<string, unknown>) =>
+    createPublicReviewSchema.safeParse({ rating: 5, ...input });
+
+  it('accepts a review with no name at all (stays anonymous)', () => {
+    const result = parse({});
+    expect(result.success && result.data.authorName).toBeUndefined();
+  });
+
+  it('accepts a real name with accents, apostrophes and hyphens, collapsing spaces', () => {
+    const result = parse({ authorName: "  María   José O'Neil-Peña " });
+    expect(result.success && result.data.authorName).toBe("María José O'Neil-Peña");
+  });
+
+  it('treats a blank name as no name', () => {
+    const result = parse({ authorName: '   ' });
+    expect(result.success && result.data.authorName).toBeUndefined();
+  });
+
+  it.each([
+    ['a phone number', 'Ana 3001234567'],
+    ['an email', 'ana@correo.com'],
+    ['a link', 'www.spam.co'],
+    ['a bare domain', 'Visita spam.co'],
+    ['a one-letter name', 'A'],
+    ['a name over 60 characters', 'A'.repeat(61)],
+  ])('rejects %s', (_label, authorName) => {
+    expect(parse({ authorName }).success).toBe(false);
+  });
+
+  it.each(['AdoptaFácil', 'Equipo Adopta Facil', 'Soporte', 'Administrador del refugio', 'Admin'])(
+    'rejects a name that impersonates the platform or staff: %s',
+    (authorName) => {
+      expect(parse({ authorName }).success).toBe(false);
+    },
+  );
+
+  it('keeps initials such as "J.R. Martínez"', () => {
+    expect(parse({ authorName: 'J.R. Martínez' }).success).toBe(true);
+  });
+
+  it('does not flag surnames that merely contain a reserved word', () => {
+    expect(parse({ authorName: 'Ana Dminguez Oficialdegui' }).success).toBe(true);
+  });
+
+  it('accepts isAnonymous (members) and still rejects unknown keys', () => {
+    expect(parse({ isAnonymous: false }).success).toBe(true);
+    expect(parse({ authorUserId: 'x' }).success).toBe(false);
   });
 });

@@ -1,4 +1,8 @@
-import type { PublicCommunityPost, PublicCommunityPostsPage } from '@adoptafacil/contracts';
+import type {
+  PublicCommunityLeader,
+  PublicCommunityPost,
+  PublicCommunityPostsPage,
+} from '@adoptafacil/contracts';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -34,4 +38,18 @@ export async function getPublicPost(
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('error');
   return (await response.json()) as PublicCommunityPost;
+}
+
+/** Escalafón público de la comunidad (siempre un array; vacío ante un cuerpo raro). */
+export async function listPublicLeaders(
+  limit = 5,
+  signal?: AbortSignal,
+): Promise<PublicCommunityLeader[]> {
+  const response = await fetch(
+    `${API_BASE}/public/community/leaders?limit=${limit}`,
+    signal ? { signal } : undefined,
+  );
+  if (!response.ok) throw new Error('error');
+  const body = (await response.json()) as unknown;
+  return Array.isArray(body) ? (body as PublicCommunityLeader[]) : [];
 }

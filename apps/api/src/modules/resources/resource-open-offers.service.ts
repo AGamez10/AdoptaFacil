@@ -2,9 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
-  Inject,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type ResourceOpenOffer as OpenOfferRow } from '@prisma/client';
@@ -18,15 +16,14 @@ import {
   type ResourceOpenOffer,
   type ResourceOpenOfferBoardItem,
   type ResourceOpenOffersBoardPage,
+  type ResourceOpenOffersPublicPage,
   ResourceOpenOfferStatus,
+  Role,
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { AuditService } from '../../core/audit/audit.service';
-import {
-  NOTIFICATION_PORT,
-  type NotificationPort,
-} from '../../core/notifications/notification.port';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { clampLimit } from './resource-needs.service';
 
@@ -44,6 +41,7 @@ interface RawBoardItem {
   city: string;
   createdAt: string;
   expiresAt: string;
+  fromYourOrganization?: boolean;
 }
 
 interface ClaimSqlRow {
@@ -69,12 +67,8 @@ function toBoardItem(raw: RawBoardItem): ResourceOpenOfferBoardItem {
     city: raw.city,
     createdAt: raw.createdAt,
     expiresAt: raw.expiresAt,
+    ...(raw.fromYourOrganization ? { fromYourOrganization: true } : {}),
   };
-}
-
-function firstName(name: string | null | undefined): string | undefined {
-  const first = name?.trim().split(/\s+/)[0];
-  return first || undefined;
 }
 
 /**
@@ -87,13 +81,11 @@ function firstName(name: string | null | undefined): string | undefined {
  */
 @Injectable()
 export class ResourceOpenOffersService {
-  private readonly logger = new Logger('ResourceOpenOffers');
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
-    @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly inbox: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -173,7 +165,65 @@ export class ResourceOpenOffersService {
       });
       return created;
     });
+    await this.announce(actor, row);
     return this.toOwn(row);
+  }
+
+  /**
+   * Un ofrecimiento nuevo le interesa a todo el banco: avisa (solo en la
+   * plataforma, sin correo masivo) a los equipos de las organizaciones
+   * aprobadas del mismo departamento y, si quien ofrece es parte de un equipo,
+   * a sus compañeros. A quien ofrece le confirma que quedó publicado.
+   */
+  private async announce(actor: RequestUser, row: OpenOfferRow): Promise<void> {
+    const what = `${row.quantity} ${row.unit} · ${row.title}`;
+    await this.inbox.toOrgsInDepartment(row.department, row.organizationId, {
+      kind: 'resources.open_offer_published',
+      title: `Nuevo ofrecimiento en ${row.city}: ${row.title}`,
+      body: `Alguien ofrece ${what}. Si le sirve a tu organización, puedes tomarlo desde el tablero.`,
+      href: `/organizacion/recursos/ofrecimientos?foco=${row.id}`,
+      dedupeKey: `open_offer:${row.id}`,
+    });
+    if (actor.accountType === 'organization') {
+      await this.inbox.toOrgStaff(
+        row.organizationId,
+        {
+          kind: 'resources.open_offer_published',
+          title: `Alguien de tu equipo ofreció: ${row.title}`,
+          body: `${what} en ${row.city}. Lo verán las demás organizaciones en el tablero de ofrecimientos.`,
+          href: `/organizacion/recursos/ofrecimientos?foco=${row.id}`,
+          dedupeKey: `open_offer:${row.id}`,
+        },
+        { roles: [Role.Owner, Role.Administrator, Role.Operator], excludeUserId: actor.id },
+      );
+    }
+    await this.inbox.toUser(actor.id, {
+      kind: 'resources.open_offer_published',
+      tone: 'kudos',
+      title: '¡Gracias por compartir! Tu ofrecimiento ya está publicado',
+      body: `"${row.title}" lo ven las organizaciones y aparece en el banco de recursos durante ${OPEN_OFFER_TTL_DAYS} días.`,
+      href: `/mis-ofertas?foco=${row.id}`,
+      dedupeKey: `open_offer_mine:${row.id}`,
+    });
+  }
+
+  /** Lista PÚBLICA y anónima de ofrecimientos abiertos (sin sesión). */
+  async publicList(limit: number, offset: number): Promise<ResourceOpenOffersPublicPage> {
+    const take = clampLimit(limit);
+    const skip = Math.max(offset || 0, 0);
+    const rows = await this.prisma.$queryRaw<
+      Array<{ data: { items: RawBoardItem[]; total: number } }>
+    >(Prisma.sql`SELECT public_resource_open_offers(${take}::int, ${skip}::int) AS data`);
+    const data = rows[0]?.data ?? { items: [], total: 0 };
+    return {
+      items: (data.items ?? []).map((raw) => {
+        const { fromYourOrganization: _omit, ...item } = toBoardItem(raw);
+        return item;
+      }),
+      total: Number(data.total ?? 0),
+      limit: take,
+      offset: skip,
+    };
   }
 
   /** Los ofrecimientos propios, más recientes primero. */
@@ -242,7 +292,7 @@ export class ResourceOpenOffersService {
    * La organización toma un ofrecimiento para una necesidad propia (existente,
    * de la misma categoría y unidad) o, sin `needId`, publica en el mismo paso
    * una necesidad nueva con lo ofrecido. Todo ocurre en una sola función
-   * transaccional; luego avisa al donante por correo (best-effort).
+   * transaccional; luego avisa al donante en la plataforma y por correo (best-effort).
    */
   async claim(
     actor: RequestUser,
@@ -282,25 +332,24 @@ export class ResourceOpenOffersService {
     return { needId: claimed.need_id, offerId: claimed.offer_id };
   }
 
+  /** Aviso (bandeja + correo) a quien dejó el ofrecimiento. Best-effort. */
   private async notifyDonor(organizationId: string, claimed: ClaimSqlRow): Promise<void> {
-    try {
-      const [org, donor] = await Promise.all([
-        this.prisma.organization.findUnique({
-          where: { id: organizationId },
-          select: { name: true },
-        }),
-        this.prisma.withOrgContext(claimed.donor_org_id, (tx) =>
-          tx.user.findUnique({
-            where: { id: claimed.donor_user_id },
-            select: { email: true, displayName: true },
-          }),
-        ),
-      ]);
-      if (!donor?.email) return;
-      const orgName = org?.name ?? 'Una organización';
-      const offered = `${claimed.quantity} ${claimed.unit} · ${claimed.title}`;
-      await this.notifications.send({
-        to: donor.email,
+    const org = await this.prisma.organization
+      .findUnique({ where: { id: organizationId }, select: { name: true } })
+      .catch(() => null);
+    const orgName = org?.name ?? 'Una organización';
+    const offered = `${claimed.quantity} ${claimed.unit} · ${claimed.title}`;
+    await this.inbox.toUser(
+      claimed.donor_user_id,
+      {
+        kind: 'resources.open_offer_claimed',
+        tone: 'success',
+        title: `${orgName} quiere recibir lo que ofreciste`,
+        body: `Tomó tu ofrecimiento "${offered}". Coordinarán contigo la entrega.`,
+        href: `/mis-ofertas?foco=${claimed.offer_id}`,
+        dedupeKey: `open_offer_claimed:${claimed.offer_id}`,
+      },
+      (donor) => ({
         subject: `${orgName} quiere recibir lo que ofreciste`,
         body: `${orgName} tomó tu ofrecimiento "${offered}". Míralo en "Mis ofertas".`,
         idempotencyKey: `resources.open_offer_claimed:${claimed.offer_id}`,
@@ -309,17 +358,12 @@ export class ResourceOpenOffersService {
           organizationName: org?.name ?? undefined,
           organizationId,
           data: {
-            nombre: firstName(donor.displayName) ?? 'amigo(a)',
+            nombre: donor.displayName,
             ofrecimiento: offered,
             organizacion: orgName,
           },
         },
-      });
-    } catch (error) {
-      // Nunca el correo del donante en el log (Ley 1581).
-      this.logger.warn(
-        `No se pudo avisar al donante del ofrecimiento tomado ${claimed.offer_id}: ${(error as Error).message}`,
-      );
-    }
+      }),
+    );
   }
 }

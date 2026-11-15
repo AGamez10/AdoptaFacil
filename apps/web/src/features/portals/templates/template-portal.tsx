@@ -66,6 +66,7 @@ export function TemplatePortal({
                 rating: created.rating,
                 comment: created.comment,
                 authorName: undefined,
+                isCommunityMember: false,
                 createdAt: created.createdAt,
               },
               ...cur.reviews,

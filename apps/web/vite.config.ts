@@ -1,8 +1,24 @@
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+
+/**
+ * La web lee `@adoptafacil/contracts` desde su código fuente, no desde `dist/`.
+ * Con el `dist/` compilado, traer una rama con un export nuevo (p. ej.
+ * INVITABLE_ORG_ROLES) dejaba todo el módulo `features/org` sin cargar hasta
+ * recompilar a mano: /organizacion y las pantallas de plataforma (aprobar
+ * organizaciones, planes, documentos, duplicadas) caían en "Error 500".
+ * Desde el fuente, Vite recarga los contratos al instante y no hay copia vieja.
+ */
+export const contractsSourceAlias = {
+  '@adoptafacil/contracts': fileURLToPath(
+    new URL('../../packages/contracts/src/index.ts', import.meta.url),
+  ),
+};
 
 export default defineConfig({
   plugins: [react()],
+  resolve: { alias: contractsSourceAlias },
   // Vite's envDir defaults to the project root (this folder, apps/web), but
   // the repo keeps a single .env at the monorepo root (see `pnpm setup:env`).
   // Without this, VITE_* vars set only at the root (e.g. VITE_GOOGLE_CLIENT_ID)

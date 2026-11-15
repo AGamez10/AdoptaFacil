@@ -113,6 +113,9 @@ export function OrgFormalizationPage() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [retryingDian, setRetryingDian] = useState(false);
+  // Por qué no se pudo avanzar, visible junto al botón (no solo en un aviso
+  // que se cierra), con el camino directo a cargar los documentos.
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
   // REFACTOR-VISUAL Fase C3: la transición pendiente de confirmar en el modal
   // (null = modal cerrado). `requiresReason` decide si el modal pide motivo.
   const [pendingTransition, setPendingTransition] = useState<{
@@ -196,6 +199,7 @@ export function OrgFormalizationPage() {
       return;
     }
     setSaving(true);
+    setBlockedReason(null);
     try {
       await client.request<TransitionResult>('/org/formalization/transitions', {
         method: 'POST',
@@ -207,16 +211,23 @@ export function OrgFormalizationPage() {
       toast({ title: 'Estado actualizado', description: `Ahora: ${STATE_LABELS[targetState]}.` });
     } catch (error) {
       const forward = !requiresReason;
+      const description =
+        forward && pendingRequirements.length > 0
+          ? `Aún falta que el equipo apruebe: ${pendingRequirements
+              .map((r) => DOCUMENT_NAMES[r.type])
+              .join(' y ')}. En "Lo que te falta" tienes el enlace para subir cada uno.`
+          : error instanceof Error
+            ? error.message
+            : 'Inténtalo de nuevo.';
+      if (forward) {
+        // El motivo queda visible junto a los enlaces de Documentos, no solo
+        // en un aviso que se cierra.
+        setPendingTransition(null);
+        setBlockedReason(description);
+      }
       toast({
         title: 'No se pudo cambiar el estado',
-        description:
-          forward && pendingRequirements.length > 0
-            ? `Aún falta que el equipo apruebe: ${pendingRequirements
-                .map((r) => DOCUMENT_NAMES[r.type])
-                .join(' y ')}. En "Lo que te falta" tienes el enlace para subir cada uno.`
-            : error instanceof Error
-              ? error.message
-              : 'Inténtalo de nuevo.',
+        description,
         variant: 'destructive',
       });
     } finally {
@@ -337,13 +348,18 @@ export function OrgFormalizationPage() {
                     </div>
                   )}
                   {next && nextNeedsPlatform && (
-                    <p>
+                    <p className={styles.actions__hint}>
                       El paso a {STATE_LABELS[next]} lo aprueba el equipo de AdoptaFácil tras
                       revisar tus documentos. Súbelos en{' '}
                       <Link to="/organizacion/documentos" className={styles.requirements__link}>
                         Documentos
                       </Link>{' '}
                       para que el equipo los revise.
+                    </p>
+                  )}
+                  {blockedReason && (
+                    <p className={styles.actions__blocked} role="alert">
+                      {blockedReason}
                     </p>
                   )}
                   {previous && (

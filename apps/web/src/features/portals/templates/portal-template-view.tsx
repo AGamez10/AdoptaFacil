@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { AnimalSummary, Review } from '@adoptafacil/contracts';
 import { RegisterReviewDialog } from '../components/register-review-dialog';
 import { PublicLedgerDialog } from '../../ledger/components/public-ledger-dialog';
+import { readLedgerTheme, type LedgerTheme } from '../../ledger/model/ledger-theme';
 import { useFeature } from '../../../shell/capabilities';
 import {
   buildAdoptionRequestHref,
@@ -62,6 +63,8 @@ export function PortalTemplateView({
   const navigate = useNavigate();
   const [reviewOpen, setReviewOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  // El libro se viste como la plantilla (y su modo claro/oscuro) al abrirse.
+  const [ledgerTheme, setLedgerTheme] = useState<LedgerTheme | null>(null);
   const [previewAnimal, setPreviewAnimal] = useState<AnimalSummary | null>(null);
   const [three, setThree] = useState<ThreeModule | null | undefined>(
     design.webgl ? undefined : null,
@@ -188,6 +191,7 @@ export function PortalTemplateView({
       }
       if (target.closest('[data-ledger]')) {
         event.preventDefault();
+        setLedgerTheme(readLedgerTheme(root));
         setLedgerOpen(true);
         return;
       }
@@ -226,17 +230,29 @@ export function PortalTemplateView({
     <>
       <div
         ref={rootRef}
-        className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}`}
+        className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}${design.premium ? ' pk' : ''}`}
         style={themeStyle}
         data-testid="portal-template"
         data-template={design.id}
       />
+      {!demo && source.animalTotal > source.animals.length && (
+        <p className="mx-auto w-full max-w-[1320px] px-4 py-6 text-center text-sm">
+          Aquí ves {source.animals.length} de los {source.animalTotal} animales en adopción.{' '}
+          <Link
+            to={{ search: '?vista=todos' }}
+            className="font-semibold underline"
+            data-testid="portal-template-all-animals"
+          >
+            Ver los {source.animalTotal}
+          </Link>
+        </p>
+      )}
       {reputation && !demo && onReviewCreated && (
         <RegisterReviewDialog
           slug={source.slug}
           open={reviewOpen}
           onOpenChange={setReviewOpen}
-          onSubmitted={onReviewCreated}
+          onSubmitted={(submitted) => onReviewCreated(submitted.review)}
         />
       )}
       {demo ? (
@@ -245,6 +261,8 @@ export function PortalTemplateView({
             ledger={source.ledger}
             open={ledgerOpen}
             onOpenChange={setLedgerOpen}
+            theme={ledgerTheme}
+            orgName={source.organization.name}
           />
           <PreviewAnimalDialog
             animal={previewAnimal}
@@ -255,7 +273,13 @@ export function PortalTemplateView({
           />
         </>
       ) : (
-        <PublicLedgerDialog slug={source.slug} open={ledgerOpen} onOpenChange={setLedgerOpen} />
+        <PublicLedgerDialog
+          slug={source.slug}
+          open={ledgerOpen}
+          onOpenChange={setLedgerOpen}
+          theme={ledgerTheme}
+          orgName={source.organization.name}
+        />
       )}
     </>
   );

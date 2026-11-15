@@ -103,6 +103,17 @@
   }
 }
 
+/* "Configurar cookies" abre un panel, no navega: es un botón con look de enlace. */
+.footer__link--button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+}
+
 .footer__meta {
   max-width: var(--af-container);
   margin: 0 auto;

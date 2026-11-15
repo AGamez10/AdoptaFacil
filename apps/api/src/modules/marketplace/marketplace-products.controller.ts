@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  OrganizationCapability,
   ProductCategory,
   Role,
   type CreateProductInput,
@@ -40,6 +41,7 @@ import {
   updateProductSchema,
 } from './marketplace-products.schemas';
 import { RequireFeature } from '../../core/features';
+import { FormalStateGuard, RequireFormalState } from '../../core/formalization';
 
 /** Tope de lo que se acepta en memoria por una foto (el límite real, en
  *  español, lo aplica el servicio con STORAGE_MAX_FILE_MB). */
@@ -67,15 +69,21 @@ function parseCategory(value?: string): ProductCategory | undefined {
  * Tenant-scoped (RLS). Publicar/editar = Owner/Administrator/Operator; ver =
  * + ReadOnlyAuditor; el resto, denegado (deny-by-default). Exposición pública
  * en un controller separado.
+ *
+ * Vender exige estar Formalizada (matriz `CAPABILITY_RULES`, ET arts. 555-2 y
+ * 615): publicar o subir fotos pasa por {@link FormalStateGuard}; editar un
+ * producto que queda activo lo verifica el servicio. Ver y desactivar siempre
+ * se permite, para que nadie quede con un producto publicado que no puede bajar.
  */
 @RequireFeature('marketplace')
 @Controller('marketplace/products')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, FormalStateGuard)
 export class MarketplaceProductsController {
   constructor(private readonly service: MarketplaceProductsService) {}
 
   @Post()
   @Roles(...MARKETPLACE_WRITE_ROLES)
+  @RequireFormalState(OrganizationCapability.MarketplaceSales)
   create(
     @CurrentUser() actor: RequestUser,
     @Body(new ZodValidationPipe(createProductSchema)) dto: CreateProductInput,
@@ -118,6 +126,7 @@ export class MarketplaceProductsController {
   /** La foto principal del producto: se sube en un paso y reemplaza la primera (o se agrega si no hay). */
   @Put(':id/image')
   @Roles(...MARKETPLACE_WRITE_ROLES)
+  @RequireFormalState(OrganizationCapability.MarketplaceSales)
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
   )
@@ -132,6 +141,7 @@ export class MarketplaceProductsController {
   /** Agrega una foto (hasta 2 por producto): se sube en un paso, ya recomprimida. */
   @Post(':id/images/file')
   @Roles(...MARKETPLACE_WRITE_ROLES)
+  @RequireFormalState(OrganizationCapability.MarketplaceSales)
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
   )
@@ -146,6 +156,7 @@ export class MarketplaceProductsController {
   /** Cambia una de las fotos del producto por otra. */
   @Put(':id/images/:imageId/file')
   @Roles(...MARKETPLACE_WRITE_ROLES)
+  @RequireFormalState(OrganizationCapability.MarketplaceSales)
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: PRODUCT_IMAGE_MULTIPART_LIMIT, files: 1 } }),
   )
@@ -160,6 +171,7 @@ export class MarketplaceProductsController {
 
   @Post(':id/images')
   @Roles(...MARKETPLACE_WRITE_ROLES)
+  @RequireFormalState(OrganizationCapability.MarketplaceSales)
   addImage(
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,

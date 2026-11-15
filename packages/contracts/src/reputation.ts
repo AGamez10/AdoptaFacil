@@ -63,11 +63,23 @@ export interface CreateReviewInput {
   isAnonymous?: boolean;
 }
 
-/** `POST /public/organizations/:slug/reviews` (S7-b) — sin sesión, la org sale
- *  del slug de la URL, no del body. Siempre anónima (no hay identidad). */
+/** `POST /public/organizations/:slug/reviews` (S7-b) — la org sale del slug de
+ *  la URL, no del body. La sesión es OPCIONAL (2026-11-05):
+ *  - visitante sin sesión: puede firmar con `authorName` (opcional, texto
+ *    libre, sin sello); sin él la reseña es anónima.
+ *  - miembro con sesión (token Bearer): la reseña queda ligada a su cuenta y
+ *    lleva el sello "Miembro de la comunidad". NO puede enviar `authorName`
+ *    (se usa el nombre de su cuenta, nadie con sello firma con un nombre
+ *    ajeno); `isAnonymous` decide si ese nombre se muestra — por defecto
+ *    `true` (mostrarlo es opt-in, Ley 1581 de 2012). */
 export interface CreatePublicReviewInput {
   rating: number;
   comment?: string;
+  /** Solo visitantes sin sesión. 2-60 caracteres, solo letras, espacios y
+   *  `. ' -` (sin números, correos ni enlaces). */
+  authorName?: string;
+  /** Solo miembros con sesión. Por defecto `true`. */
+  isAnonymous?: boolean;
 }
 
 export type ReviewDecision = 'approve' | 'reject';
@@ -104,7 +116,12 @@ export interface PublicReview {
   id: string;
   rating: number;
   comment?: string;
-  /** Ausente cuando la reseña se marcó anónima. */
+  /** Ausente cuando la reseña es anónima. Para un visitante es el nombre que
+   *  escribió (NO verificado); para un miembro, el de su cuenta. */
   authorName?: string;
+  /** `true` cuando la escribió una cuenta de AdoptaFácil con sesión iniciada
+   *  (sello "Miembro de la comunidad"). Se muestra aunque sea anónima: el
+   *  sello no revela quién es. */
+  isCommunityMember: boolean;
   createdAt: string;
 }

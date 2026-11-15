@@ -21,3 +21,10 @@
   font-size: var(--fs-sm);
   color: hsl(var(--destructive));
 }
+
+.gis {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+}

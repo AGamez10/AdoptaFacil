@@ -16,8 +16,9 @@ import type { CampaignStatus } from './campaigns';
  * es `null` (una organización sin datos en una categoría reporta `0`).
  */
 export interface OrganizationDashboardSummary {
-  /** Animales activos y en adopción (is_active=true AND status='available') —
-   *  misma definición de "adoptable" que ya usa el catálogo público (T-029). */
+  /** Animales activos y publicados (is_active=true AND status en
+   *  `PUBLIC_ANIMAL_STATUSES`: disponible o en proceso) — misma definición que
+   *  usa el catálogo público, así que cuadra con el portal y /adoptar. */
   animalsActive: number;
   /** Solicitudes de adopción en 'new' o 'in_review' ("Nuevas" + "En evaluación",
    *  mismas etiquetas que `ADOPTION_STATUS_EMAIL_LABELS`). */
@@ -35,10 +36,10 @@ export interface OrganizationDashboardSummary {
   /** Documentos institucionales con status 'rejected' (pendientes de
    *  subsanar, S2-06). */
   documentsRejected: number;
-  /** Suma histórica de `breakdown.net` de donaciones APROBADAS atribuidas
-   *  directamente a la organización (`PaymentConcept.kind === 'organization'`,
-   *  P1) — el dinero atribuido a campañas específicas ya se refleja en
-   *  `Campaign.raisedAmount` (S2-07) y no se duplica aquí. */
+  /** Suma histórica de `breakdown.net` de las donaciones APROBADAS y sin
+   *  reembolso que recibió la organización, de cualquier concepto (general,
+   *  campaña o animal): es todo lo que entró a su cuenta. El avance de cada
+   *  campaña se sigue mostrando aparte (`Campaign.raisedAmount`). */
   donationsReceivedTotal: number;
   /** Nivel de verificación (VerificationLevel.level) — el mismo que ya expone
    *  `GET /org/documents/verification` (0 si aún no alcanza ningún nivel). */
@@ -48,6 +49,29 @@ export interface OrganizationDashboardSummary {
    *  (`apps/web/src/shell/transparency`), duplicada aquí porque el backend no
    *  puede importar código de `apps/web`. */
   formalizationPercent: number;
+  /** Campana de pendientes: desde cuándo existe lo más reciente de cada aviso
+   *  (ISO UTC, o null si el aviso no aplica). Si una persona marcó el aviso
+   *  como leído DESPUÉS de esta fecha, no se le vuelve a mostrar; si llega
+   *  algo nuevo (otra solicitud, otro rechazo), reaparece. Opcional = aditivo. */
+  adoptionRequestsNewSince?: string | null;
+  documentsExpiringSoonSince?: string | null;
+  documentsRejectedSince?: string | null;
+}
+
+/** Llave de un aviso de la campana: los tres avisos agregados del resumen o
+ *  un recordatorio de salud concreto (`reminder:<uuid>`). */
+export type PendingItemKey = 'adoptions' | 'expiring' | 'rejected' | `reminder:${string}`;
+
+/** Un aviso que la persona autenticada marcó como leído (solo suyo). */
+export interface PendingItemRead {
+  key: PendingItemKey;
+  /** ISO UTC. */
+  readAt: string;
+}
+
+/** `POST /org/pending-reads` — marca avisos como leídos (máx. 50 por vez). */
+export interface MarkPendingReadInput {
+  keys: PendingItemKey[];
 }
 
 // ============================================================================
@@ -175,8 +199,8 @@ export interface PlatformSuperAdminDashboardSummary {
  * Conteo de DONACIONES por estado — NO es un conteo de "contratos de
  * donación": ese concepto no existe todavía en el sistema (pendiente, módulo
  * de Fabián). `netReceivedTotal` es la MISMA definición de
- * `OrganizationDashboardSummary.donationsReceivedTotal` (aprobadas,
- * `conceptKind === 'organization'`, nunca duplica lo atribuido a campañas);
+ * `OrganizationDashboardSummary.donationsReceivedTotal` (aprobadas y sin
+ * reembolso, de cualquier concepto: general, campaña o animal);
  * los conteos por estado, en cambio, SÍ incluyen todas las donaciones de la
  * organización sin importar el concepto — reflejan el embudo de revisión, no
  * una cifra financiera.

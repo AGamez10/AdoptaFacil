@@ -18,6 +18,7 @@ import {
 } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { mercadoPagoTimeoutSignal } from './mercadopago-http';
+import { safeOAuthDescription } from './mercadopago-oauth.client';
 
 /** Injectable fetch surface so tests run with ZERO network. */
 export type MercadoPagoFetch = typeof fetch;
@@ -32,8 +33,8 @@ export const MERCADOPAGO_REFERENCE_PREFIX = 'af-';
 const SEARCH_PAGE_SIZE = 100;
 const MAX_SEARCH_PAGES = 50;
 
-/** Hours a donation's Checkout Pro link stays payable. */
-const PREFERENCE_TTL_HOURS = 72;
+/** Days a donation's Checkout Pro order stays payable (`expiration_time`, ISO 8601). */
+const ORDER_TTL_DAYS = 3;
 
 /**
  * Stable reference sent as `external_reference` and returned as
@@ -132,6 +133,67 @@ export function mercadoPagoNotificationType(
   return typeof value === 'string' ? value : undefined;
 }
 
+/**
+ * Orders API (Checkout Pro) `status` → our {@link PaymentStatus}. Only a
+ * `processed` order approves; anything unknown or in flight stays `pending`
+ * (it never settles a donation, the next notification decides).
+ */
+export function mercadoPagoOrderStatus(raw: unknown): PaymentStatus {
+  switch (raw) {
+    case 'processed':
+      return 'approved';
+    case 'failed':
+      return 'declined';
+    case 'canceled':
+    case 'refunded':
+    case 'charged_back':
+      return 'voided';
+    default:
+      // created, action_required, at_processing, expired, unknown…
+      return 'pending';
+  }
+}
+
+/**
+ * Mercado Pago's error reason on a failed order create, trimmed and without
+ * any value we sent (token, payer email). Empty when there is none.
+ */
+function orderErrorDetail(body: Record<string, unknown> | null, sent: unknown[]): string {
+  if (!body) return '';
+  const errors = Array.isArray(body.errors) ? (body.errors as Record<string, unknown>[]) : [];
+  const parts = [
+    body.message,
+    body.error,
+    ...errors.flatMap((e) => [
+      e?.code,
+      e?.message,
+      ...(Array.isArray(e?.details) ? e.details : []),
+    ]),
+  ].filter((v): v is string => typeof v === 'string' && v !== '');
+  const detail = safeOAuthDescription(
+    [...new Set(parts)].join(' · '),
+    sent.filter((v): v is string => typeof v === 'string' && v !== ''),
+  );
+  return detail ? `: ${detail}` : '';
+}
+
+/** The order's status in the legacy payment vocabulary kept by the ledger. */
+function ledgerStatusOf(raw: unknown): string {
+  switch (raw) {
+    case 'processed':
+      return 'approved';
+    case 'failed':
+      return 'rejected';
+    case 'canceled':
+      return 'cancelled';
+    case 'refunded':
+    case 'charged_back':
+      return raw;
+    default:
+      return 'pending';
+  }
+}
+
 /** Amount as integer COP; anything else becomes NaN (never matches). */
 function integerAmount(value: unknown): number {
   const n = typeof value === 'string' ? Number(value) : value;
@@ -217,8 +279,18 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
   private readonly apiPublicBase: string;
   private readonly webBase: string;
   private readonly webhookSecret: string | undefined;
+  /** Secret of the Orders application's webhook (falls back to the shared one). */
+  private readonly ordersWebhookSecret: string | undefined;
   private readonly test: boolean;
-  private readonly statementDescriptor: string | undefined;
+  /**
+   * Sandbox with the OAuth exchange WITHOUT `test_token`: Mercado Pago then
+   * does not report test orders/payments reliably as `live_mode=false`, so
+   * `live_mode` is not used to refuse them (sandbox only; production keeps
+   * the strict check).
+   */
+  private readonly sandboxWithoutTestToken: boolean;
+  /** Sandbox only: the TEST buyer's email (a real account's email is refused). */
+  private readonly testPayerEmail: string | undefined;
 
   constructor(
     config: ConfigService<Env, true>,
@@ -240,9 +312,20 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     );
     this.webhookSecret = config.get('MERCADOPAGO_WEBHOOK_SECRET', { infer: true }) as
       string | undefined;
+    this.ordersWebhookSecret =
+      (config.get('MERCADOPAGO_ORDERS_WEBHOOK_SECRET', { infer: true }) as string | undefined) ??
+      this.webhookSecret;
     this.test = config.get('MERCADOPAGO_TEST', { infer: true }) === true;
-    this.statementDescriptor = config.get('MERCADOPAGO_STATEMENT_DESCRIPTOR', { infer: true }) as
+    this.testPayerEmail = config.get('MERCADOPAGO_TEST_PAYER_EMAIL', { infer: true }) as
       string | undefined;
+    this.sandboxWithoutTestToken =
+      this.test && config.get('MERCADOPAGO_OAUTH_TEST_TOKEN', { infer: true }) === false;
+  }
+
+  /** Whether a read-back `live_mode` belongs to this deployment's mode. */
+  private liveModeMatches(liveMode: unknown): boolean {
+    if (this.sandboxWithoutTestToken) return true;
+    return liveMode === !this.test;
   }
 
   /** Where Mercado Pago notifies payments of THIS organization. */
@@ -271,10 +354,14 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
   }
 
   /**
-   * Create a Checkout Pro preference with the ORG's token. `collectionId` =
-   * our `external_reference` (known before payment); the payer is sent to
-   * `paymentLinkUrl` (Mercado Pago's hosted checkout: card, PSE, Efecty…,
-   * whatever the org's account offers).
+   * Create a Checkout Pro ORDER (`POST /v1/orders`) with the ORG's token.
+   * `collectionId` = our `external_reference` (known before payment); the
+   * payer is sent to `checkout_url` (Mercado Pago's hosted checkout: card, PSE,
+   * Efecty…, whatever the org's account offers).
+   *
+   * Orders has no per-order notification URL: notifications arrive at the
+   * single URL configured on the application (`POST /donations/webhook/
+   * mercadopago`), and the organization is resolved from `external_reference`.
    */
   async createCollection(input: CreateCollectionInput): Promise<CollectionResult> {
     const collector = input.mercadopagoCollector;
@@ -288,38 +375,35 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     const back = new URL(`${this.webBase}/donaciones/resultado`);
     back.searchParams.set('reference', reference);
     const backUrl = back.toString();
-    const expiresAt = new Date(Date.now() + PREFERENCE_TTL_HOURS * 60 * 60 * 1000);
+    // Orders amounts are strings. COP has no cents: Mercado Pago Colombia
+    // refuses "100000.00" ("does not match pattern"), so the whole peso
+    // amount is sent ("100000").
+    const amount = String(breakdown.amountCharged);
 
     const body: Record<string, unknown> = {
-      items: [
-        {
-          id: input.concept.kind,
-          title: 'Donación',
-          description: `Donación vía AdoptaFácil (${input.concept.kind})`,
-          category_id: 'donations',
-          quantity: 1,
-          currency_id: 'COP',
-          unit_price: breakdown.amountCharged,
-        },
-      ],
+      type: 'online',
+      processing_mode: 'manual',
+      total_amount: amount,
       external_reference: reference,
-      notification_url: this.notificationUrlFor(collector.organizationId),
-      back_urls: { success: backUrl, pending: backUrl, failure: backUrl },
-      auto_return: 'approved',
-      expires: true,
-      expiration_date_to: expiresAt.toISOString(),
-      // What the money is for (never personal data).
-      metadata: { concept_kind: input.concept.kind, concept_id: input.concept.id },
+      items: [{ title: 'Donación', unit_price: amount, quantity: 1 }],
+      config: {
+        online: {
+          success_url: backUrl,
+          pending_url: backUrl,
+          failure_url: backUrl,
+          auto_return: 'approved',
+        },
+      },
+      expiration_time: `P${ORDER_TTL_DAYS}D`,
     };
-    if (this.statementDescriptor) body.statement_descriptor = this.statementDescriptor;
-    if (input.payer?.email || input.payer?.fullName) {
-      body.payer = {
-        ...(input.payer.email ? { email: input.payer.email } : {}),
-        ...(input.payer.fullName ? { name: input.payer.fullName } : {}),
-      };
-    }
+    // Nothing personal beyond what the payer gave. In sandbox the donor's
+    // email is NOT sent: it usually belongs to a real Mercado Pago account
+    // (or to another country), which the test seller cannot charge; the
+    // person signs in with the test buyer on Mercado Pago's page instead.
+    const payerEmail = this.test ? this.testPayerEmail : input.payer?.email;
+    if (payerEmail) body.payer = { email: payerEmail };
 
-    const response = await this.fetchFn(`${this.baseUrl}/checkout/preferences`, {
+    const response = await this.fetchFn(`${this.baseUrl}/v1/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -329,18 +413,22 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       body: JSON.stringify(body),
       signal: mercadoPagoTimeoutSignal(),
     });
+    const order = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     if (!response.ok) {
-      throw new Error(`Mercado Pago preference create failed (${response.status})`);
+      // Mercado Pago's own reason (never the token or the payer) so the API
+      // log says WHY, e.g. "invalid users involved".
+      throw new Error(
+        `Mercado Pago order create failed (${response.status}${orderErrorDetail(order, [
+          collector.accessToken,
+          input.payer?.email,
+        ])})`,
+      );
     }
-    const pref = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-    const link = (this.test ? pref?.sandbox_init_point : pref?.init_point) as string | undefined;
-    if (!pref?.id || !isMercadoPagoCheckoutUrl(link)) {
-      throw new Error('Mercado Pago preference create returned no usable checkout link');
+    const link = order?.checkout_url as string | undefined;
+    if (!order?.id || !isMercadoPagoCheckoutUrl(link)) {
+      throw new Error('Mercado Pago order create returned no usable checkout link');
     }
-    if (pref.collector_id !== undefined && String(pref.collector_id) !== collector.userId) {
-      throw new Error('Mercado Pago preference belongs to another collector');
-    }
-    this.logger.log(`preference created reference=${reference} test=${this.test}`);
+    this.logger.log(`order created reference=${reference} test=${this.test}`);
 
     return { collectionId: reference, status: 'pending', breakdown, paymentLinkUrl: link };
   }
@@ -369,12 +457,16 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       throw new Error('Mercado Pago webhook rejected: no connected organization for this payment.');
     }
     const dataId = mercadoPagoNotificationDataId(payload, context?.query);
+    const isOrder = mercadoPagoNotificationType(payload, context?.query) === 'order';
     assertMercadoPagoSignature(
-      this.webhookSecret,
+      isOrder ? this.ordersWebhookSecret : this.webhookSecret,
       signature,
       context?.headers?.['x-request-id'],
       dataId,
     );
+    if (isOrder) {
+      return this.readBackOrder(collector, dataId as string);
+    }
 
     // Trust only what Mercado Pago reports, read with the ORG's own token: a
     // payment of another account is not readable with it (404) and is rejected.
@@ -390,6 +482,99 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     }
     const payment = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     return this.normalizeReadBack(payment, collector.userId, dataId as string);
+  }
+
+  /**
+   * Orders notification: the order is READ BACK with the org's own token
+   * (`GET /v1/orders/{id}`), so an order of another account is not readable
+   * (404) and is rejected; only the read-back values are trusted, never the
+   * notification body.
+   */
+  private async readBackOrder(
+    collector: MercadoPagoCollectorCredentials,
+    orderId: string,
+  ): Promise<NormalizedWebhookEvent> {
+    const response = await this.fetchFn(
+      `${this.baseUrl}/v1/orders/${encodeURIComponent(orderId)}`,
+      {
+        headers: { Authorization: `Bearer ${collector.accessToken}`, Accept: 'application/json' },
+        signal: mercadoPagoTimeoutSignal(),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Mercado Pago order read-back failed (${response.status})`);
+    }
+    const order = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    return this.normalizeOrder(order, collector.userId, orderId);
+  }
+
+  /**
+   * Trust checks + normalization of an ORDER read back with the org's token.
+   * Throws when it is of the other mode (sandbox vs. production, when the order
+   * reports it) or carries no reference. Amounts here are decimal strings.
+   */
+  private normalizeOrder(
+    order: Record<string, unknown> | null,
+    collectorId: string,
+    fallbackId: string,
+  ): NormalizedWebhookEvent {
+    if (typeof order?.live_mode === 'boolean' && !this.liveModeMatches(order.live_mode)) {
+      throw new Error(
+        'Mercado Pago webhook rejected: order live_mode does not match MERCADOPAGO_TEST.',
+      );
+    }
+    const reference = typeof order?.external_reference === 'string' ? order.external_reference : '';
+    if (!reference) {
+      throw new Error('Mercado Pago webhook rejected: order has no external_reference.');
+    }
+
+    const transactions = (order?.transactions ?? {}) as { payments?: unknown };
+    const payments = (Array.isArray(transactions.payments) ? transactions.payments : []) as Array<
+      Record<string, unknown>
+    >;
+    // The payment that settled the order, else the latest attempt.
+    const payment = payments.find((p) => p?.status === 'processed') ?? payments.at(-1);
+
+    let status = mercadoPagoOrderStatus(order?.status);
+    const totalAmount = integerAmount(order?.total_amount);
+    // An approval needs the order to be paid in full.
+    if (
+      status === 'approved' &&
+      order?.total_paid_amount !== undefined &&
+      integerAmount(order.total_paid_amount) !== totalAmount
+    ) {
+      status = 'pending';
+    }
+    const orderId = String(order?.id ?? fallbackId);
+    const paymentId = String(payment?.id ?? orderId);
+    const paymentMethod = (payment?.payment_method ?? {}) as Record<string, unknown>;
+    const currency = typeof order?.currency === 'string' ? order.currency : 'COP';
+    // Fees, net received and refunds are not part of the order read-back: the
+    // creation breakdown stays (see `applyMercadoPagoSettledBreakdown`).
+    const snapshot = mercadoPagoPaymentSnapshot(
+      {
+        status: ledgerStatusOf(order?.status),
+        status_detail: payment?.status_detail ?? order?.status_detail,
+        currency_id: currency,
+        transaction_amount: payment?.paid_amount ?? payment?.amount ?? order?.total_amount,
+        payment_type_id: paymentMethod.type,
+        payment_method_id: paymentMethod.id,
+      },
+      paymentId,
+      collectorId,
+      reference,
+    );
+    return {
+      eventId: orderId,
+      collectionId: reference,
+      status,
+      dedupKey: `mercadopago:${orderId}:${status}`,
+      amountCharged: totalAmount,
+      currency,
+      // Established by the read-back with the org's own token.
+      receiverAccountId: collectorId,
+      mercadopagoPayment: snapshot,
+    };
   }
 
   /**
@@ -412,7 +597,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     }
     // A sandbox (test user) payment must never settle a real donation, nor a
     // real payment a sandbox one: `live_mode` has to match this deployment.
-    if (payment?.live_mode !== !this.test) {
+    if (!this.liveModeMatches(payment?.live_mode)) {
       throw new Error(
         'Mercado Pago webhook rejected: payment live_mode does not match MERCADOPAGO_TEST.',
       );
