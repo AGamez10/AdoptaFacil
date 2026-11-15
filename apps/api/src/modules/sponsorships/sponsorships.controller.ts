@@ -16,6 +16,7 @@ import {
   type PaySponsorshipPaymentInput,
   Role,
   type Sponsorship,
+  type SponsorshipCheckoutView,
   type SponsorshipPayment,
   SponsorshipStatus,
   type SponsorshipStatusChangeInput,
@@ -81,6 +82,20 @@ export class SponsorshipsController {
     @Body(new ZodValidationPipe(paySponsorshipPaymentSchema)) _dto: PaySponsorshipPaymentInput,
   ): Promise<SponsorshipPayment> {
     return this.payments.retryPayment(actor, id);
+  }
+
+  /**
+   * "Pagar este mes": checkout link of the period that is open now, on the
+   * organization's own Mercado Pago account. Only the padrino (ownership is
+   * checked by identity inside the service; no @Roles gate).
+   */
+  @Post(':id/pay')
+  @HttpCode(200)
+  pay(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<SponsorshipCheckoutView> {
+    return this.payments.payCurrentPeriod(actor, id);
   }
 
   /** The sponsor's own sponsorships (cross-tenant, by identity) — "mis

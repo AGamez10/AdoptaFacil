@@ -164,3 +164,17 @@ describe.each(DESIGN_IDS)('plantilla %s: datos intactos al cambiar de diseño', 
     expect(text).toContain(plain(model.CAMPAIGN.title));
   });
 });
+
+describe('libro público en las plantillas', () => {
+  it('si el libro no cargó, ninguna plantilla afirma que no hay movimientos', async () => {
+    for (const id of DESIGN_IDS) {
+      const design = await loadDesign(id);
+      const model = buildTemplateModel({ ...PROFILES.completa, ledger: null }, FIXTURE_NOW);
+      const root = document.createElement('div');
+      root.innerHTML = design.html(model, createKit(model));
+      const text = root.textContent ?? '';
+      expect(text, id).not.toMatch(/aún no ha registrado movimientos/i);
+      expect(root.querySelector('[data-ledger]'), id).not.toBeNull();
+    }
+  });
+});

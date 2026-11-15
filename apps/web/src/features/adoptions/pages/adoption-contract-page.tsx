@@ -45,12 +45,18 @@ import {
   updateAdoptionContractData,
 } from '../api/adoptions-api';
 import { AdoptionDeliveryPanel } from '../components/adoption-delivery-panel';
+import { ContractNextSteps } from '../components/contract-next-steps';
 import {
   CONTRACT_STATUS_LABELS,
   SIGNER_ROLE_LABELS,
   contractStatusVariant,
   shortHash,
 } from '../model/adoptions-contract-view';
+import {
+  FOLLOW_UP_PLAN_HELP,
+  FOLLOW_UP_WHEN_HELP,
+  contractNextSteps,
+} from '../model/adoptions-next-steps';
 import { formatBogota } from '../model/adoptions-view';
 
 const SEX_OPTIONS: Array<{ value: AnimalSex; label: string }> = [
@@ -397,6 +403,11 @@ export function AdoptionContractPage() {
     }
   };
 
+  const nextSteps = contractNextSteps(contract, canManage ? 'organization' : 'adopter', {
+    dataComplete,
+    viewerHasSigned: contract.signers.some((s) => s.userId === user?.id && Boolean(s.signedAt)),
+  });
+
   // Mismo texto legal (y misma versión) que el PDF: una sola fuente en
   // `@adoptafacil/contracts`.
   const contractDoc = buildAdoptionContractDocument(contract.payload, contract.signers);
@@ -418,6 +429,8 @@ export function AdoptionContractPage() {
       >
         ← Volver a adopciones
       </Link>
+
+      {nextSteps && <ContractNextSteps steps={nextSteps} />}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Badge variant={contractStatusVariant(contract.status)}>
@@ -731,6 +744,12 @@ export function AdoptionContractPage() {
                       ))}
                     </select>
                   </FormField>
+                  <p
+                    className="text-xs text-muted-foreground sm:col-span-2"
+                    data-testid="follow-up-plan-help"
+                  >
+                    {FOLLOW_UP_PLAN_HELP.light} {FOLLOW_UP_PLAN_HELP.standard} {FOLLOW_UP_WHEN_HELP}
+                  </p>
                   <FormField label="Cuota de recuperación (pesos, 0 si no hay)">
                     <Input
                       type="number"

@@ -13,7 +13,7 @@ import { fetchPublicLedger } from '../../ledger/api/public-ledger';
 import { formatCop } from '../../ledger/model/ledger-view';
 import { listPublicNeeds, listPublicOpenOffers } from '../../resources/api/public-resources';
 import { CATEGORY_LABELS, publicResourceNeedHref } from '../../resources/model/resources-view';
-import { volunteerSignupHref } from '../../volunteering/model/volunteering-view';
+import { volunteerBrowseHref } from '../../volunteering/model/volunteering-view';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
 import { IconArrowRight, IconBox, IconDocument, IconPeople, IconShield } from './landing-icons';
 import styles from './network.module.scss';
@@ -253,9 +253,9 @@ function VolunteeringPanel({ near }: { near: boolean }) {
         <ul className={styles.list}>
           {items.map((opportunity, index) => (
             <li key={opportunity.id} style={{ '--i': index } as CSSProperties}>
-              {/* Inscribirse pide cuenta: /voluntariado lleva al ingreso, vuelve y
-                  resalta esta jornada. */}
-              <Link to={volunteerSignupHref(opportunity.id)} className={styles.row}>
+              {/* Ver la jornada no pide cuenta: lleva al listado público con ella
+                  señalada. La cuenta se pide solo al pulsar «Quiero participar». */}
+              <Link to={volunteerBrowseHref(opportunity.id)} className={styles.row}>
                 {opportunity.appliesToStudentService ? (
                   <span className={styles.row__chip}>Servicio social</span>
                 ) : (
@@ -276,8 +276,8 @@ function VolunteeringPanel({ near }: { near: boolean }) {
           ))}
         </ul>
       )}
-      <Link to="/voluntariado" className={styles.panel__link}>
-        Inscribirme como voluntario
+      <Link to={volunteerBrowseHref()} className={styles.panel__link}>
+        Ver todos los voluntariados
         <IconArrowRight aria-hidden="true" />
       </Link>
     </article>

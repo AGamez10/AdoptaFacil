@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import type {
@@ -7,7 +13,7 @@ import type {
 } from '@prisma/client';
 import {
   BILLING_FAILURE_SUSPENSION_REASON,
-  type PaymentPort,
+  type SponsorshipCheckoutView,
   type SponsorshipPayment,
   type SponsorshipPaymentAttempt,
   SponsorshipPaymentAttemptResult,
@@ -17,11 +23,12 @@ import {
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
 import type { Env } from '../../config/env.validation';
-import { PAYMENT_PORT } from '../../core/payments/payment.port';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { buildAttemptIdempotencyKey } from './sponsorship-billing';
+import { SponsorshipCheckoutService } from './sponsorship-checkout.service';
+import { SponsorshipPaymentPollerService } from './sponsorship-payment-poller.service';
 
 /** Row from `sponsorship_billing_recovery_context(...)` (snake_case, raw SQL). */
 interface RecoveryContextRow {
@@ -30,6 +37,14 @@ interface RecoveryContextRow {
   failed_payment_id: string;
   period: string;
   attempt_count: number;
+}
+
+/** The fields of `sponsorships_for_sponsor(...)` this service needs (camelCase JSONB). */
+interface SponsorMineRow {
+  id: string;
+  organizationId: string;
+  planAmount: number;
+  status: string;
 }
 
 /** Row from `sponsorship_payment_attempt_by_collection_id(...)` (snake_case, raw SQL). */
@@ -80,7 +95,8 @@ export class SponsorshipPaymentsService {
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
-    @Inject(PAYMENT_PORT) private readonly payments: PaymentPort,
+    private readonly checkout: SponsorshipCheckoutService,
+    private readonly confirmations: SponsorshipPaymentPollerService,
   ) {}
 
   private requireOrgId(): string {
@@ -137,6 +153,91 @@ export class SponsorshipPaymentsService {
   }
 
   /**
+   * "Pagar este mes" (`POST /sponsorships/:id/pay`): the padrino pays the
+   * period that is open now. Ownership comes from `sponsorships_for_sponsor`
+   * (by identity, cross-tenant); the period and its attempt are then read
+   * under the organization's own RLS context. The open attempt keeps ONE
+   * order: its link is reused while the attempt lives (the order expires with
+   * it), so paying twice for the same month is not offered.
+   */
+  async payCurrentPeriod(
+    actor: RequestUser,
+    sponsorshipId: string,
+  ): Promise<SponsorshipCheckoutView> {
+    const rows = await this.prisma.$queryRaw<Array<{ data: SponsorMineRow[] }>>(
+      Prisma.sql`SELECT sponsorships_for_sponsor(${actor.id}::uuid) AS data`,
+    );
+    const mine = (rows[0]?.data ?? []).find((row) => row.id === sponsorshipId);
+    if (!mine) {
+      throw new NotFoundException('No encontramos ese apadrinamiento entre los tuyos.');
+    }
+    if (mine.status !== SponsorshipStatus.Active) {
+      throw new ConflictException(
+        mine.status === SponsorshipStatus.Suspended
+          ? 'Este apadrinamiento está suspendido: usa "Ponerme al día" para reactivarlo.'
+          : 'Este apadrinamiento ya terminó.',
+      );
+    }
+
+    const open = await this.prisma.withOrgContext(mine.organizationId, async (tx) => {
+      const payment = await tx.sponsorshipPayment.findFirst({
+        where: { sponsorshipId, status: 'pending' },
+        orderBy: { periodStartedAt: 'desc' },
+        include: { attempts: { where: { result: 'pending' }, orderBy: { attemptNumber: 'desc' } } },
+      });
+      const attempt = payment?.attempts[0];
+      return payment && attempt ? { payment, attempt } : null;
+    });
+    if (!open) {
+      throw new ConflictException(
+        'Estás al día: no tienes pagos pendientes de este apadrinamiento.',
+      );
+    }
+    const { payment, attempt } = open;
+    if (attempt.paymentLinkUrl) {
+      return { checkoutUrl: attempt.paymentLinkUrl, period: payment.period };
+    }
+
+    const collection = await this.checkout.open({
+      organizationId: mine.organizationId,
+      sponsorshipId,
+      amount: mine.planAmount,
+      idempotencyKey: attempt.idempotencyKey,
+      expiresAt: attempt.expiresAt,
+      payerEmail: actor.email,
+    });
+    if (!collection.paymentLinkUrl) {
+      throw new ServiceUnavailableException(
+        'No pudimos abrir el pago en Mercado Pago. Intenta de nuevo en unos minutos.',
+      );
+    }
+    await this.prisma.withOrgContext(mine.organizationId, async (tx) => {
+      await tx.sponsorshipPaymentAttempt.update({
+        where: { id: attempt.id },
+        data: { collectionId: collection.collectionId, paymentLinkUrl: collection.paymentLinkUrl },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId: mine.organizationId,
+        actorUserId: actor.id,
+        action: 'sponsorship.billing_checkout_opened',
+        entityType: 'sponsorship_payment',
+        entityId: payment.id,
+        metadata: { attemptNumber: attempt.attemptNumber },
+      });
+    });
+    if (collection.status === 'approved') {
+      // A driver that settles on the spot (local fake): same confirmation as the gateway's.
+      await this.confirmations.confirmAttempt({
+        attempt_id: attempt.id,
+        organization_id: mine.organizationId,
+        sponsorship_payment_id: payment.id,
+        collection_id: collection.collectionId,
+      });
+    }
+    return { checkoutUrl: collection.paymentLinkUrl, period: payment.period };
+  }
+
+  /**
    * Sponsor-initiated recovery (Objetivo 6) — cross-tenant (the sponsor is
    * not a member of the sponsored org), no `@Roles` gate: any authenticated
    * Person may retry ONLY their own suspended sponsorship. Generates a
@@ -173,18 +274,19 @@ export class SponsorshipPaymentsService {
 
     const nextAttemptNumber = ctx.attempt_count + 1;
     const idempotencyKey = buildAttemptIdempotencyKey(sponsorshipId, ctx.period, nextAttemptNumber);
-    const collection = await this.payments.createCollection({
-      intendedAmount: ctx.plan_amount,
-      currency: 'COP',
-      concept: { kind: 'sponsorship', id: sponsorshipId },
-      idempotencyKey,
-    });
-
     // Reuses the SAME expiry window as attempt 1 — this is a one-off,
     // sponsor-initiated link, not a rung of the automated ladder, so it has
     // no natural "day N of the period" to derive from.
     const windowDays = this.config.get('SPONSORSHIP_EXPIRE_ATTEMPT_1_DAY', { infer: true });
     const expiresAt = new Date(Date.now() + windowDays * 24 * 60 * 60 * 1000);
+    const collection = await this.checkout.open({
+      organizationId: ctx.organization_id,
+      sponsorshipId,
+      amount: ctx.plan_amount,
+      idempotencyKey,
+      expiresAt,
+      payerEmail: actor.email,
+    });
 
     return this.prisma.withOrgContext(ctx.organization_id, async (tx) => {
       await tx.sponsorshipPaymentAttempt.create({

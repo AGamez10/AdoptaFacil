@@ -56,7 +56,7 @@ export function useOtherWays(): Way[] {
       key: 'voluntariado',
       title: 'Sé voluntario',
       text: 'Paseos, baños, jornadas de adopción: tu tiempo también cuenta.',
-      to: '/voluntariado',
+      to: '/voluntariados',
       cta: 'Ver voluntariados',
     },
   ];

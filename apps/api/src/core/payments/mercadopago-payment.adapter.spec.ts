@@ -13,6 +13,7 @@ import {
   mercadoPagoPaymentSnapshot,
   mercadoPagoReferenceFor,
   mercadoPagoSignatureV1,
+  orderTtlDays,
 } from './mercadopago-payment.adapter';
 
 const ORG_ID = '11111111-2222-3333-4444-555555555555';
@@ -143,6 +144,30 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     // Nothing personal beyond the email the payer gave; never the org token.
     expect(JSON.stringify(body)).not.toContain('Ana Donante');
     expect(JSON.stringify(body)).not.toContain(ORG.accessToken);
+  });
+
+  it('a sponsorship month is its own item, returns to /apadrinar and lives as long as its attempt', async () => {
+    const fetchFn = makeFetch();
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+    const expiresAt = new Date(Date.now() + 10 * 86_400_000 + 60_000);
+    await adapter.createCollection({
+      ...INPUT,
+      concept: { kind: 'sponsorship', id: ORG_ID },
+      expiresAt,
+    });
+    const body = JSON.parse(String(fetchFn.mock.calls[0][1]?.body));
+    expect(body.items[0].title).toBe('Apadrinamiento');
+    expect(body.expiration_time).toBe('P10D');
+    expect(body.config.online.success_url).toMatch(
+      /^https:\/\/app\.adoptafacil\.test\/apadrinar\/resultado\?reference=af-/,
+    );
+  });
+
+  it('an order never lives less than a day, and a donation keeps its default', () => {
+    const now = new Date('2026-11-15T00:00:00Z');
+    expect(orderTtlDays(undefined, now)).toBe(3);
+    expect(orderTtlDays(new Date('2026-11-15T05:00:00Z'), now)).toBe(1);
+    expect(orderTtlDays(new Date('2026-11-25T00:00:00Z'), now)).toBe(10);
   });
 
   it('sends no payer when the donor gave no email', async () => {

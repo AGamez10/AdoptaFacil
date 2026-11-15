@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import {
   ADOPTION_MESSAGE_MIN_LENGTH,
   type AdoptionAnimalSnapshot,
@@ -16,7 +16,8 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
-import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
+import { useApiClient } from '../../../shell/api';
+import { isProfileGateCancelled, useProfileGate } from '../../auth/components/profile-gate';
 import { useSession } from '../../../shell/auth';
 import { validateEmail, validateRequired } from '../../auth/validation';
 import { createAdoptionRequest } from '../api/adoptions-api';
@@ -64,8 +65,7 @@ export function AdoptionRequestPage() {
   const { user } = useSession();
   const { toast } = useToast();
   const target = useAdoptionTarget();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const profileGate = useProfileGate();
 
   const [fullName, setFullName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -106,32 +106,27 @@ export function AdoptionRequestPage() {
     if (!canSubmit || !target) return;
     setSubmitting(true);
     try {
-      await createAdoptionRequest(client, {
-        animalId: target.animal.animalId,
-        organizationId: target.organizationId,
-        animalSnapshot: target.animal,
-        applicant: {
-          fullName: fullName.trim(),
-          email: email.trim(),
-          phone: phone.trim() || undefined,
-        },
-        message: message.trim(),
-      });
+      // Si faltan datos del perfil se piden en una ventana y la MISMA solicitud
+      // (con lo que ya escribió) se envía sola al guardarlos.
+      await profileGate.run(
+        () =>
+          createAdoptionRequest(client, {
+            animalId: target.animal.animalId,
+            organizationId: target.organizationId,
+            animalSnapshot: target.animal,
+            applicant: {
+              fullName: fullName.trim(),
+              email: email.trim(),
+              phone: phone.trim() || undefined,
+            },
+            message: message.trim(),
+          }),
+        'Para solicitar la adopción necesitamos tu teléfono, documento de identidad y dirección.',
+      );
       setDone(true);
       toast({ title: 'Solicitud enviada', description: 'La organización la revisará pronto.' });
     } catch (error) {
-      // T-Google-SignIn (business rule #3): an adoption request requires a
-      // complete profile (phone/documentId/address).
-      if (isIncompleteProfileError(error)) {
-        navigate('/perfil/completar', {
-          state: {
-            from: location,
-            reason:
-              'Antes de solicitar una adopción necesitamos tu teléfono, documento de identidad y dirección.',
-          },
-        });
-        return;
-      }
+      if (isProfileGateCancelled(error)) return;
       const status = (error as { status?: number }).status;
       toast({
         title: 'No se pudo enviar la solicitud',
@@ -237,6 +232,7 @@ export function AdoptionRequestPage() {
           )}
         </CardContent>
       </Card>
+      {profileGate.dialog}
     </PageContainer>
   );
 }

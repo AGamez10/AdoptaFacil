@@ -33,3 +33,23 @@
   font-size: var(--fs-sm);
   color: var(--text-muted);
 }
+
+.checkout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-hairline-strong);
+  padding: 1rem;
+}
+
+.checkout__title {
+  font-weight: var(--fw-semibold);
+  color: var(--text-dark);
+}
+
+.checkout__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

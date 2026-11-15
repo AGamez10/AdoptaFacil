@@ -528,7 +528,7 @@ export class ReportsService {
               registered,
               'La política de firmas de la organización exige a',
             )
-          : defaultSignerRoles(input.kind, registered);
+          : this.defaultRolesFor(input.kind, registered, snapshot, rteVigente);
       }
 
       const legalEffect = computeLegalEffect({
@@ -1260,6 +1260,33 @@ export class ReportsService {
       select: { subjectUserId: true },
     });
     return new Set(rows.map((r) => r.subjectUserId));
+  }
+
+  /**
+   * Firmantes por defecto. Una declaración que saldría solo "firmada" lleva
+   * ÚNICAMENTE la firma del representante legal; revisor fiscal y contador
+   * firman por defecto solo donde el documento los exige: el libro auxiliar y
+   * el informe de donaciones certificado de una ESAL con RTE vigente
+   * (art. 125-2 E.T.). Una política de la organización o una elección
+   * explícita siguen mandando.
+   */
+  private defaultRolesFor(
+    kind: OrgReportKind,
+    registered: ReadonlySet<LegalRepresentativeRole>,
+    snapshot: { formalizationState: string; nit?: string | null },
+    rteVigente: boolean,
+  ): LegalRepresentativeRole[] {
+    const roles = defaultSignerRoles(kind, registered);
+    const effect = computeLegalEffect({
+      kind,
+      formalizationState: snapshot.formalizationState,
+      rteVigente,
+      hasNit: Boolean(snapshot.nit),
+      signerRoles: roles,
+    });
+    return effect === 'signed' && kind !== 'accounting'
+      ? roles.filter((r) => r === 'legal_representative')
+      : roles;
   }
 
   /** Cargo con el que esta persona puede firmar en la organización, si alguno. */

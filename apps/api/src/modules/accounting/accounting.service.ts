@@ -19,6 +19,7 @@ import {
   accountingPeriodLabel,
   accountingPeriodOf,
   accountingPeriodRange,
+  nextAccountingPeriod,
   type AccountingEntry,
   type AccountingOverview,
   type AccountingPeriodClose,
@@ -63,6 +64,7 @@ import {
   type AccountingExportInput,
   type DonorIdentity,
 } from './accounting-export';
+import { buildOrigins, type ManualMovement, type SponsorshipIncome } from './accounting-origins';
 
 type Tx = Prisma.TransactionClient;
 type EntryRow = Prisma.AccountingEntryGetPayload<object>;
@@ -401,17 +403,18 @@ export class AccountingService {
     const organizationId = this.requireOrgId();
     this.assertPeriod(period);
     await this.sync(organizationId);
-    const { entries, close, shares } = await this.prisma.withOrgContext(
+    const { entries, close, shares, other } = await this.prisma.withOrgContext(
       organizationId,
       async (tx) => {
         const loaded = await this.loadPeriod(tx, organizationId, period);
+        const other = await this.otherIncome(tx, organizationId, period);
         const shareRows = await tx.accountingShare.findMany({
           where: { organizationId, period },
           include: { signerUser: { select: { displayName: true } } },
           orderBy: { createdAt: 'desc' },
           take: 20,
         });
-        return { ...loaded, shares: shareRows };
+        return { ...loaded, shares: shareRows, other };
       },
     );
     return {
@@ -420,6 +423,7 @@ export class AccountingService {
       ...(close ? { close: toClose(close) } : {}),
       totals: totalsOf(entries),
       entries,
+      origins: buildOrigins(entries, other.manual, other.sponsorships),
       report: await this.reports.accountingReportFor(organizationId, period),
       shares: shares.map((s): AccountingShareInfo => ({
         id: s.id,
@@ -720,6 +724,9 @@ export class AccountingService {
         tx.organizationProfile.findUnique({ where: { organizationId } }),
       ]);
       const donors = full ? await this.authorizedDonors(tx, organizationId, entries) : undefined;
+      const { manual, sponsorships } = full
+        ? await this.otherIncome(tx, organizationId, period)
+        : { manual: undefined, sponsorships: undefined };
       return {
         organizationName: org.name,
         nit: profile?.nit ?? null,
@@ -731,9 +738,60 @@ export class AccountingService {
         totals: totalsOf(entries),
         reconciliation,
         donors,
+        manual,
+        sponsorships,
         generatedAt: new Date(),
       };
     });
+  }
+
+  /**
+   * Todo lo que no es una donación cobrada en línea y debe quedar en el mismo
+   * paquete: lo que la organización registró a mano en su libro (ventas del
+   * marketplace, eventos, gastos…) y los cobros de apadrinamiento pagados.
+   * Así la contabilidad queda centralizada antes de exportar.
+   */
+  private async otherIncome(
+    tx: Tx,
+    organizationId: string,
+    period: string,
+  ): Promise<{ manual: ManualMovement[]; sponsorships: SponsorshipIncome[] }> {
+    const { fromUtc, toUtcExclusive } = accountingPeriodRange(period);
+    // `occurredOn` es una fecha (sin hora) de Colombia: se compara como tal.
+    const firstDay = new Date(`${period}-01T00:00:00Z`);
+    const nextDay = new Date(`${nextAccountingPeriod(period)}-01T00:00:00Z`);
+    const [manualRows, paid] = await Promise.all([
+      tx.ledgerEntry.findMany({
+        where: { organizationId, voidedAt: null, occurredOn: { gte: firstDay, lt: nextDay } },
+        orderBy: [{ occurredOn: 'asc' }, { createdAt: 'asc' }],
+      }),
+      tx.sponsorshipPayment.findMany({
+        where: {
+          organizationId,
+          status: 'paid',
+          paidAt: { gte: fromUtc, lt: toUtcExclusive },
+        },
+        include: { sponsorship: { include: { plan: { select: { name: true, amount: true } } } } },
+        orderBy: { paidAt: 'asc' },
+      }),
+    ]);
+    return {
+      manual: manualRows.map((r) => ({
+        date: r.occurredOn.toISOString().slice(0, 10),
+        kind: r.kind === 'expense' ? 'expense' : 'income',
+        category: r.category,
+        concept: r.concept,
+        counterparty: r.counterparty,
+        amountCop: Number(r.amountCop),
+        hasSupport: Boolean(r.supportStorageRef),
+      })),
+      sponsorships: paid.map((p) => ({
+        paidAt: (p.paidAt ?? p.updatedAt).toISOString(),
+        sponsor: p.sponsorship.sponsorName ?? '',
+        plan: p.sponsorship.plan.name,
+        amountCop: p.sponsorship.plan.amount,
+      })),
+    };
   }
 
   /**

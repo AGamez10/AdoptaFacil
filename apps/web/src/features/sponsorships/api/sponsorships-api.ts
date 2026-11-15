@@ -5,6 +5,7 @@ import type {
   Paginated,
   PaySponsorshipPaymentInput,
   Sponsorship,
+  SponsorshipCheckoutView,
   SponsorshipPayment,
   SponsorshipPlan,
   SponsorshipStatusChangeInput,
@@ -98,8 +99,8 @@ export function getSponsorshipPayments(
  * `POST /sponsorships/:id/retry-payment`). The backend rejects it (400/404)
  * if the caller is not the sponsor or the suspension was not billing-related.
  *
- * The body is empty. The web does not call this yet; it stays for the
- * upcoming gateway sponsorship payment.
+ * The body is empty. Its newest attempt carries the link to pay ("Ponerme
+ * al día" in "Mis apadrinamientos").
  */
 export function retrySponsorshipPayment(
   client: ApiClient,
@@ -110,6 +111,15 @@ export function retrySponsorshipPayment(
     method: 'POST',
     json: card,
   });
+}
+
+/** "Pagar este mes" — link of the open month on the organization's own
+ *  Mercado Pago account (the padrino only, `POST /sponsorships/:id/pay`). */
+export function paySponsorshipMonth(
+  client: ApiClient,
+  id: string,
+): Promise<SponsorshipCheckoutView> {
+  return client.request<SponsorshipCheckoutView>(`/sponsorships/${id}/pay`, { method: 'POST' });
 }
 
 /** Register an animal as deceased (M07 hallazgo QA — Owner/Administrator,

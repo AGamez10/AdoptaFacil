@@ -11,6 +11,30 @@ const EMPTY_TOTALS = {
   lastEntryOn: null,
 };
 
+const RETRY_DELAYS_MS = [400, 1500];
+
+/**
+ * Igual que `fetchPublicLedger`, pero reintenta ante un fallo pasajero (red,
+ * límite de peticiones). Una plantilla o el portal cargan muchas cosas a la
+ * vez: un solo tropiezo no debe dejar el libro "vacío" en pantalla.
+ */
+export async function fetchPublicLedgerReliable(
+  slug: string,
+  options: { limit?: number; offset?: number; signal?: AbortSignal } = {},
+): Promise<PublicLedgerPage> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await fetchPublicLedger(slug, options);
+    } catch (error) {
+      lastError = error;
+      if (options.signal?.aborted || attempt === RETRY_DELAYS_MS.length) break;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Libro público de una organización (`GET /public/organizations/:slug/ledger`),
  * sin sesión. La forma se normaliza: una respuesta incompleta nunca rompe el portal.

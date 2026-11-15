@@ -11,10 +11,10 @@ const uuid = z.string().guid();
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 const text = (max: number) =>
   z
-    .string()
+    .string({ error: 'Escribe un texto.' })
     .trim()
-    .min(1)
-    .max(max)
+    .min(1, 'Este dato no puede quedar vacío.')
+    .max(max, `Este texto es muy largo (máximo ${max} caracteres).`)
     .refine((v) => !CONTROL_CHARS.test(v), { message: 'Contiene caracteres no permitidos.' });
 
 const signerInputSchema = z
@@ -66,12 +66,28 @@ export const updateAdoptionContractDataSchema = z
     organizationAddress: text(300).nullable().optional(),
     animalBreed: text(200).nullable().optional(),
     animalSex: text(50).nullable().optional(),
-    animalAgeYears: z.number().min(0).max(100).nullable().optional(),
-    weightKg: z.number().positive().max(500).nullable().optional(),
+    animalAgeYears: z
+      .number({ error: 'Escribe la edad en años, solo con números.' })
+      .min(0, 'La edad no puede ser negativa.')
+      .max(100, 'Revisa la edad: no puede pasar de 100 años.')
+      .nullable()
+      .optional(),
+    weightKg: z
+      .number({ error: 'Escribe el peso en kilos, solo con números.' })
+      .positive('El peso debe ser mayor que cero.')
+      .max(500, 'Revisa el peso: no puede pasar de 500 kg.')
+      .nullable()
+      .optional(),
     healthStatusAtDelivery: text(2000).nullable().optional(),
     adopterDocumentNumber: text(50).nullable().optional(),
     adopterAddress: text(300).nullable().optional(),
-    followUpMonths: z.number().int().positive().max(60).nullable().optional(),
+    followUpMonths: z
+      .number({ error: 'Escribe los meses de seguimiento, solo con números.' })
+      .int('Los meses de seguimiento deben ser un número entero.')
+      .positive('El seguimiento debe durar al menos 1 mes.')
+      .max(60, 'El seguimiento no puede pasar de 60 meses.')
+      .nullable()
+      .optional(),
     signatureCity: text(200).nullable().optional(),
     // --- plantilla v2 (aditivos) ---
     organizationName: text(200).nullable().optional(),
@@ -86,8 +102,20 @@ export const updateAdoptionContractDataSchema = z
       .nullable()
       .optional(),
     animalSterilized: z.boolean().nullable().optional(),
-    sterilizationCommitmentMonths: z.number().int().min(1).max(24).nullable().optional(),
-    trialPeriodDays: z.number().int().min(1).max(30).nullable().optional(),
+    sterilizationCommitmentMonths: z
+      .number({ error: 'Escribe el plazo para esterilizar en meses.' })
+      .int('El plazo para esterilizar debe ser un número entero de meses.')
+      .min(1, 'El plazo para esterilizar debe ser de al menos 1 mes.')
+      .max(24, 'El plazo para esterilizar no puede pasar de 24 meses.')
+      .nullable()
+      .optional(),
+    trialPeriodDays: z
+      .number({ error: 'Escribe los días de prueba, solo con números.' })
+      .int('Los días de prueba deben ser un número entero.')
+      .min(1, 'La prueba debe durar al menos 1 día.')
+      .max(30, 'La prueba no puede pasar de 30 días.')
+      .nullable()
+      .optional(),
     followUpPlan: z.enum(['light', 'standard']).nullable().optional(),
     backupCaregiverName: text(200).nullable().optional(),
     backupCaregiverPhone: z
@@ -97,7 +125,13 @@ export const updateAdoptionContractDataSchema = z
       .nullable()
       .optional(),
     backupCaregiverInformed: z.boolean().nullable().optional(),
-    recoveryFeeCop: z.number().int().min(0).max(5_000_000).nullable().optional(),
+    recoveryFeeCop: z
+      .number({ error: 'Escribe la cuota en pesos, solo con números.' })
+      .int('La cuota debe ir en pesos, sin decimales.')
+      .min(0, 'La cuota no puede ser negativa.')
+      .max(5_000_000, 'La cuota no puede pasar de 5.000.000 de pesos.')
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

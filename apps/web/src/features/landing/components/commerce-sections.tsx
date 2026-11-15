@@ -12,7 +12,10 @@ import { usePublicModules } from '../../../shell/layout/public-nav-model';
 import { listPublicCampaigns } from '../../campaigns/api/public-campaigns';
 import { CampaignCard } from '../../campaigns/components/campaign-card';
 import { listPublicNeeds } from '../../resources/api/public-resources';
-import { volunteerSignupHref } from '../../volunteering/model/volunteering-view';
+import {
+  volunteerBrowseHref,
+  volunteerSignupHref,
+} from '../../volunteering/model/volunteering-view';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 import { CatMascot, DogMascot, Sparkle } from './illustrations';
@@ -246,7 +249,7 @@ export function OpenVolunteeringSection() {
               Voluntariados abiertos
             </h2>
           </div>
-          <Link to="/voluntariado" className={styles.link}>
+          <Link to={volunteerBrowseHref()} className={styles.link}>
             Ver todos los voluntariados
             <IconArrowRight aria-hidden="true" />
           </Link>

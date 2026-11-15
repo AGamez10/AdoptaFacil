@@ -41,7 +41,7 @@ describe('voluntariado en las plantillas del portal', () => {
     );
     expect(section?.textContent).toContain('Servicio social estudiantil');
     expect(section?.querySelector('a')?.getAttribute('href')).toBe(
-      '/voluntariado?oportunidad=vo-1',
+      '/voluntariado?oportunidad=vo-1&inscribirme=1',
     );
     // Un título hostil se muestra como texto, nunca como marcado.
     expect(root.querySelector('script')).toBeNull();

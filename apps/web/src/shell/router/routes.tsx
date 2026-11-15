@@ -160,6 +160,7 @@ const ReceivedDonationsPage = lazyPage(loadDonations, 'ReceivedDonationsPage');
 const loadSponsorships = () => import('../../features/sponsorships');
 const SponsorPage = lazyPage(loadSponsorships, 'SponsorPage');
 const SponsorshipsPage = lazyPage(loadSponsorships, 'SponsorshipsPage');
+const SponsorshipResultPage = lazyPage(loadSponsorships, 'SponsorshipResultPage');
 const loadNotifications = () => import('../../features/notifications');
 const EmailUnsubscribePage = lazyPage(loadNotifications, 'EmailUnsubscribePage');
 const PlatformEmailTemplateEditorPage = lazyPage(
@@ -374,6 +375,9 @@ export function AppRoutes() {
           {/* Regreso desde el checkout de una pasarela. Solo informa que el pago se
           está confirmando; la aprobación llega por la confirmación firmada. */}
           <Route path="/donaciones/resultado" element={<DonationResultPage />} />
+          {/* Regreso de Mercado Pago tras pagar un mes de apadrinamiento (mismo
+          criterio: el mes se confirma solo con el aviso firmado). */}
+          <Route path="/apadrinar/resultado" element={<SponsorshipResultPage />} />
           {/* Baja voluntaria de correos masivos (Ley 1581) — pública, sin sesión:
           el enlace firmado del correo ES la credencial. */}
           <Route path="/correo/baja" element={<EmailUnsubscribePage />} />
