@@ -1,14 +1,34 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { BILLING_FAILURE_SUSPENSION_REASON, SponsorshipStatus } from '@adoptafacil/contracts';
 import type { PaymentPort } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
+import type { Env } from '../../config/env.validation';
 import { PAYMENT_PORT } from '../../core/payments/payment.port';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SponsorshipsService } from './sponsorships.service';
 
 /** Row from `sponsorship_pending_payment_attempts()` (snake_case, raw SQL). */
-interface PendingAttemptRow {
+const copFormat = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+});
+
+/** `2026-11` → "noviembre de 2026". */
+function monthLabel(period: string): string {
+  const [year, month] = period.split('-').map(Number);
+  if (!year || !month) return period;
+  return new Intl.DateTimeFormat('es-CO', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+export interface PendingAttemptRow {
   attempt_id: string;
   organization_id: string;
   sponsorship_payment_id: string;
@@ -38,14 +58,23 @@ interface PendingAttemptRow {
 export class SponsorshipPaymentPollerService {
   private readonly logger = new Logger(SponsorshipPaymentPollerService.name);
 
+  /** Mercado Pago confirms through its signed notification
+   *  (`SponsorshipSettlementService`); its adapter has no status read. */
+  private readonly polls: boolean;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly sponsorships: SponsorshipsService,
     @Inject(PAYMENT_PORT) private readonly payments: PaymentPort,
-  ) {}
+    config: ConfigService<Env, true>,
+    @Optional() private readonly inbox?: InboxService,
+  ) {
+    this.polls = config.get('PAYMENT_DRIVER', { infer: true }) !== 'mercadopago';
+  }
 
   async pollPending(): Promise<void> {
+    if (!this.polls) return;
     const rows = await this.prisma.$queryRaw<PendingAttemptRow[]>(
       Prisma.sql`SELECT * FROM sponsorship_pending_payment_attempts()`,
     );
@@ -67,13 +96,22 @@ export class SponsorshipPaymentPollerService {
     if (status !== 'approved') {
       return; // still pending/declined — the ladder handles expiry, not this poller
     }
+    await this.confirmAttempt(row);
+  }
 
-    await this.prisma.withOrgContext(row.organization_id, async (tx) => {
+  /**
+   * Marks one attempt and its period as paid (idempotent), reactivates a
+   * billing-failure suspension, and welcomes the padrino on their FIRST paid
+   * month. Shared by this poller, the Mercado Pago notification and a driver
+   * that settles on the spot.
+   */
+  async confirmAttempt(row: PendingAttemptRow): Promise<void> {
+    const confirmed = await this.prisma.withOrgContext(row.organization_id, async (tx) => {
       const attempt = await tx.sponsorshipPaymentAttempt.findUnique({
         where: { id: row.attempt_id },
       });
       if (!attempt || attempt.result !== 'pending') {
-        return; // already resolved by a previous poll run (idempotent)
+        return null; // already resolved by a previous poll run (idempotent)
       }
       await tx.sponsorshipPaymentAttempt.update({
         where: { id: row.attempt_id },
@@ -112,6 +150,86 @@ export class SponsorshipPaymentPollerService {
           );
         }
       }
+      const paidPeriods = await tx.sponsorshipPayment.count({
+        where: { sponsorshipId: payment.sponsorshipId, status: 'paid' },
+      });
+      return sponsorship ? { sponsorship, period: payment.period, first: paidPeriods === 1 } : null;
     });
+
+    if (confirmed) {
+      await this.notifyConfirmed(row.organization_id, confirmed);
+    }
+  }
+
+  /**
+   * The padrino and the organization's team hear about every confirmed month
+   * (bell + the padrino's email). The first month carries the welcome.
+   * Best-effort: never undoes the confirmation.
+   */
+  private async notifyConfirmed(
+    organizationId: string,
+    confirmed: {
+      sponsorship: { id: string; sponsorUserId: string; animalId: string; planId: string };
+      period: string;
+      first: boolean;
+    },
+  ): Promise<void> {
+    if (!this.inbox) return;
+    try {
+      const { sponsorship, period, first } = confirmed;
+      const [org, details] = await Promise.all([
+        this.prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true },
+        }),
+        this.prisma.withOrgContext(organizationId, async (tx) => ({
+          animal: await tx.animal.findUnique({
+            where: { id: sponsorship.animalId },
+            select: { name: true },
+          }),
+          plan: await tx.sponsorshipPlan.findUnique({
+            where: { id: sponsorship.planId },
+            select: { amount: true },
+          }),
+        })),
+      ]);
+      const animal = details.animal?.name ?? 'tu ahijado';
+      const organization = org?.name ?? 'la organización';
+      const money = copFormat.format(details.plan?.amount ?? 0);
+      const month = monthLabel(period);
+      await this.inbox.toUser(
+        sponsorship.sponsorUserId,
+        {
+          kind: first ? 'sponsorships.welcome' : 'sponsorships.payment_confirmed',
+          tone: 'kudos',
+          title: first
+            ? `¡Desde hoy apadrinas a ${animal}!`
+            : `Recibimos tu apadrinamiento de ${month} para ${animal}`,
+          body: `Tu pago de ${money} llegó directo a ${organization}. Puedes verlo en "Mis apadrinamientos".`,
+          href: '/apadrinar',
+          dedupeKey: `sponsorship_paid:${sponsorship.id}:${period}`,
+        },
+        ({ displayName }) => ({
+          subject: first
+            ? `¡Gracias, ${displayName}! Ya apadrinas a ${animal}`
+            : `Recibimos tu apadrinamiento de ${month}`,
+          body: first
+            ? `¡Gracias! Desde hoy apadrinas a ${animal} en ${organization} con ${money} al mes. Tu pago llegó directo a la organización. Cada mes te avisaremos cuando toque el siguiente pago; lo haces desde "Mis apadrinamientos".`
+            : `Tu pago de ${money} del apadrinamiento de ${animal} (${month}) llegó directo a ${organization}. ¡Gracias por seguir ahí!`,
+        }),
+      );
+      await this.inbox.toOrgStaff(organizationId, {
+        kind: 'sponsorships.payment_received',
+        tone: 'success',
+        title: first
+          ? `${animal} tiene un nuevo padrino`
+          : `Recibieron el apadrinamiento de ${month} de ${animal}`,
+        body: `El pago de ${money} llegó a la cuenta de Mercado Pago de la organización.`,
+        href: '/organizacion/apadrinamientos',
+        dedupeKey: `sponsorship_paid_org:${sponsorship.id}:${period}`,
+      });
+    } catch (error) {
+      this.logger.warn(`Sponsorship payment notice failed: ${(error as Error).message}`);
+    }
   }
 }

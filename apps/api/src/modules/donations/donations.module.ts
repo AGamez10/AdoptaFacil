@@ -8,6 +8,7 @@ import { DonationAccessPublicController } from './donation-access-public.control
 import { DonationStatusPublicController } from './donation-status-public.controller';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { MercadoPagoAccountsModule } from '../payments/mercadopago-accounts.module';
+import { SponsorshipsModule } from '../sponsorships/sponsorships.module';
 
 /**
  * M05 · Donations (T-050, P1). A Person donates to an organization, sees the
@@ -48,7 +49,9 @@ import { MercadoPagoAccountsModule } from '../payments/mercadopago-accounts.modu
  */
 @Module({
   // ADR-PAG-003: MercadoPagoAccountsModule resolves the org's OAuth grant.
-  imports: [AuthModule, CampaignsModule, MercadoPagoAccountsModule],
+  // SponsorshipsModule: a monthly sponsorship is paid with an order too, and
+  // its notification arrives at the same Orders URL.
+  imports: [AuthModule, CampaignsModule, MercadoPagoAccountsModule, SponsorshipsModule],
   controllers: [
     DonationsController,
     DonationCertificatePublicController,

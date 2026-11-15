@@ -1,17 +1,20 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../core/auth/auth.module';
+import { MercadoPagoAccountsModule } from '../payments/mercadopago-accounts.module';
 import { PublicSponsorshipsController } from './public-sponsorships.controller';
 import { PublicSponsorshipsService } from './public-sponsorships.service';
 import { SPONSORSHIP_BILLING_QUEUE } from './sponsorship-billing.constants';
 import { SponsorshipBillingProcessor } from './sponsorship-billing.processor';
 import { SponsorshipBillingScheduler } from './sponsorship-billing.scheduler';
 import { SponsorshipBillingService } from './sponsorship-billing.service';
+import { SponsorshipCheckoutService } from './sponsorship-checkout.service';
 import { SponsorshipPaymentPollerService } from './sponsorship-payment-poller.service';
 import { SponsorshipPaymentStatusPublicController } from './sponsorship-payment-status-public.controller';
 import { SponsorshipPaymentsService } from './sponsorship-payments.service';
 import { SponsorshipPlansController } from './sponsorship-plans.controller';
 import { SponsorshipPlansService } from './sponsorship-plans.service';
+import { SponsorshipSettlementService } from './sponsorship-settlement.service';
 import { SponsorshipsController } from './sponsorships.controller';
 import { SponsorshipsService } from './sponsorships.service';
 
@@ -40,7 +43,13 @@ import { SponsorshipsService } from './sponsorships.service';
  * billing failure — instead of duplicating the sponsorship state machine.
  */
 @Module({
-  imports: [AuthModule, BullModule.registerQueue({ name: SPONSORSHIP_BILLING_QUEUE })],
+  // ADR-PAG-003: MercadoPagoAccountsModule resolves the organization's own
+  // grant, so each month is paid straight into the organization's account.
+  imports: [
+    AuthModule,
+    MercadoPagoAccountsModule,
+    BullModule.registerQueue({ name: SPONSORSHIP_BILLING_QUEUE }),
+  ],
   controllers: [
     SponsorshipPlansController,
     SponsorshipsController,
@@ -52,11 +61,15 @@ import { SponsorshipsService } from './sponsorships.service';
     SponsorshipsService,
     PublicSponsorshipsService,
     SponsorshipPaymentsService,
+    SponsorshipCheckoutService,
+    SponsorshipSettlementService,
     SponsorshipBillingService,
     SponsorshipPaymentPollerService,
     SponsorshipBillingScheduler,
     SponsorshipBillingProcessor,
   ],
-  exports: [SponsorshipsService],
+  // SponsorshipSettlementService: the Orders notification (one URL for the
+  // whole app, handled by DonationsModule) hands sponsorship references here.
+  exports: [SponsorshipsService, SponsorshipSettlementService],
 })
 export class SponsorshipsModule {}
