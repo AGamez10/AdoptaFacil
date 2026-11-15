@@ -149,6 +149,11 @@ export const STATIC_PAGES = {
     description:
       'Apoya cirugías, alimento y esterilizaciones de organizaciones de rescate animal en Colombia. Cada campaña muestra su meta, su avance y en qué se gastó.',
   },
+  '/transparencia-nacional': {
+    title: 'Transparencia Nacional del rescate animal en Colombia',
+    description:
+      'Cuánto se recibe y en qué se usa en el rescate animal de Colombia: la suma de los libros públicos de todas las organizaciones aprobadas en AdoptaFácil, sin datos de donantes.',
+  },
   '/guias': {
     title: 'Guías para adoptar y cuidar a tu perro',
     description:

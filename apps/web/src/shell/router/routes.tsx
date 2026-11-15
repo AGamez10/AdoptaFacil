@@ -66,6 +66,10 @@ const PortalThemePage = lazyPage(
   () => import('../../features/portals/pages/portal-theme-page'),
   'PortalThemePage',
 );
+const NationalTransparencyPublicPage = lazyPage(
+  () => import('../../features/transparency/pages/national-transparency-public-page'),
+  'NationalTransparencyPublicPage',
+);
 const TemplateDemoPage = lazyPage(
   () => import('../../features/portals/pages/template-demo-page'),
   'TemplateDemoPage',
@@ -262,6 +266,8 @@ export function AppRoutes() {
           <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
           {/* Guías públicas de adopción (SEO, rediseño 2026-10). */}
           <Route path="/guias" element={<GuidesIndexPage />} />
+          {/* Transparencia Nacional (punto 22): el consolidado del país, sin cuenta. */}
+          <Route path="/transparencia-nacional" element={<NationalTransparencyPublicPage />} />
           <Route path="/guias/:slug" element={<GuidePage />} />
           {/* Public auth screens */}
           <Route path="/login" element={<LoginPage />} />
