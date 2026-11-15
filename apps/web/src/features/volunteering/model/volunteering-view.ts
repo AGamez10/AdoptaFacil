@@ -104,11 +104,22 @@ export function canIssueCertificate(entries: ServiceHours[]): boolean {
 /** Query de `/voluntariado` que señala una jornada concreta. */
 export const OPPORTUNITY_QUERY_PARAM = 'oportunidad';
 
-/** Enlace para inscribirse a una jornada desde fuera del panel (la landing).
+/** Marca de que la persona ya decidió inscribirse: al volver del inicio de
+ *  sesión, el panel le muestra la confirmación de ESA jornada a un clic. */
+export const ENROLL_QUERY_PARAM = 'inscribirme';
+
+/** Enlace para inscribirse a una jornada (botón «Quiero participar»).
  *  `/voluntariado` pide sesión y el inicio de sesión vuelve a esta misma ruta
- *  con su query intacta, así la jornada sigue señalada. */
+ *  con su query intacta, así la jornada sigue señalada y lista para confirmar. */
 export function volunteerSignupHref(id: string): string {
-  return `/voluntariado?${OPPORTUNITY_QUERY_PARAM}=${encodeURIComponent(id)}`;
+  return `/voluntariado?${OPPORTUNITY_QUERY_PARAM}=${encodeURIComponent(id)}&${ENROLL_QUERY_PARAM}=1`;
+}
+
+/** Enlace para VER jornadas (público, sin sesión). Con `id`, la señala. */
+export function volunteerBrowseHref(id?: string): string {
+  return id
+    ? `/voluntariados?${OPPORTUNITY_QUERY_PARAM}=${encodeURIComponent(id)}`
+    : '/voluntariados';
 }
 
 export interface HoursFormInput {
