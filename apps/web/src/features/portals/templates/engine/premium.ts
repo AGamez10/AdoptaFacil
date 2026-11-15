@@ -1,5 +1,4 @@
 import { COPY, EMPTY, type TplAnimal, type TplModel } from './model';
-import { ledgerBlock } from './ledger';
 import type { Kit } from './kit';
 import { ledgerBlock } from './ledger';
 import { PREMIUM_KIT_CSS } from './premium-css';
