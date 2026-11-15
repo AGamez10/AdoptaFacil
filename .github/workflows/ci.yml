@@ -128,6 +128,11 @@ jobs:
           psql "$PG_URL" -c 'CREATE DATABASE adoptafacil_shadow'
           scripts/ci/schema-drift.sh
 
+      # ffmpeg: las pruebas de video de la comunidad lo usan (en producción va
+      # dentro de la imagen de la API).
+      - name: Install ffmpeg
+        run: command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+
       # En partes (cada una en su propio proceso): en una sola corrida la
       # memoria de jest crece suite a suite y, en un runner propio con poca
       # RAM, termina sin memoria y vuelve lentas las colas de correo.

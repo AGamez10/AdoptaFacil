@@ -124,3 +124,30 @@ describe('CommunityWallSection (landing)', () => {
     );
   });
 });
+
+describe('CommunityWallSection — video', () => {
+  it('shows the poster with a play badge for a video post', async () => {
+    stubApi(
+      [
+        post('v1', PostType.General, {
+          images: [
+            {
+              id: 'm1',
+              url: '/v.mp4',
+              kind: 'video',
+              posterUrl: '/v.poster.webp',
+              order: 0,
+            } as PublicCommunityPost['images'][number],
+          ],
+        }),
+      ],
+      [],
+    );
+    renderSection();
+    const card = await screen.findByTestId('landing-social-post');
+    expect(within(card).getByRole('img', { name: /Video de la publicación/ })).toHaveAttribute(
+      'src',
+      '/v.poster.webp',
+    );
+  });
+});

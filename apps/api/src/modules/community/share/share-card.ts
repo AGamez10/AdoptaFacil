@@ -10,10 +10,9 @@ import { SHARE_CARD_ART_JPEG_BASE64 } from './share-card-art';
  * Privacidad: la tarjeta nunca lleva datos de contacto; solo el título, un
  * extracto, el tipo y el nombre público de quien publica (la organización o
  * el primer nombre de la persona, ya recortado por la base de datos). Solo
- * puede llevar la PRIMERA FOTO de una publicación de ORGANIZACIÓN: esas fotos
- * ya se muestran en público en la propia publicación, y las personas no
- * adjuntan fotos. Sin foto (o si no se puede leer), va el perro y el gato de
- * siempre.
+ * puede llevar la PRIMERA FOTO de la publicación (o la portada de su video):
+ * ya se muestra en público en la propia publicación porque la autora la hizo
+ * pública. Sin foto (o si no se puede leer), va el perro y el gato de siempre.
  */
 
 export const SHARE_CARD_WIDTH = 1200;

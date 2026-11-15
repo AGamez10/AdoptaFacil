@@ -1,54 +1,74 @@
 import { useEffect, useState } from 'react';
 import {
+  COMMUNITY_POINTS,
   POST_TYPES,
   PostType,
-  type CreatePostInput,
-  type CreatePostResult,
+  communityTier,
   type Post,
   type PostsPage,
+  type PublicCommunityLeader,
 } from '@adoptafacil/contracts';
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  EmptyState,
-  Input,
-  Skeleton,
-  useToast,
-} from '@adoptafacil/ui';
+import { EmptyState, Skeleton, cn } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
+import { useSession } from '../../../shell/auth';
+import { listPublicLeaders } from '../api/public-community';
 import { PostCard } from '../components/post-card';
-import { TextAreaField } from '../components/community-form-fields';
+import { PostComposer } from '../components/post-composer';
+import { useReactions } from '../hooks/use-reactions';
 import { TYPE_LABELS } from '../model/community-view';
-import { IMAGE_ACCEPT, uploadImageFile, validateImageUpload } from '../lib/storage';
 
-const MAX_IMAGES = 6;
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+function Leaders({ leaders }: { leaders: PublicCommunityLeader[] }) {
+  return (
+    <aside
+      className="rounded-2xl border bg-card p-4 shadow-sm"
+      aria-labelledby="feed-leaders-title"
+      data-testid="feed-leaders"
+    >
+      <h2 id="feed-leaders-title" className="text-base font-bold">
+        Escalafón de la manada
+      </h2>
+      <p className="mb-3 text-sm text-muted-foreground">Quienes más mueven la comunidad.</p>
+      <ol className="space-y-2">
+        {leaders.map((leader, index) => (
+          <li key={`${leader.displayName}-${index}`} className="flex items-center gap-2 text-sm">
+            <span className="w-6 text-center" aria-hidden="true">
+              {MEDALS[index] ?? index + 1}
+            </span>
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate">{leader.displayName}</strong>
+              <span className="text-xs text-muted-foreground">
+                {communityTier(leader.points).label}
+              </span>
+            </span>
+            <span className="font-bold">{leader.points.toLocaleString('es-CO')} pts</span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {COMMUNITY_POINTS.post} pts por publicación pública, {COMMUNITY_POINTS.comment} por
+        comentario y {COMMUNITY_POINTS.like} por me gusta.
+      </p>
+    </aside>
+  );
+}
 
 /**
- * `/comunidad` (M11, F-8) — feed cruzado: publicaciones de todas las
- * organizaciones + de plataforma (`GET /community/posts`), con filtro por
- * tipo. Cualquier usuario autenticado (organización o Persona) puede
- * publicar — sin `@Roles` en el backend, así que sin `<RequireRoles>` aquí.
+ * `/comunidad` — el muro de la comunidad: publicar (fotos o video), filtrar
+ * por categoría y reaccionar sin salir de la página. Cualquier usuario
+ * autenticado (organización o Persona) puede publicar.
  */
 export function CommunityFeedPage() {
   const client = useApiClient();
-  const { toast } = useToast();
+  const { user } = useSession();
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<PostType | 'all'>('all');
-  const [showForm, setShowForm] = useState(false);
-
-  const [type, setType] = useState<PostType>(PostType.General);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [shareable, setShareable] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [leaders, setLeaders] = useState<PublicCommunityLeader[]>([]);
+  const { stateOf, react } = useReactions(posts);
 
   const load = async (activeFilter: PostType | 'all'): Promise<void> => {
     const qs = activeFilter !== 'all' ? `?type=${activeFilter}&limit=50` : '?limit=50';
@@ -71,213 +91,87 @@ export function CommunityFeedPage() {
     };
   }, [client, filter]);
 
-  const resetForm = (): void => {
-    setType(PostType.General);
-    setTitle('');
-    setBody('');
-    setFiles([]);
-    setShareable(false);
-  };
+  useEffect(() => {
+    const controller = new AbortController();
+    listPublicLeaders(5, controller.signal)
+      .then(setLeaders)
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
-  const onPickFiles = (fileList: FileList | null): void => {
-    const picked = Array.from(fileList ?? []).slice(0, MAX_IMAGES);
-    for (const file of picked) {
-      const invalid = validateImageUpload(file);
-      if (invalid) {
-        toast({ title: 'Archivo no válido', description: invalid, variant: 'warning' });
-        return;
-      }
-    }
-    setFiles(picked);
-  };
-
-  const submit = async (): Promise<void> => {
-    if (body.trim().length < 10) {
-      toast({
-        title: 'Publicación muy corta',
-        description: 'Escribe al menos 10 caracteres.',
-        variant: 'warning',
-      });
-      return;
-    }
-    setSaving(true);
-    try {
-      const input: CreatePostInput = {
-        type,
-        ...(title.trim() ? { title: title.trim() } : {}),
-        body: body.trim(),
-        ...(shareable ? { shareable: true } : {}),
-        ...(files.length > 0
-          ? {
-              images: files.map((file, index) => ({
-                filename: file.name,
-                contentType: file.type as 'image/jpeg' | 'image/png',
-                order: index,
-              })),
-            }
-          : {}),
-      };
-      const result = await client.request<CreatePostResult>('/community/posts', {
-        method: 'POST',
-        json: input,
-      });
-      await Promise.all(
-        result.imageUploads.map((upload) => {
-          const file = files[upload.order];
-          return file ? uploadImageFile(client, upload.key, file) : Promise.resolve();
-        }),
-      );
-      resetForm();
-      setShowForm(false);
-      await load(filter);
-      toast({ title: 'Publicación creada', variant: 'success' });
-    } catch (error) {
-      toast({
-        title: 'No se pudo publicar',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+  const userName = user?.name ?? 'Tú';
 
   return (
     <PageContainer>
       <PageHeader
         title="Comunidad"
-        description="Publicaciones, avisos y campañas de organizaciones y personas de AdoptaFácil."
-        actions={<Button onClick={() => setShowForm(true)}>Publicar</Button>}
+        description="Historias, avisos y campañas de personas y organizaciones de AdoptaFácil."
       />
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setFilter('all')}
-          aria-pressed={filter === 'all'}
-          className={`rounded-full border px-3 py-1 text-sm ${
-            filter === 'all' ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
-          }`}
-        >
-          Todas
-        </button>
-        {POST_TYPES.map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setFilter(value)}
-            aria-pressed={filter === value}
-            className={`rounded-full border px-3 py-1 text-sm ${
-              filter === value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input'
-            }`}
-          >
-            {TYPE_LABELS[value]}
-          </button>
-        ))}
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="mx-auto w-full max-w-2xl space-y-4 lg:mx-0 lg:max-w-none">
+          <PostComposer
+            userName={userName}
+            isOrganization={Boolean(user?.organizationId)}
+            onCreated={(post) => {
+              if (filter === 'all' || filter === post.type) setPosts((prev) => [post, ...prev]);
+            }}
+          />
 
-      {loading && <Skeleton className="h-64 w-full" />}
-      {!loading && (
-        <div className="space-y-6">
-          {posts.length === 0 ? (
-            <EmptyState
-              icon={<span aria-hidden>💬</span>}
-              title="Aún no hay publicaciones"
-              description="Sé la primera persona en publicar algo en la comunidad."
-              action={<Button onClick={() => setShowForm(true)}>Publicar la primera</Button>}
-            />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {posts.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por categoría">
+            {(['all', ...POST_TYPES] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilter(value)}
+                aria-pressed={filter === value}
+                className={cn(
+                  'rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors',
+                  filter === value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input hover:bg-muted',
+                )}
+              >
+                {value === 'all' ? 'Todas' : TYPE_LABELS[value]}
+              </button>
+            ))}
+          </div>
+
+          {loading && (
+            <div className="space-y-4">
+              <Skeleton className="h-64 w-full rounded-2xl" />
+              <Skeleton className="h-64 w-full rounded-2xl" />
             </div>
           )}
+          {!loading &&
+            (posts.length === 0 ? (
+              <EmptyState
+                icon={<span aria-hidden>💬</span>}
+                title="Aún no hay publicaciones"
+                description="Sé la primera persona en publicar algo en la comunidad."
+              />
+            ) : (
+              <div className="space-y-4">
+                {posts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    reaction={stateOf(post)}
+                    onReact={(p, next) => void react(p, next)}
+                  />
+                ))}
+              </div>
+            ))}
         </div>
-      )}
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nueva publicación</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label htmlFor="post-type" className="block text-sm font-medium text-foreground">
-                  Tipo
-                </label>
-                <select
-                  id="post-type"
-                  value={type}
-                  onChange={(e) => setType(e.target.value as PostType)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {POST_TYPES.map((value) => (
-                    <option key={value} value={value}>
-                      {TYPE_LABELS[value]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="post-title" className="block text-sm font-medium text-foreground">
-                  Título (opcional)
-                </label>
-                <Input id="post-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-              </div>
+        {leaders.length > 0 && (
+          <div className="hidden lg:block">
+            <div className="sticky top-4">
+              <Leaders leaders={leaders} />
             </div>
-            <TextAreaField
-              id="post-body"
-              label="Publicación (10-2000 caracteres)"
-              value={body}
-              onChange={setBody}
-              rows={6}
-              placeholder="Comparte algo con la comunidad de AdoptaFácil…"
-            />
-            <div className="space-y-1.5">
-              <label htmlFor="post-images" className="block text-sm font-medium text-foreground">
-                Fotos (opcional, hasta {MAX_IMAGES}, JPG o PNG, máx. 5 MB c/u)
-              </label>
-              <input
-                id="post-images"
-                type="file"
-                multiple
-                accept={IMAGE_ACCEPT.join(',')}
-                onChange={(e) => onPickFiles(e.target.files)}
-                className="block w-full text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
-              />
-            </div>
-            <label className="flex items-start gap-2 text-sm" htmlFor="post-shareable">
-              <input
-                id="post-shareable"
-                type="checkbox"
-                className="mt-1 h-4 w-4"
-                checked={shareable}
-                onChange={(e) => setShareable(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Hacerla pública y compartible en redes.</span>{' '}
-                <span className="text-muted-foreground">
-                  Cualquiera podrá verla sin cuenta y compartirla en WhatsApp, Facebook, X o
-                  LinkedIn. Si publicas como persona, solo se muestra tu primer nombre. Puedes
-                  cambiarlo cuando quieras.
-                </span>
-              </span>
-            </label>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>
-              Cancelar
-            </Button>
-            <Button disabled={saving} onClick={() => void submit()}>
-              {saving ? 'Publicando…' : 'Publicar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        )}
+      </div>
     </PageContainer>
   );
 }

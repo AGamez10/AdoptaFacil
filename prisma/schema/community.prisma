@@ -45,6 +45,7 @@ model Post {
   status            String    @default("published")
   commentCount      Int       @default(0) @map("comment_count")
   likeCount         Int       @default(0) @map("like_count")
+  reactionCounts    Json      @default("{}") @map("reaction_counts")
   /// La autora autorizó que se vea sin sesión y se comparta en redes. Se
   /// cambia solo vía `community_post_set_shareable` (por identidad de autora).
   shareable         Boolean   @default(false)
@@ -70,12 +71,16 @@ model Post {
 /// StoragePort. Reservada al crear la publicación (sin add/remove posterior
 /// en este alcance).
 model PostImage {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String?  @map("organization_id") @db.Uuid
-  postId         String   @map("post_id") @db.Uuid
-  storageRef     String   @map("storage_ref")
-  order          Int      @default(0)
-  createdAt      DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String?  @map("organization_id") @db.Uuid
+  postId          String   @map("post_id") @db.Uuid
+  storageRef      String   @map("storage_ref")
+  order           Int      @default(0)
+  /// 'image' | 'video'. Un video se comprime en el servidor y trae su póster.
+  kind            String   @default("image")
+  posterRef       String?  @map("poster_ref")
+  durationSeconds Int?     @map("duration_seconds")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
@@ -110,6 +115,8 @@ model PostLike {
   postId         String   @map("post_id") @db.Uuid
   userId         String   @map("user_id") @db.Uuid
   organizationId String?  @map("organization_id") @db.Uuid
+  /// like | love | tender | celebrate | sad (una por persona y publicación).
+  reaction       String   @default("like")
   createdAt      DateTime @default(now()) @map("created_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
