@@ -44,8 +44,11 @@ Las migraciones (servicio `migrate`) van directo a Postgres, nunca por PgBouncer
    el VPS y `STORAGE_PUBLIC_CDN_BASE_URL=https://img.adoptafacil.org/api`.
 2. Regla de caché "Cache everything, respetar el TTL del origen" para
    `/api/storage/public*` y `/api/public/*`. La API ya manda `Cache-Control`.
-3. Con Cloudflare delante hay un salto más: `TRUST_PROXY_HOPS=2`, o el límite
-   por IP contaría a todos los visitantes como la IP de Cloudflare.
+3. Con Cloudflare delante hay un salto más. Ya viene resuelto: el compose usa
+   `TRUST_PROXY_HOPS=2` por defecto y el Caddyfile solo confía en el
+   `X-Forwarded-For` que llega desde los rangos de IP de Cloudflare
+   (`trusted_proxies`). Sin eso, el límite por IP contaría a todos los visitantes
+   de un mismo nodo de Cloudflare como una sola IP.
 
 ## Métricas que deciden el siguiente paso
 
