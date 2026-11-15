@@ -315,6 +315,18 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       .expect(200);
   });
 
+  it('punto 11: un dato inválido se explica en español llano, sin jerga técnica', async () => {
+    const res = await request(server)
+      .patch(`/adoptions/contracts/${contractId}/data`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ weightKg: 900, followUpMonths: 0 })
+      .expect(400);
+    const text = JSON.stringify(res.body.message);
+    expect(text).toContain('Revisa el peso: no puede pasar de 500 kg.');
+    expect(text).toContain('El seguimiento debe durar al menos 1 mes.');
+    expect(text).not.toMatch(/expected|token|invalid/i);
+  });
+
   it('orden de firmas reforzado: no se puede enviar a firmas antes de que el representante firme (409)', async () => {
     await request(server)
       .post(`/adoptions/contracts/${contractId}/transitions`)

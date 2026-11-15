@@ -72,7 +72,9 @@ export function ResetPasswordPage() {
           </p>
         }
       >
-        <FormAlert>No encontramos un token válido en el enlace.</FormAlert>
+        <FormAlert>
+          Este enlace no sirve o está incompleto. Pide uno nuevo desde «Olvidé mi contraseña».
+        </FormAlert>
       </AuthLayout>
     );
   }
