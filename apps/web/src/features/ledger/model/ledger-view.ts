@@ -9,6 +9,10 @@ import {
 
 /** Presentación del libro público (hora Colombia solo aquí, en la UI). */
 
+/** Cómo funciona el libro (lo dice el diálogo "Ver libro completo"). */
+export const LEDGER_HOW_IT_WORKS =
+  'Las donaciones pagadas en línea entran solas. Los demás ingresos y todos los gastos los registra la organización, con su soporte. Ningún movimiento se borra: si hubo un error, se anula y se explica. Nunca publicamos datos de quienes donan.';
+
 const COP = new Intl.NumberFormat('es-CO', {
   style: 'currency',
   currency: 'COP',

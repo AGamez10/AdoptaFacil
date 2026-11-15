@@ -1,5 +1,6 @@
 import { COPY, EMPTY, type TplAnimal, type TplModel } from './model';
 import type { Kit } from './kit';
+import { ledgerBlock } from './ledger';
 import { PREMIUM_KIT_CSS } from './premium-css';
 import {
   fmt,
@@ -116,8 +117,7 @@ export function createPremiumKit(
         `<button type="button" class="k-lnk" data-ledger>Ver libro completo ${ic.arrow}</button>`,
         COPY.ledgerText,
       ),
-    ) =>
-      `<section class="w k-sec" data-sec="libro">${head}<p class="k-empty">${EMPTY.libro}</p></section>`,
+    ) => `<section class="w k-sec" data-sec="libro">${head}${ledgerBlock(m, 'k-empty')}</section>`,
     contact: () => {
       if (!SHOW.contacto) return '';
       const map = mapEmbed(m);

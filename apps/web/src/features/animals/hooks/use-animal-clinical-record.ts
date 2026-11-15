@@ -52,6 +52,8 @@ export function useAnimalClinicalRecord(animalId: string) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [animal, setAnimal] = useState<Animal | null>(null);
+  /** El expediente de ESTE animal no se pudo leer (red caída, servidor ocupado). */
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const base = `/animals/${animalId}/clinical-events`;
 
@@ -72,6 +74,9 @@ export function useAnimalClinicalRecord(animalId: string) {
       try {
         const list = await client.request<ClinicalEvent[]>(base);
         if (active) setEvents(list);
+      } catch {
+        // Nunca un rechazo sin manejar: la sección avisa que no pudo cargar.
+        if (active) setLoadFailed(true);
       } finally {
         if (active) setEventsLoading(false);
       }
@@ -87,6 +92,8 @@ export function useAnimalClinicalRecord(animalId: string) {
       try {
         const list = await client.request<ClinicalCarnetEntry[]>(`${base}/carnet`);
         if (active) setCarnet(list);
+      } catch {
+        if (active) setLoadFailed(true);
       } finally {
         if (active) setCarnetLoading(false);
       }
@@ -197,6 +204,7 @@ export function useAnimalClinicalRecord(animalId: string) {
     eventsLoading,
     carnet,
     carnetLoading,
+    loadFailed,
     downloadingPdf,
     downloadPdf,
     form: {

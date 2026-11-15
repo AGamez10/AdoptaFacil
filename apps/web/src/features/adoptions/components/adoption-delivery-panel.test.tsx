@@ -14,7 +14,7 @@ vi.mock('qrcode', () => ({
  * Ajuste 6 — panel "Entregar" de la organización: valida la foto obligatoria y
  * la identidad, sube la foto, registra la entrega y muestra el QR con el código.
  */
-function renderPanel() {
+function renderPanel(extra: { contractHealthStatus?: string; contractWeightKg?: number } = {}) {
   return render(
     <AppProviders
       session={{
@@ -29,7 +29,7 @@ function renderPanel() {
         },
       }}
     >
-      <AdoptionDeliveryPanel contractId="c1" animalName="Luna" />
+      <AdoptionDeliveryPanel contractId="c1" animalName="Luna" {...extra} />
     </AppProviders>,
   );
 }
@@ -112,5 +112,16 @@ describe('AdoptionDeliveryPanel', () => {
     renderPanel();
     expect(await screen.findByText('Entrega confirmada')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/Huella SHA-256 del acta/)).toBeInTheDocument());
+  });
+
+  it('punto 15: muestra la salud y el peso del contrato firmado en vez de pedirlos otra vez', async () => {
+    stub({ current: null });
+    renderPanel({ contractHealthStatus: 'Sano y vacunado', contractWeightKg: 18.5 });
+
+    const facts = await screen.findByTestId('delivery-contract-facts');
+    expect(facts).toHaveTextContent('Sano y vacunado');
+    expect(facts).toHaveTextContent('18.5 kg');
+    expect(screen.queryByLabelText('Peso (kg)')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Estado de salud al entregar')).not.toBeInTheDocument();
   });
 });

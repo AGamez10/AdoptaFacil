@@ -42,5 +42,5 @@ export const LEDGER_CSS = `
 .af-tpl .af-led li.vd b,.af-tpl .af-led li.vd .am{text-decoration:line-through;opacity:.55}
 .af-tpl .af-led .ft{font-size:13px;opacity:.75}
 .af-tpl .af-led .ft button{background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
-@media (max-width:600px){.af-tpl .af-led dl{grid-template-columns:1fr}.af-tpl .af-led li{flex-direction:column;gap:4px}}
+@media (max-width:600px){.af-tpl .af-led dl{grid-template-columns:1fr 1fr}.af-tpl .af-led dl>div:last-child{grid-column:1/-1}.af-tpl .af-led li{flex-direction:column;gap:4px}}
 `;

@@ -9,6 +9,7 @@ import {
   type NotificationMessage,
 } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
+import { completeTestContractData } from './support/contract-data';
 import { completeTestProfile } from './support/profile';
 import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
@@ -209,6 +210,7 @@ describe('Adoption delivery (ajuste 6: acta de entrega)', () => {
       .send(startBody())
       .expect(409);
 
+    await completeTestContractData(server, refugeToken, contractId);
     await request(server)
       .post(`/adoptions/contracts/${contractId}/signatures`)
       .set('Authorization', `Bearer ${refugeToken}`)
@@ -279,6 +281,15 @@ describe('Adoption delivery (ajuste 6: acta de entrega)', () => {
     const delivery = res.body.delivery;
     expect(delivery.status).toBe('pending_confirmation');
     expect(delivery.details.items).toEqual(['vaccine_card', 'food']);
+    // Punto 15: salud y peso del acta son los del contrato firmado, aunque el
+    // cliente envíe otros distintos.
+    const sealed = await request(server)
+      .get(`/adoptions/contracts/org/${contractId}`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    expect(delivery.details.weightKg).toBe(sealed.body.payload.data.weightKg);
+    expect(delivery.details.healthStatus).toBe(sealed.body.payload.data.healthStatusAtDelivery);
+    expect(delivery.details.weightKg).not.toBe(12.5);
     expect(delivery.contentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(delivery.record.animal.name).toBe('Luna');
     expect(delivery.record.organizationName).toBe('Refugio Entregas');
