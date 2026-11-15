@@ -10,6 +10,7 @@ import type {
   DonationsReportPayload,
   OrgReportPayload,
   SocialServiceReportPayload,
+  ImpactReportPayload,
 } from './report-payloads';
 import { SIGNER_ROLE_LABEL } from './report-legal-effect';
 import {
@@ -20,6 +21,11 @@ import {
   signerRoleLine,
 } from './report-pdf';
 import { sheetText } from './report-text';
+import {
+  CAMPAIGN_CATEGORY_LABEL,
+  CAMPAIGN_STATUS_LABEL,
+  labelOf,
+} from '../org-exports/export-labels';
 import { fitSignature, prepareSignature } from '../../core/legal/signature-render';
 
 /**
@@ -607,6 +613,15 @@ const ACCOUNTING_COLS: Col[] = [
   { header: 'Ajuste', width: 8 },
 ];
 
+const IMPACT_COLS: Col[] = [
+  { header: 'Campaña', width: 30 },
+  { header: 'Categoría', width: 16 },
+  { header: 'Estado', width: 11 },
+  { header: 'Meta', width: 14, fmt: 'money' },
+  { header: 'Recaudado', width: 16, fmt: 'money' },
+  { header: 'Avance', width: 13 },
+];
+
 const SOCIAL_COLS: Col[] = [
   { header: 'Voluntario', width: 16 },
   { header: 'Actividad', width: 14 },
@@ -718,6 +733,70 @@ function drawAccounting(d: DocumentSheet, p: AccountingReportPayload): void {
   );
   d.note(
     'Montos en pesos colombianos. Las donaciones suman y los reembolsos y contracargos restan. La comisión es la que informó la pasarela y la asume la organización; AdoptaFácil no cobra comisión por donación ni recibe el dinero. "-" significa que la pasarela no informó el dato. Este libro es un auxiliar de apoyo: la contabilidad oficial, los estados financieros y las declaraciones le corresponden al contador o revisor fiscal.',
+  );
+}
+
+function drawImpact(d: DocumentSheet, p: ImpactReportPayload): void {
+  d.kpis([
+    { label: 'Animales rescatados o recibidos', value: p.animalsRegistered, fmt: 'int' },
+    { label: 'Adopciones con contrato firmado', value: p.adoptionsCompleted, fmt: 'int' },
+    { label: 'Donaciones recibidas (neto)', value: p.donations.netTotal, fmt: 'money' },
+    { label: 'Horas de voluntariado', value: Math.round(p.volunteerHours), fmt: 'int' },
+  ]);
+  d.section('Dónde están hoy nuestros animales');
+  d.table(
+    [
+      { header: 'Situación', width: 70 },
+      { header: 'Animales', width: 30, fmt: 'int' },
+    ],
+    [
+      ['Esperan un hogar', p.animalsToday.available],
+      ['En proceso de adopción', p.animalsToday.inProcess],
+      ['Ya fueron adoptados', p.animalsToday.adopted],
+    ],
+  );
+  d.section('Cuidado veterinario en el período');
+  d.table(
+    [
+      { header: 'Atención', width: 70 },
+      { header: 'Cantidad', width: 30, fmt: 'int' },
+    ],
+    [
+      ['Vacunas', p.care.vaccines],
+      ['Esterilizaciones', p.care.sterilizations],
+      ['Cirugías', p.care.surgeries],
+      ['Tratamientos', p.care.treatments],
+    ],
+  );
+  d.section('Quienes nos apoyaron');
+  d.table(
+    [
+      { header: 'Concepto', width: 70 },
+      { header: 'Cantidad', width: 30, fmt: 'int' },
+    ],
+    [
+      ['Donaciones aprobadas', p.donations.count],
+      ['Personas distintas que donaron', p.donations.donors],
+      ['Voluntarios con horas aprobadas', p.volunteers],
+    ],
+  );
+  d.section('Campañas');
+  d.table(
+    IMPACT_COLS,
+    p.campaigns.map((k) => [
+      k.title,
+      labelOf(CAMPAIGN_CATEGORY_LABEL, k.category),
+      labelOf(CAMPAIGN_STATUS_LABEL, k.status),
+      k.goalAmount,
+      k.raisedAmount,
+      k.goalAmount > 0
+        ? `${Math.min(999, Math.round((k.raisedAmount / k.goalAmount) * 100))} %`
+        : '—',
+    ]),
+    'Sin campañas en el período.',
+  );
+  d.note(
+    'Cifras agregadas de los registros de la organización, sin datos personales de adoptantes, donantes ni voluntarios. El neto es lo que llegó a la organización después de la tarifa de Mercado Pago y su IVA. Documento informativo: no es un certificado de donación ni tiene efecto tributario.',
   );
 }
 
@@ -877,7 +956,9 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       ? DONATION_COLS
       : payload.kind === 'accounting'
         ? ACCOUNTING_COLS
-        : SOCIAL_COLS;
+        : payload.kind === 'impact'
+          ? IMPACT_COLS
+          : SOCIAL_COLS;
   const doc = new DocumentSheet(
     wb,
     wb.addWorksheet('Reporte', {
@@ -888,6 +969,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
   await doc.header(input);
   if (payload.kind === 'donations') drawDonations(doc, payload);
   else if (payload.kind === 'accounting') drawAccounting(doc, payload);
+  else if (payload.kind === 'impact') drawImpact(doc, payload);
   else drawSocialService(doc, payload);
   await doc.signatures(input);
   doc.footer(input);
@@ -962,7 +1044,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       })),
       input.code,
     );
-  } else {
+  } else if (payload.kind === 'social_service') {
     const notes: string[] = [];
     if (payload.anonymizedWithoutConsent && payload.anonymizedWithoutConsent > 0) {
       notes.push(

@@ -7,7 +7,8 @@ import {
   renderDataExportXlsx,
   type DataExportInput,
 } from './data-export-xlsx';
-import { renderImpactReportPdf, type ImpactReportData } from './impact-report-pdf';
+import type { ImpactReportData } from './impact-report-data';
+import { ReportsService } from '../reports/reports.service';
 import { resolveReportPeriod } from '../reports/report-period';
 
 interface DonationBreakdown {
@@ -42,6 +43,7 @@ export class OrgExportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly reports: ReportsService,
     @Inject(ConfigService) config: ConfigService,
   ) {
     this.webBaseUrl = String(config.get('WEB_BASE_URL') ?? 'http://localhost:5173').replace(
@@ -423,25 +425,37 @@ export class OrgExportsService {
     };
   }
 
-  /** PDF del reporte de impacto, con su descarga en la bitácora. */
+  /**
+   * Reporte de impacto: se SELLA en el historial de reportes (folio, QR de
+   * verificación y SHA-256) y se entrega su PDF. Generar el mismo período con
+   * las mismas cifras devuelve el reporte ya guardado.
+   */
   async impactReport(
     organizationId: string,
     actorUserId: string,
     startDate: string,
     endDate: string,
     now = new Date(),
-  ): Promise<{ filename: string; data: Buffer }> {
+  ): Promise<{ filename: string; data: Buffer; code: string }> {
     const data = await this.collectImpact(organizationId, startDate, endDate, now);
-    const pdf = await renderImpactReportPdf(data);
-    await this.audit.record({
-      organizationId,
+    const report = await this.reports.generateImpact(
       actorUserId,
-      action: 'organization.impact_report_generated',
-      entityType: 'organization',
-      entityId: organizationId,
-      metadata: { periodStart: data.period.start, periodEnd: data.period.end },
-    });
-    const stamp = `${data.period.start}_${data.period.end}`.replace(/-/g, '');
-    return { filename: `adoptafacil-impacto-${stamp}.pdf`, data: pdf };
+      data.period.start,
+      data.period.end,
+      {
+        version: 1,
+        kind: 'impact',
+        animalsRegistered: data.animalsRegistered,
+        adoptionsCompleted: data.adoptionsCompleted,
+        donations: data.donations,
+        care: data.care,
+        volunteerHours: data.volunteerHours,
+        volunteers: data.volunteers,
+        campaigns: data.campaigns,
+        animalsToday: data.animalsToday,
+      },
+    );
+    const pdf = await this.reports.renderPdf(report.id, actorUserId);
+    return { ...pdf, code: report.code };
   }
 }

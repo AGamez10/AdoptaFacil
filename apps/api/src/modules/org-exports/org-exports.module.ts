@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../core/auth/auth.module';
+import { ReportsModule } from '../reports/reports.module';
 import { OrgExportsController } from './org-exports.controller';
 import { OrgExportsService } from './org-exports.service';
 
@@ -10,7 +11,7 @@ import { OrgExportsService } from './org-exports.service';
  * comprobantes) sigue gratis en sus propios módulos; aquí solo va comodidad.
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, ReportsModule],
   controllers: [OrgExportsController],
   providers: [OrgExportsService],
 })

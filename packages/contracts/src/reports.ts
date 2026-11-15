@@ -28,8 +28,11 @@ export interface OrgReportApprovalInfo {
  * - `accounting` (aditivo, plan de pago `accountantPackage`): libro auxiliar de
  *   donaciones de un MES CERRADO, que revisa y firma el contador o revisor
  *   fiscal. Solo lo genera el cierre de mes (`POST /org/accounting/...`).
+ * - `impact` (aditivo, plan `impactReport`): reporte de impacto con cifras
+ *   agregadas para donantes y junta. Siempre informativo (sin firmantes) y
+ *   queda sellado en el historial con su código de verificación y QR.
  */
-export type OrgReportKind = 'donations' | 'social_service' | 'accounting';
+export type OrgReportKind = 'donations' | 'social_service' | 'accounting' | 'impact';
 
 /**
  * Qué valor tiene el documento según el nivel de formalidad de la

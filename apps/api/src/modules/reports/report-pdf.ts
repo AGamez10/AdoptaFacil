@@ -11,10 +11,16 @@ import type { LegalRepresentativeRole, OrgReportLegalEffect } from '@adoptafacil
 import type {
   AccountingReportPayload,
   DonationsReportPayload,
+  ImpactReportPayload,
   OrgReportPayload,
   SocialServiceReportPayload,
 } from './report-payloads';
 import { SIGNER_ROLE_LABEL } from './report-legal-effect';
+import {
+  CAMPAIGN_CATEGORY_LABEL,
+  CAMPAIGN_STATUS_LABEL,
+  labelOf,
+} from '../org-exports/export-labels';
 import { pdfText, toWinAnsi } from './report-text';
 import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
 import {
@@ -98,6 +104,9 @@ export function effectExplanation(
   kind: OrgReportPayload['kind'],
   effect: OrgReportLegalEffect,
 ): string {
+  if (kind === 'impact') {
+    return 'Reporte de impacto con cifras agregadas de los registros de la organización: no contiene datos personales de adoptantes, donantes ni voluntarios. Es informativo: no es un certificado de donación ni tiene efecto tributario. Verifica su autenticidad con el código QR o el folio.';
+  }
   if (effect === 'informative') {
     return 'Este documento resume información registrada en AdoptaFácil por la organización. No está firmado por un representante legal y no sirve como soporte legal ni tributario.';
   }
@@ -149,7 +158,9 @@ export function reportTitle(kind: OrgReportPayload['kind']): string {
     ? 'Informe de donaciones recibidas'
     : kind === 'accounting'
       ? 'Libro auxiliar de donaciones'
-      : 'Reporte de servicio social y voluntariado';
+      : kind === 'impact'
+        ? 'Reporte de impacto'
+        : 'Reporte de servicio social y voluntariado';
 }
 
 const money = (n: number): string => `$ ${Math.round(n).toLocaleString('es-CO')}`;
@@ -816,6 +827,117 @@ export function signerRoleLine(role: LegalRepresentativeRole, position: string):
   return clean.toLowerCase().includes(keyword) ? clean : `${label} · ${clean}`;
 }
 
+const impactMoney = (n: number): string => `$ ${Math.round(n).toLocaleString('es-CO')}`;
+const impactCount = (n: number): string => n.toLocaleString('es-CO');
+
+/** Barra horizontal proporcional (0..1) sobre un riel gris. */
+function drawBar(c: ReportCanvas, x: number, y: number, width: number, ratio: number): void {
+  c.page.drawRectangle({
+    x,
+    y,
+    width,
+    height: 7,
+    color: ZEBRA,
+    borderColor: LINE,
+    borderWidth: 0.5,
+  });
+  const w = Math.max(0, Math.min(1, ratio)) * width;
+  if (w > 0.5) c.page.drawRectangle({ x, y, width: w, height: 7, color: TEAL });
+}
+
+/** Una lista de barras `etiqueta · barra · valor`, todas contra el mayor valor. */
+function drawBars(
+  c: ReportCanvas,
+  rows: Array<{ label: string; value: number; shown?: string }>,
+): void {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  const labelW = 150;
+  const valueW = 70;
+  const barX = MARGIN + labelW + 8;
+  const barW = PAGE_W - MARGIN * 2 - labelW - valueW - 16;
+  for (const r of rows) {
+    c.ensure(20);
+    c.text(fit(r.label, c.font.regular, 9.5, labelW), MARGIN, 9.5, { color: INK });
+    drawBar(c, barX, c.y - 1, barW, r.value / max);
+    const shown = r.shown ?? impactCount(r.value);
+    const w = c.font.bold.widthOfTextAtSize(shown, 9.5);
+    c.text(shown, PAGE_W - MARGIN - w, 9.5, { font: c.font.bold, color: NAVY });
+    c.y -= 18;
+  }
+  c.y -= 4;
+}
+
+function drawImpact(c: ReportCanvas, p: ImpactReportPayload): void {
+  c.kpis([
+    { label: 'Animales rescatados o recibidos', value: impactCount(p.animalsRegistered) },
+    { label: 'Adopciones con contrato firmado', value: impactCount(p.adoptionsCompleted) },
+    { label: 'Donaciones recibidas (neto)', value: impactMoney(p.donations.netTotal) },
+    { label: 'Horas de voluntariado', value: impactCount(Math.round(p.volunteerHours)) },
+  ]);
+
+  c.sectionTitle('Dónde están hoy nuestros animales');
+  drawBars(c, [
+    { label: 'Esperan un hogar', value: p.animalsToday.available },
+    { label: 'En proceso de adopción', value: p.animalsToday.inProcess },
+    { label: 'Ya fueron adoptados', value: p.animalsToday.adopted },
+  ]);
+
+  c.sectionTitle('Cuidado veterinario en el período');
+  drawBars(c, [
+    { label: 'Vacunas', value: p.care.vaccines },
+    { label: 'Esterilizaciones', value: p.care.sterilizations },
+    { label: 'Cirugías', value: p.care.surgeries },
+    { label: 'Tratamientos', value: p.care.treatments },
+  ]);
+
+  c.sectionTitle('Quienes nos apoyaron');
+  c.paragraph(
+    `${impactCount(p.donations.count)} ${p.donations.count === 1 ? 'donación aprobada' : 'donaciones aprobadas'} de ${impactCount(p.donations.donors)} ${p.donations.donors === 1 ? 'persona' : 'personas'} distintas, y ${impactCount(p.volunteers)} ${p.volunteers === 1 ? 'voluntario' : 'voluntarios'} con horas aprobadas. El neto es lo que llegó a la organización después de la tarifa de Mercado Pago y su IVA.`,
+    MARGIN,
+    10,
+    PAGE_W - MARGIN * 2,
+    14,
+  );
+
+  c.sectionTitle('Campañas');
+  const shown = p.campaigns.slice(0, IMPACT_MAX_CAMPAIGNS);
+  c.table(
+    [
+      { header: 'Campaña', width: 30 },
+      { header: 'Categoría', width: 16 },
+      { header: 'Estado', width: 11 },
+      { header: 'Meta', width: 14, align: 'right' },
+      { header: 'Recaudado', width: 16, align: 'right' },
+      { header: 'Avance', width: 13, align: 'right' },
+    ],
+    shown.map((k) => [
+      pdfText(k.title, 120),
+      labelOf(CAMPAIGN_CATEGORY_LABEL, k.category),
+      labelOf(CAMPAIGN_STATUS_LABEL, k.status),
+      impactMoney(k.goalAmount),
+      impactMoney(k.raisedAmount),
+      k.goalAmount > 0
+        ? `${Math.min(999, Math.round((k.raisedAmount / k.goalAmount) * 100))} %`
+        : '—',
+    ]),
+    { emptyText: 'Sin campañas en el período.' },
+  );
+  if (p.campaigns.length > shown.length) {
+    c.paragraph(
+      `Y ${p.campaigns.length - shown.length} campañas más.`,
+      MARGIN,
+      9,
+      PAGE_W - MARGIN * 2,
+      12,
+      c.font.italic,
+      MUTED,
+    );
+  }
+}
+
+/** Campañas que caben en la tabla del reporte de impacto; el resto se resume. */
+export const IMPACT_MAX_CAMPAIGNS = 12;
+
 async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promise<void> {
   if (input.draft) {
     c.ensure(40);
@@ -989,6 +1111,7 @@ export async function renderReportPdf(input: RenderReportInput): Promise<Buffer>
   drawHeader(c, input, kindTitle);
   if (input.payload.kind === 'donations') drawDonations(c, input.payload);
   else if (input.payload.kind === 'accounting') drawAccounting(c, input.payload);
+  else if (input.payload.kind === 'impact') drawImpact(c, input.payload);
   else {
     drawSocialService(c, input.payload);
     await drawSocialServicePhotos(c, input.payload, input.photos);

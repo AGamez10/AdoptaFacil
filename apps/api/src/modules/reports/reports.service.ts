@@ -60,6 +60,7 @@ import {
 } from './report-legal-effect';
 import {
   type AccountingReportPayload,
+  type ImpactReportPayload,
   type OrgReportPayload,
   type ReportOrganizationSnapshot,
   buildDonationsPayload,
@@ -154,6 +155,13 @@ function toContract(row: OrgReportRow, reused?: boolean, approvals: ApprovalRow[
 }
 
 function summarize(payload: OrgReportPayload): OrgReportSummary {
+  if (payload.kind === 'impact') {
+    return {
+      rowCount: payload.campaigns.length,
+      netTotal: payload.donations.netTotal,
+      approvedHours: payload.volunteerHours,
+    };
+  }
   if (payload.kind === 'accounting') {
     return {
       rowCount: payload.rows.length,
@@ -445,6 +453,44 @@ export class ReportsService {
     }
   }
 
+  /**
+   * Reporte de impacto (plan `impactReport`): se sella como cualquier reporte
+   * (folio, SHA-256, QR de verificación) y queda en el historial. Es siempre
+   * informativo: sin firmantes. El mismo período con las mismas cifras reutiliza
+   * el reporte ya generado.
+   */
+  async generateImpact(
+    actorUserId: string,
+    startDate: string,
+    endDate: string,
+    metrics: Omit<ImpactReportPayload, 'organization' | 'period'>,
+  ): Promise<OrgReport> {
+    const organizationId = this.requireOrgId();
+    const input: GenerateOrgReportInput = {
+      kind: 'impact',
+      periodStart: startDate,
+      periodEnd: endDate,
+    };
+    const period = resolveReportPeriod(input.periodStart, input.periodEnd);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const { row, reused, approvals } = await this.generateOnce(
+          organizationId,
+          actorUserId,
+          input,
+          period,
+          {},
+          undefined,
+          metrics,
+        );
+        return toContract(row, reused, approvals);
+      } catch (error) {
+        if (isUniqueConstraintViolation(error) && attempt < CODE_MAX_ATTEMPTS) continue;
+        throw error;
+      }
+    }
+  }
+
   /** Informe contable de un mes ya generado (el más reciente), con su estado. */
   async accountingReportFor(
     organizationId: string,
@@ -492,6 +538,7 @@ export class ReportsService {
     period: ReportPeriod,
     filters: SocialServiceReportFilters,
     accountingPayload?: Omit<AccountingReportPayload, 'organization' | 'period'>,
+    impactPayload?: Omit<ImpactReportPayload, 'organization' | 'period'>,
   ): Promise<{
     row: OrgReportRow;
     reused: boolean;
@@ -506,7 +553,10 @@ export class ReportsService {
 
       const registered = new Set(available.keys());
       let roles: LegalRepresentativeRole[];
-      if (!this.signaturesEnabled) {
+      if (input.kind === 'impact') {
+        // Informativo siempre: ni firmantes ni política de firmas.
+        roles = [];
+      } else if (!this.signaturesEnabled) {
         // Sin aprobación del propio firmante, la plataforma no estampa firmas.
         if (input.signerRoles && input.signerRoles.length > 0) {
           throw new BadRequestException(SIGNATURES_PENDING_STEP);
@@ -563,6 +613,15 @@ export class ReportsService {
         }
         payload = {
           ...accountingPayload,
+          organization: snapshot,
+          period: { start: period.startDate, end: period.endDate },
+        };
+      } else if (input.kind === 'impact') {
+        if (!impactPayload) {
+          throw new BadRequestException('El reporte de impacto se genera desde Exportar datos.');
+        }
+        payload = {
+          ...impactPayload,
           organization: snapshot,
           period: { start: period.startDate, end: period.endDate },
         };
@@ -695,7 +754,9 @@ export class ReportsService {
         ? 'el informe de donaciones'
         : row.kind === 'accounting'
           ? 'el libro auxiliar de donaciones del mes (cierre contable)'
-          : 'el reporte de servicio social';
+          : row.kind === 'impact'
+            ? 'el reporte de impacto'
+            : 'el reporte de servicio social';
     await Promise.all(
       notify.map(({ email, role, token, firstTime }) => {
         const how = token
@@ -1377,7 +1438,7 @@ export class ReportsService {
     );
     const skip = Math.max(Number.isFinite(offset) ? offset : 0, 0);
     const where: Prisma.OrgReportWhereInput = { organizationId };
-    if (kind === 'donations' || kind === 'social_service') where.kind = kind;
+    if (kind === 'donations' || kind === 'social_service' || kind === 'impact') where.kind = kind;
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       if (await this.isRestrictedSigner(tx, organizationId, actorUserId)) {
         where.signers = { array_contains: [{ signerUserId: actorUserId }] };

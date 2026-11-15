@@ -22,6 +22,7 @@ const KIND_LABEL: Record<SignatureRequestPreview['report']['kind'], string> = {
   donations: 'Informe de donaciones',
   social_service: 'Reporte de servicio social',
   accounting: 'Libro auxiliar de donaciones (cierre de mes)',
+  impact: 'Reporte de impacto',
 };
 
 /** El token viaja en el fragmento (#token=…): nunca llega a los registros del servidor. */

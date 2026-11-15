@@ -35,6 +35,7 @@ const REPORT_KIND_LABEL: Record<OrgReportVerification['kind'], string> = {
   donations: 'Informe de donaciones recibidas',
   social_service: 'Reporte de servicio social y voluntariado',
   accounting: 'Libro auxiliar de donaciones (cierre de mes)',
+  impact: 'Reporte de impacto',
 };
 
 const REPORT_EFFECT: Record<
