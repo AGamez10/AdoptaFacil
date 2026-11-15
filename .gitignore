@@ -57,3 +57,7 @@ deploy/backups/
 deploy/.last-release
 node-compile-cache/
 dump.rdb
+
+# Python bytecode y caches locales
+__pycache__/
+*.pyc
