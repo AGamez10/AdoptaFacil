@@ -106,6 +106,12 @@ const CSS = `
 .tpl-expediente .x-copy p{font-size:18px;line-height:1.6;color:var(--soft);max-width:32em}
 @media (max-width:900px){.tpl-expediente .x-receipt-row{grid-template-columns:minmax(0,1fr)}}
 
+.tpl-expediente .x-tot{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 16px;border:1px solid var(--ink);background:var(--card)}
+.tpl-expediente .x-tot>div{padding:14px 16px}
+.tpl-expediente .x-tot>div+div{border-left:1px solid var(--hair)}
+.tpl-expediente .x-tot dt{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+.tpl-expediente .x-tot dd{margin:6px 0 0;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+@media (max-width:600px){.tpl-expediente .x-tot{grid-template-columns:1fr}.tpl-expediente .x-tot>div+div{border-left:0;border-top:1px solid var(--hair)}}
 .tpl-expediente .x-table{border:1px solid var(--ink);background:var(--card);overflow-x:auto}
 .tpl-expediente .x-table table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
 .tpl-expediente .x-table th{text-align:left;font-family:'JetBrains Mono',monospace;font-weight:400;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding:12px 16px;border-bottom:1px solid var(--ink)}
@@ -221,6 +227,7 @@ ${KIT.revs(KIT.hd('07 · Reseñas', 'Lo que dicen las familias', `<button type="
 <section class="x-sec" id="x-libro" data-sec="libro"><div class="w">
   <div class="x-sh"><span class="c x-lab">08 · Transparencia · libro público</span><h2>Ingresos y gastos</h2></div>
   <p style="color:var(--soft);margin:-10px 0 20px">${COPY.ledgerText} <button type="button" class="k-lnk" data-ledger>Ver libro completo ${ic.arrow}</button></p>
+  ${m.LEDGER.rows.length ? `<dl class="x-tot"><div><dt>Recibido</dt><dd>${m.LEDGER.income}</dd></div><div><dt>Gastado</dt><dd>${m.LEDGER.expense}</dd></div><div><dt>Saldo</dt><dd>${m.LEDGER.balance}</dd></div></dl>` : ''}
   <div class="x-table" style="overflow-x:auto"><table style="min-width:600px"><thead><tr><th>Fecha</th><th>Concepto</th><th>Tipo</th><th style="text-align:right">Monto</th><th>Soporte</th></tr></thead>
     <tbody>${m.LEDGER.rows.length ? m.LEDGER.rows.map((r) => `<tr${r.voided ? ' style="opacity:.55;text-decoration:line-through"' : ''}><td>${r.date}</td><td>${r.concept}${r.voided ? `<br><small>Anulado: ${r.voidReason}</small>` : ''}</td><td>${r.income ? 'Ingreso' : 'Gasto'}${r.category ? ` · ${r.category}` : ''}</td><td style="text-align:right;white-space:nowrap">${r.amount}</td><td>${r.online ? 'Pago en línea' : r.support ? 'Sí' : '—'}</td></tr>`).join('') : `<tr class="x-empty"><td colspan="5">${EMPTY.libro}</td></tr>`}</tbody></table></div>
 </div></section>

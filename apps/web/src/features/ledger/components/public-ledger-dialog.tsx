@@ -12,22 +12,33 @@ import {
   friendlyErrorMessage,
 } from '@adoptafacil/ui';
 import { fetchPublicLedger } from '../api/public-ledger';
+import { LEDGER_HOW_IT_WORKS } from '../model/ledger-view';
 import { LedgerEntryList } from './ledger-entry-list';
 import { LedgerSummary } from './ledger-summary';
+import { ThemedLedgerDialog } from './themed-ledger-dialog';
+import type { LedgerTheme } from '../model/ledger-theme';
 
 const PAGE = 20;
 
-export const LEDGER_HOW_IT_WORKS =
-  'Las donaciones pagadas en línea entran solas. Los demás ingresos y todos los gastos los registra la organización, con su soporte. Ningún movimiento se borra: si hubo un error, se anula y se explica. Nunca publicamos datos de quienes donan.';
+export { LEDGER_HOW_IT_WORKS };
 
 export interface PublicLedgerDialogProps {
   slug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Apariencia de la plantilla activa del portal (si la hay). */
+  theme?: LedgerTheme | null;
+  orgName?: string;
 }
 
 /** "Ver libro completo": todos los movimientos, por páginas. */
-export function PublicLedgerDialog({ slug, open, onOpenChange }: PublicLedgerDialogProps) {
+export function PublicLedgerDialog({
+  slug,
+  open,
+  onOpenChange,
+  theme,
+  orgName,
+}: PublicLedgerDialogProps) {
   const [page, setPage] = useState<PublicLedgerPage | null>(null);
   const [items, setItems] = useState<PublicLedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +72,25 @@ export function PublicLedgerDialog({ slug, open, onOpenChange }: PublicLedgerDia
       setLoadingMore(false);
     }
   }, [slug, items.length]);
+
+  if (theme) {
+    return (
+      <ThemedLedgerDialog
+        theme={theme}
+        open={open}
+        onOpenChange={onOpenChange}
+        testId="public-ledger-dialog"
+        orgName={orgName}
+        totals={page?.totals ?? null}
+        items={items}
+        loading={!page && !error}
+        error={error}
+        hasMore={!!page && items.length < page.total}
+        loadingMore={loadingMore}
+        onLoadMore={() => void loadMore()}
+      />
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
