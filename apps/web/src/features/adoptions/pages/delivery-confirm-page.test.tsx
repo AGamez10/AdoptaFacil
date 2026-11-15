@@ -73,6 +73,15 @@ describe('MyAnimalsPage', () => {
     renderShell({ route: '/mis-animales', ...persona });
     expect(await screen.findByRole('heading', { name: 'Luna' })).toBeInTheDocument();
     expect(screen.getByText('Próximas dosis')).toBeInTheDocument();
-    expect(screen.getByText(/Carné de vacunas físico, Alimento/)).toBeInTheDocument();
+    expect(screen.getByText('Carné de vacunas físico')).toBeInTheDocument();
+    expect(screen.getByText('Alimento')).toBeInTheDocument();
+    // Puntos 16 y 17: la ficha se puede llevar y conecta con la comunidad.
+    expect(screen.getByRole('button', { name: 'Guardar como PDF o imprimir' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compartir' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Agregar a mi calendario' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Comparte su historia/ })).toHaveAttribute(
+      'href',
+      '/comunidad',
+    );
   });
 });
