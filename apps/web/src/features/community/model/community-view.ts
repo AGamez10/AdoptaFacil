@@ -54,3 +54,23 @@ export function excerpt(body: string, maxLength = 220): string {
   if (body.length <= maxLength) return body;
   return `${body.slice(0, maxLength).trimEnd()}…`;
 }
+
+/** "hace 3 h", "hace 2 días" o la fecha corta si ya pasó una semana. */
+export function timeAgo(isoUtc: string, now: Date = new Date()): string {
+  const date = new Date(isoUtc);
+  if (Number.isNaN(date.getTime())) return isoUtc;
+  const seconds = Math.max(0, Math.round((now.getTime() - date.getTime()) / 1000));
+  if (seconds < 60) return 'hace un momento';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? 'hace 1 día' : `hace ${days} días`;
+  return new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}

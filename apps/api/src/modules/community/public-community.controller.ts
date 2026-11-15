@@ -16,6 +16,7 @@ import type {
   PublicCommunityPostsPage,
 } from '@adoptafacil/contracts';
 import { RequireFeature } from '../../core/features';
+import { posterKeyFor } from '../../core/media/video-transcoder';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { PublicCache } from '../../core/cache/public-cache.decorator';
 import { PublicCommunityService } from './public-community.service';
@@ -85,10 +86,16 @@ export class PublicCommunityController {
   async card(@Param('id', ParseUUIDPipe) id: string): Promise<StreamableFile> {
     const post = await this.service.get(id);
     if (!post) throw new NotFoundException('Publicación no encontrada');
-    // Solo publicaciones de organización traen fotos (ya públicas en la propia
-    // publicación); si no se puede leer, la tarjeta usa la ilustración de marca.
-    const first = post.isOrganization ? post.images[0] : undefined;
-    const stored = first ? await this.storage.readObject(first.storageRef).catch(() => null) : null;
+    // La tarjeta lleva la primera foto de la publicación (o la portada de su
+    // video). Solo existe si la autora hizo pública la publicación; si el
+    // archivo no se puede leer, usa la ilustración de marca.
+    const first = post.images[0];
+    const photoKey = first
+      ? first.kind === 'video'
+        ? posterKeyFor(first.storageRef)
+        : first.storageRef
+      : null;
+    const stored = photoKey ? await this.storage.readObject(photoKey).catch(() => null) : null;
     const png = await renderShareCard(
       post,
       new URL(this.webBaseUrl).host.replace(/^www\./, ''),

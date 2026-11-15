@@ -1,0 +1,90 @@
+/* Animaciones de reacciones y video de la comunidad. Todo se apaga con
+   prefers-reduced-motion. */
+
+.tray {
+  animation: tray-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.trayItem {
+  animation: item-in 220ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  animation-delay: calc(var(--i) * 28ms);
+  transition: transform 140ms cubic-bezier(0.2, 1.4, 0.4, 1);
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-6px) scale(1.35);
+  }
+
+  &:active {
+    transform: translateY(-2px) scale(1.15);
+  }
+}
+
+.burst {
+  position: absolute;
+  left: 1rem;
+  top: 0;
+  pointer-events: none;
+  font-size: 1.5rem;
+  animation: burst 700ms ease-out forwards;
+}
+
+.pop {
+  animation: pop 320ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes tray-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+
+@keyframes item-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.5);
+  }
+}
+
+@keyframes burst {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-2.5rem) scale(1.6);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray,
+  .trayItem,
+  .burst,
+  .pop {
+    animation: none;
+    transition: none;
+  }
+
+  .trayItem:hover,
+  .trayItem:focus-visible {
+    transform: none;
+  }
+
+  .burst {
+    display: none;
+  }
+}

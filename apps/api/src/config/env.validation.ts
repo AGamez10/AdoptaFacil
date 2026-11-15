@@ -124,6 +124,9 @@ export const envSchema = z.object({
   STORAGE_DISK_ROOT: z.string().min(1).default('./.storage'),
   // Max upload size in MB (enforced by the adapter and the upload endpoint).
   STORAGE_MAX_FILE_MB: z.coerce.number().int().positive().max(100).default(15),
+  // Videos de la comunidad: ffmpeg/ffprobe (en el PATH de la imagen de la API).
+  FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
+  FFPROBE_PATH: z.string().min(1).default('ffprobe'),
   // Video de seguimiento postadopción (máximo 30 s, decisión del 2026-10-17):
   // peso máximo en MB. TODO(client): confirmar los 50 MB propuestos.
   FOLLOWUP_VIDEO_MAX_MB: z.coerce.number().int().positive().max(100).default(50),

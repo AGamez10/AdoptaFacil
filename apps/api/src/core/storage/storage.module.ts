@@ -9,6 +9,7 @@ import { S3StorageAdapter } from './s3-storage.adapter';
 import { StorageController } from './storage.controller';
 import { STORAGE_PORT } from './storage.port';
 import { RedisUsageCache } from './usage-cache';
+import { VideoTranscoder } from '../media/video-transcoder';
 import { REDIS_CLIENT } from '../../redis/redis.service';
 
 /**
@@ -24,6 +25,7 @@ import { REDIS_CLIENT } from '../../redis/redis.service';
   imports: [AuthModule],
   controllers: [StorageController],
   providers: [
+    VideoTranscoder,
     {
       provide: STORAGE_PORT,
       inject: [ConfigService, REDIS_CLIENT],
@@ -37,6 +39,6 @@ import { REDIS_CLIENT } from '../../redis/redis.service';
       },
     },
   ],
-  exports: [STORAGE_PORT],
+  exports: [STORAGE_PORT, VideoTranscoder],
 })
 export class StorageModule {}
