@@ -171,6 +171,9 @@ export const envSchema = z.object({
   // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
   // AdoptaFácil's plans (subscriptions); never used for a donation.
   MERCADOPAGO_PLATFORM_ACCESS_TOKEN: z.string().min(1).optional(),
+  // Café de AdoptaFácil: dominios que el equipo puede imprimir en el QR de una
+  // presentación (separados por coma). El dominio queda fijo al crearla.
+  COFFEE_QR_DOMAINS: z.string().default('adoptafacil.org'),
   // Optional statement descriptor shown on the donor's card statement.
   MERCADOPAGO_STATEMENT_DESCRIPTOR: z.string().min(1).max(22).optional(),
   // Token renewal: scan interval (default daily) and how many days before

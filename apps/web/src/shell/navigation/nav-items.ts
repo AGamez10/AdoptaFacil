@@ -123,6 +123,10 @@ export const PLATFORM_TEAM_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin]
  *  `PlatformPlansController` (`GET`/`PUT /platform/organizations/:id/plan`). */
 export const PLATFORM_PLANS_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
 
+/** Café de AdoptaFácil · copiado VERBATIM del `@Roles` de
+ *  `PlatformCoffeeController` (`/platform/coffee/*`). */
+export const PLATFORM_COFFEE_ROLES = [Role.PlatformAdmin, Role.PlatformSuperAdmin] as const;
+
 export const PLATFORM_ADMIN_DASHBOARD_ROLES = [
   Role.PlatformAdmin,
   Role.PlatformSuperAdmin,
@@ -687,6 +691,13 @@ export const navItems: NavItem[] = [
     label: 'Banner del portal',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
+  },
+  // Café de AdoptaFácil: presentaciones con QR fijo, lotes, pedidos y aportes.
+  {
+    path: '/plataforma/cafe',
+    label: 'Café de AdoptaFácil',
+    icon: ShoppingBagIcon,
+    roles: PLATFORM_COFFEE_ROLES,
   },
   // F19 · espacio de trabajo del equipo de plataforma: tareas, doble
   // aprobación, personas del equipo, bitácora y "Mi seguridad".
