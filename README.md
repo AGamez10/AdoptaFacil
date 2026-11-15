@@ -26,7 +26,7 @@ son sus planes.
 
 | Herramienta | Versión          | Notas                                             |
 | ----------- | ---------------- | ------------------------------------------------- |
-| Node.js     | 20 LTS           | ver `.nvmrc` / `.node-version`                    |
+| Node.js     | 24 LTS           | ver `.nvmrc` / `.node-version` (24)               |
 | pnpm        | 9.15.9           | fijado (`npm i -g pnpm@9.15.9`); pnpm 11 rompe CI |
 | Docker      | Desktop / Engine | Postgres 16 + Redis 7 locales                     |
 | Git         | 2.x              | hooks (Husky), Conventional Commits               |
@@ -58,7 +58,9 @@ docker compose up -d
 # contraseña), seed:demo, seed:trafico y seed:volumen. Después: pnpm dev.
 
 # 4. Migrar la base de datos (tablas, RLS, funciones y rol adoptafacil_app)
-pnpm prisma migrate dev
+#    En un clon limpio o para auditoría usa `db:deploy` (solo aplica migraciones).
+#    `prisma migrate dev` además puede crear migraciones nuevas en desarrollo.
+pnpm db:deploy
 
 # 5. Datos iniciales (opcional)
 pnpm seed:admin    # PlatformAdmin / PlatformSuperAdmin
@@ -95,6 +97,29 @@ La plantilla es `.env.example`. Por defecto todo funciona sin proveedores extern
 Con `PAYMENT_DRIVER=mercadopago` son obligatorias `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET` y `MERCADOPAGO_WEBHOOK_SECRET`; con `NOTIFICATION_DRIVER=smtp`, `SMTP_HOST`, `SMTP_PORT` y `SMTP_FROM` (guía en `docs/operacion/CORREO.md`). La
 configuración se valida al arrancar y la API falla rápido si falta algo. En producción debe definirse
 `JWT_SECRET`.
+
+## Auditoría: clonar, verificar y arrancar
+
+Para revisar el código, usa la rama de auditoría (no `main`):
+
+```bash
+git clone --branch auditoria-2026-11-15 --single-branch https://github.com/AGamez10/AdoptaFacil.git
+cd AdoptaFacil
+git checkout auditoria-2026-11-15   # tag equivalente: auditoria-2026-11-15
+node -v                             # debe ser 24.x (ver .nvmrc)
+pnpm install --frozen-lockfile      # genera el cliente de Prisma en postinstall
+pnpm --filter @adoptafacil/contracts build
+pnpm typecheck                      # tsc de todos los paquetes
+pnpm lint
+pnpm --filter @adoptafacil/contracts test
+```
+
+Para levantar la aplicación completa sigue el **Arranque rápido** (requiere Docker con Postgres 16 y
+Redis 7). Un clon sin infraestructura compila y prueba `contracts` y los tipos, pero la API no arranca
+sin base de datos ni Redis. Los secretos de producción no van en el repositorio: los valores de
+desarrollo viven en `.env.example`. No hay `.env` versionado.
+
+Verificación de secretos del árbol: `gitleaks detect --source . --no-banner` (la misma regla del CI).
 
 ## Scripts (raíz, orquestados por Turborepo)
 
