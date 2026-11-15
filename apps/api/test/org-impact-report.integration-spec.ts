@@ -265,7 +265,21 @@ describe('Org impact report (impactReport: cifras agregadas, período, plan, no-
     expect(res.headers['content-type']).toContain('application/pdf');
     expect(res.headers['cache-control']).toBe('private, no-store');
     const pdf = await PDFDocument.load(res.body as Buffer);
-    expect(pdf.getTitle()).toBe('Reporte de impacto · Refugio Impacto A');
+    expect(pdf.getTitle()).toMatch(/^Reporte de impacto · ADF-REP-\d{4}-[A-Z0-9]{8}$/);
+
+    // Quedó sellado en el historial, con folio verificable públicamente.
+    const list = await request(server)
+      .get('/org/reports?limit=20')
+      .set(auth(orgA.token))
+      .expect(200);
+    const sealed = (
+      list.body.items as Array<{ kind: string; code: string; legalEffect: string }>
+    ).filter((r) => r.kind === 'impact');
+    expect(sealed).toHaveLength(1);
+    expect(sealed[0].legalEffect).toBe('informative');
+    expect(pdf.getTitle()).toContain(sealed[0].code);
+    const verify = await request(server).get(`/public/reports/${sealed[0].code}`).expect(200);
+    expect(verify.body.kind).toBe('impact');
 
     const base = '/org/exports/impact-report.pdf';
     await request(server).get(base).set(auth(orgA.token)).expect(400);
@@ -283,10 +297,15 @@ describe('Org impact report (impactReport: cifras agregadas, período, plan, no-
       .expect(400);
 
     const events = await admin.auditLog.findMany({
-      where: { organizationId: orgA.orgId, action: 'organization.impact_report_generated' },
+      where: { organizationId: orgA.orgId, action: 'report.generated' },
     });
     expect(events).toHaveLength(1);
-    expect(events[0].metadata).toEqual({ periodStart: monthAgo, periodEnd: today });
+    expect(events[0].metadata).toMatchObject({
+      kind: 'impact',
+      periodStart: monthAgo,
+      periodEnd: today,
+      legalEffect: 'informative',
+    });
   });
 
   it('RBAC: Operator, Volunteer y una persona reciben 403', async () => {

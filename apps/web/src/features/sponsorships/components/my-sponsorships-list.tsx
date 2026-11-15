@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react';
-import type { Sponsorship } from '@adoptafacil/contracts';
-import { Badge, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@adoptafacil/ui';
-import { useApiClient } from '../../../shell/api';
-import { listMySponsorships } from '../api/sponsorships-api';
+import {
+  isMercadoPagoCheckoutUrl,
+  SponsorshipPaymentStatus,
+  SponsorshipStatus,
+  type Sponsorship,
+} from '@adoptafacil/contracts';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@adoptafacil/ui';
+import { ApiError, useApiClient } from '../../../shell/api';
+import { onlinePaymentsEnabled } from '../../payments/lib/payment-provider';
+import {
+  listMySponsorships,
+  paySponsorshipMonth,
+  retrySponsorshipPayment,
+} from '../api/sponsorships-api';
 import {
   formatBogota,
   formatCop,
@@ -29,9 +39,10 @@ import styles from './my-sponsorships-list.module.scss';
  * de cierre — requeriría OTRO endpoint nuevo tipo `sponsorship_history_for_sponsor`,
  * mismo patrón que `sponsorships_for_sponsor`, no agregado sin acordarlo antes.
  *
- * Mercado Pago retirado (2026-10-17): "Pagar de nuevo" abría su Card Payment
- * Brick. Mientras no haya pasarela con cobro de apadrinamientos, una suspensión por
- * pago fallido muestra un aviso tranquilo en vez de un botón que no funciona.
+ * Pago mensual (PAY-001): "Pagar este mes" abre en Mercado Pago el mes que
+ * está abierto, en la cuenta de la ORGANIZACIÓN; "Ponerme al día" reactiva un
+ * apadrinamiento suspendido por impago. Con la pasarela apagada se muestra un
+ * aviso tranquilo en vez de un botón que no funciona.
  */
 export function MySponsorshipsList() {
   const client = useApiClient();
@@ -55,6 +66,8 @@ export function MySponsorshipsList() {
     };
   }, [client]);
 
+  const online = onlinePaymentsEnabled();
+
   if (loading) return <Skeleton className="h-64 w-full" />;
 
   return (
@@ -77,7 +90,7 @@ export function MySponsorshipsList() {
         {!error && sponsorships.length > 0 && (
           <ul className="space-y-3">
             {sponsorships.map((sponsorship) => (
-              <li key={sponsorship.id} className={styles.row}>
+              <li key={sponsorship.id} className={styles.row} data-foco={sponsorship.id}>
                 <div className={styles.row__top}>
                   <span className={styles.row__name}>
                     {sponsorship.animalName ?? sponsorship.animalId}
@@ -106,20 +119,97 @@ export function MySponsorshipsList() {
                     confirma pronto, el apadrinamiento se suspenderá.
                   </p>
                 )}
-                {isBillingFailureSuspension(sponsorship) && (
-                  <div className={styles['recovery']} data-testid="sponsorship-retry-soon">
-                    <p className={styles['hint--error']}>Suspendido por pago fallido.</p>
-                    <p className={styles.hint}>
-                      Pronto podrás ponerte al día con pago en línea desde aquí. Te avisaremos por
-                      correo cuando esté disponible.
-                    </p>
-                  </div>
+                {online && isMonthOpen(sponsorship) && (
+                  <PayButton
+                    label="Pagar este mes"
+                    testId="sponsorship-pay-month"
+                    open={() =>
+                      paySponsorshipMonth(client, sponsorship.id).then((v) => v.checkoutUrl)
+                    }
+                  />
                 )}
+                {isBillingFailureSuspension(sponsorship) &&
+                  (online ? (
+                    <div className={styles['recovery']} data-testid="sponsorship-retry">
+                      <p className={styles['hint--error']}>Suspendido por pago fallido.</p>
+                      <PayButton
+                        label="Ponerme al día"
+                        testId="sponsorship-retry-pay"
+                        open={() =>
+                          retrySponsorshipPayment(client, sponsorship.id).then(
+                            (payment) => payment.attempts.at(-1)?.paymentLinkUrl,
+                          )
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <div className={styles['recovery']} data-testid="sponsorship-retry-soon">
+                      <p className={styles['hint--error']}>Suspendido por pago fallido.</p>
+                      <p className={styles.hint}>
+                        Pronto podrás ponerte al día con pago en línea desde aquí. Te avisaremos por
+                        correo cuando esté disponible.
+                      </p>
+                    </div>
+                  ))}
               </li>
             ))}
           </ul>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Activo con el mes abierto y sin pagar: se ofrece "Pagar este mes". */
+function isMonthOpen(sponsorship: Sponsorship): boolean {
+  return (
+    sponsorship.status === SponsorshipStatus.Active &&
+    sponsorship.currentPeriodStatus === SponsorshipPaymentStatus.Pending
+  );
+}
+
+/** Abre el pago en Mercado Pago (solo a sus dominios) o dice por qué no se pudo. */
+function PayButton({
+  label,
+  testId,
+  open,
+}: {
+  label: string;
+  testId: string;
+  open: () => Promise<string | undefined>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pay = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const url = await open();
+      if (isMercadoPagoCheckoutUrl(url)) {
+        window.location.assign(url as string);
+        return;
+      }
+      setError('Este mes ya quedó registrado. Si no se confirma, te avisamos por correo.');
+    } catch (failure) {
+      setError(
+        ApiError.is(failure) && failure.message
+          ? failure.message
+          : 'No pudimos abrir el pago. Inténtalo de nuevo en un momento.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={styles.pay}>
+      <Button size="sm" onClick={() => void pay()} disabled={busy} data-testid={testId}>
+        {busy ? 'Abriendo Mercado Pago…' : label}
+      </Button>
+      {error && (
+        <p className={styles.hint} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

@@ -270,14 +270,26 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     category: 'transactional',
     theme: 'sponsorship',
     required: false,
-    variables: [ORG, ANIMAL, v('monto', 'Valor del periodo', '30000', 'money')],
+    variables: [
+      ORG,
+      ANIMAL,
+      v('monto', 'Valor del periodo', '30000', 'money'),
+      v(
+        'enlace',
+        'Enlace para pagar ("Mis apadrinamientos")',
+        'https://adoptafacil.co/apadrinar',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
     defaults: {
       subject: 'Nuevo cobro de tu apadrinamiento de {{animal}}',
       preheader: 'Completa el pago para mantener tu apadrinamiento activo.',
       heading: 'Es momento de renovar tu apoyo',
       body:
         'Hola,\n\nSe generó el cobro del nuevo periodo de tu apadrinamiento de **{{animal}}** en **{{organizacion}}** por **{{monto}}**.\n\n' +
-        'Complétalo para que {{animal}} siga contando contigo.',
+        'Págalo desde "Mis apadrinamientos" con el botón **Pagar este mes**: el dinero llega directo a {{organizacion}}.',
+      ctaLabel: 'Pagar este mes',
     },
   },
   {
@@ -288,12 +300,26 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     category: 'transactional',
     theme: 'sponsorship',
     required: false,
-    variables: [ORG, ANIMAL, v('monto', 'Valor del periodo', '30000', 'money')],
+    variables: [
+      ORG,
+      ANIMAL,
+      v('monto', 'Valor del periodo', '30000', 'money'),
+      v(
+        'enlace',
+        'Enlace para pagar ("Mis apadrinamientos")',
+        'https://adoptafacil.co/apadrinar',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
     defaults: {
       subject: 'Recordatorio: pago de apadrinamiento pendiente',
       preheader: '{{animal}} sigue contando contigo.',
       heading: 'Tu pago sigue pendiente',
-      body: 'Hola,\n\nEl pago de tu apadrinamiento de **{{animal}}** en **{{organizacion}}** por **{{monto}}** sigue pendiente.',
+      body:
+        'Hola,\n\nEl pago de tu apadrinamiento de **{{animal}}** en **{{organizacion}}** por **{{monto}}** sigue pendiente. ' +
+        'Págalo desde "Mis apadrinamientos" con el botón **Pagar este mes**.',
+      ctaLabel: 'Pagar este mes',
     },
   },
   {
@@ -304,7 +330,18 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
     category: 'transactional',
     theme: 'alert',
     required: false,
-    variables: [ORG, ANIMAL, v('monto', 'Valor del periodo', '30000', 'money')],
+    variables: [
+      ORG,
+      ANIMAL,
+      v('monto', 'Valor del periodo', '30000', 'money'),
+      v(
+        'enlace',
+        'Enlace para pagar ("Mis apadrinamientos")',
+        'https://adoptafacil.co/apadrinar',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
     defaults: {
       subject: 'Último aviso: tu apadrinamiento será suspendido',
       preheader: 'Completa el pago para no perder tu apadrinamiento.',
@@ -312,6 +349,7 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       body:
         'Hola,\n\nEl pago de tu apadrinamiento de **{{animal}}** en **{{organizacion}}** por **{{monto}}** sigue pendiente. ' +
         'Si no se completa pronto, **el apadrinamiento se suspenderá automáticamente**.',
+      ctaLabel: 'Pagar este mes',
     },
   },
   {
@@ -616,6 +654,57 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       body:
         'Hola {{nombre}},\n\n{{organizacion}} emitió tu certificado de voluntariado en **"{{oportunidad}}"**, que refleja **{{horas}} horas efectivas**.\n\n' +
         'Puedes descargarlo desde "Mi voluntariado" en AdoptaFácil. ¡Gracias por tu tiempo!',
+    },
+  },
+  {
+    event: 'volunteering.opportunity_rescheduled',
+    label: 'Jornada de voluntariado reprogramada',
+    description:
+      'Se envía a cada persona inscrita (pendiente o aceptada) cuando la organización cambia las fechas o los días de la jornada.',
+    audience: 'Las personas inscritas en la jornada',
+    category: 'transactional',
+    theme: 'volunteering',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre del voluntario', 'Carlos'),
+      v('oportunidad', 'Jornada', 'Jornada de baño y paseo'),
+      ORG,
+      v('fechas', 'Nuevas fechas', 'del 22 de noviembre al 23 de noviembre de 2026'),
+      v('dias', 'Días de jornada', 'sábado 22 de noviembre y domingo 23 de noviembre'),
+      v('motivo', 'Motivo', 'Pronóstico de lluvia fuerte para este fin de semana.'),
+    ],
+    defaults: {
+      subject: 'Cambió la fecha de "{{oportunidad}}"',
+      preheader: 'La jornada ahora es {{fechas}}.',
+      heading: 'Tu jornada cambió de fecha 📅',
+      body:
+        'Hola {{nombre}},\n\n{{organizacion}} reprogramó **"{{oportunidad}}"**. La jornada ahora es **{{fechas}}**.\n\n' +
+        'Días de jornada: {{dias}}\n\nMotivo: {{motivo}}\n\n' +
+        'Tu inscripción sigue vigente. Si ya no puedes asistir, avísale a la organización.',
+    },
+  },
+  {
+    event: 'volunteering.opportunity_cancelled',
+    label: 'Jornada de voluntariado cancelada',
+    description:
+      'Se envía a cada persona inscrita (pendiente o aceptada) cuando la organización cancela la jornada.',
+    audience: 'Las personas inscritas en la jornada',
+    category: 'transactional',
+    theme: 'volunteering',
+    required: false,
+    variables: [
+      v('nombre', 'Nombre del voluntario', 'Carlos'),
+      v('oportunidad', 'Jornada', 'Jornada de baño y paseo'),
+      ORG,
+      v('motivo', 'Motivo', 'No conseguimos el transporte para los perritos.'),
+    ],
+    defaults: {
+      subject: '"{{oportunidad}}" fue cancelada',
+      preheader: 'Gracias por querer ayudar: hay más jornadas esperándote.',
+      heading: 'La jornada se canceló',
+      body:
+        'Hola {{nombre}},\n\n{{organizacion}} canceló **"{{oportunidad}}"**.\n\nMotivo: {{motivo}}\n\n' +
+        'Tu inscripción quedó cerrada. Gracias por querer ayudar: en AdoptaFácil hay más jornadas esperándote.',
     },
   },
   {

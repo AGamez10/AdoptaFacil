@@ -1,4 +1,9 @@
-import { PRODUCTION_FORBIDDEN_DRIVERS, parseRedisUrl, validateEnv } from './env.validation';
+import {
+  PRODUCTION_FORBIDDEN_DRIVERS,
+  isLoopbackUrl,
+  parseRedisUrl,
+  validateEnv,
+} from './env.validation';
 
 /**
  * Ola 1 · R0-1 (SEC-001, SEC-002, SEC-003) and R1-1/R1-3/R1-7: production must
@@ -30,6 +35,7 @@ const SAFE_PRODUCTION = {
   TRUST_PROXY_HOPS: '1',
   THROTTLER_STORAGE: 'redis',
   WEB_BASE_URL: 'https://adoptafacil.co',
+  STORAGE_PUBLIC_BASE_URL: 'https://adoptafacil.co/api',
 };
 
 function omit(env: Record<string, string>, ...keys: string[]): Record<string, string> {
@@ -37,10 +43,14 @@ function omit(env: Record<string, string>, ...keys: string[]): Record<string, st
 }
 
 describe('production guard (R0-1)', () => {
-  it('accepts an https WEB_BASE_URL, including the CI stack on https://localhost', () => {
-    expect(() =>
-      validateEnv({ ...SAFE_PRODUCTION, WEB_BASE_URL: 'https://localhost' }),
-    ).not.toThrow();
+  it('accepts the CI stack on https://localhost only with the explicit opt-out', () => {
+    const ci = {
+      ...SAFE_PRODUCTION,
+      WEB_BASE_URL: 'https://localhost',
+      STORAGE_PUBLIC_BASE_URL: 'https://localhost/api',
+    };
+    expect(() => validateEnv(ci)).toThrow(/points to localhost/);
+    expect(() => validateEnv({ ...ci, ALLOW_LOOPBACK_PUBLIC_URLS: 'true' })).not.toThrow();
   });
 
   it.each([
@@ -51,6 +61,62 @@ describe('production guard (R0-1)', () => {
       ? { ...SAFE_PRODUCTION, WEB_BASE_URL: url }
       : omit(SAFE_PRODUCTION, 'WEB_BASE_URL');
     expect(() => validateEnv(env)).toThrow(/WEB_BASE_URL must be the public https origin/);
+  });
+
+  // Rendición de cuentas: "Ver soporte" abría http://localhost:3000/storage/…
+  // Ninguna URL pública puede apuntar a localhost fuera de desarrollo.
+  it.each([
+    ['the dev default (http://localhost:3000)', undefined],
+    ['plain http', 'http://adoptafacil.co/api'],
+  ])('refuses production when STORAGE_PUBLIC_BASE_URL is %s', (_c, url) => {
+    const env = url
+      ? { ...SAFE_PRODUCTION, STORAGE_PUBLIC_BASE_URL: url }
+      : omit(SAFE_PRODUCTION, 'STORAGE_PUBLIC_BASE_URL');
+    expect(() => validateEnv(env)).toThrow(/STORAGE_PUBLIC_BASE_URL/);
+  });
+
+  it.each([
+    ['WEB_BASE_URL', 'https://localhost:5173'],
+    ['STORAGE_PUBLIC_BASE_URL', 'https://127.0.0.1/api'],
+    ['STORAGE_PUBLIC_CDN_BASE_URL', 'https://img.localhost'],
+    ['API_PUBLIC_BASE_URL', 'https://[::1]:3000'],
+  ])('refuses production when %s points to localhost (%s)', (key, url) => {
+    expect(() => validateEnv({ ...SAFE_PRODUCTION, [key]: url })).toThrow(
+      new RegExp(`${key} points to localhost`),
+    );
+  });
+
+  it.each(['STORAGE_PUBLIC_CDN_BASE_URL', 'API_PUBLIC_BASE_URL'])(
+    'refuses production when %s is plain http',
+    (key) => {
+      expect(() => validateEnv({ ...SAFE_PRODUCTION, [key]: 'http://adoptafacil.co' })).toThrow(
+        new RegExp(`${key} must be an https URL`),
+      );
+    },
+  );
+
+  it('leaves development free to use localhost', () => {
+    expect(() =>
+      validateEnv({
+        ...BASE,
+        NODE_ENV: 'development',
+        STORAGE_PUBLIC_BASE_URL: 'http://localhost:3000',
+      }),
+    ).not.toThrow();
+  });
+
+  it('flags localhost hosts and nothing else', () => {
+    for (const url of [
+      'http://localhost:3000',
+      'https://127.0.0.2',
+      'https://demo.localhost',
+      'http://0.0.0.0',
+    ]) {
+      expect(isLoopbackUrl(url)).toBe(true);
+    }
+    for (const url of ['https://adoptafacil.co/api', 'https://localhost.example.com', 'nope']) {
+      expect(isLoopbackUrl(url)).toBe(false);
+    }
   });
 
   it('boots a production config with every simulated adapter replaced', () => {

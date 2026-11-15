@@ -81,12 +81,12 @@ describe('CommunityFeedPage — feed cruzado (F-8)', () => {
     expect(await screen.findAllByTestId('post-card')).toHaveLength(2);
   });
 
-  it('shows a friendly empty state with a "Publicar" CTA', async () => {
+  it('shows a friendly empty state and the composer', async () => {
     stubFetch(() => ({ items: [], total: 0, limit: 50, offset: 0 }));
     renderShell({ route: '/comunidad', ...sessionWith() });
 
     expect(await screen.findByText('Aún no hay publicaciones')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Publicar la primera' })).toBeInTheDocument();
+    expect(screen.getByTestId('post-composer-card')).toBeInTheDocument();
   });
 
   it('a PERSONA can also publish (no @Roles on the backend)', async () => {
@@ -94,7 +94,9 @@ describe('CommunityFeedPage — feed cruzado (F-8)', () => {
     renderShell({ route: '/comunidad', ...sessionWith('person') });
 
     await screen.findByRole('heading', { name: 'Comunidad' });
-    expect(screen.getByRole('button', { name: 'Publicar' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /¿Qué quieres compartir con la comunidad\?/ }),
+    ).toBeInTheDocument();
   });
 
   it('publishes with the REAL required fields and toasts success', async () => {
@@ -102,6 +104,7 @@ describe('CommunityFeedPage — feed cruzado (F-8)', () => {
     let created = false;
     stubFetch((url, init) => {
       calls.push({ url, init });
+      if (url.includes('/reactions/mine')) return {};
       if (init?.method === 'POST' && url.includes('/community/posts')) {
         created = true;
         return { post: post('p1'), imageUploads: [] };
@@ -110,9 +113,11 @@ describe('CommunityFeedPage — feed cruzado (F-8)', () => {
     });
     renderShell({ route: '/comunidad', ...sessionWith() });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Publicar' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /¿Qué quieres compartir con la comunidad\?/ }),
+    );
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(screen.getByLabelText('Publicación (10-2000 caracteres)'), {
+    fireEvent.change(screen.getByLabelText('Tu publicación'), {
       target: { value: 'Esta es una publicación de prueba con suficiente longitud.' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Publicar' }));
@@ -126,21 +131,23 @@ describe('CommunityFeedPage — feed cruzado (F-8)', () => {
         body: 'Esta es una publicación de prueba con suficiente longitud.',
       });
     });
-    expect(await screen.findByText('Publicación creada')).toBeInTheDocument();
+    expect(await screen.findByText('Publicado')).toBeInTheDocument();
   });
 
   it('rejects a body shorter than 10 characters before ever calling the API', async () => {
     stubFetch(() => ({ items: [], total: 0, limit: 50, offset: 0 }));
     renderShell({ route: '/comunidad', ...sessionWith() });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Publicar' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /¿Qué quieres compartir con la comunidad\?/ }),
+    );
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(screen.getByLabelText('Publicación (10-2000 caracteres)'), {
+    fireEvent.change(screen.getByLabelText('Tu publicación'), {
       target: { value: 'corto' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Publicar' }));
 
-    expect(await screen.findByText('Publicación muy corta')).toBeInTheDocument();
+    expect(await screen.findByText('Cuéntanos un poco más')).toBeInTheDocument();
     expect(dialog).toBeInTheDocument();
   });
 });

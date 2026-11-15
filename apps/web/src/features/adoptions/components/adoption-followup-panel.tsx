@@ -113,6 +113,10 @@ export function AdoptionFollowUpPanel({ contractId, canManage }: AdoptionFollowU
   return (
     <div className="space-y-2 rounded-md border border-dashed p-2 text-xs">
       <p className="font-medium">Seguimiento post-adopción</p>
+      <p className="text-muted-foreground">
+        Los contactos del plan que eligió el adoptante se programan solos cuando confirma la
+        entrega.{canManage && ' Usa «Programar hito» solo si quieres agregar un contacto extra.'}
+      </p>
 
       {milestones.length === 0 ? (
         <p className="text-muted-foreground">Sin hitos programados.</p>

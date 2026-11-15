@@ -20,7 +20,13 @@ const GuideAssistant = lazy(() =>
   })),
 );
 
-const AUTH_MODE: 'mock' | 'http' = import.meta.env.VITE_AUTH_MODE === 'mock' ? 'mock' : 'http';
+// El modo `mock` (sesión simulada en memoria, sin API) solo existe en el
+// servidor de desarrollo: un build de producción siempre usa la API real,
+// aunque alguien deje VITE_AUTH_MODE=mock (además vite.config.ts falla el build).
+const AUTH_MODE: 'mock' | 'http' =
+  import.meta.env.MODE !== 'production' && import.meta.env.VITE_AUTH_MODE === 'mock'
+    ? 'mock'
+    : 'http';
 
 /**
  * Application shell entry point: providers + router + routes. Mounted by main.tsx.

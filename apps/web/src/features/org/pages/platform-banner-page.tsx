@@ -14,6 +14,7 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient, type ApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { IMAGE_ACCEPT, uploadFileBytes, validateUpload } from '../lib/storage';
+import { publicUrlFromUploadTarget } from '../../../lib/file-url';
 
 const SLOT_COUNT = 4;
 
@@ -35,8 +36,7 @@ async function uploadBannerPhoto(client: ApiClient, file: File): Promise<string>
     json: { filename: file.name, contentType: file.type },
   });
   await uploadFileBytes(client, reserved.key, file);
-  const origin = new URL(reserved.url).origin;
-  return `${origin}/storage/public?key=${encodeURIComponent(reserved.key)}`;
+  return publicUrlFromUploadTarget(reserved.url, reserved.key);
 }
 
 function CameraIcon() {

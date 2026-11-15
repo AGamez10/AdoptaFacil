@@ -16,6 +16,7 @@ import type {
   PublicCommunityPostsPage,
 } from '@adoptafacil/contracts';
 import { RequireFeature } from '../../core/features';
+import { posterKeyFor } from '../../core/media/video-transcoder';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { PublicCache } from '../../core/cache/public-cache.decorator';
 import { PublicCommunityService } from './public-community.service';
@@ -33,9 +34,11 @@ export function publicPostPath(id: string): string {
  *   GET public/community/posts/:id        → una publicación compartible
  *   GET public/community/leaders          → escalafón (solo lo ya público)
  *   GET public/community/posts/:id/card.png → tarjeta 1200×630 para og:image
- *   GET public/share/c/:id?s=<red>        → HTML con Open Graph + redirección
+ *   GET public/share/p/:id?s=<red>        → HTML con Open Graph + redirección
  *                                            a la web con parámetros UTM
- * (Caddy publica el puente como `/c/:id` en el dominio principal.)
+ *   GET public/share/c/:id?s=<red>        → lo mismo (enlaces ya compartidos)
+ * Caddy publica el puente como `/p/<uuid>` en el dominio principal, y
+ * `/c/<uuid>` solo para los enlaces viejos: `/c/<código>` es el QR del café.
  */
 @RequireFeature('community', 'communityWall')
 @Controller('public')
@@ -85,10 +88,16 @@ export class PublicCommunityController {
   async card(@Param('id', ParseUUIDPipe) id: string): Promise<StreamableFile> {
     const post = await this.service.get(id);
     if (!post) throw new NotFoundException('Publicación no encontrada');
-    // Solo publicaciones de organización traen fotos (ya públicas en la propia
-    // publicación); si no se puede leer, la tarjeta usa la ilustración de marca.
-    const first = post.isOrganization ? post.images[0] : undefined;
-    const stored = first ? await this.storage.readObject(first.storageRef).catch(() => null) : null;
+    // La tarjeta lleva la primera foto de la publicación (o la portada de su
+    // video). Solo existe si la autora hizo pública la publicación; si el
+    // archivo no se puede leer, usa la ilustración de marca.
+    const first = post.images[0];
+    const photoKey = first
+      ? first.kind === 'video'
+        ? posterKeyFor(first.storageRef)
+        : first.storageRef
+      : null;
+    const stored = photoKey ? await this.storage.readObject(photoKey).catch(() => null) : null;
     const png = await renderShareCard(
       post,
       new URL(this.webBaseUrl).host.replace(/^www\./, ''),
@@ -97,7 +106,7 @@ export class PublicCommunityController {
     return new StreamableFile(png, { type: 'image/png', length: png.length });
   }
 
-  @Get('share/c/:id')
+  @Get(['share/p/:id', 'share/c/:id'])
   @Header('Content-Type', 'text/html; charset=utf-8')
   @Header('Cache-Control', 'public, max-age=600')
   // El puente solo lleva metadatos y un enlace: sin scripts ni recursos externos.

@@ -6,14 +6,22 @@
 // (Colombia local time is a presentation concern only).
 
 /**
- * Campaign category — CLOSED list from the base document (§9). Stable string
- * values; the Spanish label is a UI concern. Do NOT invent new categories.
+ * Campaign category — CLOSED list. Stable string values; the Spanish label is
+ * a UI concern. Do NOT invent new categories without the product owner.
  * - `medications`     — medicamentos
  * - `food`            — alimentación
  * - `surgeries`       — cirugías
  * - `sterilizations`  — esterilizaciones
  * - `infrastructure`  — infraestructura
  * - `emergencies`     — emergencias
+ * - `conservation`    — conservación de territorio y hábitat
+ * - `education`       — educación y concientización
+ *
+ * The first six come from the base document (§9). `conservation` and
+ * `education` were added by decision of the product owner (2026-10-23) so an
+ * organization whose work is territorial conservation or awareness (e.g. a
+ * refuge on a farm) can raise funds for those activities too. The column is a
+ * plain `text` with no DB CHECK, so no migration is needed.
  */
 export enum CampaignCategory {
   Medications = 'medications',
@@ -22,6 +30,8 @@ export enum CampaignCategory {
   Sterilizations = 'sterilizations',
   Infrastructure = 'infrastructure',
   Emergencies = 'emergencies',
+  Conservation = 'conservation',
+  Education = 'education',
 }
 
 /** Allowed categories, exported for validation and UI dropdowns. */
@@ -32,6 +42,8 @@ export const CAMPAIGN_CATEGORIES: readonly CampaignCategory[] = [
   CampaignCategory.Sterilizations,
   CampaignCategory.Infrastructure,
   CampaignCategory.Emergencies,
+  CampaignCategory.Conservation,
+  CampaignCategory.Education,
 ];
 
 /**

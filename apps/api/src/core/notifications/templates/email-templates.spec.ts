@@ -78,8 +78,8 @@ describe('validateContent', () => {
   });
 
   it('rejects a button label on an event without a button URL', () => {
-    const errors = validateContent(def('sponsorship.charge'), {
-      ...def('sponsorship.charge').defaults,
+    const errors = validateContent(def('sponsorship.suspended_org'), {
+      ...def('sponsorship.suspended_org').defaults,
       ctaLabel: 'Pagar aquí',
     });
     expect(errors.join(' ')).toContain('no lleva botón');

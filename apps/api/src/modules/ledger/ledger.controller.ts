@@ -17,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import {
+  type NationalTransparency,
   type LedgerEntry,
   type OrgLedgerPage,
   type PublicLedgerPage,
@@ -29,6 +30,7 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { LedgerService, type UploadedSupportFile } from './ledger.service';
+import { NationalTransparencyService } from './national-transparency.service';
 import {
   type CreateLedgerEntryDto,
   createLedgerEntrySchema,
@@ -100,7 +102,21 @@ export class OrgLedgerController {
  */
 @Controller()
 export class PublicLedgerController {
-  constructor(private readonly service: LedgerService) {}
+  constructor(
+    private readonly service: LedgerService,
+    private readonly national: NationalTransparencyService,
+  ) {}
+
+  /**
+   * Transparencia Nacional: el consolidado de todas las organizaciones
+   * aprobadas (solo sumas y conteos, sin datos personales). Sin sesión.
+   */
+  @Get('public/transparency/national')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  nationalTransparency(): Promise<NationalTransparency> {
+    return this.national.get();
+  }
 
   @Get('public/organizations/:slug/ledger')
   @UseGuards(ThrottlerGuard)

@@ -98,23 +98,23 @@ configuración se valida al arrancar y la API falla rápido si falta algo. En pr
 
 ## Scripts (raíz, orquestados por Turborepo)
 
-| Comando                                           | Qué hace                                                                                |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `pnpm dev`                                        | Levanta api + web en modo watch                                                         |
-| `pnpm build`                                      | Compila todos los paquetes y apps                                                       |
-| `pnpm lint` / `pnpm typecheck`                    | ESLint y `tsc --noEmit` en todo el monorepo                                             |
-| `pnpm test`                                       | Pruebas unitarias (jest + vitest)                                                       |
-| `pnpm --filter @adoptafacil/api test:integration` | Suite de integración (requiere Postgres y Redis)                                        |
-| `pnpm --filter @adoptafacil/api test:rls`         | Solo las pruebas `no-leak` de aislamiento entre organizaciones                          |
-| `pnpm format` / `pnpm format:check`               | Prettier                                                                                |
-| `pnpm setup:env`                                  | Crea el `.env` desde `.env.example`                                                     |
-| `pnpm setup:demo-env`                             | Enciende en `.env` los módulos de la demo local sin tocar el resto                      |
-| `pnpm demo:prepare`                               | Demo local completa: módulos, migraciones, contracts y todas las semillas               |
-| `pnpm seed:admin` / `seed:demo` / `seed:breeds`   | Semillas (administradores, demo, catálogo de razas)                                     |
-| `pnpm seed:trafico --yes-demo`                    | Tráfico ficticio para ver cifras en local (se niega en producción, CI o base remota)    |
-| `pnpm seed:volumen --yes-demo`                    | Organización ficticia con 100 animales para probar el catálogo con volumen (solo local) |
-| `pnpm db:deploy`                                  | `prisma migrate deploy` (producción)                                                    |
-| `pnpm docs:manuals`                               | Genera los manuales Word desde `docs/manual/*.md`                                       |
+| Comando                                           | Qué hace                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                        | Levanta api + web en modo watch; antes instala solo lo que falte (`scripts/dev-preflight.mjs`) |
+| `pnpm build`                                      | Compila todos los paquetes y apps                                                              |
+| `pnpm lint` / `pnpm typecheck`                    | ESLint y `tsc --noEmit` en todo el monorepo                                                    |
+| `pnpm test`                                       | Pruebas unitarias (jest + vitest)                                                              |
+| `pnpm --filter @adoptafacil/api test:integration` | Suite de integración (requiere Postgres y Redis)                                               |
+| `pnpm --filter @adoptafacil/api test:rls`         | Solo las pruebas `no-leak` de aislamiento entre organizaciones                                 |
+| `pnpm format` / `pnpm format:check`               | Prettier                                                                                       |
+| `pnpm setup:env`                                  | Crea el `.env` desde `.env.example`                                                            |
+| `pnpm setup:demo-env`                             | Enciende en `.env` los módulos de la demo local sin tocar el resto                             |
+| `pnpm demo:prepare`                               | Demo local completa: módulos, migraciones, contracts y todas las semillas                      |
+| `pnpm seed:admin` / `seed:demo` / `seed:breeds`   | Semillas (administradores, demo, catálogo de razas)                                            |
+| `pnpm seed:trafico --yes-demo`                    | Tráfico ficticio para ver cifras en local (se niega en producción, CI o base remota)           |
+| `pnpm seed:volumen --yes-demo`                    | Organización ficticia con 100 animales para probar el catálogo con volumen (solo local)        |
+| `pnpm db:deploy`                                  | `prisma migrate deploy` (producción)                                                           |
+| `pnpm docs:manuals`                               | Genera los manuales Word desde `docs/manual/*.md`                                              |
 
 ## Estructura
 

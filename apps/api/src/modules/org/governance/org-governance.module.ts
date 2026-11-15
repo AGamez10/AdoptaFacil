@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../../../core/auth/auth.module';
 import { InvitationsController, PublicInvitationsController } from './invitations.controller';
 import { InvitationsService } from './invitations.service';
+import { MembersController } from './members.controller';
+import { MembersService } from './members.service';
 import { SignersController } from './signers.controller';
 import { SignersService } from './signers.service';
 import {
@@ -23,7 +25,8 @@ import { OrganizationStatusService } from './organization-status.service';
     InvitationsController,
     PublicInvitationsController,
     SignersController,
+    MembersController,
   ],
-  providers: [OrganizationStatusService, InvitationsService, SignersService],
+  providers: [OrganizationStatusService, InvitationsService, SignersService, MembersService],
 })
 export class OrgGovernanceModule {}

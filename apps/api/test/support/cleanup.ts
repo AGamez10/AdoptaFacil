@@ -49,6 +49,18 @@ const APPEND_ONLY_TABLES = [
   'clinical_event_attachments',
   'clinical_events',
   'animal_behavior_disclosures',
+  // Custodia y guardería: nada se borra (triggers rechazan DELETE) y lo emitido
+  // es de solo inserción. Hijos antes que padres.
+  'custody_events',
+  'custody_documents',
+  'custody_payments',
+  'custody_charge_extensions',
+  'custody_charges',
+  'custody_releases',
+  'custody_contracts',
+  'custody_contract_templates',
+  'animal_intakes',
+  'custody_responsibles',
   'animals',
   'sponsorship_status_history',
   'legal_representatives',

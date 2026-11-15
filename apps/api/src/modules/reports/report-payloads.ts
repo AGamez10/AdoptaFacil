@@ -95,6 +95,8 @@ export function buildDonationsPayload(input: {
   animalNames: Map<string, string>;
   /** Personas con consentimiento vigente para esta organización; sin él, no se identifica. */
   consentedUserIds?: ReadonlySet<string>;
+  /** Documento del perfil de quien autorizó; se usa si el pago no trajo uno. */
+  profileDocuments?: ReadonlyMap<string, string>;
 }): DonationsReportPayload {
   const consented = input.consentedUserIds ?? new Set<string>();
   const sorted = [...input.donations].sort(
@@ -114,7 +116,12 @@ export function buildDonationsPayload(input: {
         : identified
           ? d.payer?.fullName?.trim() || 'Donante'
           : 'Donante',
-      donorDocument: identified ? maskDocument(d.payer?.documentId) : '',
+      donorDocument: identified
+        ? maskDocument(
+            d.payer?.documentId?.trim() ||
+              (d.donorUserId && input.profileDocuments?.get(d.donorUserId)),
+          )
+        : '',
       concept: conceptLabel(d.conceptKind, d.conceptId, names),
       amountCharged: d.amountCharged,
       fees,
@@ -405,5 +412,38 @@ export interface AccountingReportPayload {
   close: { closedAt: string; entriesHash: string; lastSeq: number; note: string | null };
 }
 
+/**
+ * Reporte de impacto: SOLO cifras agregadas de la organización (nunca datos de
+ * personas). Se sella como cualquier reporte, así queda en el historial y se
+ * puede verificar con su folio y QR. `generatedAt` no entra al sello: el
+ * momento es el `createdAt` del reporte.
+ */
+export interface ImpactCampaignRow {
+  title: string;
+  category: string;
+  status: string;
+  goalAmount: number;
+  raisedAmount: number;
+}
+
+export interface ImpactReportPayload {
+  version: 1;
+  kind: 'impact';
+  organization: ReportOrganizationSnapshot;
+  period: { start: string; end: string };
+  /** Animales registrados (ingresos/rescates) en el período. */
+  animalsRegistered: number;
+  adoptionsCompleted: number;
+  donations: { count: number; netTotal: number; donors: number };
+  care: { vaccines: number; sterilizations: number; surgeries: number; treatments: number };
+  volunteerHours: number;
+  volunteers: number;
+  campaigns: ImpactCampaignRow[];
+  animalsToday: { available: number; inProcess: number; adopted: number };
+}
+
 export type OrgReportPayload =
-  DonationsReportPayload | SocialServiceReportPayload | AccountingReportPayload;
+  | DonationsReportPayload
+  | SocialServiceReportPayload
+  | AccountingReportPayload
+  | ImpactReportPayload;

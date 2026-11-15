@@ -39,11 +39,18 @@ model Animal {
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  breed              AnimalBreed?               @relation(fields: [breedId], references: [id])
-  photos             AnimalPhoto[]
-  clinicalEvents     ClinicalEvent[]
-  reminders          ClinicalReminder[]
+  breed               AnimalBreed?               @relation(fields: [breedId], references: [id])
+  photos              AnimalPhoto[]
+  clinicalEvents      ClinicalEvent[]
+  reminders           ClinicalReminder[]
   behaviorDisclosures AnimalBehaviorDisclosure[]
+  // Documentación, custodia y guardería. See custody.prisma.
+  intakes             AnimalIntake[]
+  custodyContracts    CustodyContract[]
+  custodyCharges      CustodyCharge[]
+  custodyReleases     CustodyRelease[]
+  custodyDocuments    CustodyDocument[]
+  custodyEvents       CustodyEvent[]
 
   @@index([organizationId])
   @@index([organizationId, isActive])

@@ -12,7 +12,7 @@ import { fetchAllPublicAnimals } from '../api/public-animals';
 import { fetchPublicOrgCampaigns } from '../api/public-campaigns';
 import { fetchPublicOrgVolunteering } from '../api/public-volunteering';
 import { fetchPublicReviews } from '../api/public-reviews';
-import { fetchPublicLedger } from '../../ledger/api/public-ledger';
+import { fetchPublicLedgerReliable } from '../../ledger/api/public-ledger';
 import { listPublicNeeds } from '../../resources/api/public-resources';
 import { listPublicProducts } from '../../marketplace/api/public-marketplace';
 import type { TemplateSourceData } from './engine/model';
@@ -63,7 +63,7 @@ export function useTemplateSource(
       .then((p) => p.items)
       .catch(() => [] as PublicReview[]);
 
-    const ledger = fetchPublicLedger(slug, { limit: 5, signal }).catch(() => null);
+    const ledger = fetchPublicLedgerReliable(slug, { limit: 5, signal }).catch(() => null);
 
     Promise.all([animals, campaigns, needs, products, reviews, ledger, volunteering])
       .then(([a, c, n, p, r, l, v]) => {

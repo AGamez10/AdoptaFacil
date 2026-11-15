@@ -8,6 +8,7 @@ import {
   NotFoundException,
   PayloadTooLargeException,
   Put,
+  ServiceUnavailableException,
   Query,
   Req,
   Res,
@@ -18,7 +19,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { Role } from '@adoptafacil/contracts';
+import { COMMUNITY_MEDIA_LIMITS, Role } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -34,6 +35,7 @@ import { enforcePlatformMfa } from '../rbac/platform-mfa.policy';
 import { STORAGE_PORT, type StoragePort } from './storage.port';
 import { isAllowedUpload, parseByteRange, parseStorageKey } from './storage-keys';
 import { optimizeImage } from './image-optimizer';
+import { VideoRejectedError, VideoTranscoder, posterKeyFor } from '../media/video-transcoder';
 import { sniffContentType } from './file-sniff';
 import { setServeHeaders } from './serve-headers';
 
@@ -75,6 +77,7 @@ export class StorageController {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly plans: PlansService,
+    private readonly videos: VideoTranscoder,
     config: ConfigService<Env, true>,
     @Inject(PLATFORM_SECURITY_CONFIG) private readonly platformSecurity: PlatformSecurityConfig,
   ) {
@@ -96,6 +99,7 @@ export class StorageController {
     @CurrentUser() user: RequestUser,
     @Query('key') key: string,
     @UploadedFile() file: UploadedFileLike | undefined,
+    @Query('media') media?: string,
   ): Promise<{ key: string; url: string }> {
     const parsed = parseStorageKey(key ?? '');
     if (!parsed) {
@@ -108,18 +112,64 @@ export class StorageController {
     if (!file || !file.buffer) {
       throw new BadRequestException('A file is required (multipart field "file")');
     }
-    if (file.size > this.maxBytes) {
+    // Un video de la comunidad puede pesar más antes de comprimirse; el resto
+    // de archivos sigue con el límite general.
+    const videoMaxBytes = COMMUNITY_MEDIA_LIMITS.maxVideoMb * 1024 * 1024;
+    if (file.size > Math.max(this.maxBytes, media === 'post' ? videoMaxBytes : 0)) {
       throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);
     }
     // El tipo se decide por el CONTENIDO, no por lo que declara el navegador ni
     // por la extensión: un "rut.pdf" que en realidad es HTML o un ejecutable no
     // entra, y lo guardado siempre se sirve con su tipo real.
     const realType = sniffContentType(file.buffer);
-    if (!realType || !isAllowedUpload(realType, parsed.visibility)) {
+    const isPostVideo =
+      media === 'post' && parsed.visibility === 'public' && realType?.startsWith('video/');
+    if (!realType || !(isPostVideo || isAllowedUpload(realType, parsed.visibility))) {
       throw new BadRequestException(
         'El archivo no es un PDF ni una imagen válida (JPG, PNG, WebP o GIF). Revisa que no esté dañado y vuelve a intentarlo.',
       );
     }
+    // Video de una publicación de la comunidad: se comprime a MP4 y se le saca
+    // la portada (sharp no procesa video; se usa ffmpeg). Solo a llaves públicas.
+    if (media === 'post' && realType.startsWith('video/') && parsed.visibility === 'public') {
+      if (file.size > videoMaxBytes) {
+        throw new PayloadTooLargeException(
+          `El video supera el límite de ${COMMUNITY_MEDIA_LIMITS.maxVideoMb} MB.`,
+        );
+      }
+      let result;
+      try {
+        result = await this.videos.transcode(file.buffer, {
+          maxSeconds: COMMUNITY_MEDIA_LIMITS.maxVideoSeconds,
+        });
+      } catch (error) {
+        if (error instanceof VideoRejectedError) {
+          if (error.kind === 'unavailable') throw new ServiceUnavailableException(error.message);
+          throw new BadRequestException(error.message);
+        }
+        throw error;
+      }
+      await this.plans.assertStorageAvailable(
+        parsed.organizationId,
+        result.video.length + result.poster.length,
+      );
+      const stored = { maxBytes: Math.max(this.maxBytes, videoMaxBytes) };
+      await this.storage.saveObject(key, result.video, 'video/mp4', stored);
+      await this.storage.saveObject(posterKeyFor(key), result.poster, 'image/webp', stored);
+      await this.audit.record({
+        organizationId: parsed.organizationId,
+        actorUserId: user.id,
+        action: 'storage.uploaded',
+        entityType: 'storage_object',
+        entityId: key,
+        metadata: { visibility: parsed.visibility, kind: 'video', seconds: result.durationSeconds },
+      });
+      return { key, url: this.storage.resolvePublicUrl(key) };
+    }
+    if (realType.startsWith('video/') && file.size > this.maxBytes) {
+      throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);
+    }
+
     // Un documento privado (legal o clínico) se escribe UNA sola vez: nadie
     // cambia el archivo que el equipo ya revisó. Una corrección es otra versión.
     if (parsed.visibility === 'private' && (await this.storage.readObject(key))) {

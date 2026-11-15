@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type {
+  PostReactionCounts,
   PostType,
   PublicCommunityLeader,
   PublicCommunityPost,
@@ -25,7 +26,15 @@ interface RawPublicPost {
   body: string;
   commentCount: number;
   likeCount: number;
-  images: Array<{ id: string; storageRef: string; order: number }>;
+  reactionCounts?: PostReactionCounts | null;
+  images: Array<{
+    id: string;
+    storageRef: string;
+    order: number;
+    kind?: string | null;
+    posterRef?: string | null;
+    durationSeconds?: number | null;
+  }>;
   createdAt: string;
 }
 
@@ -52,14 +61,23 @@ export class PublicCommunityService {
       body: raw.body,
       commentCount: raw.commentCount,
       likeCount: raw.likeCount,
+      reactionCounts: raw.reactionCounts ?? {},
       images: [...(raw.images ?? [])]
         .sort((a, b) => a.order - b.order)
-        .map((i) => ({
-          id: i.id,
-          storageRef: i.storageRef,
-          order: i.order,
-          url: this.storage.resolvePublicUrl(i.storageRef),
-        })),
+        .map((i) => {
+          const isVideo = i.kind === 'video';
+          return {
+            id: i.id,
+            storageRef: i.storageRef,
+            order: i.order,
+            url: this.storage.resolvePublicUrl(i.storageRef),
+            kind: isVideo ? ('video' as const) : ('image' as const),
+            ...(isVideo && i.posterRef
+              ? { posterUrl: this.storage.resolvePublicUrl(i.posterRef) }
+              : {}),
+            ...(isVideo && i.durationSeconds ? { durationSeconds: i.durationSeconds } : {}),
+          };
+        }),
       createdAt: raw.createdAt,
     };
   }

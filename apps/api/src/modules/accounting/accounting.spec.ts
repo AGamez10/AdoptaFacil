@@ -278,10 +278,44 @@ describe('exportes y documento firmable', () => {
     expect(basic).not.toContain('Comisión');
     expect(basic).not.toContain('Ana Pérez');
     const full = renderAccountingCsv(input, true).toString('utf8');
-    expect(full).toContain('Comisión pasarela (COP)');
+    expect(full).toContain('Comisión de la pasarela (COP)');
     expect(full).toContain('Ana Pérez');
-    expect(full).toContain('Donante (sin autorización para identificarlo)');
+    expect(full).toContain('Donante sin autorización para identificarlo');
     expect(full).toContain("'=cmd|calc");
+  });
+
+  it('el CSV separa con punto y coma y parte fecha y hora', () => {
+    const csv = renderAccountingCsv(input, false)
+      .toString('utf8')
+      .replace(/^\uFEFF/, '');
+    const lines = csv.split('\r\n');
+    expect(lines[0]).toBe('sep=;');
+    expect(lines[1]).toBe('Folio;Fecha;Hora (Colombia);Tipo;Valor bruto (COP)');
+    expect(lines[2]).toMatch(/^1;\d{4}-\d{2}-\d{2};\d{2}:\d{2};Donación;/);
+    // Tabla pura: nada de renglones de resumen ni celdas de relleno.
+    expect(csv).not.toContain('SALDO');
+    expect(csv.split('\r\n').filter(Boolean).length).toBe(2 + input.entries.length);
+  });
+
+  it('el paquete completo no trae una sola celda vacía y todo va en español', async () => {
+    const csv = renderAccountingCsv(input, true)
+      .toString('utf8')
+      .replace(/^\uFEFF/, '');
+    const [, , ...rows] = csv.split('\r\n').filter(Boolean);
+    for (const row of rows) expect(row.split(';')).not.toContain('');
+    expect(csv).not.toMatch(/mercadopago|master\b|credit_card/);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await renderAccountingXlsx(input, true)) as unknown as ArrayBuffer);
+    for (const name of ['Libro auxiliar', 'Ingresos por origen', 'Otros movimientos']) {
+      const ws = wb.getWorksheet(name)!;
+      ws.eachRow((row) => {
+        for (let c = 1; c <= ws.columnCount; c++) {
+          const v = row.getCell(c).value;
+          const empty = v === null || v === '' || v === undefined;
+          if (empty) throw new Error(`${name} fila ${row.number} columna ${c} vacía`);
+        }
+      });
+    }
   });
 
   it('el Excel completo trae libro, destinación, forma de pago y donantes autorizados', async () => {
@@ -293,6 +327,8 @@ describe('exportes y documento firmable', () => {
       'Por destinación',
       'Por forma de pago',
       'Donantes autorizados',
+      'Ingresos por origen',
+      'Otros movimientos',
     ]);
     const basic = new ExcelJS.Workbook();
     await basic.xlsx.load((await renderAccountingXlsx(input, false)) as unknown as ArrayBuffer);

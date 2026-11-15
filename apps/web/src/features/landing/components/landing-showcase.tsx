@@ -1,5 +1,11 @@
 import { Link } from 'react-router-dom';
+import {
+  NEW_ORG_TRIAL_DAYS,
+  PORTAL_TEMPLATES,
+  type PortalTemplateId,
+} from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
+import { premiumPlanNames } from '../../portals/components/templates/template-picker';
 import {
   DEMO_TEMPLATE_IDS,
   templateDemoHref,
@@ -9,17 +15,50 @@ import { IconArrowRight } from './landing-icons';
 import landing from './landing.module.scss';
 import styles from './showcase.module.scss';
 
-/** Plantillas premium: todavía no están en el código, se muestran como próximamente y sin precio. */
-const PREMIUM_NAMES = ['Álbum', 'Linterna', 'Revelado', 'Velitas', 'Terminal'] as const;
+const isPro = (id: PortalTemplateId) => PORTAL_TEMPLATES.find((t) => t.id === id)?.tier === 'paid';
+
+/** Gratuitas y Pro por separado: cada plantilla aparece una sola vez. */
+const FREE_IDS = DEMO_TEMPLATE_IDS.filter((id) => !isPro(id));
+const PRO_IDS = DEMO_TEMPLATE_IDS.filter(isPro);
 
 export const LANDING_TEMPLATES_ID = 'plantillas';
 export const LANDING_COFFEE_ID = 'cafe';
 
+function TemplateTile({ id, pro }: { id: PortalTemplateId; pro?: boolean }) {
+  return (
+    <li className={cn(styles.tile, pro && styles['tile--pro'])}>
+      <Link
+        to={templateDemoHref(id)}
+        className={styles.tile__link}
+        aria-label={`Ver la plantilla ${templateName(id)}${pro ? ' (Pro)' : ''} con datos de ejemplo`}
+      >
+        <img
+          src={`/template-previews/${id}-390.jpg`}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          width={390}
+          height={488}
+        />
+        <p className={styles.tile__name}>
+          <span>
+            {templateName(id)}
+            {pro && <span className={styles.tile__badge}>PRO</span>}
+          </span>
+          <span className={styles.tile__cta}>Ver ejemplo</span>
+        </p>
+      </Link>
+    </li>
+  );
+}
+
 /**
- * Galería de plantillas: las 14 del motor más la Clásica son gratuitas. Las
- * premium se marcan como próximamente, sin precio. Las miniaturas salen de
- * `public/template-previews` (datos de demostración, no de una organización real).
- * Cada una abre su vista de ejemplo completa (`/plantillas/:id`), desde donde se
+ * Galería de plantillas: primero las gratuitas (para siempre) y aparte, una
+ * sola vez, las Pro. Las Pro se pueden elegir al registrarse: la organización
+ * nueva las usa gratis durante su prueba ({@link NEW_ORG_TRIAL_DAYS} días) y
+ * después necesita Crece o Pro; si no, su portal vuelve solo a una gratuita.
+ * Las miniaturas salen de `public/template-previews` (datos de demostración).
+ * Cada una abre su vista de ejemplo (`/plantillas/:id`), desde donde se
  * registra la fundación con esa plantilla.
  */
 export function TemplateGallerySection() {
@@ -33,7 +72,7 @@ export function TemplateGallerySection() {
         <div className={landing.heading}>
           <p className={landing.eyebrow}>Plantillas para tu portal</p>
           <h2 id="landing-templates-title" className={landing.heading__title}>
-            Elige la forma de tu portal. Todas son gratis.
+            Elige la forma de tu portal.
           </h2>
           <p className={landing.heading__lead}>
             Cambias el diseño cuando quieras. Tus animales, tus datos y tus campañas se ven igual en
@@ -41,42 +80,33 @@ export function TemplateGallerySection() {
           </p>
         </div>
 
+        <h3 className={styles.subhead}>Gratis, para siempre</h3>
         <ul className={styles.gallery} aria-label="Plantillas gratuitas">
-          {DEMO_TEMPLATE_IDS.map((id) => (
-            <li key={id} className={styles.tile}>
-              <Link
-                to={templateDemoHref(id)}
-                className={styles.tile__link}
-                aria-label={`Ver la plantilla ${templateName(id)} con datos de ejemplo`}
-              >
-                <img
-                  src={`/template-previews/${id}-390.jpg`}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  width={390}
-                  height={488}
-                />
-                <p className={styles.tile__name}>
-                  {templateName(id)}
-                  <span className={styles.tile__cta}>Ver ejemplo</span>
-                </p>
-              </Link>
-            </li>
+          {FREE_IDS.map((id) => (
+            <TemplateTile key={id} id={id} />
           ))}
         </ul>
 
-        <h3 className={styles.subhead}>Próximamente, plantillas premium</h3>
-        <ul className={styles.gallery} aria-label="Plantillas premium, próximamente">
-          {PREMIUM_NAMES.map((name) => (
-            <li key={name} className={cn(styles.tile, styles['tile--soon'])}>
-              <span className={styles.tile__badge}>Próximamente</span>
-              <div className={styles['tile--text']}>
-                <span className={styles.tile__name}>{name}</span>
+        {PRO_IDS.length > 0 && (
+          <div className={styles.pro} data-testid="landing-pro-templates">
+            <div className={styles.pro__head}>
+              <span className={styles.pro__badge}>PRO</span>
+              <div>
+                <h3 className={styles.pro__title}>Plantillas Pro</h3>
+                <p className={styles.pro__lead}>
+                  Elige una al crear tu portal y úsala gratis durante tus primeros{' '}
+                  {NEW_ORG_TRIAL_DAYS} días. Después están en los planes {premiumPlanNames()}; si no
+                  activas uno, tu portal pasa solo a una plantilla gratuita sin perder nada.
+                </p>
               </div>
-            </li>
-          ))}
-        </ul>
+            </div>
+            <ul className={styles.gallery} aria-label="Plantillas Pro">
+              {PRO_IDS.map((id) => (
+                <TemplateTile key={id} id={id} pro />
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className={landing.orgs__cta}>
           <Link to="/register" className={cn(landing.btn, landing['btn--primary'])}>

@@ -439,7 +439,10 @@ describe('Open offers (M09) + public shareable community (M11)', () => {
     }).expect(201);
     const id = post.body.post.id;
 
-    const html = await request(server).get(`/public/share/c/${id}?s=whatsapp`).expect(200);
+    // `/p/` es el enlace que comparte la web; `/c/` queda para los ya compartidos.
+    const html = await request(server).get(`/public/share/p/${id}?s=whatsapp`).expect(200);
+    const legacy = await request(server).get(`/public/share/c/${id}?s=whatsapp`).expect(200);
+    expect(legacy.text).toBe(html.text);
     expect(html.headers['content-type']).toContain('text/html');
     expect(html.text).toContain(
       '<meta property="og:title" content="Jornada de adopción &lt;este sábado&gt; · Org oo-org">',

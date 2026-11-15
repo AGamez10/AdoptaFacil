@@ -44,8 +44,11 @@ Las migraciones (servicio `migrate`) van directo a Postgres, nunca por PgBouncer
    el VPS y `STORAGE_PUBLIC_CDN_BASE_URL=https://img.adoptafacil.org/api`.
 2. Regla de caché "Cache everything, respetar el TTL del origen" para
    `/api/storage/public*` y `/api/public/*`. La API ya manda `Cache-Control`.
-3. Con Cloudflare delante hay un salto más: `TRUST_PROXY_HOPS=2`, o el límite
-   por IP contaría a todos los visitantes como la IP de Cloudflare.
+3. Con Cloudflare delante hay un salto más. Ya viene resuelto: el compose usa
+   `TRUST_PROXY_HOPS=2` por defecto y el Caddyfile solo confía en el
+   `X-Forwarded-For` que llega desde los rangos de IP de Cloudflare
+   (`trusted_proxies`). Sin eso, el límite por IP contaría a todos los visitantes
+   de un mismo nodo de Cloudflare como una sola IP.
 
 ## Métricas que deciden el siguiente paso
 
@@ -54,3 +57,11 @@ se leen en `/metrics`: `http_request_duration_seconds` por ruta,
 `public_cache_requests_total`, `rate_limit_rejections_total` y las métricas de
 proceso (CPU, memoria). Hace falta un Prometheus o Grafana Cloud que las
 recoja; eso se configura fuera del repo.
+
+## Video de la comunidad (ffmpeg + R2)
+
+- Los videos de las publicaciones se comprimen **en la API** con ffmpeg (H.264 main, AAC 96 k, máx. 720p, 30 fps, 60 s, sin metadatos, `faststart`) y se genera un póster WebP que también usa la tarjeta para redes (`card.png`). Sharp sigue encargándose solo de las fotos.
+- Límites: 6 archivos por publicación, 1 video (máx. 80 MB de entrada, 60 s), fotos de hasta 8 MB.
+- La conversión es síncrona (máx. 2 a la vez, 150 s por video). Si el volumen crece, el siguiente paso es moverla a una cola.
+- Cloudflare R2 no requiere cambios: `STORAGE_DRIVER=s3` y las variables S3 existentes. La imagen Docker instala ffmpeg (`ARG MEDIA_PACKAGES`); en CI se instala en el job de integración.
+- Al borrar una publicación no se eliminan sus archivos del almacenamiento (comportamiento existente).

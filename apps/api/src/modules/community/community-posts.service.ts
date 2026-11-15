@@ -1,4 +1,11 @@
-import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Post as PostRow, PostImage as PostImageRow } from '@prisma/client';
 import {
@@ -6,13 +13,18 @@ import {
   type CreatePostResult,
   type Post,
   type PostImage,
+  type PostImageInput,
+  type PostMediaKind,
+  type PostReactionCounts,
   PostType,
   type PostsPage,
   type UpdatePostInput,
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
+import { posterKeyFor } from '../../core/media/video-transcoder';
 import {
   NOTIFICATION_PORT,
   type NotificationPort,
@@ -55,7 +67,15 @@ interface RawPost {
   likeCount: number;
   moderationReason?: string | null;
   shareable?: boolean;
-  images: Array<{ id: string; storageRef: string; order: number }>;
+  reactionCounts?: PostReactionCounts | null;
+  images: Array<{
+    id: string;
+    storageRef: string;
+    order: number;
+    kind?: string | null;
+    posterRef?: string | null;
+    durationSeconds?: number | null;
+  }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,14 +96,28 @@ export class CommunityPostsService {
     private readonly prisma: PrismaService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    @Optional() private readonly inbox?: InboxService,
   ) {}
 
-  private toImage(row: PostImageRow): PostImage {
+  private toImage(row: {
+    id: string;
+    storageRef: string;
+    order: number;
+    kind?: string | null;
+    posterRef?: string | null;
+    durationSeconds?: number | null;
+  }): PostImage {
+    const isVideo = row.kind === 'video';
     return {
       id: row.id,
       storageRef: row.storageRef,
       order: row.order,
       url: this.storage.resolvePublicUrl(row.storageRef),
+      kind: (isVideo ? 'video' : 'image') as PostMediaKind,
+      ...(isVideo && row.posterRef
+        ? { posterUrl: this.storage.resolvePublicUrl(row.posterRef) }
+        : {}),
+      ...(isVideo && row.durationSeconds ? { durationSeconds: row.durationSeconds } : {}),
     };
   }
 
@@ -99,6 +133,7 @@ export class CommunityPostsService {
       images: [...row.images].sort((a, b) => a.order - b.order).map((i) => this.toImage(i)),
       commentCount: row.commentCount,
       likeCount: row.likeCount,
+      reactionCounts: (row.reactionCounts ?? {}) as PostReactionCounts,
       status: row.status as Post['status'],
       moderationReason: row.moderationReason ?? undefined,
       shareable: row.shareable,
@@ -117,16 +152,10 @@ export class CommunityPostsService {
       type: raw.type as PostType,
       title: raw.title ?? undefined,
       body: raw.body,
-      images: [...(raw.images ?? [])]
-        .sort((a, b) => a.order - b.order)
-        .map((i) => ({
-          id: i.id,
-          storageRef: i.storageRef,
-          order: i.order,
-          url: this.storage.resolvePublicUrl(i.storageRef),
-        })),
+      images: [...(raw.images ?? [])].sort((a, b) => a.order - b.order).map((i) => this.toImage(i)),
       commentCount: raw.commentCount,
       likeCount: raw.likeCount,
+      reactionCounts: raw.reactionCounts ?? {},
       status: raw.status as Post['status'],
       moderationReason: raw.moderationReason ?? undefined,
       shareable: raw.shareable ?? false,
@@ -150,13 +179,54 @@ export class CommunityPostsService {
   async create(actor: RequestUser, input: CreatePostInput): Promise<CreatePostResult> {
     const authorName = await this.resolveAuthorName(actor);
     if (actor.accountType === 'person') {
-      let post = await this.createPlatformPost(actor, authorName, input);
+      const created = await this.createPlatformPost(actor, authorName, input);
+      let { post } = created;
+      const { imageUploads } = created;
       if (input.shareable) {
         post = { ...post, shareable: await this.setShareable(actor, post.id, true) };
       }
-      return { post, imageUploads: [] };
+      return { post, imageUploads };
     }
     return this.createOrgPost(actor, authorName, input);
+  }
+
+  /**
+   * Reserva los destinos de subida FUERA de la transacción (igual que animales
+   * y marketplace). `uploadUrl` es el destino PUT al que el cliente sube los
+   * bytes; nunca se persiste (solo `storageRef`). Un video se guarda siempre
+   * como `.mp4` (el servidor lo comprime) y trae la llave de su portada.
+   */
+  private async reserveMedia(
+    organizationId: string,
+    media: PostImageInput[],
+  ): Promise<
+    Array<{
+      storageRef: string;
+      uploadUrl: string;
+      order: number;
+      kind: PostMediaKind;
+      posterRef: string | null;
+    }>
+  > {
+    return Promise.all(
+      media.map(async (item, index) => {
+        const isVideo = item.contentType.startsWith('video/');
+        const stored = await this.storage.createUploadTarget({
+          organizationId,
+          filename: isVideo ? 'video.mp4' : item.filename,
+          contentType: isVideo ? 'video/mp4' : item.contentType,
+          // Las fotos y videos de la comunidad son públicos (se ven en el muro).
+          visibility: 'public',
+        });
+        return {
+          storageRef: stored.key,
+          uploadUrl: stored.url,
+          order: item.order ?? index,
+          kind: (isVideo ? 'video' : 'image') as PostMediaKind,
+          posterRef: isVideo ? posterKeyFor(stored.key) : null,
+        };
+      }),
+    );
   }
 
   private async createOrgPost(
@@ -166,21 +236,7 @@ export class CommunityPostsService {
   ): Promise<CreatePostResult> {
     const organizationId = actor.organizationId;
 
-    // Reserve storage targets OUTSIDE the tx (mirrors animals/marketplace create).
-    // `uploadUrl` is the PUT-only target the client uploads bytes to; it is
-    // NEVER persisted (only `storageRef`/the resolved view url are).
-    const reserved = await Promise.all(
-      (input.images ?? []).map(async (image, index) => {
-        const stored = await this.storage.createUploadTarget({
-          organizationId,
-          filename: image.filename,
-          contentType: image.contentType,
-          // Community post photos are public (shown in the shared feed).
-          visibility: 'public',
-        });
-        return { storageRef: stored.key, uploadUrl: stored.url, order: image.order ?? index };
-      }),
-    );
+    const reserved = await this.reserveMedia(organizationId, input.images ?? []);
 
     const created = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const row = await tx.post.create({
@@ -199,6 +255,8 @@ export class CommunityPostsService {
                     organizationId,
                     storageRef: r.storageRef,
                     order: r.order,
+                    kind: r.kind,
+                    posterRef: r.posterRef,
                   })),
                 }
               : undefined,
@@ -209,7 +267,7 @@ export class CommunityPostsService {
       if (input.type === PostType.Campaign) {
         const donations = await tx.donation.findMany({
           where: { organizationId, status: 'approved', reversal: null },
-          select: { payer: true },
+          select: { payer: true, donorUserId: true },
         });
         // One entry per address (first name seen wins), for a personal greeting.
         const recipients = new Map<string, CampaignRecipient>();
@@ -217,7 +275,11 @@ export class CommunityPostsService {
           const payer = d.payer as { email?: string; fullName?: string } | null;
           const email = payer?.email?.trim();
           if (!email || recipients.has(email.toLowerCase())) continue;
-          recipients.set(email.toLowerCase(), { email, name: payer?.fullName?.trim() });
+          recipients.set(email.toLowerCase(), {
+            email,
+            name: payer?.fullName?.trim(),
+            userId: d.donorUserId ?? undefined,
+          });
           if (recipients.size >= MAX_CAMPAIGN_NOTIFY_RECIPIENTS) break;
         }
         const emails = [...recipients.values()];
@@ -258,6 +320,19 @@ export class CommunityPostsService {
     const orgName = org?.name ?? 'una organización de AdoptaFácil';
     const subject = `${orgName} publicó novedades sobre una campaña`;
     const body = post.title ? `"${post.title}": ${post.body}` : post.body;
+    const noticed = new Set<string>();
+    for (const { userId } of recipients) {
+      if (!userId || noticed.has(userId)) continue;
+      noticed.add(userId);
+      await this.inbox?.toUser(userId, {
+        kind: 'community.campaign_update',
+        tone: 'info',
+        title: `${orgName} publicó novedades de una campaña que apoyaste`,
+        body: post.title ?? post.body.slice(0, 200),
+        href: `/comunidad/${post.id}`,
+        dedupeKey: `community_campaign_update:${post.id}`,
+      });
+    }
     for (let i = 0; i < recipients.length; i += NOTIFY_ENQUEUE_BATCH) {
       const batch = recipients.slice(i, i + NOTIFY_ENQUEUE_BATCH);
       await Promise.all(
@@ -298,14 +373,38 @@ export class CommunityPostsService {
     actor: RequestUser,
     authorName: string,
     input: CreatePostInput,
-  ): Promise<Post> {
-    // Platform-wide posts (no organization) never carry images reserved
-    // under an org's storage bucket — out of scope for a Persona post in
-    // this MVP (documented in the PR); images are for org-authored posts.
+  ): Promise<{ post: Post; imageUploads: CreatePostResult['imageUploads'] }> {
     const rows = await this.prisma.$queryRaw<Array<{ data: RawPost }>>(
       Prisma.sql`SELECT create_community_post_platform(${actor.id}::uuid, ${authorName}, ${input.type}, ${input.title ?? null}, ${input.body}) AS data`,
     );
-    return this.fromRaw(rows[0].data);
+    let post = this.fromRaw(rows[0].data);
+    const media = input.images ?? [];
+    if (media.length === 0) return { post, imageUploads: [] };
+
+    // Las fotos y videos de una Persona viven en su propio espacio de
+    // almacenamiento (el de su cuenta) y se registran con una función acotada.
+    const reserved = await this.reserveMedia(actor.organizationId, media);
+    const ids = await this.prisma.$queryRaw<Array<{ ids: string[] }>>(
+      Prisma.sql`SELECT community_post_attach_media(${post.id}::uuid, ${actor.id}::uuid, ${JSON.stringify(
+        reserved.map((r) => ({
+          storageRef: r.storageRef,
+          order: r.order,
+          kind: r.kind,
+          posterRef: r.posterRef,
+        })),
+      )}::jsonb) AS ids`,
+    );
+    post = await this.get(post.id);
+    const imageIds = ids[0]?.ids ?? [];
+    return {
+      post,
+      imageUploads: reserved.map((r, index) => ({
+        imageId: imageIds[index] ?? '',
+        order: r.order,
+        key: r.storageRef,
+        url: r.uploadUrl,
+      })),
+    };
   }
 
   /** El feed cruzado: publicaciones activas de todas las organizaciones +
@@ -408,6 +507,8 @@ export class CommunityPostsService {
 interface CampaignRecipient {
   email: string;
   name?: string;
+  /** Cuenta de quien donó (si donó con sesión): también recibe el aviso en su campana. */
+  userId?: string;
 }
 
 function firstName(fullName: string | undefined): string | undefined {

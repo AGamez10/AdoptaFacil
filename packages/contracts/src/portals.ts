@@ -161,6 +161,12 @@ export const PORTAL_TEMPLATE_IDS = [
   'constelacion',
   'portada',
   'hilo',
+  // Premium (plan Crece o Pro, entitlement `portalPremiumDesigns`).
+  'album',
+  'linterna',
+  'revelado',
+  'velitas',
+  'terminal',
 ] as const;
 export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
@@ -302,6 +308,36 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     name: 'Hilo',
     tagline: 'Neo-brutalista: un hilo recorre la página y stickers con física.',
     tier: 'free',
+  }, // Premium: dos experiencias (clara y oscura) sobre las mismas secciones.
+  {
+    id: 'album',
+    name: 'Álbum',
+    tagline: 'Álbum de láminas con sobres para abrir, y cartas holográficas en modo oscuro.',
+    tier: 'paid',
+  },
+  {
+    id: 'linterna',
+    name: 'Linterna',
+    tagline: 'Amanece en el refugio; de noche, una linterna descubre quién espera.',
+    tier: 'paid',
+  },
+  {
+    id: 'revelado',
+    name: 'Revelado',
+    tagline: 'Negativos con lupa y, en modo oscuro, copias que se revelan bajo luz roja.',
+    tier: 'paid',
+  },
+  {
+    id: 'velitas',
+    name: 'Velitas',
+    tagline: 'Cerros de papel recortado y banderines; de noche, faroles y una vela por animal.',
+    tier: 'paid',
+  },
+  {
+    id: 'terminal',
+    name: 'Terminal',
+    tagline: 'Pases de abordar hacia un hogar y un tablero de salidas con letras que giran.',
+    tier: 'paid',
   },
 ];
 
@@ -395,6 +431,11 @@ export const PORTAL_TEMPLATE_OPTIONS: Readonly<
   constelacion: [],
   portada: [],
   hilo: [],
+  album: [],
+  linterna: [],
+  revelado: [],
+  velitas: [],
+  terminal: [],
 };
 
 /**

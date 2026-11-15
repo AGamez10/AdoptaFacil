@@ -440,9 +440,9 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
         .set(auth(owner)),
     ).expect(200);
     const text = (csv.body as Buffer).toString('utf8');
-    expect(text).toContain('Folio,Fecha (hora Colombia),Tipo,Valor bruto (COP)');
+    expect(text).toContain('Folio;Fecha;Hora (Colombia);Tipo;Valor bruto (COP)');
     expect(text).not.toContain('Comisión pasarela');
-    expect(text).toContain(`,Donación,${d1.amountCharged}`);
+    expect(text).toContain(`;Donación;${d1.amountCharged}`);
 
     for (const [method, path, body, capability] of [
       ['post', `/org/accounting/periods/${PAST}/close`, {}, 'accountingClose'],
@@ -714,8 +714,8 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
         .send({ token: shareToken, format: 'csv' }),
     ).expect(200);
     const text = (csv.body as Buffer).toString('utf8');
-    expect(text).toContain('Comisión pasarela (COP)');
-    expect(text).toContain('Donante (sin autorización para identificarlo)');
+    expect(text).toContain('Comisión de la pasarela (COP)');
+    expect(text).toContain('Donante sin autorización para identificarlo');
     expect(text).not.toContain('Donante Prueba');
 
     const views = await admin.auditLog.count({

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, useToast } from '@adoptafacil/ui';
 import { toApiError, type RegisterPersonRequest } from '../../../shell/api';
@@ -11,7 +11,6 @@ import {
 } from '../../legal';
 import { Field } from '../components/field';
 import { FormAlert } from '../components/form-alert';
-import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
 import { PasswordRequirements } from '../components/password-requirements';
 import {
   collectErrors,
@@ -31,9 +30,13 @@ type PersonErrors = Partial<
  * the backend DTO needs; first and last name are combined into the required
  * `displayName`. Phone is not part of account creation (see M01, Ola 1).
  */
-export function RegisterPersonForm() {
-  const { register, signInWithGoogle } = useSession();
-  const googleAvailable = useGoogleSignInAvailable();
+export interface RegisterPersonFormProps {
+  /** Tras crear la cuenta: vuelve a la intención guardada (o al inicio). */
+  onRegistered?: () => void | Promise<void>;
+}
+
+export function RegisterPersonForm({ onRegistered }: RegisterPersonFormProps) {
+  const { register } = useSession();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -100,30 +103,14 @@ export function RegisterPersonForm() {
         description:
           'Registramos tu aceptación de los términos y de la autorización de datos. Te enviamos una constancia a tu correo.',
       });
-      navigate('/', { replace: true });
+      if (onRegistered) await onRegistered();
+      else navigate('/', { replace: true });
     } catch (error) {
       const apiError = toApiError(error);
       setFormError(registerErrorMessage(apiError.status, apiError.code));
       setSubmitting(false);
     }
   };
-
-  const handleGoogleCredential = useCallback(
-    async (idToken: string) => {
-      setFormError(null);
-      setSubmitting(true);
-      try {
-        // Same endpoint as login: auto-links by email if the account already
-        // exists, otherwise creates the lightweight Person account.
-        await signInWithGoogle(idToken);
-        navigate('/', { replace: true });
-      } catch {
-        setFormError('No pudimos continuar con Google. Inténtalo de nuevo.');
-        setSubmitting(false);
-      }
-    },
-    [signInWithGoogle, navigate],
-  );
 
   return (
     <div className="space-y-4">
@@ -202,23 +189,6 @@ export function RegisterPersonForm() {
       >
         {submitting ? 'Creando cuenta…' : 'Crear cuenta personal'}
       </Button>
-
-      {/* Google Sign-In NEVER creates an Organization — only offered on the
-          Person tab. Registering an org stays the long NIT/legal-rep form. */}
-      {googleAvailable && (
-        <>
-          <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            o
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
-          <p className="text-xs text-muted-foreground">
-            Si continúas con Google, te pediremos aceptar estos mismos documentos antes de usar tu
-            cuenta.
-          </p>
-        </>
-      )}
     </div>
   );
 }

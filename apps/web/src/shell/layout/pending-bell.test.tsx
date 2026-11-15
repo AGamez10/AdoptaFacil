@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ReminderStatus, Role } from '@adoptafacil/contracts';
 import { renderShell } from '../../test-utils';
 import { DATA_CHANGED_EVENT } from '../api';
-import { isUnread, kudosMessage } from './pending-bell';
+import { isUnread, kudosMessage, normalizeInbox, timeAgo } from './pending-bell';
 
 /**
  * Campana de pendientes del encabezado: recordatorios clínicos abiertos + acciones
@@ -125,14 +125,118 @@ describe('PendingBell (encabezado)', () => {
     await waitFor(() => expect(screen.queryByTestId('pending-bell-panel')).not.toBeInTheDocument());
   });
 
-  it('un rol sin acceso (Volunteer) no ve la campana ni dispara consultas de pendientes', async () => {
+  it('un rol sin pendientes del equipo (Volunteer) ve sus avisos, pero no consulta pendientes', async () => {
     stubFetch([]);
     renderShell({ route: '/inicio', ...sessionWith([Role.Volunteer]) });
 
     await screen.findByRole('heading', { name: 'Inicio' });
-    expect(screen.queryByTestId('pending-bell')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('pending-bell')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        vi.mocked(fetch).mock.calls.some((call) => String(call[0]).includes('/me/notifications')),
+      ).toBe(true),
+    );
     const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]));
     expect(urls.some((url) => url.includes('/clinical-reminders'))).toBe(false);
+    expect(urls.some((url) => url.includes('/org/pending-reads'))).toBe(false);
+  });
+});
+
+describe('PendingBell · avisos personales (todas las cuentas)', () => {
+  const NOTICE = {
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: 'resources.offer_accepted',
+    tone: 'success',
+    title: 'Refugio Patitas aceptó tu oferta para "Arena"',
+    body: 'Coordinarán contigo la entrega.',
+    href: '/mis-ofertas',
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  function stubInbox(page: object) {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      const body = url.includes('/me/notifications/read')
+        ? { updated: 1 }
+        : url.includes('/me/notifications')
+          ? page
+          : [];
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => body,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('una persona ve el contador de avisos sin leer y los lista con su enlace', async () => {
+    stubInbox({ items: [NOTICE], unread: 1 });
+    renderShell({ route: '/inicio', ...sessionWith([]) });
+
+    expect(await screen.findByTestId('pending-bell-count')).toHaveTextContent('1');
+    fireEvent.click(screen.getByTestId('pending-bell'));
+    const panel = within(await screen.findByTestId('pending-bell-inbox'));
+    expect(panel.getByText(NOTICE.title)).toBeInTheDocument();
+    expect(panel.getByRole('link', { name: /Ver/ })).toHaveAttribute('href', '/mis-ofertas');
+  });
+
+  it('marcar un aviso como leído baja el contador y lo guarda en el servidor', async () => {
+    const fetchMock = stubInbox({ items: [NOTICE], unread: 1 });
+    renderShell({ route: '/inicio', ...sessionWith([]) });
+    fireEvent.click(await screen.findByTestId('pending-bell'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: `Marcar como leído: ${NOTICE.title}` }),
+    );
+    await waitFor(() => expect(screen.queryByTestId('pending-bell-count')).toBeNull());
+    const post = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes('/me/notifications/read') && init?.method === 'POST',
+    );
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ ids: [NOTICE.id] });
+  });
+
+  it('celebra un reconocimiento nuevo, pero no los que ya estaban al entrar', async () => {
+    let page: object = {
+      items: [{ ...NOTICE, id: 'k-old', tone: 'kudos', title: 'Reconocimiento viejo' }],
+      unread: 1,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => (String(input).includes('/me/notifications') ? page : []),
+        }),
+      ),
+    );
+    renderShell({ route: '/inicio', ...sessionWith([]) });
+    expect(await screen.findByTestId('pending-bell-count')).toHaveTextContent('1');
+    expect(screen.queryByTestId('pending-bell-kudos')).toBeNull();
+
+    page = {
+      items: [
+        { ...NOTICE, id: 'k-new', tone: 'kudos', title: '¡Gracias! Recibieron tu donación' },
+        { ...NOTICE, id: 'k-old', tone: 'kudos', title: 'Reconocimiento viejo' },
+      ],
+      unread: 2,
+    };
+    window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT));
+    expect(await screen.findByTestId('pending-bell-kudos')).toHaveTextContent(
+      '¡Gracias! Recibieron tu donación',
+    );
+  });
+
+  it('normalizeInbox y timeAgo toleran respuestas viejas y formatean el tiempo', () => {
+    expect(normalizeInbox([])).toEqual({ items: [], unread: 0 });
+    expect(normalizeInbox({ items: [NOTICE] }).unread).toBe(1);
+    const now = Date.parse('2026-11-13T12:00:00.000Z');
+    expect(timeAgo('2026-11-13T11:55:00.000Z', now)).toBe('hace 5 min');
+    expect(timeAgo('2026-11-13T09:00:00.000Z', now)).toBe('hace 3 h');
   });
 });
 

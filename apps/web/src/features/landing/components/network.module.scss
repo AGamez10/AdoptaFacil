@@ -437,6 +437,59 @@ $teal-tint: #e3f7f3;
 }
 
 /* Libro público */
+.national {
+  display: grid;
+  gap: 2rem;
+  margin-bottom: 3.5rem;
+
+  @media (min-width: 1024px) {
+    margin-bottom: 4.5rem;
+  }
+}
+
+.national__head {
+  max-width: 48rem;
+}
+
+/* El tablero va sobre una superficie clara: sus cifras y notas no pierden contraste. */
+.national__panel {
+  border-radius: 1.5rem;
+  background: var(--af-cream);
+  color: var(--af-ink);
+  padding: 1rem;
+
+  @media (min-width: 640px) {
+    padding: 1.5rem;
+  }
+}
+
+.national__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-self: start;
+  min-height: 44px;
+  font-weight: var(--fw-bold);
+  color: var(--af-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+  }
+}
+
+.ledger__title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: var(--fw-extra);
+  line-height: 1.1;
+  color: #fff;
+}
+
 .ledger {
   display: grid;
   gap: 2rem;

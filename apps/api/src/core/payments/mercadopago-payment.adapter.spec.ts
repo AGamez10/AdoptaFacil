@@ -13,6 +13,7 @@ import {
   mercadoPagoPaymentSnapshot,
   mercadoPagoReferenceFor,
   mercadoPagoSignatureV1,
+  orderTtlDays,
 } from './mercadopago-payment.adapter';
 
 const ORG_ID = '11111111-2222-3333-4444-555555555555';
@@ -118,7 +119,7 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     expect(headers.Authorization).toBe(`Bearer ${ORG.accessToken}`);
     expect(headers['X-Idempotency-Key']).toBe(reference);
     const body = JSON.parse(String(init?.body));
-    const amount = breakdown.amountCharged.toFixed(2);
+    const amount = String(breakdown.amountCharged);
     expect(body).toMatchObject({
       type: 'online',
       processing_mode: 'manual',
@@ -145,11 +146,76 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     expect(JSON.stringify(body)).not.toContain(ORG.accessToken);
   });
 
+  it('a sponsorship month is its own item, returns to /apadrinar and lives as long as its attempt', async () => {
+    const fetchFn = makeFetch();
+    const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
+    const expiresAt = new Date(Date.now() + 10 * 86_400_000 + 60_000);
+    await adapter.createCollection({
+      ...INPUT,
+      concept: { kind: 'sponsorship', id: ORG_ID },
+      expiresAt,
+    });
+    const body = JSON.parse(String(fetchFn.mock.calls[0][1]?.body));
+    expect(body.items[0].title).toBe('Apadrinamiento');
+    expect(body.expiration_time).toBe('P10D');
+    expect(body.config.online.success_url).toMatch(
+      /^https:\/\/app\.adoptafacil\.test\/apadrinar\/resultado\?reference=af-/,
+    );
+  });
+
+  it('an order never lives less than a day, and a donation keeps its default', () => {
+    const now = new Date('2026-11-15T00:00:00Z');
+    expect(orderTtlDays(undefined, now)).toBe(3);
+    expect(orderTtlDays(new Date('2026-11-15T05:00:00Z'), now)).toBe(1);
+    expect(orderTtlDays(new Date('2026-11-25T00:00:00Z'), now)).toBe(10);
+  });
+
   it('sends no payer when the donor gave no email', async () => {
     const fetchFn = makeFetch();
     const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
     await adapter.createCollection({ ...INPUT, payer: undefined });
     expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).payer).toBeUndefined();
+  });
+
+  it('in sandbox never sends the donor email (only the configured test buyer)', async () => {
+    const fetchFn = makeFetch();
+    const sandbox = new MercadoPagoPaymentAdapter(makeConfig({ MERCADOPAGO_TEST: true }), fetchFn);
+    await sandbox.createCollection(INPUT);
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).payer).toBeUndefined();
+
+    const withBuyer = makeFetch();
+    const configured = new MercadoPagoPaymentAdapter(
+      makeConfig({ MERCADOPAGO_TEST: true, MERCADOPAGO_TEST_PAYER_EMAIL: 'buyer@testuser.com' }),
+      withBuyer,
+    );
+    await configured.createCollection(INPUT);
+    expect(JSON.parse(String(withBuyer.mock.calls[0][1]?.body)).payer).toEqual({
+      email: 'buyer@testuser.com',
+    });
+  });
+
+  it('says why Mercado Pago refused the order, without the token or the payer', async () => {
+    const failing = new MercadoPagoPaymentAdapter(
+      makeConfig(),
+      jest.fn(async () =>
+        json(
+          {
+            errors: [
+              {
+                code: 'invalid_users_involved',
+                message: `payer donante@test.local cannot pay ${ORG.accessToken}`,
+                details: [],
+              },
+            ],
+          },
+          400,
+        ),
+      ),
+    );
+    const error = await failing.createCollection(INPUT).catch((e: Error) => e);
+    expect(String(error)).toMatch(/order create failed \(400: invalid_users_involved/);
+    expect(String(error)).not.toContain(ORG.accessToken);
+    expect(String(error)).not.toContain('donante@test.local');
   });
 
   it('uses the same checkout_url in test mode (the order id carries the mode)', async () => {
@@ -254,6 +320,15 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     await expect(
       sandbox.verifyAndNormalizeWebhook({}, signed7.signature, signed7.context),
     ).rejects.toThrow(/live_mode/);
+    // Sandbox whose OAuth skips test_token (MP support, WCS-58365): the test
+    // seller's payments may come back live_mode=true, so they are accepted.
+    const noTestToken = new MercadoPagoPaymentAdapter(
+      makeConfig({ MERCADOPAGO_TEST: true, MERCADOPAGO_OAUTH_TEST_TOKEN: false }),
+      makeFetch({ ...sandboxPayment, live_mode: true }),
+    );
+    await expect(
+      noTestToken.verifyAndNormalizeWebhook({}, signed7.signature, signed7.context),
+    ).resolves.toMatchObject({ status: 'approved' });
   });
 
   it('every call to Mercado Pago carries a timeout signal', async () => {

@@ -32,6 +32,7 @@ import {
   validateOptionalUrl,
 } from '../validation';
 import styles from './org-profile-form.module.scss';
+import { publicUrlFromUploadTarget } from '../../../lib/file-url';
 
 const ABOUT_US_MAX = 2000;
 
@@ -234,10 +235,9 @@ async function uploadProfileImage(client: ApiClient, file: File): Promise<string
   // the display URL (confirmed by reading it AND a live curl: the field really
   // is the PUT endpoint). The GET/display URL is built from the SAME key at
   // `/storage/public` (this endpoint always reserves with `visibility: 'public'`
-  // — org.controller.ts), same origin as the reserved URL so this works in any
-  // environment without hardcoding a base URL.
-  const origin = new URL(reserved.url).origin;
-  return `${origin}/storage/public?key=${encodeURIComponent(reserved.key)}`;
+  // — org.controller.ts), on the SAME base as the reserved URL (keeping its
+  // `/api` prefix in production) so this works in any environment.
+  return publicUrlFromUploadTarget(reserved.url, reserved.key);
 }
 
 /** Simple camera glyph for the empty image placeholder (feature-local — no

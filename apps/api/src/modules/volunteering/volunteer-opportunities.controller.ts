@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -10,18 +11,23 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  type CancelVolunteerOpportunityInput,
   type CreateVolunteerOpportunityInput,
   type Paginated,
   Role,
   type UpdateVolunteerOpportunityInput,
   type VolunteerOpportunity,
+  type VolunteerOpportunityChangeResult,
 } from '@adoptafacil/contracts';
+import type { RequestUser } from '../../core/auth/auth.types';
+import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { VolunteerOpportunitiesService } from './volunteer-opportunities.service';
 import {
+  cancelVolunteerOpportunitySchema,
   createVolunteerOpportunitySchema,
   updateVolunteerOpportunitySchema,
 } from './volunteer-opportunities.schemas';
@@ -71,10 +77,24 @@ export class VolunteerOpportunitiesController {
   @Patch(':id')
   @Roles(...MANAGE_ROLES)
   update(
+    @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateVolunteerOpportunitySchema))
     dto: UpdateVolunteerOpportunityInput,
-  ): Promise<VolunteerOpportunity> {
-    return this.service.update(id, dto);
+  ): Promise<VolunteerOpportunity & { notifiedVolunteers: number }> {
+    return this.service.update(id, dto, actor);
+  }
+
+  /** Cancela la jornada (no se borra) y avisa a cada persona inscrita. */
+  @Post(':id/cancel')
+  @HttpCode(200)
+  @Roles(...MANAGE_ROLES)
+  cancel(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(cancelVolunteerOpportunitySchema))
+    dto: CancelVolunteerOpportunityInput,
+  ): Promise<VolunteerOpportunityChangeResult> {
+    return this.service.cancel(id, dto, actor);
   }
 }

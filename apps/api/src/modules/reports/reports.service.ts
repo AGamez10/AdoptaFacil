@@ -1,3 +1,4 @@
+import { loadConsentedDocuments } from './consented-documents';
 import {
   BadRequestException,
   ConflictException,
@@ -59,6 +60,7 @@ import {
 } from './report-legal-effect';
 import {
   type AccountingReportPayload,
+  type ImpactReportPayload,
   type OrgReportPayload,
   type ReportOrganizationSnapshot,
   buildDonationsPayload,
@@ -153,6 +155,13 @@ function toContract(row: OrgReportRow, reused?: boolean, approvals: ApprovalRow[
 }
 
 function summarize(payload: OrgReportPayload): OrgReportSummary {
+  if (payload.kind === 'impact') {
+    return {
+      rowCount: payload.campaigns.length,
+      netTotal: payload.donations.netTotal,
+      approvedHours: payload.volunteerHours,
+    };
+  }
   if (payload.kind === 'accounting') {
     return {
       rowCount: payload.rows.length,
@@ -444,6 +453,44 @@ export class ReportsService {
     }
   }
 
+  /**
+   * Reporte de impacto (plan `impactReport`): se sella como cualquier reporte
+   * (folio, SHA-256, QR de verificación) y queda en el historial. Es siempre
+   * informativo: sin firmantes. El mismo período con las mismas cifras reutiliza
+   * el reporte ya generado.
+   */
+  async generateImpact(
+    actorUserId: string,
+    startDate: string,
+    endDate: string,
+    metrics: Omit<ImpactReportPayload, 'organization' | 'period'>,
+  ): Promise<OrgReport> {
+    const organizationId = this.requireOrgId();
+    const input: GenerateOrgReportInput = {
+      kind: 'impact',
+      periodStart: startDate,
+      periodEnd: endDate,
+    };
+    const period = resolveReportPeriod(input.periodStart, input.periodEnd);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const { row, reused, approvals } = await this.generateOnce(
+          organizationId,
+          actorUserId,
+          input,
+          period,
+          {},
+          undefined,
+          metrics,
+        );
+        return toContract(row, reused, approvals);
+      } catch (error) {
+        if (isUniqueConstraintViolation(error) && attempt < CODE_MAX_ATTEMPTS) continue;
+        throw error;
+      }
+    }
+  }
+
   /** Informe contable de un mes ya generado (el más reciente), con su estado. */
   async accountingReportFor(
     organizationId: string,
@@ -491,6 +538,7 @@ export class ReportsService {
     period: ReportPeriod,
     filters: SocialServiceReportFilters,
     accountingPayload?: Omit<AccountingReportPayload, 'organization' | 'period'>,
+    impactPayload?: Omit<ImpactReportPayload, 'organization' | 'period'>,
   ): Promise<{
     row: OrgReportRow;
     reused: boolean;
@@ -505,7 +553,10 @@ export class ReportsService {
 
       const registered = new Set(available.keys());
       let roles: LegalRepresentativeRole[];
-      if (!this.signaturesEnabled) {
+      if (input.kind === 'impact') {
+        // Informativo siempre: ni firmantes ni política de firmas.
+        roles = [];
+      } else if (!this.signaturesEnabled) {
         // Sin aprobación del propio firmante, la plataforma no estampa firmas.
         if (input.signerRoles && input.signerRoles.length > 0) {
           throw new BadRequestException(SIGNATURES_PENDING_STEP);
@@ -527,7 +578,7 @@ export class ReportsService {
               registered,
               'La política de firmas de la organización exige a',
             )
-          : defaultSignerRoles(input.kind, registered);
+          : this.defaultRolesFor(input.kind, registered, snapshot, rteVigente);
       }
 
       const legalEffect = computeLegalEffect({
@@ -562,6 +613,15 @@ export class ReportsService {
         }
         payload = {
           ...accountingPayload,
+          organization: snapshot,
+          period: { start: period.startDate, end: period.endDate },
+        };
+      } else if (input.kind === 'impact') {
+        if (!impactPayload) {
+          throw new BadRequestException('El reporte de impacto se genera desde Exportar datos.');
+        }
+        payload = {
+          ...impactPayload,
           organization: snapshot,
           period: { start: period.startDate, end: period.endDate },
         };
@@ -694,7 +754,9 @@ export class ReportsService {
         ? 'el informe de donaciones'
         : row.kind === 'accounting'
           ? 'el libro auxiliar de donaciones del mes (cierre contable)'
-          : 'el reporte de servicio social';
+          : row.kind === 'impact'
+            ? 'el reporte de impacto'
+            : 'el reporte de servicio social';
     await Promise.all(
       notify.map(({ email, role, token, firstTime }) => {
         const how = token
@@ -1155,6 +1217,11 @@ export class ReportsService {
       campaignNames: new Map(campaigns.map((c) => [c.id, c.title])),
       animalNames: new Map(animals.map((a) => [a.id, a.name])),
       consentedUserIds: await this.consentedUserIds(tx, organizationId),
+      profileDocuments: await loadConsentedDocuments(
+        tx,
+        organizationId,
+        donations.map((d) => d.donorUserId),
+      ),
     });
   }
 
@@ -1256,6 +1323,33 @@ export class ReportsService {
     return new Set(rows.map((r) => r.subjectUserId));
   }
 
+  /**
+   * Firmantes por defecto. Una declaración que saldría solo "firmada" lleva
+   * ÚNICAMENTE la firma del representante legal; revisor fiscal y contador
+   * firman por defecto solo donde el documento los exige: el libro auxiliar y
+   * el informe de donaciones certificado de una ESAL con RTE vigente
+   * (art. 125-2 E.T.). Una política de la organización o una elección
+   * explícita siguen mandando.
+   */
+  private defaultRolesFor(
+    kind: OrgReportKind,
+    registered: ReadonlySet<LegalRepresentativeRole>,
+    snapshot: { formalizationState: string; nit?: string | null },
+    rteVigente: boolean,
+  ): LegalRepresentativeRole[] {
+    const roles = defaultSignerRoles(kind, registered);
+    const effect = computeLegalEffect({
+      kind,
+      formalizationState: snapshot.formalizationState,
+      rteVigente,
+      hasNit: Boolean(snapshot.nit),
+      signerRoles: roles,
+    });
+    return effect === 'signed' && kind !== 'accounting'
+      ? roles.filter((r) => r === 'legal_representative')
+      : roles;
+  }
+
   /** Cargo con el que esta persona puede firmar en la organización, si alguno. */
   private async signerRoleOf(
     tx: Prisma.TransactionClient,
@@ -1344,7 +1438,7 @@ export class ReportsService {
     );
     const skip = Math.max(Number.isFinite(offset) ? offset : 0, 0);
     const where: Prisma.OrgReportWhereInput = { organizationId };
-    if (kind === 'donations' || kind === 'social_service') where.kind = kind;
+    if (kind === 'donations' || kind === 'social_service' || kind === 'impact') where.kind = kind;
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       if (await this.isRestrictedSigner(tx, organizationId, actorUserId)) {
         where.signers = { array_contains: [{ signerUserId: actorUserId }] };
@@ -1445,21 +1539,14 @@ export class ReportsService {
     return out;
   }
 
-  /** Firmantes sellados con la imagen que cada uno aprobó (por id + hash).
-   *  Un borrador, o un firmante que aún no aprobó, va sin imagen. */
-  private async signersWithImages(
+  /** Firmantes sellados con la imagen de la firma que cada uno aprobó (por id +
+   *  hash). Un borrador nunca lleva firmas. */
+  private signersWithImages(
     organizationId: string,
     sealed: SealedSigner[],
-    approvals: Awaited<ReturnType<ReportsService['findOwn']>>['approvals'],
-    draft: ReturnType<ReportsService['draftOf']>,
-  ): Promise<
-    Array<{
-      role: SealedSigner['role'];
-      fullName: string;
-      position: string;
-      image: Buffer | null;
-    }>
-  > {
+    approvals: ApprovalRecord[],
+    draft: 'pending_signatures' | 'rejected' | undefined,
+  ) {
     return Promise.all(
       sealed.map(async (s) => {
         const approval = approvals.find(
@@ -1511,15 +1598,14 @@ export class ReportsService {
     const { row, approvals } = await this.findOwn(id, actorUserId);
     const sealed = row.signers as unknown as SealedSigner[];
     const draft = this.draftOf(sealed, approvals);
-    const withImages = await this.signersWithImages(row.organizationId, sealed, approvals, draft);
     const data = await renderReportXlsx({
       code: row.code,
       contentHash: row.contentHash,
       createdAt: row.createdAt,
       legalEffect: row.legalEffect as OrgReportLegalEffect,
       payload: row.payload as unknown as OrgReportPayload,
-      signers: sealed.map(({ role, fullName, position }) => ({ role, fullName, position })),
-      signerImages: withImages.map((s) => s.image),
+      // Las mismas firmas aprobadas que el PDF: el Excel conserva el diseño.
+      signers: await this.signersWithImages(row.organizationId, sealed, approvals, draft),
       verifyUrl: this.verifyUrl(row.code),
       ...(draft ? { draft } : {}),
     });

@@ -18,6 +18,7 @@ import {
   type VolunteerEnrollmentMine,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -35,7 +36,7 @@ import {
   buildEnrollmentDecisionBody,
   buildEnrollmentDecisionSubject,
 } from './volunteer-notifications';
-import { clampLimit } from './volunteer-opportunities.service';
+import { clampLimit, whenCanLogHours } from './volunteer-opportunities.service';
 
 /** Row shape returned by the raw SQL `create_volunteer_enrollment(...)`. */
 interface EnrollmentRawRow {
@@ -177,6 +178,7 @@ export class VolunteerEnrollmentsService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     private readonly config: ConfigService<Env, true>,
+    private readonly inbox: InboxService,
   ) {}
 
   private requireOrgId(): string {
@@ -274,6 +276,22 @@ export class VolunteerEnrollmentsService {
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
     }
+    const title = opportunity?.title ?? 'una jornada';
+    await this.inbox.toOrgStaff(row.organization_id, {
+      kind: 'volunteering.enrollment_received',
+      title: `Nueva inscripción a "${title}"`,
+      body: `${row.volunteer_name.split(/\s+/)[0] || 'Alguien'} quiere ser voluntario(a). Acéptala o recházala.`,
+      href: `/organizacion/voluntariado/${opportunityId}?inscripcion=${row.id}&foco=${row.id}`,
+      dedupeKey: `volunteer_enrollment:${row.id}`,
+    });
+    await this.inbox.toUser(actor.id, {
+      kind: 'volunteering.enrollment_sent',
+      tone: 'kudos',
+      title: `¡Gracias por sumarte a "${title}"!`,
+      body: `${organization?.name ?? 'La organización'} revisará tu inscripción y te avisaremos aquí.`,
+      href: `/voluntariado?foco=${row.id}`,
+      dedupeKey: `volunteer_enrollment_sent:${row.id}`,
+    });
 
     return fromRawRow(row);
   }
@@ -337,7 +355,7 @@ export class VolunteerEnrollmentsService {
         ? VolunteerEnrollmentStatus.Accepted
         : VolunteerEnrollmentStatus.Rejected;
 
-    const { updated, opportunityTitle } = await this.prisma.withOrgContext(
+    const { updated, opportunityTitle, opportunity } = await this.prisma.withOrgContext(
       organizationId,
       async (tx) => {
         const existing = await tx.volunteerEnrollment.findUnique({ where: { id } });
@@ -369,7 +387,7 @@ export class VolunteerEnrollmentsService {
         const opportunity = await tx.volunteerOpportunity.findUnique({
           where: { id: row.opportunityId },
         });
-        return { updated: row, opportunityTitle: opportunity?.title ?? '' };
+        return { updated: row, opportunityTitle: opportunity?.title ?? '', opportunity };
       },
     );
 
@@ -404,6 +422,36 @@ export class VolunteerEnrollmentsService {
       });
     } catch (error) {
       this.logger.warn(`No se pudo notificar al voluntario: ${(error as Error).message}`);
+    }
+    const accepted = input.decision === 'accept';
+    await this.inbox.toUser(updated.volunteerUserId, {
+      kind: accepted ? 'volunteering.enrollment_accepted' : 'volunteering.enrollment_rejected',
+      tone: accepted ? 'success' : 'info',
+      title: accepted
+        ? `¡Te aceptaron en "${opportunityTitle}"!`
+        : `No quedaste en "${opportunityTitle}" esta vez`,
+      body: accepted
+        ? opportunity
+          ? whenCanLogHours(opportunity)
+          : 'Registra tus horas el día de la jornada o después, desde Voluntariado.'
+        : updated.rejectionReason
+          ? `Motivo: ${updated.rejectionReason}`
+          : 'Mira otras jornadas abiertas en Voluntariado.',
+      href: `/voluntariado?foco=${id}`,
+      dedupeKey: `volunteer_enrollment_decided:${id}`,
+    });
+    // Hay voluntarios aceptados y la jornada no tiene días asignados: se le
+    // recuerda al equipo (una vez por persona y jornada) que los asigne, para
+    // que los voluntarios sepan cuándo ir y puedan registrar sus horas.
+    if (accepted && opportunity && opportunity.sessionDates.length === 0) {
+      await this.inbox.toOrgStaff(organizationId, {
+        kind: 'volunteering.session_days_missing',
+        tone: 'warning',
+        title: `Asigna los días de jornada de "${opportunityTitle}"`,
+        body: 'Ya tienes voluntarios aceptados y aún no saben qué días ir. Al asignar los días, les avisamos y podrán registrar sus horas.',
+        href: `/organizacion/voluntariado/${opportunity.id}?foco=dias-jornada`,
+        dedupeKey: `volunteer_opportunity_days_missing:${opportunity.id}`,
+      });
     }
 
     return toEnrollment(updated);

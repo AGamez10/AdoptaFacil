@@ -11,7 +11,8 @@ import {
   Input,
   useToast,
 } from '@adoptafacil/ui';
-import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
+import { useApiClient } from '../../../shell/api';
+import { isProfileGateCancelled, useProfileGate } from '../../auth/components/profile-gate';
 import { useFeature } from '../../../shell/capabilities';
 
 export interface StudentServiceEnrollmentModalProps {
@@ -22,7 +23,6 @@ export interface StudentServiceEnrollmentModalProps {
   onEnrolled: () => void;
   /** Same T-Google-SignIn handoff `my-volunteering-page.tsx` already does for
    *  the direct-enroll path — kept here so this modal can trigger it too. */
-  onIncompleteProfile: () => void;
 }
 
 /**
@@ -39,9 +39,9 @@ export function StudentServiceEnrollmentModal({
   opportunityId,
   opportunityTitle,
   onEnrolled,
-  onIncompleteProfile,
 }: StudentServiceEnrollmentModalProps) {
   const client = useApiClient();
+  const profileGate = useProfileGate();
   const { toast } = useToast();
   // P0-1: mientras la inscripción de menores no esté habilitada (en
   // producción nunca lo está), solo se inscriben mayores de edad y no se
@@ -76,20 +76,22 @@ export function StudentServiceEnrollmentModal({
     };
     setSaving(true);
     try {
-      await client.request<VolunteerEnrollment>('/volunteer-enrollments', {
-        method: 'POST',
-        json: input,
-      });
+      // Faltan datos del perfil: se piden encima de esta ventana y la misma
+      // inscripción sigue sola al guardarlos.
+      await profileGate.run(
+        () =>
+          client.request<VolunteerEnrollment>('/volunteer-enrollments', {
+            method: 'POST',
+            json: input,
+          }),
+        'Para inscribirte necesitamos tu teléfono, documento de identidad y dirección.',
+      );
       reset();
       onOpenChange(false);
       onEnrolled();
       toast({ title: 'Inscripción enviada', variant: 'success' });
     } catch (error) {
-      if (isIncompleteProfileError(error)) {
-        onOpenChange(false);
-        onIncompleteProfile();
-        return;
-      }
+      if (isProfileGateCancelled(error)) return;
       toast({
         title: 'No se pudo completar la inscripción',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
@@ -101,90 +103,93 @@ export function StudentServiceEnrollmentModal({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset();
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Inscripción a "{opportunityTitle}"</DialogTitle>
-          <DialogDescription>
-            {minorsEnabled
-              ? 'Esta oportunidad cuenta para el servicio social (Resolución 4210/1996). Si eres ' +
-                'menor de edad, el nombre y documento de tu acudiente serán obligatorios antes de ' +
-                'que el refugio pueda emitir tu constancia; puedes agregarlos ahora o más adelante.'
-              : 'Esta oportunidad cuenta para el servicio social. Por ahora la inscripción es solo ' +
-                'para personas mayores de edad.'}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) reset();
+          onOpenChange(next);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Inscripción a "{opportunityTitle}"</DialogTitle>
+            <DialogDescription>
+              {minorsEnabled
+                ? 'Esta oportunidad cuenta para el servicio social (Resolución 4210/1996). Si eres ' +
+                  'menor de edad, el nombre y documento de tu acudiente serán obligatorios antes de ' +
+                  'que el refugio pueda emitir tu constancia; puedes agregarlos ahora o más adelante.'
+                : 'Esta oportunidad cuenta para el servicio social. Por ahora la inscripción es solo ' +
+                  'para personas mayores de edad.'}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-3">
-          {minorsEnabled ? (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={isMinor}
-                onChange={(e) => setIsMinor(e.target.checked)}
-              />
-              Soy menor de edad
-            </label>
-          ) : (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={confirmsAdult}
-                onChange={(e) => setConfirmsAdult(e.target.checked)}
-              />
-              Confirmo que soy mayor de edad
-            </label>
-          )}
+          <div className="space-y-3">
+            {minorsEnabled ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isMinor}
+                  onChange={(e) => setIsMinor(e.target.checked)}
+                />
+                Soy menor de edad
+              </label>
+            ) : (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={confirmsAdult}
+                  onChange={(e) => setConfirmsAdult(e.target.checked)}
+                />
+                Confirmo que soy mayor de edad
+              </label>
+            )}
 
-          {minorsEnabled && isMinor && (
-            <div className="space-y-2 rounded-md border border-input p-3">
-              <Input
-                aria-label="Nombre completo del acudiente"
-                placeholder="Nombre completo del acudiente"
-                value={guardianName}
-                onChange={(e) => setGuardianName(e.target.value)}
-              />
-              <Input
-                aria-label="Documento del acudiente"
-                placeholder="Documento del acudiente"
-                value={guardianDocument}
-                onChange={(e) => setGuardianDocument(e.target.value)}
-              />
-            </div>
-          )}
+            {minorsEnabled && isMinor && (
+              <div className="space-y-2 rounded-md border border-input p-3">
+                <Input
+                  aria-label="Nombre completo del acudiente"
+                  placeholder="Nombre completo del acudiente"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                />
+                <Input
+                  aria-label="Documento del acudiente"
+                  placeholder="Documento del acudiente"
+                  value={guardianDocument}
+                  onChange={(e) => setGuardianDocument(e.target.value)}
+                />
+              </div>
+            )}
 
-          <Input
-            aria-label="Institución educativa (opcional)"
-            placeholder="Institución educativa (opcional)"
-            value={schoolName}
-            onChange={(e) => setSchoolName(e.target.value)}
-          />
-          <Input
-            aria-label="Código de convenio institucional (opcional)"
-            placeholder="Código de convenio institucional (opcional)"
-            value={schoolAgreementCode}
-            onChange={(e) => setSchoolAgreementCode(e.target.value)}
-          />
-        </div>
+            <Input
+              aria-label="Institución educativa (opcional)"
+              placeholder="Institución educativa (opcional)"
+              value={schoolName}
+              onChange={(e) => setSchoolName(e.target.value)}
+            />
+            <Input
+              aria-label="Código de convenio institucional (opcional)"
+              placeholder="Código de convenio institucional (opcional)"
+              value={schoolAgreementCode}
+              onChange={(e) => setSchoolAgreementCode(e.target.value)}
+            />
+          </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={saving || (!minorsEnabled && !confirmsAdult)}
-            onClick={() => void submit()}
-          >
-            {saving ? 'Enviando…' : 'Inscribirme'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={saving || (!minorsEnabled && !confirmsAdult)}
+              onClick={() => void submit()}
+            >
+              {saving ? 'Enviando…' : 'Inscribirme'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {profileGate.dialog}
+    </>
   );
 }

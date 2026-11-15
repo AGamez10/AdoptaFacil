@@ -16,6 +16,16 @@
 # verificados: sin él, cualquiera podría hacernos emitir certificados.
 {
 	email {$ACME_EMAIL}
+	# Cloudflare con proxy (nube naranja) delante: Caddy conserva el
+	# X-Forwarded-For SOLO si la petición viene de una IP de Cloudflare, y la
+	# API cuenta 2 saltos (TRUST_PROXY_HOPS) para ver la IP real del visitante.
+	# Sin esto, todos los visitantes que entran por el mismo nodo de Cloudflare
+	# compartirían un solo cupo del límite por IP. Cualquier otro origen no puede
+	# falsear la cabecera: Caddy la reemplaza por la IP que ve.
+	# Rangos de https://www.cloudflare.com/ips/ (revisar si Cloudflare los cambia).
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+	}
 	# Logs de acceso en JSON por stdout (los recoge Docker con rotación).
 	log {
 		output stdout
@@ -58,10 +68,14 @@
 		}
 	}
 
-	# Enlaces para compartir publicaciones de la comunidad (/c/<id>?s=<red>):
+	# Enlaces para compartir publicaciones de la comunidad (/p/<uuid>?s=<red>):
 	# la API responde el HTML con Open Graph para WhatsApp, Facebook, X y
 	# LinkedIn, y manda a la persona a la publicación con parámetros UTM.
-	handle /c/* {
+	# /c/<uuid> es el formato viejo (enlaces ya compartidos). Solo un UUID va a
+	# la API: /c/<código de 8> es el QR impreso en las bolsas de café y lo
+	# atiende la web. No ampliar este patrón a /c/* (ver short-links.tsx).
+	@share_link path_regexp ^/[pc]/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+	handle @share_link {
 		rewrite * /public/share{uri}
 		reverse_proxy api:3000 {
 			header_up X-Forwarded-Proto {scheme}
@@ -76,10 +90,6 @@
 		root * /srv/web
 		try_files {path} /index.html
 		header /index.html Cache-Control "no-cache"
-		# PWA: el service worker y el manifiesto se revisan en cada visita para que
-		# una versión nueva llegue sin esperar a que caduque una caché.
-		header /sw.js Cache-Control "no-cache"
-		header /manifest.webmanifest Cache-Control "no-cache"
 		file_server
 	}
 }

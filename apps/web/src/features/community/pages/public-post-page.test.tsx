@@ -54,7 +54,7 @@ describe('PublicPostPage', () => {
     const whatsapp = within(screen.getByTestId('share-post')).getByRole('link', {
       name: /WhatsApp/,
     });
-    expect(decodeURIComponent(whatsapp.getAttribute('href') ?? '')).toContain('/c/p1?s=whatsapp');
+    expect(decodeURIComponent(whatsapp.getAttribute('href') ?? '')).toContain('/p/p1?s=whatsapp');
     expect(whatsapp).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByRole('link', { name: 'Crear mi cuenta gratis' })).toHaveAttribute(
       'href',

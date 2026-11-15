@@ -8,6 +8,11 @@ import { EMPTY, type TplModel } from './model';
  */
 export function ledgerBlock(m: TplModel, emptyClass: string): string {
   const L = m.LEDGER;
+  // Si el libro no cargó, nunca se afirma que no hay movimientos: los datos
+  // existen y están en el libro completo, que el donante puede abrir.
+  if (L.unavailable) {
+    return `<p class="${emptyClass}">No pudimos cargar los movimientos en este momento. <button type="button" data-ledger>Ver libro completo</button></p>`;
+  }
   if (L.rows.length === 0) return `<p class="${emptyClass}">${EMPTY.libro}</p>`;
   const rows = L.rows
     .map((r) => {
@@ -42,5 +47,5 @@ export const LEDGER_CSS = `
 .af-tpl .af-led li.vd b,.af-tpl .af-led li.vd .am{text-decoration:line-through;opacity:.55}
 .af-tpl .af-led .ft{font-size:13px;opacity:.75}
 .af-tpl .af-led .ft button{background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
-@media (max-width:600px){.af-tpl .af-led dl{grid-template-columns:1fr}.af-tpl .af-led li{flex-direction:column;gap:4px}}
+@media (max-width:600px){.af-tpl .af-led dl{grid-template-columns:1fr 1fr}.af-tpl .af-led dl>div:last-child{grid-column:1/-1}.af-tpl .af-led li{flex-direction:column;gap:4px}}
 `;

@@ -68,6 +68,18 @@ model Organization {
   emailUsage               OrganizationEmailUsage[]
   // Campana de pendientes: qué avisos leyó cada persona. See notifications.prisma.
   notificationReads        NotificationRead[]
+  userNotifications        UserNotification[]
+  // Documentación, custodia y guardería. See custody.prisma.
+  custodyResponsibles      CustodyResponsible[]
+  animalIntakes            AnimalIntake[]
+  custodyContractTemplates CustodyContractTemplate[]
+  custodyContracts         CustodyContract[]
+  custodyCharges           CustodyCharge[]
+  custodyChargeExtensions  CustodyChargeExtension[]
+  custodyPayments          CustodyPayment[]
+  custodyReleases          CustodyRelease[]
+  custodyDocuments         CustodyDocument[]
+  custodyEvents            CustodyEvent[]
 
   @@index([status])
   @@map("organizations")
@@ -269,6 +281,7 @@ model User {
   reportPoliciesUpdated     OrgReportPolicy[]       @relation("ReportPolicyUpdatedBy")
   mfaFactor                 AuthMfaFactor?
   notificationReads         NotificationRead[]
+  userNotifications         UserNotification[]
 
   @@unique([organizationId, email])
   @@index([organizationId])

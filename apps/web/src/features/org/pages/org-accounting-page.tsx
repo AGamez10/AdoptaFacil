@@ -9,6 +9,7 @@ import {
   RECONCILIATION_STATUSES,
   Role,
   accountingPeriodLabel,
+  type AccountingOrigins,
   type AccountingOverview,
   type AccountingPeriodView,
   type AccountingReconciliation,
@@ -136,6 +137,134 @@ function Totals({ view }: { view: AccountingPeriodView }) {
       <StatCard label="Tarifa de Mercado Pago" value={money(t.feesCop)} />
       <StatCard label="Neto recibido" value={money(t.netCop)} />
     </div>
+  );
+}
+
+const CHANNEL_LABEL = {
+  online: 'En línea',
+  sponsorship: 'Apadrinamiento',
+  manual: 'Registrado a mano',
+} as const;
+
+/**
+ * "De dónde vino el dinero": cruza y clasifica solo lo que entró en el mes
+ * (donaciones libres, a campañas y a animales; apadrinamientos; y lo que la
+ * organización registró a mano, como las ventas del marketplace).
+ */
+function OriginsCard({ origins }: { origins: AccountingOrigins }) {
+  const rows = origins.income.filter((r) => r.count > 0 || r.amountCop !== 0);
+  return (
+    <Card data-testid="accounting-origins">
+      <CardHeader>
+        <CardTitle className="text-base">¿De dónde vino el dinero este mes?</CardTitle>
+        <CardDescription>
+          AdoptaFácil cruza y clasifica solo cada ingreso: donaciones libres, a campañas y a
+          animales, apadrinamientos y lo que registraste a mano.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay ingresos en este mes.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Origen</TableHead>
+                  <TableHead>Detalle</TableHead>
+                  <TableHead>Cómo llegó</TableHead>
+                  <TableHead className="text-right">Cantidad</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={`${r.origin}|${r.detail}`}>
+                    <TableCell className="font-medium">{r.origin}</TableCell>
+                    <TableCell>{r.detail}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{CHANNEL_LABEL[r.channel]}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{r.count}</TableCell>
+                    <TableCell className="text-right">{money(r.amountCop)}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell className="font-semibold" colSpan={4}>
+                    Total de ingresos
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {money(origins.incomeTotalCop)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {origins.expenseTotalCop > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Gastos registrados en el mes: <strong>{money(origins.expenseTotalCop)}</strong>.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * El marketplace cierra las ventas por WhatsApp, fuera de la plataforma: aquí
+ * se explica cómo dejarlas en la contabilidad central.
+ */
+function ExternalSalesGuide({ fullExport }: { fullExport: boolean }) {
+  return (
+    <Card data-testid="accounting-external-sales">
+      <CardHeader>
+        <CardTitle className="text-base">¿Vendiste por WhatsApp u otro medio?</CardTitle>
+        <CardDescription>
+          Las ventas del marketplace se acuerdan por WhatsApp y el dinero no pasa por AdoptaFácil.
+          Regístralas a mano para que tu contabilidad quede completa.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <ol className="list-decimal space-y-1 pl-5">
+          <li>
+            Entra a <strong>Libro público</strong> y completa{' '}
+            <strong>Registrar un movimiento</strong>.
+          </li>
+          <li>
+            Elige <strong>Ingreso</strong>, categoría <strong>Venta</strong>, la fecha de la venta,
+            el valor cobrado y un concepto corto (por ejemplo, &quot;Camiseta rescate, pago por
+            Nequi&quot;).
+          </li>
+          <li>
+            Adjunta el soporte (captura del pago o recibo). Los gastos también se registran ahí, con
+            su factura.
+          </li>
+          <li>
+            Listo: la venta aparece en <strong>¿De dónde vino el dinero?</strong> y en el paquete
+            para tu contador.
+          </li>
+        </ol>
+        {fullExport ? (
+          <p className="text-muted-foreground">
+            En tu plan, el Excel completo trae las hojas <em>Ingresos por origen</em> y{' '}
+            <em>Otros movimientos</em> con todo lo registrado a mano, junto a las donaciones en
+            línea.
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            Con los planes Crece y Pro, el paquete completo para tu contador incluye estas ventas y
+            gastos en hojas separadas.
+          </p>
+        )}
+        <Link
+          to="/organizacion/libro-publico"
+          className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-muted"
+        >
+          Registrar una venta o un gasto
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -819,6 +948,8 @@ export function OrgAccountingPage() {
           ) : (
             <>
               <Totals view={view} />
+              {view.origins && <OriginsCard origins={view.origins} />}
+              <ExternalSalesGuide fullExport={overview.features.fullExport} />
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">

@@ -84,7 +84,7 @@ export function MyFollowUpsPage() {
       ) : (
         <ul className="space-y-4">
           {milestones.map((milestone) => (
-            <li key={milestone.id}>
+            <li key={milestone.id} data-foco={milestone.id}>
               <FollowUpCard milestone={milestone} onSubmitted={load} />
             </li>
           ))}

@@ -91,6 +91,19 @@ export class PlanBillingService {
     this.webBaseUrl = (config.get('WEB_BASE_URL', { infer: true }) as string).replace(/\/+$/, '');
     this.webhookSecret = config.get('MERCADOPAGO_WEBHOOK_SECRET', { infer: true }) as
       string | undefined;
+    if (this.billing.isConfigured()) {
+      if (!this.webBaseUrl.startsWith('https://')) {
+        this.logger.warn(
+          `WEB_BASE_URL (${this.webBaseUrl}) is not https: Mercado Pago may refuse the plan ` +
+            'subscription (its back_url must be a public https URL; use your tunnel).',
+        );
+      }
+      if (!this.webhookSecret) {
+        this.logger.warn(
+          'MERCADOPAGO_WEBHOOK_SECRET is not set: plan notifications will not be accepted.',
+        );
+      }
+    }
   }
 
   /** `POST /org/plan/checkout` (Owner/Administrator of the caller's org). */
@@ -120,15 +133,26 @@ export class PlanBillingService {
     );
     const monthlyAmountCop = planMonthlyAmount(plan, current?.discountPercent ?? 0);
     const reference = planSubscriptionReference(organizationId, plan);
-    const { id, checkoutUrl } = await this.billing.createMonthlySubscription({
-      reason: `AdoptaFácil · Plan ${PLAN_CATALOG[plan].name} (mensual)`,
-      externalReference: reference,
-      payerEmail: actor.email,
-      amountCop: monthlyAmountCop,
-      backUrl: `${this.webBaseUrl}/organizacion/plan?pago=mercadopago`,
-      // A new checkout per click; Mercado Pago dedups only true retries.
-      idempotencyKey: `${reference}:${Date.now()}`,
-    });
+    let created: { id: string; checkoutUrl: string };
+    try {
+      created = await this.billing.createMonthlySubscription({
+        reason: `AdoptaFácil · Plan ${PLAN_CATALOG[plan].name} (mensual)`,
+        externalReference: reference,
+        payerEmail: actor.email,
+        amountCop: monthlyAmountCop,
+        backUrl: `${this.webBaseUrl}/organizacion/plan?pago=mercadopago`,
+        // A new checkout per click; Mercado Pago dedups only true retries.
+        idempotencyKey: `${reference}:${Date.now()}`,
+      });
+    } catch (error) {
+      // The reason (Mercado Pago's own message) goes to the log; the person
+      // only sees that the payment could not be opened.
+      this.logger.error(`Plan checkout for org ${organizationId}: ${(error as Error).message}`);
+      throw new ServiceUnavailableException(
+        'No pudimos abrir el pago en Mercado Pago. Intenta de nuevo en unos minutos.',
+      );
+    }
+    const { id, checkoutUrl } = created;
     await this.audit.record({
       organizationId,
       actorUserId: actor.id,

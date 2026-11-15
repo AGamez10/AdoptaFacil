@@ -5,7 +5,10 @@ import { PublicVolunteeringController } from './public-volunteering.controller';
 import { ServiceHoursController } from './service-hours.controller';
 import { ServiceHoursService } from './service-hours.service';
 import { ServiceHoursPhotosService } from './service-hours-photos.service';
-import { VolunteerCertificatesController } from './volunteer-certificates.controller';
+import {
+  PublicVolunteerCertificatesController,
+  VolunteerCertificatesController,
+} from './volunteer-certificates.controller';
 import { VolunteerCertificatesService } from './volunteer-certificates.service';
 import { VolunteerEnrollmentsController } from './volunteer-enrollments.controller';
 import { VolunteerEnrollmentsService } from './volunteer-enrollments.service';
@@ -30,6 +33,7 @@ import { VolunteerOpportunitiesService } from './volunteer-opportunities.service
     VolunteerEnrollmentsController,
     ServiceHoursController,
     VolunteerCertificatesController,
+    PublicVolunteerCertificatesController,
   ],
   providers: [
     VolunteerOpportunitiesService,

@@ -1,6 +1,15 @@
 import { Controller, Get, Param, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
-import { type Paginated, Role, type VolunteerCertificate } from '@adoptafacil/contracts';
+import {
+  DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE,
+  type Paginated,
+  Role,
+  type VolunteerCertificate,
+  type VolunteerCertificateTemplate,
+  type VolunteerCertificateVerification,
+  VOLUNTEER_CERTIFICATE_TEMPLATES,
+} from '@adoptafacil/contracts';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { CurrentUser } from '../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
@@ -62,10 +71,37 @@ export class VolunteerCertificatesController {
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
+    @Query('plantilla') plantilla?: string,
   ): Promise<void> {
-    const buffer = await this.service.generatePdf(id, actor);
+    const template = (VOLUNTEER_CERTIFICATE_TEMPLATES as readonly string[]).includes(
+      plantilla ?? '',
+    )
+      ? (plantilla as VolunteerCertificateTemplate)
+      : DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE;
+    const buffer = await this.service.generatePdf(id, actor, template);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="certificado.pdf"');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="certificado-voluntariado-${template}.pdf"`,
+    );
     res.send(buffer);
+  }
+}
+
+/**
+ * Verificación PÚBLICA de un certificado de voluntariado por su código (sin
+ * sesión): lo que un colegio o una empresa necesita para comprobar que es
+ * auténtico. Limitada por IP: el código es aleatorio de 64 bits, pero no se
+ * deja enumerar a ciegas.
+ */
+@Controller('public/volunteer-certificates')
+@UseGuards(ThrottlerGuard)
+@Throttle({ default: { limit: 20, ttl: 60_000 } })
+export class PublicVolunteerCertificatesController {
+  constructor(private readonly service: VolunteerCertificatesService) {}
+
+  @Get(':code')
+  verify(@Param('code') code: string): Promise<VolunteerCertificateVerification> {
+    return this.service.verifyPublic(code);
   }
 }

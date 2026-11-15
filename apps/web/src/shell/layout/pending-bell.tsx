@@ -7,6 +7,8 @@ import {
   type OrganizationDashboardSummary,
   type PendingItemKey,
   type PendingItemRead,
+  type UserNotification,
+  type UserNotificationsPage,
 } from '@adoptafacil/contracts';
 import { Badge, cn } from '@adoptafacil/ui';
 import { DATA_CHANGED_EVENT, useApiClient } from '../api';
@@ -28,6 +30,9 @@ const REMINDER_ROLES = [
 const SUMMARY_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
 
 const POLL_MS = 5 * 60 * 1000;
+/** Los avisos personales se consultan más seguido: son los que mueven a la gente. */
+const INBOX_POLL_MS = 60 * 1000;
+const MAX_INBOX_LISTED = 8;
 const MAX_LISTED = 5;
 /** Espera tras una escritura antes de recontar (deja terminar la cadena). */
 const DATA_CHANGED_DEBOUNCE_MS = 400;
@@ -63,6 +68,30 @@ function formatDue(iso: string): string {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+  });
+}
+
+/** Respuesta de `/me/notifications` normalizada (API anterior o fallo = vacío). */
+export function normalizeInbox(data: unknown): UserNotificationsPage {
+  const page = (data ?? {}) as Partial<UserNotificationsPage>;
+  const items = Array.isArray(page.items) ? page.items : [];
+  const unread =
+    typeof page.unread === 'number' ? page.unread : items.filter((n) => !n.read).length;
+  return { items, unread };
+}
+
+/** "hace 5 min", "hace 3 h", "12 nov." (hora Colombia). */
+export function timeAgo(iso: string, now: number = Date.now()): string {
+  const diff = Math.max(0, now - new Date(iso).getTime());
+  const minutes = Math.round(diff / 60000);
+  if (minutes < 1) return 'ahora';
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  return new Date(iso).toLocaleDateString('es-CO', {
+    timeZone: 'America/Bogota',
+    day: 'numeric',
+    month: 'short',
   });
 }
 
@@ -105,13 +134,21 @@ export function isUnread(readAt: string | undefined, since: string | null): bool
  */
 export function PendingBell() {
   const client = useApiClient();
-  const { hasAnyRole } = useSession();
+  const { hasAnyRole, user } = useSession();
   const canSeeReminders = hasAnyRole(...REMINDER_ROLES);
   const canSeeSummary = hasAnyRole(...SUMMARY_ROLES);
+  const canSeePending = canSeeReminders || canSeeSummary;
+  /** Todas las cuentas con sesión tienen bandeja de avisos personales. */
+  const hasInbox = Boolean(user);
+  const enabled = hasInbox || canSeePending;
 
   const [reminders, setReminders] = useState<ClinicalReminder[]>([]);
   const [summary, setSummary] = useState<OrganizationDashboardSummary | null>(null);
   const [reads, setReads] = useState<Record<string, string>>({});
+  const [inbox, setInbox] = useState<UserNotification[]>([]);
+  const [inboxUnread, setInboxUnread] = useState(0);
+  /** Avisos de reconocimiento ya mostrados (no se repiten al recargar). */
+  const seenKudosRef = useRef<Set<string> | null>(null);
   const [open, setOpen] = useState(false);
   const [kudos, setKudos] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -123,8 +160,29 @@ export function PendingBell() {
   const justMarkedRef = useRef(0);
   const location = useLocation();
 
+  const loadInbox = useCallback(async () => {
+    if (!hasInbox) return;
+    try {
+      const page = normalizeInbox(await client.request<UserNotificationsPage>('/me/notifications'));
+      setInbox(page.items);
+      setInboxUnread(page.unread);
+      // Reconocimiento: un aviso `kudos` nuevo y sin leer se celebra una vez
+      // (en la primera carga solo se registran, no se celebran).
+      const kudosItems = page.items.filter((n) => n.tone === 'kudos' && !n.read);
+      if (seenKudosRef.current === null) {
+        seenKudosRef.current = new Set(kudosItems.map((n) => n.id));
+      } else {
+        const fresh = kudosItems.find((n) => !seenKudosRef.current?.has(n.id));
+        kudosItems.forEach((n) => seenKudosRef.current?.add(n.id));
+        if (fresh) setKudos(fresh.title);
+      }
+    } catch {
+      // Silencioso: la campana nunca rompe el encabezado.
+    }
+  }, [client, hasInbox]);
+
   const load = useCallback(async () => {
-    const tasks: Promise<void>[] = [];
+    const tasks: Promise<void>[] = [loadInbox()];
     if (canSeeReminders) {
       tasks.push(
         client
@@ -140,32 +198,40 @@ export function PendingBell() {
           .catch(() => undefined),
       );
     }
-    tasks.push(
-      client
-        .request<PendingItemRead[]>('/org/pending-reads')
-        .then((list) =>
-          setReads(
-            Object.fromEntries((Array.isArray(list) ? list : []).map((r) => [r.key, r.readAt])),
-          ),
-        )
-        .catch(() => undefined),
-    );
+    if (canSeePending) {
+      tasks.push(
+        client
+          .request<PendingItemRead[]>('/org/pending-reads')
+          .then((list) =>
+            setReads(
+              Object.fromEntries((Array.isArray(list) ? list : []).map((r) => [r.key, r.readAt])),
+            ),
+          )
+          .catch(() => undefined),
+      );
+    }
     await Promise.all(tasks);
     setLoaded(true);
-  }, [client, canSeeReminders, canSeeSummary]);
+  }, [client, canSeeReminders, canSeeSummary, canSeePending, loadInbox]);
 
   useEffect(() => {
-    if (!canSeeReminders && !canSeeSummary) return;
+    if (!enabled) return;
     void load();
     const timer = window.setInterval(() => void load(), POLL_MS);
     return () => window.clearInterval(timer);
-  }, [load, canSeeReminders, canSeeSummary]);
+  }, [load, enabled]);
+
+  useEffect(() => {
+    if (!hasInbox) return;
+    const timer = window.setInterval(() => void loadInbox(), INBOX_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [loadInbox, hasInbox]);
 
   // Ola 3: antes el conteo solo se refrescaba al abrir la campana o cada 5
   // minutos, así que un pendiente atendido seguía ahí. Ahora se recuenta tras
   // cada escritura exitosa, al cambiar de página y al volver a la pestaña.
   useEffect(() => {
-    if (!canSeeReminders && !canSeeSummary) return;
+    if (!enabled) return;
     let pending: number | undefined;
     const schedule = () => {
       window.clearTimeout(pending);
@@ -183,7 +249,7 @@ export function PendingBell() {
       window.removeEventListener('focus', schedule);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [load, canSeeReminders, canSeeSummary]);
+  }, [load, enabled]);
 
   const isFirstLocation = useRef(true);
   useEffect(() => {
@@ -191,8 +257,8 @@ export function PendingBell() {
       isFirstLocation.current = false;
       return;
     }
-    if (canSeeReminders || canSeeSummary) void load();
-  }, [location.pathname, load, canSeeReminders, canSeeSummary]);
+    if (enabled) void load();
+  }, [location.pathname, load, enabled]);
 
   // Cierra con Escape o al hacer clic fuera.
   useEffect(() => {
@@ -220,18 +286,19 @@ export function PendingBell() {
         isUnread(reads[item.key], sinceOf(item.key, summary)),
       )
     : [];
-  const total = openReminders.length + actions.length;
+  const pendingTotal = openReminders.length + actions.length;
+  const total = pendingTotal + inboxUnread;
   const badge = total > 9 ? '9+' : String(total);
 
   // Ola 3: cuando el total baja, se reconoce al usuario por atenderlo.
   useEffect(() => {
     if (!loaded) return;
     const previous = lastTotalRef.current;
-    lastTotalRef.current = total;
-    const resolved = previous === null ? 0 : previous - total - justMarkedRef.current;
+    lastTotalRef.current = pendingTotal;
+    const resolved = previous === null ? 0 : previous - pendingTotal - justMarkedRef.current;
     justMarkedRef.current = 0;
-    if (resolved > 0) setKudos(kudosMessage(resolved, total));
-  }, [loaded, total]);
+    if (resolved > 0) setKudos(kudosMessage(resolved, pendingTotal));
+  }, [loaded, pendingTotal]);
 
   useEffect(() => {
     if (!kudos) return;
@@ -239,11 +306,28 @@ export function PendingBell() {
     return () => window.clearTimeout(timer);
   }, [kudos]);
 
-  if (!canSeeReminders && !canSeeSummary) return null;
+  if (!enabled) return null;
+
+  /** Marca avisos personales como leídos (al instante en pantalla). */
+  const markInboxRead = (ids: string[] | 'all') => {
+    const targets = ids === 'all' ? inbox.filter((n) => !n.read).map((n) => n.id) : ids;
+    if (ids !== 'all' && targets.length === 0) return;
+    const unreadTargets = inbox.filter((n) => !n.read && targets.includes(n.id)).length;
+    setInbox((current) =>
+      current.map((n) => (ids === 'all' || targets.includes(n.id) ? { ...n, read: true } : n)),
+    );
+    setInboxUnread((count) => (ids === 'all' ? 0 : Math.max(0, count - unreadTargets)));
+    void client
+      .request('/me/notifications/read', {
+        method: 'POST',
+        json: ids === 'all' ? { all: true } : { ids: targets },
+      })
+      .catch(() => undefined);
+  };
 
   /** Saca los avisos del contador al instante y guarda la marca en el servidor. */
   const markRead = (keys: PendingItemKey[]) => {
-    if (keys.length === 0) return;
+    if (keys.length === 0 || !canSeePending) return;
     const now = new Date().toISOString();
     justMarkedRef.current += keys.length;
     setReads((current) => ({ ...current, ...Object.fromEntries(keys.map((k) => [k, now])) }));
@@ -275,7 +359,9 @@ export function PendingBell() {
         onClick={toggle}
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={total > 0 ? `Pendientes: ${total} por revisar` : 'Pendientes: nada por revisar'}
+        aria-label={
+          total > 0 ? `Avisos y pendientes: ${total} sin leer` : 'Avisos: nada nuevo por revisar'
+        }
         data-testid="pending-bell"
       >
         <BellIcon className="h-5 w-5" />
@@ -306,17 +392,20 @@ export function PendingBell() {
       {open && (
         <div
           role="dialog"
-          aria-label="Recordatorios y acciones pendientes"
+          aria-label="Avisos, recordatorios y acciones pendientes"
           className={styles.bell__panel}
           data-testid="pending-bell-panel"
         >
           <div className={styles.bell__head}>
-            <p className={styles.bell__title}>Pendientes</p>
+            <p className={styles.bell__title}>{canSeePending ? 'Avisos y pendientes' : 'Avisos'}</p>
             {total > 0 && (
               <button
                 type="button"
                 className={styles.bell__markAll}
-                onClick={() => markRead(allKeys)}
+                onClick={() => {
+                  markRead(allKeys);
+                  if (inboxUnread > 0) markInboxRead('all');
+                }}
                 data-testid="pending-bell-mark-all"
               >
                 Marcar todas como leídas
@@ -324,11 +413,71 @@ export function PendingBell() {
             )}
           </div>
 
-          {total === 0 && (
+          {total === 0 && inbox.length === 0 && (
             <p className={styles.bell__empty}>
-              Todo al día. Aquí te avisamos de solicitudes de adopción nuevas, documentos por vencer
-              o rechazados y próximas vacunas o tratamientos.
+              {canSeePending
+                ? 'Todo al día. Aquí te avisamos de ofertas, inscripciones y solicitudes nuevas, documentos por vencer o rechazados y próximas vacunas o tratamientos.'
+                : 'Todo al día. Aquí te avisamos cuando una organización responda tus ofertas, solicitudes o inscripciones, y cuando reconozcan lo que haces.'}
             </p>
+          )}
+          {total === 0 && inbox.length > 0 && <p className={styles.bell__empty}>Todo al día.</p>}
+
+          {inbox.length > 0 && (
+            <section aria-label="Avisos" data-testid="pending-bell-inbox">
+              <p className={styles.bell__section}>Avisos</p>
+              <ul className={styles.bell__list}>
+                {inbox.slice(0, MAX_INBOX_LISTED).map((notice) => (
+                  <li
+                    key={notice.id}
+                    className={cn(
+                      styles.bell__item,
+                      notice.read && styles['bell__item--read'],
+                      notice.tone === 'kudos' && styles['bell__item--kudos'],
+                    )}
+                    data-testid="pending-bell-notice"
+                  >
+                    <span className={styles.bell__row}>
+                      <span className={styles.bell__itemTitle}>
+                        {notice.tone === 'kudos' && (
+                          <span aria-hidden="true" className={styles.bell__star}>
+                            ★{' '}
+                          </span>
+                        )}
+                        {notice.title}
+                      </span>
+                    </span>
+                    {notice.body && <span className={styles.bell__meta}>{notice.body}</span>}
+                    <span className={styles.bell__row}>
+                      {notice.href ? (
+                        <Link
+                          to={notice.href}
+                          onClick={() => {
+                            markInboxRead([notice.id]);
+                            setOpen(false);
+                          }}
+                          className={styles.bell__link}
+                        >
+                          Ver →
+                        </Link>
+                      ) : (
+                        <span />
+                      )}
+                      <span className={styles.bell__meta}>{timeAgo(notice.createdAt)}</span>
+                      {!notice.read && (
+                        <button
+                          type="button"
+                          className={styles.bell__read}
+                          onClick={() => markInboxRead([notice.id])}
+                          aria-label={`Marcar como leído: ${notice.title}`}
+                        >
+                          Marcar como leído
+                        </button>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {actions.length > 0 && (

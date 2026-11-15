@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import type { Animal, AnimalSex, ComputedAge } from '@adoptafacil/contracts';
+import { Role, type Animal, type AnimalSex, type ComputedAge } from '@adoptafacil/contracts';
 import { Badge, Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@adoptafacil/ui';
+import { useSession } from '../../../shell/auth';
+import { AnimalCustodySection } from '../../custody';
 import { AnimalCarnetSection } from './animal-carnet-section';
 import { AnimalDocumentosSection } from './animal-documentos-section';
 import { AnimalRegistroClinicoSection } from './animal-registro-clinico-section';
@@ -54,7 +56,8 @@ export interface AnimalDetailPanelProps {
 /**
  * Panel de detalle del animal seleccionado (refactor visual maestro-detalle,
  * M03). Header con foto/nombre/raza-sexo-edad + acciones en icon-button con
- * tooltip, y 3 tabs: Carnet · Registro clínico · Documentos. Las 3 secciones
+ * tooltip, y las tabs Carnet · Registro clínico · Documentos · Custodia (esta
+ * última, documentación y guardería, solo para quien puede consultarla). Las 3 secciones
  * reutilizan `useAnimalClinicalRecord` para no duplicar los fetches ya usados
  * por `AnimalClinicalPanel` (shell). "Documentos" (fix,
  * T-ANIMALS-ATTACHMENTS-AUDIT) ya NO es un `ComingSoon`: es la galería
@@ -72,7 +75,15 @@ export function AnimalDetailPanel({
   onReactivate,
   onBack,
 }: AnimalDetailPanelProps) {
-  const [tab, setTab] = useState<'carnet' | 'registro' | 'documentos'>('carnet');
+  const [tab, setTab] = useState<'carnet' | 'registro' | 'documentos' | 'custodia'>('carnet');
+  const { hasAnyRole } = useSession();
+  // Mismos roles que exige `GET /custody/animals/:id/overview`.
+  const canViewCustody = hasAnyRole(
+    Role.Owner,
+    Role.Administrator,
+    Role.Operator,
+    Role.ReadOnlyAuditor,
+  );
   const isInactive = animal.isActive === false;
   const photo = animal.photos[0];
 
@@ -114,10 +125,16 @@ export function AnimalDetailPanel({
 
         <div className={styles.detail__actions}>
           {canManage && (
-            <IconButton icon={<PencilIcon />} label="Editar" onClick={() => onEdit(animal)} />
+            <IconButton
+              tooltipAlign="end"
+              icon={<PencilIcon />}
+              label="Editar"
+              onClick={() => onEdit(animal)}
+            />
           )}
           {canManage && (
             <IconButton
+              tooltipAlign="end"
               icon={<FolderIcon />}
               label="Expediente médico"
               onClick={() => setTab('registro')}
@@ -125,6 +142,7 @@ export function AnimalDetailPanel({
           )}
           {!isInactive && canDelete && (
             <IconButton
+              tooltipAlign="end"
               icon={<TrashIcon />}
               label="Eliminar"
               variant="danger"
@@ -133,6 +151,7 @@ export function AnimalDetailPanel({
           )}
           {!isInactive && canManageSponsorship && (
             <IconButton
+              tooltipAlign="end"
               icon={<HeartIcon />}
               label="Apadrinamiento"
               onClick={() => onSponsor(animal)}
@@ -140,6 +159,7 @@ export function AnimalDetailPanel({
           )}
           {canManage && (
             <IconButton
+              tooltipAlign="end"
               icon={<ShieldIcon />}
               label="Declaración de comportamiento"
               onClick={() => onDeclareBehavior(animal)}
@@ -153,13 +173,19 @@ export function AnimalDetailPanel({
         </div>
       </div>
 
-      <div className={styles.detail__body}>
+      {/* `key`: al elegir otro animal las secciones se montan de cero, así nunca
+          queda en pantalla el carnet, el registro o la custodia del anterior. */}
+      <div key={animal.id} className={styles.detail__body}>
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-          <TabsList aria-label="Secciones del expediente del animal">
-            <TabsTrigger value="carnet">Carnet</TabsTrigger>
-            <TabsTrigger value="registro">Registro clínico</TabsTrigger>
-            <TabsTrigger value="documentos">Documentos</TabsTrigger>
-          </TabsList>
+          {/* En pantallas angostas las pestañas se desplazan en vez de desbordar la página. */}
+          <div className="w-0 min-w-full overflow-x-auto">
+            <TabsList aria-label="Secciones del expediente del animal">
+              <TabsTrigger value="carnet">Carnet</TabsTrigger>
+              <TabsTrigger value="registro">Registro clínico</TabsTrigger>
+              <TabsTrigger value="documentos">Documentos</TabsTrigger>
+              {canViewCustody && <TabsTrigger value="custodia">Custodia</TabsTrigger>}
+            </TabsList>
+          </div>
 
           <TabsContent value="carnet">
             <AnimalCarnetSection animal={animal} />
@@ -172,6 +198,12 @@ export function AnimalDetailPanel({
           <TabsContent value="documentos">
             <AnimalDocumentosSection animalId={animal.id} />
           </TabsContent>
+
+          {canViewCustody && (
+            <TabsContent value="custodia">
+              <AnimalCustodySection animalId={animal.id} animalName={animal.name} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

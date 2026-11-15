@@ -12,6 +12,7 @@ import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
 import { listPublicLeaders, listPublicPosts } from '../../community/api/public-community';
 import { publicPostPath, shareLink, shareTargets, shareText } from '../../community/lib/share';
+import { REACTION_META, topReactions } from '../../community/lib/reactions';
 import { IconArrowRight, IconChat, IconHeart } from './landing-icons';
 import styles from './community.module.scss';
 
@@ -110,6 +111,8 @@ function ShareRow({ post }: { post: PublicCommunityPost }) {
 
 function PostCard({ post }: { post: PublicCommunityPost }) {
   const image = post.images[0];
+  const isVideo = image?.kind === 'video';
+  const cover = isVideo ? image?.posterUrl : image?.url;
   const extra = post.images.length - 1;
   return (
     <li className={cn(styles.post, 'af-reveal')} data-tone={TYPE_TONE[post.type]}>
@@ -119,14 +122,19 @@ function PostCard({ post }: { post: PublicCommunityPost }) {
           className={styles.post__link}
           data-testid="landing-social-post"
         >
-          {image?.url && (
+          {cover && (
             <span className={styles.post__media}>
               <img
-                src={image.url}
-                alt={`Foto de la publicación de ${post.authorDisplayName}`}
+                src={cover}
+                alt={`${isVideo ? 'Video' : 'Foto'} de la publicación de ${post.authorDisplayName}`}
                 loading="lazy"
                 className={styles.post__image}
               />
+              {isVideo && (
+                <span className={styles.post__play} aria-hidden="true">
+                  ▶
+                </span>
+              )}
               {extra > 0 && (
                 <span className={styles.post__more}>
                   +{extra} {extra === 1 ? 'foto' : 'fotos'}
@@ -151,6 +159,12 @@ function PostCard({ post }: { post: PublicCommunityPost }) {
             <span className={styles.post__text}>{clip(post.body, 160)}</span>
             <span className={styles.post__foot}>
               <span aria-label={plural(post.likeCount, 'me gusta', 'me gusta')}>
+                <span aria-hidden="true">
+                  {topReactions(post.reactionCounts ?? {})
+                    .slice(0, 3)
+                    .map((t) => REACTION_META[t.reaction].emoji)
+                    .join('') || ''}
+                </span>{' '}
                 <IconHeart aria-hidden="true" /> {post.likeCount.toLocaleString('es-CO')}
               </span>
               <span aria-label={plural(post.commentCount, 'comentario', 'comentarios')}>

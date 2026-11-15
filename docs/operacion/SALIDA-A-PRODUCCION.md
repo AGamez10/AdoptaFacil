@@ -1,6 +1,7 @@
 # Salida a producción: runbook
 
 > Versión 2026-11-06. Orden de ejecución para el primer despliegue en el VPS.
+> **Guía clic por clic para el dueño:** [GUIA-PASO-A-PASO-PRODUCCION.md](./GUIA-PASO-A-PASO-PRODUCCION.md).
 > Complementa a [DESPLIEGUE_VPS.md](./DESPLIEGUE_VPS.md), donde está el detalle de cada paso, y
 > a [CORREO.md](./CORREO.md), [BACKUPS.md](./BACKUPS.md) y [MONITOREO.md](./MONITOREO.md).
 > Ningún secreto va en el repositorio, en el chat ni en capturas: solo en `deploy/.env` y

@@ -15,4 +15,5 @@ export {
   useGoogleSignInAvailable,
 } from './components/google-sign-in-button';
 export { CompleteProfilePage } from './pages/complete-profile-page';
+export { WelcomeNotice } from './components/welcome-notice';
 export * from './validation';

@@ -124,6 +124,9 @@ export const envSchema = z.object({
   STORAGE_DISK_ROOT: z.string().min(1).default('./.storage'),
   // Max upload size in MB (enforced by the adapter and the upload endpoint).
   STORAGE_MAX_FILE_MB: z.coerce.number().int().positive().max(100).default(15),
+  // Videos de la comunidad: ffmpeg/ffprobe (en el PATH de la imagen de la API).
+  FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
+  FFPROBE_PATH: z.string().min(1).default('ffprobe'),
   // Video de seguimiento postadopción (máximo 30 s, decisión del 2026-10-17):
   // peso máximo en MB. TODO(client): confirmar los 50 MB propuestos.
   FOLLOWUP_VIDEO_MAX_MB: z.coerce.number().int().positive().max(100).default(50),
@@ -149,6 +152,11 @@ export const envSchema = z.object({
   // Public origin of THIS API (OAuth redirect and notification URLs). Optional:
   // falls back to STORAGE_PUBLIC_BASE_URL.
   API_PUBLIC_BASE_URL: z.string().url().optional(),
+  // SOLO para el arranque de punta a punta del CI (compose de producción en
+  // https://localhost con la CA interna de Caddy). Fuera de eso, en producción
+  // ninguna URL pública puede apuntar a localhost: los enlaces a archivos y los
+  // correos llevarían a una dirección que solo existe en el servidor.
+  ALLOW_LOOPBACK_PUBLIC_URLS: featureFlag(),
   // Mercado Pago (ADR-PAG-003). Credentials of AdoptaFácil's application in
   // "Tus integraciones" (developers panel). Optional at the schema level so
   // the other drivers boot without them; required when
@@ -170,6 +178,21 @@ export const envSchema = z.object({
   MERCADOPAGO_OAUTH_PKCE: featureFlag(),
   // Sandbox: ask for test tokens (subscriptions still open `sandbox_init_point`). OFF unless "true".
   MERCADOPAGO_TEST: featureFlag(),
+  // Whether the OAuth code exchange sends `test_token=true`. Unset: follows
+  // MERCADOPAGO_TEST (unchanged behavior). Set it to "false" to keep sandbox
+  // (test users only) but NOT send `test_token`: Mercado Pago support says the
+  // parameter belongs to the Checkout API Marketplace test flow, not Checkout Pro.
+  MERCADOPAGO_OAUTH_TEST_TOKEN: z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((value) =>
+      value === undefined || value === '' ? undefined : value === true || value === 'true',
+    ),
+  // Sandbox only: email of the Mercado Pago TEST BUYER. A plan subscription is
+  // created for this email instead of the logged-in user's, because in the
+  // sandbox the payer email must be the test buyer's. Ignored unless
+  // MERCADOPAGO_TEST=true and refused in production.
+  MERCADOPAGO_TEST_PAYER_EMAIL: z.string().email().optional(),
   // Access token of AdoptaFácil's OWN Mercado Pago account. ONLY for charging
   // AdoptaFácil's plans (subscriptions); never used for a donation.
   MERCADOPAGO_PLATFORM_ACCESS_TOKEN: z.string().min(1).optional(),
@@ -267,6 +290,9 @@ export const envSchema = z.object({
     .refine((value) => value === undefined || !Number.isNaN(Date.parse(value)), {
       message: 'PLAN_LAUNCH_DATE debe ser una fecha ISO-8601 (por ejemplo 2026-11-01)',
     }),
+  // Días de prueba Pro de cada organización nueva. Sin valor rige
+  // NEW_ORG_TRIAL_DAYS (packages/contracts, 14 días); 0 apaga la prueba.
+  PLAN_NEW_ORG_TRIAL_DAYS: z.coerce.number().int().min(0).max(365).optional(),
   // Written approval reference (PSP confirmation + legal review, D1–D7/D17)
   // that production requires before FEATURE_PAYMENTS or FEATURE_SPONSORSHIPS
   // can be turned on. Free text (ticket, email date, document id); it is only
@@ -422,6 +448,12 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
     // The client secret, the OAuth codes and every org token go to these
     // hosts: in production they are pinned to Mercado Pago's own (the
     // overrides exist only for tests), so a typo can never ship them elsewhere.
+    if (env.MERCADOPAGO_TEST_PAYER_EMAIL) {
+      fail(
+        'MERCADOPAGO_TEST_PAYER_EMAIL',
+        'sandbox-only override of the plan payer email: remove it in production',
+      );
+    }
     if (!isMercadoPagoApiBase(env.MERCADOPAGO_BASE_URL)) {
       fail('MERCADOPAGO_BASE_URL', 'must be https://api.mercadopago.com in production');
     }
@@ -438,13 +470,58 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   // Every emailed link (invitations, password reset, receipts, contracts) is
   // built from WEB_BASE_URL: the forgotten dev default (http://localhost:5173)
   // would email links nobody can open, and plain http would expose the tokens.
-  // `https://localhost` stays allowed: the CI boots this same production
-  // compose on localhost behind Caddy's internal CA.
   if (!isHttpsUrl(env.WEB_BASE_URL)) {
     fail(
       'WEB_BASE_URL',
       'WEB_BASE_URL must be the public https origin of the web app in production',
     );
+  }
+  // Every file link the API hands out (photos, logos, campaign evidences, the
+  // "Ver soporte" of a rendición de cuentas) is built from
+  // STORAGE_PUBLIC_BASE_URL (or the CDN host for public files). The dev
+  // default http://localhost:3000 would send visitors to an address that only
+  // exists on the server.
+  if (!isHttpsUrl(env.STORAGE_PUBLIC_BASE_URL)) {
+    fail(
+      'STORAGE_PUBLIC_BASE_URL',
+      'STORAGE_PUBLIC_BASE_URL must be the public https URL of the API in production (e.g. https://<dominio>/api)',
+    );
+  }
+  for (const key of ['STORAGE_PUBLIC_CDN_BASE_URL', 'API_PUBLIC_BASE_URL'] as const) {
+    const value = env[key];
+    if (value !== undefined && !isHttpsUrl(value)) {
+      fail(key, `${key} must be an https URL in production`);
+    }
+  }
+  // No public URL may point to this machine. Only the CI end-to-end boot of
+  // this same compose on https://localhost opts out, explicitly.
+  if (!env.ALLOW_LOOPBACK_PUBLIC_URLS) {
+    for (const key of PUBLIC_URL_KEYS) {
+      const value = env[key];
+      if (value !== undefined && isLoopbackUrl(value)) {
+        fail(key, `${key} points to localhost; use the public domain in production`);
+      }
+    }
+  }
+}
+
+/** Env keys whose value ends up in a link that someone outside the server opens. */
+export const PUBLIC_URL_KEYS = [
+  'WEB_BASE_URL',
+  'STORAGE_PUBLIC_BASE_URL',
+  'STORAGE_PUBLIC_CDN_BASE_URL',
+  'API_PUBLIC_BASE_URL',
+] as const;
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '::1']);
+
+/** `localhost`, `*.localhost`, 127.x.x.x, 0.0.0.0 or ::1. Pure. */
+export function isLoopbackUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return LOOPBACK_HOSTS.has(host) || host.endsWith('.localhost') || /^127\./.test(host);
+  } catch {
+    return false;
   }
 }
 

@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,10 @@ import {
   type CreateCommentInput,
   type CreatePostInput,
   type CreatePostResult,
+  type MyReactions,
+  type MyReactionsInput,
+  type SetReactionInput,
+  type SetReactionResult,
   type Post as PostDto,
   type PostsPage,
   type SetPostShareableInput,
@@ -33,7 +38,9 @@ import { CommunityCommentsService } from './community-comments.service';
 import { CommunityLikesService } from './community-likes.service';
 import {
   createPostSchema,
+  myReactionsSchema,
   setPostShareableSchema,
+  setReactionSchema,
   updatePostSchema,
 } from './community-posts.schemas';
 import { createCommentSchema } from './community-comments.schemas';
@@ -150,5 +157,25 @@ export class CommunityPostsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ToggleLikeResult> {
     return this.likes.toggle(actor.id, id);
+  }
+
+  /** Poner, cambiar o quitar mi reacción (`{ "reaction": null }`). */
+  @Put('posts/:id/reaction')
+  react(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(setReactionSchema)) dto: SetReactionInput,
+  ): Promise<SetReactionResult> {
+    return this.likes.react(actor.id, id, dto.reaction);
+  }
+
+  /** Mis reacciones sobre varias publicaciones, para pintar el feed. */
+  @Post('reactions/mine')
+  @HttpCode(200)
+  myReactions(
+    @CurrentUser() actor: RequestUser,
+    @Body(new ZodValidationPipe(myReactionsSchema)) dto: MyReactionsInput,
+  ): Promise<MyReactions> {
+    return this.likes.mine(actor.id, dto.postIds);
   }
 }

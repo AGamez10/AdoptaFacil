@@ -181,3 +181,23 @@ export function computeDeliveryHash(input: {
 }): string {
   return createHash('sha256').update(canonicalJson(input), 'utf8').digest('hex');
 }
+
+/**
+ * Estado de salud y peso que quedan en el acta de entrega (punto 15). El
+ * contrato firmado manda: si ya los tiene, el acta copia esos mismos valores y
+ * se ignora lo que envíe el cliente. Solo los contratos antiguos, sellados sin
+ * esos datos, usan lo que la organización escriba al entregar. `null` = no hay
+ * de dónde tomarlos.
+ */
+export function resolveDeliveryFacts(
+  contractData: { healthStatusAtDelivery?: string; weightKg?: number },
+  input: { healthStatus?: string; weightKg?: number },
+): { healthStatus: string; weightKg: number } | null {
+  const healthStatus = contractData.healthStatusAtDelivery?.trim() || input.healthStatus?.trim();
+  const weightKg =
+    typeof contractData.weightKg === 'number' && contractData.weightKg > 0
+      ? contractData.weightKg
+      : input.weightKg;
+  if (!healthStatus || typeof weightKg !== 'number' || !(weightKg > 0)) return null;
+  return { healthStatus, weightKg };
+}

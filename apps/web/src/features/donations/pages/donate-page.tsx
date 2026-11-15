@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { isMercadoPagoCheckoutUrl, type Donation } from '@adoptafacil/contracts';
 import {
   Button,
@@ -14,8 +14,9 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
-import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
-import { useSession } from '../../../shell/auth';
+import { useApiClient } from '../../../shell/api';
+import { isProfileGateCancelled, useProfileGate } from '../../auth/components/profile-gate';
+import { accessPathWithReturn, returnPathOf, useSession } from '../../../shell/auth';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { createDonation, fetchOrganizationDonationAvailability } from '../api/donations-api';
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
@@ -94,7 +95,7 @@ export function DonatePage() {
   const { toast } = useToast();
   const target = useDonationTarget();
   const location = useLocation();
-  const navigate = useNavigate();
+  const profileGate = useProfileGate();
 
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<Donation | null>(null);
@@ -154,7 +155,10 @@ export function DonatePage() {
             />
             <p className={styles['done__hint']}>
               ¿Ya donaste antes con una cuenta?{' '}
-              <Link to="/login" className="underline">
+              <Link
+                to={accessPathWithReturn('/login', returnPathOf(location))}
+                className="underline"
+              >
                 Inicia sesión
               </Link>{' '}
               para ver tu historial.
@@ -174,23 +178,31 @@ export function DonatePage() {
   }: DonateFormValues): Promise<void> => {
     setSubmitting(true);
     try {
-      const donation = await createDonation(client, {
-        organizationId: target.organizationId,
-        ...(target.campaignId ? { concept: { kind: 'campaign', id: target.campaignId } } : {}),
-        intendedAmount,
-        anonymous,
-        // Con sesión: se prellena del donante autenticado (como antes). Sin
-        // sesión (invitado): viene del propio formulario, requerido allí.
-        payer: hasSession
-          ? user?.email
-            ? { fullName: user.name, email: user.email }
-            : undefined
-          : guestPayer,
-        // Invitado: prueba de su aceptación de términos y datos (Ley 1581).
-        legalAcceptances,
-        // Idempotencia: el servidor deduplica por (org, key); una clave por intento.
-        idempotencyKey: crypto.randomUUID(),
-      });
+      // Si faltan teléfono, documento o dirección, se piden en una ventana y la
+      // MISMA donación sigue sola al guardarlos (misma clave de idempotencia:
+      // el primer intento respondió 422 y no creó nada).
+      const idempotencyKey = crypto.randomUUID();
+      const donation = await profileGate.run(
+        () =>
+          createDonation(client, {
+            organizationId: target.organizationId,
+            ...(target.campaignId ? { concept: { kind: 'campaign', id: target.campaignId } } : {}),
+            intendedAmount,
+            anonymous,
+            // Con sesión: se prellena del donante autenticado (como antes). Sin
+            // sesión (invitado): viene del propio formulario, requerido allí.
+            payer: hasSession
+              ? user?.email
+                ? { fullName: user.name, email: user.email }
+                : undefined
+              : guestPayer,
+            // Invitado: prueba de su aceptación de términos y datos (Ley 1581).
+            legalAcceptances,
+            // Idempotencia: el servidor deduplica por (org, key); una clave por intento.
+            idempotencyKey,
+          }),
+        'Para donar necesitamos tu teléfono, documento de identidad y dirección.',
+      );
       if (mercadopago && isMercadoPagoCheckoutUrl(donation.paymentLinkUrl)) {
         // Navegación completa a Mercado Pago (solo a sus dominios: nunca un
         // redireccionamiento abierto). Vuelve a /donaciones/resultado.
@@ -219,18 +231,8 @@ export function DonatePage() {
               },
       );
     } catch (error) {
-      // T-Google-SignIn (business rule #3): donating requires a complete
-      // profile (phone/documentId/address) — send the person to complete it,
-      // then let them retry the donation themselves from where they left off.
-      if (isIncompleteProfileError(error)) {
-        navigate('/perfil/completar', {
-          state: {
-            from: location,
-            reason: 'Antes de donar necesitamos tu teléfono, documento de identidad y dirección.',
-          },
-        });
-        return;
-      }
+      // Cerró la ventana de datos sin guardar: no se envió nada.
+      if (isProfileGateCancelled(error)) return;
       toast({
         title: 'No se pudo procesar la donación',
         description: 'Inténtalo de nuevo en un momento.',
@@ -253,6 +255,7 @@ export function DonatePage() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <PublicNavbar />
       <main className="flex-1">
+        {profileGate.dialog}
         <PageContainer>
           <PageHeader
             title="Donar"

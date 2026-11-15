@@ -1,0 +1,63 @@
+.container {
+  width: 100%;
+  max-width: var(--af-container, 72rem);
+  margin-inline: auto;
+  padding-inline: 1rem;
+
+  @media (min-width: 640px) {
+    padding-inline: 2rem;
+  }
+}
+
+.hero {
+  padding-block: 3rem 2rem;
+
+  @media (min-width: 1024px) {
+    padding-block: 4.5rem 2.5rem;
+  }
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--af-teal-ink, #0f6f62);
+}
+
+.title {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.lead {
+  max-width: 60ch;
+  margin: 1rem 0 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--af-ink-soft, #3f4c5c);
+}
+
+.h2 {
+  margin: 3rem 0 1rem;
+  font-family: var(--font-brand);
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.more {
+  margin: 1.5rem 0 4rem;
+  color: var(--af-ink-soft, #3f4c5c);
+
+  a {
+    font-weight: 700;
+    color: var(--af-ink, #14202e);
+    text-decoration: underline;
+  }
+}

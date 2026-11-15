@@ -22,6 +22,7 @@ import {
   createPkcePair,
   MercadoPagoOAuthClient,
   MercadoPagoOAuthError,
+  safeOAuthDescription,
   type MercadoPagoTokenGrant,
 } from '../../core/payments/mercadopago-oauth.client';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
@@ -155,9 +156,22 @@ export class MercadoPagoConnectionsService {
     code?: string;
     state?: string;
     error?: string;
+    errorDescription?: string;
     /** The HttpOnly binding cookie sent by the browser. */
     binding?: string;
   }): Promise<MercadoPagoConnectResult> {
+    if (params.error) {
+      // Mercado Pago itself reported a problem on the way back: keep its code
+      // and description (trimmed, never the code or the state) to see why.
+      const description = safeOAuthDescription(params.errorDescription, [
+        params.code,
+        params.state,
+      ]);
+      this.logger.warn(
+        `Mercado Pago callback returned error=${params.error.slice(0, 60)}` +
+          (description ? ` error_description=${description}` : ''),
+      );
+    }
     const claims = params.state ? openOAuthState(params.state, this.key) : null;
     if (!claims) {
       this.logger.warn('Mercado Pago callback with an invalid or expired state');
