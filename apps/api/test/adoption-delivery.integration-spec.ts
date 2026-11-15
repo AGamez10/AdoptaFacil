@@ -9,6 +9,7 @@ import {
   type NotificationMessage,
 } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
+import { completeTestContractData } from './support/contract-data';
 import { completeTestProfile } from './support/profile';
 import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
@@ -209,6 +210,7 @@ describe('Adoption delivery (ajuste 6: acta de entrega)', () => {
       .send(startBody())
       .expect(409);
 
+    await completeTestContractData(server, refugeToken, contractId);
     await request(server)
       .post(`/adoptions/contracts/${contractId}/signatures`)
       .set('Authorization', `Bearer ${refugeToken}`)

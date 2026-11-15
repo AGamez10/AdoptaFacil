@@ -290,6 +290,31 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
     expect(res.body.payload.data.animalSex).toBe('male');
   });
 
+  it('no deja firmar ni enviar a firmas un contrato sin los datos obligatorios (422, en lenguaje llano)', async () => {
+    // Deja el peso en blanco (null borra el dato): el contrato queda incompleto.
+    const cleared = await request(server)
+      .patch(`/adoptions/contracts/${contractId}/data`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ weightKg: null })
+      .expect(200);
+    expect(cleared.body.payload.data.weightKg).toBeUndefined();
+
+    const res = await request(server)
+      .post(`/adoptions/contracts/${contractId}/signatures`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ signerId: orgSignerId })
+      .expect(422);
+    expect(res.body.error).toBe('CONTRACT_DATA_INCOMPLETE');
+    expect(res.body.message).toMatch(/Faltan datos obligatorios del contrato: .*Peso \(kg\)/);
+    expect(res.body.missing).toContain('weightKg');
+
+    await request(server)
+      .patch(`/adoptions/contracts/${contractId}/data`)
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .send({ weightKg: 18.5, signatureCity: 'Bogotá' })
+      .expect(200);
+  });
+
   it('orden de firmas reforzado: no se puede enviar a firmas antes de que el representante firme (409)', async () => {
     await request(server)
       .post(`/adoptions/contracts/${contractId}/transitions`)
