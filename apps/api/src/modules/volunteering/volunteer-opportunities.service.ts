@@ -14,6 +14,7 @@ import {
   type CreateVolunteerOpportunityInput,
   dateOrderError,
   formatDayEs,
+  todayInColombia,
   type VolunteerOpportunityChangeResult,
   VolunteerEnrollmentStatus,
   type Paginated,
@@ -117,6 +118,28 @@ export function describeOpportunityDates(startDate: Date, endDate: Date): string
 export function describeSessionDays(days: readonly string[]): string {
   if (days.length === 0) return 'todos los días de la convocatoria';
   return days.map((day) => formatDayEs(day)).join(', ');
+}
+
+/**
+ * Para el voluntario: cuándo podrá registrar horas en esta jornada, en una
+ * frase. Lo usan los avisos de aceptación y de días asignados, para que nadie
+ * se quede sin saber por qué todavía no puede registrar horas.
+ */
+export function whenCanLogHours(
+  opportunity: { startDate: Date; endDate: Date; sessionDates: readonly Date[] },
+  today: string = todayInColombia(),
+): string {
+  const start = toDay(opportunity.startDate);
+  const days = opportunity.sessionDates.map(toDay).sort();
+  if (days.length === 0) {
+    return start > today
+      ? `La organización aún no ha asignado los días de jornada; te avisaremos cuando los publique. Podrás registrar horas desde el ${formatDayEs(start)}.`
+      : 'La organización no asignó días de jornada específicos: puedes registrar las horas de cualquier día de la convocatoria desde Voluntariado.';
+  }
+  const next = days.find((day) => day >= today);
+  return next
+    ? `Tu próxima jornada es el ${formatDayEs(next)}. Ese día o después podrás registrar tus horas desde Voluntariado.`
+    : 'Ya puedes registrar las horas de los días de jornada desde Voluntariado.';
 }
 
 /**
@@ -303,7 +326,14 @@ export class VolunteerOpportunitiesService {
             select: { name: true },
           })
         : null;
-      return { row, recipients, organizationName: organization?.name ?? '' };
+      return {
+        row,
+        recipients,
+        organizationName: organization?.name ?? '',
+        // La organización asigna por primera vez los días de jornada: se avisa
+        // como buena noticia (ya se sabe cuándo ir), no como reprogramación.
+        firstDaysAssigned: oldDays.length === 0 && row.sessionDates.length > 0,
+      };
     });
 
     for (const recipient of result.recipients) {
@@ -332,13 +362,24 @@ export class VolunteerOpportunitiesService {
           },
         },
       });
-      await this.inbox.toUser(recipient.volunteerUserId, {
-        kind: 'volunteering.opportunity_rescheduled',
-        tone: 'info',
-        title: `Cambió la fecha de "${result.row.title}"`,
-        body: `Ahora es ${emailInput.dates}.${emailInput.reason ? ` Motivo: ${emailInput.reason}` : ''}`,
-        href: `/voluntariado?foco=${recipient.id}`,
-      });
+      await this.inbox.toUser(
+        recipient.volunteerUserId,
+        result.firstDaysAssigned
+          ? {
+              kind: 'volunteering.session_days_assigned',
+              tone: 'success',
+              title: `Ya están los días de jornada de "${result.row.title}"`,
+              body: `Días: ${emailInput.sessionDays}. ${whenCanLogHours(result.row)}`,
+              href: `/voluntariado?foco=${recipient.id}`,
+            }
+          : {
+              kind: 'volunteering.opportunity_rescheduled',
+              tone: 'info',
+              title: `Cambió la fecha de "${result.row.title}"`,
+              body: `Ahora es ${emailInput.dates}.${emailInput.reason ? ` Motivo: ${emailInput.reason}` : ''} ${whenCanLogHours(result.row)}`,
+              href: `/voluntariado?foco=${recipient.id}`,
+            },
+      );
     }
     // Forma de siempre (contrato aditivo) + a cuántas personas se avisó.
     return { ...toOpportunity(result.row), notifiedVolunteers: result.recipients.length };

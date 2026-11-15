@@ -296,6 +296,32 @@ describe('MyVolunteeringPage (RF18/RF19)', () => {
     );
   });
 
+  it('punto 9: si la organización aún no asignó días y la convocatoria no empieza, lo dice en vez de dejar a la persona sin saber por qué', async () => {
+    const day = (offset: number) =>
+      new Date(Date.now() - 5 * 3_600_000 + offset * 86_400_000).toISOString().slice(0, 10);
+    const enrollment = {
+      ...ACCEPTED_MINE,
+      opportunityStartDate: `${day(5)}T00:00:00.000Z`,
+      opportunityEndDate: `${day(20)}T00:00:00.000Z`,
+      sessionDates: [],
+    };
+    stubFetch((url) => {
+      if (url.includes('/public/volunteer-opportunities')) {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      }
+      if (url.includes('/volunteer-enrollments/mine')) return [enrollment];
+      if (url.includes('/service-hours/mine')) return [];
+      if (url.includes('/volunteer-certificates/mine')) return [];
+      return {};
+    });
+    renderShell({ route: '/voluntariado', ...sessionWith([]) });
+
+    const note = await screen.findByTestId('hours-not-yet');
+    expect(note).toHaveTextContent('aún no ha asignado los días de jornada');
+    expect(note).toHaveTextContent('te avisaremos');
+    expect(screen.queryByRole('button', { name: 'Registrar horas' })).not.toBeInTheDocument();
+  });
+
   it('nuevo requerimiento: oculta "Registrar horas" una vez la organización emitió el certificado de esa inscripción', async () => {
     stubFetch((url) => {
       if (url.includes('/public/volunteer-opportunities')) {

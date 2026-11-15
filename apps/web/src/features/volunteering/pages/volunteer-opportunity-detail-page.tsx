@@ -310,7 +310,7 @@ export function VolunteerOpportunityDetailPage() {
               </p>
               <p>{opportunity.location}</p>
               {opportunity.requirements && <p>Requisitos: {opportunity.requirements}</p>}
-              <div className="pt-2" data-testid="opportunity-session-days">
+              <div className="pt-2" data-testid="opportunity-session-days" data-foco="dias-jornada">
                 <p className="font-medium text-foreground">Días de jornada</p>
                 {opportunity.sessionDates && opportunity.sessionDates.length > 0 ? (
                   <p>{opportunity.sessionDates.map(formatDayEs).join(' · ')}</p>
