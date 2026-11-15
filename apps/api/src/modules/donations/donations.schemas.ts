@@ -33,7 +33,6 @@ export const createDonationSchema = z
   .object({
     organizationId: uuid,
     intendedAmount: pesos,
-    commissionPayer: z.enum(['organization', 'donor']),
     concept: conceptSchema.optional(),
     payer: donorSchema.optional(),
     idempotencyKey: z.string().trim().min(8).max(200),

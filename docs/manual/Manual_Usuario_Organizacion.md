@@ -141,19 +141,17 @@ el contrato de adopción (con firma electrónica) y dar seguimiento post-adopci�
 ## 6. Donaciones recibidas
 
 La contraparte de "Mis donaciones" del donante: todo lo que has recibido, con el nombre del donante (una
-vez emitido el recibo) y el monto neto que efectivamente te llega, ya descontados comisión de plataforma,
-IVA sobre esa comisión y comisión de la pasarela de pago.
+vez emitido el recibo) y el monto neto que efectivamente te llega, ya descontada la tarifa que Mercado
+Pago le cobra a tu cuenta. AdoptaFácil no cobra comisión por las donaciones (0 %).
 
 ![Donaciones recibidas](img/19-donaciones-recibidas.png)
 
-**Importante sobre el dinero — atención, cambio temporal:** el modelo de AdoptaFácil es que la
-plataforma nunca custodia tus fondos: el recaudo se consolida (ahora vía MercadoPago) y se
-dispersa a tu cuenta bancaria registrada al día hábil siguiente (T+1). **Esa dispersión automática
-está pausada mientras MercadoPago aprueba un permiso especial ("Disbursements") sobre la cuenta de
-la plataforma** — sin esa aprobación, el dinero recaudado por MercadoPago queda en la cuenta de la
-plataforma sin una forma automática de transferirlo a la tuya. En cuanto MercadoPago apruebe el
-permiso, la dispersión automática vuelve a funcionar. Mientras tanto, si tienes donaciones
-recaudadas pendientes de recibir, contacta al equipo de AdoptaFácil.
+**Importante sobre el dinero:** las donaciones se cobran con **tu propia cuenta de Mercado Pago**,
+que conectas una sola vez desde tu perfil (Organización → Perfil → Pagos). El dinero llega directo a
+esa cuenta: AdoptaFácil nunca lo recibe ni lo retiene, y no hay transferencias posteriores que esperar.
+Para recibir donaciones tu organización debe estar aprobada por la plataforma y tener Mercado Pago
+conectado. Si un donante pide un reembolso o hay un contracargo, esa donación deja de contar en tus
+cifras, informes y campañas.
 
 ## 7. Gestión de campañas
 
@@ -282,16 +280,13 @@ otra organización — está garantizado a nivel de base de datos, no solo en la
 ## 17. Preguntas frecuentes
 
 **¿Cuánto cuesta usar AdoptaFácil?**
-Nada. Registrarte y publicar es gratuito. La plataforma se sostiene con un pequeño porcentaje de apoyo
-sobre las donaciones que tú mismo recibes — nunca sobre las adopciones ni por usar el marketplace o el
-banco de recursos.
+Registrarte y publicar es gratuito, y AdoptaFácil no cobra comisión por las donaciones que recibes:
+el único descuento es la tarifa que Mercado Pago le cobra a tu cuenta. Si alguna función avanzada
+hace parte de un plan de pago, lo verás claramente antes de activarlo.
 
 **¿AdoptaFácil retiene mi dinero en algún momento?**
-Por diseño, no: el recaudo se consolida vía MercadoPago y se dispersa a tu cuenta bancaria
-registrada al día hábil siguiente (T+1) — la plataforma nunca custodia saldos como modelo de
-negocio. Ahora mismo, sin embargo, esa dispersión automática está pausada mientras MercadoPago
-aprueba un permiso especial sobre la cuenta de la plataforma (ver sección 6) — es una limitación
-temporal de la integración, no una decisión de negocio.
+No. Cada donación se cobra con tu propia cuenta de Mercado Pago y el dinero llega directo a ella.
+AdoptaFácil no recibe, no retiene y no transfiere dinero de donaciones.
 
 **¿Quién revisa mis documentos institucionales?**
 El equipo de AdoptaFácil (roles de plataforma), no otra organización ni tu propio equipo.

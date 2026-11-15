@@ -13,6 +13,7 @@ import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * Aceptación versionada de documentos legales de punta a punta (Ley 1581):
@@ -68,6 +69,8 @@ describe('Legal: aceptación versionada', () => {
       })
       .expect(201);
     beneficiaryOrgId = org.body.user.organizationId;
+    await approveTestOrganization(admin, org.body.user.organizationId);
+    await formalizeTestOrganization(admin, org.body.user.organizationId);
     orgIds.push(beneficiaryOrgId);
   });
 
@@ -196,6 +199,8 @@ describe('Legal: aceptación versionada', () => {
       .send({ idToken: `fake:${email}:Con Google` })
       .expect(200);
     orgIds.push(google.body.user.organizationId);
+    await approveTestOrganization(admin, google.body.user.organizationId);
+    await formalizeTestOrganization(admin, google.body.user.organizationId);
     const token = google.body.tokens.accessToken;
 
     const before = await request(server)
@@ -221,7 +226,6 @@ describe('Legal: aceptación versionada', () => {
     const base = {
       organizationId: beneficiaryOrgId,
       intendedAmount: 20_000,
-      commissionPayer: 'organization',
       payer: { fullName: 'Invitada', email: `legal-guest-${randomUUID()}@test.local` },
     };
     const rejected = await request(server)

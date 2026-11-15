@@ -230,7 +230,6 @@ export class SponsorshipsService {
       intendedAmount: plan.amount,
       currency: 'COP',
       concept: { kind: 'sponsorship', id: row.id },
-      commissionPayer: 'organization',
       idempotencyKey,
     });
 

@@ -63,11 +63,30 @@ const PENDING_HOURS = {
   createdAt: '2026-09-05T00:00:00.000Z',
 };
 
-function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
+/** Quien firma por la organización: por defecto, la misma usuaria (u1). */
+const REPRESENTATIVE = {
+  id: 'lr-1',
+  organizationId: 'org-1',
+  memberId: 'u1',
+  role: 'legal_representative',
+  fullName: 'Dueña Firmante',
+  documentType: 'CC',
+  documentNumber: '123',
+  position: 'Representante legal',
+};
+
+function stubFetch(
+  handler: (url: string, init?: RequestInit) => unknown,
+  representatives: unknown[] = [REPRESENTATIVE],
+) {
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const body = handler(String(input), init);
+      const url = String(input);
+      const body =
+        url.endsWith('/org/legal-representative') && !init?.method
+          ? representatives
+          : handler(url, init);
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -172,7 +191,7 @@ describe('VolunteerOpportunityDetailPage (RF18/RF19)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Aprobar' }));
     expect(await screen.findByText('Horas aprobadas')).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Emitir certificado' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Emitir y firmar certificado' }));
     expect(await screen.findByText('Certificado emitido')).toBeInTheDocument();
     expect(await screen.findByText(/3 horas efectivas/)).toBeInTheDocument();
   });
@@ -192,7 +211,7 @@ describe('VolunteerOpportunityDetailPage (RF18/RF19)', () => {
     });
     renderShell({ route: '/organizacion/voluntariado/op-1', ...sessionWith([Role.Owner]) });
 
-    const issueButton = await screen.findByRole('button', { name: 'Emitir certificado' });
+    const issueButton = await screen.findByRole('button', { name: 'Emitir y firmar certificado' });
     expect(issueButton).toBeDisabled();
     expect(
       await screen.findByText('Aún no hay horas registradas — no se puede emitir el certificado.'),
@@ -224,7 +243,9 @@ describe('VolunteerOpportunityDetailPage (RF18/RF19)', () => {
     });
     renderShell({ route: '/organizacion/voluntariado/op-1', ...sessionWith([Role.Owner]) });
 
-    expect(await screen.findByRole('button', { name: 'Emitir certificado' })).toBeDisabled();
+    expect(
+      await screen.findByRole('button', { name: 'Emitir y firmar certificado' }),
+    ).toBeDisabled();
     expect(
       await screen.findByText('Hay horas pendientes de aprobar o rechazar.'),
     ).toBeInTheDocument();
@@ -233,8 +254,57 @@ describe('VolunteerOpportunityDetailPage (RF18/RF19)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Aprobar' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Emitir certificado' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Emitir y firmar certificado' })).toBeEnabled();
     });
+  });
+
+  it('P0-2: solo quien firma por la organización emite; otra administradora ve a quién pedírselo', async () => {
+    stubFetch(
+      (url) => {
+        if (url.includes('/service-hours')) {
+          return {
+            items: [{ ...PENDING_HOURS, status: 'approved' }],
+            total: 1,
+            limit: 100,
+            offset: 0,
+          };
+        }
+        if (url.includes('/volunteer-enrollments')) {
+          return { items: [ACCEPTED_ENROLLMENT], total: 1, limit: 100, offset: 0 };
+        }
+        if (url.includes('/volunteer-opportunities/')) return OPPORTUNITY;
+        return {};
+      },
+      [{ ...REPRESENTATIVE, memberId: 'otra-persona' }],
+    );
+    renderShell({ route: '/organizacion/voluntariado/op-1', ...sessionWith([Role.Administrator]) });
+
+    expect(await screen.findByTestId('certificate-waiting-representative')).toHaveTextContent(
+      'Dueña Firmante',
+    );
+    expect(screen.getByRole('button', { name: 'Emitir y firmar certificado' })).toBeDisabled();
+  });
+
+  it('P0-2: sin nadie registrado para firmar, indica dónde registrarlo', async () => {
+    stubFetch((url) => {
+      if (url.includes('/service-hours')) {
+        return {
+          items: [{ ...PENDING_HOURS, status: 'approved' }],
+          total: 1,
+          limit: 100,
+          offset: 0,
+        };
+      }
+      if (url.includes('/volunteer-enrollments')) {
+        return { items: [ACCEPTED_ENROLLMENT], total: 1, limit: 100, offset: 0 };
+      }
+      if (url.includes('/volunteer-opportunities/')) return OPPORTUNITY;
+      return {};
+    }, []);
+    renderShell({ route: '/organizacion/voluntariado/op-1', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByTestId('certificate-no-representative')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Emitir y firmar certificado' })).toBeDisabled();
   });
 
   it('hides management actions for ReadOnlyAuditor (view-only)', async () => {

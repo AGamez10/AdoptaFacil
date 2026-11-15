@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   type DecideServiceHoursInput,
   type DecideVolunteerEnrollmentInput,
+  type LegalRepresentative,
   type Paginated,
   Role,
   type ServiceHours,
@@ -49,9 +50,16 @@ type LoadState = 'loading' | 'ready' | 'not-found' | 'error';
 export function VolunteerOpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const client = useApiClient();
-  const { hasRole } = useSession();
+  const { hasRole, user } = useSession();
   const canManage = hasRole(Role.Owner) || hasRole(Role.Administrator);
   const { toast } = useToast();
+  // P0-2: el certificado lo emite y firma quien firma por la organización
+  // (su representante legal o, en un grupo informal, su responsable).
+  // `undefined` = aún cargando; `null` = no hay nadie registrado.
+  const [representative, setRepresentative] = useState<LegalRepresentative | null | undefined>(
+    undefined,
+  );
+  const isRepresentative = Boolean(representative && representative.memberId === user?.id);
 
   const [state, setState] = useState<LoadState>('loading');
   const [opportunity, setOpportunity] = useState<VolunteerOpportunity | null>(null);
@@ -138,6 +146,18 @@ export function VolunteerOpportunityDetailPage() {
       }
     })();
     void loadEnrollments();
+    if (canManage) {
+      void client
+        .request<LegalRepresentative[]>('/org/legal-representative')
+        .then((rows) => {
+          if (!active) return;
+          const list = Array.isArray(rows) ? rows : [];
+          setRepresentative(list.find((r) => r.role === 'legal_representative') ?? null);
+        })
+        .catch(() => {
+          if (active) setRepresentative(null);
+        });
+    }
     return () => {
       active = false;
     };
@@ -475,11 +495,37 @@ export function VolunteerOpportunityDetailPage() {
                                     <div className="space-y-1">
                                       <Button
                                         size="sm"
-                                        disabled={!canIssue}
+                                        disabled={!canIssue || !isRepresentative}
                                         onClick={() => void issueCertificate(enrollment.id)}
                                       >
-                                        Emitir certificado
+                                        Emitir y firmar certificado
                                       </Button>
+                                      {representative === null && (
+                                        <p
+                                          className="text-xs text-muted-foreground"
+                                          data-testid="certificate-no-representative"
+                                        >
+                                          Antes de emitir certificados registra quién firma por la
+                                          organización, en{' '}
+                                          <Link
+                                            to="/organizacion/representante-legal"
+                                            className="underline"
+                                          >
+                                            Firma del representante
+                                          </Link>
+                                          .
+                                        </p>
+                                      )}
+                                      {representative && !isRepresentative && (
+                                        <p
+                                          className="text-xs text-muted-foreground"
+                                          data-testid="certificate-waiting-representative"
+                                        >
+                                          Este certificado lo emite y firma{' '}
+                                          {representative.fullName}, quien firma por la
+                                          organización.
+                                        </p>
+                                      )}
                                       {hoursLoaded && entries.length === 0 && (
                                         <p className="text-xs text-muted-foreground">
                                           Aún no hay horas registradas — no se puede emitir el

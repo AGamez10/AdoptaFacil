@@ -458,7 +458,7 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
   c.kpis([
     { label: 'Donaciones aprobadas', value: String(p.totals.count) },
     { label: 'Valor donado', value: money(p.totals.amountCharged) },
-    { label: 'Comisiones e IVA', value: money(p.totals.fees) },
+    { label: 'Tarifa de Mercado Pago e IVA', value: money(p.totals.fees) },
     { label: 'Neto recibido por la organización', value: money(p.totals.net) },
   ]);
 
@@ -493,7 +493,7 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
       { header: 'Documento', width: 9 },
       { header: 'Destino', width: 16 },
       { header: 'Valor donado', width: 11, align: 'right' },
-      { header: 'Comisiones', width: 10, align: 'right' },
+      { header: 'Tarifa MP', width: 10, align: 'right' },
       { header: 'Neto', width: 11, align: 'right' },
       { header: 'Certificado', width: 17 },
     ],
@@ -512,7 +512,7 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
   );
   c.y -= 4;
   c.paragraph(
-    'Montos en pesos colombianos. "Neto" es lo que efectivamente recibe la organización después de la comisión de la plataforma, la de la pasarela y su IVA. Por protección de datos (Ley 1581 de 2012) los documentos de identidad se muestran parcialmente y las donaciones anónimas no revelan al donante.',
+    'Montos en pesos colombianos. "Neto" es lo que efectivamente recibe la organización después de la tarifa de Mercado Pago y su IVA; AdoptaFácil no cobra comisión por donación. Las donaciones reembolsadas o contracargadas no se cuentan. Por protección de datos (Ley 1581 de 2012) los documentos de identidad se muestran parcialmente y las donaciones anónimas no revelan al donante.',
     MARGIN,
     8,
     PAGE_W - MARGIN * 2,
@@ -543,7 +543,7 @@ function drawAccounting(c: ReportCanvas, p: AccountingReportPayload): void {
   c.kpis([
     { label: 'Donaciones del mes', value: `${t.donationCount} · ${money(t.donationsGrossCop)}` },
     { label: 'Reembolsos y contracargos', value: signedMoney(t.refundsCop + t.chargebacksCop) },
-    { label: 'Comisiones de la pasarela', value: money(t.feesCop) },
+    { label: 'Tarifa de Mercado Pago', value: money(t.feesCop) },
     { label: 'Neto informado por la pasarela', value: money(t.netCop) },
   ]);
 

@@ -61,6 +61,23 @@ describe('buildAdoptionContractDocument', () => {
     expect(text).not.toContain('renunciando a otro fuero');
   });
 
+  it('P1-10: un grupo informal firma por su responsable, sin NIT ni representante legal', () => {
+    const text = fullText(
+      buildAdoptionContractDocument(
+        {
+          ...base,
+          templateVersion: 'v2',
+          data: { ...base.data, organizationFormalization: 'informal' },
+        },
+        signers,
+      ),
+    );
+    expect(text).toContain('grupo de protección animal sin personería jurídica');
+    expect(text).toContain('por medio de María Gómez, persona natural');
+    expect(text).not.toContain('representante legal');
+    expect(text).not.toContain('entidad sin ánimo de lucro');
+  });
+
   it('v2 cita el marco legal vigente (Ley 1774, 2455, C. Civil, conciliación)', () => {
     const text = fullText(
       buildAdoptionContractDocument({ ...base, templateVersion: 'v2' }, signers),

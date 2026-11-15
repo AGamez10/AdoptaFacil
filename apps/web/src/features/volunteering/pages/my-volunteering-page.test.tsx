@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Role, VolunteerEnrollmentStatus } from '@adoptafacil/contracts';
-import { renderShell } from '../../../test-utils';
+import { OPEN_CAPABILITIES, renderShell } from '../../../test-utils';
 
 function sessionWith(roles: Role[]) {
   return {
@@ -143,7 +143,7 @@ describe('MyVolunteeringPage (RF18/RF19)', () => {
     fireEvent.change(screen.getByLabelText('Documento del acudiente'), {
       target: { value: '123456' },
     });
-    fireEvent.change(screen.getByLabelText('Colegio (opcional)'), {
+    fireEvent.change(screen.getByLabelText('Institución educativa (opcional)'), {
       target: { value: 'Colegio Mayor de Colombia' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Inscribirme' }));
@@ -159,6 +159,52 @@ describe('MyVolunteeringPage (RF18/RF19)', () => {
       guardianName: 'Andrés Gámez',
       guardianDocument: '123456',
       schoolName: 'Colegio Mayor de Colombia',
+    });
+  });
+
+  it('P0-1: con menores deshabilitados no hay casilla de menor ni datos de acudiente; exige confirmar mayoría de edad', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method === 'POST' && url.includes('/volunteer-enrollments')) {
+        return { ...ACCEPTED_MINE, id: 'en-2', status: 'pending' };
+      }
+      if (url.includes('/public/volunteer-opportunities')) {
+        return { items: [STUDENT_SERVICE_OPPORTUNITY], total: 1, limit: 50, offset: 0 };
+      }
+      if (url.includes('/volunteer-enrollments/mine')) return [];
+      if (url.includes('/service-hours/mine')) return [];
+      if (url.includes('/volunteer-certificates/mine')) return [];
+      return {};
+    });
+    renderShell({
+      route: '/voluntariado',
+      ...sessionWith([]),
+      capabilities: {
+        ...OPEN_CAPABILITIES,
+        features: { ...OPEN_CAPABILITIES.features, volunteeringMinors: false },
+      },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Inscribirme' }));
+    await screen.findByText(/Inscripción a "Servicio social — bodega de donaciones"/);
+    expect(screen.queryByLabelText('Soy menor de edad')).toBeNull();
+    expect(screen.queryByLabelText('Nombre completo del acudiente')).toBeNull();
+
+    const submit = screen.getByRole('button', { name: 'Inscribirme' });
+    expect(submit).toBeDisabled();
+    fireEvent.click(screen.getByLabelText('Confirmo que soy mayor de edad'));
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => {
+      const post = calls.find(
+        (c) => c.init?.method === 'POST' && c.url.includes('/volunteer-enrollments'),
+      );
+      expect(JSON.parse(String(post?.init?.body))).toEqual({
+        opportunityId: 'op-2',
+        isMinor: false,
+      });
     });
   });
 

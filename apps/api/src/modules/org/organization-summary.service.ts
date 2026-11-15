@@ -73,7 +73,13 @@ export class OrganizationSummaryService {
             select: { type: true, version: true, status: true, expiresAt: true },
           }),
           tx.donation.findMany({
-            where: { organizationId, status: 'approved', conceptKind: 'organization' },
+            // P1-1: lo reembolsado o contracargado no suma.
+            where: {
+              organizationId,
+              status: 'approved',
+              conceptKind: 'organization',
+              reversal: null,
+            },
             select: { breakdown: true },
           }),
           tx.organizationProfile.findUnique({

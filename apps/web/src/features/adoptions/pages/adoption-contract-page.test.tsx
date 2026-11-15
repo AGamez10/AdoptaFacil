@@ -171,12 +171,25 @@ describe('AdoptionContractPage (M04, T-028b — nuevo requerimiento)', () => {
     expect(screen.getByText(/Firulais/)).toBeInTheDocument();
     expect(screen.getByText(/18 kg/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Firmar como representante' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aprobar y firmar por la organización' }));
     expect(await screen.findByText('Firmado como representante')).toBeInTheDocument();
 
     const signCall = calls.find((c) => c.url.includes('/signatures') && c.init?.method === 'POST');
     expect(signCall).toBeDefined();
     expect(JSON.parse(String(signCall?.init?.body))).toEqual({ signerId: 's-rep' });
+  });
+
+  it('org: quien no es el representante registrado no puede firmar por la organización', async () => {
+    stubFetch((url) => (url.includes('/org/') ? DRAFT_CONTRACT : {}));
+    renderShell({
+      route: '/adopciones/contratos/c1',
+      ...sessionWith([Role.Administrator], 'admin-2'),
+    });
+
+    expect(await screen.findByTestId('waiting-representative')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Aprobar y firmar por la organización' }),
+    ).not.toBeInTheDocument();
   });
 
   it('org: "Enviar a firmas" solo aparece una vez el representante ya firmó', async () => {
@@ -195,7 +208,7 @@ describe('AdoptionContractPage (M04, T-028b — nuevo requerimiento)', () => {
 
     expect(await screen.findByRole('button', { name: 'Enviar a firmas' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Firmar como representante' }),
+      screen.queryByRole('button', { name: 'Aprobar y firmar por la organización' }),
     ).not.toBeInTheDocument();
   });
 

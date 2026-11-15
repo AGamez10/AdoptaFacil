@@ -18,6 +18,7 @@
 // All timestamps are ISO-8601 UTC; the UI renders them in Colombia time.
 
 import type { AuditEvent } from './audit';
+import type { CoffeeLotCampaignPayload, CoffeeLotPublishPayload } from './coffee';
 import type { Role } from './auth';
 
 // ============================================================================
@@ -189,6 +190,8 @@ export const SENSITIVE_ACTION_TYPES = [
   'staff.role_revoke',
   'staff.mfa_reset',
   'audit.export',
+  'coffee.lot_publish',
+  'coffee.lot_campaign',
 ] as const;
 export type SensitiveActionType = (typeof SENSITIVE_ACTION_TYPES)[number];
 
@@ -211,7 +214,12 @@ export interface AuditExportPayload {
 }
 
 export type SensitiveActionPayload =
-  StaffInvitePayload | StaffRolePayload | StaffMfaResetPayload | AuditExportPayload;
+  | StaffInvitePayload
+  | StaffRolePayload
+  | StaffMfaResetPayload
+  | AuditExportPayload
+  | CoffeeLotPublishPayload
+  | CoffeeLotCampaignPayload;
 
 export type SensitiveActionStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
 

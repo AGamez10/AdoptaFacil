@@ -416,6 +416,64 @@ describe('render PDF / Excel', () => {
   });
 });
 
+describe('Excel del reporte: se ve y se imprime igual en cualquier equipo', () => {
+  const pngSignature = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+  );
+
+  it('estampa la firma de cada firmante aprobado y deja el papel listo para imprimir', async () => {
+    const bytes = await renderReportXlsx({
+      code: 'ADF-REP-2026-ABCDEFGH',
+      contentHash: 'c'.repeat(64),
+      createdAt: new Date(),
+      legalEffect: 'certified',
+      payload: donationsPayload(),
+      signers: [
+        { role: 'legal_representative', fullName: 'Ana Pérez', position: 'Representante legal' },
+        { role: 'fiscal_reviewer', fullName: 'Blanca Navarro', position: 'Revisora fiscal' },
+      ],
+      signerImages: [pngSignature, null],
+      verifyUrl: 'http://x/verificar/ADF-REP-2026-ABCDEFGH',
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(bytes as unknown as ArrayBuffer);
+    const summary = wb.getWorksheet('Resumen')!;
+    // Una imagen por firma que sí existe; la otra queda solo con nombre y cargo.
+    expect(summary.getImages()).toHaveLength(1);
+    const all = summary.getSheetValues().flat().map(String).join('|');
+    expect(all).toContain('Ana Pérez');
+    expect(all).toContain('Blanca Navarro');
+    // Cada hoja cabe en el ancho de una página A4 apaisada y repite su encabezado.
+    for (const name of ['Resumen', 'Donaciones', 'Por destino']) {
+      const setup = wb.getWorksheet(name)!.pageSetup;
+      expect(setup.orientation).toBe('landscape');
+      expect(setup.fitToPage).toBe(true);
+      expect(setup.fitToWidth).toBe(1);
+    }
+    expect(wb.getWorksheet('Donaciones')!.pageSetup.printTitlesRow).toBe('1:1');
+  });
+
+  it('un borrador no lleva firmas ni sus imágenes', async () => {
+    const bytes = await renderReportXlsx({
+      code: 'ADF-REP-2026-ABCDEFGH',
+      contentHash: 'd'.repeat(64),
+      createdAt: new Date(),
+      legalEffect: 'certified',
+      payload: donationsPayload(),
+      signers: [
+        { role: 'legal_representative', fullName: 'Ana Pérez', position: 'Representante legal' },
+      ],
+      signerImages: [pngSignature],
+      verifyUrl: 'http://x/verificar/ADF-REP-2026-ABCDEFGH',
+      draft: 'pending_signatures',
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(bytes as unknown as ArrayBuffer);
+    expect(wb.getWorksheet('Resumen')!.getImages()).toHaveLength(0);
+  });
+});
+
 describe('reporte de servicio social: cada persona que anexa horas, con sus fotos', () => {
   const period = resolveReportPeriod('2026-09-01', '2026-09-30', new Date('2026-10-09T12:00:00Z'));
   const base = {

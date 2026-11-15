@@ -54,6 +54,9 @@ function formatCO(iso: string): string {
   return new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
 }
 
+/** Mismo tope que el servidor (`SIGNATURE_IMAGE_MAX_BYTES`). */
+const SIGNATURE_MAX_BYTES = 512 * 1024;
+
 /** Lee un `File` como base64 (sin el prefijo `data:...;base64,`). */
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -192,7 +195,10 @@ export function OrgLegalRepresentativePage() {
   const [position, setPosition] = useState('');
   const [captureMode, setCaptureMode] = useState<'draw' | 'upload'>('draw');
   const [signatureBase64, setSignatureBase64] = useState<string | null>(null);
-  const [signatureContentType, setSignatureContentType] = useState('image/png');
+  const [signatureContentType, setSignatureContentType] = useState<'image/png' | 'image/jpeg'>(
+    'image/png',
+  );
+  const [fileError, setFileError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const currentByRole = useMemo(() => {
@@ -236,10 +242,24 @@ export function OrgLegalRepresentativePage() {
   }, [client]);
 
   async function handleFileSelected(file: File): Promise<void> {
+    setSignatureBase64(null);
+    // Solo PNG o JPG: un HEIC o WebP del celular no se puede estampar en el PDF.
+    // El servidor vuelve a revisar los bytes reales y la convierte a PNG.
+    if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
+      setFileError(
+        'La firma debe ser una imagen PNG o JPG. Toma la foto en ese formato o dibújala.',
+      );
+      return;
+    }
+    if (file.size > SIGNATURE_MAX_BYTES) {
+      setFileError('La imagen de la firma pesa más de 512 KB. Recórtala o dibújala.');
+      return;
+    }
+    setFileError(null);
     try {
       const base64 = await fileToBase64(file);
       setSignatureBase64(base64 || null);
-      setSignatureContentType(file.type || 'application/octet-stream');
+      setSignatureContentType(file.type);
     } catch {
       toast({ title: 'No se pudo leer el archivo', variant: 'warning' });
     }
@@ -273,6 +293,9 @@ export function OrgLegalRepresentativePage() {
         position: position.trim(),
         signatureBase64,
         signatureContentType,
+        // Una imagen subida es la foto de una firma en papel: el servidor deja
+        // solo el trazo, sobre fondo transparente, para que el PDF se vea limpio.
+        signatureMethod: captureMode === 'upload' ? 'photo' : 'drawn',
       };
       const created = await client.request<LegalRepresentative>('/org/legal-representative', {
         method: 'POST',
@@ -452,7 +475,7 @@ export function OrgLegalRepresentativePage() {
                   ) : (
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/png,image/jpeg"
                       aria-label="Subir imagen de la firma"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
@@ -460,6 +483,17 @@ export function OrgLegalRepresentativePage() {
                       }}
                       className="block text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
                     />
+                  )}
+                  {captureMode === 'upload' && (
+                    <p className="text-xs text-muted-foreground">
+                      PNG o JPG de hasta 512 KB: tu firma en tinta oscura sobre papel blanco, bien
+                      iluminada.
+                    </p>
+                  )}
+                  {fileError && (
+                    <p className="text-xs font-medium text-destructive" role="alert">
+                      {fileError}
+                    </p>
                   )}
                   {signatureBase64 && (
                     <p className="text-xs font-medium text-emerald-600">✓ Firma lista</p>

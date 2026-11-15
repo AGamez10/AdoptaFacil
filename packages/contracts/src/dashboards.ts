@@ -122,11 +122,10 @@ export interface OrganizationsGrowth {
  * Financiero: suma de `breakdown` (mismo cálculo ya persistido por
  * `computeBreakdown()`, M15) de TODAS las donaciones aprobadas de TODAS las
  * organizaciones — nunca una fórmula nueva, solo la suma de lo ya calculado.
- * IVA de cada comisión va sumado dentro de su propio total
- * (platformFeeTotal incluye el IVA de la comisión de plataforma; lo mismo
- * para gatewayFeeTotal), de forma que
- * `grossTotal === platformFeeTotal + gatewayFeeTotal + netTotal` se mantiene
- * como identidad verificable también a nivel agregado.
+ * Sin lo reembolsado o contracargado. AdoptaFácil no cobra comisión por
+ * donación: el IVA de la tarifa de Mercado Pago va sumado dentro de
+ * gatewayFeeTotal, de forma que `grossTotal === gatewayFeeTotal + netTotal`
+ * se mantiene como identidad verificable también a nivel agregado.
  *
  * Geografía: `organizationsByDepartment` es una lista simple de conteos por
  * departamento; el frontend (S-9) la renderiza como un choropleth real de
@@ -142,7 +141,6 @@ export interface OrganizationsGrowth {
  */
 export interface PlatformSuperAdminDashboardSummary {
   grossTotal: number;
-  platformFeeTotal: number;
   gatewayFeeTotal: number;
   netTotal: number;
   organizationsByVerificationLevel: OrganizationVerificationLevelCount[];

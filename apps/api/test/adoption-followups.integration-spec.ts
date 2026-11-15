@@ -8,6 +8,7 @@ import { FollowUpService } from '../src/modules/adoptions/followup.service';
 import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
@@ -54,6 +55,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
       .expect(201);
     refugeToken = refuge.body.tokens.accessToken;
     refugeOrgId = refuge.body.user.organizationId;
+    await approveTestOrganization(admin, refugeOrgId);
     orgIds.push(refugeOrgId);
 
     const person = await request(server)
@@ -106,7 +108,8 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
         documentType: 'cedula_ciudadania',
         documentNumber: '987654321',
         position: 'Representante legal',
-        signatureBase64: Buffer.from('fake-rep-signature').toString('base64'),
+        signatureBase64:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
         signatureContentType: 'image/png',
       })
       .expect(201);

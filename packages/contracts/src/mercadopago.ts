@@ -14,7 +14,7 @@
 //
 // Browser-safe, dependency-free.
 
-import type { PaymentStatus } from './payments';
+import type { PaymentBreakdown, PaymentStatus } from './payments';
 import type { PlanKey } from './plans';
 
 /** Lifecycle of a connected account. `needs_reconnect` = the token could not
@@ -190,4 +190,37 @@ export interface MercadoPagoPaymentSnapshot {
   /** `refunds` as reported (id, amount, date_created, status). */
   refunds: unknown[];
   transactionAmountRefunded: string | null;
+}
+
+/**
+ * The REAL breakdown of an approved Mercado Pago donation, from the read-back
+ * of the payment (never estimated). The donor paid `amountCharged`; Mercado
+ * Pago deducted its fee (and any withholding) from the ORGANIZATION's account,
+ * so what the organization actually received is `net_received_amount`.
+ * AdoptaFácil takes nothing (0 %). Everything is rounded to integer pesos and
+ * the RNF12 sum invariant holds: `gross === net + gatewayFee`.
+ *
+ * Returns `null` when Mercado Pago did not report a usable net (the donation
+ * then keeps the breakdown it was created with: no fee is ever invented).
+ */
+export function mercadoPagoSettledBreakdown(
+  amountCharged: number,
+  snapshot: Pick<MercadoPagoPaymentSnapshot, 'netReceivedAmount'> | undefined,
+): PaymentBreakdown | null {
+  if (!Number.isInteger(amountCharged) || amountCharged <= 0) return null;
+  const raw = snapshot?.netReceivedAmount;
+  if (raw === null || raw === undefined || raw.trim() === '') return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  const net = Math.round(parsed);
+  if (net > amountCharged) return null;
+  return {
+    amountCharged,
+    gross: amountCharged,
+    platformFee: 0,
+    platformIva: 0,
+    gatewayFee: amountCharged - net,
+    gatewayIva: 0,
+    net,
+  };
 }

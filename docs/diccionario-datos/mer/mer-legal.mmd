@@ -1,0 +1,25 @@
+erDiagram
+  legal_acceptances {
+    uuid id PK
+    uuid organization_id FK
+    uuid user_id
+    text subject_type
+    uuid subject_id
+    text document_key
+    text document_version
+    text document_sha256
+    text action
+    text channel
+    text ip_address
+    text user_agent
+    timestamp created_at
+  }
+  organizations {
+    uuid id PK
+  }
+  users {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organizations ||--o{ legal_acceptances : "organization_id"
+  users |o..o{ legal_acceptances : "user_id (lógica)"

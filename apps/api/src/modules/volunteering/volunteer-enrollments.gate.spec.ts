@@ -1,3 +1,6 @@
+import { ForbiddenException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
+import type { Env } from '../../config/env.validation';
 import type { AuditService } from '../../core/audit/audit.service';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { IncompleteProfileException } from '../../core/auth/require-complete-profile';
@@ -21,7 +24,10 @@ const ACTOR: RequestUser = {
   email: 'volunteer@example.com',
 };
 
-function makeService(profile: unknown): {
+function makeService(
+  profile: unknown,
+  minorsEnabled = false,
+): {
   service: VolunteerEnrollmentsService;
   queryRaw: jest.Mock;
 } {
@@ -57,7 +63,10 @@ function makeService(profile: unknown): {
   const notifications = {
     send: jest.fn().mockResolvedValue(undefined),
   } as unknown as NotificationPort;
-  const service = new VolunteerEnrollmentsService(prisma, tenant, audit, notifications);
+  const config = {
+    get: (key: string) => (key === 'FEATURE_VOLUNTEERING_MINORS' ? minorsEnabled : undefined),
+  } as unknown as ConfigService<Env, true>;
+  const service = new VolunteerEnrollmentsService(prisma, tenant, audit, notifications, config);
   return { service, queryRaw };
 }
 
@@ -85,6 +94,37 @@ describe('VolunteerEnrollmentsService.enroll — profile-completion gate', () =>
     const enrollment = await service.enroll(ACTOR, { opportunityId: 'opp-1' });
 
     expect(enrollment.id).toBe('enr-1');
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('VolunteerEnrollmentsService.enroll — menores (P0-1)', () => {
+  const COMPLETE = { phone: '3001234567', documentId: '1000000000', address: 'Calle 1 #2-3' };
+
+  it.each([{ isMinor: true }, { guardianName: 'Acudiente' }, { guardianDocument: '123' }])(
+    'con el flag apagado rechaza %o con 403 y sin escribir nada',
+    async (extra) => {
+      const { service, queryRaw } = makeService(COMPLETE);
+      await expect(
+        service.enroll(ACTOR, { opportunityId: 'opp-1', ...extra }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(queryRaw).not.toHaveBeenCalled();
+    },
+  );
+
+  it('con el flag apagado un adulto se inscribe (institución educativa opcional)', async () => {
+    const { service, queryRaw } = makeService(COMPLETE);
+    await service.enroll(ACTOR, {
+      opportunityId: 'opp-1',
+      isMinor: false,
+      schoolName: 'U. Nacional',
+    });
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('con el flag encendido (solo fuera de producción) acepta la inscripción de un menor', async () => {
+    const { service, queryRaw } = makeService(COMPLETE, true);
+    await service.enroll(ACTOR, { opportunityId: 'opp-1', isMinor: true });
     expect(queryRaw).toHaveBeenCalledTimes(1);
   });
 });

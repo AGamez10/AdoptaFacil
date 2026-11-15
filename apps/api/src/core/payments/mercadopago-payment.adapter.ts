@@ -3,21 +3,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   computeBreakdown,
-  DIRECT_COLLECTION_RATES,
   isMercadoPagoCheckoutUrl,
   MERCADOPAGO_RESOURCE_ID_PATTERN,
   mercadoPagoPaymentStatus,
   planCollection,
   type CollectionResult,
   type CreateCollectionInput,
-  type CreatePayoutInput,
   type MercadoPagoCollectorCredentials,
   type MercadoPagoPaymentSnapshot,
-  type NormalizedPayoutWebhookEvent,
   type NormalizedWebhookEvent,
   type PaymentPort,
   type PaymentStatus,
-  type PayoutResult,
   type WebhookVerificationContext,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
@@ -204,8 +200,7 @@ const NO_CUSTODY_ERROR =
  * Real Mercado Pago {@link PaymentPort} adapter (ADR-PAG-003): Checkout Pro
  * with the BENEFICIARY organization's OAuth token. The org is the collector
  * (merchant of record), the money lands in ITS Mercado Pago account and
- * AdoptaFácil takes no per-transaction fee (split 1:1 is not available in
- * Colombia; `planCollection` refuses it). There is no fallback to a platform
+ * AdoptaFácil takes no per-transaction fee (0 %, owner's decision). There is no fallback to a platform
  * token: without the org's grant nothing is charged.
  *
  * Settlement: a notification is accepted only if its `x-signature` verifies
@@ -255,7 +250,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     return `${this.apiPublicBase}/donations/webhook/mercadopago/${organizationId}?source_news=webhooks`;
   }
 
-  /** Platform fee for this charge, decided ONLY by `planCollection` ⇒ 0. */
+  /** Direct collection to the org, decided ONLY by `planCollection`. */
   private assertDirectCollection(collector: MercadoPagoCollectorCredentials): void {
     const decision = planCollection(
       collector.organizationId,
@@ -266,9 +261,9 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
         status: 'active',
         gatewayAccountId: collector.userId,
       },
-      { enabledModes: ['direct_to_org'], splitPlatformFeeRate: 0, splitApprovalRef: null },
+      { enabledModes: ['direct_to_org'] },
     );
-    if (!decision.ok || decision.plan.platformFeeRate !== 0) {
+    if (!decision.ok || decision.plan.collector !== 'organization') {
       throw new Error(
         'MercadoPagoPaymentAdapter: direct collection refused. No charge was created.',
       );
@@ -288,11 +283,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     }
     this.assertDirectCollection(collector);
 
-    const breakdown = computeBreakdown(
-      input.intendedAmount,
-      input.commissionPayer,
-      DIRECT_COLLECTION_RATES,
-    );
+    const breakdown = computeBreakdown(input.intendedAmount);
     const reference = mercadoPagoReferenceFor(collector.organizationId, input.idempotencyKey);
     const back = new URL(`${this.webBase}/donaciones/resultado`);
     back.searchParams.set('reference', reference);
@@ -502,24 +493,5 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       if (results.length < SEARCH_PAGE_SIZE || (page + 1) * SEARCH_PAGE_SIZE >= total) break;
     }
     return out;
-  }
-
-  /** No custody: Mercado Pago settles to the organization's own account. */
-  async createPayout(_input: CreatePayoutInput): Promise<PayoutResult> {
-    throw new Error(
-      'MercadoPagoPaymentAdapter.createPayout is not supported: AdoptaFácil never holds ' +
-        'donations (ADR-PAG-001).',
-    );
-  }
-
-  /** See {@link createPayout}. */
-  async verifyAndNormalizePayoutWebhook(
-    _payload: unknown,
-    _signature: string,
-    _context?: WebhookVerificationContext,
-  ): Promise<NormalizedPayoutWebhookEvent> {
-    throw new Error(
-      'MercadoPagoPaymentAdapter.verifyAndNormalizePayoutWebhook is not supported: no payouts.',
-    );
   }
 }

@@ -133,7 +133,7 @@ function Totals({ view }: { view: AccountingPeriodView }) {
         accessory={<span className="text-xs text-muted-foreground">{t.donationCount} pagos</span>}
       />
       <StatCard label="Reembolsos y contracargos" value={money(t.refundsCop + t.chargebacksCop)} />
-      <StatCard label="Comisiones de la pasarela" value={money(t.feesCop)} />
+      <StatCard label="Tarifa de Mercado Pago" value={money(t.feesCop)} />
       <StatCard label="Neto recibido" value={money(t.netCop)} />
     </div>
   );
@@ -317,8 +317,8 @@ function ReconciliationCard({
             </ul>
             <p className="text-sm text-muted-foreground">
               AdoptaFácil {money(reconciliation.platformTotalCop)} · Mercado Pago{' '}
-              {money(reconciliation.gatewayTotalCop)} (comisiones{' '}
-              {money(reconciliation.gatewayFeesCop)}, neto {money(reconciliation.gatewayNetCop)})
+              {money(reconciliation.gatewayTotalCop)} (tarifa {money(reconciliation.gatewayFeesCop)}
+              , neto {money(reconciliation.gatewayNetCop)})
             </p>
             {pending.length > 0 && (
               <ul className="space-y-2 text-sm">

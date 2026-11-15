@@ -1,7 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import {
   computeBreakdown,
-  DIRECT_COLLECTION_RATES,
   type CreateCollectionInput,
   type MercadoPagoCollectorCredentials,
 } from '@adoptafacil/contracts';
@@ -64,7 +63,6 @@ const INPUT: CreateCollectionInput = {
   intendedAmount: 50_000,
   currency: 'COP',
   concept: { kind: 'organization', id: ORG_ID },
-  commissionPayer: 'donor',
   payer: { email: 'donante@test.local', fullName: 'Ana Donante' },
   idempotencyKey: 'idem-1',
   mercadopagoCollector: ORG,
@@ -99,7 +97,7 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
 
     const reference = mercadoPagoReferenceFor(ORG_ID, 'idem-1');
     expect(reference.length).toBeLessThanOrEqual(MERCADOPAGO_REFERENCE_MAX_LENGTH);
-    const breakdown = computeBreakdown(50_000, 'donor', DIRECT_COLLECTION_RATES);
+    const breakdown = computeBreakdown(50_000);
     expect(breakdown.platformFee).toBe(0);
     expect(result).toEqual({
       collectionId: reference,
@@ -276,23 +274,9 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     expect(Number.isNaN(event.amountCharged)).toBe(true);
   });
 
-  it('never supports payouts nor status polling without the org grant', async () => {
+  it('never polls a status without the org grant', async () => {
     const adapter = new MercadoPagoPaymentAdapter(makeConfig(), makeFetch());
     await expect(adapter.getCollectionStatus('af-x')).rejects.toThrow();
-    await expect(
-      adapter.createPayout({
-        beneficiaryOrgId: ORG_ID,
-        amount: 1,
-        idempotencyKey: 'k',
-        bankAccount: {
-          bankCode: '1',
-          accountType: 'savings',
-          accountNumber: '1',
-          accountHolderName: 'x',
-          accountHolderDocument: '1',
-        },
-      }),
-    ).rejects.toThrow(/never holds/);
   });
 });
 

@@ -63,11 +63,11 @@ export class MercadoPagoConnectController {
   @Get('connect')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...MERCADOPAGO_MANAGE_ROLES)
-  getConnectUrl(
+  async getConnectUrl(
     @CurrentUser() actor: RequestUser,
     @Res({ passthrough: true }) res: Response,
-  ): MercadoPagoConnectUrlView {
-    const { view, bindingSecret } = this.service.getConnectUrl(actor.id);
+  ): Promise<MercadoPagoConnectUrlView> {
+    const { view, bindingSecret } = await this.service.getConnectUrl(actor.id);
     res.cookie(
       MERCADOPAGO_OAUTH_BINDING_COOKIE,
       bindingSecret,

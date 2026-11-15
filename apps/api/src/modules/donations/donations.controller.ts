@@ -133,9 +133,8 @@ export class DonationsController {
   }
 
   /**
-   * Gateway webhook (PUBLIC — no JWT). The body is the raw gateway payload
-   * (ePayco signs its confirmation inside the body, `x_signature`). The
-   * `x-signature`/`x-request-id` headers and the query are still forwarded
+   * Gateway webhook (PUBLIC — no JWT). The body is the raw gateway payload.
+   * The `x-signature`/`x-request-id` headers and the query are forwarded
    * untouched in `context` for any adapter that needs them. The PaymentPort verifies and normalizes it, and the
    * settlement + receipt are idempotent (dedup by event).
    */

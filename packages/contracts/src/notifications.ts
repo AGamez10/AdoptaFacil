@@ -37,6 +37,7 @@ export const EMAIL_EVENT_KEYS = [
   'resources.open_offer_claimed',
   'platform.announcement',
   'org.urgent_announcement',
+  'coffee.purchase_receipt',
 ] as const;
 
 export type EmailEventKey = (typeof EMAIL_EVENT_KEYS)[number];

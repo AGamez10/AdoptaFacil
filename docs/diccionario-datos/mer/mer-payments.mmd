@@ -1,36 +1,46 @@
 erDiagram
-  organization_bank_accounts {
-    uuid organization_id PK,FK
-    text bank_code
-    text account_type
-    text account_number
-    text account_holder_name
-    text account_holder_document
-    timestamp3 created_at
-    timestamp3 updated_at
-  }
-  payouts {
+  mercadopago_payments {
     uuid id PK
     uuid organization_id FK
-    integer amount
-    text currency
-    text idempotency_key
-    text wompi_payout_id UK
+    text mp_payment_id
+    text collector_id
+    text external_reference
+    uuid donation_id
     text status
-    integer attempts
-    text last_error
-    timestamp3 created_at
-    timestamp3 updated_at
+    text status_detail
+    text currency
+    numeric transaction_amount
+    numeric net_received_amount
+    numeric transaction_amount_refunded
+    jsonb fee_details
+    jsonb refunds
+    text payment_type_id
+    text payment_method_id
+    timestamp date_approved
+    timestamp money_release_date
+    timestamp first_seen_at
+    timestamp updated_at
   }
-  organization_mercadopago_accounts {
+  organization_mercadopago_connections {
     uuid id PK
     uuid organization_id FK,UK
-    text mp_user_id
-    text access_token
-    text refresh_token
-    timestamp3 expires_at
-    timestamp3 connected_at
-    timestamp3 updated_at
+    text mp_user_id UK
+    text access_token_enc
+    text refresh_token_enc
+    text public_key
+    boolean live_mode
+    text scope
+    text status
+    timestamp expires_at
+    timestamp last_refreshed_at
+    text last_error
+    uuid connected_by_user_id
+    timestamp connected_at
+    timestamp updated_at
+  }
+  donations {
+    uuid id PK
+    uuid organization_id FK
   }
   organizations {
     uuid id PK
@@ -39,7 +49,7 @@ erDiagram
     uuid id PK
     uuid organization_id FK
   }
-  organizations ||--o{ organization_bank_accounts : "organization_id"
-  organizations ||--o{ payouts : "organization_id"
-  organizations ||--o| organization_mercadopago_accounts : "organization_id"
-  users ||..o{ organization_mercadopago_accounts : "mp_user_id (lógica)"
+  organizations ||--o{ mercadopago_payments : "organization_id"
+  organizations ||--o| organization_mercadopago_connections : "organization_id"
+  donations |o..o{ mercadopago_payments : "donation_id (lógica)"
+  users |o..o{ organization_mercadopago_connections : "connected_by_user_id (lógica)"

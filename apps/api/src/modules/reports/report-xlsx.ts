@@ -1,8 +1,24 @@
 import * as ExcelJS from 'exceljs';
-import type { OrgReportLegalEffect, OrgReportSigner } from '@adoptafacil/contracts';
+import sharp from 'sharp';
+import type {
+  LegalRepresentativeRole,
+  OrgReportLegalEffect,
+  OrgReportSigner,
+} from '@adoptafacil/contracts';
 import type { OrgReportPayload } from './report-payloads';
 import { SIGNER_ROLE_LABEL } from './report-legal-effect';
 import { sheetText } from './report-text';
+import { detectSignatureImageType } from '../adoptions/adoption-contract-rules';
+import {
+  BORDER,
+  NAVY,
+  PAPER,
+  TEAL,
+  WARNING,
+  setupPrint,
+  styleHeader,
+  styleTable,
+} from './xlsx-style';
 
 /**
  * Versión Excel del reporte (para el contador o el colegio): mismas cifras que
@@ -18,6 +34,9 @@ export interface RenderXlsxInput {
   legalEffect: OrgReportLegalEffect;
   payload: OrgReportPayload;
   signers: OrgReportSigner[];
+  /** Imagen de la firma de cada firmante (mismo orden que `signers`), ya
+   *  descifrada. Un null (o la ausencia) deja la línea de firma sin imagen. */
+  signerImages?: ReadonlyArray<Buffer | null>;
   verifyUrl: string;
   /** Borrador sin emitir (faltan firmas o fue rechazado). */
   draft?: 'pending_signatures' | 'rejected';
@@ -32,10 +51,14 @@ const EFFECT_LABEL: Record<OrgReportLegalEffect, string> = {
 const MONEY = '"$" #,##0';
 const HOURS = '0.##';
 
-function styleHeader(row: ExcelJS.Row): void {
-  row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14294D' } };
-  row.alignment = { vertical: 'middle' };
+/** "Revisora fiscal · T.P. 145872-T": el cargo registrado si ya nombra el rol;
+ *  si no, "Rol · cargo" (nunca "Revisor fiscal · Revisora fiscal"). */
+function roleLine(role: LegalRepresentativeRole, position: string): string {
+  const label = SIGNER_ROLE_LABEL[role];
+  const clean = sheetText(position);
+  if (!clean) return label;
+  const keyword = label.split(' ')[0].toLowerCase().slice(0, 6);
+  return clean.toLowerCase().includes(keyword) ? clean : `${label} · ${clean}`;
 }
 
 function colombiaDate(iso: string): Date {
@@ -50,14 +73,41 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
   wb.created = input.createdAt;
 
   const summary = wb.addWorksheet('Resumen');
-  summary.columns = [{ width: 38 }, { width: 70 }];
+  summary.columns = [{ width: 40 }, { width: 80 }];
   const title =
     payload.kind === 'donations'
       ? 'Informe de donaciones recibidas'
       : payload.kind === 'accounting'
         ? 'Libro auxiliar de donaciones'
         : 'Reporte de servicio social y voluntariado';
-  summary.addRow([title]).font = { bold: true, size: 14 };
+  const printCtx = {
+    org: payload.organization.name,
+    code: input.code,
+    verifyUrl: input.verifyUrl,
+  };
+  const banner = summary.addRow([sheetText(payload.organization.name)]);
+  summary.mergeCells(banner.number, 1, banner.number, 2);
+  banner.height = 34;
+  banner.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+  banner.alignment = { vertical: 'middle', indent: 1 };
+  banner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+  const titleRow = summary.addRow([title]);
+  summary.mergeCells(titleRow.number, 1, titleRow.number, 2);
+  titleRow.height = 26;
+  titleRow.font = { bold: true, size: 14, color: { argb: TEAL } };
+  titleRow.alignment = { vertical: 'middle', indent: 1 };
+  if (input.draft) {
+    const notice = summary.addRow([
+      input.draft === 'rejected'
+        ? 'BORRADOR: un firmante rechazó este documento y no se emitirá.'
+        : 'BORRADOR sin emitir: no tiene valor hasta que cada firmante lo apruebe.',
+    ]);
+    summary.mergeCells(notice.number, 1, notice.number, 2);
+    notice.height = 24;
+    notice.font = { bold: true, color: { argb: 'FF7A4B00' } };
+    notice.alignment = { vertical: 'middle', indent: 1 };
+    notice.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: WARNING } };
+  }
   summary.addRow([]);
   const info: Array<[string, string | number]> = [
     ['Organización', sheetText(payload.organization.name)],
@@ -85,7 +135,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     info.push(
       ['Donaciones aprobadas', payload.totals.count],
       ['Valor donado (COP)', payload.totals.amountCharged],
-      ['Comisiones e IVA (COP)', payload.totals.fees],
+      ['Tarifa de Mercado Pago e IVA (COP)', payload.totals.fees],
       ['Neto recibido (COP)', payload.totals.net],
     );
   } else if (payload.kind === 'accounting') {
@@ -97,7 +147,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       ['Reembolsos (COP)', t.refundsCop],
       ['Contracargos (COP)', t.chargebacksCop],
       ['Saldo bruto neto de reversos (COP)', t.balanceCop],
-      ['Comisiones de la pasarela (COP)', t.feesCop],
+      ['Tarifa de Mercado Pago (COP)', t.feesCop],
       ['Neto informado por la pasarela (COP)', t.netCop],
       ['Conciliación al cerrar', payload.reconciliation.balanced ? 'Cuadra' : 'Con descuadres'],
       ['Huella SHA-256 de los renglones', payload.close.entriesHash],
@@ -113,10 +163,61 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
   }
   for (const [k, v] of info) {
     const row = summary.addRow([k, v]);
-    row.getCell(1).font = { bold: true };
-    if (typeof v === 'number' && k.includes('COP')) row.getCell(2).numFmt = MONEY;
-    row.getCell(2).alignment = { horizontal: 'left', wrapText: true };
+    const label = row.getCell(1);
+    label.font = { bold: true, color: { argb: NAVY } };
+    label.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: PAPER } };
+    label.alignment = { vertical: 'top', wrapText: true, indent: 1 };
+    label.border = BORDER;
+    const value = row.getCell(2);
+    if (typeof v === 'number' && k.includes('COP')) value.numFmt = MONEY;
+    value.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
+    value.border = BORDER;
   }
+
+  // Firmas: cada firmante con su imagen y su nombre, como en el PDF.
+  const issuedSigners = input.draft ? [] : input.signers;
+  if (issuedSigners.length > 0 && input.legalEffect !== 'informative') {
+    summary.addRow([]);
+    const head = summary.addRow(['Firmas']);
+    summary.mergeCells(head.number, 1, head.number, 2);
+    head.height = 24;
+    head.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+    head.alignment = { vertical: 'middle', indent: 1 };
+    head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TEAL } };
+    for (const [i, signer] of issuedSigners.entries()) {
+      const row = summary.addRow([
+        `${sheetText(signer.fullName)}\n${roleLine(signer.role, signer.position)}`,
+        '',
+      ]);
+      row.height = 62;
+      const label = row.getCell(1);
+      label.font = { bold: true, color: { argb: NAVY } };
+      label.alignment = { vertical: 'bottom', wrapText: true, indent: 1 };
+      label.border = BORDER;
+      row.getCell(2).border = BORDER;
+      const image = input.signerImages?.[i] ?? null;
+      const kind = image ? detectSignatureImageType(image) : null;
+      if (image && kind) {
+        try {
+          const meta = await sharp(image).metadata();
+          const w = meta.width ?? 0;
+          const h = meta.height ?? 0;
+          if (w > 0 && h > 0) {
+            const ratio = Math.min(200 / w, 74 / h, 1);
+            const id = wb.addImage({ buffer: image as unknown as ExcelJS.Buffer, extension: kind });
+            summary.addImage(id, {
+              tl: { col: 1.15, row: row.number - 1 + 0.05 },
+              ext: { width: Math.round(w * ratio), height: Math.round(h * ratio) },
+            });
+          }
+        } catch {
+          // Sin la imagen antes que sin el reporte; el nombre y el cargo siguen.
+        }
+      }
+    }
+  }
+  setupPrint(summary, { ...printCtx, title });
+  summary.pageSetup.fitToHeight = 1;
 
   if (payload.kind === 'donations') {
     const detail = wb.addWorksheet('Donaciones');
@@ -127,7 +228,7 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
       { header: 'Documento', key: 'doc', width: 14 },
       { header: 'Destino', key: 'concept', width: 34 },
       { header: 'Valor donado', key: 'amount', width: 15, style: { numFmt: MONEY } },
-      { header: 'Comisiones e IVA', key: 'fees', width: 16, style: { numFmt: MONEY } },
+      { header: 'Tarifa de Mercado Pago e IVA', key: 'fees', width: 22, style: { numFmt: MONEY } },
       { header: 'Neto recibido', key: 'net', width: 15, style: { numFmt: MONEY } },
       { header: 'Certificado', key: 'cert', width: 22 },
     ];
@@ -147,6 +248,8 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     }
     detail.views = [{ state: 'frozen', ySplit: 1 }];
     detail.autoFilter = { from: 'A1', to: 'I1' };
+    styleTable(detail, 9);
+    setupPrint(detail, { ...printCtx, title: 'Donaciones', repeatHeader: true });
 
     const byConcept = wb.addWorksheet('Por destino');
     byConcept.columns = [
@@ -158,6 +261,8 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     for (const r of payload.byConcept) {
       byConcept.addRow({ concept: sheetText(r.concept), count: r.count, net: r.net });
     }
+    styleTable(byConcept, 3);
+    setupPrint(byConcept, { ...printCtx, title: 'Por destino', repeatHeader: true });
   } else if (payload.kind === 'accounting') {
     const detail = wb.addWorksheet('Libro auxiliar');
     detail.columns = [
@@ -189,6 +294,8 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     }
     detail.views = [{ state: 'frozen', ySplit: 1 }];
     detail.autoFilter = { from: 'A1', to: 'J1' };
+    styleTable(detail, 10);
+    setupPrint(detail, { ...printCtx, title: 'Libro auxiliar', repeatHeader: true });
   } else {
     const detail = wb.addWorksheet('Voluntarios');
     detail.columns = [
@@ -240,6 +347,8 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     }
     detail.views = [{ state: 'frozen', ySplit: 1 }];
     detail.autoFilter = { from: 'A1', to: 'M1' };
+    styleTable(detail, 13);
+    setupPrint(detail, { ...printCtx, title: 'Voluntarios', repeatHeader: true });
 
     const bySchool = wb.addWorksheet('Por institución');
     bySchool.columns = [
@@ -251,6 +360,8 @@ export async function renderReportXlsx(input: RenderXlsxInput): Promise<Buffer> 
     for (const r of payload.bySchool) {
       bySchool.addRow({ school: sheetText(r.school), volunteers: r.volunteers, hours: r.hours });
     }
+    styleTable(bySchool, 3);
+    setupPrint(bySchool, { ...printCtx, title: 'Por institución', repeatHeader: true });
   }
 
   const bytes = await wb.xlsx.writeBuffer();

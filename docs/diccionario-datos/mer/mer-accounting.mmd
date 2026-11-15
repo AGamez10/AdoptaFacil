@@ -1,0 +1,68 @@
+erDiagram
+  accounting_entries {
+    uuid id PK
+    uuid organization_id FK
+    integer seq
+    text dedup_key
+    text entry_type
+    text source
+    uuid donation_id
+    text gateway_payment_id
+    timestamp occurred_at
+    text event_period
+    text period
+    boolean is_adjustment
+    bigint gross_cop
+    bigint fee_cop
+    bigint net_cop
+    text currency
+    text payment_type
+    text payment_method
+    text destination
+    uuid destination_id
+    text destination_label
+    timestamp created_at
+  }
+  accounting_period_closes {
+    uuid id PK
+    uuid organization_id FK
+    text period
+    integer entry_count
+    integer last_seq
+    jsonb totals
+    jsonb reconciliation
+    text entries_hash
+    text note
+    uuid closed_by_user_id FK
+    timestamp closed_at
+  }
+  accounting_shares {
+    uuid id PK
+    uuid organization_id FK
+    text period
+    uuid signer_user_id FK
+    text signer_role
+    text token_hash UK
+    timestamp expires_at
+    timestamp revoked_at
+    uuid created_by_user_id FK
+    timestamp created_at
+  }
+  donations {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organizations {
+    uuid id PK
+  }
+  users {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organizations ||--o{ accounting_entries : "organization_id"
+  users ||--o{ accounting_period_closes : "closed_by_user_id"
+  organizations ||--o{ accounting_period_closes : "organization_id"
+  users ||--o{ accounting_shares : "created_by_user_id"
+  organizations ||--o{ accounting_shares : "organization_id"
+  users ||--o{ accounting_shares : "signer_user_id"
+  donations |o..o{ accounting_entries : "donation_id (lógica)"

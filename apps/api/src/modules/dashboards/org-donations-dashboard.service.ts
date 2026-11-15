@@ -102,7 +102,8 @@ export class OrgDonationsDashboardService {
         _count: { _all: true },
       }),
       tx.donation.findMany({
-        where: { organizationId, status: 'approved', conceptKind: 'organization' },
+        // P1-1: lo que volvió al donante (reembolso o contracargo) no suma.
+        where: { organizationId, status: 'approved', conceptKind: 'organization', reversal: null },
         select: { breakdown: true },
       }),
     ]);

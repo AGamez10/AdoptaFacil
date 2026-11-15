@@ -6,12 +6,15 @@
 // the real gateway adapter (that is M15 implementation, a later task).
 //
 // CLOSED decisions reflected here (do NOT reopen):
-//   - Gateway: cobro directo a la organización. Mercado Pago con OAuth del
-//     refugio (ADR-PAG-003, 2026-11-06) o ePayco con sus llaves (ADR-PAG-002). NO split at checkout — the port never
-//     models a split; `breakdown` is informational/accounting only.
-//   - Platform commission 4% on gross; gateway commission 2.65% + 700 (fixed);
-//     IVA 19% ONLY over commissions; no custody of third-party balances; COP.
-//   - SARLAFT/KYC (RF28) is validated in M15 BEFORE createPayout — NOT by the port.
+//   - Gateway: cobro directo a la organización con Mercado Pago y la cuenta
+//     propia del refugio conectada por OAuth (ADR-PAG-003). NO split at
+//     checkout — the port never models a split; `breakdown` is
+//     informational/accounting only.
+//   - Platform commission 0 % (owner's decision): AdoptaFácil takes nothing
+//     from a donation. The gateway's own fee is set by Mercado Pago on the
+//     organization's account and is never estimated here; the real fee and net
+//     come from the read-back of the payment (`mercadopago_payments`).
+//   - No custody: the money never passes through an AdoptaFácil account. COP only.
 //
 // This file is TYPES + a PURE breakdown function + a deterministic FAKE adapter
 // (dev/test double, dependency-free, browser-safe). The DI token (PAYMENT_PORT),
@@ -26,12 +29,6 @@ export type PaymentCurrency = 'COP';
 
 /** Lifecycle of a collection (recaudo). */
 export type PaymentStatus = 'pending' | 'approved' | 'declined' | 'voided' | 'error';
-
-/** Lifecycle of a payout (dispersión T+1). */
-export type PayoutStatus = 'scheduled' | 'paid' | 'failed';
-
-/** Who bears the commissions — the client's "cubro la comisión" checkbox (P1). */
-export type CommissionPayer = 'organization' | 'donor';
 
 /** What the money is FOR (drives beneficiary/accounting; not a checkout split). */
 export type PaymentConceptKind = 'organization' | 'animal' | 'campaign' | 'sponsorship';
@@ -72,17 +69,9 @@ export interface CreateCollectionInput {
   intendedAmount: number;
   currency: PaymentCurrency;
   concept: PaymentConcept;
-  commissionPayer: CommissionPayer;
   payer?: PaymentPayer;
   /** Caller-supplied key: a retry with the same key must NOT double-charge. */
   idempotencyKey: string;
-  /**
-   * ADR-PAG-002 (ePayco): the BENEFICIARY organization's own ePayco merchant
-   * keys, resolved SERVER-SIDE from its connected account. Server-only:
-   * never serialized, logged or audited. The ePayco driver refuses to charge
-   * without it.
-   */
-  epaycoCollector?: EpaycoCollectorCredentials;
   /**
    * ADR-PAG-003 (Mercado Pago OAuth): the BENEFICIARY organization's own
    * access token, obtained through OAuth and decrypted SERVER-SIDE. Server-only:
@@ -105,22 +94,6 @@ export interface MercadoPagoCollectorCredentials {
   accessToken: string;
 }
 
-/**
- * The organization's own ePayco merchant keys (dashboard → Integraciones →
- * Llaves API). `custId` and `publicKey` are not secrets; `privateKey` and
- * `pKey` are, and are stored encrypted at rest.
- */
-export interface EpaycoCollectorCredentials {
-  /** `P_CUST_ID_CLIENTE`: the merchant id at ePayco. Not a secret. */
-  custId: string;
-  /** `P_KEY`: signs/verifies the confirmation (`x_signature`). Secret. */
-  pKey: string;
-  /** `PUBLIC_KEY` for the Apify login. Not a secret. */
-  publicKey: string;
-  /** `PRIVATE_KEY` for the Apify login. Secret. */
-  privateKey: string;
-}
-
 export interface CollectionResult {
   collectionId: string;
   status: PaymentStatus;
@@ -133,12 +106,6 @@ export interface CollectionResult {
    * present.
    */
   paymentLinkUrl?: string;
-  /**
-   * ePayco checkout v2: the session the browser opens with
-   * `ePayco.checkout.configure({ sessionId })`. Ephemeral, like
-   * `paymentLinkUrl`. Absent for every other driver.
-   */
-  checkoutSessionId?: string;
 }
 
 /** Normalized, idempotent webhook event (dedup by `dedupKey`). */
@@ -174,95 +141,8 @@ export interface NormalizedWebhookEvent {
 export interface WebhookVerificationContext {
   headers?: Record<string, string | undefined>;
   query?: Record<string, string | undefined>;
-  /** ADR-PAG-002: ePayco keys of the organization that owns the payment. */
-  epaycoCollector?: EpaycoCollectorCredentials;
   /** ADR-PAG-003: Mercado Pago grant of the organization that owns the payment. */
   mercadopagoCollector?: MercadoPagoCollectorCredentials;
-}
-
-/** Colombian bank account type (RF26 payouts — ahorros/corriente). */
-export type BankAccountType = 'savings' | 'checking';
-
-/**
- * The organization's OWN bank account, registered once and used as the ONLY
- * payout destination (no custody: AdoptaFácil never pools organization funds —
- * every payout disperses directly to this account, never to an intermediate
- * platform-owned balance).
- */
-export interface PayoutBankAccount {
-  /** Código del banco en el catálogo del proveedor de pagos vigente. */
-  bankCode: string;
-  accountType: BankAccountType;
-  accountNumber: string;
-  accountHolderName: string;
-  /** Cédula/NIT of the account holder (SARLAFT/KYC context; validated in M15). */
-  accountHolderDocument: string;
-}
-
-export interface CreatePayoutInput {
-  beneficiaryOrgId: string;
-  /** Integer COP pesos to disperse (T+1). */
-  amount: number;
-  /** Caller-supplied key: a retry with the same key must NOT double-pay. */
-  idempotencyKey: string;
-  /** Destination account — resolved by M15 from the org's registration, never
-   *  supplied by the caller of a higher layer. */
-  bankAccount: PayoutBankAccount;
-}
-
-export interface PayoutResult {
-  payoutId: string;
-  status: PayoutStatus;
-}
-
-/** Normalized, idempotent payout webhook event (dedup by `dedupKey`). */
-export interface NormalizedPayoutWebhookEvent {
-  eventId: string;
-  payoutId: string;
-  status: PayoutStatus;
-  dedupKey: string;
-}
-
-// ============================================================================
-// M15b API-facing DTOs (dispersión T+1, RF26) — Owner/Administrator register
-// their org's OWN bank account; PlatformAdmin/PlatformSuperAdmin trigger a
-// payout (treasury operation). Separate from PayoutBankAccount/CreatePayoutInput
-// above, which are the PORT's internal shape (fed FROM this registered data).
-// ============================================================================
-
-/** Register/replace the org's bank account (Owner/Administrator only). */
-export type RegisterBankAccountInput = PayoutBankAccount;
-
-/** The org's own registered bank account (read back verbatim — it is the
- *  org's own data, not third-party PII exposed to someone else). */
-export interface OrganizationBankAccountView extends PayoutBankAccount {
-  organizationId: string;
-  updatedAt: string;
-}
-
-/** Trigger a payout for an organization (PlatformAdmin/PlatformSuperAdmin —
- *  a treasury operation, not something an org self-triggers in Ola 1). */
-export interface RequestPayoutInput {
-  organizationId: string;
-  /** Integer COP pesos to disperse. */
-  amount: number;
-  /** Caller-supplied key: a retry with the same key must NOT double-pay. */
-  idempotencyKey: string;
-}
-
-/** A payout attempt as read back by the API (M13 dashboard reads this shape). */
-export interface PayoutView {
-  id: string;
-  organizationId: string;
-  amount: number;
-  currency: PaymentCurrency;
-  idempotencyKey: string;
-  wompiPayoutId?: string;
-  status: PayoutStatus;
-  attempts: number;
-  lastError?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 /**
@@ -289,115 +169,36 @@ export interface PaymentPort {
     signature: string,
     context?: WebhookVerificationContext,
   ): Promise<NormalizedWebhookEvent>;
-  /** Schedule a payout (T+1). SARLAFT/KYC is checked in M15 before calling this. */
-  createPayout(input: CreatePayoutInput): Promise<PayoutResult>;
-  /** Verify a payout-confirmation webhook and normalize it to a dedup-able event. */
-  verifyAndNormalizePayoutWebhook(
-    payload: unknown,
-    signature: string,
-    context?: WebhookVerificationContext,
-  ): Promise<NormalizedPayoutWebhookEvent>;
 }
 
 // ============================================================================
-// Pure breakdown (RNF12) — the SINGLE source of the commission math, reusable by
-// the port, the checkout UI and the transparency surface (misma cuenta).
+// Pure breakdown (RNF12) — the SINGLE source of the donation amounts, reusable by
+// the port, the checkout UI and the receipt (misma cuenta).
 // ============================================================================
 
-/** Commission configuration (COP). Exposed so UIs can show the same figures. */
-export const PAYMENT_FEE_CONFIG = {
-  /** Platform commission over gross. */
-  platformRate: 0.04,
-  // TODO(client): estos valores siguen siendo los de Wompi (2.65% + $700 COP) —
-  // pendiente de que el cliente confirme la tarifa real de MercadoPago Colombia
-  // asignada a su cuenta (referencia pública: 3.29%+$800+IVA para liberación
-  // instantánea, pero puede variar por categoría/volumen). NO cambiar sin
-  // confirmación explícita.
-  /** Gateway proportional commission over gross. */
-  gatewayRate: 0.0265,
-  /** Gateway fixed commission (pesos). */
-  gatewayFixed: 700,
-  /** VAT applied ONLY over commissions. */
-  ivaRate: 0.19,
-} as const;
-
-/** Round to integer pesos, HALF-UP (positive amounts only). */
-export function roundPesosHalfUp(value: number): number {
-  return Math.floor(value + 0.5);
-}
-
-/** Commission components computed from a gross amount (each rounded to the peso). */
-function feesFromGross(
-  gross: number,
-  platformRate: number,
-): Omit<PaymentBreakdown, 'amountCharged' | 'gross' | 'net'> {
-  const { gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
-  const platformFee = roundPesosHalfUp(platformRate * gross);
-  const platformIva = roundPesosHalfUp(ivaRate * platformFee);
-  const gatewayFee = roundPesosHalfUp(gatewayRate * gross + gatewayFixed);
-  const gatewayIva = roundPesosHalfUp(ivaRate * gatewayFee);
-  return { platformFee, platformIva, gatewayFee, gatewayIva };
-}
-
-/** Optional overrides for {@link computeBreakdown}. */
-export interface BreakdownRates {
-  /** Platform commission over gross. Defaults to `PAYMENT_FEE_CONFIG.platformRate`. */
-  platformRate?: number;
-}
-
 /**
- * Rates for direct collection (ADR-PAG-001): the organization collects with its
- * own account and AdoptaFácil takes NO per-transaction fee (its revenue comes
- * from subscription plans). The 4 % only returns with a gateway split at
- * source confirmed in writing.
+ * Breakdown of a direct collection (ADR-PAG-001/003). The donor pays exactly
+ * the amount they chose and it lands in the organization's own Mercado Pago
+ * account. AdoptaFácil takes NO fee (0 %, owner's decision) and invents no
+ * gateway fee: Mercado Pago charges its own rate to the organization's account,
+ * and the real fee/net are read back from the payment afterwards. So every
+ * fee is 0 and `net === gross === amountCharged === intendedAmount`.
+ *
+ * @param intendedAmount integer COP pesos the donor gives (> 0).
  */
-export const DIRECT_COLLECTION_RATES: Readonly<Required<BreakdownRates>> = { platformRate: 0 };
-
-/**
- * Compute the auditable breakdown for a collection.
- *
- * - `organization`: the org absorbs the commissions. `amountCharged = gross =
- *   intendedAmount`; `net < intendedAmount`.
- * - `donor`: the donor covers the commissions (checkbox P1). The gross is grossed
- *   UP so `net ≈ intendedAmount`; `amountCharged = gross > intendedAmount`.
- *
- * `net` is always the remainder (`gross − Σ commissions`), so the sum invariant
- * holds to the peso by construction in BOTH modes.
- *
- * @param intendedAmount integer COP pesos that should reach the beneficiary (> 0).
- */
-export function computeBreakdown(
-  intendedAmount: number,
-  commissionPayer: CommissionPayer,
-  rates: BreakdownRates = {},
-): PaymentBreakdown {
+export function computeBreakdown(intendedAmount: number): PaymentBreakdown {
   if (!Number.isInteger(intendedAmount) || intendedAmount <= 0) {
     throw new RangeError('intendedAmount must be a positive integer number of COP pesos');
   }
-
-  const platformRate = rates.platformRate ?? PAYMENT_FEE_CONFIG.platformRate;
-  if (!Number.isFinite(platformRate) || platformRate < 0 || platformRate >= 1) {
-    throw new RangeError('platformRate must be in [0, 1)');
-  }
-  const { gatewayRate, gatewayFixed, ivaRate } = PAYMENT_FEE_CONFIG;
-
-  let gross: number;
-  if (commissionPayer === 'organization') {
-    gross = intendedAmount;
-  } else {
-    // Solve net(gross) = gross·(1 − r) − F = intendedAmount for gross, then round.
-    //   r = proportional commissions incl. their IVA
-    //   F = fixed gateway fee incl. its IVA
-    const proportional =
-      platformRate + platformRate * ivaRate + gatewayRate + gatewayRate * ivaRate;
-    const fixed = gatewayFixed + gatewayFixed * ivaRate;
-    gross = roundPesosHalfUp((intendedAmount + fixed) / (1 - proportional));
-  }
-
-  const fees = feesFromGross(gross, platformRate);
-  const net = gross - fees.platformFee - fees.platformIva - fees.gatewayFee - fees.gatewayIva;
-
-  return { amountCharged: gross, gross, ...fees, net };
+  return {
+    amountCharged: intendedAmount,
+    gross: intendedAmount,
+    platformFee: 0,
+    platformIva: 0,
+    gatewayFee: 0,
+    gatewayIva: 0,
+    net: intendedAmount,
+  };
 }
 
 // ============================================================================
@@ -424,18 +225,11 @@ interface FakeWebhookPayload {
   eventId?: string;
 }
 
-/** Shape a fake payout webhook payload is expected to carry. */
-interface FakePayoutWebhookPayload {
-  payoutId?: string;
-  status?: PayoutStatus;
-  eventId?: string;
-}
-
 /**
  * Deterministic {@link PaymentPort} for development and tests: no network, no
  * randomness, no clock. The same `idempotencyKey` always yields the same ids and
  * result (ids are DERIVED from the key, so no state is needed). Collections settle
- * as `approved`, payouts as `scheduled`.
+ * as `approved`.
  */
 export class FakePaymentAdapter implements PaymentPort {
   static readonly PROVIDER = 'fake-local';
@@ -446,7 +240,7 @@ export class FakePaymentAdapter implements PaymentPort {
     return {
       collectionId,
       status: 'approved',
-      breakdown: computeBreakdown(input.intendedAmount, input.commissionPayer),
+      breakdown: computeBreakdown(input.intendedAmount),
       paymentLinkUrl: `https://fake-checkout.local/l/${collectionId}`,
     };
   }
@@ -470,115 +264,4 @@ export class FakePaymentAdapter implements PaymentPort {
       dedupKey: eventId,
     };
   }
-
-  async createPayout(input: CreatePayoutInput): Promise<PayoutResult> {
-    return {
-      payoutId: `fake-pay-${stableHash(input.idempotencyKey)}`,
-      status: 'scheduled',
-    };
-  }
-
-  async verifyAndNormalizePayoutWebhook(
-    payload: unknown,
-    _signature: string,
-    _context?: WebhookVerificationContext,
-  ): Promise<NormalizedPayoutWebhookEvent> {
-    const body = (payload ?? {}) as FakePayoutWebhookPayload;
-    const payoutId = body.payoutId ?? 'fake-pay-unknown';
-    const eventId = body.eventId ?? `fake-pevt-${stableHash(payoutId)}`;
-    return {
-      eventId,
-      payoutId,
-      status: body.status ?? 'paid',
-      dedupKey: eventId,
-    };
-  }
-}
-
-// ============================================================================
-// M15b conciliación (F-5, RF26) — cruza lo recaudado (donaciones aprobadas)
-// contra lo dispersado (payouts, F-4), por organización y por período
-// calendario (mes, UTC). Reporte de SOLO LECTURA: no muta nada, es el primer
-// dato real que el dashboard financiero de Super Administración (M13/RF28,
-// @sebastian) consumirá — la forma de este contrato debe revisarse con él
-// antes de que construya su vista.
-// ============================================================================
-
-/** Por qué una fila necesita revisión manual. */
-export type ReconciliationFlagReason = 'overpaid' | 'failed_payout';
-
-/**
- * Una fila = una organización en un período (mes calendario UTC, 'YYYY-MM').
- *
- * DECISIÓN DE ALCANCE: `collected` es la suma de `breakdown.net` (lo que le
- * corresponde a la organización DESPUÉS de comisión) de sus donaciones
- * aprobadas — NO `amountCharged` (lo que se le cobró al donante). Comparar
- * `amountCharged` contra lo dispersado marcaría una "diferencia" permanente
- * en TODA organización (la comisión siempre reduce lo dispersado respecto a
- * lo cobrado), lo que no es una anomalía real — es el modelo de negocio. La
- * comparación que sí tiene sentido para detectar problemas reales es
- * neto-adeudado vs. efectivamente dispersado.
- */
-export interface ReconciliationPeriodRow {
-  organizationId: string;
-  organizationName: string;
-  /** Mes calendario UTC, formato 'YYYY-MM'. */
-  period: string;
-  /** Suma de `breakdown.net` de donaciones `approved` en el período. */
-  collected: number;
-  /** Suma de `payouts.amount` con status `paid` en el período. */
-  dispersedPaid: number;
-  /** Suma de `payouts.amount` con status `scheduled` (en vuelo, aún sin
-   *  confirmar por el webhook) en el período. */
-  dispersedScheduled: number;
-  /** Suma de `payouts.amount` con status `failed` en el período. */
-  dispersedFailed: number;
-  /** `collected - dispersedPaid` — lo adeudado que todavía no se dispersó
-   *  con éxito (puede ser negativo, ver `flagReason: 'overpaid'`). */
-  pending: number;
-  /** true cuando la fila necesita revisión manual (ver `flagReason`). */
-  flagged: boolean;
-  /** Presente solo cuando `flagged` es true. */
-  flagReason?: ReconciliationFlagReason;
-}
-
-export interface ReconciliationReport {
-  generatedAt: string;
-  /** Ventana de tiempo del reporte (ISO, límites usados en la consulta). */
-  from: string;
-  to: string;
-  rows: ReconciliationPeriodRow[];
-}
-
-/** Insumo crudo de una fila — los 4 montos ya agregados por SQL (por
- *  organización + período), antes de derivar `pending`/`flagged`. */
-export interface ReconciliationRawRow {
-  organizationId: string;
-  organizationName: string;
-  period: string;
-  collected: number;
-  dispersedPaid: number;
-  dispersedScheduled: number;
-  dispersedFailed: number;
-}
-
-/**
- * Deriva `pending`/`flagged`/`flagReason` de los 4 montos crudos — la ÚNICA
- * fuente de qué cuenta como "necesita revisión manual" (RNF12-style: una
- * sola función, reutilizable por el servicio y por quien construya encima).
- *
- * Reglas (conciliación básica, F-5):
- *   - `overpaid`: se dispersó (`paid`) MÁS de lo que se recaudó — siempre una
- *     anomalía real, sin importar el monto.
- *   - `failed_payout`: hubo al menos un intento de dispersión fallido en el
- *     período — necesita que alguien revise por qué (p. ej. cuenta bancaria
- *     inválida) aunque `pending` en sí no sea negativo.
- *   - Un `pending > 0` simple (recaudado, aún no dispersado) NO se marca:
- *     es el estado normal mientras el T+1 no ha corrido todavía.
- */
-export function computeReconciliationRow(raw: ReconciliationRawRow): ReconciliationPeriodRow {
-  const pending = raw.collected - raw.dispersedPaid;
-  const flagReason: ReconciliationFlagReason | undefined =
-    pending < 0 ? 'overpaid' : raw.dispersedFailed > 0 ? 'failed_payout' : undefined;
-  return { ...raw, pending, flagged: flagReason !== undefined, flagReason };
 }

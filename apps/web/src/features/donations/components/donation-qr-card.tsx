@@ -42,7 +42,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 /**
- * "QR de donaciones" (ADR-PAG-002 §QR): un QR propio por organización que lleva
+ * "QR de donaciones" (ADR-PAG-001 §QR): un QR propio por organización que lleva
  * a su comunidad directo a donarle. Codifica la URL ESTABLE de AdoptaFácil
  * (`buildOrganizationDonateUrl`: `https://<sub>.<dominio>/donar` o
  * `/o/<slug>/donar`), nunca un enlace de la pasarela — un QR ya impreso sigue

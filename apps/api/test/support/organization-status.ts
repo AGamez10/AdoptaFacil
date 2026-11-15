@@ -17,3 +17,20 @@ export async function approveTestOrganization(
     data: { status: 'approved', statusChangedAt: new Date() },
   });
 }
+
+/**
+ * Donations and online collection (owner's decision, 2026-11-07): only a
+ * minimally formalized organization (a legal person) may collect. Tests that
+ * collect money formalize the organization after approving it.
+ */
+export async function formalizeTestOrganization(
+  admin: PrismaClient,
+  organizationId: string,
+  state: 'formalizada' | 'informal' = 'formalizada',
+): Promise<void> {
+  await admin.organizationProfile.upsert({
+    where: { organizationId },
+    create: { organizationId, formalizationState: state, rteVigente: false },
+    update: { formalizationState: state, rteVigente: false },
+  });
+}

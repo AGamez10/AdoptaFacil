@@ -311,8 +311,8 @@ describe('Voluntariado: días de jornada, fotos, reporte y firma del certificado
     expect(await countImages(pdf.body as Buffer)).toBeGreaterThanOrEqual(4);
   });
 
-  it('el certificado lleva la firma registrada del representante legal, también si es una foto JPG', async () => {
-    // Aprobar las horas y emitir.
+  it('el certificado lleva la firma de quien firma por la organización, aunque la haya subido como foto JPG, y queda congelada', async () => {
+    // Aprobar las horas.
     const list = await request(server)
       .get(`/service-hours?enrollmentId=${enrollmentId}`)
       .set(auth(org))
@@ -324,30 +324,28 @@ describe('Voluntariado: días de jornada, fotos, reporte y firma del certificado
         .send({ decision: 'approve' })
         .expect(200);
     }
-    const cert = await request(server)
+
+    // P0-2: sin nadie registrado para firmar, el certificado no se emite.
+    const blocked = await request(server)
       .post(`/volunteer-certificates/${enrollmentId}`)
       .set(auth(org))
       .send()
-      .expect(201);
+      .expect(409);
+    expect(blocked.body.message).toMatch(/registra quién firma/i);
 
-    const download = async () =>
-      (
-        await request(server)
-          .get(`/volunteer-certificates/${cert.body.id}/pdf`)
-          .set(auth(volunteer))
-          .buffer(true)
-          .parse(binaryParser)
-          .expect(200)
-      ).body as Buffer;
-
-    // Sin firma registrada: no se inventa ninguna imagen.
-    expect(await countImages(await download())).toBe(0);
-
-    // Firma registrada por el flujo real, subida como FOTO (JPEG). Antes se
-    // descartaba en silencio porque solo se intentaba PNG.
+    // Firma registrada por el flujo real, subida como FOTO (JPEG): el servidor
+    // la valida y la guarda normalizada a PNG, así que el PDF siempre la dibuja.
     const jpeg = await sharp({
       create: { width: 300, height: 120, channels: 3, background: '#ffffff' },
     })
+      .composite([
+        {
+          input: Buffer.from(
+            '<svg width="300" height="120"><path d="M20 80 C 80 10, 160 110, 280 40" ' +
+              'stroke="#000" stroke-width="6" fill="none"/></svg>',
+          ),
+        },
+      ])
       .jpeg()
       .toBuffer();
     await request(server)
@@ -361,14 +359,33 @@ describe('Voluntariado: días de jornada, fotos, reporte y firma del certificado
         position: 'Representante legal',
         signatureBase64: jpeg.toString('base64'),
         signatureContentType: 'image/jpeg',
+        signatureMethod: 'photo',
       })
       .expect(201);
-    const signed = await download();
-    expect(await countImages(signed)).toBe(1);
-    const text = signed.toString('latin1');
-    expect(text).toContain('/DCTDecode'); // la imagen JPEG de la firma
 
-    // También una firma dibujada (PNG).
+    const cert = await request(server)
+      .post(`/volunteer-certificates/${enrollmentId}`)
+      .set(auth(org))
+      .send()
+      .expect(201);
+    expect(cert.body.signerFullName).toBe('Laura Representante');
+
+    const download = async () =>
+      (
+        await request(server)
+          .get(`/volunteer-certificates/${cert.body.id}/pdf`)
+          .set(auth(volunteer))
+          .buffer(true)
+          .parse(binaryParser)
+          .expect(200)
+      ).body as Buffer;
+    const signed = await download();
+    expect(await countImages(signed)).toBeGreaterThanOrEqual(1);
+    const stored = await admin.volunteerCertificate.findUniqueOrThrow({
+      where: { id: cert.body.id },
+    });
+
+    // Una firma NUEVA registrada después no reescribe el certificado ya emitido.
     const pngSig = await sharp({
       create: { width: 300, height: 120, channels: 4, background: '#00000000' },
     })
@@ -379,16 +396,22 @@ describe('Voluntariado: días de jornada, fotos, reporte y firma del certificado
       .set(auth(org))
       .send({
         role: 'legal_representative',
-        fullName: 'Laura Representante',
+        fullName: 'Otra Persona',
         documentType: 'cedula_ciudadania',
-        documentNumber: '52000111',
-        position: 'Representante legal',
+        documentNumber: '52000999',
+        position: 'Directora',
         signatureBase64: pngSig.toString('base64'),
         signatureContentType: 'image/png',
       })
       .expect(201);
-    // PNG con transparencia: imagen + su máscara alfa.
-    expect(await countImages(await download())).toBeGreaterThanOrEqual(1);
+    const after = await admin.volunteerCertificate.findUniqueOrThrow({
+      where: { id: cert.body.id },
+    });
+    expect(after.signerSignatureHash).toBe(stored.signerSignatureHash);
+    expect(after.signerFullName).toBe('Laura Representante');
+    const again = await download();
+    expect(again.toString('latin1')).not.toContain('Otra Persona');
+    expect(await countImages(again)).toBe(await countImages(signed));
   });
 });
 

@@ -4,7 +4,6 @@ import { FakePaymentAdapter } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
 import { DisabledPaymentAdapter } from './disabled-payment.adapter';
 import { PAYMENT_PORT } from './payment.port';
-import { EpaycoPaymentAdapter } from './epayco-payment.adapter';
 import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
 
 /**
@@ -15,9 +14,8 @@ import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
  * is IMPORTED from @adoptafacil/contracts (dependency-free, deterministic) — NOT
  * copied here, so Fabián's `computeBreakdown` stays the single source of the
  * commission math. `mercadopago` (ADR-PAG-003, 2026-11-06) binds Checkout Pro
- * with each organization's OWN OAuth token; `epayco` (ADR-PAG-002) binds the
- * ePayco checkout v2 adapter with the organization's own keys. Both collect
- * directly to the organization (no custody); `disabled` refuses every call.
+ * with each organization's OWN OAuth token: it collects directly to the
+ * organization (no custody); `disabled` refuses every call.
  */
 @Global()
 @Module({
@@ -29,9 +27,6 @@ import { MercadoPagoPaymentAdapter } from './mercadopago-payment.adapter';
         const driver = config.get('PAYMENT_DRIVER', { infer: true }) ?? 'fake';
         if (driver === 'mercadopago') {
           return new MercadoPagoPaymentAdapter(config);
-        }
-        if (driver === 'epayco') {
-          return new EpaycoPaymentAdapter(config);
         }
         if (driver === 'disabled') {
           return new DisabledPaymentAdapter();

@@ -1,22 +1,20 @@
 erDiagram
-  donations {
+  donation_access_links {
     uuid id PK
-    uuid organization_id FK
-    uuid donor_user_id
-    text concept_kind
-    uuid concept_id
-    text commission_payer
-    integer intended_amount
-    integer amount_charged
-    text currency
-    jsonb breakdown
-    text collection_id UK
-    text idempotency_key
-    text status
-    jsonb payer
-    boolean anonymous
-    timestamp3 created_at
-    timestamp3 updated_at
+    uuid donation_id FK
+    text token_hash UK
+    timestamp expires_at
+    timestamp created_at
+  }
+  donation_certificates {
+    uuid id PK
+    uuid organization_id
+    uuid donation_id FK,UK
+    text code UK
+    jsonb payload
+    text content_hash
+    timestamp issued_at
+    timestamp created_at
   }
   donation_receipts {
     uuid id PK
@@ -26,25 +24,34 @@ erDiagram
     jsonb donor
     integer intended_amount
     jsonb breakdown
-    timestamp3 issued_at
-    timestamp3 created_at
+    timestamp issued_at
+    timestamp created_at
   }
-  donation_certificates {
+  donation_reversals {
     uuid id PK
     uuid organization_id
     uuid donation_id FK,UK
-    text code UK
-    jsonb payload
-    text content_hash
-    timestamp3 issued_at
-    timestamp3 created_at
+    text reason
+    text dedup_key
+    timestamp reversed_at
   }
-  donation_access_links {
+  donations {
     uuid id PK
-    uuid donation_id FK
-    text token_hash UK
-    timestamp3 expires_at
-    timestamp3 created_at
+    uuid organization_id FK
+    uuid donor_user_id
+    text concept_kind
+    uuid concept_id
+    integer intended_amount
+    integer amount_charged
+    text currency
+    jsonb breakdown
+    text collection_id UK
+    text idempotency_key
+    text status
+    jsonb payer
+    timestamp created_at
+    timestamp updated_at
+    boolean anonymous
   }
   organizations {
     uuid id PK
@@ -53,9 +60,12 @@ erDiagram
     uuid id PK
     uuid organization_id FK
   }
-  organizations ||--o{ donations : "organization_id"
+  donations ||--o{ donation_access_links : "donation_id"
+  donations ||--o| donation_certificates : "donation_id"
   donations ||--o| donation_receipts : "donation_id"
   organizations ||--o{ donation_receipts : "organization_id"
-  donations ||--o| donation_certificates : "donation_id"
-  donations ||--o{ donation_access_links : "donation_id"
+  donations ||--o| donation_reversals : "donation_id"
+  organizations ||--o{ donations : "organization_id"
+  organizations ||..o{ donation_certificates : "organization_id (lógica)"
+  organizations ||..o{ donation_reversals : "organization_id (lógica)"
   users |o..o{ donations : "donor_user_id (lógica)"

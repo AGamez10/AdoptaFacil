@@ -258,6 +258,11 @@ export interface AdoptionContractData {
 
   /** Razón social de la organización cedente (auto-rellenada al generar). */
   organizationName?: string;
+  /** P1-10: `informal` (grupo sin personería jurídica, o en proceso de
+   *  formalizarse) firma por medio de su responsable, una persona natural;
+   *  `formal` (formalizada o ESAL) por medio de su representante legal.
+   *  Ausente en contratos anteriores: se lee como `formal`. */
+  organizationFormalization?: 'formal' | 'informal';
   /** Tipo de documento del adoptante (cédula, extranjería, PPT, pasaporte). */
   adopterDocumentType?: AdopterDocumentType;
   /** La organización confirmó la identidad y la edad con el documento original

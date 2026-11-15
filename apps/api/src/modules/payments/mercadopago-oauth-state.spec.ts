@@ -1,4 +1,4 @@
-import { loadEpaycoKeysEncryptionKey } from './epayco-keys-crypto';
+import { randomBytes } from 'node:crypto';
 import {
   createOAuthBinding,
   oauthBindingMatches,
@@ -49,7 +49,7 @@ describe('Mercado Pago OAuth state (sealed, anti-CSRF)', () => {
     const raw = Buffer.from(state, 'base64url');
     raw[raw.length - 1] ^= 0x01;
     expect(openOAuthState(raw.toString('base64url'), key)).toBeNull();
-    expect(openOAuthState(state, loadEpaycoKeysEncryptionKey())).toBeNull();
+    expect(openOAuthState(state, randomBytes(32))).toBeNull();
     expect(openOAuthState('not a state!', key)).toBeNull();
     const old = sealOAuthState(CLAIMS, key, 600, new Date(Date.now() - 11 * 60 * 1000));
     expect(openOAuthState(old, key)).toBeNull();
@@ -57,8 +57,7 @@ describe('Mercado Pago OAuth state (sealed, anti-CSRF)', () => {
 });
 
 describe('Mercado Pago tokens at rest', () => {
-  it('derives its own key and never stores the token in clear', () => {
-    expect(key.equals(loadEpaycoKeysEncryptionKey())).toBe(false);
+  it('never stores the token in clear', () => {
     const enc = encryptMercadoPagoSecret('APP_USR-token', key);
     expect(enc).not.toContain('APP_USR');
     expect(decryptMercadoPagoSecret(enc, key)).toBe('APP_USR-token');

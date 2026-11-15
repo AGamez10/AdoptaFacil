@@ -81,7 +81,7 @@ Esto muestra lo construido de forma narrativa. Lo **funcional real** y las **maq
 2. **Portal público de una organización** (`/o/:slug`) — perfil, indicador de transparencia con datos reales (nivel de verificación + % de formalización), personalización por tokens, y el **badge de tipo de organización**. _(Funcional)_
 3. **Catálogo público de adopción** — sección "Mascotas en adopción" en el portal, detalle público del animal (sin datos clínicos), botón "Solicitar adopción". _(Funcional)_
 4. **Flujo de adopción** — solicitud autenticada (mensaje ≥ 50), kanban de evaluación de la organización, contrato con firma electrónica e inmutabilidad, seguimiento post-adopción. _(Funcional)_
-5. **Donación con transparencia** (el P1 estrella del pitch) — desde el portal, botón "Donar" → **desglose transparente antes de pagar** (comisión 4%, pasarela, IVA, neto que recibe la org) → casilla **"cubro la comisión"** (el donante decide si el 100% llega) → **recibo automático**. _(Funcional)_
+5. **Donación con transparencia** (el P1 estrella del pitch) — desde el portal, botón "Donar" → pago en **Mercado Pago con la cuenta de la propia organización** (AdoptaFácil no cobra comisión) → **recibo automático** con el desglose real: valor donado, tarifa de Mercado Pago con su IVA y lo que recibe la organización. _(Funcional)_
 6. **Flujo de confianza del certificado** — desde el recibo, "Ver tu certificado" → emisión → código único + QR → verificación pública → evidencia de autenticidad. _(Maqueta — marcada "vista de diseño"; el motor real es post-pitch)_
 7. **Panel de organización (shell autenticado)** — documentos y verificación, animales, expediente clínico, recordatorios de vacunas. _(Funcional)_
 

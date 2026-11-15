@@ -14,6 +14,7 @@ import { SponsorshipBillingService } from '../src/modules/sponsorships/sponsorsh
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * Requerimiento #17: `POST /sponsorships` ahora cobra de inmediato y marca el
@@ -65,6 +66,8 @@ describe('Org donations/campaigns dashboard (M13, S-14)', () => {
       })
       .expect(201);
     orgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
+    await formalizeTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       orgId: res.body.user.organizationId,
@@ -117,7 +120,6 @@ describe('Org donations/campaigns dashboard (M13, S-14)', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 20_000,
-        commissionPayer: 'organization',
         idempotencyKey,
       })
       .expect(201);

@@ -2,12 +2,9 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import type {
   CollectionResult,
   CreateCollectionInput,
-  CreatePayoutInput,
-  NormalizedPayoutWebhookEvent,
   NormalizedWebhookEvent,
   PaymentPort,
   PaymentStatus,
-  PayoutResult,
   WebhookVerificationContext,
 } from '@adoptafacil/contracts';
 
@@ -37,18 +34,6 @@ export class DisabledPaymentAdapter implements PaymentPort {
     _signature: string,
     _context?: WebhookVerificationContext,
   ): Promise<NormalizedWebhookEvent> {
-    return this.refuse();
-  }
-
-  async createPayout(_input: CreatePayoutInput): Promise<PayoutResult> {
-    return this.refuse();
-  }
-
-  async verifyAndNormalizePayoutWebhook(
-    _payload: unknown,
-    _signature: string,
-    _context?: WebhookVerificationContext,
-  ): Promise<NormalizedPayoutWebhookEvent> {
     return this.refuse();
   }
 }

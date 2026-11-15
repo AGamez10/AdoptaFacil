@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { IdentityClaims, IdentityPort } from '@adoptafacil/contracts';
 import type { AuditService } from '../audit/audit.service';
@@ -205,5 +206,34 @@ describe('AuthService.googleSignIn — unverified email', () => {
     );
 
     expect(tx.authCredential.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.googleSignIn — token that fails verification', () => {
+  it('answers 401 (never 500) and never touches the database', async () => {
+    const { service, identity, withOrgContext } = makeService({
+      existingCredential: null,
+      claims: {} as IdentityClaims,
+    });
+    identity.verifyGoogleIdToken.mockRejectedValue(new Error('Invalid Google ID token'));
+
+    await expect(service.googleSignIn({ idToken: 'forged.token.value' })).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(withOrgContext).not.toHaveBeenCalled();
+  });
+
+  it('keeps the 404 of the disabled driver (production posture)', async () => {
+    const { service, identity } = makeService({
+      existingCredential: null,
+      claims: {} as IdentityClaims,
+    });
+    identity.verifyGoogleIdToken.mockRejectedValue(
+      new NotFoundException('Google sign-in is not enabled.'),
+    );
+
+    await expect(service.googleSignIn({ idToken: 'fake:x@y.z:X' })).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });

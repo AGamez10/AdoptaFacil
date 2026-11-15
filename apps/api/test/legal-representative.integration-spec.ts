@@ -8,6 +8,7 @@ import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_ORG } from './support/legal';
 import { CapturingNotificationPort, inviteSigner } from './support/signers';
+import { approveTestOrganization } from './support/organization-status';
 
 /**
  * M01 legal representative signature (S-1, RF14 relacionado / RNF10):
@@ -41,6 +42,7 @@ describe('Legal representative signature (M01, S-1)', () => {
       })
       .expect(201);
     createdOrgIds.push(res.body.user.organizationId);
+    await approveTestOrganization(admin, res.body.user.organizationId);
     return {
       token: res.body.tokens.accessToken,
       orgId: res.body.user.organizationId,
@@ -60,9 +62,12 @@ describe('Legal representative signature (M01, S-1)', () => {
     return actor;
   }
 
-  const SIGNATURE_BASE64 = Buffer.from('a tiny fake signature image, not real bytes').toString(
-    'base64',
-  );
+  // Firmas PNG reales: el servidor valida los bytes (solo PNG/JPG) y las
+  // normaliza antes de guardarlas.
+  const SIGNATURE_BASE64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const OTHER_SIGNATURE_BASE64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGPgEpHTMLJhcAuISsmrAAAPGAMNu2WgUwAAAABJRU5ErkJggg==';
 
   const register = (
     token: string,
@@ -163,7 +168,7 @@ describe('Legal representative signature (M01, S-1)', () => {
     const legalRep = await register(
       fresh.token,
       'Representante Vigente',
-      Buffer.from('firma rep').toString('base64'),
+      SIGNATURE_BASE64,
       'legal_representative',
     ).expect(201);
     // Los vincula la organización por invitación; cada uno crea su cuenta.
@@ -172,13 +177,13 @@ describe('Legal representative signature (M01, S-1)', () => {
     const accountant = await register(
       accountantUser.token,
       'Contador Vigente',
-      Buffer.from('firma contador').toString('base64'),
+      OTHER_SIGNATURE_BASE64,
       'accountant',
     ).expect(201);
     const fiscalReviewer = await register(
       reviewerUser.token,
       'Revisor Vigente',
-      Buffer.from('firma revisor').toString('base64'),
+      SIGNATURE_BASE64,
       'fiscal_reviewer',
     ).expect(201);
 
@@ -207,7 +212,7 @@ describe('Legal representative signature (M01, S-1)', () => {
     const newAccountant = await register(
       accountantUser.token,
       'Nuevo Contador',
-      Buffer.from('firma nuevo contador').toString('base64'),
+      SIGNATURE_BASE64,
       'accountant',
     ).expect(201);
 
@@ -287,16 +292,12 @@ describe('Legal representative signature (M01, S-1)', () => {
 
   it('legal_representative_summary() — the narrow read M05 will consume — exposes ONLY fullName/position/signatureFileRef/signatureHash, and only the most recent record OF THE DEFAULT ROLE (legal_representative)', async () => {
     const fresh = await actorWithRoles(['owner']);
-    const first = await register(
-      fresh.token,
-      'Representante Viejo',
-      Buffer.from('firma vieja').toString('base64'),
-    ).expect(201);
+    const first = await register(fresh.token, 'Representante Viejo', SIGNATURE_BASE64).expect(201);
     await new Promise((resolve) => setTimeout(resolve, 5));
     const second = await register(
       fresh.token,
       'Representante Vigente',
-      Buffer.from('firma nueva').toString('base64'),
+      OTHER_SIGNATURE_BASE64,
     ).expect(201);
 
     const rows = await admin.$queryRawUnsafe<
@@ -322,14 +323,14 @@ describe('Legal representative signature (M01, S-1)', () => {
     await register(
       fresh.token,
       'Representante Legal',
-      Buffer.from('firma rep').toString('base64'),
+      SIGNATURE_BASE64,
       'legal_representative',
     ).expect(201);
     const accountantUser = await inviteSigner(server, notifications, fresh, 'accountant');
     const accountant = await register(
       accountantUser.token,
       'Contador Vigente',
-      Buffer.from('firma contador').toString('base64'),
+      OTHER_SIGNATURE_BASE64,
       'accountant',
     ).expect(201);
 
@@ -351,5 +352,25 @@ describe('Legal representative signature (M01, S-1)', () => {
       empty.orgId,
     );
     expect(rows).toHaveLength(0);
+  });
+
+  it('P1-9: rechaza con 400 una firma que no es PNG/JPG real (WebP, HEIC o un archivo renombrado)', async () => {
+    const fresh = await actorWithRoles(['owner']);
+    const webp = Buffer.from('RIFF\u0000\u0000\u0000\u0000WEBPVP8 ', 'latin1').toString('base64');
+    const res = await register(fresh.token, 'Ana Pérez', webp).expect(400);
+    expect(res.body.message).toMatch(/PNG o JPG/);
+    await request(server)
+      .post('/org/legal-representative')
+      .set('Authorization', `Bearer ${fresh.token}`)
+      .send({
+        role: 'legal_representative',
+        fullName: 'Ana Pérez',
+        documentType: 'cedula_ciudadania',
+        documentNumber: '123456789',
+        position: 'Representante legal',
+        signatureBase64: SIGNATURE_BASE64,
+        signatureContentType: 'image/heic',
+      })
+      .expect(400);
   });
 });

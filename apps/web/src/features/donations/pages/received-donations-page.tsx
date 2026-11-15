@@ -5,7 +5,6 @@ import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { listReceivedDonations } from '../api/donations-api';
 import { ReceivedDonationDetailModal } from '../components/received-donation-detail-modal';
-import { PaymentsConnectionBanner } from '../../org/components/payments-connection-status';
 import { formatBogota, formatCop } from '../model/donation-breakdown-view';
 import { DONATION_STATUS_BADGE_VARIANT, DONATION_STATUS_LABELS } from '../model/my-donations-view';
 import {
@@ -60,8 +59,6 @@ export function ReceivedDonationsPage() {
         title="Donaciones recibidas"
         description="Donaciones que han llegado a tu organización."
       />
-      {/* Estado de cobros (ePayco): solo Owner/Administrator, nunca un error. */}
-      <PaymentsConnectionBanner />
       <Card>
         <CardHeader>
           <CardTitle>Historial</CardTitle>

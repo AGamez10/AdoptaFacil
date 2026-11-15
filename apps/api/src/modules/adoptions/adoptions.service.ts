@@ -17,6 +17,7 @@ import type {
   TransitionAdoptionRequestInput,
 } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
+import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
 import {
@@ -64,6 +65,7 @@ export class AdoptionsService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     config: ConfigService<Env, true>,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
   }
@@ -94,13 +96,19 @@ export class AdoptionsService {
       );
     }
 
+    // P0-3 (AF-024): el animal se lee de la base — debe existir, ser de esa
+    // organización, estar activo y disponible — y el snapshot (nombre,
+    // especie, foto) se construye AQUÍ, nunca con lo que mande el cliente. La
+    // función SQL vuelve a verificarlo todo de forma atómica.
+    const animalSnapshot = await this.serverAnimalSnapshot(input.organizationId, input.animalId);
+
     let row: AdoptionRow;
     try {
       const rows = await this.prisma.$queryRaw<AdoptionRow[]>(Prisma.sql`
         SELECT * FROM create_adoption_request(
           ${input.organizationId}::uuid,
           ${input.animalId}::uuid,
-          ${JSON.stringify(input.animalSnapshot)}::jsonb,
+          ${JSON.stringify(animalSnapshot)}::jsonb,
           ${actor.id}::uuid,
           ${JSON.stringify(input.applicant)}::jsonb,
           ${input.message}
@@ -111,6 +119,7 @@ export class AdoptionsService {
       if (this.isActiveDuplicate(error)) {
         throw new ConflictException('Ya tienes una solicitud activa para este animal.');
       }
+      this.rethrowAnimalError(error);
       throw error;
     }
 
@@ -126,6 +135,59 @@ export class AdoptionsService {
     });
 
     return this.fromRow(row);
+  }
+
+  /** Snapshot del animal construido en el servidor (P0-3). 404 si no existe,
+   *  es de otra organización, está inactivo o la organización no está
+   *  aprobada; 409 si ya no está disponible para adopción. */
+  private async serverAnimalSnapshot(
+    organizationId: string,
+    animalId: string,
+  ): Promise<AdoptionAnimalSnapshot> {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { status: true },
+    });
+    if (organization?.status !== 'approved') {
+      throw new NotFoundException('Animal no encontrado.');
+    }
+    const animal = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.animal.findFirst({
+        where: { id: animalId, organizationId, isActive: true },
+        select: {
+          id: true,
+          name: true,
+          species: true,
+          status: true,
+          photos: { orderBy: { order: 'asc' }, take: 1, select: { storageRef: true } },
+        },
+      }),
+    );
+    if (!animal) {
+      throw new NotFoundException('Animal no encontrado.');
+    }
+    if (animal.status !== 'available') {
+      throw new ConflictException('Este animal ya no está disponible para adopción.');
+    }
+    const photoRef = animal.photos[0]?.storageRef;
+    return {
+      animalId: animal.id,
+      name: animal.name,
+      species: animal.species as AdoptionAnimalSnapshot['species'],
+      photoUrl: photoRef ? this.storage.resolvePublicUrl(photoRef) : undefined,
+    };
+  }
+
+  /** Traduce los errores de `create_adoption_request` (carrera entre la
+   *  lectura y la inserción) a 404/409. */
+  private rethrowAnimalError(error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('adoption_animal_not_found')) {
+      throw new NotFoundException('Animal no encontrado.');
+    }
+    if (message.includes('adoption_animal_unavailable')) {
+      throw new ConflictException('Este animal ya no está disponible para adopción.');
+    }
   }
 
   /** The org's own adoption requests for the evaluation kanban (RLS-scoped). */
@@ -180,6 +242,37 @@ export class AdoptionsService {
       const check = checkAdoptionTransition(current.status as AdoptionStatus, input.targetStatus);
       if (!check.allowed) {
         throw new ConflictException(check.error);
+      }
+      if (input.targetStatus === 'approved') {
+        // P0-3: un animal se aprueba para UNA sola persona. Se bloquea su fila
+        // (dos aprobaciones simultáneas se serializan), se exige que siga
+        // disponible y pasa a `in_process`; el índice único parcial
+        // `adoption_requests_one_approved_per_animal` es la última garantía.
+        const locked = await tx.$queryRaw<Array<{ status: string }>>(
+          Prisma.sql`SELECT status FROM "animals"
+                     WHERE id = ${current.animalId}::uuid
+                       AND organization_id = ${organizationId}::uuid
+                       AND is_active = true
+                     FOR UPDATE`,
+        );
+        if (locked.length === 0) {
+          throw new ConflictException(
+            'No se puede aprobar: el animal de esta solicitud ya no existe en tu organización.',
+          );
+        }
+        const alreadyApproved = await tx.adoptionRequest.findFirst({
+          where: { organizationId, animalId: current.animalId, status: 'approved' },
+          select: { id: true },
+        });
+        if (alreadyApproved || locked[0].status !== 'available') {
+          throw new ConflictException(
+            'Este animal ya tiene una adopción aprobada o en curso: no se puede aprobar otra solicitud.',
+          );
+        }
+        await tx.animal.update({
+          where: { id: current.animalId },
+          data: { status: 'in_process' },
+        });
       }
       const next = await tx.adoptionRequest.update({
         where: { id },

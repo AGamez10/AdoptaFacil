@@ -45,6 +45,8 @@ export const registerLegalRepresentativeSchema = z
     position,
     /** Base64 of the signature image (no `data:` URL prefix). */
     signatureBase64: z.string().min(1).max(MAX_SIGNATURE_BASE64_LENGTH),
-    signatureContentType: z.string().trim().min(1).max(100),
+    /** Only PNG or JPG; the real type is checked again on the decoded bytes. */
+    signatureContentType: z.enum(['image/png', 'image/jpeg']),
+    signatureMethod: z.enum(['drawn', 'photo']).optional(),
   })
   .strict();

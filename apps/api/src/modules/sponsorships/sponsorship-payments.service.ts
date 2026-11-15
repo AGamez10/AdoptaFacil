@@ -177,7 +177,6 @@ export class SponsorshipPaymentsService {
       intendedAmount: ctx.plan_amount,
       currency: 'COP',
       concept: { kind: 'sponsorship', id: sponsorshipId },
-      commissionPayer: 'organization',
       idempotencyKey,
     });
 

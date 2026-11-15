@@ -78,7 +78,6 @@ describe('Org urgent announcements', () => {
         organizationId: org.orgId,
         conceptKind: 'organization',
         conceptId: org.orgId,
-        commissionPayer: 'donor',
         intendedAmount: 10000,
         amountCharged: 10400,
         breakdown: {},

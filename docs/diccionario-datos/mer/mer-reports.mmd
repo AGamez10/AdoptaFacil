@@ -1,0 +1,98 @@
+erDiagram
+  org_report_approvals {
+    uuid id PK
+    uuid organization_id FK
+    uuid report_id FK
+    text signer_role
+    uuid signer_user_id FK
+    uuid legal_representative_id FK
+    text signature_hash
+    text content_hash
+    text decision
+    timestamp decided_at
+  }
+  org_report_policies {
+    uuid id PK
+    uuid organization_id FK
+    text kind
+    text_array required_roles
+    uuid updated_by_user_id FK
+    timestamp updated_at
+  }
+  org_reports {
+    uuid id PK
+    uuid organization_id FK
+    text kind
+    text code UK
+    date period_start
+    date period_end
+    jsonb filters
+    text legal_effect
+    jsonb signers
+    jsonb payload
+    jsonb summary
+    text content_hash
+    uuid generated_by_user_id FK
+    timestamp created_at
+  }
+  org_signature_requests {
+    uuid id PK
+    uuid organization_id FK
+    uuid report_id FK
+    text signer_role
+    uuid signer_user_id FK
+    text token_hash UK
+    timestamp expires_at
+    timestamp used_at
+    timestamp created_at
+  }
+  org_signer_designations {
+    uuid id PK
+    uuid organization_id FK
+    uuid user_id FK
+    text role
+    uuid designated_by_user_id FK
+    timestamp created_at
+    timestamp revoked_at
+    uuid revoked_by_user_id FK
+  }
+  third_party_consents {
+    uuid id PK
+    uuid organization_id FK
+    uuid subject_user_id FK
+    text purpose
+    text text_version
+    text text_sha256
+    text channel
+    timestamp granted_at
+    timestamp revoked_at
+  }
+  legal_representatives {
+    uuid id PK
+    uuid organization_id FK
+    uuid member_id FK
+  }
+  organizations {
+    uuid id PK
+  }
+  users {
+    uuid id PK
+    uuid organization_id FK
+  }
+  legal_representatives ||--o{ org_report_approvals : "legal_representative_id"
+  organizations ||--o{ org_report_approvals : "organization_id"
+  org_reports ||--o{ org_report_approvals : "report_id"
+  users ||--o{ org_report_approvals : "signer_user_id"
+  organizations ||--o{ org_report_policies : "organization_id"
+  users ||--o{ org_report_policies : "updated_by_user_id"
+  users ||--o{ org_reports : "generated_by_user_id"
+  organizations ||--o{ org_reports : "organization_id"
+  organizations ||--o{ org_signature_requests : "organization_id"
+  org_reports ||--o{ org_signature_requests : "report_id"
+  users ||--o{ org_signature_requests : "signer_user_id"
+  users ||--o{ org_signer_designations : "designated_by_user_id"
+  organizations ||--o{ org_signer_designations : "organization_id"
+  users |o--o{ org_signer_designations : "revoked_by_user_id"
+  users ||--o{ org_signer_designations : "user_id"
+  organizations ||--o{ third_party_consents : "organization_id"
+  users ||--o{ third_party_consents : "subject_user_id"

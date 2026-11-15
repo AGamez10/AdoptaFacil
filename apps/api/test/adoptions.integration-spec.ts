@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /**
@@ -53,6 +54,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
       .expect(201);
     refugeToken = refugeReg.body.tokens.accessToken;
     refugeOrgId = refugeReg.body.user.organizationId;
+    await approveTestOrganization(admin, refugeOrgId);
     orgIds.push(refugeOrgId);
 
     const personReg = await request(server)
@@ -213,5 +215,84 @@ describe('Adoptions (M04: request + evaluation)', () => {
       where: { entityId: requestId, action: 'adoption.request.transitioned' },
     });
     expect(audits.length).toBeGreaterThanOrEqual(2);
+  });
+
+  describe('P0-3: el animal es real, de la organización y se aprueba una sola vez', () => {
+    async function newPerson(tag: string): Promise<string> {
+      const reg = await request(server)
+        .post('/auth/register/person')
+        .send({
+          ...LEGAL_PERSON,
+          displayName: tag,
+          email: `p03-${tag}-${randomUUID()}@test.local`,
+          password,
+        })
+        .expect(201);
+      orgIds.push(reg.body.user.organizationId);
+      await completeTestProfile(admin, reg.body.user.id);
+      return reg.body.tokens.accessToken;
+    }
+    async function newAnimal(token: string, name: string): Promise<string> {
+      const res = await request(server)
+        .post('/animals')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ approximateAgeMonths: 24, name, species: 'cat', sex: 'female', size: 'small' })
+        .expect(201);
+      return res.body.id;
+    }
+    const apply = (token: string, organizationId: string, id: string, name = 'Inventado') =>
+      request(server)
+        .post('/adoptions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          animalId: id,
+          organizationId,
+          animalSnapshot: { animalId: id, name, species: 'dog' },
+          applicant: applicant(),
+          message: longMessage,
+        });
+    const move = (id: string, targetStatus: string) =>
+      request(server)
+        .post(`/adoptions/${id}/transitions`)
+        .set('Authorization', `Bearer ${refugeToken}`)
+        .send({ targetStatus });
+
+    it('un animal que no existe → 404', async () => {
+      const token = await newPerson('noexiste');
+      await apply(token, refugeOrgId, randomUUID()).expect(404);
+    });
+
+    it('un animal de OTRA organización, atribuido a esta → 404', async () => {
+      const token = await newPerson('ajeno');
+      const foreign = await newAnimal(otherToken, 'Ajeno');
+      await apply(token, refugeOrgId, foreign).expect(404);
+    });
+
+    it('el nombre y la especie salen de la base, nunca del cliente', async () => {
+      const token = await newPerson('snapshot');
+      const id = await newAnimal(refugeToken, 'Mishi Real');
+      const res = await apply(token, refugeOrgId, id, 'Nombre Falso').expect(201);
+      expect(res.body.animalSnapshot).toMatchObject({
+        animalId: id,
+        name: 'Mishi Real',
+        species: 'cat',
+      });
+    });
+
+    it('aprobar una solicitud reserva el animal: otra aprobación → 409 y nuevas solicitudes → 409', async () => {
+      const id = await newAnimal(refugeToken, 'Una Sola Vez');
+      const first = await apply(await newPerson('primera'), refugeOrgId, id).expect(201);
+      const second = await apply(await newPerson('segunda'), refugeOrgId, id).expect(201);
+      await move(first.body.id, 'in_review').expect(201);
+      await move(second.body.id, 'in_review').expect(201);
+      await move(first.body.id, 'approved').expect(201);
+
+      const animal = await admin.animal.findUniqueOrThrow({ where: { id } });
+      expect(animal.status).toBe('in_process');
+
+      const blocked = await move(second.body.id, 'approved').expect(409);
+      expect(blocked.body.message).toMatch(/ya tiene una adopción aprobada/i);
+      await apply(await newPerson('tercera'), refugeOrgId, id).expect(409);
+    });
   });
 });

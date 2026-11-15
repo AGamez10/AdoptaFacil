@@ -1,14 +1,38 @@
 erDiagram
+  organization_qr_links {
+    uuid id PK
+    uuid organization_id FK,UK
+    text code UK
+    text target_kind
+    uuid target_id
+    uuid updated_by_user_id
+    timestamp created_at
+    timestamp updated_at
+  }
+  organization_qr_scan_days {
+    uuid organization_id PK,FK
+    date day PK
+    text target_kind PK
+    integer scans
+  }
   portal_themes {
     uuid id PK
     uuid organization_id FK,UK
     jsonb tokens
+    timestamp created_at
+    timestamp updated_at
     text logo_position
     text social_nav_position
-    timestamp3 created_at
-    timestamp3 updated_at
+    boolean hide_seal
   }
   organizations {
     uuid id PK
   }
+  users {
+    uuid id PK
+    uuid organization_id FK
+  }
+  organizations ||--o| organization_qr_links : "organization_id"
+  organizations ||--o| organization_qr_scan_days : "organization_id"
   organizations ||--o| portal_themes : "organization_id"
+  users |o..o{ organization_qr_links : "updated_by_user_id (lógica)"

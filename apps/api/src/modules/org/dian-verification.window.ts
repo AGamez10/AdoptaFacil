@@ -3,9 +3,9 @@ import type { DianVerificationCheckStatus } from '@adoptafacil/contracts';
 /**
  * Pure helpers for the DIAN-verification worker (S-2, RNF07) — no DB, no I/O,
  * so the retry-backoff and status-derivation rules are unit tested in
- * isolation. Same schedule/shape as `animals/reminders.window.ts` (RF09) and
- * `payments/payouts.window.ts` (M15) — RNF07's staggered backoff is a single
- * project-wide convention, not reinvented per module.
+ * isolation. Same schedule/shape as `animals/reminders.window.ts` (RF09) —
+ * RNF07's staggered backoff is a single project-wide convention, not
+ * reinvented per module.
  */
 
 const BACKOFF_MS: readonly number[] = [

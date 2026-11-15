@@ -9,6 +9,7 @@ import type { NotificationMessage } from '../src/core/notifications/notification
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
 import { LEGAL_GUEST, LEGAL_ORG, LEGAL_PERSON } from './support/legal';
+import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
  * Smoke of the branded emails on the REAL flows (real AppModule, Prisma, RLS,
@@ -57,6 +58,8 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
       .expect(201);
     orgToken = org.body.tokens.accessToken;
     orgId = org.body.user.organizationId;
+    await approveTestOrganization(admin, org.body.user.organizationId);
+    await formalizeTestOrganization(admin, org.body.user.organizationId);
     orgIds.push(orgId);
 
     personEmail = `flows-p-${randomUUID()}@test.local`;
@@ -118,7 +121,6 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 40_000,
-        commissionPayer: 'organization',
         idempotencyKey: `flows-guest-${randomUUID()}`,
         ...LEGAL_GUEST,
         payer: { fullName: 'Invitada', email: guestEmail },
@@ -148,7 +150,6 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
       .send({
         organizationId: orgId,
         intendedAmount: 25_000,
-        commissionPayer: 'organization',
         idempotencyKey: `flows-auth-${randomUUID()}`,
         // The web app fills `payer` from the session for a signed-in donor.
         payer: { fullName: 'Padrina Ana', email: personEmail },
@@ -216,7 +217,6 @@ describe('Branded emails on the real donation and sponsorship flows', () => {
         .send({
           organizationId: orgId,
           intendedAmount: 10_000,
-          commissionPayer: 'organization',
           idempotencyKey: `flows-camp-${randomUUID()}`,
           ...LEGAL_GUEST,
           payer: donor.fullName ? donor : { email: donor.email },

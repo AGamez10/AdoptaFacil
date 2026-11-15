@@ -157,7 +157,7 @@ export function AccountingSharePage() {
                   <strong>{money(t.refundsCop + t.chargebacksCop)}</strong>
                 </li>
                 <li>
-                  Comisiones de la pasarela: <strong>{money(t.feesCop)}</strong>
+                  Tarifa de Mercado Pago: <strong>{money(t.feesCop)}</strong>
                 </li>
                 <li>
                   Neto recibido: <strong>{money(t.netCop)}</strong>

@@ -208,7 +208,7 @@ export class CommunityPostsService {
 
       if (input.type === PostType.Campaign) {
         const donations = await tx.donation.findMany({
-          where: { organizationId, status: 'approved' },
+          where: { organizationId, status: 'approved', reversal: null },
           select: { payer: true },
         });
         // One entry per address (first name seen wins), for a personal greeting.

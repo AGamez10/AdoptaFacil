@@ -52,9 +52,12 @@ model Organization {
   sensitiveActionDecisions PlatformSensitiveActionDecision[]
   qrLink                   OrganizationQrLink?
   qrScanDays               OrganizationQrScanDay[]
-  // ePayco (ADR-PAG-002): the organization's own connected merchant account.
-  // See payments.prisma.
-  epaycoAccount            OrganizationEpaycoAccount?
+  // Café de AdoptaFácil (solo en la org del equipo de plataforma). See coffee.prisma.
+  coffeeProducts           CoffeeProduct[]
+  coffeeLots               CoffeeLot[]
+  coffeeOrders             CoffeeOrder[]
+  coffeeVisitDays          CoffeeVisitDay[]
+  coffeeDeliveries         CoffeeContributionDelivery[]
   mercadopagoConnection    OrganizationMercadoPagoConnection?
   mercadopagoPayments      MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.

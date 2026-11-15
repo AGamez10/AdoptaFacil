@@ -70,6 +70,34 @@ export class CampaignFundingService {
   }
 
   /**
+   * P1-1: a refund or chargeback SUBTRACTS the collection's net from its
+   * campaign, exactly once (the ledger row is marked `reversed_at`). A no-op
+   * when the collection never counted toward a campaign or was already
+   * subtracted.
+   */
+  async reverseCollection(collectionId: string): Promise<CampaignFundingResult> {
+    const rows = await this.prisma.$queryRaw<AppliedRow[]>(
+      Prisma.sql`SELECT * FROM reverse_campaign_funding(${collectionId})`,
+    );
+    const reversed = rows[0];
+    if (!reversed) {
+      return { applied: false };
+    }
+    await this.audit.record({
+      organizationId: reversed.organization_id,
+      actorUserId: null,
+      action: 'campaign.funding_reversed',
+      entityType: 'campaign',
+      entityId: reversed.campaign_id,
+      metadata: { collectionId, net: reversed.net },
+    });
+    this.logger.log(
+      `campaign funding reversed campaign=${reversed.campaign_id} net=${reversed.net}`,
+    );
+    return { applied: true, campaignId: reversed.campaign_id, net: -reversed.net };
+  }
+
+  /**
    * Reconcile the CALLER org's approved campaign donations into raised (idempotent
    * catch-up). Audits each newly-applied collection. Runs bounded to the caller's
    * own tenant.

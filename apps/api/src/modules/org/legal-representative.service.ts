@@ -25,11 +25,17 @@ import {
   hashSignature,
   type SignatureEncryptionConfig,
 } from '../../core/crypto/signature-crypto';
+import { normalizeSignatureImage, SignatureImageError } from '../reports/signature-image';
 
 /** The CURRENT legal representative's public identity + DECRYPTED signature
  *  image bytes — for another module to print on an official document (e.g.
  *  M08's volunteer certificate). Never the encrypted payload nor the key. */
 export interface LegalRepresentativeSigner {
+  /** Id of the (append-only) record: always points to the same signature. */
+  id: string;
+  /** The member who registered it — the only person who may approve a
+   *  document with this signature. */
+  memberId: string;
   fullName: string;
   position: string;
   /** Raw image bytes (PNG, from `SignaturePad`'s canvas export) — ready to
@@ -166,9 +172,20 @@ export class LegalRepresentativeService {
       this.assertMayRegister(tx, organizationId, actorUserId, input.role),
     );
 
-    const plaintext = Buffer.from(input.signatureBase64, 'base64');
-    if (plaintext.length === 0) {
-      throw new BadRequestException('La firma está vacía o no es una imagen válida.');
+    // P1-9: the bytes are checked (real PNG/JPG, size, decodable) and
+    // re-encoded to PNG BEFORE anything is stored, so a HEIC/WebP/corrupt file
+    // never becomes a "registered" signature that the PDF later drops, and
+    // EXIF/GPS metadata never reaches storage. A photo of a paper signature is
+    // reduced to its ink on a transparent background.
+    let plaintext: Buffer;
+    try {
+      plaintext = await normalizeSignatureImage(
+        Buffer.from(input.signatureBase64, 'base64'),
+        input.signatureMethod ?? 'drawn',
+      );
+    } catch (error) {
+      if (error instanceof SignatureImageError) throw new BadRequestException(error.message);
+      throw error;
     }
 
     const signatureHash = hashSignature(plaintext);
@@ -279,6 +296,8 @@ export class LegalRepresentativeService {
     try {
       const signatureImage = decryptSignature(stored.data, this.config.signatureEncryptionKey);
       return {
+        id: row.id,
+        memberId: row.memberId,
         fullName: row.fullName,
         position: row.position,
         signatureImage,

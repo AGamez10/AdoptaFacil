@@ -400,8 +400,7 @@ export class SponsorshipBillingService {
    * Net effect: every period still needs 30 days (the existing ladder) to
    * reach the one moment a sponsor can really pay. TODO(client): recommend
    * deciding, as a fast-follow, between (a) gateway-side recurring charges
-   * (Mercado Pago was retired 2026-10-17; ePayco subscriptions are the
-   * candidate), or (b) converting EVERY
+   * (no gateway is connected today), or (b) converting EVERY
    * period (not only post-suspension recovery) into an immediate in-app
    * "pay now" prompt the moment it opens.
    */

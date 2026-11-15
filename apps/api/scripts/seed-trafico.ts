@@ -85,7 +85,6 @@ import {
   CURRENT_ADOPTION_CONTRACT_TEMPLATE,
   DEFAULT_FOLLOW_UP_MONTHS,
   DEFAULT_FOLLOW_UP_PLAN,
-  DIRECT_COLLECTION_RATES,
   computeBreakdown,
   getLegalDocument,
   type LegalAcceptanceItem,
@@ -990,7 +989,6 @@ async function main(): Promise<void> {
           concept.kind === 'campaign'
             ? pick(rand, [80_000, 100_000, 150_000, 200_000, 300_000])
             : pick(rand, [10_000, 20_000, 25_000, 30_000, 50_000, 50_000, 100_000, 150_000]);
-        const commissionPayer = rand() < 0.5 ? 'donor' : 'organization';
         const guest = rand() < 0.35;
         const person = pick(rand, people);
         const anonymous = rand() < 0.15;
@@ -1001,7 +999,7 @@ async function main(): Promise<void> {
         const createdAt = daysAgo(days, 10 + (n % 10));
         await prisma.withOrgContext(organizationId, async (tx) => {
           if (await tx.donation.findUnique({ where: { collectionId } })) return;
-          const breakdown = computeBreakdown(intended, commissionPayer, DIRECT_COLLECTION_RATES);
+          const breakdown = computeBreakdown(intended);
           const settledAt = new Date(createdAt.getTime() + 5 * 60_000);
           await tx.donation.create({
             data: {
@@ -1009,7 +1007,6 @@ async function main(): Promise<void> {
               donorUserId: guest ? null : person.userId,
               conceptKind: concept.kind,
               conceptId: concept.id,
-              commissionPayer,
               intendedAmount: intended,
               amountCharged: breakdown.amountCharged,
               breakdown: breakdown as unknown as Prisma.InputJsonValue,

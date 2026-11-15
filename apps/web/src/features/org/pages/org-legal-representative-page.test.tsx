@@ -200,8 +200,30 @@ describe('OrgLegalRepresentativePage (M01, S-1)', () => {
     expect(body.fullName).toBe('Nuevo Representante');
     expect(body.signatureBase64).toEqual(expect.any(String));
     expect(body.signatureBase64.length).toBeGreaterThan(0);
+    expect(body.signatureContentType).toBe('image/png');
+    expect(body.signatureMethod).toBe('photo');
 
     expect(await screen.findByText('Representante legal registrado')).toBeInTheDocument();
+  });
+
+  it('rejects a HEIC or WebP signature before sending it (the PDF only takes PNG or JPG)', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      return [];
+    });
+    renderShell({ route: '/organizacion/representante-legal', ...sessionWith([Role.Owner]) });
+
+    await screen.findByText('Aún no se ha registrado un representante legal.');
+    fireEvent.click(screen.getByRole('button', { name: 'Subir imagen' }));
+    const input = screen.getByLabelText('Subir imagen de la firma');
+    expect(input).toHaveAttribute('accept', 'image/png,image/jpeg');
+    for (const type of ['image/heic', 'image/webp']) {
+      fireEvent.change(input, { target: { files: [new File(['x'], 'firma', { type })] } });
+      expect(await screen.findByRole('alert')).toHaveTextContent('PNG o JPG');
+    }
+    expect(screen.queryByText('✓ Firma lista')).not.toBeInTheDocument();
+    expect(calls.some((c) => c.init?.method === 'POST')).toBe(false);
   });
 
   it('the linked accountant registers THEIR OWN signature from their account, without replacing the legal representative', async () => {

@@ -238,7 +238,6 @@ describe('Reviews / portal público sin sesión (M12, S7-b)', () => {
         donorUserId: author.userId,
         conceptKind: 'organization',
         conceptId: org.orgId,
-        commissionPayer: 'organization',
         intendedAmount: 20000,
         amountCharged: 20000,
         breakdown: { intendedAmount: 20000, commission: 800, vat: 152, net: 19200 },

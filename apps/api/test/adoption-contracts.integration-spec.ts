@@ -11,6 +11,7 @@ import {
 import { AdoptionContractCopyService } from '../src/modules/adoptions/adoption-contract-copy.service';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
+import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
 /** A minimal but genuinely valid 1x1 PNG — `embedPng` must accept it. Same
@@ -96,6 +97,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       .expect(201);
     refugeToken = refuge.body.tokens.accessToken;
     refugeOrgId = refuge.body.user.organizationId;
+    await approveTestOrganization(admin, refugeOrgId);
     orgIds.push(refugeOrgId);
 
     // Auto-rellenado: NIT + domicilio de la organización.
@@ -309,6 +311,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       })
       .expect(201);
     orgIds.push(bare.body.user.organizationId);
+    await approveTestOrganization(admin, bare.body.user.organizationId);
     const bareToken = bare.body.tokens.accessToken;
 
     const bareAnimal = await request(server)
@@ -343,21 +346,14 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       .set('Authorization', `Bearer ${bareToken}`)
       .send({ targetStatus: 'approved' })
       .expect(201);
-    const bareContract = await request(server)
+    // P0-2: sin nadie registrado para firmar por la organización, el contrato
+    // ni siquiera se genera (antes se generaba y luego fallaba la firma).
+    const blocked = await request(server)
       .post('/adoptions/contracts')
       .set('Authorization', `Bearer ${bareToken}`)
       .send({ requestId: bareReq.body.id })
-      .expect(201);
-    const bareOrgSignerId = bareContract.body.signers.find(
-      (s: { role: string }) => s.role === 'organization_representative',
-    ).id;
-
-    const blocked = await request(server)
-      .post(`/adoptions/contracts/${bareContract.body.id}/signatures`)
-      .set('Authorization', `Bearer ${bareToken}`)
-      .send({ signerId: bareOrgSignerId })
-      .expect(400);
-    expect(blocked.body.message).toMatch(/representante legal/i);
+      .expect(409);
+    expect(blocked.body.message).toMatch(/registra quién firma/i);
   });
 
   it('firma el representante EN BORRADOR (reutiliza la firma ya registrada, sin dibujar nada nuevo)', async () => {
@@ -502,7 +498,16 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       .set('Authorization', `Bearer ${refugeToken}`)
       .expect(200);
     const repSigner = contract.body.signers.find((s: { id: string }) => s.id === orgSignerId);
-    expect(repSigner.signatureHash).toBe(sha256(Buffer.from(SIGNATURE_PNG, 'base64')));
+    // La firma registrada se normaliza a PNG al guardarla: el contrato congela
+    // el hash de ESA firma (la del representante al momento de firmar).
+    const current = await request(server)
+      .get('/org/legal-representative')
+      .set('Authorization', `Bearer ${refugeToken}`)
+      .expect(200);
+    const registered = current.body.find(
+      (r: { role: string }) => r.role === 'legal_representative',
+    );
+    expect(repSigner.signatureHash).toBe(registered.signatureHash);
 
     await request(server)
       .post('/org/legal-representative')

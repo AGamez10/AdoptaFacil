@@ -71,6 +71,7 @@ else
     warn "Pagos apagados (FEATURE_PAYMENTS y FEATURE_SPONSORSHIPS sin true): nadie puede donar"
   fi
   [ "$(aget FEATURE_VOLUNTEERING_MINORS)" != "true" ] || err "api.env: voluntariado con menores no se permite en producción"
+  [ "$(aget FEATURE_SPONSORSHIPS)" != "true" ] || err "api.env: los apadrinamientos aún no cobran con la cuenta de cada organización; déjalos apagados"
   [ "$(aget PLAN_ENFORCEMENT)" != "true" ] || warn "PLAN_ENFORCEMENT=true: los planes se cobran/limitan desde PLAN_LAUNCH_DATE"
 fi
 

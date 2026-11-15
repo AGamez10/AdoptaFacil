@@ -76,6 +76,10 @@
 		root * /srv/web
 		try_files {path} /index.html
 		header /index.html Cache-Control "no-cache"
+		# PWA: el service worker y el manifiesto se revisan en cada visita para que
+		# una versión nueva llegue sin esperar a que caduque una caché.
+		header /sw.js Cache-Control "no-cache"
+		header /manifest.webmanifest Cache-Control "no-cache"
 		file_server
 	}
 }

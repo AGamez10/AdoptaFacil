@@ -22,9 +22,8 @@ describe('PlatformSuperAdminDashboardService.getSummary (RF24)', () => {
       .mockResolvedValueOnce([
         {
           gross_total: '1000000',
-          platform_fee_total: '47600', // 40000 fee + 7600 IVA (19%)
           gateway_fee_total: '29988.5',
-          net_total: '922411.5',
+          net_total: '970011.5',
         },
       ])
       .mockResolvedValueOnce([
@@ -45,9 +44,8 @@ describe('PlatformSuperAdminDashboardService.getSummary (RF24)', () => {
 
     expect(summary).toEqual({
       grossTotal: 1000000,
-      platformFeeTotal: 47600,
       gatewayFeeTotal: 29988.5,
-      netTotal: 922411.5,
+      netTotal: 970011.5,
       organizationsByVerificationLevel: [
         { level: 0, count: 3 },
         { level: 2, count: 5 },
@@ -59,20 +57,15 @@ describe('PlatformSuperAdminDashboardService.getSummary (RF24)', () => {
       organizationsByDepartment: [{ department: 'Antioquia', count: 4 }],
       organizationsGrowth: { currentPeriodCount: 6, previousPeriodCount: 4, growthRatePct: 50 },
     });
-    // gross === platformFee + gatewayFee + net (same identity computeBreakdown
-    // guarantees per-donation) must still hold once summed at platform scale.
-    expect(summary.platformFeeTotal + summary.gatewayFeeTotal + summary.netTotal).toBeCloseTo(
-      summary.grossTotal,
-      6,
-    );
+    // gross === gatewayFee + net (0 % de AdoptaFácil) must still hold once
+    // summed at platform scale.
+    expect(summary.gatewayFeeTotal + summary.netTotal).toBeCloseTo(summary.grossTotal, 6);
   });
 
   it('defaults every field to 0/[] when there is no data yet (fresh platform)', async () => {
     const h = makeService();
     h.queryRaw
-      .mockResolvedValueOnce([
-        { gross_total: '0', platform_fee_total: '0', gateway_fee_total: '0', net_total: '0' },
-      ])
+      .mockResolvedValueOnce([{ gross_total: '0', gateway_fee_total: '0', net_total: '0' }])
       .mockResolvedValueOnce([
         { active_animals: 0, total_adoptions: 0, active_campaigns: 0, active_sponsorships: 0 },
       ])
@@ -84,7 +77,6 @@ describe('PlatformSuperAdminDashboardService.getSummary (RF24)', () => {
 
     expect(summary).toEqual({
       grossTotal: 0,
-      platformFeeTotal: 0,
       gatewayFeeTotal: 0,
       netTotal: 0,
       organizationsByVerificationLevel: [],

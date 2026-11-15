@@ -21,7 +21,7 @@ AdoptaFácil conecta a las organizaciones de rescate animal (refugios, fundacion
 quieren ayudarlas. Como Persona puedes:
 
 - **Adoptar** un animal en estado disponible de cualquier organización de la plataforma.
-- **Donar** dinero a una organización, con desglose transparente de comisiones antes de pagar.
+- **Donar** dinero a una organización: pagas exactamente lo que eliges, sin comisión de AdoptaFácil.
 - **Apadrinar** un animal con un aporte mensual, sin adoptarlo.
 - **Ofrecer** una donación física (comida, insumos, medicamentos) a través del Banco de recursos.
 - **Comprar o contactar** productos del Marketplace de una organización.
@@ -121,14 +121,10 @@ Al pulsar "Donar", ves el formulario de aporte:
 
 ![Formulario de donación vacío](img/10-donar-formulario-vacio.png)
 
-Antes de pagar, AdoptaFácil siempre muestra el desglose completo: lo que pagas, el apoyo de
-sostenimiento a la plataforma (4% + IVA sobre ese 4%, nunca sobre el total), la comisión de la pasarela
-de pago (MercadoPago, un costo real de un tercero) y el neto que efectivamente recibe la organización. Puedes
-marcar la casilla para cubrir tú ambos costos, de modo que la organización reciba el 100% de tu aporte.
-
-![Desglose de donación](img/11-donar-desglose.png)
-
-![Desglose de donación (móvil)](img/11b-donar-desglose-movil.png)
+Antes de pagar ves exactamente cuánto vas a pagar: el monto que elegiste, sin recargos. AdoptaFácil
+no cobra comisión por tu donación. Pagas en la página segura de Mercado Pago y el dinero va directo a
+la cuenta de Mercado Pago de la organización; Mercado Pago le descuenta a la organización su propia
+tarifa. Al terminar recibes tu comprobante.
 
 Al confirmar, la donación queda registrada de inmediato:
 
@@ -251,9 +247,9 @@ aviso claro.
 No. Registrarse y publicar animales es gratuito. La plataforma se sostiene con un pequeño porcentaje de
 apoyo sobre las donaciones que la propia organización recibe — nunca sobre las adopciones.
 
-**¿Por qué veo un cargo por "comisión de la pasarela" además del apoyo a AdoptaFácil?**
-Son dos cosas distintas. El apoyo de sostenimiento es lo que AdoptaFácil retiene para operar. La
-comisión de la pasarela es un costo real cobrado por el proveedor de pagos (MercadoPago), un tercero.
+**¿Pago algo además de mi donación?**
+No. Pagas exactamente el monto que eliges. La tarifa de Mercado Pago se la descuenta Mercado Pago a la
+organización en su propia cuenta; AdoptaFácil no se queda con ninguna parte.
 
 **¿Puedo verificar públicamente que un certificado de donación es auténtico?**
 Sí. El código QR del certificado lleva a una página pública de verificación que confirma su autenticidad
