@@ -374,6 +374,14 @@ export const PAGE_HELP: readonly PageHelp[] = [
     ],
   },
   {
+    match: /^\/apadrinar\/resultado/,
+    title: 'Tu apadrinamiento',
+    tips: [
+      'Mercado Pago está confirmando tu pago. Cuando lo apruebe, te avisamos por correo y en la campana.',
+      'El dinero llega directo a la cuenta de la organización. No necesitas volver a pagar.',
+    ],
+  },
+  {
     match: /^\/donaciones\/comprobante/,
     title: 'Tu comprobante de donación',
     tips: [
@@ -549,7 +557,9 @@ export const PAGE_HELP: readonly PageHelp[] = [
     match: /^\/apadrinar/,
     title: 'Mis apadrinamientos',
     tips: [
-      'Historial de los animales que apadrinas.',
+      'Historial de los animales que apadrinas y el estado del mes.',
+      'Cuando un mes está pendiente, "Pagar este mes" lo abre en Mercado Pago; el dinero llega directo a la organización.',
+      'Si se suspendió por un pago fallido, "Ponerme al día" lo reactiva al confirmarse el pago.',
       'Para apadrinar uno nuevo, abre su ficha en el portal de la organización y pulsa "Apadrinar".',
     ],
   },

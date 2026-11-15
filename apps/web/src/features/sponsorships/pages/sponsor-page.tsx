@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
-import type { SponsorshipPublicSummary } from '@adoptafacil/contracts';
-import { Card, CardContent, CardHeader, CardTitle, EmptyState, Skeleton } from '@adoptafacil/ui';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  isMercadoPagoCheckoutUrl,
+  type SponsorshipPlanPublic,
+  type SponsorshipPublicSummary,
+} from '@adoptafacil/contracts';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  Skeleton,
+} from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
+import { ApiError, isIncompleteProfileError, useApiClient } from '../../../shell/api';
+import { onlinePaymentsEnabled } from '../../payments/lib/payment-provider';
 import { fetchAnimalSponsorshipSummary } from '../api/public-sponsorships';
+import { subscribeToPlan } from '../api/sponsorships-api';
 import { formatCop, SPONSORSHIP_PERIODICITY_LABELS } from '../model/sponsorships-view';
 import { MySponsorshipsList } from '../components/my-sponsorships-list';
 import styles from './sponsor-page.module.scss';
@@ -44,11 +59,11 @@ type SummaryState = 'loading' | 'ready' | 'error';
  * doble-propósito que `/donaciones`). El punto de entrada real (botón en el
  * detalle público de un animal) es de `features/portals`.
  *
- * Mercado Pago retirado (2026-10-17): el cobro del apadrinamiento usaba su
- * Card Payment Brick y hoy no hay pasarela con cobro recurrente para
- * apadrinamientos. En vez de un flujo roto, la página muestra los planes
- * y un aviso tranquilo ("Pronto podrás apadrinar con pago en línea"). La API
- * (`POST /sponsorships`) no cambia; solo la web deja de ofrecer el cobro.
+ * Pago (PAY-001, ADR-PAG-003): "Apadrinar" crea el apadrinamiento y lleva al
+ * padrino a pagar el primer mes en Mercado Pago, en la cuenta de la
+ * ORGANIZACIÓN (AdoptaFácil no recibe ese dinero). Cada mes siguiente se paga
+ * desde "Mis apadrinamientos" con "Pagar este mes". Con la pasarela apagada
+ * (`VITE_PAYMENT_PROVIDER=off`) se muestra un aviso tranquilo.
  */
 export function SponsorPage() {
   const target = useSponsorTarget();
@@ -131,16 +146,126 @@ export function SponsorPage() {
                   </li>
                 ))}
               </ul>
-              <div data-testid="sponsorship-online-soon">
-                <EmptyState
-                  title="Pronto podrás apadrinar con pago en línea"
-                  description={`Estamos preparando el pago mensual en línea para que apadrinar a ${animalLabel} sea tan fácil como donar. Mientras tanto, puedes donar a ${target.organizationName ?? 'la organización'} desde su portal.`}
+              {onlinePaymentsEnabled() ? (
+                <SponsorCheckout
+                  plans={summary.activePlans}
+                  animalLabel={animalLabel}
+                  organizationName={target.organizationName}
                 />
-              </div>
+              ) : (
+                <div data-testid="sponsorship-online-soon">
+                  <EmptyState
+                    title="Pronto podrás apadrinar con pago en línea"
+                    description={`Estamos preparando el pago mensual en línea para que apadrinar a ${animalLabel} sea tan fácil como donar. Mientras tanto, puedes donar a ${target.organizationName ?? 'la organización'} desde su portal.`}
+                  />
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
     </PageContainer>
+  );
+}
+
+/**
+ * "Apadrinar": crea el apadrinamiento y abre el pago del primer mes. El dinero
+ * va a la cuenta de Mercado Pago de la organización; los meses siguientes se
+ * pagan desde "Mis apadrinamientos".
+ */
+function SponsorCheckout({
+  plans,
+  animalLabel,
+  organizationName,
+}: {
+  plans: SponsorshipPlanPublic[];
+  animalLabel: string;
+  organizationName?: string;
+}) {
+  const client = useApiClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<'approved' | 'pending' | null>(null);
+  const organization = organizationName ?? 'la organización';
+
+  const sponsor = async (plan: SponsorshipPlanPublic) => {
+    setBusyPlan(plan.id);
+    setError(null);
+    try {
+      const sponsorship = await subscribeToPlan(client, { planId: plan.id });
+      if (isMercadoPagoCheckoutUrl(sponsorship.firstPaymentLinkUrl)) {
+        // Solo a dominios de Mercado Pago (nunca un redireccionamiento abierto).
+        window.location.assign(sponsorship.firstPaymentLinkUrl as string);
+        return;
+      }
+      setDone(sponsorship.firstPaymentStatus === 'approved' ? 'approved' : 'pending');
+    } catch (failure) {
+      if (isIncompleteProfileError(failure)) {
+        navigate('/perfil/completar', {
+          state: {
+            from: location,
+            reason:
+              'Antes de apadrinar necesitamos tu teléfono, documento de identidad y dirección.',
+          },
+        });
+        return;
+      }
+      setError(
+        ApiError.is(failure) && failure.status >= 400 && failure.status < 600 && failure.message
+          ? failure.message
+          : 'No pudimos abrir el pago. Inténtalo de nuevo en un momento.',
+      );
+    } finally {
+      setBusyPlan(null);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className={styles.checkout} data-testid="sponsorship-done">
+        <p className={styles.checkout__title}>
+          {done === 'approved'
+            ? `¡Gracias! Desde hoy apadrinas a ${animalLabel}.`
+            : `Tu apadrinamiento de ${animalLabel} quedó registrado.`}
+        </p>
+        <p className={styles.hint}>
+          {done === 'approved'
+            ? 'Te enviamos la bienvenida por correo.'
+            : 'Cuando el pago se confirme te avisamos por correo.'}{' '}
+          Cada mes lo pagas desde <Link to="/apadrinar">Mis apadrinamientos</Link>.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.checkout} data-testid="sponsorship-checkout">
+      <p className={styles.hint}>
+        Pagas el primer mes ahora en Mercado Pago y el dinero llega directo a {organization}. Cada
+        mes te avisamos para pagar el siguiente desde &quot;Mis apadrinamientos&quot;; puedes
+        dejarlo cuando quieras.
+      </p>
+      <div className={styles.checkout__actions}>
+        {plans.map((plan) => (
+          <Button
+            key={plan.id}
+            onClick={() => void sponsor(plan)}
+            disabled={busyPlan !== null}
+            data-testid={`sponsor-plan-${plan.id}`}
+          >
+            {busyPlan === plan.id
+              ? 'Abriendo Mercado Pago…'
+              : `Apadrinar por ${formatCop(plan.amount)} al mes`}
+          </Button>
+        ))}
+      </div>
+      {error && (
+        <p className={styles['hint--error']} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
