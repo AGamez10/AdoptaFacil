@@ -9,6 +9,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -29,6 +31,7 @@ import type { Env } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AuditService } from '../../core/audit/audit.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import {
   NOTIFICATION_PORT,
   type NotificationPort,
@@ -43,6 +46,7 @@ import {
   deliveryConfirmUrl,
   generateDeliveryCode,
   hashDeliveryCode,
+  resolveDeliveryFacts,
 } from './adoption-delivery-rules';
 
 type DeliveryModel = Prisma.AdoptionDeliveryGetPayload<Record<string, never>>;
@@ -96,6 +100,7 @@ export class AdoptionDeliveryService {
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     config: ConfigService<Env, true>,
+    @Optional() private readonly inbox?: InboxService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
   }
@@ -152,14 +157,6 @@ export class AdoptionDeliveryService {
 
     const id = randomUUID();
     const code = generateDeliveryCode();
-    const details: AdoptionDeliveryDetails = {
-      healthStatus: input.healthStatus,
-      weightKg: input.weightKg,
-      identityVerified: input.identityVerified,
-      identificationChecked: input.identificationChecked,
-      items: input.items,
-      photoRef: input.photoRef,
-    };
 
     const created = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const contract = await tx.adoptionContract.findUnique({ where: { id: input.contractId } });
@@ -185,6 +182,22 @@ export class AdoptionDeliveryService {
 
       const payload = contract.payload as unknown as AdoptionContractPayload;
       const data = payload.data ?? { followUpMonths: 12 };
+      // Punto 15: el estado de salud y el peso del acta son EXACTAMENTE los del
+      // contrato firmado; lo que escriba el cliente no los puede cambiar.
+      const facts = resolveDeliveryFacts(data, input);
+      if (!facts) {
+        throw new UnprocessableEntityException(
+          'Indica el estado de salud y el peso del animal para registrar la entrega.',
+        );
+      }
+      const details: AdoptionDeliveryDetails = {
+        healthStatus: facts.healthStatus,
+        weightKg: facts.weightKg,
+        identityVerified: input.identityVerified,
+        identificationChecked: input.identificationChecked,
+        items: input.items,
+        photoRef: input.photoRef,
+      };
 
       const [org, animal, clinicalEvents, behaviorDisclosures] = await Promise.all([
         tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
@@ -333,6 +346,14 @@ export class AdoptionDeliveryService {
       });
       return cancelled;
     });
+    await this.inbox?.toUser(row.adopterUserId, {
+      kind: 'adoptions.delivery_cancelled',
+      tone: 'info',
+      title: `Se canceló la entrega de ${row.animalName}`,
+      body: 'La organización canceló esta entrega pendiente. Te avisaremos cuando la programe de nuevo.',
+      href: `/mis-solicitudes?foco=${row.requestId}`,
+      dedupeKey: `adoption_delivery_cancelled:${row.id}`,
+    });
     return this.fromModel(row);
   }
 
@@ -406,6 +427,22 @@ export class AdoptionDeliveryService {
         milestonesPlanned: row.milestone_plan.length,
       },
     });
+    await this.inbox?.toUser(actor.id, {
+      kind: 'adoptions.delivery_confirmed',
+      tone: 'kudos',
+      title: `¡Bienvenido a casa, ${row.animal_name}!`,
+      body: 'La entrega quedó confirmada y el acta sellada. Encontrarás su historia clínica en Mis adopciones; la organización te acompañará con los seguimientos.',
+      href: `/mis-adopciones/entrega/${id}`,
+      dedupeKey: `adoption_delivery_confirmed:${id}`,
+    });
+    await this.inbox?.toOrgStaff(row.organization_id, {
+      kind: 'adoptions.delivery_confirmed',
+      tone: 'kudos',
+      title: `${row.animal_name} ya está con su familia`,
+      body: 'El adoptante confirmó la entrega. Los seguimientos programados quedan en Seguimientos.',
+      href: `/adopciones?foco=${row.request_id}`,
+      dedupeKey: `adoption_delivery_confirmed:${id}`,
+    });
     return this.fromRow(row);
   }
 
@@ -451,6 +488,13 @@ export class AdoptionDeliveryService {
       // La organización igual ve el código y el QR en pantalla.
       this.logger.warn(`No se pudo enviar el código de entrega ${row.id}: ${String(error)}`);
     }
+    await this.inbox?.toUser(row.adopterUserId, {
+      kind: 'adoptions.delivery_ready',
+      tone: 'success',
+      title: `Confirma que recibiste a ${row.animalName}`,
+      body: `Cuando tengas a ${row.animalName} contigo, confirma la entrega con el código que te mostró la organización o que te llegó al correo. Vence en ${ADOPTION_DELIVERY_CODE_TTL_MINUTES} minutos; si vence, pide uno nuevo.`,
+      href: `/mis-adopciones/entrega/${row.id}`,
+    });
     return { delivery: this.fromModel(row), code, confirmUrl };
   }
 

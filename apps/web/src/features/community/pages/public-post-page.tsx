@@ -6,6 +6,7 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { useSession } from '../../../shell/auth';
 import { useSeo } from '../../../seo/seo';
 import { getPublicPost } from '../api/public-community';
+import { MediaGallery } from '../components/media-gallery';
 import { SharePost } from '../components/share-post';
 import { publicPostPath } from '../lib/share';
 import {
@@ -88,23 +89,8 @@ export function PublicPostPage() {
             </header>
             <p className="whitespace-pre-wrap leading-relaxed">{post.body}</p>
             {post.images.length > 0 && (
-              <div
-                className={cn('grid gap-2', post.images.length > 1 && 'sm:grid-cols-2')}
-                data-testid="public-post-images"
-              >
-                {post.images.map((image, index) => (
-                  <img
-                    key={image.id}
-                    src={image.url}
-                    alt={`Foto ${index + 1} de la publicación de ${post.authorDisplayName}`}
-                    loading={index === 0 ? 'eager' : 'lazy'}
-                    className={cn(
-                      'w-full rounded-xl border object-cover',
-                      post.images.length === 1 || index === 0 ? 'aspect-[16/10]' : 'aspect-[4/3]',
-                      post.images.length > 1 && index === 0 && 'sm:col-span-2',
-                    )}
-                  />
-                ))}
+              <div data-testid="public-post-images">
+                <MediaGallery media={post.images} authorName={post.authorDisplayName} />
               </div>
             )}
             <p className="text-xs text-muted-foreground">

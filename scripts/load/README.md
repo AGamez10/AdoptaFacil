@@ -20,12 +20,13 @@ Se niega con `NODE_ENV=production` y si la base no es local, salvo
 
 ## 2. Escenarios k6
 
-| Archivo               | Escenario del plan                                              | Objetivo (hipótesis)                                   |
-| --------------------- | --------------------------------------------------------------- | ------------------------------------------------------ |
-| `k6/publico.js`       | Navegación pública: catálogo nacional, portal, campañas, banner | 1.500 lecturas/s 30 min, p95 < 150 ms, errores < 0,1 % |
-| `k6/campana-viral.js` | Pico sobre una campaña: 0 → 5.000 lecturas/s en 60 s            | p95 < 200 ms, errores < 0,5 %                          |
-| `k6/refugio.js`       | Refugios autenticados: listar, crear animal, adopciones         | 1.000 usuarios, p95 < 500 ms, errores < 0,1 %          |
-| `k6/remojo.js`        | 50 % de la carga pública durante 4 h                            | memoria estable (± 10 %), errores < 0,1 %              |
+| Archivo               | Escenario del plan                                                                     | Objetivo (hipótesis)                                          |
+| --------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `k6/publico.js`       | Navegación pública: catálogo nacional, portal, campañas, banner                        | 1.500 lecturas/s 30 min, p95 < 150 ms, errores < 0,1 %        |
+| `k6/campana-viral.js` | Pico sobre una campaña: 0 → 5.000 lecturas/s en 60 s                                   | p95 < 200 ms, errores < 0,5 %                                 |
+| `k6/refugio.js`       | Refugios autenticados: listar, crear animal, adopciones                                | 1.000 usuarios, p95 < 500 ms, errores < 0,1 %                 |
+| `k6/remojo.js`        | 50 % de la carga pública durante 4 h                                                   | memoria estable (± 10 %), errores < 0,1 %                     |
+| `k6/perfil-animal.js` | Perfil del animal: 500 lectores mientras 50 personas registran eventos y editan fichas | lectura p95 < 400 ms, escritura p95 < 800 ms, errores < 0,1 % |
 
 ```bash
 k6 run -e API_URL=https://staging.adoptafacil.org/api scripts/load/k6/publico.js

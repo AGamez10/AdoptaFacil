@@ -31,7 +31,17 @@ export interface PublicCapabilities {
   /** Whether `POST /auth/google` is served (a real or, outside production, a
    *  fake identity adapter is bound). */
   googleSignIn: boolean;
+  /** OAuth Client ID (web) the API verifies Google ID tokens against, sent
+   *  only when the real adapter is bound (`AUTH_IDENTITY_DRIVER=google`). It
+   *  is public by design (Google Identity Services puts it in every page that
+   *  shows the button), and publishing it here means the web always uses the
+   *  SAME Client ID the API checks the token audience with, without having to
+   *  duplicate it in `VITE_GOOGLE_CLIENT_ID` and rebuild. */
+  googleClientId?: string;
 }
+
+/** Shape of a Google OAuth web Client ID. Anything else is ignored. */
+export const GOOGLE_CLIENT_ID_PATTERN = /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
 
 /** Everything off: the web's fallback when the capabilities document cannot
  *  be loaded (fail closed). */

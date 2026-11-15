@@ -69,13 +69,13 @@ describe('PublicVolunteeringPage', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/public/volunteer-opportunities?');
   });
 
-  it('links each card to the authenticated volunteer page to enroll', async () => {
+  it('links each card to enroll in THAT opportunity (login only at that point)', async () => {
     stub({ items: [opportunity('v1', 'Jornada de siembra')], total: 1, limit: 50, offset: 0 });
     renderList();
     await screen.findByTestId('volunteer-opportunity-card');
     expect(screen.getByRole('link', { name: 'Quiero participar' })).toHaveAttribute(
       'href',
-      '/voluntariado',
+      '/voluntariado?oportunidad=v1&inscribirme=1',
     );
   });
 

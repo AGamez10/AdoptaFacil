@@ -20,7 +20,8 @@ import styles from './animal-detail-panel.module.scss';
 export function AnimalCarnetSection({ animal }: { animal: Animal }) {
   const animalId = animal.id;
   const client = useApiClient();
-  const { carnet, carnetLoading, downloadingPdf, downloadPdf } = useAnimalClinicalRecord(animalId);
+  const { carnet, carnetLoading, loadFailed, downloadingPdf, downloadPdf } =
+    useAnimalClinicalRecord(animalId);
 
   // Código N° y URL del QR: los calcula el servidor (mismo origen que el PDF).
   const [card, setCard] = useState<AnimalCardInfo | null>(null);
@@ -60,6 +61,11 @@ export function AnimalCarnetSection({ animal }: { animal: Animal }) {
 
       {carnetLoading ? (
         <Skeleton className="h-24 w-full" />
+      ) : loadFailed ? (
+        <p role="alert" className="text-sm text-destructive">
+          No pudimos cargar el expediente de este animal. Revisa tu conexión y vuelve a
+          seleccionarlo.
+        </p>
       ) : carnet.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin eventos clínicos registrados todavía.</p>
       ) : (

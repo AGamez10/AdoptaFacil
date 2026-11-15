@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { FollowUpService } from '../src/modules/adoptions/followup.service';
 import { STORAGE_PORT, type StoragePort } from '../src/core/storage/storage.port';
 import { purgeOrganizations } from './support/cleanup';
+import { completeTestContractData } from './support/contract-data';
 import { completeTestProfile } from './support/profile';
 import { approveTestOrganization } from './support/organization-status';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
@@ -150,6 +151,7 @@ describe('Adoption follow-up (M04: post-adoption tracking)', () => {
     ).id;
     // El representante firma primero, en `draft` (reutiliza la firma ya
     // registrada arriba, no manda `signatureBase64`).
+    await completeTestContractData(server, refugeToken, contractId);
     await request(server)
       .post(`/adoptions/contracts/${contractId}/signatures`)
       .set('Authorization', `Bearer ${refugeToken}`)

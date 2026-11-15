@@ -41,3 +41,15 @@ export const acceptInvitationSchema = z
     legalAcceptances: legalAcceptancesSchema.optional(),
   })
   .strict();
+
+/** `POST /auth/invitations/accept/google`: Google proves the invited email. */
+export const acceptInvitationGoogleSchema = z
+  .object({
+    token: invitationTokenSchema,
+    idToken: z.string().min(1).max(4096),
+    legalAcceptances: legalAcceptancesSchema.optional(),
+  })
+  .strict();
+
+/** `PUT /org/members/:userId/role`. Only organization roles (never platform). */
+export const changeMemberRoleSchema = z.object({ role: orgRoleSchema }).strict();

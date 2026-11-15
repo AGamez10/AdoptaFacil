@@ -340,7 +340,17 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     // Pro (p. ej. Historias) llevan la marca y el aviso de la promoción.
     expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-option-carnet')).toHaveTextContent('Gratis');
-    expect(screen.getByTestId('template-upsell')).toHaveTextContent(/incluidas gratis/);
+    expect(screen.getByTestId('template-upsell')).toHaveTextContent(/incluidas gratis/i);
+    // La sección Pro aparece UNA sola vez y agrupa todas las plantillas de pago.
+    expect(screen.getAllByTestId('template-group-pro')).toHaveLength(1);
+    expect(screen.getAllByTestId('template-upsell')).toHaveLength(1);
+    const pro = screen.getByTestId('template-group-pro');
+    expect(pro).toHaveTextContent(/Plantillas Pro/);
+    expect(pro).toHaveTextContent(/planes Crece y Pro/);
+    for (const id of ['historias', 'album', 'linterna', 'revelado', 'velitas', 'terminal']) {
+      expect(within(pro).getByTestId(`template-option-${id}`)).toHaveTextContent('Pro');
+    }
+    expect(within(pro).queryByTestId('template-option-clasica')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: /Carnet/ }));
     fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
@@ -371,6 +381,12 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     expect(await screen.findByRole('radio', { name: /Clásica/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: /Historias/ })).toBeDisabled();
     expect(screen.getByTestId('template-option-historias')).toHaveAttribute('data-locked', 'true');
+    expect(screen.getByRole('radio', { name: /Álbum/ })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /Carnet/ })).not.toBeDisabled();
+    // Selector rápido del móvil: las Pro también quedan bloqueadas sin plan.
+    const quick = screen.getByTestId('template-quick-switch');
+    expect(within(quick).getByRole('button', { name: /Historias/ })).toBeDisabled();
+    expect(within(quick).getByRole('button', { name: /Carnet/ })).not.toBeDisabled();
     expect(screen.getByTestId('template-upsell')).toHaveTextContent(
       /volvió a la plantilla Clásica/,
     );
@@ -388,6 +404,20 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
       expect(body.template).toBeUndefined();
       expect(body.templateOptions).toBeUndefined();
     });
+  });
+
+  it('vista previa de una plantilla Pro: monta el kit Pro en modo claro para que el diseño cargue', async () => {
+    stubFetch(() => ({ tokens: {}, template: 'clasica' }));
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    fireEvent.click(await screen.findByRole('radio', { name: /Álbum/ }));
+    const frame = (await screen.findByTitle(
+      'Vista previa de la plantilla album',
+      {},
+      { timeout: 5000 },
+    )) as HTMLIFrameElement;
+    // Sin `pk` ni `data-mode` el CSS Pro no aplica y la tarjeta se ve rota.
+    expect(frame.getAttribute('srcdoc')).toMatch(/class="af-tpl tpl-album pk" data-mode="light"/);
   });
 
   it('muestra los ajustes de la plantilla, los refleja en la vista previa y los envía al guardar', async () => {

@@ -199,6 +199,12 @@ export interface Sponsorship {
    * instead of showing a generic "listo" message.
    */
   firstPaymentStatus?: PaymentStatus;
+  /**
+   * Checkout link of the first period (Mercado Pago: an order of the
+   * ORGANIZATION's own account, never AdoptaFácil's). Only returned by
+   * `POST /sponsorships`; the web sends the padrino there to pay.
+   */
+  firstPaymentLinkUrl?: string;
   /** ISO-8601 UTC. */
   createdAt: string;
 }
@@ -251,6 +257,17 @@ export interface CancelSponsorshipInput {
  * Mercado Pago's Card Payment Brick were removed with the gateway.
  */
 export type PaySponsorshipPaymentInput = Record<string, never>;
+
+/**
+ * `POST /sponsorships/:id/pay` ("Pagar este mes" in "Mis apadrinamientos"):
+ * where the padrino pays the period that is open now. The money goes straight
+ * to the organization's own Mercado Pago account (PAY-001: no custody).
+ */
+export interface SponsorshipCheckoutView {
+  checkoutUrl: string;
+  /** Period paid by this link, `YYYY-MM`. */
+  period: string;
+}
 
 // ============================================================================
 // S-5-REDISEÑO (M07, RF17, incluye T-057) — recurring billing ledger. One

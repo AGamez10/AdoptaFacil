@@ -46,6 +46,7 @@ const KIND_LABEL: Record<OrgReportKind, string> = {
   donations: 'Informe de donaciones',
   social_service: 'Reporte de servicio social',
   accounting: 'Libro auxiliar de donaciones (cierre de mes)',
+  impact: 'Reporte de impacto (informativo, sin firmas)',
 };
 
 const STATUS_UI: Record<
@@ -61,6 +62,7 @@ const DEFAULT_POLICY: Record<OrgReportKind, LegalRepresentativeRole[]> = {
   donations: ['legal_representative', 'fiscal_reviewer'],
   social_service: ['legal_representative'],
   accounting: ['legal_representative', 'fiscal_reviewer'],
+  impact: [],
 };
 
 function PolicyCard({

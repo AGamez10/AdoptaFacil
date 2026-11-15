@@ -5,6 +5,7 @@ import { useSession } from '../auth';
 import { TransparencyIndicator } from '../transparency';
 import { Brand } from './brand';
 import { PendingBell } from './pending-bell';
+import { FocusScroller } from '../focus';
 import styles from './header.module.scss';
 
 /**
@@ -52,6 +53,7 @@ export function Header() {
       <div className={styles.topbar__actions}>
         <TransparencyIndicator />
         <PendingBell />
+        <FocusScroller />
 
         {user && (
           <div className={styles.topbar__user}>

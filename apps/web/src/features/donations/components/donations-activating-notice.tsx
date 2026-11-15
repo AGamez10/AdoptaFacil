@@ -85,7 +85,7 @@ export function DonationsActivatingNotice({
         <Link to="/campanas" className={linkClass}>
           Ver campañas solidarias
         </Link>
-        <Link to="/voluntariado" className={linkClass}>
+        <Link to="/voluntariados" className={linkClass}>
           Ofrecer tu tiempo como voluntario
         </Link>
         {portalPath && (

@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { getQueueToken } from '@nestjs/bullmq';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
+import type { Queue } from 'bullmq';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
+import { REMINDERS_QUEUE } from '../src/modules/animals/reminders.constants';
 import { RemindersService } from '../src/modules/animals/reminders.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
@@ -92,6 +95,7 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
     request(server).get('/clinical-reminders').set('Authorization', `Bearer ${token}`);
 
   let vet: Actor;
+  let remindersQueue: Queue | undefined;
   let animalId = '';
   let event1Id = '';
   let event2Id = '';
@@ -105,6 +109,12 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
     await app.init();
     server = app.getHttpServer();
     reminders = app.get(RemindersService);
+    // Registrar un evento con próxima fecha encola un escaneo extra. Esta suite
+    // llama al servicio directamente, así que la cola queda en pausa para que el
+    // worker no compita con esas llamadas (generaría y enviaría el recordatorio
+    // antes de las aserciones).
+    remindersQueue = app.get<Queue>(getQueueToken(REMINDERS_QUEUE));
+    await remindersQueue.pause();
 
     vet = await actorWithRoles(['veterinarian']);
     const animal = await createAnimal(vet.token).expect(201);
@@ -115,6 +125,8 @@ describe('Clinical reminders (M03, RF09: worker + idempotency + RBAC + tenant)',
   });
 
   afterAll(async () => {
+    await remindersQueue?.drain();
+    await remindersQueue?.resume();
     await purgeOrganizations(admin, createdOrgIds);
     await admin.$disconnect();
     await app?.close();

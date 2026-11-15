@@ -2,6 +2,8 @@ import {
   CampaignCategory,
   CampaignStatus,
   FormalizationState,
+  LedgerEntryKind,
+  LedgerSource,
   OrganizationType,
   ProductCategory,
   ResourceCategory,
@@ -179,6 +181,78 @@ const REVIEWS = [
   },
 ];
 
+/** Libro público con movimientos (últimos 5, como lo pide el portal). */
+const LEDGER: TemplateSourceData['ledger'] = {
+  items: [
+    [
+      'led-1',
+      LedgerEntryKind.Income,
+      'donacion_dinero',
+      850_000,
+      'Donaciones en línea de la semana',
+      2,
+      LedgerSource.OnlineDonation,
+    ],
+    [
+      'led-2',
+      LedgerEntryKind.Expense,
+      'veterinaria',
+      420_000,
+      'Consulta y exámenes de Rocco',
+      4,
+      LedgerSource.Manual,
+    ],
+    [
+      'led-3',
+      LedgerEntryKind.Expense,
+      'alimento',
+      380_000,
+      'Concentrado para el hogar de paso',
+      7,
+      LedgerSource.Manual,
+    ],
+    [
+      'led-4',
+      LedgerEntryKind.Income,
+      'evento',
+      600_000,
+      'Bazar de adopción',
+      11,
+      LedgerSource.Manual,
+    ],
+    [
+      'led-5',
+      LedgerEntryKind.Expense,
+      'esterilizacion',
+      300_000,
+      'Esterilización de Nina y Mora',
+      14,
+      LedgerSource.Manual,
+    ],
+  ].map(([id, kind, category, amountCop, concept, ago, source]) => ({
+    id: id as string,
+    source: source as LedgerSource,
+    kind: kind as LedgerEntryKind,
+    category: category as 'donacion_dinero',
+    occurredOn: daysAgo(ago as number).slice(0, 10),
+    amountCop: amountCop as number,
+    concept: concept as string,
+    hasSupport: true,
+    createdAt: daysAgo(ago as number),
+    voided: false,
+  })),
+  total: 12,
+  limit: 5,
+  offset: 0,
+  totals: {
+    incomeCop: 1_450_000,
+    expenseCop: 1_100_000,
+    balanceCop: 350_000,
+    entryCount: 12,
+    lastEntryOn: daysAgo(2).slice(0, 10),
+  },
+};
+
 export const FIXTURE_NOW = NOW;
 
 export const PROFILES: Record<'completa' | 'nueva' | 'vacia' | 'hostil', TemplateSourceData> = {
@@ -191,6 +265,7 @@ export const PROFILES: Record<'completa' | 'nueva' | 'vacia' | 'hostil', Templat
     needs: NEEDS,
     products: PRODUCTS,
     reviews: REVIEWS,
+    ledger: LEDGER,
   },
   nueva: {
     slug: 'rescatistas-bogota',

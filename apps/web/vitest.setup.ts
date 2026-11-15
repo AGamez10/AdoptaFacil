@@ -11,7 +11,12 @@ import { preloadLazyPages } from './src/shell/router/lazy-page';
 beforeAll(() => preloadLazyPages(), 30_000);
 
 // Unmount React trees between tests so the drawer/overlay portals don't leak.
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // La intención pendiente y la bienvenida viven en sessionStorage
+  // (shell/auth/pending-intent.ts): no deben pasar de una prueba a otra.
+  window.sessionStorage.clear();
+});
 
 // jsdom does not implement matchMedia; responsive helpers and some Radix
 // primitives read it. Default to "no match" unless a test overrides it.

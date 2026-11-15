@@ -31,6 +31,7 @@ import { ProductManageCard } from '../components/product-manage-card';
 import { ProductPhotosField } from '../components/product-photos-field';
 import { addProductImage, MAX_PRODUCT_PHOTOS, validateImageUpload } from '../lib/storage';
 import { CATEGORY_LABELS } from '../model/marketplace-view';
+import { firstFormProblem } from '../../../lib/form-checks';
 
 const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map((value) => ({
   value,
@@ -145,18 +146,26 @@ export function MarketplacePage() {
   const submit = async (): Promise<void> => {
     const priceValue = Number(price);
     const stockValue = stock.trim() ? Number(stock) : undefined;
-    if (
-      !name.trim() ||
-      !Number.isInteger(priceValue) ||
-      priceValue <= 0 ||
-      (stockValue !== undefined && (!Number.isInteger(stockValue) || stockValue < 0))
-    ) {
-      toast({
-        title: 'Datos incompletos',
-        description:
-          'Nombre, categoría y precio (entero COP > 0) son obligatorios; el stock no puede ser negativo.',
-        variant: 'warning',
-      });
+    const problem = firstFormProblem([
+      {
+        ok: Boolean(name.trim()),
+        title: 'Falta el nombre',
+        message: 'Escribe el nombre del producto.',
+      },
+      {
+        ok: Number.isInteger(priceValue) && priceValue > 0,
+        title: 'Precio no válido',
+        message:
+          'El precio debe ser un número entero en pesos mayor que 0 (sin puntos ni decimales).',
+      },
+      {
+        ok: stockValue === undefined || (Number.isInteger(stockValue) && stockValue >= 0),
+        title: 'Stock no válido',
+        message: 'El stock debe ser un número entero de 0 en adelante.',
+      },
+    ]);
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     setSaving(true);

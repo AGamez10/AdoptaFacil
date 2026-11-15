@@ -84,6 +84,14 @@ describe('Report signing: consent, separation between organizations and signers 
       `Rev ${name}`,
     );
     await registerOwnSignature(server, signer, 'fiscal_reviewer', `Rev ${name}`).expect(201);
+    // Por defecto una declaración solo "firmada" lleva la firma del representante
+    // legal; estas organizaciones declaran en sus estatutos que el revisor fiscal
+    // también firma el informe de donaciones.
+    await request(server)
+      .put('/org/reports/policy')
+      .set(auth(owner))
+      .send({ kind: 'donations', requiredRoles: ['legal_representative', 'fiscal_reviewer'] })
+      .expect(200);
     const drafter = await memberWithRole(app, admin, owner.orgId, 'administrator');
     return { owner, drafter, signer };
   }
@@ -171,6 +179,13 @@ describe('Report signing: consent, separation between organizations and signers 
       .set(auth(A.signer))
       .send({ kind: 'donations', requiredRoles: ['legal_representative'] })
       .expect(403);
+  });
+
+  it('without a statutes policy, a signed declaration carries ONLY the legal representative signature', async () => {
+    const C = await setupOrg('Refugio Gamma');
+    await admin.orgReportPolicy.deleteMany({ where: { organizationId: C.owner.orgId } });
+    const res = await draft(C.drafter).expect(201);
+    expect(res.body.signers.map((s: { role: string }) => s.role)).toEqual(['legal_representative']);
   });
 
   it('the Owner declares the signatures the statutes demand; the platform applies the rule', async () => {

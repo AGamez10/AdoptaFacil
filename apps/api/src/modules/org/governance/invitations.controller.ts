@@ -16,6 +16,7 @@ import type { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   type AcceptInvitationInput,
+  type AcceptInvitationWithGoogleInput,
   type AuthSession,
   type CreateInvitationInput,
   type InvitationPreview,
@@ -32,6 +33,7 @@ import { ZodValidationPipe } from '../../../core/auth/zod-validation.pipe';
 import { Roles } from '../../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../../core/rbac/roles.guard';
 import {
+  acceptInvitationGoogleSchema,
   acceptInvitationSchema,
   createInvitationSchema,
   previewInvitationSchema,
@@ -95,8 +97,24 @@ export class PublicInvitationsController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthSession> {
     const session = await this.invitations.accept(dto, legalContextFrom(req));
-    // Igual que el registro y el login: sin la cookie de refresco, recargar la
-    // página justo después de crear la cuenta obligaba a iniciar sesión otra vez.
+    return this.withRefreshCookie(res, session);
+  }
+
+  /** Accept with Google instead of a password (same token, same legal rules). */
+  @Post('accept/google')
+  async acceptWithGoogle(
+    @Body(new ZodValidationPipe(acceptInvitationGoogleSchema))
+    dto: AcceptInvitationWithGoogleInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthSession> {
+    const session = await this.invitations.acceptWithGoogle(dto, legalContextFrom(req));
+    return this.withRefreshCookie(res, session);
+  }
+
+  // Igual que el registro y el login: sin la cookie de refresco, recargar la
+  // página justo después de crear la cuenta obligaba a iniciar sesión otra vez.
+  private withRefreshCookie(res: Response, session: AuthSession): AuthSession {
     setRefreshCookie(
       res,
       session.tokens.refreshToken,

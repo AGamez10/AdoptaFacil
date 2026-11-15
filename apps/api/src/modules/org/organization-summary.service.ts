@@ -87,13 +87,11 @@ export class OrganizationSummaryService {
             },
           }),
           tx.donation.findMany({
-            // P1-1: lo reembolsado o contracargado no suma.
-            where: {
-              organizationId,
-              status: 'approved',
-              conceptKind: 'organization',
-              reversal: null,
-            },
+            // Todo lo que llegó a la organización (donación general, campaña o
+            // animal). Antes solo contaba la general, así que una donación a una
+            // campaña dejaba el tablero en $0. P1-1: lo reembolsado o
+            // contracargado no suma.
+            where: { organizationId, status: 'approved', reversal: null },
             select: { breakdown: true },
           }),
           tx.organizationProfile.findUnique({

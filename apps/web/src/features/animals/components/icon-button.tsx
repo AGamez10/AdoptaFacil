@@ -17,11 +17,15 @@ export interface IconButtonProps extends Omit<
   icon: ReactNode;
   label: string;
   variant?: 'default' | 'danger';
+  tooltipAlign?: 'center' | 'end';
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ icon, label, variant = 'default', className, type = 'button', ...rest }, ref) => (
-    <Tooltip label={label}>
+  (
+    { icon, label, variant = 'default', tooltipAlign, className, type = 'button', ...rest },
+    ref,
+  ) => (
+    <Tooltip label={label} align={tooltipAlign}>
       <button
         ref={ref}
         type={type}

@@ -47,7 +47,7 @@ export function MyOpenOffers() {
       </h2>
       <ul className="grid gap-4 sm:grid-cols-2">
         {items.map((offer) => (
-          <li key={offer.id}>
+          <li key={offer.id} data-foco={offer.id}>
             <Card data-testid="my-open-offer">
               <CardHeader className="gap-1">
                 <CardTitle className="text-base">{offer.title}</CardTitle>

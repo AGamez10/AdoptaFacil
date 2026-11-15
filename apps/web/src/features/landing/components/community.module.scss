@@ -256,6 +256,22 @@
   color: #fff;
 }
 
+.post__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  transform: translate(-50%, -50%);
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(20 32 46 / 0.72);
+  color: #fff;
+  font-size: 1.25rem;
+  padding-left: 0.2rem;
+}
+
 .share {
   display: flex;
   flex-wrap: wrap;

@@ -291,6 +291,41 @@ export function planHighlights(key: PlanKey): PlanHighlight[] {
 export const LAUNCH_PRO_PROMO_MONTHS = 3;
 
 /**
+ * Prueba gratis de cada organización nueva (decisión del dueño, 2026-11-14):
+ * Pro completo, plantillas Pro incluidas, durante estos días desde que se
+ * registra. Es el ÚNICO lugar donde se fija la duración. Se suma a la promoción
+ * de lanzamiento: rige la que termine más tarde. Al vencer sin plan, la
+ * organización pasa a Gratis y su portal vuelve a una plantilla gratuita sin
+ * perder nada (la plantilla elegida queda guardada).
+ */
+export const NEW_ORG_TRIAL_DAYS = 14;
+
+/** Días antes del fin de la prueba en que sale el primer aviso (el otro, el mismo día). */
+export const TRIAL_REMINDER_DAYS_BEFORE = 3;
+
+/** Último instante de la prueba de una organización creada en `createdAt`. */
+export function newOrgTrialEnd(createdAt: Date, days: number = NEW_ORG_TRIAL_DAYS): Date {
+  return new Date(createdAt.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Hasta cuándo una organización SIN suscripción tiene Pro gratis, y por qué:
+ * la promoción de lanzamiento o su prueba de {@link NEW_ORG_TRIAL_DAYS} días,
+ * la que termine más tarde. `null` cuando no aplica ninguna.
+ */
+export function freeProPeriod(
+  launchPromoEndsAt: Date | null,
+  orgCreatedAt: Date | null,
+  trialDays: number = NEW_ORG_TRIAL_DAYS,
+): { endsAt: Date; reason: 'launch' | 'trial' } | null {
+  const trial = orgCreatedAt && trialDays > 0 ? newOrgTrialEnd(orgCreatedAt, trialDays) : null;
+  if (trial && (!launchPromoEndsAt || trial.getTime() > launchPromoEndsAt.getTime())) {
+    return { endsAt: trial, reason: 'trial' };
+  }
+  return launchPromoEndsAt ? { endsAt: launchPromoEndsAt, reason: 'launch' } : null;
+}
+
+/**
  * Last instant of the launch promotion: `launchDate` + {@link LAUNCH_PRO_PROMO_MONTHS}
  * calendar months (UTC). The launch date is the server setting `PLAN_LAUNCH_DATE`.
  */
@@ -347,6 +382,9 @@ export interface OrganizationPlanView {
   /** End of the launch promotion (Pro for free) while it applies to this org
    *  (no paid subscription yet), ISO-8601 UTC; absent/null otherwise. */
   launchPromoEndsAt?: string | null;
+  /** Fin de la prueba gratis de la organización nueva ({@link NEW_ORG_TRIAL_DAYS}
+   *  días de Pro) mientras rige y dura más que la promoción, ISO-8601 UTC. */
+  trialEndsAt?: string | null;
   limits: PlanLimits;
   capabilities: Record<PlanCapability, boolean>;
   /** `storageMb`: espacio usado en MB (redondeado hacia arriba), cuando el
@@ -415,7 +453,8 @@ export function graceEnd(currentPeriodEnd: Date): Date {
 /**
  * The plan in effect for an organization at `now`:
  * - enforcement off → `pro` (nothing is gated);
- * - no subscription and the launch promotion still running (`promoEndsAt`) → `pro`;
+ * - no subscription and the launch promotion or the new-org trial still
+ *   running (`promoEndsAt`, see {@link freeProPeriod}) → `pro`;
  * - no subscription → `free`;
  * - `canceled`: the plan keeps working until the end of the period already
  *   paid (`currentPeriodEnd`, no grace), then `free`; with no period end it is

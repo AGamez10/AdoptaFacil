@@ -33,6 +33,8 @@ export const EMAIL_EVENT_KEYS = [
   'volunteering.hours_approved',
   'volunteering.hours_rejected',
   'volunteering.certificate_issued',
+  'volunteering.opportunity_rescheduled',
+  'volunteering.opportunity_cancelled',
   'community.campaign_update',
   'resources.open_offer_claimed',
   'platform.announcement',
@@ -235,4 +237,36 @@ export interface SendOrgAnnouncementResult {
 
 export interface EmailUnsubscribeResult {
   unsubscribed: true;
+}
+
+// ============================================================================
+// Avisos en la plataforma (bandeja por persona, campana del encabezado).
+// Additive. Cada persona ve solo los suyos. `href` es siempre una ruta
+// interna de la aplicación. Todas las fechas en ISO-8601 UTC.
+// ============================================================================
+
+/** Tono del aviso: `kudos` es un reconocimiento por algo que hiciste. */
+export type UserNotificationTone = 'info' | 'success' | 'warning' | 'kudos';
+
+export interface UserNotification {
+  id: string;
+  /** `<dominio>.<evento>`, p. ej. `resources.offer_received`. */
+  kind: string;
+  tone: UserNotificationTone;
+  title: string;
+  body?: string;
+  href?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface UserNotificationsPage {
+  items: UserNotification[];
+  unread: number;
+}
+
+/** Marcar como leídos: unos ids concretos o, con `all`, todos. */
+export interface MarkUserNotificationsReadInput {
+  ids?: string[];
+  all?: boolean;
 }

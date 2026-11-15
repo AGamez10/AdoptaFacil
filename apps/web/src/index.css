@@ -41,3 +41,11 @@ html {
     transform: translateY(28px) scale(0.98);
   }
 }
+
+/* Ítem al que llevó un aviso (`?foco=`): se resalta unos segundos. */
+[data-foco-activo] {
+  outline: 3px solid hsl(var(--primary));
+  outline-offset: 3px;
+  border-radius: var(--r-md, 8px);
+  transition: outline-color 0.4s ease;
+}

@@ -1,10 +1,19 @@
 import { PDFDocument } from 'pdf-lib';
-import { renderImpactReportPdf, type ImpactReportData } from './impact-report-pdf';
+import type { ImpactReportPayload } from '../reports/report-payloads';
+import { renderReportPdf } from '../reports/report-pdf';
+import { renderReportXlsx } from '../reports/report-xlsx';
+import { computeLegalEffect, defaultSignerRoles } from '../reports/report-legal-effect';
 
-const base: ImpactReportData = {
-  organization: { name: 'Refugio 🐾 Patitas', city: 'Medellín' },
+const base: ImpactReportPayload = {
+  version: 1,
+  kind: 'impact',
+  organization: {
+    name: 'Refugio 🐾 Patitas',
+    city: 'Medellín',
+    nit: null,
+    formalizationState: 'esal_rte',
+  } as unknown as ImpactReportPayload['organization'],
   period: { start: '2026-01-01', end: '2026-09-30' },
-  generatedAt: new Date('2026-10-20T15:00:00Z'),
   animalsRegistered: 42,
   adoptionsCompleted: 17,
   donations: { count: 120, netTotal: 4_250_000, donors: 85 },
@@ -21,20 +30,29 @@ const base: ImpactReportData = {
     },
   ],
   animalsToday: { available: 20, inProcess: 3, adopted: 140 },
-  portalUrl: 'https://adoptafacil.org/o/patitas',
 };
 
-describe('impact-report-pdf (reporte de impacto)', () => {
-  it('dibuja un PDF válido aunque los textos traigan emojis', async () => {
-    const pdf = await PDFDocument.load(await renderImpactReportPdf(base));
+const sealed = (payload: ImpactReportPayload) => ({
+  code: 'ADF-REP-2026-ABCD1234',
+  contentHash: 'a'.repeat(64),
+  createdAt: new Date('2026-10-20T15:00:00Z'),
+  legalEffect: 'informative' as const,
+  payload,
+  signers: [],
+  verifyUrl: 'https://adoptafacil.org/verificar/ADF-REP-2026-ABCD1234',
+});
+
+describe('reporte de impacto sellado', () => {
+  it('dibuja un PDF válido con folio y título, aunque los textos traigan emojis', async () => {
+    const pdf = await PDFDocument.load(await renderReportPdf(sealed(base)));
     expect(pdf.getPageCount()).toBeGreaterThanOrEqual(1);
-    expect(pdf.getTitle()).toBe('Reporte de impacto · Refugio ? Patitas');
+    expect(pdf.getTitle()).toContain('Reporte de impacto');
+    expect(pdf.getTitle()).toContain('ADF-REP-2026-ABCD1234');
   });
 
-  it('una organización sin datos, sin ciudad ni portal también obtiene su PDF', async () => {
-    const empty: ImpactReportData = {
+  it('una organización sin datos también obtiene su PDF', async () => {
+    const empty: ImpactReportPayload = {
       ...base,
-      organization: { name: 'Rescatista nueva' },
       animalsRegistered: 0,
       adoptionsCompleted: 0,
       donations: { count: 0, netTotal: 0, donors: 0 },
@@ -43,18 +61,37 @@ describe('impact-report-pdf (reporte de impacto)', () => {
       volunteers: 0,
       campaigns: [],
       animalsToday: { available: 0, inProcess: 0, adopted: 0 },
-      portalUrl: undefined,
     };
-    const pdf = await PDFDocument.load(await renderImpactReportPdf(empty));
-    expect(pdf.getPageCount()).toBe(1);
+    const pdf = await PDFDocument.load(await renderReportPdf(sealed(empty)));
+    expect(pdf.getPageCount()).toBeLessThanOrEqual(2);
   });
 
-  it('muchas campañas no desbordan: la tabla se acota y pasa de página si hace falta', async () => {
+  it('muchas campañas no desbordan: la tabla se acota', async () => {
     const many = Array.from({ length: 40 }, (_, i) => ({
       ...base.campaigns[0],
       title: `Campaña ${i}`,
     }));
-    const pdf = await PDFDocument.load(await renderImpactReportPdf({ ...base, campaigns: many }));
+    const pdf = await PDFDocument.load(await renderReportPdf(sealed({ ...base, campaigns: many })));
     expect(pdf.getPageCount()).toBeLessThanOrEqual(3);
+  });
+
+  it('también sale en Excel', async () => {
+    const xlsx = await renderReportXlsx(sealed(base));
+    expect(xlsx.length).toBeGreaterThan(1000);
+  });
+
+  it('es siempre informativo y nunca pide firmantes', () => {
+    expect(
+      computeLegalEffect({
+        kind: 'impact',
+        formalizationState: 'esal_rte',
+        rteVigente: true,
+        hasNit: true,
+        signerRoles: ['legal_representative', 'fiscal_reviewer'],
+      }),
+    ).toBe('informative');
+    expect(defaultSignerRoles('impact', new Set(['legal_representative', 'accountant']))).toEqual(
+      [],
+    );
   });
 });

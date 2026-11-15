@@ -12,7 +12,7 @@ export function buildChargeSubject(): string {
 }
 
 export function buildChargeBody(input: ChargeInput): string {
-  return `Se generó un nuevo link de pago para tu apadrinamiento de ${input.animalName} en ${input.organizationName} (${input.amount} COP). Complétalo para mantener tu apadrinamiento activo.`;
+  return `Ya puedes pagar este mes de tu apadrinamiento de ${input.animalName} en ${input.organizationName} (${input.amount} COP). Entra a "Mis apadrinamientos" y toca "Pagar este mes": el dinero llega directo a la organización.`;
 }
 
 interface ReminderInput extends ChargeInput {
@@ -26,7 +26,7 @@ export function buildReminderSubject(input: ReminderInput): string {
 }
 
 export function buildReminderBody(input: ReminderInput): string {
-  const base = `Tu pago del apadrinamiento de ${input.animalName} en ${input.organizationName} (${input.amount} COP) sigue pendiente.`;
+  const base = `Tu pago del apadrinamiento de ${input.animalName} en ${input.organizationName} (${input.amount} COP) sigue pendiente. Págalo desde "Mis apadrinamientos" con "Pagar este mes".`;
   return input.isFinal
     ? `${base} Si no se completa pronto, el apadrinamiento se suspenderá automáticamente.`
     : base;

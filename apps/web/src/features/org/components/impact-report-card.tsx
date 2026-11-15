@@ -28,7 +28,14 @@ export function impactPeriod(
  * logró en el año, para donantes, empresas y su junta. Solo cifras agregadas:
  * nunca nombres ni datos de contacto de personas (`GET /org/exports/impact-report.pdf`).
  */
-export function ImpactReportCard({ plan = null }: { plan?: OrganizationPlanView | null }) {
+export function ImpactReportCard({
+  plan = null,
+  onGenerated,
+}: {
+  plan?: OrganizationPlanView | null;
+  /** Se llama al terminar: el reporte ya quedó en el historial. */
+  onGenerated?: () => void;
+}) {
   const allowed = planAllows(plan, 'impactReport');
   const client = useApiClient();
   const [busy, setBusy] = useState<ImpactPeriod | null>(null);
@@ -44,6 +51,7 @@ export function ImpactReportCard({ plan = null }: { plan?: OrganizationPlanView 
         `/org/exports/impact-report.pdf?start=${start}&end=${end}`,
         `reporte-de-impacto-${start.slice(0, 4)}.pdf`,
       );
+      onGenerated?.();
     } catch (error) {
       setMessage(exportErrorMessage(error));
     } finally {
@@ -57,9 +65,9 @@ export function ImpactReportCard({ plan = null }: { plan?: OrganizationPlanView 
         <CardTitle className="text-base">Reporte de impacto</CardTitle>
         <CardDescription>
           Un PDF para tus donantes y aliados: animales rescatados, adopciones, atenciones
-          veterinarias, donaciones, voluntariado y campañas, con un código QR a tu portal. Solo
-          cifras: no muestra nombres ni datos de nadie. Es informativo, no es un certificado de
-          donación.
+          veterinarias, donaciones, voluntariado y campañas, con un folio y un código QR para
+          verificar que es auténtico. Queda guardado en el historial. Solo cifras: no muestra
+          nombres ni datos de nadie. Es informativo, no es un certificado de donación.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">

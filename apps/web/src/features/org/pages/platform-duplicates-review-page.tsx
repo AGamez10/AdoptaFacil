@@ -56,6 +56,16 @@ export function PlatformDuplicatesReviewPage() {
           '/platform/duplicates/queue',
         );
         if (active) setQueue(items);
+      } catch (error) {
+        // Sin esto el rechazo quedaba sin manejar en la consola (p. ej. el 403
+        // de la verificación en dos pasos mientras se muestra su pantalla).
+        if (active) {
+          toast({
+            title: 'No se pudo cargar la cola de duplicados',
+            description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+            variant: 'destructive',
+          });
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -63,7 +73,7 @@ export function PlatformDuplicatesReviewPage() {
     return () => {
       active = false;
     };
-  }, [client]);
+  }, [client, toast]);
 
   const decide = async (
     id: string,

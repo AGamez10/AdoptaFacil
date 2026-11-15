@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   type Paginated,
   type ServiceHours,
   type VolunteerCertificate,
   type VolunteerEnrollmentMine,
   type VolunteerOpportunityPublic,
+  DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE,
   formatDayEs,
   SERVICE_HOURS_MAX_PHOTOS,
+  VOLUNTEER_CERTIFICATE_TEMPLATE_LABELS,
+  VOLUNTEER_CERTIFICATE_TEMPLATES,
+  type VolunteerCertificateTemplate,
   todayInColombia,
   volunteerEnabledDays,
 } from '@adoptafacil/contracts';
@@ -24,16 +28,19 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
-import { isIncompleteProfileError, useApiClient } from '../../../shell/api';
+import { useApiClient } from '../../../shell/api';
+import { isProfileGateCancelled, useProfileGate } from '../../auth/components/profile-gate';
 import { StudentServiceEnrollmentModal } from '../components/student-service-enrollment-modal';
 import { downloadVolunteerCertificatePdf } from '../lib/certificate';
 import {
   ENROLLMENT_STATUS_LABELS,
   HOURS_STATUS_LABELS,
+  ENROLL_QUERY_PARAM,
   OPPORTUNITY_QUERY_PARAM,
   enrollmentStatusVariant,
   formatBogota,
   formatHours,
+  hoursFormProblem,
   hoursStatusVariant,
   parseSessionHours,
 } from '../model/volunteering-view';
@@ -55,6 +62,31 @@ function loggableDays(enrollment: VolunteerEnrollmentMine): string[] | null {
   ).reverse();
 }
 
+/** Próximo día de jornada habilitado (hoy o después), si la organización
+ *  definió días. Para decirle a la persona CUÁNDO podrá registrar horas. */
+function nextSessionDay(enrollment: VolunteerEnrollmentMine): string | null {
+  const today = todayInColombia();
+  return (enrollment.sessionDates ?? []).filter((day) => day >= today).sort()[0] ?? null;
+}
+
+/** Por qué todavía no puede registrar horas, en palabras de la persona: si la
+ *  organización aún no asignó días, se dice así (y desde cuándo podrá); si los
+ *  asignó, cuál es la próxima jornada. */
+function notYetMessage(enrollment: VolunteerEnrollmentMine): string {
+  const after = 'Podrás registrar tus horas el mismo día de la jornada o después.';
+  if (!enrollment.sessionDates || enrollment.sessionDates.length === 0) {
+    const start = enrollment.opportunityStartDate?.slice(0, 10);
+    return (
+      'La organización aún no ha asignado los días de jornada; te avisaremos cuando los publique.' +
+      (start ? ` La convocatoria empieza el ${formatDayEs(start)}.` : '')
+    );
+  }
+  const next = nextSessionDay(enrollment);
+  return next
+    ? `Tu próxima jornada es el ${formatDayEs(next)}. ${after}`
+    : `Aún no hay un día de jornada habilitado que ya haya ocurrido. ${after}`;
+}
+
 /**
  * `/voluntariado` (RF18/RF19, M08) — experiencia del voluntario (Persona):
  * explorar oportunidades públicas e inscribirse, ver "mis inscripciones",
@@ -64,12 +96,15 @@ function loggableDays(enrollment: VolunteerEnrollmentMine): string[] | null {
  */
 export function MyVolunteeringPage() {
   const client = useApiClient();
+  const profileGate = useProfileGate();
   const { toast } = useToast();
-  const navigate = useNavigate();
   // Jornada elegida desde la landing (`?oportunidad=<id>`): se resalta y se
   // lleva a la vista para que la persona la encuentre sin buscarla.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const highlightedId = searchParams.get(OPPORTUNITY_QUERY_PARAM);
+  // `&inscribirme=1`: la persona ya pulsó «Quiero participar» (antes de entrar
+  // o crear su cuenta). Se le muestra ESA jornada lista para confirmar.
+  const wantsToEnroll = searchParams.get(ENROLL_QUERY_PARAM) === '1';
 
   const [opportunities, setOpportunities] = useState<VolunteerOpportunityPublic[]>([]);
   const [enrollments, setEnrollments] = useState<VolunteerEnrollmentMine[]>([]);
@@ -86,6 +121,9 @@ export function MyVolunteeringPage() {
   const [logDescription, setLogDescription] = useState('');
   const [logPhotos, setLogPhotos] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const [template, setTemplate] = useState<VolunteerCertificateTemplate>(
+    DEFAULT_VOLUNTEER_CERTIFICATE_TEMPLATE,
+  );
 
   const loadAll = async (): Promise<void> => {
     const [opportunitiesPage, enrollmentsList, hoursList, certificatesList] = await Promise.all([
@@ -125,21 +163,16 @@ export function MyVolunteeringPage() {
 
   const enroll = async (opportunityId: string): Promise<void> => {
     try {
-      await client.request('/volunteer-enrollments', { method: 'POST', json: { opportunityId } });
+      // Faltan datos del perfil: se piden en una ventana y la inscripción a ESTA
+      // jornada sigue sola al guardarlos (sin pasar por otra pantalla).
+      await profileGate.run(
+        () => client.request('/volunteer-enrollments', { method: 'POST', json: { opportunityId } }),
+        'Para inscribirte necesitamos tu teléfono, documento de identidad y dirección.',
+      );
       await loadAll();
       toast({ title: 'Inscripción enviada', variant: 'success' });
     } catch (error) {
-      // T-Google-SignIn (business rule #3): enrolling as a volunteer requires
-      // a complete profile (phone/documentId/address).
-      if (isIncompleteProfileError(error)) {
-        navigate('/perfil/completar', {
-          state: {
-            reason:
-              'Antes de inscribirte como voluntario necesitamos tu teléfono, documento de identidad y dirección.',
-          },
-        });
-        return;
-      }
+      if (isProfileGateCancelled(error)) return;
       toast({
         title: 'No se pudo completar la inscripción',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
@@ -157,13 +190,16 @@ export function MyVolunteeringPage() {
   };
 
   const submitHours = async (enrollmentId: string): Promise<void> => {
-    const parsedHours = parseSessionHours(logHoursValue);
-    if (!logDate || parsedHours === null || !logDescription.trim()) {
-      toast({
-        title: 'Datos incompletos',
-        description: 'Fecha, horas (hasta 24) y descripción son obligatorios.',
-        variant: 'warning',
-      });
+    const enrollment = enrollments.find((e) => e.id === enrollmentId);
+    const allowed = enrollment ? loggableDays(enrollment) : null;
+    const problem = hoursFormProblem({
+      allowedDays: allowed,
+      date: logDate,
+      hoursText: logHoursValue,
+      description: logDescription,
+    });
+    if (problem) {
+      toast({ ...problem, variant: 'warning' });
       return;
     }
     const logDateError = dateError('serviceHoursDate', logDate);
@@ -171,17 +207,7 @@ export function MyVolunteeringPage() {
       toast({ title: 'Fecha no válida', description: logDateError, variant: 'warning' });
       return;
     }
-    const enrollment = enrollments.find((e) => e.id === enrollmentId);
-    const allowed = enrollment ? loggableDays(enrollment) : null;
-    if (allowed && !allowed.includes(logDate)) {
-      toast({
-        title: 'Día no habilitado',
-        description:
-          'Solo puedes registrar horas en los días de jornada que habilitó la organización.',
-        variant: 'warning',
-      });
-      return;
-    }
+    const parsedHours = parseSessionHours(logHoursValue) as number;
     setSaving(true);
     try {
       const created = await client.request<ServiceHours>('/service-hours', {
@@ -223,6 +249,24 @@ export function MyVolunteeringPage() {
   };
 
   const enrolledOpportunityIds = new Set(enrollments.map((e) => e.opportunityId));
+  const pendingChoice =
+    wantsToEnroll && highlightedId && !enrolledOpportunityIds.has(highlightedId)
+      ? (opportunities.find((o) => o.id === highlightedId) ?? null)
+      : null;
+  const dismissChoice = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete(ENROLL_QUERY_PARAM);
+    setSearchParams(next, { replace: true });
+  };
+  const confirmChoice = () => {
+    if (!pendingChoice) return;
+    if (pendingChoice.appliesToStudentService) {
+      setStudentServiceTarget(pendingChoice);
+    } else {
+      void enroll(pendingChoice.id);
+    }
+    dismissChoice();
+  };
   // Nuevo requerimiento: una vez la organización emite el certificado de una
   // inscripción, el voluntario ya no puede registrar más horas sobre ella.
   const certifiedEnrollmentIds = new Set(certificates.map((c) => c.enrollmentId));
@@ -234,6 +278,31 @@ export function MyVolunteeringPage() {
         description="Explora oportunidades, inscríbete, registra tus horas y descarga tus certificados."
       />
       {loading && <Skeleton className="h-64 w-full" />}
+      {!loading && pendingChoice && (
+        <div
+          role="status"
+          data-testid="volunteer-pending-choice"
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/5 p-4"
+        >
+          <div className="text-sm">
+            <p className="font-semibold text-foreground">
+              Seguimos con tu inscripción a «{pendingChoice.title}»
+            </p>
+            <p className="text-muted-foreground">
+              {pendingChoice.organizationName} · {formatBogota(pendingChoice.startDate)} –{' '}
+              {formatBogota(pendingChoice.endDate)} · {pendingChoice.location}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={dismissChoice}>
+              Ahora no
+            </Button>
+            <Button size="sm" onClick={confirmChoice}>
+              Confirmar inscripción
+            </Button>
+          </div>
+        </div>
+      )}
       {!loading && (
         <div className="space-y-6">
           <Card>
@@ -293,7 +362,11 @@ export function MyVolunteeringPage() {
               ) : (
                 <ul className="space-y-3">
                   {enrollments.map((enrollment) => (
-                    <li key={enrollment.id} className="space-y-2 rounded-md border p-3 text-sm">
+                    <li
+                      key={enrollment.id}
+                      data-foco={enrollment.id}
+                      className="space-y-2 rounded-md border p-3 text-sm"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-medium">
                           {enrollment.opportunityTitle} · {enrollment.organizationName}
@@ -302,11 +375,12 @@ export function MyVolunteeringPage() {
                           {ENROLLMENT_STATUS_LABELS[enrollment.status]}
                         </Badge>
                       </div>
-                      {enrollment.status === 'rejected' && enrollment.rejectionReason && (
-                        <p className="text-xs text-muted-foreground">
-                          Motivo: {enrollment.rejectionReason}
-                        </p>
-                      )}
+                      {(enrollment.status === 'rejected' || enrollment.status === 'cancelled') &&
+                        enrollment.rejectionReason && (
+                          <p className="text-xs text-muted-foreground">
+                            Motivo: {enrollment.rejectionReason}
+                          </p>
+                        )}
                       {(enrollment.status === 'accepted' || enrollment.status === 'completed') && (
                         <div className="space-y-2">
                           {certifiedEnrollmentIds.has(enrollment.id) ? (
@@ -332,9 +406,7 @@ export function MyVolunteeringPage() {
                                 if (days.length === 0) {
                                   return (
                                     <p className="text-xs text-muted-foreground sm:col-span-3">
-                                      Aún no hay un día de jornada habilitado que ya haya ocurrido.
-                                      Podrás registrar tus horas el mismo día de la jornada o
-                                      después.
+                                      {notYetMessage(enrollment)}
                                     </p>
                                   );
                                 }
@@ -400,6 +472,13 @@ export function MyVolunteeringPage() {
                                 </Button>
                               </div>
                             </div>
+                          ) : loggableDays(enrollment)?.length === 0 ? (
+                            <p
+                              className="text-xs text-muted-foreground"
+                              data-testid="hours-not-yet"
+                            >
+                              {notYetMessage(enrollment)}
+                            </p>
                           ) : (
                             <Button
                               size="sm"
@@ -430,6 +509,7 @@ export function MyVolunteeringPage() {
                   {hours.map((entry) => (
                     <li
                       key={entry.id}
+                      data-foco={entry.id}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
                     >
                       <div>
@@ -469,6 +549,7 @@ export function MyVolunteeringPage() {
                   {certificates.map((certificate) => (
                     <li
                       key={certificate.id}
+                      data-foco={certificate.id}
                       className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
                     >
                       <div>
@@ -486,19 +567,61 @@ export function MyVolunteeringPage() {
                               ` · Convenio ${certificate.schoolAgreementCode}`}
                           </p>
                         )}
+                        {certificate.verificationCode && (
+                          <p className="text-xs text-muted-foreground">
+                            Código de verificación:{' '}
+                            <a
+                              className="font-mono underline"
+                              href={`/verificar/${encodeURIComponent(certificate.verificationCode)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {certificate.verificationCode}
+                            </a>
+                          </p>
+                        )}
                         {certificate.guardianName && (
                           <p className="text-xs text-muted-foreground">
                             Acudiente: {certificate.guardianName}
                           </p>
                         )}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void downloadVolunteerCertificatePdf(client, certificate.id)}
-                      >
-                        Descargar PDF
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                          value={template}
+                          onChange={(e) =>
+                            setTemplate(e.target.value as VolunteerCertificateTemplate)
+                          }
+                          aria-label="Diseño del certificado"
+                        >
+                          {VOLUNTEER_CERTIFICATE_TEMPLATES.map((key) => (
+                            <option key={key} value={key}>
+                              {VOLUNTEER_CERTIFICATE_TEMPLATE_LABELS[key]}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void downloadVolunteerCertificatePdf(
+                              client,
+                              certificate.id,
+                              template,
+                            ).catch((error: unknown) =>
+                              toast({
+                                title: 'No se pudo descargar el certificado',
+                                description:
+                                  error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+                                variant: 'destructive',
+                              }),
+                            )
+                          }
+                        >
+                          Descargar PDF
+                        </Button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -515,16 +638,9 @@ export function MyVolunteeringPage() {
           opportunityId={studentServiceTarget.id}
           opportunityTitle={studentServiceTarget.title}
           onEnrolled={() => void loadAll()}
-          onIncompleteProfile={() =>
-            navigate('/perfil/completar', {
-              state: {
-                reason:
-                  'Antes de inscribirte como voluntario necesitamos tu teléfono, documento de identidad y dirección.',
-              },
-            })
-          }
         />
       )}
+      {profileGate.dialog}
     </PageContainer>
   );
 }

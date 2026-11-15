@@ -40,6 +40,8 @@ export function isFormalState(state: string): boolean {
  *   legal ⇒ `signed`.
  */
 export function computeLegalEffect(input: LegalEffectInput): OrgReportLegalEffect {
+  // El reporte de impacto nunca se firma ni certifica: es informativo siempre.
+  if (input.kind === 'impact') return 'informative';
   if (!isFormalState(input.formalizationState)) return 'informative';
   if (input.kind === 'accounting') {
     // El libro auxiliar lo revisa y firma el contador o el revisor fiscal; el
@@ -76,6 +78,7 @@ export function defaultSignerRoles(
   registered: ReadonlySet<LegalRepresentativeRole>,
 ): LegalRepresentativeRole[] {
   const roles: LegalRepresentativeRole[] = [];
+  if (kind === 'impact') return roles;
   if (registered.has('legal_representative')) roles.push('legal_representative');
   if (kind === 'donations' || kind === 'accounting') {
     if (registered.has('fiscal_reviewer')) roles.push('fiscal_reviewer');

@@ -1,0 +1,416 @@
+// Libro público con la apariencia de la plantilla activa. Todo sale de las
+// variables --led-* (fondo, tinta, acento, tipografías y redondeo de la
+// plantilla); los tonos de apoyo se mezclan con la tinta para que funcionen en
+// modo claro y oscuro sin colores sueltos.
+
+$in: #12a065;
+$out: #d0334f;
+$warn: #c27a00;
+
+// Doble clase: gana a los estilos base del diálogo sin depender del orden.
+.dialog.dialog {
+  --led-line: color-mix(in srgb, var(--led-ink) 14%, transparent);
+  --led-soft: color-mix(in srgb, var(--led-ink) 68%, var(--led-bg));
+  --led-tile: color-mix(in srgb, var(--led-ink) 5%, var(--led-bg));
+  --led-in: color-mix(in srgb, #{$in} 72%, var(--led-ink));
+  --led-out: color-mix(in srgb, #{$out} 72%, var(--led-ink));
+
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(720px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(88vh, 900px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--led-line);
+  border-radius: calc(var(--led-r) + 6px);
+  background: var(--led-bg);
+  color: var(--led-ink);
+  font-family: var(--led-font);
+  line-height: 1.5;
+  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.45);
+
+  @media (max-width: 600px) {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 26px 28px 0;
+
+  @media (max-width: 600px) {
+    padding: max(18px, env(safe-area-inset-top)) 18px 0;
+  }
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--led-acc);
+}
+
+.title.title {
+  margin: 6px 0 0;
+  font-family: var(--led-head);
+  font-size: clamp(26px, 4vw, 34px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--led-ink);
+}
+
+.close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--led-line);
+  border-radius: 999px;
+  background: var(--led-tile);
+  color: var(--led-ink);
+  cursor: pointer;
+  transition: background 0.2s;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--led-ink) 10%, var(--led-bg));
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--led-acc);
+    outline-offset: 2px;
+  }
+}
+
+.lead.lead {
+  margin: 12px 0 0;
+  padding: 0 28px 20px;
+  border-bottom: 1px solid var(--led-line);
+  font-size: 14px;
+  color: var(--led-soft);
+
+  @media (max-width: 600px) {
+    padding: 0 18px 16px;
+    font-size: 13px;
+  }
+}
+
+.body {
+  display: grid;
+  gap: 22px;
+  padding: 22px 28px 28px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  @media (max-width: 600px) {
+    padding: 18px 18px max(24px, env(safe-area-inset-bottom));
+  }
+}
+
+.totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+
+  > div {
+    padding: 16px 18px;
+    border: 1px solid var(--led-line);
+    border-radius: var(--led-r);
+    background: var(--led-tile);
+  }
+
+  dt {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--led-soft);
+  }
+
+  dd {
+    margin: 6px 0 0;
+    font-family: var(--led-head);
+    font-size: clamp(19px, 2.6vw, 24px);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .in dd {
+    color: var(--led-in);
+  }
+
+  .out dd {
+    color: var(--led-out);
+  }
+
+  .balance {
+    border-color: transparent;
+    background: var(--led-acc);
+    color: var(--led-acc-ink);
+
+    dt {
+      color: inherit;
+      opacity: 0.8;
+    }
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr 1fr;
+
+    .balance {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+.flow {
+  display: grid;
+  gap: 8px;
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--led-soft);
+  }
+
+  b {
+    color: var(--led-ink);
+  }
+}
+
+.bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--led-in) 22%, var(--led-bg));
+
+  i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--led-out);
+  }
+}
+
+.months {
+  display: grid;
+  gap: 20px;
+}
+
+.month {
+  h3 {
+    margin: 0 0 8px;
+    font-family: var(--led-head);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--led-soft);
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--led-line);
+    border-radius: var(--led-r);
+    overflow: hidden;
+  }
+
+  li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: start;
+    padding: 14px 16px;
+
+    & + li {
+      border-top: 1px solid var(--led-line);
+    }
+  }
+
+  @media (max-width: 600px) {
+    li {
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 4px 12px;
+    }
+
+    .amount {
+      grid-column: 2;
+    }
+  }
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .in & {
+    background: color-mix(in srgb, var(--led-in) 16%, var(--led-bg));
+    color: var(--led-in);
+  }
+
+  .out & {
+    background: color-mix(in srgb, var(--led-out) 14%, var(--led-bg));
+    color: var(--led-out);
+  }
+
+  .voided & {
+    background: var(--led-tile);
+    color: var(--led-soft);
+  }
+}
+
+.what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+
+  > b {
+    flex-basis: 100%;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--led-soft);
+}
+
+.chip {
+  padding: 1px 9px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--led-acc) 16%, var(--led-bg));
+  color: color-mix(in srgb, var(--led-acc) 55%, var(--led-ink));
+}
+
+.why {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: color-mix(in srgb, #{$warn} 70%, var(--led-ink));
+}
+
+.amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  .in & {
+    color: var(--led-in);
+  }
+
+  .out & {
+    color: var(--led-out);
+  }
+}
+
+.voided {
+  .what > b,
+  .amount {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+}
+
+.more {
+  justify-self: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 1.5px solid var(--led-acc);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--led-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--led-acc) 14%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--led-acc);
+    outline-offset: 2px;
+  }
+}
+
+.empty {
+  padding: 28px;
+  border: 1px dashed var(--led-line);
+  border-radius: var(--led-r);
+  text-align: center;
+
+  b {
+    display: block;
+    font-family: var(--led-head);
+    font-size: 18px;
+  }
+
+  p {
+    margin: 6px auto 0;
+    max-width: 40ch;
+    font-size: 14px;
+    color: var(--led-soft);
+  }
+}
+
+.skeleton {
+  display: grid;
+  gap: 10px;
+
+  i {
+    display: block;
+    height: 64px;
+    border-radius: var(--led-r);
+    background: var(--led-tile);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton i {
+    animation: none;
+  }
+}

@@ -58,10 +58,14 @@
 		}
 	}
 
-	# Enlaces para compartir publicaciones de la comunidad (/c/<id>?s=<red>):
+	# Enlaces para compartir publicaciones de la comunidad (/p/<uuid>?s=<red>):
 	# la API responde el HTML con Open Graph para WhatsApp, Facebook, X y
 	# LinkedIn, y manda a la persona a la publicación con parámetros UTM.
-	handle /c/* {
+	# /c/<uuid> es el formato viejo (enlaces ya compartidos). Solo un UUID va a
+	# la API: /c/<código de 8> es el QR impreso en las bolsas de café y lo
+	# atiende la web. No ampliar este patrón a /c/* (ver short-links.tsx).
+	@share_link path_regexp ^/[pc]/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+	handle @share_link {
 		rewrite * /public/share{uri}
 		reverse_proxy api:3000 {
 			header_up X-Forwarded-Proto {scheme}

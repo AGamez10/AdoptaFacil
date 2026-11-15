@@ -4,6 +4,7 @@ import { EmptyState, Skeleton } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
 import { PostCard } from '../components/post-card';
+import { useReactions } from '../hooks/use-reactions';
 
 /**
  * `/mis-publicaciones` (M11, F-8) — las publicaciones propias
@@ -15,6 +16,7 @@ export function MyPostsPage() {
   const client = useApiClient();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const { stateOf, react } = useReactions(posts);
 
   useEffect(() => {
     let active = true;
@@ -45,9 +47,14 @@ export function MyPostsPage() {
         />
       )}
       {!loading && posts.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mx-auto max-w-2xl space-y-4">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard
+              key={post.id}
+              post={post}
+              reaction={stateOf(post)}
+              onReact={(p, next) => void react(p, next)}
+            />
           ))}
         </div>
       )}

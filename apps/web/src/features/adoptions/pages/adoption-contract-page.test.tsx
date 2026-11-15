@@ -46,7 +46,18 @@ const BASE_PAYLOAD = {
   applicant: { fullName: 'Juan Adoptante', email: 'juan@test.local' },
   applicableLaws: ['Ley 527/1999', 'Ley 1581/2012'] as const,
   terms: '',
-  data: { followUpMonths: 6, weightKg: 18, healthStatusAtDelivery: 'Sano' },
+  data: {
+    followUpMonths: 6,
+    weightKg: 18,
+    healthStatusAtDelivery: 'Sano',
+    organizationName: 'Refugio Demo',
+    organizationNit: '900000000-1',
+    organizationAddress: 'Calle 1 # 2-3, Bogotá',
+    animalSex: 'male',
+    adopterDocumentNumber: '1000000000',
+    adopterAddress: 'Carrera 4 # 5-6, Bogotá',
+    signatureCity: 'Bogotá',
+  },
 };
 
 const DRAFT_CONTRACT = {
@@ -321,5 +332,45 @@ describe('AdoptionContractPage (M04, T-028b — nuevo requerimiento)', () => {
       screen.getByLabelText('Plan de seguimiento que eligió el adoptante'),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Cuidador de respaldo (nombre)')).toBeInTheDocument();
+  });
+  it('punto 13: con datos obligatorios en blanco no deja firmar y dice qué falta; guardar envía solo lo editable', async () => {
+    const incomplete = {
+      ...DRAFT_CONTRACT,
+      payload: {
+        ...BASE_PAYLOAD,
+        data: {
+          ...BASE_PAYLOAD.data,
+          weightKg: undefined,
+          healthStatusAtDelivery: '',
+          organizationFormalization: 'formal' as const,
+        },
+      },
+    };
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      return url.includes('/org/') || url.includes('/data') ? incomplete : {};
+    });
+    renderShell({ route: '/adopciones/contratos/c1', ...sessionWith([Role.Owner]) });
+
+    const notice = await screen.findByTestId('contract-missing-fields');
+    expect(notice).toHaveTextContent('Peso (kg)');
+    expect(notice).toHaveTextContent('Estado de salud al momento de la entrega');
+    expect(
+      screen.getByRole('button', { name: 'Aprobar y firmar por la organización' }),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar datos' }));
+    const patch = await waitFor(() => {
+      const found = calls.find((c) => c.url.includes('/data') && c.init?.method === 'PATCH');
+      expect(found).toBeDefined();
+      return found;
+    });
+    const body = JSON.parse(String(patch?.init?.body)) as Record<string, unknown>;
+    // Lo vacío viaja como null (no como texto vacío) y lo que fija el sistema no viaja.
+    expect(body.healthStatusAtDelivery).toBeNull();
+    expect(body.weightKg).toBeNull();
+    expect(body).not.toHaveProperty('organizationFormalization');
+    expect(body).not.toHaveProperty('minimumSignerAge');
   });
 });

@@ -6,7 +6,10 @@ import {
   PLAN_CAPABILITY_INFO,
   PLAN_CATALOG,
   PLAN_KEYS,
+  NEW_ORG_TRIAL_DAYS,
+  freeProPeriod,
   launchPromoEnd,
+  newOrgTrialEnd,
   minimumPlanFor,
   minimumPlanForLimit,
   planHighlights,
@@ -157,5 +160,33 @@ describe('launch promotion', () => {
     expect(
       resolveEffectivePlan(sub({ status: 'canceled', currentPeriodEnd: null }), during, true, end),
     ).toBe('free');
+  });
+});
+
+describe('prueba Pro de la organización nueva', () => {
+  const created = new Date('2026-12-01T10:00:00Z');
+
+  it('dura NEW_ORG_TRIAL_DAYS (14) días desde el registro', () => {
+    expect(NEW_ORG_TRIAL_DAYS).toBe(14);
+    expect(newOrgTrialEnd(created).toISOString()).toBe('2026-12-15T10:00:00.000Z');
+  });
+
+  it('rige la que termine más tarde entre la promoción y la prueba', () => {
+    const promo = new Date('2026-12-10T00:00:00Z');
+    expect(freeProPeriod(promo, created)).toEqual({
+      endsAt: new Date('2026-12-15T10:00:00Z'),
+      reason: 'trial',
+    });
+    const longPromo = new Date('2027-02-01T00:00:00Z');
+    expect(freeProPeriod(longPromo, created)).toEqual({ endsAt: longPromo, reason: 'launch' });
+    expect(freeProPeriod(null, null)).toBeNull();
+    // 0 días apaga la prueba.
+    expect(freeProPeriod(null, created, 0)).toBeNull();
+  });
+
+  it('sin suscripción es Pro durante la prueba y Gratis al vencer', () => {
+    const end = newOrgTrialEnd(created);
+    expect(resolveEffectivePlan(null, new Date('2026-12-14T00:00:00Z'), true, end)).toBe('pro');
+    expect(resolveEffectivePlan(null, new Date('2026-12-16T00:00:00Z'), true, end)).toBe('free');
   });
 });

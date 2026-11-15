@@ -11,10 +11,16 @@ import type { LegalRepresentativeRole, OrgReportLegalEffect } from '@adoptafacil
 import type {
   AccountingReportPayload,
   DonationsReportPayload,
+  ImpactReportPayload,
   OrgReportPayload,
   SocialServiceReportPayload,
 } from './report-payloads';
 import { SIGNER_ROLE_LABEL } from './report-legal-effect';
+import {
+  CAMPAIGN_CATEGORY_LABEL,
+  CAMPAIGN_STATUS_LABEL,
+  labelOf,
+} from '../org-exports/export-labels';
 import { pdfText, toWinAnsi } from './report-text';
 import { stampPlatformDocumentNotice } from '../../core/legal/platform-document-notice';
 import {
@@ -98,6 +104,9 @@ export function effectExplanation(
   kind: OrgReportPayload['kind'],
   effect: OrgReportLegalEffect,
 ): string {
+  if (kind === 'impact') {
+    return 'Reporte de impacto con cifras agregadas de los registros de la organización: no contiene datos personales de adoptantes, donantes ni voluntarios. Es informativo: no es un certificado de donación ni tiene efecto tributario. Verifica su autenticidad con el código QR o el folio.';
+  }
   if (effect === 'informative') {
     return 'Este documento resume información registrada en AdoptaFácil por la organización. No está firmado por un representante legal y no sirve como soporte legal ni tributario.';
   }
@@ -149,7 +158,9 @@ export function reportTitle(kind: OrgReportPayload['kind']): string {
     ? 'Informe de donaciones recibidas'
     : kind === 'accounting'
       ? 'Libro auxiliar de donaciones'
-      : 'Reporte de servicio social y voluntariado';
+      : kind === 'impact'
+        ? 'Reporte de impacto'
+        : 'Reporte de servicio social y voluntariado';
 }
 
 const money = (n: number): string => `$ ${Math.round(n).toLocaleString('es-CO')}`;
@@ -215,6 +226,28 @@ function fit(raw: string, font: PDFFont, size: number, maxWidth: number): string
     out = out.slice(0, -1);
   }
   return `${out}…`;
+}
+
+/** Como `wrap`, pero parte también las palabras más anchas que la columna (códigos, URLs). */
+function wrapAll(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const lines: string[] = [];
+  for (const line of wrap(text, font, size, maxWidth)) {
+    if (font.widthOfTextAtSize(line, size) <= maxWidth) {
+      lines.push(line);
+      continue;
+    }
+    let chunk = '';
+    for (const ch of line) {
+      if (chunk && font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
+        lines.push(chunk);
+        chunk = ch;
+      } else {
+        chunk += ch;
+      }
+    }
+    if (chunk) lines.push(chunk);
+  }
+  return lines.length > 0 ? lines : [''];
 }
 
 function wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
@@ -353,25 +386,36 @@ export class ReportCanvas {
       return;
     }
     rows.forEach((row, r) => {
-      if (this.ensure(rowH)) drawHeader();
+      // Un PDF es estático: nada se recorta con "…". El texto largo baja a
+      // más renglones y la fila crece lo necesario.
+      const cells = columns.map((_col, i) =>
+        wrapAll(row[i] ?? '', this.font.regular, size, widths[i] - 8),
+      );
+      const lineH = size + 2.5;
+      const maxLines = Math.max(...cells.map((l) => l.length));
+      const height = Math.max(rowH, maxLines * lineH + 6);
+      if (this.ensure(height)) drawHeader();
       if (r % 2 === 1) {
         this.page.drawRectangle({
           x: MARGIN,
-          y: this.y - rowH + size * 0.2,
+          y: this.y - height + size * 0.2,
           width: PAGE_W - MARGIN * 2,
-          height: rowH,
+          height,
           color: ZEBRA,
         });
       }
       let x = MARGIN;
       columns.forEach((col, i) => {
-        const label = fit(row[i] ?? '', this.font.regular, size, widths[i] - 8);
-        const w = this.font.regular.widthOfTextAtSize(label, size);
-        const tx = col.align === 'right' ? x + widths[i] - 4 - w : x + 4;
-        this.text(label, tx, size, { y: this.y - rowH + 5 + size * 0.2 });
+        cells[i].forEach((label, li) => {
+          const w = this.font.regular.widthOfTextAtSize(label, size);
+          const tx = col.align === 'right' ? x + widths[i] - 4 - w : x + 4;
+          this.text(label, tx, size, {
+            y: this.y - height + 5 + size * 0.2 + (maxLines - 1 - li) * lineH,
+          });
+        });
         x += widths[i];
       });
-      this.y -= rowH;
+      this.y -= height;
     });
     this.page.drawLine({
       start: { x: MARGIN, y: this.y + size * 0.2 },
@@ -507,7 +551,7 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
       { header: 'Donaciones', width: 15, align: 'right' },
       { header: 'Neto recibido', width: 25, align: 'right' },
     ],
-    p.byConcept.map((r) => [pdfText(r.concept, 120), String(r.count), money(r.net)]),
+    p.byConcept.map((r) => [pdfText(r.concept, 300), String(r.count), money(r.net)]),
   );
 
   if (p.byMonth.length > 1) {
@@ -527,20 +571,20 @@ function drawDonations(c: ReportCanvas, p: DonationsReportPayload): void {
     [
       { header: 'Fecha', width: 9 },
       { header: 'Recibo', width: 8 },
-      { header: 'Donante', width: 19 },
+      { header: 'Donante', width: 16 },
       { header: 'Documento', width: 9 },
-      { header: 'Destino', width: 16 },
+      { header: 'Destino', width: 20 },
       { header: 'Valor donado', width: 11, align: 'right' },
-      { header: 'Tarifa MP', width: 10, align: 'right' },
-      { header: 'Neto', width: 11, align: 'right' },
-      { header: 'Certificado', width: 17 },
+      { header: 'Tarifa MP', width: 9, align: 'right' },
+      { header: 'Neto', width: 10, align: 'right' },
+      { header: 'Certificado', width: 16 },
     ],
     p.rows.map((r) => [
       formatShortDate(r.date),
       pdfText(r.receiptNo, 12),
-      pdfText(r.donor, 80),
-      pdfText(r.donorDocument, 20),
-      pdfText(r.concept, 80),
+      pdfText(r.donor, 200),
+      pdfText(r.donorDocument, 30),
+      pdfText(r.concept, 300),
       money(r.amountCharged),
       money(r.fees),
       money(r.net),
@@ -688,7 +732,7 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
       { header: 'Estudiantes / voluntarios', width: 20, align: 'right' },
       { header: 'Horas en el período', width: 20, align: 'right' },
     ],
-    p.bySchool.map((r) => [pdfText(r.school, 120), String(r.volunteers), hours(r.hours)]),
+    p.bySchool.map((r) => [pdfText(r.school, 300), String(r.volunteers), hours(r.hours)]),
   );
 
   c.sectionTitle('Detalle por voluntario');
@@ -707,10 +751,10 @@ function drawSocialService(c: ReportCanvas, p: SocialServiceReportPayload): void
       { header: 'Certificado', width: 6 },
     ],
     p.rows.map((r) => [
-      pdfText(r.volunteerName, 80),
-      pdfText(r.opportunity, 80),
+      pdfText(r.volunteerName, 200),
+      pdfText(r.opportunity, 200),
       r.studentService ? 'Serv. social' : 'Voluntariado',
-      pdfText(r.school, 80) || '-',
+      pdfText(r.school, 200) || '-',
       pdfText(r.agreementCode, 30) || '-',
       r.sessionsInPeriod === undefined ? '-' : String(r.sessionsInPeriod),
       hours(r.hoursInPeriod),
@@ -782,6 +826,117 @@ export function signerRoleLine(role: LegalRepresentativeRole, position: string):
   const keyword = label.split(' ')[0].toLowerCase().slice(0, 6);
   return clean.toLowerCase().includes(keyword) ? clean : `${label} · ${clean}`;
 }
+
+const impactMoney = (n: number): string => `$ ${Math.round(n).toLocaleString('es-CO')}`;
+const impactCount = (n: number): string => n.toLocaleString('es-CO');
+
+/** Barra horizontal proporcional (0..1) sobre un riel gris. */
+function drawBar(c: ReportCanvas, x: number, y: number, width: number, ratio: number): void {
+  c.page.drawRectangle({
+    x,
+    y,
+    width,
+    height: 7,
+    color: ZEBRA,
+    borderColor: LINE,
+    borderWidth: 0.5,
+  });
+  const w = Math.max(0, Math.min(1, ratio)) * width;
+  if (w > 0.5) c.page.drawRectangle({ x, y, width: w, height: 7, color: TEAL });
+}
+
+/** Una lista de barras `etiqueta · barra · valor`, todas contra el mayor valor. */
+function drawBars(
+  c: ReportCanvas,
+  rows: Array<{ label: string; value: number; shown?: string }>,
+): void {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  const labelW = 150;
+  const valueW = 70;
+  const barX = MARGIN + labelW + 8;
+  const barW = PAGE_W - MARGIN * 2 - labelW - valueW - 16;
+  for (const r of rows) {
+    c.ensure(20);
+    c.text(fit(r.label, c.font.regular, 9.5, labelW), MARGIN, 9.5, { color: INK });
+    drawBar(c, barX, c.y - 1, barW, r.value / max);
+    const shown = r.shown ?? impactCount(r.value);
+    const w = c.font.bold.widthOfTextAtSize(shown, 9.5);
+    c.text(shown, PAGE_W - MARGIN - w, 9.5, { font: c.font.bold, color: NAVY });
+    c.y -= 18;
+  }
+  c.y -= 4;
+}
+
+function drawImpact(c: ReportCanvas, p: ImpactReportPayload): void {
+  c.kpis([
+    { label: 'Animales rescatados o recibidos', value: impactCount(p.animalsRegistered) },
+    { label: 'Adopciones con contrato firmado', value: impactCount(p.adoptionsCompleted) },
+    { label: 'Donaciones recibidas (neto)', value: impactMoney(p.donations.netTotal) },
+    { label: 'Horas de voluntariado', value: impactCount(Math.round(p.volunteerHours)) },
+  ]);
+
+  c.sectionTitle('Dónde están hoy nuestros animales');
+  drawBars(c, [
+    { label: 'Esperan un hogar', value: p.animalsToday.available },
+    { label: 'En proceso de adopción', value: p.animalsToday.inProcess },
+    { label: 'Ya fueron adoptados', value: p.animalsToday.adopted },
+  ]);
+
+  c.sectionTitle('Cuidado veterinario en el período');
+  drawBars(c, [
+    { label: 'Vacunas', value: p.care.vaccines },
+    { label: 'Esterilizaciones', value: p.care.sterilizations },
+    { label: 'Cirugías', value: p.care.surgeries },
+    { label: 'Tratamientos', value: p.care.treatments },
+  ]);
+
+  c.sectionTitle('Quienes nos apoyaron');
+  c.paragraph(
+    `${impactCount(p.donations.count)} ${p.donations.count === 1 ? 'donación aprobada' : 'donaciones aprobadas'} de ${impactCount(p.donations.donors)} ${p.donations.donors === 1 ? 'persona' : 'personas'} distintas, y ${impactCount(p.volunteers)} ${p.volunteers === 1 ? 'voluntario' : 'voluntarios'} con horas aprobadas. El neto es lo que llegó a la organización después de la tarifa de Mercado Pago y su IVA.`,
+    MARGIN,
+    10,
+    PAGE_W - MARGIN * 2,
+    14,
+  );
+
+  c.sectionTitle('Campañas');
+  const shown = p.campaigns.slice(0, IMPACT_MAX_CAMPAIGNS);
+  c.table(
+    [
+      { header: 'Campaña', width: 30 },
+      { header: 'Categoría', width: 16 },
+      { header: 'Estado', width: 11 },
+      { header: 'Meta', width: 14, align: 'right' },
+      { header: 'Recaudado', width: 16, align: 'right' },
+      { header: 'Avance', width: 13, align: 'right' },
+    ],
+    shown.map((k) => [
+      pdfText(k.title, 120),
+      labelOf(CAMPAIGN_CATEGORY_LABEL, k.category),
+      labelOf(CAMPAIGN_STATUS_LABEL, k.status),
+      impactMoney(k.goalAmount),
+      impactMoney(k.raisedAmount),
+      k.goalAmount > 0
+        ? `${Math.min(999, Math.round((k.raisedAmount / k.goalAmount) * 100))} %`
+        : '—',
+    ]),
+    { emptyText: 'Sin campañas en el período.' },
+  );
+  if (p.campaigns.length > shown.length) {
+    c.paragraph(
+      `Y ${p.campaigns.length - shown.length} campañas más.`,
+      MARGIN,
+      9,
+      PAGE_W - MARGIN * 2,
+      12,
+      c.font.italic,
+      MUTED,
+    );
+  }
+}
+
+/** Campañas que caben en la tabla del reporte de impacto; el resto se resume. */
+export const IMPACT_MAX_CAMPAIGNS = 12;
 
 async function drawSignatures(c: ReportCanvas, input: RenderReportInput): Promise<void> {
   if (input.draft) {
@@ -956,6 +1111,7 @@ export async function renderReportPdf(input: RenderReportInput): Promise<Buffer>
   drawHeader(c, input, kindTitle);
   if (input.payload.kind === 'donations') drawDonations(c, input.payload);
   else if (input.payload.kind === 'accounting') drawAccounting(c, input.payload);
+  else if (input.payload.kind === 'impact') drawImpact(c, input.payload);
   else {
     drawSocialService(c, input.payload);
     await drawSocialServicePhotos(c, input.payload, input.photos);

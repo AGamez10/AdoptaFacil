@@ -1,16 +1,56 @@
 import { useEffect, useState } from 'react';
 import type {
   CampaignPublic,
+  OrgLedgerPage,
   OrganizationPublic,
   ProductPublic,
+  PublicLedgerPage,
+  PublicReview,
   ResourceNeedPublic,
+  VolunteerOpportunityPublic,
 } from '@adoptafacil/contracts';
 import { useApiClient } from '../../../../shell/api';
+import { fetchPublicLedger } from '../../../ledger/api/public-ledger';
 import { listPublicProducts } from '../../../marketplace/api/public-marketplace';
 import { listPublicNeeds } from '../../../resources/api/public-resources';
 import { fetchAllPublicAnimals } from '../../api/public-animals';
 import { fetchPublicOrgCampaigns } from '../../api/public-campaigns';
+import { fetchPublicReviews } from '../../api/public-reviews';
+import { fetchPublicOrgVolunteering } from '../../api/public-volunteering';
 import type { TemplateSourceData } from '../engine/model';
+
+/** Tope del libro en la vista previa (el mismo máximo por página de la API pública). */
+const PREVIEW_LEDGER_LIMIT = 100;
+
+/**
+ * Libro de la vista previa con la MISMA forma y orden del libro público. El
+ * libro sin sesión solo responde cuando la organización ya está aprobada;
+ * antes, se lee el de la propia organización (autenticado, bajo RLS) para que
+ * la vista previa muestre exactamente lo que verá el público.
+ */
+export function orgLedgerAsPublic(
+  page: OrgLedgerPage,
+  limit = PREVIEW_LEDGER_LIMIT,
+): PublicLedgerPage {
+  const sorted = [...page.items].sort(
+    (a, b) => b.occurredOn.localeCompare(a.occurredOn) || b.createdAt.localeCompare(a.createdAt),
+  );
+  const items = sorted.slice(0, limit).map((e) => ({
+    id: e.id,
+    source: e.source,
+    kind: e.kind,
+    category: e.category,
+    occurredOn: e.occurredOn,
+    amountCop: e.amountCop,
+    concept: e.concept,
+    ...(e.counterparty ? { counterparty: e.counterparty } : {}),
+    hasSupport: e.hasSupport,
+    createdAt: e.createdAt,
+    voided: Boolean(e.voidedAt),
+    ...(e.voidReason ? { voidReason: e.voidReason } : {}),
+  }));
+  return { items, total: page.items.length, limit, offset: 0, totals: page.totals };
+}
 
 export type OwnPortalSource =
   | { status: 'loading' }
@@ -56,7 +96,8 @@ export function useOwnPortalSource(enabled: boolean): OwnPortalSource {
         signal,
       });
       if (animals.length === 0) return null;
-      const [campaigns, needs, products] = await Promise.all([
+      const own = (x: { organizationId: string }) => x.organizationId === organization.id;
+      const [campaigns, needs, products, reviews, volunteering, ledger] = await Promise.all([
         fetchPublicOrgCampaigns({ slug, preview: client, limit: 12, offset: 0, signal })
           .then((page) => page.items)
           .catch(() => [] as CampaignPublic[]),
@@ -68,8 +109,21 @@ export function useOwnPortalSource(enabled: boolean): OwnPortalSource {
         listPublicProducts({ organizationId: organization.id, limit: 12, offset: 0, signal })
           .then((page) => page.items)
           .catch(() => [] as ProductPublic[]),
+        fetchPublicReviews(slug, 30, signal)
+          .then((page) => page.items)
+          .catch(() => [] as PublicReview[]),
+        fetchPublicOrgVolunteering({ slug, limit: 12, signal })
+          .then((items) => items.filter(own))
+          .catch(() => [] as VolunteerOpportunityPublic[]),
+        // El libro: el MISMO que ve el público (y el que abre "Ver libro completo").
+        fetchPublicLedger(slug, { limit: PREVIEW_LEDGER_LIMIT, signal })
+          .catch(() =>
+            client
+              .request<OrgLedgerPage>('/org/ledger', { signal })
+              .then((page) => (page?.items ? orgLedgerAsPublic(page) : null)),
+          )
+          .catch(() => null),
       ]);
-      const own = (x: { organizationId: string }) => x.organizationId === organization.id;
       const data: TemplateSourceData = {
         slug,
         organization,
@@ -78,8 +132,9 @@ export function useOwnPortalSource(enabled: boolean): OwnPortalSource {
         campaigns: campaigns.filter(own),
         needs: needs.filter(own),
         products: products.filter(own),
-        reviews: [],
-        ledger: null,
+        volunteering,
+        reviews,
+        ledger,
       };
       return data;
     })()

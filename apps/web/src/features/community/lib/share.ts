@@ -1,6 +1,6 @@
 /**
  * Enlaces para compartir publicaciones de la comunidad en redes. Siempre se
- * comparte el PUENTE `/c/<id>?s=<red>` (Caddy lo pasa a la API): los
+ * comparte el PUENTE `/p/<id>?s=<red>` (Caddy lo pasa a la API): los
  * rastreadores de WhatsApp, Facebook, X y LinkedIn no ejecutan JavaScript, así
  * que solo ese HTML les da título, descripción y la tarjeta con la marca. El
  * puente manda a la persona a la publicación con `utm_source` de la red.
@@ -12,7 +12,12 @@ export type ShareNetwork =
   'whatsapp' | 'facebook' | 'x' | 'linkedin' | 'telegram' | 'copy' | 'native';
 
 /** URL del puente para `network`. Con la API en el mismo origen (`/api`), el
- *  enlace corto `/c/<id>`; en desarrollo (API en otro origen), la ruta directa. */
+ *  enlace corto `/p/<id>`; en desarrollo (API en otro origen), la ruta directa.
+ *
+ *  `/c/` NO: es la URL impresa bajo el QR de las bolsas de café
+ *  (`/c/<código>`), que no puede cambiar. Antes los dos compartían `/c/` y el
+ *  enlace de una publicación abría "Código no encontrado" del café. Los
+ *  enlaces viejos `/c/<uuid>` siguen funcionando (ver `short-links.tsx`). */
 export function shareLink(
   postId: string,
   network: ShareNetwork,
@@ -20,8 +25,8 @@ export function shareLink(
 ): string {
   const id = encodeURIComponent(postId);
   const base = API_BASE.startsWith('/')
-    ? `${origin}/c/${id}`
-    : `${API_BASE.replace(/\/+$/, '')}/public/share/c/${id}`;
+    ? `${origin}/p/${id}`
+    : `${API_BASE.replace(/\/+$/, '')}/public/share/p/${id}`;
   return `${base}?s=${network}`;
 }
 

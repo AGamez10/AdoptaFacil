@@ -7,6 +7,7 @@ import type {
   AdoptionFollowUpPlan,
   AnimalIdentificationType,
   AnimalSex,
+  UpdateAdoptionContractDataInput,
 } from '@adoptafacil/contracts';
 import {
   ADOPTER_DOCUMENT_TYPE_LABELS,
@@ -15,8 +16,17 @@ import {
   FOLLOW_UP_PLAN_LABELS,
   Role,
   buildAdoptionContractDocument,
+  missingAdoptionContractFields,
 } from '@adoptafacil/contracts';
-import { Badge, Button, EmptyState, Input, Skeleton, useToast } from '@adoptafacil/ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  Skeleton,
+  friendlyErrorMessage,
+  useToast,
+} from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { ApiError, useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
@@ -35,12 +45,18 @@ import {
   updateAdoptionContractData,
 } from '../api/adoptions-api';
 import { AdoptionDeliveryPanel } from '../components/adoption-delivery-panel';
+import { ContractNextSteps } from '../components/contract-next-steps';
 import {
   CONTRACT_STATUS_LABELS,
   SIGNER_ROLE_LABELS,
   contractStatusVariant,
   shortHash,
 } from '../model/adoptions-contract-view';
+import {
+  FOLLOW_UP_PLAN_HELP,
+  FOLLOW_UP_WHEN_HELP,
+  contractNextSteps,
+} from '../model/adoptions-next-steps';
 import { formatBogota } from '../model/adoptions-view';
 
 const SEX_OPTIONS: Array<{ value: AnimalSex; label: string }> = [
@@ -89,6 +105,58 @@ function FormField(props: {
       {props.children}
     </label>
   );
+}
+
+/** Campos que la organización puede editar (los demás los fija el sistema). */
+const EDITABLE_CONTRACT_FIELDS = [
+  'organizationName',
+  'organizationNit',
+  'organizationAddress',
+  'animalBreed',
+  'animalSex',
+  'animalAgeYears',
+  'weightKg',
+  'healthStatusAtDelivery',
+  'adopterDocumentType',
+  'adopterDocumentNumber',
+  'adopterAddress',
+  'followUpMonths',
+  'signatureCity',
+  'identityDocumentVerified',
+  'animalIdentificationType',
+  'animalIdentificationNumber',
+  'animalSterilized',
+  'sterilizationCommitmentMonths',
+  'trialPeriodDays',
+  'followUpPlan',
+  'backupCaregiverName',
+  'backupCaregiverPhone',
+  'backupCaregiverInformed',
+  'recoveryFeeCop',
+] as const satisfies readonly (keyof AdoptionContractData)[];
+
+/**
+ * Lo que se envía al guardar: solo los campos editables. Un campo en blanco
+ * viaja como `null` (borra el dato) en vez de un texto vacío que el servidor
+ * rechazaría; así "Guardar datos" funciona aunque el contrato esté incompleto.
+ */
+export function editableContractData(form: AdoptionContractData): UpdateAdoptionContractDataInput {
+  const out: Record<string, unknown> = {};
+  for (const key of EDITABLE_CONTRACT_FIELDS) {
+    const value = form[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      out[key] = trimmed === '' ? null : trimmed;
+    } else if (typeof value === 'number') {
+      out[key] = Number.isFinite(value) ? value : null;
+    } else {
+      out[key] = value ?? null;
+    }
+  }
+  // Sin microchip ni placa no hay número que guardar.
+  if (out.animalIdentificationType === 'none') out.animalIdentificationNumber = null;
+  if (out.animalSterilized === true) out.sterilizationCommitmentMonths = null;
+  return out as UpdateAdoptionContractDataInput;
 }
 
 /**
@@ -225,6 +293,23 @@ export function AdoptionContractPage() {
     mySigner?.role !== 'organization_representative' &&
     contract.status === 'pending_signatures';
   const isV2 = contract.payload.templateVersion === 'v2';
+  // Punto 13: un contrato con datos obligatorios en blanco no se firma ni se
+  // envía. Se calcula sobre lo GUARDADO (no sobre lo que se está escribiendo).
+  const missingFields = missingAdoptionContractFields(contract.payload.data);
+  const dataComplete = missingFields.length === 0;
+  const missingNotice = dataComplete ? null : (
+    <p
+      className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+      role="status"
+      data-testid="contract-missing-fields"
+    >
+      {canManage
+        ? `Para poder firmar y enviar el contrato, primero completa y guarda: ${missingFields
+            .map((m) => m.label)
+            .join(', ')}.`
+        : 'A este contrato todavía le faltan datos. La organización debe completarlos antes de que puedas firmar.'}
+    </p>
+  );
 
   const setField = <K extends keyof AdoptionContractData>(
     key: K,
@@ -237,14 +322,18 @@ export function AdoptionContractPage() {
     if (!form) return;
     setSavingData(true);
     try {
-      const updated = await updateAdoptionContractData(client, contract.id, form);
+      const updated = await updateAdoptionContractData(
+        client,
+        contract.id,
+        editableContractData(form),
+      );
       setContract(updated);
       setForm(updated.payload.data);
       toast({ title: 'Datos guardados', variant: 'success' });
     } catch (error) {
       toast({
         title: 'No se pudieron guardar los datos',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        description: friendlyErrorMessage(error, 'Inténtalo de nuevo.'),
         variant: 'destructive',
       });
     } finally {
@@ -264,7 +353,7 @@ export function AdoptionContractPage() {
     } catch (error) {
       toast({
         title: 'No se pudo firmar',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        description: friendlyErrorMessage(error, 'Inténtalo de nuevo.'),
         variant: 'destructive',
       });
     } finally {
@@ -283,7 +372,7 @@ export function AdoptionContractPage() {
     } catch (error) {
       toast({
         title: 'No se pudo enviar a firmas',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        description: friendlyErrorMessage(error, 'Inténtalo de nuevo.'),
         variant: 'destructive',
       });
     } finally {
@@ -306,13 +395,18 @@ export function AdoptionContractPage() {
     } catch (error) {
       toast({
         title: 'No se pudo firmar',
-        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        description: friendlyErrorMessage(error, 'Inténtalo de nuevo.'),
         variant: 'destructive',
       });
     } finally {
       setBusyAction(false);
     }
   };
+
+  const nextSteps = contractNextSteps(contract, canManage ? 'organization' : 'adopter', {
+    dataComplete,
+    viewerHasSigned: contract.signers.some((s) => s.userId === user?.id && Boolean(s.signedAt)),
+  });
 
   // Mismo texto legal (y misma versión) que el PDF: una sola fuente en
   // `@adoptafacil/contracts`.
@@ -335,6 +429,8 @@ export function AdoptionContractPage() {
       >
         ← Volver a adopciones
       </Link>
+
+      {nextSteps && <ContractNextSteps steps={nextSteps} />}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Badge variant={contractStatusVariant(contract.status)}>
@@ -432,6 +528,8 @@ export function AdoptionContractPage() {
           <AdoptionDeliveryPanel
             contractId={contract.id}
             animalName={contract.payload.animal.name}
+            contractHealthStatus={contract.payload.data.healthStatusAtDelivery}
+            contractWeightKg={contract.payload.data.weightKg}
           />
         )}
 
@@ -449,7 +547,7 @@ export function AdoptionContractPage() {
                   onChange={(e) => setField('weightKg', e.target.valueAsNumber || undefined)}
                 />
               </FormField>
-              <FormField label="Sexo">
+              <FormField label="Sexo" required>
                 <select
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={form.animalSex ?? ''}
@@ -478,13 +576,16 @@ export function AdoptionContractPage() {
                   onChange={(e) => setField('animalAgeYears', e.target.valueAsNumber || undefined)}
                 />
               </FormField>
-              <FormField label="NIT de la organización">
+              <FormField
+                label="NIT de la organización"
+                required={form.organizationFormalization !== 'informal'}
+              >
                 <Input
                   value={form.organizationNit ?? ''}
                   onChange={(e) => setField('organizationNit', e.target.value || undefined)}
                 />
               </FormField>
-              <FormField label="Domicilio de la organización">
+              <FormField label="Domicilio de la organización" required>
                 <Input
                   value={form.organizationAddress ?? ''}
                   onChange={(e) => setField('organizationAddress', e.target.value || undefined)}
@@ -511,19 +612,19 @@ export function AdoptionContractPage() {
                   </select>
                 </FormField>
               )}
-              <FormField label="Número de documento del adoptante">
+              <FormField label="Número de documento del adoptante" required>
                 <Input
                   value={form.adopterDocumentNumber ?? ''}
                   onChange={(e) => setField('adopterDocumentNumber', e.target.value || undefined)}
                 />
               </FormField>
-              <FormField label="Domicilio del adoptante">
+              <FormField label="Domicilio del adoptante" required>
                 <Input
                   value={form.adopterAddress ?? ''}
                   onChange={(e) => setField('adopterAddress', e.target.value || undefined)}
                 />
               </FormField>
-              <FormField label="Ciudad (jurisdicción / firma)">
+              <FormField label="Ciudad (jurisdicción / firma)" required>
                 <Input
                   value={form.signatureCity ?? ''}
                   onChange={(e) => setField('signatureCity', e.target.value || undefined)}
@@ -554,7 +655,7 @@ export function AdoptionContractPage() {
               <div className="space-y-3 border-t pt-3">
                 <h4 className="text-sm font-semibold">Entrega, identidad y seguimiento</h4>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <FormField label="Nombre de la organización (cedente)">
+                  <FormField label="Nombre de la organización (cedente)" required>
                     <Input
                       value={form.organizationName ?? ''}
                       onChange={(e) => setField('organizationName', e.target.value || undefined)}
@@ -643,6 +744,12 @@ export function AdoptionContractPage() {
                       ))}
                     </select>
                   </FormField>
+                  <p
+                    className="text-xs text-muted-foreground sm:col-span-2"
+                    data-testid="follow-up-plan-help"
+                  >
+                    {FOLLOW_UP_PLAN_HELP.light} {FOLLOW_UP_PLAN_HELP.standard} {FOLLOW_UP_WHEN_HELP}
+                  </p>
                   <FormField label="Cuota de recuperación (pesos, 0 si no hay)">
                     <Input
                       type="number"
@@ -722,8 +829,13 @@ export function AdoptionContractPage() {
             ))}
           </ul>
 
+          {(canSignAsRepresentative || canSendToSignatures || canSignAsAdopter) && missingNotice}
           {canSignAsRepresentative && (
-            <Button size="sm" disabled={busyAction} onClick={() => void signAsRepresentative()}>
+            <Button
+              size="sm"
+              disabled={busyAction || !dataComplete}
+              onClick={() => void signAsRepresentative()}
+            >
               Aprobar y firmar por la organización
             </Button>
           )}
@@ -734,7 +846,11 @@ export function AdoptionContractPage() {
             </p>
           )}
           {canSendToSignatures && (
-            <Button size="sm" disabled={busyAction} onClick={() => void sendToSignatures()}>
+            <Button
+              size="sm"
+              disabled={busyAction || !dataComplete}
+              onClick={() => void sendToSignatures()}
+            >
               Enviar a firmas
             </Button>
           )}
@@ -786,7 +902,7 @@ export function AdoptionContractPage() {
               )}
               <Button
                 size="sm"
-                disabled={busyAction || !signatureBase64}
+                disabled={busyAction || !signatureBase64 || !dataComplete}
                 onClick={() => void signAsAdopter()}
               >
                 Firmar

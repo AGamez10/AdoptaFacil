@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PORTAL_TEMPLATE_IDS, PORTAL_TEMPLATES } from '@adoptafacil/contracts';
 import { PROFILES, FIXTURE_NOW } from './__fixtures__/profiles';
 import { createKit } from './engine/kit';
-import { buildTemplateModel } from './engine/model';
+import { EMPTY, buildTemplateModel } from './engine/model';
 import { ENGINE_TEMPLATE_IDS, isEngineTemplate, loadDesign } from './registry';
 
 /**
@@ -125,5 +125,56 @@ describe.each(DESIGN_IDS)('plantilla %s', (id) => {
     root.querySelectorAll('a[target="_blank"]').forEach((a) => {
       expect(a.getAttribute('rel') ?? '').toMatch(/noopener/);
     });
+  });
+});
+
+/**
+ * Mismos datos en TODAS las plantillas: cambiar de diseño nunca esconde lo que
+ * la organización publicó (el libro público, necesidades, productos, reseñas y
+ * campaña). Lo que muestra el portal sale del mismo modelo, sin importar el diseño.
+ */
+/** Texto visible sin espacios: un diseño puede partir un título en dos líneas. */
+const plain = (html: string) => {
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  return (el.textContent ?? '').replace(/\s+/g, '');
+};
+const textOf = (root: HTMLElement) => (root.textContent ?? '').replace(/\s+/g, '');
+
+describe.each(DESIGN_IDS)('plantilla %s: datos intactos al cambiar de diseño', (id) => {
+  it('pinta el libro público con sus totales y sus últimos movimientos', async () => {
+    const { root, model } = await render(id, 'completa');
+    const text = textOf(root);
+    expect(model.LEDGER.rows.length).toBeGreaterThan(0);
+    for (const row of model.LEDGER.rows) expect(text).toContain(plain(row.concept));
+    for (const total of [model.LEDGER.income, model.LEDGER.expense, model.LEDGER.balance]) {
+      expect(text).toContain(plain(total));
+    }
+    expect(root.querySelector('[data-sec~="libro"] [data-ledger]')).not.toBeNull();
+    const libro = root.querySelector<HTMLElement>('[data-sec~="libro"]');
+    expect(libro && textOf(libro)).not.toContain(plain(EMPTY.libro));
+  });
+
+  it('pinta todas las necesidades, productos, reseñas y la campaña activa', async () => {
+    const { root, model } = await render(id, 'completa');
+    const text = textOf(root);
+    for (const n of model.NEEDS) expect(text, `necesidad ${n.title}`).toContain(plain(n.title));
+    for (const p of model.PRODUCTS) expect(text, `producto ${p.name}`).toContain(plain(p.name));
+    for (const r of model.REVIEWS) expect(text, `reseña ${r.name}`).toContain(plain(r.text));
+    expect(text).toContain(plain(model.CAMPAIGN.title));
+  });
+});
+
+describe('libro público en las plantillas', () => {
+  it('si el libro no cargó, ninguna plantilla afirma que no hay movimientos', async () => {
+    for (const id of DESIGN_IDS) {
+      const design = await loadDesign(id);
+      const model = buildTemplateModel({ ...PROFILES.completa, ledger: null }, FIXTURE_NOW);
+      const root = document.createElement('div');
+      root.innerHTML = design.html(model, createKit(model));
+      const text = root.textContent ?? '';
+      expect(text, id).not.toMatch(/aún no ha registrado movimientos/i);
+      expect(root.querySelector('[data-ledger]'), id).not.toBeNull();
+    }
   });
 });

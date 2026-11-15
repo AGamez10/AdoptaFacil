@@ -15,9 +15,11 @@ import {
   ORG_SIGNERS_ROLES,
   ORG_SIGNING_ROLES,
   ORG_PLAN_ROLES,
+  ORG_MEMBERS_ROLES,
   ORG_MEMBER_ROLES,
   ORG_REVIEWS_ROLES,
   ORG_LEDGER_ROLES,
+  CUSTODY_VIEW_ROLES,
   PLATFORM_ADMIN_DASHBOARD_ROLES,
   PLATFORM_DOCUMENTS_ROLES,
   PLATFORM_DUPLICATES_ROLES,
@@ -37,6 +39,7 @@ import { HomePage } from '../../features/_layout';
 import { NotFoundRoute, PublicNotFoundPage } from '../errors';
 import {
   CompleteProfilePage,
+  WelcomeNotice,
   ForgotPasswordPage,
   LoginPage,
   RegisterPage,
@@ -52,6 +55,7 @@ import {
   MyAuthorizationsPage,
 } from '../../features/legal';
 import { lazyPage } from './lazy-page';
+import { CoffeeOrLegacyShareLink, SharedPostLink } from './short-links';
 
 // Pantallas que se cargan al visitarlas (fuera del paquete inicial).
 // Portales de organización: plantillas pesadas que solo usa quien visita uno.
@@ -62,6 +66,10 @@ const OrgPublicPage = lazyPage(
 const PortalThemePage = lazyPage(
   () => import('../../features/portals/pages/portal-theme-page'),
   'PortalThemePage',
+);
+const NationalTransparencyPublicPage = lazyPage(
+  () => import('../../features/transparency/pages/national-transparency-public-page'),
+  'NationalTransparencyPublicPage',
 );
 const TemplateDemoPage = lazyPage(
   () => import('../../features/portals/pages/template-demo-page'),
@@ -79,6 +87,7 @@ const loadOrg = () => import('../../features/org');
 const NationalTransparencyPage = lazyPage(loadOrg, 'NationalTransparencyPage');
 const OrgDocumentsPage = lazyPage(loadOrg, 'OrgDocumentsPage');
 const OrgPlanPage = lazyPage(loadOrg, 'OrgPlanPage');
+const OrgMembersPage = lazyPage(loadOrg, 'OrgMembersPage');
 const OrgAnnouncementsPage = lazyPage(loadOrg, 'OrgAnnouncementsPage');
 const OrgFormalizationPage = lazyPage(loadOrg, 'OrgFormalizationPage');
 const OrgLegalRepresentativePage = lazyPage(loadOrg, 'OrgLegalRepresentativePage');
@@ -156,6 +165,7 @@ const ReceivedDonationsPage = lazyPage(loadDonations, 'ReceivedDonationsPage');
 const loadSponsorships = () => import('../../features/sponsorships');
 const SponsorPage = lazyPage(loadSponsorships, 'SponsorPage');
 const SponsorshipsPage = lazyPage(loadSponsorships, 'SponsorshipsPage');
+const SponsorshipResultPage = lazyPage(loadSponsorships, 'SponsorshipResultPage');
 const loadNotifications = () => import('../../features/notifications');
 const EmailUnsubscribePage = lazyPage(loadNotifications, 'EmailUnsubscribePage');
 const PlatformEmailTemplateEditorPage = lazyPage(
@@ -175,6 +185,9 @@ const loadReputation = () => import('../../features/reputation');
 const MyReviewsPage = lazyPage(loadReputation, 'MyReviewsPage');
 const loadLedger = () => import('../../features/ledger');
 const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
+const loadCustody = () => import('../../features/custody');
+const OrgCustodyPage = lazyPage(loadCustody, 'OrgCustodyPage');
+const AnimalReportsPage = lazyPage(loadCustody, 'AnimalReportsPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -229,6 +242,8 @@ export function AppRoutes() {
   return (
     // Ola 1 (R1-1): switched-off modules render "not found" before any route.
     <FeatureRouteGate>
+      {/* Bienvenida / "seguimos donde ibas", una sola vez tras entrar. */}
+      <WelcomeNotice />
       {/* Las pantallas privadas llegan en su propio archivo (ver lazy-page.ts). */}
       <Suspense fallback={<Skeleton className="h-screen w-full" />}>
         <Routes>
@@ -252,6 +267,8 @@ export function AppRoutes() {
           <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
           {/* Guías públicas de adopción (SEO, rediseño 2026-10). */}
           <Route path="/guias" element={<GuidesIndexPage />} />
+          {/* Transparencia Nacional (punto 22): el consolidado del país, sin cuenta. */}
+          <Route path="/transparencia-nacional" element={<NationalTransparencyPublicPage />} />
           <Route path="/guias/:slug" element={<GuidePage />} />
           {/* Public auth screens */}
           <Route path="/login" element={<LoginPage />} />
@@ -290,8 +307,14 @@ export function AppRoutes() {
           apadrinar un animal. La API valida el destino en cada escaneo. */}
           <Route path="/q/:code" element={<OrgQrRedirectPage />} />
           {/* Café de AdoptaFácil: el QR impreso en la bolsa (`/c/:code`, no cambia
-          entre lotes) y el regreso desde Mercado Pago con el estado del pedido. */}
-          <Route path="/c/:code" element={<PublicCoffeePage />} />
+          entre lotes) y el regreso desde Mercado Pago con el estado del pedido.
+          `/c/<uuid>` es el enlace viejo de la comunidad y `/p/<uuid>` el nuevo:
+          ver short-links.tsx (un dueño por prefijo). */}
+          <Route
+            path="/c/:code"
+            element={<CoffeeOrLegacyShareLink coffee={<PublicCoffeePage />} />}
+          />
+          <Route path="/p/:id" element={<SharedPostLink />} />
           <Route path="/cafe/pedido/:reference" element={<CoffeeOrderPage />} />
           <Route
             path="/donar"
@@ -332,7 +355,7 @@ export function AppRoutes() {
           sesión): solo perfiles aprobados por la plataforma. Gestión propia en
           /mi-negocio y ficha privada en /mis-mascotas, abajo (RequireAuth). */}
           {/* Comunidad · publicación PÚBLICA que su autora marcó como compartible
-          (sin sesión): destino de los enlaces compartidos en redes (`/c/:id`). */}
+          (sin sesión): destino de los enlaces compartidos en redes (`/p/:id`). */}
           <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
           {/* Pre-registro público (sin cuenta). Estático: gana a /servicios/:id. */}
@@ -365,6 +388,9 @@ export function AppRoutes() {
           {/* Regreso desde el checkout de una pasarela. Solo informa que el pago se
           está confirmando; la aprobación llega por la confirmación firmada. */}
           <Route path="/donaciones/resultado" element={<DonationResultPage />} />
+          {/* Regreso de Mercado Pago tras pagar un mes de apadrinamiento (mismo
+          criterio: el mes se confirma solo con el aviso firmado). */}
+          <Route path="/apadrinar/resultado" element={<SponsorshipResultPage />} />
           {/* Baja voluntaria de correos masivos (Ley 1581) — pública, sin sesión:
           el enlace firmado del correo ES la credencial. */}
           <Route path="/correo/baja" element={<EmailUnsubscribePage />} />
@@ -569,6 +595,15 @@ export function AppRoutes() {
                     </RequireRoles>
                   }
                 />
+                {/* Equipo · mismo gate que GET /org/members y /org/invitations. */}
+                <Route
+                  path="organizacion/miembros"
+                  element={
+                    <RequireRoles roles={ORG_MEMBERS_ROLES}>
+                      <OrgMembersPage />
+                    </RequireRoles>
+                  }
+                />
                 {/* Planes y suscripciones · mismo gate que GET /org/plan. */}
                 <Route
                   path="organizacion/plan"
@@ -672,6 +707,24 @@ export function AppRoutes() {
                   element={
                     <RequireRoles roles={MARKETPLACE_VIEW_ROLES}>
                       <ProductDetailPage />
+                    </RequireRoles>
+                  }
+                />
+                {/* Custodia y guardería: cuenta, contratos, plantillas y reportes
+              de animales. La API vuelve a exigir el rol en cada acción. */}
+                <Route
+                  path="organizacion/custodia"
+                  element={
+                    <RequireRoles roles={CUSTODY_VIEW_ROLES}>
+                      <OrgCustodyPage />
+                    </RequireRoles>
+                  }
+                />
+                <Route
+                  path="reportes-animales"
+                  element={
+                    <RequireRoles roles={CUSTODY_VIEW_ROLES}>
+                      <AnimalReportsPage />
                     </RequireRoles>
                   }
                 />

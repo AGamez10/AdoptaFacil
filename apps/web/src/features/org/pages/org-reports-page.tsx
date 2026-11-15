@@ -102,6 +102,12 @@ const KIND_UI: Record<OrgReportKind, { title: string; description: string; short
       'Se genera al cerrar un mes en Contabilidad y lo firma tu contador o revisor fiscal.',
     short: 'Libro auxiliar',
   },
+  impact: {
+    title: 'Reporte de impacto',
+    description:
+      'Cifras de lo que lograste en un período, para donantes y aliados. Se genera desde "Reporte de impacto".',
+    short: 'Impacto',
+  },
 };
 
 /** Mismo conjunto que el servidor: solo aquí se ofrecen firmantes. */
@@ -173,6 +179,9 @@ function summaryText(report: OrgReport): string {
   }
   if (report.kind === 'accounting') {
     return `${s.rowCount} ${s.rowCount === 1 ? 'renglón' : 'renglones'} · ${money(s.grossTotal ?? 0)} bruto`;
+  }
+  if (report.kind === 'impact') {
+    return `${s.rowCount} ${s.rowCount === 1 ? 'campaña' : 'campañas'} · ${money(s.netTotal ?? 0)} neto`;
   }
   return `${s.volunteers ?? s.rowCount} ${s.volunteers === 1 ? 'voluntario' : 'voluntarios'} · ${(s.approvedHours ?? 0).toLocaleString('es-CO')} h`;
 }
@@ -621,7 +630,7 @@ export function OrgReportsPage() {
 
           {canGenerate && (
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <ImpactReportCard plan={plan} />
+              <ImpactReportCard plan={plan} onGenerated={() => void load()} />
               <DataExportCard plan={plan} />
             </div>
           )}

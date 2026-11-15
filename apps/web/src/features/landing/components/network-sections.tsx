@@ -4,15 +4,17 @@ import type {
   PublicAnimalOrganizationSummary,
   PublicLedgerPage,
   ResourceNeedPublic,
+  ResourceOpenOfferPublic,
   VolunteerOpportunityPublic,
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { useFeature } from '../../../shell/capabilities';
 import { fetchPublicLedger } from '../../ledger/api/public-ledger';
 import { formatCop } from '../../ledger/model/ledger-view';
-import { listPublicNeeds } from '../../resources/api/public-resources';
+import { NationalBoard } from '../../transparency/components/national-board';
+import { listPublicNeeds, listPublicOpenOffers } from '../../resources/api/public-resources';
 import { CATEGORY_LABELS, publicResourceNeedHref } from '../../resources/model/resources-view';
-import { volunteerSignupHref } from '../../volunteering/model/volunteering-view';
+import { volunteerBrowseHref } from '../../volunteering/model/volunteering-view';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
 import { IconArrowRight, IconBox, IconDocument, IconPeople, IconShield } from './landing-icons';
 import styles from './network.module.scss';
@@ -141,6 +143,10 @@ function NeedsPanel({ near }: { near: boolean }) {
   const { status, items } = useLazyList<ResourceNeedPublic>(near && resources, (signal) =>
     listPublicNeeds({ limit: PREVIEW, signal }).then((page) => page.items.slice(0, PREVIEW)),
   );
+  // Lo que la comunidad ofrece también es noticia: a una organización le puede servir.
+  const offers = useLazyList<ResourceOpenOfferPublic>(near && resources, (signal) =>
+    listPublicOpenOffers({ limit: 2, signal }).then((page) => page.items.slice(0, 2)),
+  );
 
   return (
     <article className={cn(styles.panel, 'af-reveal')} data-testid="landing-needs">
@@ -191,6 +197,27 @@ function NeedsPanel({ near }: { near: boolean }) {
           })}
         </ul>
       )}
+      {resources && offers.items.length > 0 ? (
+        <ul
+          className={styles.list}
+          aria-label="Ofrecido por la comunidad"
+          data-testid="landing-open-offers"
+        >
+          {offers.items.map((offer, index) => (
+            <li key={offer.id} style={{ '--i': index } as CSSProperties}>
+              <Link to="/recursos" className={styles.row}>
+                <span className={styles.row__chip}>
+                  Ofrecido · {CATEGORY_LABELS[offer.category]}
+                </span>
+                <span className={styles.row__title}>{offer.title}</span>
+                <span className={styles.row__meta}>
+                  {offer.quantity} {offer.unit} · {offer.city}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {resources ? (
         <Link to="/recursos" className={styles.panel__link}>
           Ver el banco de recursos
@@ -227,9 +254,9 @@ function VolunteeringPanel({ near }: { near: boolean }) {
         <ul className={styles.list}>
           {items.map((opportunity, index) => (
             <li key={opportunity.id} style={{ '--i': index } as CSSProperties}>
-              {/* Inscribirse pide cuenta: /voluntariado lleva al ingreso, vuelve y
-                  resalta esta jornada. */}
-              <Link to={volunteerSignupHref(opportunity.id)} className={styles.row}>
+              {/* Ver la jornada no pide cuenta: lleva al listado público con ella
+                  señalada. La cuenta se pide solo al pulsar «Quiero participar». */}
+              <Link to={volunteerBrowseHref(opportunity.id)} className={styles.row}>
                 {opportunity.appliesToStudentService ? (
                   <span className={styles.row__chip}>Servicio social</span>
                 ) : (
@@ -250,8 +277,8 @@ function VolunteeringPanel({ near }: { near: boolean }) {
           ))}
         </ul>
       )}
-      <Link to="/voluntariado" className={styles.panel__link}>
-        Inscribirme como voluntario
+      <Link to={volunteerBrowseHref()} className={styles.panel__link}>
+        Ver todos los voluntariados
         <IconArrowRight aria-hidden="true" />
       </Link>
     </article>
@@ -397,10 +424,11 @@ async function loadLedgers(
 }
 
 /**
- * Libro público (RF14) de todas las organizaciones de la red: no hay un
- * endpoint global, así que se resume el libro de cada organización con
- * animales publicados (totales reales, sin datos de donantes) y cada tarjeta
- * abre el libro completo en su portal.
+ * Transparencia de la landing, en sus dos escalas sin solaparse:
+ * - Transparencia Nacional (macro): el consolidado del país
+ *   (`GET /public/transparency/national`), con enlace al tablero completo;
+ * - Libro público (micro): el resumen del libro de cada organización con
+ *   animales publicados, y cada tarjeta abre su libro completo en su portal.
  */
 export function PublicLedgerSection({ snapshot }: { snapshot: CatalogSnapshot }) {
   const [ref, near] = useNearViewport<HTMLElement>();
@@ -434,16 +462,42 @@ export function PublicLedgerSection({ snapshot }: { snapshot: CatalogSnapshot })
       data-testid="landing-ledger"
     >
       <div className={styles.container}>
-        <div className={styles.ledger}>
-          <div className={styles.ledger__intro}>
-            <p className={cn(styles.eyebrow, styles['eyebrow--light'])}>Transparencia</p>
+        {/* Nivel país (macro): la suma de todos los libros, sin cuenta. */}
+        <div className={styles.national}>
+          <div className={styles.national__head}>
+            <p className={cn(styles.eyebrow, styles['eyebrow--light'])}>Transparencia Nacional</p>
             <h2 id="landing-ledger-title" className={cn(styles.head__title, styles.light)}>
-              Libro público de las organizaciones
+              El rescate animal de Colombia, en cifras abiertas
             </h2>
             <p className={styles.ledger__lead}>
-              Cada organización publica sus ingresos y gastos. Las donaciones en línea aprobadas
-              entran solas y nada se borra: un registro solo se anula con su motivo y sigue a la
-              vista.
+              La suma de los libros públicos de todas las organizaciones aprobadas: cuánto se
+              recibe, en qué se usa y cuántos animales encuentran familia. Sin cuenta y sin datos de
+              quienes donan.
+            </p>
+          </div>
+          <div className={styles.national__panel}>
+            <NationalBoard
+              variant="compact"
+              enabled={near}
+              footer={
+                <Link to="/transparencia-nacional" className={styles.national__more}>
+                  Ver el tablero completo: de dónde viene, en qué se usa y por departamento
+                  <IconArrowRight aria-hidden="true" />
+                </Link>
+              }
+            />
+          </div>
+        </div>
+
+        {/* Nivel organización (micro): el detalle de cada una, en su portal. */}
+        <div className={styles.ledger}>
+          <div className={styles.ledger__intro}>
+            <p className={cn(styles.eyebrow, styles['eyebrow--light'])}>Libro público</p>
+            <h3 className={styles.ledger__title}>El detalle de cada organización</h3>
+            <p className={styles.ledger__lead}>
+              Cada organización publica en su portal cada ingreso y cada gasto. Las donaciones en
+              línea aprobadas entran solas y nada se borra: un registro solo se anula con su motivo
+              y sigue a la vista.
             </p>
             <ul className={styles.ledger__facts}>
               <li>

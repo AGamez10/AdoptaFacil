@@ -4,6 +4,7 @@ import type { Comment, CommentsPage, CreateCommentInput } from '@adoptafacil/con
 import type { RequestUser } from '../../core/auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { clampLimit } from './community-posts.service';
+import { InboxService } from '../../core/notifications/inbox/inbox.service';
 
 /** Row emitted by the SECURITY DEFINER functions (camelCase — I control the
  *  jsonb_build_object keys). */
@@ -35,7 +36,29 @@ function fromRaw(raw: RawComment): Comment {
  */
 @Injectable()
 export class CommunityCommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly inbox: InboxService,
+  ) {}
+
+  /** Avisa a quien publicó que alguien comentó (nunca a sí misma). */
+  private async notifyPostAuthor(actor: RequestUser, comment: RawComment): Promise<void> {
+    const rows = await this.prisma
+      .$queryRaw<Array<{ data: { authorUserId: string; title: string | null } | null }>>(
+        Prisma.sql`SELECT community_post_get(${comment.postId}::uuid) AS data`,
+      )
+      .catch(() => []);
+    const post = rows[0]?.data;
+    if (!post?.authorUserId || post.authorUserId === actor.id) return;
+    const who = comment.authorName.split(/\s+/)[0] || 'Alguien';
+    await this.inbox.toUser(post.authorUserId, {
+      kind: 'community.comment_received',
+      title: `${who} comentó tu publicación${post.title ? ` "${post.title}"` : ''}`,
+      body: comment.body.slice(0, 160),
+      href: `/comunidad/${comment.postId}`,
+      dedupeKey: `community_comment:${comment.id}`,
+    });
+  }
 
   /** The actor's display name, resolved under their OWN tenant. */
   private async resolveAuthorName(actor: RequestUser): Promise<string> {
@@ -51,7 +74,9 @@ export class CommunityCommentsService {
       const rows = await this.prisma.$queryRaw<Array<{ data: RawComment }>>(
         Prisma.sql`SELECT create_community_comment(${postId}::uuid, ${actor.id}::uuid, ${authorName}, ${input.body}) AS data`,
       );
-      return fromRaw(rows[0].data);
+      const created = rows[0].data;
+      await this.notifyPostAuthor(actor, created);
+      return fromRaw(created);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/post not found/i.test(message)) {
