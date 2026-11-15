@@ -5,8 +5,12 @@ describe('community share links', () => {
   it('always shares the Open Graph bridge with the network as source', () => {
     const link = shareLink('p-1', 'whatsapp', 'https://adoptafacil.co');
     expect(link).toMatch(
-      /\/public\/share\/c\/p-1\?s=whatsapp$|^https:\/\/adoptafacil\.co\/c\/p-1\?s=whatsapp$/,
+      /\/public\/share\/p\/p-1\?s=whatsapp$|^https:\/\/adoptafacil\.co\/p\/p-1\?s=whatsapp$/,
     );
+  });
+
+  it('never uses /c/, which belongs to the coffee bag QR', () => {
+    expect(shareLink('p-1', 'x', 'https://adoptafacil.co')).not.toMatch(/\/c\//);
   });
 
   it('builds one encoded link per network, each tagged with its own source', () => {

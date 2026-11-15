@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { SHARE_LINK_PATTERN } from './src/shell/router/short-link-patterns';
 
 /**
  * La web lee `@adoptafacil/contracts` desde su código fuente, no desde `dist/`.
@@ -52,6 +53,14 @@ export default defineConfig({
     // both once the demo is over — not needed for normal local dev.
     allowedHosts: true,
     proxy: {
+      // Puente de enlaces compartidos de la comunidad (lo mismo que hace Caddy
+      // en producción): solo `/p/<uuid>` y `/c/<uuid>`. `/c/<código>` es el QR
+      // del café y lo sirve la web.
+      [SHARE_LINK_PATTERN]: {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => `/public/share${path}`,
+      },
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,

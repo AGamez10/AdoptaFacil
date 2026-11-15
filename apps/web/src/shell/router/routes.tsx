@@ -55,6 +55,7 @@ import {
   MyAuthorizationsPage,
 } from '../../features/legal';
 import { lazyPage } from './lazy-page';
+import { CoffeeOrLegacyShareLink, SharedPostLink } from './short-links';
 
 // Pantallas que se cargan al visitarlas (fuera del paquete inicial).
 // Portales de organización: plantillas pesadas que solo usa quien visita uno.
@@ -299,8 +300,14 @@ export function AppRoutes() {
           apadrinar un animal. La API valida el destino en cada escaneo. */}
           <Route path="/q/:code" element={<OrgQrRedirectPage />} />
           {/* Café de AdoptaFácil: el QR impreso en la bolsa (`/c/:code`, no cambia
-          entre lotes) y el regreso desde Mercado Pago con el estado del pedido. */}
-          <Route path="/c/:code" element={<PublicCoffeePage />} />
+          entre lotes) y el regreso desde Mercado Pago con el estado del pedido.
+          `/c/<uuid>` es el enlace viejo de la comunidad y `/p/<uuid>` el nuevo:
+          ver short-links.tsx (un dueño por prefijo). */}
+          <Route
+            path="/c/:code"
+            element={<CoffeeOrLegacyShareLink coffee={<PublicCoffeePage />} />}
+          />
+          <Route path="/p/:id" element={<SharedPostLink />} />
           <Route path="/cafe/pedido/:reference" element={<CoffeeOrderPage />} />
           <Route
             path="/donar"
@@ -341,7 +348,7 @@ export function AppRoutes() {
           sesión): solo perfiles aprobados por la plataforma. Gestión propia en
           /mi-negocio y ficha privada en /mis-mascotas, abajo (RequireAuth). */}
           {/* Comunidad · publicación PÚBLICA que su autora marcó como compartible
-          (sin sesión): destino de los enlaces compartidos en redes (`/c/:id`). */}
+          (sin sesión): destino de los enlaces compartidos en redes (`/p/:id`). */}
           <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
           {/* Pre-registro público (sin cuenta). Estático: gana a /servicios/:id. */}
