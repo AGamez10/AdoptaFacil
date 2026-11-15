@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { SHARE_LINK_PATTERN } from './src/shell/router/short-link-patterns';
 
 /**
@@ -17,8 +17,30 @@ export const contractsSourceAlias = {
   ),
 };
 
+/**
+ * Acceso de prueba: la sesión simulada (VITE_AUTH_MODE=mock) nunca entra a un
+ * build de producción. Si quedó en el .env, el build se detiene aquí.
+ */
+export function forbidMockAuthInProduction(): Plugin {
+  return {
+    name: 'adoptafacil:forbid-mock-auth-in-production',
+    config(_config, { mode }) {
+      if (
+        mode === 'production' &&
+        loadEnv(mode, fileURLToPath(new URL('../..', import.meta.url)), 'VITE_').VITE_AUTH_MODE ===
+          'mock'
+      ) {
+        throw new Error(
+          'VITE_AUTH_MODE=mock (sesión simulada) no está permitido en un build de producción. ' +
+            'Quítalo del .env o déjalo en http.',
+        );
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [forbidMockAuthInProduction(), react()],
   resolve: { alias: contractsSourceAlias },
   // Vite's envDir defaults to the project root (this folder, apps/web), but
   // the repo keeps a single .env at the monorepo root (see `pnpm setup:env`).
