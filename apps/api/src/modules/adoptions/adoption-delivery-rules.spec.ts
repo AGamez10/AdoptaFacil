@@ -6,6 +6,7 @@ import {
   deliveryConfirmUrl,
   generateDeliveryCode,
   hashDeliveryCode,
+  resolveDeliveryFacts,
 } from './adoption-delivery-rules';
 
 describe('adoption delivery rules', () => {
@@ -149,5 +150,28 @@ describe('adoption delivery rules', () => {
         milestonePlan: [],
       }),
     ).not.toBe(a);
+  });
+});
+
+describe('resolveDeliveryFacts (punto 15)', () => {
+  it('copia salud y peso del contrato firmado e ignora lo que envíe el cliente', () => {
+    expect(
+      resolveDeliveryFacts(
+        { healthStatusAtDelivery: 'Sano', weightKg: 18.5 },
+        { healthStatus: 'Otro texto', weightKg: 3 },
+      ),
+    ).toEqual({ healthStatus: 'Sano', weightKg: 18.5 });
+    expect(resolveDeliveryFacts({ healthStatusAtDelivery: 'Sano', weightKg: 18.5 }, {})).toEqual({
+      healthStatus: 'Sano',
+      weightKg: 18.5,
+    });
+  });
+
+  it('solo un contrato antiguo sin esos datos usa lo escrito al entregar', () => {
+    expect(resolveDeliveryFacts({}, { healthStatus: ' Bien ', weightKg: 7 })).toEqual({
+      healthStatus: 'Bien',
+      weightKg: 7,
+    });
+    expect(resolveDeliveryFacts({}, {})).toBeNull();
   });
 });

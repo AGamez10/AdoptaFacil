@@ -10,6 +10,7 @@ import {
   Logger,
   NotFoundException,
   Optional,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -45,6 +46,7 @@ import {
   deliveryConfirmUrl,
   generateDeliveryCode,
   hashDeliveryCode,
+  resolveDeliveryFacts,
 } from './adoption-delivery-rules';
 
 type DeliveryModel = Prisma.AdoptionDeliveryGetPayload<Record<string, never>>;
@@ -155,14 +157,6 @@ export class AdoptionDeliveryService {
 
     const id = randomUUID();
     const code = generateDeliveryCode();
-    const details: AdoptionDeliveryDetails = {
-      healthStatus: input.healthStatus,
-      weightKg: input.weightKg,
-      identityVerified: input.identityVerified,
-      identificationChecked: input.identificationChecked,
-      items: input.items,
-      photoRef: input.photoRef,
-    };
 
     const created = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const contract = await tx.adoptionContract.findUnique({ where: { id: input.contractId } });
@@ -188,6 +182,22 @@ export class AdoptionDeliveryService {
 
       const payload = contract.payload as unknown as AdoptionContractPayload;
       const data = payload.data ?? { followUpMonths: 12 };
+      // Punto 15: el estado de salud y el peso del acta son EXACTAMENTE los del
+      // contrato firmado; lo que escriba el cliente no los puede cambiar.
+      const facts = resolveDeliveryFacts(data, input);
+      if (!facts) {
+        throw new UnprocessableEntityException(
+          'Indica el estado de salud y el peso del animal para registrar la entrega.',
+        );
+      }
+      const details: AdoptionDeliveryDetails = {
+        healthStatus: facts.healthStatus,
+        weightKg: facts.weightKg,
+        identityVerified: input.identityVerified,
+        identificationChecked: input.identificationChecked,
+        items: input.items,
+        photoRef: input.photoRef,
+      };
 
       const [org, animal, clinicalEvents, behaviorDisclosures] = await Promise.all([
         tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),

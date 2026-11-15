@@ -6,7 +6,7 @@ import {
   type AdoptionDeliveryCodeIssued,
   type AdoptionDeliveryItem,
 } from '@adoptafacil/contracts';
-import { Button, Input, Skeleton, useToast } from '@adoptafacil/ui';
+import { Button, Input, Skeleton, friendlyErrorMessage, useToast } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
 import {
   cancelAdoptionDelivery,
@@ -25,6 +25,10 @@ const PHOTO_MAX_MB = 15;
 export interface AdoptionDeliveryPanelProps {
   contractId: string;
   animalName: string;
+  /** Estado de salud y peso ya firmados en el contrato: el acta de entrega
+   *  usa exactamente estos (no se vuelven a escribir). */
+  contractHealthStatus?: string;
+  contractWeightKg?: number;
 }
 
 /** QR del enlace de confirmación, generado en el navegador. */
@@ -51,7 +55,17 @@ function DeliveryQr({ value }: { value: string }) {
  * adoptante confirma en su sesión. Al confirmar, el animal pasa a adoptado y
  * se programan los seguimientos del plan.
  */
-export function AdoptionDeliveryPanel({ contractId, animalName }: AdoptionDeliveryPanelProps) {
+export function AdoptionDeliveryPanel({
+  contractId,
+  animalName,
+  contractHealthStatus,
+  contractWeightKg,
+}: AdoptionDeliveryPanelProps) {
+  // Punto 15: si el contrato ya trae salud y peso, la entrega los copia tal cual.
+  const fromContract =
+    Boolean(contractHealthStatus?.trim()) &&
+    typeof contractWeightKg === 'number' &&
+    contractWeightKg > 0;
   const client = useApiClient();
   const { toast } = useToast();
 
@@ -89,8 +103,10 @@ export function AdoptionDeliveryPanel({ contractId, animalName }: AdoptionDelive
     event.preventDefault();
     setFormError(null);
     const weight = Number(weightKg.replace(',', '.'));
-    if (healthStatus.trim().length < 3) return setFormError('Describe el estado de salud.');
-    if (!Number.isFinite(weight) || weight <= 0) return setFormError('Indica el peso en kg.');
+    if (!fromContract) {
+      if (healthStatus.trim().length < 3) return setFormError('Describe el estado de salud.');
+      if (!Number.isFinite(weight) || weight <= 0) return setFormError('Indica el peso en kg.');
+    }
     if (!identityVerified)
       return setFormError('Confirma la identidad del adoptante con su documento original.');
     if (!photo) return setFormError(`Toma la foto de ${animalName} con su nuevo hogar.`);
@@ -106,8 +122,7 @@ export function AdoptionDeliveryPanel({ contractId, animalName }: AdoptionDelive
       onIssued(
         await startAdoptionDelivery(client, {
           contractId,
-          healthStatus: healthStatus.trim(),
-          weightKg: weight,
+          ...(fromContract ? {} : { healthStatus: healthStatus.trim(), weightKg: weight }),
           identityVerified,
           identificationChecked,
           items,
@@ -115,7 +130,7 @@ export function AdoptionDeliveryPanel({ contractId, animalName }: AdoptionDelive
         }),
       );
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'No se pudo registrar la entrega.');
+      setFormError(friendlyErrorMessage(error, 'No se pudo registrar la entrega.'));
     } finally {
       setBusy(false);
     }
@@ -213,23 +228,44 @@ export function AdoptionDeliveryPanel({ contractId, animalName }: AdoptionDelive
         adoptante confirme que recibió a {animalName}.
       </p>
       <form className="space-y-3" onSubmit={(e) => void submit(e)} noValidate>
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">Estado de salud al entregar</span>
-          <textarea
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            rows={3}
-            value={healthStatus}
-            onChange={(e) => setHealthStatus(e.target.value)}
-          />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span className="font-medium">Peso (kg)</span>
-          <Input
-            inputMode="decimal"
-            value={weightKg}
-            onChange={(e) => setWeightKg(e.target.value)}
-          />
-        </label>
+        {fromContract ? (
+          <dl
+            className="space-y-1 rounded-md bg-muted/50 p-3 text-sm"
+            data-testid="delivery-contract-facts"
+          >
+            <div>
+              <dt className="font-medium">Estado de salud al entregar</dt>
+              <dd>{contractHealthStatus}</dd>
+            </div>
+            <div>
+              <dt className="font-medium">Peso</dt>
+              <dd>{contractWeightKg} kg</dd>
+            </div>
+            <p className="pt-1 text-xs text-muted-foreground">
+              Estos datos vienen del contrato firmado y quedan iguales en el acta de entrega.
+            </p>
+          </dl>
+        ) : (
+          <>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Estado de salud al entregar</span>
+              <textarea
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                rows={3}
+                value={healthStatus}
+                onChange={(e) => setHealthStatus(e.target.value)}
+              />
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Peso (kg)</span>
+              <Input
+                inputMode="decimal"
+                value={weightKg}
+                onChange={(e) => setWeightKg(e.target.value)}
+              />
+            </label>
+          </>
+        )}
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"

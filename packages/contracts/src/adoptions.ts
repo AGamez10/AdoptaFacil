@@ -295,6 +295,65 @@ export interface AdoptionContractData {
   recoveryFeeCop?: number;
 }
 
+/**
+ * Datos OBLIGATORIOS del contrato: sin ellos el documento saldría con espacios
+ * en blanco, así que no se puede firmar ni enviar a firmas. La lista es corta
+ * a propósito (solo lo que el contrato imprime como identificación de las
+ * partes, del animal y de la entrega); lo demás sigue siendo opcional.
+ */
+export interface AdoptionContractMissingField {
+  field: keyof AdoptionContractData;
+  label: string;
+}
+
+const hasText = (value: string | undefined): boolean =>
+  typeof value === 'string' && value.trim().length > 0;
+
+/** Devuelve los datos obligatorios que faltan (vacío = contrato completo). */
+export function missingAdoptionContractFields(
+  data: AdoptionContractData,
+): AdoptionContractMissingField[] {
+  const missing: AdoptionContractMissingField[] = [];
+  const need = (ok: boolean, field: keyof AdoptionContractData, label: string): void => {
+    if (!ok) missing.push({ field, label });
+  };
+  need(hasText(data.organizationName), 'organizationName', 'Nombre de la organización');
+  // Un grupo sin personería jurídica no tiene NIT: solo se exige a la formal.
+  if (data.organizationFormalization !== 'informal') {
+    need(hasText(data.organizationNit), 'organizationNit', 'NIT de la organización');
+  }
+  need(hasText(data.organizationAddress), 'organizationAddress', 'Domicilio de la organización');
+  need(hasText(data.animalSex), 'animalSex', 'Sexo del animal');
+  need(typeof data.weightKg === 'number' && data.weightKg > 0, 'weightKg', 'Peso (kg)');
+  need(
+    hasText(data.healthStatusAtDelivery),
+    'healthStatusAtDelivery',
+    'Estado de salud al momento de la entrega',
+  );
+  need(
+    hasText(data.adopterDocumentNumber),
+    'adopterDocumentNumber',
+    'Número de documento del adoptante',
+  );
+  need(hasText(data.adopterAddress), 'adopterAddress', 'Domicilio del adoptante');
+  need(hasText(data.signatureCity), 'signatureCity', 'Ciudad de firma');
+  if (data.animalIdentificationType === 'microchip' || data.animalIdentificationType === 'tag') {
+    need(
+      hasText(data.animalIdentificationNumber),
+      'animalIdentificationNumber',
+      'Número del microchip o placa',
+    );
+  }
+  return missing;
+}
+
+/** Frase lista para mostrar: "Faltan datos obligatorios del contrato: A, B." */
+export function describeMissingAdoptionContractFields(
+  missing: readonly AdoptionContractMissingField[],
+): string {
+  return `Faltan datos obligatorios del contrato: ${missing.map((m) => m.label).join(', ')}.`;
+}
+
 /** Tipos de documento admitidos para el adoptante. */
 export type AdopterDocumentType = 'CC' | 'CE' | 'PPT' | 'PA';
 export const ADOPTER_DOCUMENT_TYPES: readonly AdopterDocumentType[] = ['CC', 'CE', 'PPT', 'PA'];
@@ -320,8 +379,10 @@ export const MIN_SIGNER_AGE_RANGE = { min: 18, max: 30 } as const;
 
 /** Entrada para `PATCH /adoptions/contracts/:id/data` — cualquier subconjunto
  *  de {@link AdoptionContractData}; solo aplicable mientras el contrato está
- *  en `draft` y nadie ha firmado todavía. */
-export type UpdateAdoptionContractDataInput = Partial<AdoptionContractData>;
+ *  en `draft` y nadie ha firmado todavía. `null` borra el dato. */
+export type UpdateAdoptionContractDataInput = {
+  [K in keyof AdoptionContractData]?: AdoptionContractData[K] | null;
+};
 
 /** Default de {@link AdoptionContractData.followUpMonths} cuando se genera el
  *  contrato — 12 meses desde la plantilla v2 (estudio v3/v4: la mayoría de
@@ -717,8 +778,10 @@ export interface AdoptionDelivery {
 /** `POST /adoptions/deliveries` (org). */
 export interface StartAdoptionDeliveryInput {
   contractId: string;
-  healthStatus: string;
-  weightKg: number;
+  /** Solo para contratos antiguos sellados sin estos datos: el acta copia el
+   *  estado de salud y el peso del contrato firmado (deben ser idénticos). */
+  healthStatus?: string;
+  weightKg?: number;
   identityVerified: boolean;
   identificationChecked: boolean;
   items: AdoptionDeliveryItem[];

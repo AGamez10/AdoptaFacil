@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PublicLedgerPage } from '@adoptafacil/contracts';
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@adoptafacil/ui';
 import { fetchPublicLedger } from '../../ledger/api/public-ledger';
 import { LedgerEntryList } from '../../ledger/components/ledger-entry-list';
 import { LedgerSummary } from '../../ledger/components/ledger-summary';
 import { PublicLedgerDialog } from '../../ledger/components/public-ledger-dialog';
+import { readLedgerTheme, type LedgerTheme } from '../../ledger/model/ledger-theme';
 
 const HEADING_ID = 'portal-section-public-ledger';
 /** Lo que se ve sin abrir el libro completo. */
@@ -12,6 +13,8 @@ const PREVIEW = 5;
 
 export interface PortalPublicLedgerSectionProps {
   slug: string;
+  /** Nombre de la organización, para el encabezado del libro completo. */
+  orgName?: string;
 }
 
 /**
@@ -21,8 +24,23 @@ export interface PortalPublicLedgerSectionProps {
  * pilar del producto. Si el libro no carga, la sección se oculta (nunca un
  * mensaje técnico en el portal).
  */
-export function PortalPublicLedgerSection({ slug }: PortalPublicLedgerSectionProps) {
+export function PortalPublicLedgerSection({ slug, orgName }: PortalPublicLedgerSectionProps) {
   const [open, setOpen] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+  // El libro completo toma la marca y las tipografías del portal donde se abre.
+  const [theme, setTheme] = useState<LedgerTheme | null>(null);
+  const openBook = () => {
+    const section = sectionRef.current;
+    setTheme(
+      section
+        ? readLedgerTheme(
+            section.closest<HTMLElement>('main') ?? document.body,
+            section.firstElementChild ?? section,
+          )
+        : null,
+    );
+    setOpen(true);
+  };
   const [page, setPage] = useState<PublicLedgerPage | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
@@ -44,6 +62,7 @@ export function PortalPublicLedgerSection({ slug }: PortalPublicLedgerSectionPro
 
   return (
     <section
+      ref={sectionRef}
       id="portal-section-public-ledger"
       aria-labelledby={HEADING_ID}
       data-testid="portal-public-ledger-section"
@@ -57,7 +76,7 @@ export function PortalPublicLedgerSection({ slug }: PortalPublicLedgerSectionPro
               Cada donación recibida y cada gasto ejecutado, con fecha y soporte.
             </p>
           </div>
-          <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+          <Button type="button" variant="outline" onClick={openBook}>
             Ver libro completo →
           </Button>
         </CardHeader>
@@ -79,7 +98,13 @@ export function PortalPublicLedgerSection({ slug }: PortalPublicLedgerSectionPro
         </CardContent>
       </Card>
 
-      <PublicLedgerDialog slug={slug} open={open} onOpenChange={setOpen} />
+      <PublicLedgerDialog
+        slug={slug}
+        open={open}
+        onOpenChange={setOpen}
+        theme={theme}
+        orgName={orgName}
+      />
     </section>
   );
 }

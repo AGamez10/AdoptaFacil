@@ -50,7 +50,11 @@ import { checkContractTransition } from './adoption-contract-status';
 import { computeContractHash } from './adoption-contract-hash';
 import { SIGNATURE_PORT } from './signature/signature.port';
 import { AdoptionContractCopyService } from './adoption-contract-copy.service';
-import { resolveMinimumSignerAge } from './adoption-contract-rules';
+import {
+  assertContractDataComplete,
+  mergeContractData,
+  resolveMinimumSignerAge,
+} from './adoption-contract-rules';
 import { normalizeSignatureImage, SignatureImageError } from '../reports/signature-image';
 
 /** Formatea `{ city, address }` de `OrganizationLocation` en una sola línea
@@ -497,6 +501,7 @@ export class AdoptionContractsService {
             'El representante de la organización debe firmar el contrato antes de enviarlo a firmas.',
           );
         }
+        assertContractDataComplete((current.payload as unknown as AdoptionContractPayload).data);
       }
       const next = await tx.adoptionContract.update({
         where: { id: contractId },
@@ -556,7 +561,7 @@ export class AdoptionContractsService {
       const currentPayload = current.payload as unknown as AdoptionContractPayload;
       const nextPayload: AdoptionContractPayload = {
         ...currentPayload,
-        data: { ...currentPayload.data, ...input },
+        data: mergeContractData(currentPayload.data, input),
       };
 
       const next = await tx.adoptionContract.update({
@@ -629,6 +634,9 @@ export class AdoptionContractsService {
     if (signer.signedAt) {
       throw new ConflictException('Esa parte ya fue firmada.');
     }
+    // Nadie firma un contrato con espacios en blanco: ni la organización ni
+    // el adoptante (los datos se congelan con la primera firma).
+    assertContractDataComplete(row.payload.data);
 
     let fullNameOverride: string | undefined;
     let userIdOverride: string | undefined;

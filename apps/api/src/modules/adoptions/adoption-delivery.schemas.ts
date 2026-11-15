@@ -6,8 +6,10 @@ import { ADOPTION_DELIVERY_ITEMS } from '@adoptafacil/contracts';
 export const startDeliverySchema = z
   .object({
     contractId: z.guid(),
-    healthStatus: z.string().trim().min(3).max(1000),
-    weightKg: z.number().positive().max(150),
+    // Opcionales: el acta copia estos dos datos del contrato firmado. Solo se
+    // usan si el contrato (antiguo) se selló sin ellos.
+    healthStatus: z.string().trim().min(3).max(1000).optional(),
+    weightKg: z.number().positive().max(150).optional(),
     /** El contrato exige confirmar la identidad con el documento original. */
     identityVerified: z.literal(true, {
       error: 'Confirma la identidad del adoptante con su documento.',

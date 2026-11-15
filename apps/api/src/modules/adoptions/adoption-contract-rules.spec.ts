@@ -1,4 +1,9 @@
-import { detectSignatureImageType, resolveMinimumSignerAge } from './adoption-contract-rules';
+import {
+  assertContractDataComplete,
+  detectSignatureImageType,
+  mergeContractData,
+  resolveMinimumSignerAge,
+} from './adoption-contract-rules';
 
 describe('detectSignatureImageType', () => {
   it('reconoce PNG y JPEG por sus bytes, no por lo que diga el cliente', () => {
@@ -29,5 +34,61 @@ describe('resolveMinimumSignerAge', () => {
       18,
     );
     expect(resolveMinimumSignerAge(org, { ADOPTION_MIN_SIGNER_AGE_BY_ORG: 'basura::,,' })).toBe(18);
+  });
+});
+
+describe('datos obligatorios del contrato (punto 13)', () => {
+  const complete = {
+    followUpMonths: 12,
+    organizationName: 'Refugio',
+    organizationNit: '900000000-1',
+    organizationAddress: 'Calle 1',
+    animalSex: 'male',
+    weightKg: 10,
+    healthStatusAtDelivery: 'Sano',
+    adopterDocumentNumber: '1000000000',
+    adopterAddress: 'Calle 2',
+    signatureCity: 'Bogotá',
+  };
+
+  it('acepta un contrato completo y nombra en lenguaje llano lo que falta', () => {
+    expect(() => assertContractDataComplete(complete)).not.toThrow();
+    try {
+      assertContractDataComplete({ ...complete, weightKg: undefined, signatureCity: '  ' });
+      throw new Error('debió fallar');
+    } catch (error) {
+      const body = (
+        error as { getResponse(): { message: string; missing: string[] } }
+      ).getResponse();
+      expect(body.message).toBe(
+        'Faltan datos obligatorios del contrato: Peso (kg), Ciudad de firma.',
+      );
+      expect(body.missing).toEqual(['weightKg', 'signatureCity']);
+    }
+  });
+
+  it('no exige NIT a un grupo sin personería, pero sí el número si hay microchip o placa', () => {
+    expect(() =>
+      assertContractDataComplete({
+        ...complete,
+        organizationNit: undefined,
+        organizationFormalization: 'informal',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertContractDataComplete({ ...complete, animalIdentificationType: 'microchip' }),
+    ).toThrow();
+  });
+
+  it('null borra el dato al guardar y los meses de seguimiento nunca quedan vacíos', () => {
+    const next = mergeContractData(complete, {
+      weightKg: null,
+      followUpMonths: null,
+      animalBreed: 'Criollo',
+    });
+    expect(next.weightKg).toBeUndefined();
+    expect(next.followUpMonths).toBe(12);
+    expect(next.animalBreed).toBe('Criollo');
+    expect(next.organizationName).toBe('Refugio');
   });
 });

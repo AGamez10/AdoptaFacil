@@ -108,6 +108,51 @@ describe('AnimalsPage — lista + detalle maestro-detalle', () => {
     expect(screen.getByText('Cariñoso')).toBeInTheDocument();
   });
 
+  it('punto 2: al elegir otro animal nunca deja en pantalla el carnet del anterior', async () => {
+    const entry = {
+      id: 'e1',
+      eventId: 'ev1',
+      version: 1,
+      animalId: 'a1',
+      organizationId: 'org-1',
+      type: 'vaccine',
+      occurredAt: '2026-09-01T15:00:00.000Z',
+      authorName: 'Dra. Uno',
+      attachments: [],
+      createdAt: '2026-09-01T15:00:00.000Z',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        // El expediente del segundo animal falla: antes quedaba el del primero.
+        const fails = url.includes('/animals/a2/clinical-events');
+        const body = url.includes('/animals/a1/clinical-events/carnet')
+          ? [entry]
+          : url.includes('/clinical-events') || url.includes('/breeds')
+            ? []
+            : url.includes('/animals')
+              ? [animal('a1', 'Firulais'), animal('a2', 'Chorizo')]
+              : {};
+        return Promise.resolve({
+          ok: !fails,
+          status: fails ? 500 : 200,
+          headers: { get: () => null },
+          json: async () => (fails ? { message: 'Internal server error' } : body),
+          blob: async () => new Blob([]),
+        });
+      }),
+    );
+    renderShell({ route: '/animales', ...sessionWith([Role.Owner]) });
+
+    await selectRow('Firulais');
+    expect(await screen.findByText(/Dra\. Uno/)).toBeInTheDocument();
+
+    await selectRow('Chorizo');
+    expect(await screen.findByRole('heading', { name: 'Chorizo' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/Dra\. Uno/)).not.toBeInTheDocument());
+  });
+
   it('shows a friendly empty state with a CTA for a manager', async () => {
     stubFetch(() => []);
     renderShell({ route: '/animales', ...sessionWith([Role.Owner]) });
