@@ -179,12 +179,35 @@ export interface AccountingOverview {
 }
 
 /** `GET /org/accounting/periods/:period` — el libro auxiliar de un mes. */
+/** Una fila de "de dónde vino el dinero" del mes. */
+export interface AccountingOriginRow {
+  /** Origen en palabras simples ("Donaciones a campañas", "Ventas (marketplace y otras)"). */
+  origin: string;
+  /** Detalle (nombre de la campaña o del animal, o "Sin movimientos en el mes"). */
+  detail: string;
+  count: number;
+  /** Pesos; las donaciones ya van netas de reembolsos y contracargos. */
+  amountCop: number;
+  /** Cómo llegó el dato al libro. */
+  channel: 'online' | 'sponsorship' | 'manual';
+}
+
+/** Cruce del mes: todo lo que entró y salió, clasificado por origen. */
+export interface AccountingOrigins {
+  income: AccountingOriginRow[];
+  expenses: AccountingOriginRow[];
+  incomeTotalCop: number;
+  expenseTotalCop: number;
+}
+
 export interface AccountingPeriodView {
   period: string;
   status: AccountingPeriodStatus;
   close?: AccountingPeriodClose;
   totals: AccountingTotals;
   entries: AccountingEntry[];
+  /** De dónde vino el dinero del mes (campañas, animales, apadrinamientos, ventas…). */
+  origins?: AccountingOrigins;
   /** Informe contable firmable del mes, si ya se generó (plan de pago). */
   report?: { id: string; code: string; status: OrgReportStatus } | null;
   /** Enlaces compartidos con el contador / revisor (plan de pago). */

@@ -714,8 +714,8 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
         .send({ token: shareToken, format: 'csv' }),
     ).expect(200);
     const text = (csv.body as Buffer).toString('utf8');
-    expect(text).toContain('Comisión pasarela (COP)');
-    expect(text).toContain('Donante (sin autorización para identificarlo)');
+    expect(text).toContain('Comisión de la pasarela (COP)');
+    expect(text).toContain('Donante sin autorización para identificarlo');
     expect(text).not.toContain('Donante Prueba');
 
     const views = await admin.auditLog.count({
