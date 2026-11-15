@@ -13,7 +13,7 @@ import { dateBounds } from '../../../lib/date-rules';
  * pantalla porque aquí ya los provee `AnimalDetailPanel`.
  */
 export function AnimalRegistroClinicoSection({ animalId }: { animalId: string }) {
-  const { canEdit, events, eventsLoading, form } = useAnimalClinicalRecord(animalId);
+  const { canEdit, events, eventsLoading, loadFailed, form } = useAnimalClinicalRecord(animalId);
 
   return (
     <div className="space-y-6">
@@ -67,6 +67,11 @@ export function AnimalRegistroClinicoSection({ animalId }: { animalId: string })
 
       {eventsLoading ? (
         <Skeleton className="h-24 w-full" />
+      ) : loadFailed ? (
+        <p role="alert" className="text-sm text-destructive">
+          No pudimos cargar el expediente de este animal. Revisa tu conexión y vuelve a
+          seleccionarlo.
+        </p>
       ) : events.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin eventos clínicos.</p>
       ) : (

@@ -164,7 +164,9 @@ export function AnimalDetailPanel({
         </div>
       </div>
 
-      <div className={styles.detail__body}>
+      {/* `key`: al elegir otro animal las secciones se montan de cero, así nunca
+          queda en pantalla el carnet, el registro o la custodia del anterior. */}
+      <div key={animal.id} className={styles.detail__body}>
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
           {/* En pantallas angostas las pestañas se desplazan en vez de desbordar la página. */}
           <div className="w-0 min-w-full overflow-x-auto">
