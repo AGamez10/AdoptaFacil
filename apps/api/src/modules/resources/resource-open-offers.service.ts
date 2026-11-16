@@ -138,6 +138,9 @@ export class ResourceOpenOffersService {
     input: CreateResourceOpenOfferInput,
   ): Promise<ResourceOpenOffer> {
     const row = await this.prisma.withOrgContext(actor.organizationId, async (tx) => {
+      // Run-2 S-02: serialise per donor so N parallel requests cannot all read
+      // the same counts and all slip under the open cap / daily quota.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`resource.open_offer:${actor.id}`}))`;
       const openCount = await tx.resourceOpenOffer.count({
         where: {
           donorUserId: actor.id,

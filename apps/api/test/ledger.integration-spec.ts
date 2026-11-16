@@ -172,6 +172,24 @@ describe('Public ledger (RF14: libro público, idempotencia, inmutabilidad, no-l
       .expect(400);
   });
 
+  // Run-2 S-04: multer now caps the body (one file, 100 MB) before the service.
+  it('rejects a second support file in the same request (400) and records nothing', async () => {
+    const before = await admin.ledgerEntry.count({ where: { organizationId: orgA.orgId } });
+    const res = await request(server)
+      .post('/org/ledger')
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .field('kind', 'expense')
+      .field('category', 'alimento')
+      .field('occurredOn', today)
+      .field('amountCop', '1000')
+      .field('concept', 'Dos soportes')
+      .attach('support', PDF, { filename: 'a.pdf', contentType: 'application/pdf' })
+      .attach('support', PDF, { filename: 'b.pdf', contentType: 'application/pdf' })
+      .expect(400);
+    expect(res.body.message).toMatch(/too many files/i);
+    expect(await admin.ledgerEntry.count({ where: { organizationId: orgA.orgId } })).toBe(before);
+  });
+
   it('is idempotent: the same clientRequestId returns the same entry', async () => {
     const body = {
       kind: 'expense',

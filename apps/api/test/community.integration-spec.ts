@@ -6,7 +6,10 @@ import request from 'supertest';
 import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
-import { MAX_CAMPAIGN_BROADCASTS_PER_DAY } from '../src/modules/community/community-posts.service';
+import {
+  CAMPAIGN_BROADCAST_AUDIT_ACTION,
+  MAX_CAMPAIGN_BROADCASTS_PER_DAY,
+} from '../src/modules/community/community-posts.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
@@ -259,6 +262,42 @@ describe('Community (M11, F-8: posts, comments, likes, RBAC, moderation)', () =>
       expect(campaignSends()).toBe(0);
       expect(await campaignPosts()).toBe(MAX_CAMPAIGN_BROADCASTS_PER_DAY + 1);
     });
+
+    // Run-2 F-02: the cap used to count posts, so deleting them reset it.
+    it('deleting the campaign posts does not reset the cap (counted from the audit log)', async () => {
+      await setRoles(['owner']);
+      const ids = (
+        await admin.post.findMany({
+          where: { organizationId: member.orgId, type: 'campaign' },
+          select: { id: true },
+        })
+      ).map((p) => p.id);
+      for (const id of ids) {
+        await request(server)
+          .delete(`/community/posts/${id}`)
+          .set('Authorization', `Bearer ${member.token}`)
+          .expect(204);
+      }
+      expect(await campaignPosts()).toBe(0);
+      send.mockClear();
+      await createPost(member.token, campaign).expect(201);
+      expect(campaignSends()).toBe(0);
+    });
+  });
+
+  // Run-2 S-01: concurrent campaign posts used to all read the same count and
+  // all broadcast; the advisory lock serialises the decision per organization.
+  it('concurrent campaign posts never broadcast more than the daily cap', async () => {
+    const broadcasts = () =>
+      admin.auditLog.count({
+        where: { organizationId: org.orgId, action: CAMPAIGN_BROADCAST_AUDIT_ACTION },
+      });
+    expect(await broadcasts()).toBeLessThan(MAX_CAMPAIGN_BROADCASTS_PER_DAY);
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => createPost(org.token, { type: 'campaign', title: 'Ya' })),
+    );
+    expect(results.map((r) => r.status)).toEqual(Array(8).fill(201));
+    expect(await broadcasts()).toBe(MAX_CAMPAIGN_BROADCASTS_PER_DAY);
   });
 
   it('the feed shows BOTH the org post and the platform-wide post', async () => {

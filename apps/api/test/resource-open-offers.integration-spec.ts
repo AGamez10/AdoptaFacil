@@ -317,6 +317,17 @@ describe('Open offers (M09) + public shareable community (M11)', () => {
     );
   });
 
+  // Run-2 S-02: parallel requests used to all read the same count.
+  it('parallel creates never exceed the open-offer cap (advisory lock per donor)', async () => {
+    const racer = await registerPerson('oo-race');
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => openOffer(racer.token, { title: `Carrera ${i}` })),
+    );
+    const statuses = results.map((r) => r.status).sort();
+    expect(statuses).toEqual([201, 201, 201, 201, 201, 409, 409, 409]);
+    expect(await admin.resourceOpenOffer.count({ where: { donorUserId: racer.userId } })).toBe(5);
+  });
+
   // ------------------------------------------------------------------ comunidad
   const createPost = (token: string, body: Record<string, unknown> = {}) =>
     request(server)

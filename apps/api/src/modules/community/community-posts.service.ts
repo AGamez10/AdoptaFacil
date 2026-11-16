@@ -23,6 +23,7 @@ import {
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditService } from '../../core/audit/audit.service';
 import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
 import { posterKeyFor } from '../../core/media/video-transcoder';
@@ -55,6 +56,12 @@ export const CAMPAIGN_POST_ORG_ROLES: readonly string[] = [Role.Owner, Role.Admi
  */
 export const MAX_CAMPAIGN_BROADCASTS_PER_DAY = 3;
 const BROADCAST_WINDOW_MS = 24 * 60 * 60 * 1000;
+/**
+ * Security remediation run-2 F-02 / S-01: the daily cap counts THIS audit
+ * action (append-only, nobody can delete it), not the posts — deleting a post
+ * used to reset the count. Written in the same transaction as the post.
+ */
+export const CAMPAIGN_BROADCAST_AUDIT_ACTION = 'community.campaign_broadcast';
 // Recipients enqueued in parallel per round trip batch.
 const NOTIFY_ENQUEUE_BATCH = 100;
 
@@ -113,6 +120,7 @@ export class CommunityPostsService {
     private readonly prisma: PrismaService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly audit: AuditService,
     @Optional() private readonly inbox?: InboxService,
   ) {}
 
@@ -273,16 +281,20 @@ export class CommunityPostsService {
           'Solo el propietario o un administrador publican campañas que se envían a los donantes.',
         );
       }
-      const broadcastsToday =
-        input.type === PostType.Campaign
-          ? await tx.post.count({
-              where: {
-                organizationId,
-                type: PostType.Campaign,
-                createdAt: { gt: new Date(Date.now() - BROADCAST_WINDOW_MS) },
-              },
-            })
-          : 0;
+      let broadcastsToday = 0;
+      if (input.type === PostType.Campaign) {
+        // One donor broadcast decision at a time per organization: concurrent
+        // campaign posts wait here, so all of them see the count the previous
+        // one committed (READ COMMITTED alone let N parallel posts all see 0).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`community.broadcast:${organizationId}`}))`;
+        broadcastsToday = await tx.auditLog.count({
+          where: {
+            organizationId,
+            action: CAMPAIGN_BROADCAST_AUDIT_ACTION,
+            createdAt: { gt: new Date(Date.now() - BROADCAST_WINDOW_MS) },
+          },
+        });
+      }
 
       const row = await tx.post.create({
         data: {
@@ -328,6 +340,15 @@ export class CommunityPostsService {
           if (recipients.size >= MAX_CAMPAIGN_NOTIFY_RECIPIENTS) break;
         }
         const emails = [...recipients.values()];
+        // Counts toward the cap (only counts, no addresses — Ley 1581).
+        await this.audit.recordWithTx(tx, {
+          organizationId,
+          actorUserId: actor.id,
+          action: CAMPAIGN_BROADCAST_AUDIT_ACTION,
+          entityType: 'community_post',
+          entityId: row.id,
+          metadata: { recipients: emails.length },
+        });
         return { post: this.toPost(row), images: row.images, notifyEmails: emails };
       }
       return {

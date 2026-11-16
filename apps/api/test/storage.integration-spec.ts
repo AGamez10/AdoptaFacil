@@ -12,6 +12,7 @@ import { Role } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { PasswordService } from '../src/core/auth/password.service';
 import { TokenService } from '../src/core/auth/token.service';
+import { HAS_FFMPEG, makeTestVideo } from './support/test-video';
 import type { Env } from '../src/config/env.validation';
 import { DiskStorageAdapter } from '../src/core/storage/disk-storage.adapter';
 import { STORAGE_PORT } from '../src/core/storage/storage.port';
@@ -383,6 +384,56 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       await request(server)
         .get(`/storage/public?key=${encodeURIComponent(key)}`)
         .expect(404);
+    });
+
+    // Security remediation run-2 F-01 (`storage-upload-video-poster-derived-key-overwrite`):
+    // a `…-video.mov` upload derived the poster of the published `…-video.mp4`
+    // and overwrote it. Now a video key must be `.mp4` and the derived poster
+    // is write-once too.
+    (HAS_FFMPEG ? it : it.skip)(
+      'never replaces the poster of a published video through a sibling key',
+      async () => {
+        const video = makeTestVideo(1, '320x240');
+        const base = `public/${ownerA.orgId}/${randomUUID()}-video`;
+        const send = (token: string, key: string) =>
+          request(server)
+            .put(`/storage/upload?key=${encodeURIComponent(key)}&media=post`)
+            .set('Authorization', `Bearer ${token}`)
+            .attach('file', video, { filename: 'clip.mov', contentType: 'video/quicktime' });
+        await send(ownerA.token, `${base}.mp4`).expect(200);
+        const poster = `${base}.poster.webp`;
+        const before = await request(server)
+          .get(`/storage/public?key=${encodeURIComponent(poster)}`)
+          .buffer()
+          .parse(binaryParser)
+          .expect(200);
+
+        const volunteer = await memberOf(ownerA.orgId, Role.Volunteer);
+        await send(volunteer.token, `${base}.mov`).expect(400);
+        await send(volunteer.token, `${base}.webm`).expect(400);
+        // Even through a `.mp4` key whose poster already exists: 409.
+        await upload(ownerA.token, poster, photoBytes, 'p.png', 'image/png').expect(409);
+
+        const after = await request(server)
+          .get(`/storage/public?key=${encodeURIComponent(poster)}`)
+          .buffer()
+          .parse(binaryParser)
+          .expect(200);
+        expect((after.body as Buffer).equals(before.body as Buffer)).toBe(true);
+      },
+      60_000,
+    );
+
+    it('two concurrent uploads to the same new key: exactly one wins (atomic write-once)', async () => {
+      const key = publicKey(ownerA.orgId, 'carrera.png');
+      const other = await otherPhoto();
+      const results = await Promise.all([
+        upload(ownerA.token, key, photoBytes, 'a.png', 'image/png'),
+        upload(ownerA.token, key, other, 'b.png', 'image/png'),
+        upload(ownerA.token, key, photoBytes, 'c.png', 'image/png'),
+      ]);
+      const codes = results.map((r) => r.status).sort();
+      expect(codes).toEqual([200, 409, 409]);
     });
 
     it('refuses a removed member whose access token is still valid (403)', async () => {

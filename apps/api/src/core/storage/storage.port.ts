@@ -38,6 +38,20 @@ export interface CreateUploadInput {
 export interface SaveObjectOptions {
   /** Size limit for THIS object, replacing the global one. */
   maxBytes?: number;
+  /**
+   * Write only if nothing is stored under the key yet (atomic in the adapter:
+   * `O_EXCL` on disk, `If-None-Match: *` on S3). When something already is,
+   * the adapter throws {@link StorageObjectExistsError} and keeps the old bytes.
+   */
+  ifNotExists?: boolean;
+}
+
+/** Thrown by `saveObject(..., { ifNotExists: true })` when the key is taken. */
+export class StorageObjectExistsError extends Error {
+  constructor(readonly key: string) {
+    super('A stored object already exists under this key');
+    this.name = 'StorageObjectExistsError';
+  }
 }
 
 /** Bytes + content type read back from storage. */

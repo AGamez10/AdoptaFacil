@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.validation';
 import { DiskStorageAdapter } from './disk-storage.adapter';
+import { StorageObjectExistsError } from './storage.port';
 
 const ORG = '6f9619ff-8b86-d011-b42d-00cf4fc964ff';
 
@@ -52,6 +53,19 @@ describe('DiskStorageAdapter (T-108)', () => {
     const read = await adapter.readObject(key);
     expect(read?.data.equals(bytes)).toBe(true);
     expect(read?.contentType).toBe('image/png');
+  });
+
+  it('ifNotExists writes once, atomically: the second writer gets StorageObjectExistsError', async () => {
+    const key = `public/${ORG}/a1-poster.webp`;
+    const results = await Promise.allSettled([
+      adapter.saveObject(key, Buffer.from('first'), 'image/webp', { ifNotExists: true }),
+      adapter.saveObject(key, Buffer.from('second'), 'image/webp', { ifNotExists: true }),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(StorageObjectExistsError);
+    const read = await adapter.readObject(key);
+    expect(['first', 'second']).toContain(read?.data.toString());
   });
 
   it('returns null for a missing object', async () => {

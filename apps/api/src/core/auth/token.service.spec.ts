@@ -20,7 +20,7 @@ function makePrisma(): PrismaService {
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
-      updateMany: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     authCredential: { findUnique: jest.fn() },
     userRole: { count: jest.fn().mockResolvedValue(1) },
@@ -106,6 +106,26 @@ describe('TokenService', () => {
     });
     expect(tokens.accessToken).toBe('signed.access.token');
     expect(tokens.refreshToken).toEqual(expect.any(String));
+  });
+
+  it('S-03: a token already claimed by a concurrent rotation gets 401 and mints nothing', async () => {
+    const prisma = makePrisma();
+    (prisma.refreshToken.findUnique as jest.Mock).mockResolvedValue({
+      id: 'old',
+      userId: 'u1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    (prisma.authCredential.findUnique as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      organizationId: 'o1',
+      accountType: 'person',
+      email: 'e@test',
+    });
+    (prisma.refreshToken.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+    const service = new TokenService(makeJwt(), prisma, CONFIG);
+    await expect(service.rotate('raced')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
   it('rejects an unknown refresh token', async () => {

@@ -199,6 +199,19 @@ export class TokenService {
     // (removal deletes them; this is the defense in depth) gets no new pair.
     await this.assertActiveMembership(principal);
 
+    // Run-2 S-03: claim the presented token atomically BEFORE minting a new
+    // pair. Two concurrent rotations of the same token used to both pass the
+    // read above and both get a fresh pair (a stolen token kept working after
+    // the legitimate refresh); now only the request whose UPDATE flips
+    // `revokedAt` from NULL wins, the other gets 401.
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: { id: existing.id, revokedAt: null, expiresAt: { gt: new Date() } },
+      data: { revokedAt: new Date() },
+    });
+    if (claimed.count !== 1) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
     const mfaVerifiedAt = this.carriedMfa(existing);
     const newRefreshToken = randomBytes(48).toString('base64url');
     const expiresAt = new Date(Date.now() + this.config.refreshTtlSeconds * 1000);
@@ -210,10 +223,10 @@ export class TokenService {
         mfaVerifiedAt,
       },
     });
-    // Revoke the presented token and link it to its replacement (reuse trail).
+    // Link the (already revoked) presented token to its replacement (reuse trail).
     await this.prisma.refreshToken.update({
       where: { id: existing.id },
-      data: { revokedAt: new Date(), replacedById: replacement.id },
+      data: { replacedById: replacement.id },
     });
 
     return {
