@@ -382,6 +382,22 @@ export const PAGE_HELP: readonly PageHelp[] = [
     ],
   },
   {
+    match: /^\/pagar\/guarderia\/resultado/,
+    title: 'Tu pago de guardería',
+    tips: [
+      'Mercado Pago está confirmando tu pago. Cuando lo apruebe, el cobro queda pagado y la organización tiene tu constancia.',
+      'El dinero llega directo a la cuenta de la organización. No necesitas volver a pagar.',
+    ],
+  },
+  {
+    match: /^\/pagar\/guarderia/,
+    title: 'Pagar la guardería',
+    tips: [
+      'Aquí pagas el cobro que te compartió la organización, sin crear una cuenta. Puedes pagar todo el saldo o una parte.',
+      'Pagas en Mercado Pago y el dinero llega directo a la organización. La constancia no es una factura: si la necesitas, pídesela a la organización.',
+    ],
+  },
+  {
     match: /^\/donaciones\/comprobante/,
     title: 'Tu comprobante de donación',
     tips: [
@@ -794,6 +810,7 @@ export const PAGE_HELP: readonly PageHelp[] = [
     tips: [
       'Gestiona la guardería: animales que cuidas, sus vencimientos, pagos, contratos y plantillas.',
       'Cada contrato y movimiento queda documentado para que todos tengan el mismo soporte.',
+      'Si enciendes el pago en línea, cada cobro tiene un enlace para que el responsable pague por Mercado Pago a la cuenta de la organización.',
     ],
     related: [ANIMALS_LINK],
   },

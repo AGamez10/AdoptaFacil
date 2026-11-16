@@ -114,6 +114,32 @@
   refugio. No hay que registrar otro webhook ni crear otra app.
 - Se activa con `FEATURE_SPONSORSHIPS=true` (y `PAYMENT_DRIVER=mercadopago`).
 
+## 3c. Guardería y custodia (cuenta del refugio, por enlace de pago)
+
+Un cobro de guardería o custodia NO es una donación. Se paga en línea con la misma conexión OAuth del
+refugio: el dinero llega a SU cuenta de Mercado Pago, AdoptaFácil no lo recibe ni cobra comisión, y nunca
+se usa la cuenta de AdoptaFácil (la de planes y café). Sin cuenta conectada no se cobra.
+
+- **Apagado por defecto.** `PUT /custody/online-payments/settings` lo enciende (Owner o Administrador) y
+  exige aceptar el texto vigente (`CUSTODY_ONLINE_PAYMENT_TERMS`): el refugio factura y responde por IVA y
+  retenciones. Queda quién aceptó, cuándo y qué versión (`custody_online_payment_settings`).
+- **Enlace por cobro.** `POST /custody/charges/:id/payment-link` devuelve el enlace
+  (`/pagar/guarderia/<token>`, 256 bits, uno vigente por cobro, revocable). Quien lo abre no necesita
+  cuenta: ve el cobro y su saldo, sin datos del responsable, y paga todo o una parte
+  (`POST /public/custody/pay/:token/checkout`).
+- **Confirmación.** La orden llega a la URL única de Orders; si la referencia no es una donación ni un
+  apadrinamiento, se busca en `custody_online_payments`. Mismas verificaciones: firma, relectura con el
+  token del refugio, valor, moneda y cuenta receptora. Solo entonces se escribe el pago en la cuenta del
+  responsable (medio `mercadopago`) con su constancia, que no es factura. Es idempotente.
+- **Devolución o contracargo.** El aviso de la orden `refunded` o `charged_back` anula el pago y el cobro
+  vuelve a su saldo. Una devolución PARCIAL no viene en la relectura de la orden: el refugio la registra
+  a mano (anula el pago y registra el valor que quedó).
+- **Para revisar.** Si llega un pago que el cobro ya no admite (ya estaba pagado o anulado), no se
+  inventa un pago: queda un aviso en el historial del animal para devolver el excedente desde Mercado Pago.
+- **Contabilidad aparte.** No crea donaciones, recibos ni certificados de donación, y sus pagos no
+  entran a `mercadopago_payments` ni a la conciliación de donaciones.
+- **Regla.** Pagar o no pagar nunca condiciona la devolución del animal.
+
 ## 4. Planes (cuenta de AdoptaFácil)
 
 - `POST /org/plan/checkout` (Owner/Admin) crea un preapproval mensual en COP, IVA incluido, con el
