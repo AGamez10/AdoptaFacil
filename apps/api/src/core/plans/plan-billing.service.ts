@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   BadRequestException,
   ConflictException,
@@ -386,7 +387,8 @@ export class PlanBillingService {
     return this.prisma.withOrgContext(ref.organizationId, async (tx) => {
       // One notification at a time per organization: a charge, a cancellation
       // and a renewal arriving together each see the row the previous one left.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`plan.billing:${ref.organizationId}`}))`;
+      const lockKey = `plan.billing:${ref.organizationId}`;
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
       const previous = await tx.organizationSubscription.findUnique({
         where: { organizationId: ref.organizationId },
       });

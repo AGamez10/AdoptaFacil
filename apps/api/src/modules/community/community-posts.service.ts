@@ -286,7 +286,8 @@ export class CommunityPostsService {
         // One donor broadcast decision at a time per organization: concurrent
         // campaign posts wait here, so all of them see the count the previous
         // one committed (READ COMMITTED alone let N parallel posts all see 0).
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`community.broadcast:${organizationId}`}))`;
+        const lockKey = `community.broadcast:${organizationId}`;
+        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
         broadcastsToday = await tx.auditLog.count({
           where: {
             organizationId,
