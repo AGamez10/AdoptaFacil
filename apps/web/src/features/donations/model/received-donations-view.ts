@@ -43,5 +43,8 @@ export function donationConceptLabel(concept: PaymentConcept): string {
       return `Campaña ${shortId}`;
     case 'sponsorship':
       return `Apadrinamiento ${shortId}`;
+    // Una donación nunca trae este concepto (es un cobro, no una donación).
+    case 'custody':
+      return 'Guardería y custodia';
   }
 }

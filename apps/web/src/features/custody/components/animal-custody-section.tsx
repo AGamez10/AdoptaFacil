@@ -108,6 +108,21 @@ export function AnimalCustodySection({
   const [kindFilter, setKindFilter] = useState<CustodyDocumentKind | ''>('');
   const [finalizeBusy, setFinalizeBusy] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string[] | null>(null);
+  const [onlinePayments, setOnlinePayments] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Si esto falla, la cuenta se sigue viendo: solo no se ofrece el enlace de pago.
+    api
+      .onlinePaymentSettings()
+      .then((settings) => {
+        if (!cancelled) setOnlinePayments(settings.enabled);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
 
   const load = useCallback(async () => {
     try {
@@ -443,6 +458,7 @@ export function AnimalCustodySection({
             charges={data.charges}
             canWrite={canWrite}
             canManage={canManage}
+            onlinePayments={onlinePayments}
             onChanged={() => void load()}
           />
         </TabsContent>

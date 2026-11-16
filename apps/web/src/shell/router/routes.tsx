@@ -188,6 +188,8 @@ const OrgLedgerPage = lazyPage(loadLedger, 'OrgLedgerPage');
 const loadCustody = () => import('../../features/custody');
 const OrgCustodyPage = lazyPage(loadCustody, 'OrgCustodyPage');
 const AnimalReportsPage = lazyPage(loadCustody, 'AnimalReportsPage');
+const CustodyPayPage = lazyPage(loadCustody, 'CustodyPayPage');
+const CustodyPayResultPage = lazyPage(loadCustody, 'CustodyPayResultPage');
 const OrgReviewsPage = lazyPage(loadReputation, 'OrgReviewsPage');
 const OrganizationReputationPage = lazyPage(loadReputation, 'OrganizationReputationPage');
 const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), 'AnimalDetailPage');
@@ -391,6 +393,11 @@ export function AppRoutes() {
           {/* Regreso de Mercado Pago tras pagar un mes de apadrinamiento (mismo
           criterio: el mes se confirma solo con el aviso firmado). */}
           <Route path="/apadrinar/resultado" element={<SponsorshipResultPage />} />
+          {/* Pago en línea de un cobro de guardería o custodia. Públicas, sin
+          sesión: el enlace que comparte la organización es la credencial. El
+          pago se confirma solo con el aviso firmado de Mercado Pago. */}
+          <Route path="/pagar/guarderia/resultado" element={<CustodyPayResultPage />} />
+          <Route path="/pagar/guarderia/:token" element={<CustodyPayPage />} />
           {/* Baja voluntaria de correos masivos (Ley 1581) — pública, sin sesión:
           el enlace firmado del correo ES la credencial. */}
           <Route path="/correo/baja" element={<EmailUnsubscribePage />} />
