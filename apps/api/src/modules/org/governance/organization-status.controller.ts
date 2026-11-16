@@ -76,6 +76,6 @@ export class PlatformOrganizationStatusController {
     @Param('organizationId', ParseUUIDPipe) organizationId: string,
     @Body(new ZodValidationPipe(changeOrganizationStatusSchema)) dto: ChangeOrganizationStatusInput,
   ): Promise<OrganizationStatusView> {
-    return this.status.change(actor.id, organizationId, dto);
+    return this.status.change(actor, organizationId, dto);
   }
 }

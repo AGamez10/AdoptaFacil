@@ -5,6 +5,8 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
+import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
+import { MAX_CAMPAIGN_BROADCASTS_PER_DAY } from '../src/modules/community/community-posts.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
@@ -173,6 +175,90 @@ describe('Community (M11, F-8: posts, comments, likes, RBAC, moderation)', () =>
 
   it('a campaign-type org post does not fail even with zero past donors', async () => {
     await createPost(org.token, { type: 'campaign', title: 'Nueva campaña' }).expect(201);
+  });
+
+  /**
+   * Security remediation `community-campaign-post-donor-broadcast-no-role-check`:
+   * a campaign post e-mails the donors under the organization's name, so only
+   * Owner/Administrator publish one; a removed member publishes nothing; and the
+   * donors are e-mailed at most MAX_CAMPAIGN_BROADCASTS_PER_DAY times a day.
+   */
+  describe('donor broadcast (security remediation)', () => {
+    let send: jest.SpyInstance;
+    // One organization for the whole block (sign-ups are rate limited); its
+    // registrant's roles are swapped per case.
+    let member: Actor;
+    beforeAll(async () => {
+      member = await actorWithRoles('broadcast', []);
+      await admin.donation.create({
+        data: {
+          organizationId: member.orgId,
+          conceptKind: 'organization',
+          conceptId: member.orgId,
+          intendedAmount: 10000,
+          amountCharged: 10400,
+          breakdown: {},
+          collectionId: `col-${randomUUID()}`,
+          idempotencyKey: randomUUID(),
+          status: 'approved',
+          payer: { email: `donante-${randomUUID()}@test.local`, fullName: 'Donante' },
+        },
+      });
+    });
+    beforeEach(() => {
+      send = jest.spyOn(app.get(NOTIFICATION_PORT), 'send');
+    });
+    afterEach(() => send.mockRestore());
+
+    async function setRoles(roles: string[]): Promise<void> {
+      await admin.userRole.deleteMany({ where: { userId: member.userId } });
+      for (const role of roles) {
+        await admin.userRole.create({
+          data: { organizationId: member.orgId, userId: member.userId, role },
+        });
+      }
+    }
+    const campaignSends = () =>
+      send.mock.calls.filter(([n]) => n?.template?.event === 'community.campaign_update').length;
+    const campaign = { type: 'campaign', title: 'Urgente', body: 'Confirma tu donación aquí ya.' };
+    const campaignPosts = () =>
+      admin.post.count({ where: { organizationId: member.orgId, type: 'campaign' } });
+
+    it.each(['read_only_auditor', 'volunteer', 'temporary_collaborator', 'operator'])(
+      '%s cannot publish a campaign post (403) and nothing is queued',
+      async (role) => {
+        await setRoles([role]);
+        await createPost(member.token, campaign).expect(403);
+        expect(campaignSends()).toBe(0);
+        expect(await campaignPosts()).toBe(0);
+        // A regular post keeps working for every member.
+        await createPost(member.token).expect(201);
+      },
+    );
+
+    it('a member left without roles cannot publish at all (403)', async () => {
+      await setRoles([]);
+      await createPost(member.token).expect(403);
+      await createPost(member.token, campaign).expect(403);
+      expect(campaignSends()).toBe(0);
+    });
+
+    it('Owner and Administrator broadcast to donors, capped per day', async () => {
+      await setRoles(['administrator']);
+      await createPost(member.token, campaign).expect(201);
+      expect(campaignSends()).toBe(1);
+
+      await setRoles(['owner']);
+      for (let i = 1; i < MAX_CAMPAIGN_BROADCASTS_PER_DAY; i++) {
+        await createPost(member.token, campaign).expect(201);
+      }
+      expect(campaignSends()).toBe(MAX_CAMPAIGN_BROADCASTS_PER_DAY);
+      // Over the cap: published on the wall, donors not e-mailed again.
+      send.mockClear();
+      await createPost(member.token, campaign).expect(201);
+      expect(campaignSends()).toBe(0);
+      expect(await campaignPosts()).toBe(MAX_CAMPAIGN_BROADCASTS_PER_DAY + 1);
+    });
   });
 
   it('the feed shows BOTH the org post and the platform-wide post', async () => {

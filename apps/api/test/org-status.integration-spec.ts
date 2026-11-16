@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { PasswordService } from '../src/core/auth/password.service';
 import { TokenService } from '../src/core/auth/token.service';
 import { purgeOrganizations } from './support/cleanup';
+import { createStaffMember } from './support/platform-team';
 import { formalizeTestOrganization } from './support/organization-status';
 import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 
@@ -161,6 +162,30 @@ describe('Organization status, approval and suspension (R2-1, AF-023)', () => {
     await changeStatus(owner, owner.orgId, { status: 'approved' }).expect(403);
     await changeStatus(person, owner.orgId, { status: 'approved' }).expect(403);
     await request(server).get('/platform/organizations').set(auth(owner)).expect(403);
+  });
+
+  /**
+   * Security remediation `organization-status.service:change:platform-team-org-suspension`:
+   * no staffer suspends (or otherwise moves) its own platform team, nor any
+   * other team; the team keeps working afterwards.
+   */
+  it('a PlatformAdmin cannot suspend its own team or another platform team (403, unchanged)', async () => {
+    const own = await changeStatus(platform, platform.orgId, {
+      status: 'suspended',
+      reason: 'x',
+    }).expect(403);
+    expect(own.body.message).toMatch(/propio estado/);
+
+    const otherTeam = await createStaffMember(admin, app, { roles: [Role.PlatformSuperAdmin] });
+    createdOrgIds.push(otherTeam.orgId);
+    await changeStatus(platform, otherTeam.orgId, { status: 'suspended', reason: 'x' }).expect(403);
+
+    for (const id of [platform.orgId, otherTeam.orgId]) {
+      const row = await admin.organization.findUniqueOrThrow({ where: { id } });
+      expect(row.status).toBe('approved');
+    }
+    // The team still reaches the platform routes.
+    await request(server).get('/platform/organizations').set(auth(platform)).expect(200);
   });
 
   it('the review queue lists real organizations only, filtered by status', async () => {

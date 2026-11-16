@@ -23,6 +23,11 @@ function makePrisma(): PrismaService {
       updateMany: jest.fn(),
     },
     authCredential: { findUnique: jest.fn() },
+    userRole: { count: jest.fn().mockResolvedValue(1) },
+    // Runs the callback on the same mock (no real tenant transaction).
+    withOrgContext: jest.fn(function (this: unknown, _org: string, fn: (tx: unknown) => unknown) {
+      return fn(this);
+    }),
   } as unknown as PrismaService;
 }
 
@@ -132,5 +137,58 @@ describe('TokenService', () => {
     });
     const service = new TokenService(makeJwt(), prisma, CONFIG);
     await expect(service.rotate('expired')).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  // Security remediation `tenant-membership-not-revalidated`: every front door
+  // (password, Google, MFA step-up, invitation) ends in issueTokens, and every
+  // refresh in rotate — both refuse an organization account with no role left.
+  describe('live membership', () => {
+    const orgPrincipal = {
+      userId: 'u-org',
+      organizationId: 'o-org',
+      accountType: 'organization' as const,
+      email: 'ex@test',
+    };
+
+    it('refuses to issue a session to an organization account without roles', async () => {
+      const prisma = makePrisma();
+      (prisma.userRole.count as jest.Mock).mockResolvedValue(0);
+      const service = new TokenService(makeJwt(), prisma, CONFIG);
+      await expect(service.issueTokens(orgPrincipal)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+      expect(prisma.withOrgContext).toHaveBeenCalledWith('o-org', expect.any(Function));
+    });
+
+    it('issues it while the member holds a role; never checks a person account', async () => {
+      const prisma = makePrisma();
+      (prisma.refreshToken.create as jest.Mock).mockResolvedValue({ id: 'r' });
+      const service = new TokenService(makeJwt(), prisma, CONFIG);
+      await expect(service.issueTokens(orgPrincipal)).resolves.toBeDefined();
+      (prisma.userRole.count as jest.Mock).mockClear();
+      await service.issueTokens({ ...orgPrincipal, accountType: 'person' });
+      expect(prisma.userRole.count).not.toHaveBeenCalled();
+    });
+
+    it('refuses to rotate a refresh token of a removed member', async () => {
+      const prisma = makePrisma();
+      (prisma.refreshToken.findUnique as jest.Mock).mockResolvedValue({
+        id: 'r1',
+        userId: 'u-org',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+        mfaVerifiedAt: null,
+        createdAt: new Date(),
+      });
+      (prisma.authCredential.findUnique as jest.Mock).mockResolvedValue({
+        userId: 'u-org',
+        organizationId: 'o-org',
+        accountType: 'organization',
+        email: 'ex@test',
+      });
+      (prisma.userRole.count as jest.Mock).mockResolvedValue(0);
+      const service = new TokenService(makeJwt(), prisma, CONFIG);
+      await expect(service.rotate('presented')).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
   });
 });

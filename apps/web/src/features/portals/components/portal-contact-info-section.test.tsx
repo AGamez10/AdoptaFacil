@@ -41,6 +41,22 @@ describe('PortalContactInfoSection — mapa', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  // Security remediation `web/portals/google-maps-embed-host-suffix-bypass`.
+  it('un dominio parecido (maps.google.evil.com) nunca llega al iframe, y el iframe va aislado', () => {
+    render(
+      <PortalContactInfoSection
+        contact={{
+          mapUrl: 'https://maps.google.evil.com/maps/embed?pb=x',
+          fullAddress: 'Carrera 7 # 10-20',
+        }}
+      />,
+    );
+    const frame = screen.getByTestId('portal-contact-map');
+    expect(frame.getAttribute('src')).toMatch(/^https:\/\/maps\.google\.com\/maps\?q=/);
+    expect(frame.getAttribute('src')).not.toContain('evil');
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
+  });
+
   it('sin dirección ni enlace no muestra mapa', () => {
     render(<PortalContactInfoSection contact={{ hours: 'Lunes a viernes' }} />);
     expect(screen.queryByTestId('portal-contact-map')).not.toBeInTheDocument();

@@ -67,3 +67,35 @@ describe('googleMapsEmbedFromAddress (mapa visible sin hacer clic)', () => {
     expect(googleMapsEmbedFromAddress('   ', 'Bogotá')).toBeNull();
   });
 });
+
+// Security remediation `web/portals/google-maps-embed-host-suffix-bypass`.
+describe('lookalike hosts never reach the map iframe', () => {
+  it.each([
+    'https://maps.google.evil.com/maps/embed?pb=x',
+    'https://maps.google.attacker.example/?output=embed',
+    'https://google.evil.com/maps/embed?pb=x',
+    'https://www.google.com.evil.co/maps/embed?pb=x',
+    'https://evilgoogle.com/maps/embed?pb=x',
+    'https://www.google.com@evil.com/maps/embed?pb=x',
+    'https://user:pass@www.google.com/maps/embed?pb=x',
+    'https://www.google.com:8443/maps/embed?pb=x',
+    'javascript://www.google.com/maps/embed?pb=x',
+  ])('%s is not a Google Maps URL and gets no iframe', (raw) => {
+    expect(isGoogleMapsUrl(raw)).toBe(false);
+    expect(toGoogleMapsEmbedUrl(raw)).toBeNull();
+  });
+
+  it('keeps accepting Google Maps on its regional domains', () => {
+    expect(isGoogleMapsUrl('https://www.google.com.co/maps/place/Bogota')).toBe(true);
+    expect(isGoogleMapsUrl('https://maps.google.com.co/?q=Bogota')).toBe(true);
+  });
+
+  it('rebuilds embed URLs on a fixed Google host (query kept, nothing else)', () => {
+    expect(toGoogleMapsEmbedUrl('https://www.google.com.co/maps/embed?pb=!1m18#frag')).toBe(
+      'https://www.google.com/maps/embed?pb=!1m18',
+    );
+    expect(toGoogleMapsEmbedUrl('https://maps.google.es/maps?q=Cali&output=embed')).toBe(
+      'https://maps.google.com/maps?q=Cali&output=embed',
+    );
+  });
+});

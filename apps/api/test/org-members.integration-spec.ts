@@ -196,6 +196,45 @@ describe('Org team members (Miembros)', () => {
     expect(restored).not.toBeNull();
   });
 
+  /**
+   * Security remediation `tenant-membership-not-revalidated:jwt-org-from-auth-credential`:
+   * a removed member keeps the password of an organization account, but no new
+   * session comes out of it (login, refresh) until a role is given back.
+   */
+  it('a removed member cannot sign in or refresh again; restoring a role lets them back in', async () => {
+    const operator = await memberOf(owner.orgId, Role.Operator);
+    const email = (
+      await admin.authCredential.findUniqueOrThrow({
+        where: { userId: operator.userId },
+      })
+    ).email;
+    const login = () => request(server).post('/auth/login').send({ email, password });
+
+    // A live refresh token that, for the test, survives the role loss (the
+    // removal itself deletes them; this covers the rotation check on its own).
+    const before = await login().expect(200);
+    await admin.userRole.deleteMany({ where: { userId: operator.userId } });
+    const refresh = await request(server)
+      .post('/auth/refresh')
+      .send({ refreshToken: before.body.tokens.refreshToken })
+      .expect(401);
+    expect(refresh.body.code).toBe('MEMBERSHIP_REVOKED');
+    await admin.userRole.create({
+      data: { organizationId: owner.orgId, userId: operator.userId, role: Role.Operator },
+    });
+
+    await remove(owner, operator.userId).expect(204);
+    const denied = await login().expect(401);
+    expect(denied.body.code).toBe('MEMBERSHIP_REVOKED');
+    expect(
+      await admin.refreshToken.count({ where: { userId: operator.userId, revokedAt: null } }),
+    ).toBe(0);
+
+    await changeRole(owner, operator.userId, Role.Volunteer).expect(204);
+    const back = await login().expect(200);
+    expect(back.body.user.organizationId).toBe(owner.orgId);
+  });
+
   it('refuses self-removal, an Administrator removing an Owner, and another organization', async () => {
     const administrator = await memberOf(owner.orgId, Role.Administrator);
     await remove(owner, owner.userId).expect(400);

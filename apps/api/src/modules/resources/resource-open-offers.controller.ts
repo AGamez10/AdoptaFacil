@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   OPEN_OFFER_CATEGORIES,
   type ClaimResourceOpenOfferInput,
@@ -45,8 +46,12 @@ import { RESOURCE_WRITE_ROLES } from './resource-needs.controller';
 export class ResourceOpenOffersController {
   constructor(private readonly service: ResourceOpenOffersService) {}
 
+  // Security remediation: each new offer notifies every organization of the
+  // department, so its creation (and the withdraw that frees a slot) is
+  // throttled on top of the per-donor 24 h quota in the service.
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 10 * 60_000 } })
   create(
     @CurrentUser() actor: RequestUser,
     @Body(new ZodValidationPipe(createResourceOpenOfferSchema)) dto: CreateResourceOpenOfferInput,
@@ -61,7 +66,8 @@ export class ResourceOpenOffersController {
   }
 
   @Patch(':id/withdraw')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 10 * 60_000 } })
   withdraw(
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,

@@ -12,6 +12,7 @@ import {
   ORGANIZATION_SUBMITTABLE_STATUSES,
   OrganizationStatus,
   type OrganizationStatusView,
+  PLATFORM_ROLES,
   type PlatformOrganizationListItem,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../../core/audit/audit.service';
@@ -122,10 +123,28 @@ export class OrganizationStatusService {
    * rejected/suspended. Audited in the TARGET organization's trail.
    */
   async change(
-    actorUserId: string,
+    actor: { id: string; organizationId: string },
     organizationId: string,
     input: ChangeOrganizationStatusInput,
   ): Promise<OrganizationStatusView> {
+    const actorUserId = actor.id;
+    // Security remediation `organization-status.service:change:platform-team-org-suspension`:
+    // this route governs TENANT organizations. A platform team (an organization
+    // where platform roles live) — including the caller's own — is never
+    // reviewed or suspended here: one staffer would lock the whole team out
+    // (JwtAuthGuard 403s every /platform/* route, including the one to undo
+    // it), bypassing the lead-only four-eyes removal of staff access.
+    if (organizationId === actor.organizationId) {
+      throw new ForbiddenException('Un equipo de plataforma no cambia su propio estado.');
+    }
+    const platformSeats = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.userRole.count({ where: { organizationId, role: { in: [...PLATFORM_ROLES] } } }),
+    );
+    if (platformSeats > 0) {
+      throw new ForbiddenException(
+        'Los equipos de plataforma no se gestionan desde la revisión de organizaciones.',
+      );
+    }
     const current = await this.prisma.organization.findUnique({ where: { id: organizationId } });
     if (!current) {
       throw new NotFoundException('Organization not found');

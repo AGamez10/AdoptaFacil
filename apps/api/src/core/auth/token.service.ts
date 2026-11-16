@@ -17,6 +17,10 @@ export interface TokenPrincipal {
   email: string;
 }
 
+/** Error code of the 401 a removed organization member gets on sign-in or
+ *  refresh (security remediation `tenant-membership-not-revalidated`). */
+export const MEMBERSHIP_REVOKED = 'MEMBERSHIP_REVOKED';
+
 /** Options of {@link TokenService.issueTokens}. */
 export interface IssueTokensOptions {
   /** The session just passed the second factor (platform staff, TOTP). */
@@ -120,12 +124,41 @@ export class TokenService {
     });
   }
 
+  /**
+   * Live membership is a condition of every session (security remediation
+   * `tenant-membership-not-revalidated:jwt-org-from-auth-credential`). The
+   * token's `org` claim comes from `auth_credentials.organization_id`, which
+   * outlives a removal from the team (`DELETE /org/members/:id` deletes only
+   * the roles and the refresh tokens). An ORGANIZATION account holding no role
+   * in its organization is a former member: no new session for it, neither by
+   * password, Google, MFA step-up nor refresh. A person account never holds a
+   * role in its personal organization (nor do platform staff, who are person
+   * accounts), so only organization accounts are checked. Restoring a role
+   * (`PUT /org/members/:id/role`) lets the person sign in again.
+   */
+  private async assertActiveMembership(principal: TokenPrincipal): Promise<void> {
+    if (principal.accountType !== 'organization') return;
+    const roles = await this.prisma.withOrgContext(principal.organizationId, (tx) =>
+      tx.userRole.count({
+        where: { userId: principal.userId, organizationId: principal.organizationId },
+      }),
+    );
+    if (roles === 0) {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        code: MEMBERSHIP_REVOKED,
+        message: 'Esta cuenta ya no hace parte de la organización.',
+      });
+    }
+  }
+
   /** Mint a fresh access + refresh pair for a principal (login / register /
    *  Google sign-in) — revokes any other session this user already had. */
   async issueTokens(
     principal: TokenPrincipal,
     options: IssueTokensOptions = {},
   ): Promise<AuthTokens> {
+    await this.assertActiveMembership(principal);
     await this.revokeOtherSessions(principal.userId);
     const refreshToken = await this.persistRefreshToken(principal.userId, options.mfaVerifiedAt);
     return {
@@ -162,6 +195,9 @@ export class TokenService {
       accountType: credential.accountType as AccountType,
       email: credential.email,
     };
+    // A member removed while holding a refresh token that somehow survived
+    // (removal deletes them; this is the defense in depth) gets no new pair.
+    await this.assertActiveMembership(principal);
 
     const mfaVerifiedAt = this.carriedMfa(existing);
     const newRefreshToken = randomBytes(48).toString('base64url');
