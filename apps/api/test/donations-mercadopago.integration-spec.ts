@@ -210,8 +210,11 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     ...over,
   });
 
-  const notify = (paymentId: string, opts: { secret?: string; type?: string } = {}) => {
-    const ts = String(Math.floor(Date.now() / 1000));
+  const notify = (
+    paymentId: string,
+    opts: { secret?: string; type?: string; ts?: string } = {},
+  ) => {
+    const ts = opts.ts ?? String(Math.floor(Date.now() / 1000));
     const requestId = randomUUID();
     const v1 = mercadoPagoSignatureV1(opts.secret ?? SECRET, paymentId, requestId, ts);
     return request(server)
@@ -464,6 +467,16 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
       where: { organizationId: orgId, action: 'donation.payment_mismatch' },
     });
     expect(audits.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // Run-2 I-03: a captured notification, correctly signed, cannot be replayed
+  // days later (simulated signature; the real flow was validated in production).
+  it('a correctly signed but STALE notification is 403 and settles nothing', async () => {
+    const twoDaysAgo = String(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    await notify('900001', { ts: twoDaysAgo }).expect(403);
+    const donation = await admin.donation.findUniqueOrThrow({ where: { id: donationId } });
+    expect(donation.status).not.toBe('approved');
+    expect(await admin.donationReceipt.count({ where: { donationId } })).toBe(0);
   });
 
   it('a valid notification approves the donation once and issues one receipt', async () => {

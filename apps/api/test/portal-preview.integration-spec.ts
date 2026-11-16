@@ -98,6 +98,21 @@ describe('Portal preview for the organization owner', () => {
     expect(campaigns.body.items.map((c: { title: string }) => c.title)).toEqual(['Vacunas']);
   });
 
+  // Run-2 R-05: the portal's "Ver en mapa" link only goes to a map service.
+  it('the map link of the portal must be a map service (400 otherwise; real links still save)', async () => {
+    const owner = await registerOrg('Refugio Mapa');
+    const put = (mapUrl: string) =>
+      request(server)
+        .put('/org/profile')
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({ extendedContact: { hours: 'L-V 8-5', mapUrl } });
+    await put('https://evil.example/login').expect(400);
+    await put('https://maps.google.evil.com/maps?q=x').expect(400);
+    const ok = await put('https://maps.app.goo.gl/AbCdEf123').expect(200);
+    expect(ok.body.extendedContact?.mapUrl).toBe('https://maps.app.goo.gl/AbCdEf123');
+    await put('https://www.google.com/maps/place/Refugio/@4.6,-74.1,15z').expect(200);
+  });
+
   it('never shows another organization: each caller previews only its own', async () => {
     const a = await registerOrg('Refugio A');
     const b = await registerOrg('Refugio B');

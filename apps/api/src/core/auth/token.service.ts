@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { assertActiveMembership } from './membership';
 import type { AccessTokenClaims, AccountType, AuthTokens } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AUTH_CONFIG, type AuthConfig } from './auth.config';
@@ -19,7 +20,7 @@ export interface TokenPrincipal {
 
 /** Error code of the 401 a removed organization member gets on sign-in or
  *  refresh (security remediation `tenant-membership-not-revalidated`). */
-export const MEMBERSHIP_REVOKED = 'MEMBERSHIP_REVOKED';
+export { MEMBERSHIP_REVOKED } from './membership';
 
 /** Options of {@link TokenService.issueTokens}. */
 export interface IssueTokensOptions {
@@ -136,20 +137,8 @@ export class TokenService {
    * accounts), so only organization accounts are checked. Restoring a role
    * (`PUT /org/members/:id/role`) lets the person sign in again.
    */
-  private async assertActiveMembership(principal: TokenPrincipal): Promise<void> {
-    if (principal.accountType !== 'organization') return;
-    const roles = await this.prisma.withOrgContext(principal.organizationId, (tx) =>
-      tx.userRole.count({
-        where: { userId: principal.userId, organizationId: principal.organizationId },
-      }),
-    );
-    if (roles === 0) {
-      throw new UnauthorizedException({
-        statusCode: 401,
-        code: MEMBERSHIP_REVOKED,
-        message: 'Esta cuenta ya no hace parte de la organización.',
-      });
-    }
+  private assertActiveMembership(principal: TokenPrincipal): Promise<void> {
+    return assertActiveMembership(this.prisma, principal);
   }
 
   /** Mint a fresh access + refresh pair for a principal (login / register /

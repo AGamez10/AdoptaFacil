@@ -107,6 +107,7 @@ export function assertMercadoPagoSignature(
   signatureHeader: string | undefined,
   requestId: string | undefined,
   dataId: string | undefined,
+  now: number = Date.now(),
 ): void {
   const { ts, v1 } = parseMercadoPagoSignature(signatureHeader);
   if (!secret || !ts || !v1 || !requestId || !dataId) {
@@ -115,6 +116,33 @@ export function assertMercadoPagoSignature(
   // AF-032: never log the secret nor the computed HMAC.
   if (!timingSafeEqualHex(mercadoPagoSignatureV1(secret, dataId, requestId, ts), v1)) {
     throw new Error('Mercado Pago notification rejected: signature mismatch.');
+  }
+  assertFreshMercadoPagoTimestamp(ts, now);
+}
+
+/**
+ * Audit run-2 I-03: the signed `ts` bounds how long a captured notification can
+ * be replayed. Replays were already harmless for the money (every handler
+ * READS BACK the payment/order/subscription from Mercado Pago and trusts only
+ * that), so the window is deliberately generous: Mercado Pago retries an
+ * unacknowledged notification for a while and its documentation does not say
+ * whether a retry is re-signed with a new `ts`. A notification rejected here
+ * is not lost: "Releer Mercado Pago" (reconciliation) and the plan sync read
+ * the same state.
+ */
+export const MERCADOPAGO_WEBHOOK_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** Clock skew tolerated for a `ts` slightly in the future. */
+export const MERCADOPAGO_WEBHOOK_MAX_SKEW_MS = 5 * 60 * 1000;
+
+function assertFreshMercadoPagoTimestamp(ts: string, now: number): void {
+  if (!/^\d{1,16}$/.test(ts)) {
+    throw new Error('Mercado Pago notification rejected: malformed timestamp.');
+  }
+  const raw = Number(ts);
+  // Documented in milliseconds; seconds are accepted too (older examples).
+  const at = raw < 1e12 ? raw * 1000 : raw;
+  if (at > now + MERCADOPAGO_WEBHOOK_MAX_SKEW_MS || now - at > MERCADOPAGO_WEBHOOK_MAX_AGE_MS) {
+    throw new Error('Mercado Pago notification rejected: stale timestamp.');
   }
 }
 

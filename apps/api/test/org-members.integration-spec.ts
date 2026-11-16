@@ -177,7 +177,10 @@ describe('Org team members (Miembros)', () => {
     await request(server).get('/animals').set(auth(operator)).expect(200);
 
     await remove(administrator, operator.userId).expect(204);
-    await request(server).get('/animals').set(auth(operator)).expect(403);
+    // Run-2 R-04: refused by the auth guard itself (401 MEMBERSHIP_REVOKED, so
+    // the web app signs out) rather than by each route's role check (403).
+    const gone = await request(server).get('/animals').set(auth(operator)).expect(401);
+    expect(gone.body.code).toBe('MEMBERSHIP_REVOKED');
     expect(await admin.refreshToken.count({ where: { userId: operator.userId } })).toBe(0);
     await remove(administrator, operator.userId).expect(409);
 
@@ -233,6 +236,23 @@ describe('Org team members (Miembros)', () => {
     await changeRole(owner, operator.userId, Role.Volunteer).expect(204);
     const back = await login().expect(200);
     expect(back.body.user.organizationId).toBe(owner.orgId);
+  });
+
+  // Run-2 R-04: the access token issued BEFORE the removal stops working at once.
+  it("a removed member's still-valid access token is refused on every org route (401)", async () => {
+    const operator = await memberOf(owner.orgId, Role.Operator);
+    const animals = (actor: Actor) => request(server).get('/animals').set(auth(actor));
+    await animals(operator).expect(200);
+    await remove(owner, operator.userId).expect(204);
+    const denied = await animals(operator).expect(401);
+    expect(denied.body.code).toBe('MEMBERSHIP_REVOKED');
+    await request(server).get('/org/status').set(auth(operator)).expect(401);
+    // Regression: the rest of the team keeps working.
+    await animals(owner).expect(200);
+    await list(owner).expect(200);
+    // Restoring a role makes the very same token valid again.
+    await changeRole(owner, operator.userId, Role.Operator).expect(204);
+    await animals(operator).expect(200);
   });
 
   it('refuses self-removal, an Administrator removing an Owner, and another organization', async () => {
