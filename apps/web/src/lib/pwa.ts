@@ -14,7 +14,7 @@ export interface RegisterOptions {
 }
 
 export async function registerServiceWorker({
-  enabled = import.meta.env.PROD,
+  enabled = import.meta.env.MODE === 'production',
   nav = typeof navigator === 'undefined' ? undefined : navigator,
   url = '/sw.js',
 }: RegisterOptions = {}): Promise<ServiceWorkerRegistration | null> {

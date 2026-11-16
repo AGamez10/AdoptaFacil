@@ -23,6 +23,9 @@ ReactDOM.createRoot(rootElement).render(
 );
 
 // PWA: instalable desde el navegador y con pantalla sin conexión (ver public/sw.js).
-window.addEventListener('load', () => {
+// Se registra cuando la página ya cargó; si el evento `load` ya pasó, ahora mismo.
+if (document.readyState === 'complete') {
   void registerServiceWorker();
-});
+} else {
+  window.addEventListener('load', () => void registerServiceWorker(), { once: true });
+}
