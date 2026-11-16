@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -28,7 +29,9 @@ import {
   type CustodyDocument,
   type CustodyEvent,
   type CustodyIntake,
+  type CustodyOnlinePaymentSettings,
   type CustodyOverview,
+  type CustodyPaymentLink,
   type CustodyRelease,
   type CustodyResponsible,
   Role,
@@ -44,6 +47,7 @@ import { RolesGuard } from '../../core/rbac/roles.guard';
 import { setServeHeaders } from '../../core/storage/serve-headers';
 import { CustodyBillingService } from './custody-billing.service';
 import { CustodyContractsService } from './custody-contracts.service';
+import { CustodyOnlinePaymentsService } from './custody-online-payments.service';
 import type { UploadedFileLike } from './custody-core.service';
 import { CustodyRecordsService } from './custody-records.service';
 import { CustodyReportsService } from './custody-reports.service';
@@ -65,6 +69,7 @@ import {
   extensionSchema,
   intakeSchema,
   issueContractSchema,
+  onlinePaymentSettingsSchema,
   paymentSchema,
   reasonSchema,
   releaseSchema,
@@ -104,6 +109,7 @@ export class CustodyController {
     private readonly contracts: CustodyContractsService,
     private readonly billing: CustodyBillingService,
     private readonly reports: CustodyReportsService,
+    private readonly onlinePayments: CustodyOnlinePaymentsService,
   ) {}
 
   // --- Responsables ----------------------------------------------------------
@@ -516,6 +522,46 @@ export class CustodyController {
     @Body(new ZodValidationPipe(reasonSchema)) dto: { reason: string },
   ): Promise<CustodyCharge> {
     return this.billing.voidPayment(actor.id, id, dto.reason);
+  }
+
+  // --- Pago en línea (Mercado Pago, cuenta de la organización) ---------------
+
+  @Get('online-payments/settings')
+  @Roles(...VIEW_ROLES)
+  onlinePaymentSettings(): Promise<CustodyOnlinePaymentSettings> {
+    return this.onlinePayments.getSettings();
+  }
+
+  /** Encender es una decisión de la organización: queda quién aceptó y cuándo. */
+  @Put('online-payments/settings')
+  @Roles(...MANAGE_ROLES)
+  updateOnlinePaymentSettings(
+    @CurrentUser() actor: RequestUser,
+    @Body(new ZodValidationPipe(onlinePaymentSettingsSchema))
+    dto: { enabled: boolean; acceptResponsibility?: boolean },
+  ): Promise<CustodyOnlinePaymentSettings> {
+    return this.onlinePayments.updateSettings(actor.id, dto);
+  }
+
+  /** Crea el enlace de pago del cobro, o devuelve el que ya tiene. */
+  @Post('charges/:id/payment-link')
+  @HttpCode(200)
+  @Roles(...WRITE_ROLES)
+  paymentLink(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<CustodyPaymentLink> {
+    return this.onlinePayments.paymentLink(actor.id, id);
+  }
+
+  @Delete('charges/:id/payment-link')
+  @HttpCode(204)
+  @Roles(...WRITE_ROLES)
+  revokePaymentLink(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    return this.onlinePayments.revokePaymentLink(actor.id, id);
   }
 
   // --- Reportes de animales --------------------------------------------------

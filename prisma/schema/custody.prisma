@@ -195,12 +195,14 @@ model CustodyCharge {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  animal       Animal                   @relation(fields: [animalId], references: [id], onDelete: Cascade)
-  responsible  CustodyResponsible       @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
-  contract     CustodyContract?         @relation(fields: [contractId], references: [id], onDelete: Restrict)
-  extensions   CustodyChargeExtension[]
-  payments     CustodyPayment[]
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal         Animal                   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  responsible    CustodyResponsible       @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
+  contract       CustodyContract?         @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  extensions     CustodyChargeExtension[]
+  payments       CustodyPayment[]
+  paymentLinks   CustodyPaymentLink[]
+  onlinePayments CustodyOnlinePayment[]
 
   @@index([organizationId, status, dueDate])
   @@index([animalId])
@@ -248,8 +250,9 @@ model CustodyPayment {
   voidedByUserId   String?   @map("voided_by_user_id") @db.Uuid
   voidReason       String?   @map("void_reason")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  charge       CustodyCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  charge        CustodyCharge         @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  onlinePayment CustodyOnlinePayment?
 
   @@unique([organizationId, receiptNumber])
   @@index([organizationId])
@@ -360,4 +363,76 @@ model CustodyEvent {
   @@index([organizationId])
   @@index([animalId, occurredAt])
   @@map("custody_events")
+}
+
+/// Cobro en línea de guardería y custodia (Mercado Pago, cuenta de la propia
+/// organización). Apagado mientras no exista la fila o `enabled` sea falso. Al
+/// encenderlo, una persona con rol Owner/Administrator acepta que el servicio lo
+/// vende la organización y que facturar, IVA y retenciones son responsabilidad
+/// suya; se guarda quién, cuándo y qué versión del texto aceptó.
+model CustodyOnlinePaymentSettings {
+  organizationId   String    @id @map("organization_id") @db.Uuid
+  enabled          Boolean   @default(false)
+  termsVersion     String?   @map("terms_version")
+  acceptedAt       DateTime? @map("accepted_at")
+  acceptedByUserId String?   @map("accepted_by_user_id") @db.Uuid
+  acceptedByName   String?   @map("accepted_by_name")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("custody_online_payment_settings")
+}
+
+/// Enlace de pago de UN cobro: quien lo recibe puede ver el cobro y pagarlo sin
+/// tener cuenta. Un cobro tiene a lo sumo un enlace vigente (el anterior se
+/// revoca al generar otro).
+model CustodyPaymentLink {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  chargeId        String    @map("charge_id") @db.Uuid
+  /// Secreto del enlace (aleatorio, 256 bits). Solo permite ver y pagar el cobro.
+  token           String    @unique
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  revokedAt       DateTime? @map("revoked_at")
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  charge       CustodyCharge          @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  attempts     CustodyOnlinePayment[]
+
+  @@index([organizationId])
+  @@index([chargeId])
+  @@map("custody_payment_links")
+}
+
+/// Un intento de pago en línea de un cobro. `collectionId` es la referencia que
+/// viaja a Mercado Pago. Solo `approved` crea un `CustodyPayment` (con su
+/// constancia); `reversed` lo anula (devolución o contracargo) y `mismatch`
+/// nunca marca nada como pagado.
+model CustodyOnlinePayment {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  chargeId         String    @map("charge_id") @db.Uuid
+  linkId           String    @map("link_id") @db.Uuid
+  collectionId     String    @unique @map("collection_id")
+  amountCop        Int       @map("amount_cop")
+  /// pending | approved | reversed | mismatch
+  status           String    @default("pending")
+  gatewayPaymentId String?   @map("gateway_payment_id")
+  /// refunded | charged_back | voided (estado que reportó la pasarela).
+  reversalKind     String?   @map("reversal_kind")
+  paymentId        String?   @unique @map("payment_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  settledAt        DateTime? @map("settled_at")
+  reversedAt       DateTime? @map("reversed_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  charge       CustodyCharge      @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  link         CustodyPaymentLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  payment      CustodyPayment?    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
+  @@index([chargeId, status])
+  @@map("custody_online_payments")
 }

@@ -13,7 +13,7 @@ import {
   CUSTODY_MAX_CLAUSES,
   CUSTODY_NAME_MAX,
   CUSTODY_PAYMENT_FREQUENCIES,
-  CUSTODY_PAYMENT_METHODS,
+  CUSTODY_MANUAL_PAYMENT_METHODS,
   CUSTODY_PREVENTIVE_STATUSES,
   CUSTODY_REASON_MIN,
   CUSTODY_RELEASE_TYPES,
@@ -294,7 +294,8 @@ export const paymentSchema = z
   .object({
     amountCop: amount('Valor recibido'),
     paidOn: pastOrToday('Fecha del pago'),
-    method: z.enum(CUSTODY_PAYMENT_METHODS, { message: 'Elige el medio de pago.' }),
+    // `mercadopago` solo lo escribe el sistema al confirmar un pago en línea.
+    method: z.enum(CUSTODY_MANUAL_PAYMENT_METHODS, { message: 'Elige el medio de pago.' }),
     reference: optionalText(120, 'Referencia'),
     notes: optionalText(CUSTODY_SHORT_TEXT_MAX, 'Notas'),
   })
@@ -446,3 +447,24 @@ export const reportFiltersSchema = z
   });
 
 export type ReportFiltersDto = z.infer<typeof reportFiltersSchema>;
+
+// --- Pago en línea -----------------------------------------------------------
+
+export const onlinePaymentSettingsSchema = z
+  .object({
+    enabled: z.boolean({ message: 'Indica si el pago en línea queda encendido o apagado.' }),
+    acceptResponsibility: z.boolean().optional(),
+  })
+  .strict();
+
+/** Lo que envía quien paga desde el enlace público: solo cuánto (opcional). */
+export const publicCheckoutSchema = z
+  .object({
+    amountCop: z
+      .number({ message: 'Escribe el valor a pagar en pesos, sin puntos ni comas.' })
+      .int('El valor a pagar va en pesos, sin centavos.')
+      .min(1, 'El valor a pagar debe ser mayor que cero.')
+      .max(1_000_000_000, 'El valor a pagar es demasiado alto.')
+      .optional(),
+  })
+  .strict();

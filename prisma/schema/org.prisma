@@ -80,6 +80,9 @@ model Organization {
   custodyReleases          CustodyRelease[]
   custodyDocuments         CustodyDocument[]
   custodyEvents            CustodyEvent[]
+  custodyOnlinePaymentSettings CustodyOnlinePaymentSettings?
+  custodyPaymentLinks      CustodyPaymentLink[]
+  custodyOnlinePayments    CustodyOnlinePayment[]
 
   @@index([status])
   @@map("organizations")
