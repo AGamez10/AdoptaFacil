@@ -206,7 +206,9 @@ export class PlanBillingService {
       this.logger.warn(`Plan charge ${charge.id} does not match its subscription`);
       return { applied: false };
     }
-    return this.afterApply(await this.applyPreapproval(preapproval, addOneMonth(charge.chargedAt)));
+    return this.afterApply(
+      await this.applyPreapproval(preapproval, addOneMonth(charge.chargedAt), charge.id),
+    );
   }
 
   /** Cancels, after the commit, the subscription a new one replaced. */
@@ -365,6 +367,7 @@ export class PlanBillingService {
   private async applyPreapproval(
     preapproval: MercadoPagoPreapproval,
     paidThrough: Date | null,
+    chargeId: string | null = null,
   ): Promise<AppliedPreapproval> {
     const ref = parsePlanSubscriptionReference(preapproval.externalReference);
     if (!ref) {
@@ -381,6 +384,9 @@ export class PlanBillingService {
     if (!org) return { applied: false };
 
     return this.prisma.withOrgContext(ref.organizationId, async (tx) => {
+      // One notification at a time per organization: a charge, a cancellation
+      // and a renewal arriving together each see the row the previous one left.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`plan.billing:${ref.organizationId}`}))`;
       const previous = await tx.organizationSubscription.findUnique({
         where: { organizationId: ref.organizationId },
       });
@@ -403,6 +409,47 @@ export class PlanBillingService {
       // org never gets a free month.
       if (status === 'active' && !paidThrough) {
         return { applied: false };
+      }
+      // A late charge of a subscription this organization already REPLACED
+      // (Mercado Pago charged it before processing our cancellation) must not
+      // switch the plan back nor cancel the current one. A replaced
+      // subscription is one that was the org's provider reference before; a
+      // genuinely new one (upgrade/downgrade) never was. The charge is left in
+      // the audit log for a manual refund, and the old subscription is
+      // cancelled again so it stops charging.
+      if (
+        paidThrough &&
+        previous?.provider === 'mercadopago' &&
+        previous.providerReference &&
+        previous.providerReference !== preapproval.id &&
+        previous.status !== 'canceled'
+      ) {
+        const wasCurrentBefore = await tx.auditLog.count({
+          where: {
+            organizationId: ref.organizationId,
+            action: 'organization.plan_changed',
+            metadata: { path: ['providerReference'], equals: preapproval.id },
+          },
+        });
+        if (wasCurrentBefore > 0) {
+          await this.audit.recordWithTx(tx, {
+            organizationId: ref.organizationId,
+            actorUserId: null,
+            action: 'organization.plan_stale_charge',
+            entityType: 'organization_subscription',
+            entityId: ref.organizationId,
+            metadata: {
+              preapprovalId: preapproval.id,
+              chargeId,
+              amountCop: preapproval.amount,
+              currentProviderReference: previous.providerReference,
+            },
+          });
+          this.logger.warn(
+            `Plan charge ${chargeId} belongs to replaced preapproval ${preapproval.id}: review a refund`,
+          );
+          return { applied: false, replacedPreapprovalId: preapproval.id };
+        }
       }
       // Cancelling/pausing only touches the subscription THIS preapproval made.
       if (

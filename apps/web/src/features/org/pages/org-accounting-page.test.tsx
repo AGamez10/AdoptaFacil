@@ -225,6 +225,38 @@ describe('OrgAccountingPage (/organizacion/contabilidad)', () => {
     expect(screen.getByRole('button', { name: 'Cerrar octubre de 2026' })).toBeEnabled();
   });
 
+  // Caso real reportado: $4.000 cobrados, tarifa $2.060 y neto $1.862 de
+  // Mercado Pago; los $78 de diferencia (impuestos/retenciones) no se veían.
+  it('the reconciliation shows what Mercado Pago deducted besides its fee, so it adds up', async () => {
+    const reconciliation = {
+      counts: {
+        matched: 2,
+        missing_in_gateway: 0,
+        missing_in_platform: 0,
+        status_mismatch: 0,
+        amount_mismatch: 0,
+      },
+      balanced: true,
+      platformTotalCop: 4000,
+      gatewayTotalCop: 4000,
+      gatewayFeesCop: 2060,
+      gatewayNetCop: 1862,
+      lines: [],
+    };
+    stubApi(
+      accountingApi({ close: true, fullExport: true, accountantPackage: true }, (url, init) =>
+        url.endsWith('/periods/2026-10/reconciliation') && !init?.method
+          ? { body: reconciliation }
+          : undefined,
+      ),
+    );
+    renderShell({ route: '/organizacion/contabilidad', ...sessionWith([Role.Owner]) });
+    fireEvent.click(await screen.findByRole('button', { name: /octubre de 2026/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Conciliar este mes' }));
+    expect(await screen.findByText(/otros descuentos \$\s78/)).toBeInTheDocument();
+    expect(screen.getByText(/impuestos y retenciones/)).toBeInTheDocument();
+  });
+
   it('the read-only auditor sees the ledger but cannot close, reread or share', async () => {
     stubApi(accountingApi({ close: true, fullExport: true, accountantPackage: true }));
     renderShell({ route: '/organizacion/contabilidad', ...sessionWith([Role.ReadOnlyAuditor]) });

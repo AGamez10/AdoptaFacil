@@ -51,6 +51,19 @@ import { useSession } from '../../../shell/auth';
  * servidor (`features` del resumen y 403 PLAN_REQUIRED), que es la autoridad.
  */
 
+/**
+ * Lo que Mercado Pago descontó además de su tarifa: el neto lo reporta Mercado
+ * Pago (ya sin impuestos ni retenciones), así que bruto − tarifa − neto es la
+ * diferencia que antes no se mostraba y hacía que la cuenta no cuadrara.
+ */
+function otherDeductions(r: {
+  gatewayTotalCop: number;
+  gatewayFeesCop: number;
+  gatewayNetCop: number;
+}): number {
+  return Math.max(r.gatewayTotalCop - r.gatewayFeesCop - r.gatewayNetCop, 0);
+}
+
 export const money = (n: number) => `$ ${Math.round(n).toLocaleString('es-CO')}`;
 
 const SIGNER_ROLE_LABEL: Record<AdditionalSignerRole, string> = {
@@ -447,8 +460,17 @@ function ReconciliationCard({
             <p className="text-sm text-muted-foreground">
               AdoptaFácil {money(reconciliation.platformTotalCop)} · Mercado Pago{' '}
               {money(reconciliation.gatewayTotalCop)} (tarifa {money(reconciliation.gatewayFeesCop)}
+              {otherDeductions(reconciliation) > 0 && (
+                <>, otros descuentos {money(otherDeductions(reconciliation))}</>
+              )}
               , neto {money(reconciliation.gatewayNetCop)})
             </p>
+            {otherDeductions(reconciliation) > 0 && (
+              <p className="text-xs text-muted-foreground">
+                El neto es el que reporta Mercado Pago. Los otros descuentos son lo que Mercado Pago
+                retuvo aparte de su tarifa (impuestos y retenciones, o devoluciones del mes).
+              </p>
+            )}
             {pending.length > 0 && (
               <ul className="space-y-2 text-sm">
                 {pending.map((line) => (
