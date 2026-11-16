@@ -32,6 +32,7 @@ import {
 } from './resource-offer-proofs.service';
 import { RequireFeature } from '../../core/features';
 import { setServeHeaders } from '../../core/storage/serve-headers';
+import { SINGLE_FILE_UPLOAD_LIMITS } from '../../core/storage/upload-limits';
 
 /**
  * M09 — prueba del donante y su validación, anidadas bajo la oferta.
@@ -48,7 +49,7 @@ export class ResourceOfferProofsController {
 
   @Post('proofs')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SINGLE_FILE_UPLOAD_LIMITS))
   attach(
     @CurrentUser() actor: RequestUser,
     @Param('offerId', ParseUUIDPipe) offerId: string,

@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { TokenService } from '../src/core/auth/token.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 
@@ -147,6 +148,32 @@ describe('Auth endpoints (register/login/refresh/logout)', () => {
       .post('/auth/refresh')
       .send({ refreshToken: rotated.body.refreshToken })
       .expect(401);
+  });
+
+  // Run-2 S-03: concurrent rotations of ONE refresh token used to all succeed.
+  it('concurrent refreshes of the same token: exactly one new pair is issued', async () => {
+    // Minted directly (not via /auth/login) so this case does not eat the
+    // login rate limit the other cases rely on.
+    const cred = await admin.authCredential.findUniqueOrThrow({ where: { email: personEmail } });
+    const { refreshToken: presented } = await app.get(TokenService).issueTokens({
+      userId: cred.userId,
+      organizationId: cred.organizationId,
+      accountType: 'person',
+      email: cred.email,
+    });
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        request(server).post('/auth/refresh').send({ refreshToken: presented }),
+      ),
+    );
+    const statuses = results.map((r) => r.status).sort();
+    expect(statuses).toEqual([200, 401, 401, 401, 401, 401]);
+    const winner = results.find((r) => r.status === 200)!;
+    // The single winner's pair keeps working (no regression on normal refresh).
+    await request(server)
+      .post('/auth/refresh')
+      .send({ refreshToken: winner.body.refreshToken })
+      .expect(200);
   });
 
   it('accepts a password-reset request without revealing account existence (202)', async () => {

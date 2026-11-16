@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OrganizationType } from '@adoptafacil/contracts';
+import { isAllowedMapUrl, MAP_URL_MESSAGE } from './map-url';
 
 /** Runtime validation for the M01 organization-profile update. `.strict()`
  *  rejects unknown keys, so formalization/verification fields can never be set
@@ -68,7 +69,7 @@ export const updateOrgProfileSchema = z
       .object({
         hours: shortText(200).optional(),
         fullAddress: shortText(300).optional(),
-        mapUrl: url.optional(),
+        mapUrl: url.refine(isAllowedMapUrl, MAP_URL_MESSAGE).optional(),
         additionalPhones: z.array(shortText(30)).max(10).optional(),
       })
       .strict()

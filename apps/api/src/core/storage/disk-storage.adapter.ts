@@ -10,6 +10,7 @@ import type {
   StoredObject,
   StoredObjectData,
 } from './storage.port';
+import { StorageObjectExistsError } from './storage.port';
 import {
   assertSafeRelativeKey,
   buildStorageKey,
@@ -77,7 +78,16 @@ export class DiskStorageAdapter implements StoragePort {
     void contentType; // content type is inferred from the key extension on read
     const full = this.resolvePath(key);
     await mkdir(dirname(full), { recursive: true });
-    await writeFile(full, data);
+    try {
+      // `wx` = O_CREAT|O_EXCL: the existence check and the write are one atomic
+      // step, so two concurrent writers can never both win.
+      await writeFile(full, data, options?.ifNotExists ? { flag: 'wx' } : undefined);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new StorageObjectExistsError(key);
+      }
+      throw error;
+    }
     // Keep a cached total current (an overwrite may count twice until it expires).
     const org = parseStorageKey(key)?.organizationId;
     if (org) await this.usageCache.add(org, data.length);

@@ -19,6 +19,7 @@ import {
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
+import { PrivacyRightsCard } from '../components/privacy-rights-card';
 
 /**
  * `/uso-de-mis-datos` (M13) — "Uso de mis datos en reportes". Una persona
@@ -161,6 +162,8 @@ export function ThirdPartyConsentsPage() {
           </Card>
         );
       })}
+
+      <PrivacyRightsCard />
     </PageContainer>
   );
 }

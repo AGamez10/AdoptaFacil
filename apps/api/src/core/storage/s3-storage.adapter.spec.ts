@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.validation';
 import { S3StorageAdapter } from './s3-storage.adapter';
+import { StorageObjectExistsError } from './storage.port';
 
 const ORG = '6f9619ff-8b86-d011-b42d-00cf4fc964ff';
 
@@ -47,6 +48,20 @@ describe('S3StorageAdapter (Cloudflare R2 / Backblaze B2 / S3)', () => {
     expect(header(calls[0].init, 'authorization')).toBe(
       'AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20261017/auto/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=bce0c95f19aff12514d62e3a3c2f8c76a7cdee87ab444f00d61f655414532945',
     );
+  });
+
+  it('a write-once PUT sends a signed If-None-Match: * and maps 412 to StorageObjectExistsError', async () => {
+    const { adapter, calls } = setup([
+      () => new Response(null, { status: 200 }),
+      () => new Response(null, { status: 412 }),
+    ]);
+    const key = `public/${ORG}/a1-poster.webp`;
+    await adapter.saveObject(key, Buffer.from('x'), 'image/webp', { ifNotExists: true });
+    expect(header(calls[0].init, 'if-none-match')).toBe('*');
+    expect(header(calls[0].init, 'authorization')).toContain('if-none-match');
+    await expect(
+      adapter.saveObject(key, Buffer.from('y'), 'image/webp', { ifNotExists: true }),
+    ).rejects.toBeInstanceOf(StorageObjectExistsError);
   });
 
   it('sums an org listing across pages and signs the query like botocore', async () => {

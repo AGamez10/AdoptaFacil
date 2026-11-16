@@ -32,19 +32,13 @@ import {
   type PlatformSecurityConfig,
 } from '../auth/mfa/platform-security.config';
 import { enforcePlatformMfa } from '../rbac/platform-mfa.policy';
-import { STORAGE_PORT, type StoragePort } from './storage.port';
+import { STORAGE_PORT, StorageObjectExistsError, type StoragePort } from './storage.port';
 import { isAllowedUpload, parseByteRange, parseStorageKey } from './storage-keys';
 import { optimizeImage } from './image-optimizer';
 import { VideoRejectedError, VideoTranscoder, posterKeyFor } from '../media/video-transcoder';
 import { sniffContentType } from './file-sniff';
 import { setServeHeaders } from './serve-headers';
-
-/**
- * Tope DURO del cuerpo multipart, antes de que multer lo termine de leer en
- * memoria. `STORAGE_MAX_FILE_MB` (máx. 100) se valida después, con el mensaje
- * claro; sin este tope un archivo enorme se cargaba entero en RAM primero.
- */
-const MULTIPART_HARD_LIMIT_BYTES = 100 * 1024 * 1024;
+import { MULTIPART_HARD_LIMIT_BYTES } from './upload-limits';
 
 /**
  * Org roles that may write bytes through `PUT /storage/upload`. Every org role
@@ -60,6 +54,9 @@ const UPLOAD_ORG_ROLES: ReadonlySet<string> = new Set<string>([
   Role.Volunteer,
   Role.TemporaryCollaborator,
 ]);
+
+const ALREADY_UPLOADED =
+  'Este archivo ya se subió y no se puede reemplazar. Sube una versión nueva.';
 
 /** Minimal shape of a multer memory-storage file (no @types/multer installed). */
 interface UploadedFileLike {
@@ -99,6 +96,19 @@ export class StorageController {
   ) {
     this.maxMb = config.get('STORAGE_MAX_FILE_MB', { infer: true });
     this.maxBytes = this.maxMb * 1024 * 1024;
+  }
+
+  /** Atomic write-once in the adapter: a concurrent writer that got there
+   *  first (the check above is not atomic) turns into the same 409. */
+  private async writeOnce(write: () => Promise<void>): Promise<void> {
+    try {
+      await write();
+    } catch (error) {
+      if (error instanceof StorageObjectExistsError) {
+        throw new ConflictException(ALREADY_UPLOADED);
+      }
+      throw error;
+    }
   }
 
   private async rolesOf(userId: string): Promise<Set<string>> {
@@ -168,14 +178,23 @@ export class StorageController {
     // same URL — the CDN even caches it as `immutable`. A correction is a new
     // reservation, i.e. a new key. Checked before any transcoding work.
     if (await this.storage.readObject(key)) {
-      throw new ConflictException(
-        'Este archivo ya se subió y no se puede reemplazar. Sube una versión nueva.',
-      );
+      throw new ConflictException(ALREADY_UPLOADED);
     }
     // Video de una publicación de la comunidad o de la portada del portal: se
     // comprime a MP4 y se le saca la portada (sharp no procesa video; se usa
     // ffmpeg). Solo a llaves públicas.
     if (videoLimits && realType.startsWith('video/') && parsed.visibility === 'public') {
+      // Security remediation run-2 F-01 (`storage-upload-video-poster-derived-key-overwrite`):
+      // a video also writes a DERIVED key (`<key sin extensión>.poster.webp`).
+      // Every video reservation ends in `.mp4`, so any other extension is not
+      // a reservation (`…-video.mov` would derive the poster of an existing
+      // `…-video.mp4`); and the derived poster is write-once too.
+      if (!key.endsWith('.mp4')) {
+        throw new BadRequestException('La llave de un video debe terminar en .mp4.');
+      }
+      if (await this.storage.readObject(posterKeyFor(key))) {
+        throw new ConflictException(ALREADY_UPLOADED);
+      }
       if (file.size > videoMaxBytes) {
         throw new PayloadTooLargeException(`El video supera el límite de ${videoLimits.mb} MB.`);
       }
@@ -208,9 +227,11 @@ export class StorageController {
           parsed.organizationId,
           result.video.length + result.poster.length,
         );
-        const stored = { maxBytes: Math.max(this.maxBytes, videoMaxBytes) };
-        await this.storage.saveObject(key, result.video, 'video/mp4', stored);
-        await this.storage.saveObject(posterKeyFor(key), result.poster, 'image/webp', stored);
+        const stored = { maxBytes: Math.max(this.maxBytes, videoMaxBytes), ifNotExists: true };
+        await this.writeOnce(() =>
+          this.storage.saveObject(posterKeyFor(key), result.poster, 'image/webp', stored),
+        );
+        await this.writeOnce(() => this.storage.saveObject(key, result.video, 'video/mp4', stored));
         await this.audit.record({
           organizationId: parsed.organizationId,
           actorUserId: user.id,
@@ -238,7 +259,11 @@ export class StorageController {
 
     // Cuota de espacio del plan (solo con los planes encendidos).
     await this.plans.assertStorageAvailable(parsed.organizationId, optimized.buffer.length);
-    await this.storage.saveObject(key, optimized.buffer, optimized.contentType);
+    await this.writeOnce(() =>
+      this.storage.saveObject(key, optimized.buffer, optimized.contentType, {
+        ifNotExists: true,
+      }),
+    );
     await this.audit.record({
       organizationId: parsed.organizationId,
       actorUserId: user.id,

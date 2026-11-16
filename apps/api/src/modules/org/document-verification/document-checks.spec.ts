@@ -217,3 +217,29 @@ NUMERO 52.345.678 PEREZ GOMEZ MARIA`;
     expect(checkDocumentKind(DocumentType.Other, PET_PHOTO_PDF).result).toBe('not_checked');
   });
 });
+
+describe('extractNit on hostile text (audit run-2 S-06)', () => {
+  it('long runs of whitespace no longer cause catastrophic backtracking', () => {
+    const hostile = `NIT ${' '.repeat(50_000)}1${' '.repeat(50_000)}x`;
+    const started = Date.now();
+    expect(extractNit(hostile)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('a multi-megabyte text is capped before searching', () => {
+    const started = Date.now();
+    extractNit(`${'9 '.repeat(2_000_000)}`);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  it('still finds the NIT when the PDF text has extra spaces and line breaks (regression)', () => {
+    expect(extractNit('NIT:   900.123.456   -   7')).toEqual({ base: '900123456', dv: '7' });
+    expect(extractNit('Razón social: Patitas\n\n   NIT 900123456-7')).toEqual({
+      base: '900123456',
+      dv: '7',
+    });
+    expect(
+      extractNit('5. Número de Identificación Tributaria (NIT)\n  9 0 0 1 2 3 4 5 6   7'),
+    ).toEqual({ base: '900123456', dv: '7' });
+  });
+});

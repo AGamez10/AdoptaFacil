@@ -15,7 +15,7 @@ import {
   type MercadoPagoPreapproval,
 } from '../src/core/payments/mercadopago-billing.client';
 import { mercadoPagoSignatureV1 } from '../src/core/payments/mercadopago-payment.adapter';
-import { PlanBillingService } from '../src/core/plans/plan-billing.service';
+import { addOneMonth, PlanBillingService } from '../src/core/plans/plan-billing.service';
 import { PlanRemindersService } from '../src/core/plans/plan-reminders.service';
 import { PlansService } from '../src/core/plans/plans.service';
 import { purgeOrganizations } from './support/cleanup';
@@ -311,7 +311,7 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
     expect((await row(org.orgId))?.status).toBe('active');
   });
 
-  it('subir de plan: la nueva suscripción rige y la anterior se cancela en Mercado Pago (sin doble cobro)', async () => {
+  it('subir de plan: la nueva rige, la anterior se cancela; un cobro tardío de la anterior no revierte nada', async () => {
     const org = await registerOrg('Refugio Sube');
     const crece = await checkoutAndAuthorize(org, 'crece');
     const pro = await checkoutAndAuthorize(org, 'pro');
@@ -325,6 +325,53 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
       status: 'active',
       providerReference: pro,
     });
+
+    // Revisión de cobros con dinero real: un cobro TARDÍO de la suscripción ya
+    // reemplazada (Mercado Pago lo hizo antes de procesar la cancelación) no
+    // devuelve el plan al anterior ni cancela la suscripción nueva.
+    const late = `ch${randomUUID().slice(0, 8)}`;
+    fake.charges.set(late, {
+      id: late,
+      preapprovalId: crece,
+      paymentStatus: 'approved',
+      amount: (fake.preapprovals.get(crece) as MercadoPagoPreapproval).amount,
+      currency: 'COP',
+      chargedAt: new Date(),
+    });
+    await notify('subscription_authorized_payment', late).expect(200);
+    expect(await row(org.orgId)).toMatchObject({
+      plan: 'pro',
+      status: 'active',
+      providerReference: pro,
+    });
+    expect(fake.cancelled).not.toContain(pro);
+    // Queda en la bitácora para revisar la devolución de ese cobro.
+    const stale = await admin.auditLog.findFirst({
+      where: { organizationId: org.orgId, action: 'organization.plan_stale_charge' },
+    });
+    expect(stale?.metadata).toMatchObject({ preapprovalId: crece, chargeId: late });
+
+    // Cobros simultáneos de la suscripción vigente: un solo periodo coherente.
+    const before = (await row(org.orgId))?.currentPeriodEnd as Date;
+    const amount = (fake.preapprovals.get(pro) as MercadoPagoPreapproval).amount;
+    const ids = [0, 1, 2].map(() => `ch${randomUUID().slice(0, 8)}`);
+    for (const id of ids) {
+      fake.charges.set(id, {
+        id,
+        preapprovalId: pro,
+        paymentStatus: 'approved',
+        amount,
+        currency: 'COP',
+        chargedAt: before,
+      });
+    }
+    const results = await Promise.all(
+      ids.map((id) => notify('subscription_authorized_payment', id)),
+    );
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
+    const after = await row(org.orgId);
+    expect(after?.currentPeriodEnd?.getTime()).toBe(addOneMonth(before).getTime());
+    expect(after).toMatchObject({ plan: 'pro', status: 'active', providerReference: pro });
   });
 
   it('cancelar: se detiene el cobro y el plan sigue hasta el fin de lo pagado', async () => {

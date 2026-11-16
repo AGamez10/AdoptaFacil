@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { type AccessTokenClaims, OrganizationStatus } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedRequest } from './auth.types';
+import { assertActiveMembership } from './membership';
 
 /** Error code of the 403 a suspended organization's members get (R2-1). */
 export const ORGANIZATION_SUSPENDED = 'ORGANIZATION_SUSPENDED';
@@ -61,6 +62,16 @@ export class JwtAuthGuard implements CanActivate {
     };
 
     const path = (request.originalUrl ?? request.url ?? '').split('?')[0];
+    // Run-2 R-04: a removed member's still-valid access token stops working at
+    // once, not when it expires. `/auth/*` stays reachable (me/refresh/logout;
+    // refresh itself refuses a former member).
+    if (!path.startsWith('/auth/')) {
+      await assertActiveMembership(this.prisma, {
+        userId: claims.sub,
+        organizationId: claims.org,
+        accountType: claims.typ,
+      });
+    }
     if (!allowedWhileSuspended(request.method, path)) {
       // `organizations` is the global catalog (no RLS): a plain keyed read.
       const org = await this.prisma.organization.findUnique({

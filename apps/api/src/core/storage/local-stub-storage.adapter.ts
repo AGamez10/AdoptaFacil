@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  CreateUploadInput,
-  StoragePort,
-  StoredObject,
-  StoredObjectData,
+import {
+  type CreateUploadInput,
+  type SaveObjectOptions,
+  StorageObjectExistsError,
+  type StoragePort,
+  type StoredObject,
+  type StoredObjectData,
 } from './storage.port';
 import { buildStorageKey, contentTypeFromKey, parseStorageKey } from './storage-keys';
 
@@ -32,7 +34,15 @@ export class LocalStubStorageAdapter implements StoragePort {
     return `${this.baseUrl}/${key}`;
   }
 
-  async saveObject(key: string, data: Buffer, contentType?: string): Promise<void> {
+  async saveObject(
+    key: string,
+    data: Buffer,
+    contentType?: string,
+    options?: SaveObjectOptions,
+  ): Promise<void> {
+    if (options?.ifNotExists && this.objects.has(key)) {
+      throw new StorageObjectExistsError(key);
+    }
     this.objects.set(key, { data, contentType: contentType ?? contentTypeFromKey(key) });
   }
 

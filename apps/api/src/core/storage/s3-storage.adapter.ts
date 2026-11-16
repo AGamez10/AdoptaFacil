@@ -9,6 +9,7 @@ import type {
   StoredObject,
   StoredObjectData,
 } from './storage.port';
+import { StorageObjectExistsError } from './storage.port';
 import {
   assertSafeRelativeKey,
   buildStorageKey,
@@ -95,7 +96,12 @@ export class S3StorageAdapter implements StoragePort {
     assertSafeRelativeKey(key);
     const res = await this.send('PUT', key, {}, data, {
       'content-type': contentType ?? contentTypeFromKey(key),
+      // Conditional write: S3, R2 and MinIO refuse it (412) when the key exists.
+      ...(options?.ifNotExists ? { 'if-none-match': '*' } : {}),
     });
+    if (options?.ifNotExists && (res.status === 412 || res.status === 409)) {
+      throw new StorageObjectExistsError(key);
+    }
     if (!res.ok) {
       throw new Error(`Storage upload failed with status ${res.status}`);
     }

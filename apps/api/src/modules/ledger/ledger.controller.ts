@@ -37,6 +37,7 @@ import {
   voidLedgerEntrySchema,
 } from './ledger.schemas';
 import { setServeHeaders } from '../../core/storage/serve-headers';
+import { SINGLE_FILE_UPLOAD_LIMITS } from '../../core/storage/upload-limits';
 
 /** Registran y anulan movimientos (es dinero: solo quien administra). */
 const WRITE_ROLES = [Role.Owner, Role.Administrator] as const;
@@ -61,7 +62,7 @@ export class OrgLedgerController {
   /** JSON o multipart (soporte opcional en el campo `support`). */
   @Post()
   @Roles(...WRITE_ROLES)
-  @UseInterceptors(FileInterceptor('support'))
+  @UseInterceptors(FileInterceptor('support', SINGLE_FILE_UPLOAD_LIMITS))
   create(
     @CurrentUser() actor: RequestUser,
     @Body(new ZodValidationPipe(createLedgerEntrySchema)) dto: CreateLedgerEntryDto,

@@ -72,6 +72,7 @@ import {
   responsibleSchema,
   uploadDocumentSchema,
 } from './custody.schemas';
+import { SINGLE_FILE_UPLOAD_LIMITS } from '../../core/storage/upload-limits';
 
 /** Consultan el historial, los documentos, la cuenta y los reportes. */
 const VIEW_ROLES = [Role.Owner, Role.Administrator, Role.Operator, Role.ReadOnlyAuditor] as const;
@@ -164,7 +165,7 @@ export class CustodyController {
 
   @Post('animals/:animalId/documents')
   @Roles(...WRITE_ROLES)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SINGLE_FILE_UPLOAD_LIMITS))
   uploadDocument(
     @CurrentUser() actor: RequestUser,
     @Param('animalId', ParseUUIDPipe) animalId: string,
@@ -266,7 +267,7 @@ export class CustodyController {
 
   @Post('intakes/:id/photos')
   @Roles(...WRITE_ROLES)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SINGLE_FILE_UPLOAD_LIMITS))
   addIntakePhoto(
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -446,7 +447,7 @@ export class CustodyController {
   /** JSON o multipart (soporte opcional en el campo `file`). */
   @Post('charges')
   @Roles(...WRITE_ROLES)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SINGLE_FILE_UPLOAD_LIMITS))
   createCharge(
     @CurrentUser() actor: RequestUser,
     @Body(new ZodValidationPipe(chargeSchema)) dto: ChargeDto,
@@ -481,7 +482,7 @@ export class CustodyController {
   /** JSON o multipart (comprobante opcional en el campo `file`). */
   @Post('charges/:id/payments')
   @Roles(...WRITE_ROLES)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SINGLE_FILE_UPLOAD_LIMITS))
   registerPayment(
     @CurrentUser() actor: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,

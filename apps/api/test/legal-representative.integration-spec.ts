@@ -140,9 +140,12 @@ describe('Legal representative signature (M01, S-1)', () => {
     await register(administrator.token).expect(403);
   });
 
-  it('rejects registration from a user with no role at all with 403', async () => {
+  // Run-2 R-04: an organization account with no role is a former member,
+  // refused by the auth guard itself (401 MEMBERSHIP_REVOKED).
+  it('rejects registration from a user with no role at all (401, former member)', async () => {
     const noRole = await actorWithRoles([]);
-    await register(noRole.token).expect(403);
+    const res = await register(noRole.token).expect(401);
+    expect(res.body.code).toBe('MEMBERSHIP_REVOKED');
   });
 
   it('re-registering (change of representative) keeps the previous row (append-only) and GET returns the newest', async () => {

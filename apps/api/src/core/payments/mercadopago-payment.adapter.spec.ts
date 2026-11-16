@@ -7,6 +7,7 @@ import {
 import type { Env } from '../../config/env.validation';
 import {
   assertMercadoPagoSignature,
+  MERCADOPAGO_WEBHOOK_MAX_AGE_MS,
   MERCADOPAGO_REFERENCE_MAX_LENGTH,
   MercadoPagoPaymentAdapter,
   mercadoPagoNotificationDataId,
@@ -76,7 +77,7 @@ const INPUT: CreateCollectionInput = {
 };
 
 function signedContext(dataId: string, overrides: { ts?: string; requestId?: string } = {}) {
-  const ts = overrides.ts ?? '1704908010';
+  const ts = overrides.ts ?? String(Date.now());
   const requestId = overrides.requestId ?? 'req-1';
   const v1 = mercadoPagoSignatureV1(SECRET, dataId, requestId, ts);
   return {
@@ -379,7 +380,7 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     const ORDERS_SECRET = 'orders-webhook-secret-for-tests';
     const orderConfig = () => makeConfig({ MERCADOPAGO_ORDERS_WEBHOOK_SECRET: ORDERS_SECRET });
     const signedOrder = (dataId: string, secret = ORDERS_SECRET) => {
-      const ts = '1704908010';
+      const ts = String(Date.now());
       const v1 = mercadoPagoSignatureV1(secret, dataId, 'req-9', ts);
       return {
         signature: `ts=${ts},v1=${v1}`,
@@ -515,8 +516,38 @@ describe('Mercado Pago notification helpers', () => {
 
   it('lowercases alphanumeric ids in the manifest, as documented', () => {
     const v1 = mercadoPagoSignatureV1(SECRET, 'abc', 'r', '1');
-    expect(() => assertMercadoPagoSignature(SECRET, `ts=1,v1=${v1}`, 'r', 'ABC')).not.toThrow();
+    // `now` = 1 s after the epoch, so `ts=1` (seconds) is fresh for this case.
+    expect(() =>
+      assertMercadoPagoSignature(SECRET, `ts=1,v1=${v1}`, 'r', 'ABC', 1_000),
+    ).not.toThrow();
     expect(() => assertMercadoPagoSignature(undefined, `ts=1,v1=${v1}`, 'r', 'abc')).toThrow();
+  });
+
+  describe('signed timestamp freshness (audit run-2 I-03)', () => {
+    const NOW = Date.UTC(2026, 10, 16, 12, 0, 0);
+    const sign = (ts: string) => `ts=${ts},v1=${mercadoPagoSignatureV1(SECRET, '123', 'r', ts)}`;
+    const check = (ts: string) => () =>
+      assertMercadoPagoSignature(SECRET, sign(ts), 'r', '123', NOW);
+
+    it('accepts a fresh ts in milliseconds (documented) and in seconds', () => {
+      expect(check(String(NOW - 60_000))).not.toThrow();
+      expect(check(String(Math.floor((NOW - 60_000) / 1000)))).not.toThrow();
+      // A retry well within the window keeps working.
+      expect(check(String(NOW - MERCADOPAGO_WEBHOOK_MAX_AGE_MS + 60_000))).not.toThrow();
+    });
+
+    it('rejects a replay older than the window, a ts from the future and a malformed ts', () => {
+      expect(check(String(NOW - MERCADOPAGO_WEBHOOK_MAX_AGE_MS - 1))).toThrow(/stale/);
+      expect(check(String(NOW + 10 * 60_000))).toThrow(/stale/);
+      expect(check('12abc')).toThrow(/malformed/);
+    });
+
+    it('a stale ts with a WRONG signature still reports the signature (no oracle)', () => {
+      const old = String(NOW - MERCADOPAGO_WEBHOOK_MAX_AGE_MS - 1);
+      expect(() =>
+        assertMercadoPagoSignature(SECRET, `ts=${old},v1=${'0'.repeat(64)}`, 'r', '123', NOW),
+      ).toThrow(/signature mismatch/);
+    });
   });
 
   it('keeps a payer-free reconciliation snapshot of the read-back (fees, net, refunds)', () => {
