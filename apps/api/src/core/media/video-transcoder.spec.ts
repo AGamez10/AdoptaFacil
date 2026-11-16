@@ -1,12 +1,12 @@
-import { spawnSync } from 'node:child_process';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
-import { makeTestVideo } from '../../../test/support/test-video';
+import { HAS_FFMPEG, makeTestVideo } from '../../../test/support/test-video';
 import { sniffContentType } from '../storage/file-sniff';
+import * as binaries from './ffmpeg-binaries';
+import { resolveMediaBinary } from './ffmpeg-binaries';
 import { VideoRejectedError, VideoTranscoder, posterKeyFor } from './video-transcoder';
 
-const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
-const describeIfFfmpeg = hasFfmpeg ? describe : describe.skip;
+const describeIfFfmpeg = HAS_FFMPEG ? describe : describe.skip;
 
 const transcoder = () =>
   new VideoTranscoder(new ConfigService({ FFMPEG_PATH: 'ffmpeg', FFPROBE_PATH: 'ffprobe' }));
@@ -46,8 +46,56 @@ describeIfFfmpeg('VideoTranscoder', () => {
   }, 30_000);
 });
 
-describe('VideoTranscoder without ffmpeg installed', () => {
+describe('resolveMediaBinary', () => {
+  const bundled = () => '/deps/ffmpeg';
+
+  it('uses the configured ffmpeg when it runs (Docker image)', () => {
+    expect(resolveMediaBinary('ffmpeg', 'ffmpeg', () => true, bundled)).toBe('ffmpeg');
+  });
+
+  it('falls back to the bundled binary when the system has no ffmpeg (pnpm dev)', () => {
+    const works = (bin: string) => bin === '/deps/ffmpeg';
+    expect(resolveMediaBinary('ffmpeg', 'ffmpeg', works, bundled)).toBe('/deps/ffmpeg');
+  });
+
+  it('keeps the configured one when there is nothing better', () => {
+    expect(
+      resolveMediaBinary(
+        'ffprobe',
+        'ffprobe',
+        () => false,
+        () => null,
+      ),
+    ).toBe('ffprobe');
+  });
+
+  it('the bundled binaries exist and run on this machine', () => {
+    for (const tool of ['ffmpeg', 'ffprobe'] as const) {
+      const path = binaries.bundledBinary(tool);
+      expect(path).toBeTruthy();
+      expect(binaries.binaryWorks(path!)).toBe(true);
+    }
+  });
+});
+
+describeIfFfmpeg('VideoTranscoder on a machine without system ffmpeg', () => {
+  it('compresses with the bundled binaries instead of saying it cannot', async () => {
+    const t = new VideoTranscoder(
+      new ConfigService({ FFMPEG_PATH: '/no/existe/ffmpeg', FFPROBE_PATH: '/no/existe/ffprobe' }),
+    );
+    const result = await t.transcode(makeTestVideo(2), { maxSeconds: 60 });
+    expect(sniffContentType(result.video)).toBe('video/mp4');
+    expect((await sharp(result.poster).metadata()).format).toBe('webp');
+  }, 60_000);
+});
+
+describe('VideoTranscoder without any ffmpeg', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   it('says so in plain language instead of crashing', async () => {
+    jest
+      .spyOn(binaries, 'resolveMediaBinary')
+      .mockImplementation((_tool, configured) => configured!);
     const missing = new VideoTranscoder(
       new ConfigService({ FFMPEG_PATH: '/no/existe/ffmpeg', FFPROBE_PATH: '/no/existe/ffprobe' }),
     );

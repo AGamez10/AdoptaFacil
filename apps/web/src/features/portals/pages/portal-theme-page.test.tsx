@@ -535,6 +535,44 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     });
   });
 
+  it('Documental: admite un segundo video y envía su llave aparte; Historias solo uno', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/org/profile/uploads')) {
+        return { key: 'public/org-1/dos-portada.mp4', url: 'http://api.test/storage/upload' };
+      }
+      if (url.includes('/storage/upload')) return {};
+      if (init?.method === 'PUT') return { tokens: {}, template: 'documental' };
+      return { tokens: {}, template: 'clasica' };
+    });
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:dos') }));
+    renderShell({ route: '/organizacion/portal', ...sessionWith([Role.Owner]) });
+
+    await screen.findByRole('radio', { name: /Clásica/ });
+    fireEvent.click(screen.getByRole('radio', { name: /Historias/ }));
+    expect(screen.getByTestId('cover-video-field')).toBeInTheDocument();
+    expect(screen.queryByTestId('cover-video-field-2')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Documental/ }));
+    expect(screen.getByTestId('cover-video-field-2')).toHaveTextContent('Segundo video');
+    const file = new File(['video'], 'escena.mp4', { type: 'video/mp4' });
+    fireEvent.change(screen.getByTestId('cover-video-input-2'), { target: { files: [file] } });
+    expect(await screen.findByTestId('cover-video-preview-2')).toHaveAttribute('src', 'blob:dos');
+    expect(screen.queryByTestId('cover-video-preview')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Guardar y publicar/ })[0]);
+    await waitFor(() => {
+      const put = calls.find((c) => c.url.endsWith('/portals/theme') && c.init?.method === 'PUT');
+      const body = JSON.parse(String(put?.init?.body));
+      expect(body).toMatchObject({
+        template: 'documental',
+        coverVideo2Key: 'public/org-1/dos-portada.mp4',
+      });
+      expect(body).not.toHaveProperty('coverVideoKey');
+    });
+  });
+
   it('Historias: rechaza un archivo que no es video sin subir nada', async () => {
     const calls: string[] = [];
     stubFetch((url) => {

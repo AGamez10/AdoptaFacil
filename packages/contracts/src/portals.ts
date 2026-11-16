@@ -478,6 +478,19 @@ export function templateUsesVideo(id: PortalTemplateId | undefined): boolean {
   return id !== undefined && PORTAL_VIDEO_TEMPLATES.includes(id);
 }
 
+/**
+ * Cuántos videos admite cada plantilla. Documental admite dos (cada uno de
+ * hasta `PORTAL_COVER_VIDEO_LIMITS.maxSeconds`): se reproducen uno tras otro.
+ */
+export const PORTAL_TEMPLATE_VIDEO_SLOTS: Partial<Record<PortalTemplateId, 1 | 2>> = {
+  historias: 1,
+  documental: 2,
+};
+
+export function templateVideoSlots(id: PortalTemplateId | undefined): 0 | 1 | 2 {
+  return (id !== undefined && PORTAL_TEMPLATE_VIDEO_SLOTS[id]) || 0;
+}
+
 /** Ajustes efectivos: los guardados válidos sobre los valores por defecto. */
 export function resolveTemplateOptions(
   template: PortalTemplateId,
@@ -526,6 +539,10 @@ export interface PortalThemeConfig {
   coverVideoUrl?: string;
   /** Imagen de portada del video (primer cuadro), cuando el servidor la sacó. */
   coverVideoPosterUrl?: string;
+  /** Segundo video (Documental), se reproduce después del primero. */
+  coverVideo2Url?: string;
+  /** Imagen de portada del segundo video. */
+  coverVideo2PosterUrl?: string;
   /**
    * Plantilla de pago elegida que hoy no está disponible porque el plan de la
    * organización no la incluye (terminó el lanzamiento o la suscripción). El
@@ -559,6 +576,8 @@ export interface UpdatePortalThemeInput {
    * (`public/<orgId>/<archivo>.mp4` o `.webm`). Omitida, se conserva; `null` lo quita.
    */
   coverVideoKey?: string | null;
+  /** Segundo video (Documental), mismas reglas que `coverVideoKey`. */
+  coverVideo2Key?: string | null;
   /** Ocultar el sello "Hecho con AdoptaFácil" (exige `portalRemoveSeal`). Omitido, se conserva. */
   hideSeal?: boolean;
 }

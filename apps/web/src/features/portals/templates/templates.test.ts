@@ -214,6 +214,28 @@ describe('Documental: el video de la organización abre el portal', () => {
     expect(root.querySelector('.dc-reel')).toBeNull();
   });
 
+  it('con dos videos: el primero se ve y el segundo espera su turno sin descargarse', async () => {
+    const design = await loadDesign('documental');
+    const model = buildTemplateModel(
+      {
+        ...PROFILES.completa,
+        coverVideo: { url: 'https://cdn.example.org/storage/public?key=uno.mp4' },
+        coverVideo2: { url: 'https://cdn.example.org/storage/public?key=dos.mp4' },
+      } as never,
+      FIXTURE_NOW,
+    );
+    expect(model.VIDEOS).toHaveLength(2);
+    const root = document.createElement('div');
+    root.innerHTML = design.html(model, createKit(model));
+    const [first, second] = [...root.querySelectorAll('video')];
+    expect(first?.getAttribute('src')).toContain('uno.mp4');
+    expect(first?.classList.contains('on')).toBe(true);
+    expect(first?.hasAttribute('autoplay')).toBe(true);
+    expect(second?.getAttribute('src')).toContain('dos.mp4');
+    expect(second?.getAttribute('preload')).toBe('none');
+    expect(second?.hasAttribute('autoplay')).toBe(false);
+  });
+
   it('sin video: carrete con las fotos reales y sin botón de sonido', async () => {
     const { root } = await render('documental', 'completa');
     expect(root.querySelector('video')).toBeNull();
