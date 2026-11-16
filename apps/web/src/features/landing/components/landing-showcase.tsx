@@ -11,6 +11,7 @@ import {
   templateDemoHref,
   templateName,
 } from '../../portals/templates/demo/demo-templates';
+import { useFeaturedCoffeeHref } from '../model/use-featured-coffee';
 import { IconArrowRight } from './landing-icons';
 import landing from './landing.module.scss';
 import styles from './showcase.module.scss';
@@ -120,16 +121,21 @@ export function TemplateGallerySection() {
 }
 
 /**
- * Café San Pedro: AdoptaFácil compra café colombiano y lo vende. El 20 % del
- * margen bruto (precio de venta menos precio de compra) de cada venta apoya a los
- * animales. No se promete una cifra fija por bolsa, porque los precios cambian.
+ * Café San Pedro: AdoptaFácil compra café colombiano y lo vende para sostener
+ * la plataforma gratis para los refugios. El 20 % del margen bruto (precio de
+ * venta menos precio de compra) de cada venta apoya a una campaña. No se
+ * promete una cifra fija por bolsa, porque los precios cambian. Con un lote a
+ * la venta, "Comprar café" abre la misma página del QR (`/c/<código>`): precio,
+ * bolsas disponibles, campaña y pago. Sin lote, no se ofrece comprar.
  */
 export function CoffeeSection() {
+  const buyHref = useFeaturedCoffeeHref();
   return (
     <section
       id={LANDING_COFFEE_ID}
       className={landing.section}
       aria-labelledby="landing-coffee-title"
+      data-testid="landing-coffee"
     >
       <div className={landing.container}>
         <div className={styles.coffee}>
@@ -142,22 +148,42 @@ export function CoffeeSection() {
             height={1100}
           />
           <div className={styles.coffee__body}>
-            <p className={landing.eyebrow}>Iniciativa de AdoptaFácil</p>
+            <p className={landing.eyebrow}>Café San Pedro · Iniciativa de AdoptaFácil</p>
             <h2 id="landing-coffee-title" className={landing.heading__title}>
-              Un café que también cuida.
+              Tu café mantiene AdoptaFácil gratis para los refugios.
             </h2>
             <p>
-              AdoptaFácil es gratis para los refugios. Para mantenerlo, compramos café colombiano y
-              lo vendemos. El 20 % del margen bruto de cada venta, calculado como precio de venta
-              menos precio de compra, apoya a los animales.
+              No le cobramos a las fundaciones por lo esencial: portal, adopciones con contrato,
+              campañas y transparencia. Para sostenerlo vendemos café colombiano, y el 20 % del
+              margen bruto de cada bolsa (precio de venta menos precio de compra) va a la campaña
+              que tú elijas.
             </p>
-            <p className={styles.coffee__fine}>
-              El detalle de cada campaña se publica cuando esté confirmado.
-            </p>
+            <ul className={styles.coffee__steps}>
+              <li>Eliges la campaña que quieres apoyar.</li>
+              <li>Pagas en línea y te llega el comprobante por correo.</li>
+              <li>Te enviamos el café y sigues tu pedido.</li>
+            </ul>
             <div className={landing.orgs__cta}>
-              <Link to="/campanas" className={cn(landing.btn, landing['btn--ink'])}>
+              {buyHref ? (
+                <Link
+                  to={buyHref}
+                  className={cn(landing.btn, landing['btn--primary'])}
+                  data-testid="coffee-buy"
+                >
+                  Comprar café
+                  <IconArrowRight className={landing.btn__icon} />
+                </Link>
+              ) : (
+                <p className={styles.coffee__fine}>
+                  La venta en línea abre con el próximo lote. Mientras tanto, puedes apoyar una
+                  campaña directamente.
+                </p>
+              )}
+              <Link
+                to="/campanas"
+                className={cn(landing.btn, buyHref ? landing['btn--ghost'] : landing['btn--ink'])}
+              >
                 Ver campañas que apoyamos
-                <IconArrowRight className={landing.btn__icon} />
               </Link>
             </div>
           </div>

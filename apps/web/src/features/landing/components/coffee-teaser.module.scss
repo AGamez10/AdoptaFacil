@@ -1,0 +1,179 @@
+/* Aviso flotante del café: solo transform y opacity; nada de layout. */
+.teaser {
+  position: fixed;
+  z-index: 40;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 1rem;
+  /* Deja libre el botón de ayuda (abajo a la derecha). */
+  right: 5.25rem;
+  display: flex;
+  max-width: 24rem;
+  align-items: flex-start;
+  gap: 0.8rem;
+  overflow: hidden;
+  border: 1px solid rgb(37 186 166 / 0.35);
+  border-radius: 1.25rem;
+  background: #202c3c;
+  box-shadow: 0 18px 40px -12px rgb(15 23 42 / 0.55);
+  padding: 0.75rem 2.25rem 0.85rem 0.75rem;
+  color: #fff;
+  animation: teaser-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @media (min-width: 640px) {
+    right: auto;
+    bottom: 1.5rem;
+    left: 1.5rem;
+  }
+
+  &[data-phase='leaving'] {
+    animation: teaser-out 0.35s ease-in both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-name: teaser-fade-in;
+
+    &[data-phase='leaving'] {
+      animation-name: teaser-fade-out;
+    }
+  }
+}
+
+@keyframes teaser-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.96);
+  }
+}
+
+@keyframes teaser-out {
+  to {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.96);
+  }
+}
+
+@keyframes teaser-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes teaser-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.teaser__art {
+  width: 3.25rem;
+  height: 3.25rem;
+
+  @media (min-width: 640px) {
+    width: 4rem;
+    height: 4rem;
+  }
+
+  flex: none;
+  border-radius: 0.9rem;
+  background: #fff6e5;
+  object-fit: cover;
+}
+
+.teaser__body {
+  min-width: 0;
+}
+
+.teaser__title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 0.975rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.25;
+}
+
+.teaser__text {
+  margin: 0.25rem 0 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: rgb(255 255 255 / 0.78);
+}
+
+.teaser__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: var(--r-full);
+  background: var(--af-teal);
+  padding: 0.45rem 0.95rem;
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  color: #102a26;
+  text-decoration: none;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-mint);
+    outline-offset: 2px;
+  }
+}
+
+.teaser__close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: rgb(255 255 255 / 0.7);
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.1);
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-mint);
+    outline-offset: 0;
+  }
+}
+
+/* Barra que se vacía: muestra cuánto falta para que el aviso se vaya. */
+.teaser__timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--af-teal);
+  transform-origin: left;
+  animation: teaser-timer 9s linear both;
+
+  .teaser[data-paused='true'] & {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    display: none;
+  }
+}
+
+@keyframes teaser-timer {
+  to {
+    transform: scaleX(0);
+  }
+}

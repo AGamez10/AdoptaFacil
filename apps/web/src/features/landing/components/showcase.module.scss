@@ -7,6 +7,31 @@
   padding: 0;
 }
 
+/* Celular: las plantillas se deslizan en una fila (antes eran más de diez
+   pantallazos de cuadrícula). Las miniaturas siguen con carga diferida. */
+@media (max-width: 759px) {
+  .gallery {
+    grid-auto-columns: 44%;
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    margin-inline: -1.25rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 4px 1.25rem 18px;
+    scroll-padding-inline: 1.25rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .gallery::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gallery > li {
+    scroll-snap-align: start;
+  }
+}
+
 @media (min-width: 760px) {
   .gallery {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -172,6 +197,45 @@
   width: 100%;
   height: auto;
   border-radius: 24px;
+}
+
+/* En celular la foto no se come la pantalla: el mensaje y el botón primero. */
+@media (max-width: 899px) {
+  .coffee img {
+    max-width: 13rem;
+    justify-self: center;
+  }
+}
+
+.coffee__steps {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: coffee-step;
+}
+
+.coffee__steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  counter-increment: coffee-step;
+}
+
+.coffee__steps li::before {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: #14202e;
+  font-size: 13px;
+  color: #ffe08a;
+  content: counter(coffee-step);
 }
 
 .coffee__body p {

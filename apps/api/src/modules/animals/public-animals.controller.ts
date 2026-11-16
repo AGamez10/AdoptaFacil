@@ -1,5 +1,10 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
-import type { AnimalSummary, AnimalSummaryPage, PublicAnimalsPage } from '@adoptafacil/contracts';
+import type {
+  AnimalSummary,
+  AnimalSummaryPage,
+  PublicAdoptionNetwork,
+  PublicAnimalsPage,
+} from '@adoptafacil/contracts';
 import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { PublicAnimalsService } from './public-animals.service';
 import {
@@ -60,5 +65,13 @@ export class PublicAnimalsController {
     @Query(new ZodValidationPipe(publicAnimalsGlobalQuerySchema)) query: PublicAnimalsGlobalQuery,
   ): Promise<PublicAnimalsPage> {
     return this.service.listAllAdoptable(query);
+  }
+
+  /** The whole adoption network in real numbers, for the landing's
+   *  "Rescatistas de todo el país" section (organizations, cities, photos). */
+  @Get('public/network')
+  @PublicCache()
+  network(): Promise<PublicAdoptionNetwork> {
+    return this.service.network();
   }
 }

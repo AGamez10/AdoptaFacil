@@ -110,6 +110,14 @@ export class CoffeePublicService {
     return data;
   }
 
+  /** El código del café a la venta hoy (para el botón de la landing), o null. */
+  async featuredCode(): Promise<string | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ code: string | null }>>(
+      Prisma.sql`SELECT coffee_featured_code() AS code`,
+    );
+    return rows[0]?.code ?? null;
+  }
+
   async campaigns(): Promise<CoffeeCampaignOption[]> {
     const rows = await this.prisma.$queryRaw<Array<{ data: CoffeeCampaignOption[] }>>(
       Prisma.sql`SELECT coffee_campaign_options() AS data`,

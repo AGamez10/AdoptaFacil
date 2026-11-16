@@ -9,8 +9,8 @@ import {
   ActiveCampaignsSection,
   AdoptionStepsSection,
   CoffeeSection,
+  CoffeeTeaser,
   CommunitySection,
-  CommunityPulseSection,
   CommunityWallSection,
   FaqSection,
   FinalCtaSection,
@@ -18,7 +18,6 @@ import {
   ImpactSection,
   LANDING_CATALOG_ID,
   LandingHero,
-  OpenVolunteeringSection,
   PromisesSection,
   TemplateGallerySection,
   WaitingAnimalsSection,
@@ -123,32 +122,41 @@ export function GeneralPortalPage() {
       <PublicNavbar />
 
       <main className="flex-1">
-        {/* Landing marca v3 (rediseño 2026-10): primero animales reales y
-            "Quiero adoptar", luego las formas de ayudar (donar y recursos
-            solo con su módulo encendido), cómo adoptar, la red en cifras
-            reales, campañas, la comunidad (muro público y
-            escalafón), servicios, la propuesta
-            para organizaciones y el cierre. Ninguna cifra que no salga de
-            la API. */}
+        {/* Embudo de la landing (2026-11): cada bloque lleva al siguiente.
+            1. Engancha: hero con "Quiero adoptar" y el buscador; el aviso del
+               café aparece y se va solo.
+            2. Enamora: animales reales y lo fácil que es adoptar.
+            3. Prueba: la red de rescatistas en cifras reales de toda la red.
+            4. Actúa: formas de ayudar, campañas, el café y lo que piden los
+               refugios (insumos y voluntariado, una sola vez cada uno).
+            5. Pertenece: el muro de la comunidad.
+            6. Confía: transparencia nacional y lo que cuidamos.
+            7. Organizaciones: propuesta, planes y plantillas.
+            8. Resuelve: servicios, guías, preguntas y el cierre.
+            Ninguna cifra que no salga de la API. */}
         <LandingHero snapshot={snapshot} />
         <WaitingAnimalsSection snapshot={snapshot} />
-        <WaysToHelpSection />
         <AdoptionStepsSection photos={heroBannerPhotos} />
         <ImpactSection snapshot={snapshot} />
 
+        <WaysToHelpSection />
         <ActiveCampaignsSection />
-        <OpenVolunteeringSection />
+        <CoffeeSection />
         <Suspense fallback={null}>
           <NetworkNeedsSection />
+        </Suspense>
+
+        <CommunityWallSection />
+
+        <Suspense fallback={null}>
           <PublicLedgerSection snapshot={snapshot} />
         </Suspense>
-        <CommunityWallSection />
-        <CoffeeSection />
-        <CommunityPulseSection />
-        <CommunitySection />
+        <PromisesSection />
+
         <ForOrganizationsSection />
         <TemplateGallerySection />
-        <PromisesSection />
+
+        <CommunitySection />
         <Suspense fallback={null}>
           <GuidesSection />
         </Suspense>
@@ -157,6 +165,7 @@ export function GeneralPortalPage() {
       </main>
 
       <PublicFooter />
+      <CoffeeTeaser />
     </div>
   );
 }

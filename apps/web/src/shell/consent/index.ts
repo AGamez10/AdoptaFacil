@@ -1,5 +1,6 @@
 export { CookieConsentBanner } from './cookie-consent-banner';
 export {
+  COOKIE_CONSENT_CHANGE_EVENT,
   COOKIE_POLICY_VERSION,
   hasCookieConsent,
   loadScriptWithConsent,

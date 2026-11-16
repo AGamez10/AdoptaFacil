@@ -30,8 +30,23 @@ import portalStyles from '../../styles/public-portal.module.scss';
 import templateStyles from './portal-templates.module.scss';
 import styles from './template-live-preview.module.scss';
 
-const PORTAL_BASE_DOMAIN =
-  (import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined) || 'adoptafacil.org';
+/** Dominio de los subdominios de portal; vacío mientras no estén activos. */
+const PORTAL_BASE_DOMAIN = (import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined) || '';
+
+/**
+ * La dirección que de verdad abre el portal: el subdominio solo cuando la
+ * plataforma los activó (`VITE_PORTAL_BASE_DOMAIN`) y la organización tiene
+ * uno; si no, `/o/<slug>` en este mismo dominio, que siempre funciona.
+ */
+export function portalPreviewAddress(
+  slug: string,
+  subdomain: string | undefined,
+  baseDomain: string,
+  host: string,
+): string {
+  if (baseDomain && subdomain) return `${subdomain}.${baseDomain}`;
+  return `${host}/o/${slug}`;
+}
 
 type Device = 'desktop' | 'mobile';
 const DEVICE_WIDTH: Record<Device, number> = { desktop: 1280, mobile: 390 };
@@ -149,7 +164,12 @@ export function TemplateLivePreview({
       <div className={styles.toolbar}>
         <span className={styles.url}>
           <span className={styles.dot} />
-          {previewSlug}.{PORTAL_BASE_DOMAIN}
+          {portalPreviewAddress(
+            previewSlug,
+            usingDemo ? undefined : organization.subdomain,
+            PORTAL_BASE_DOMAIN,
+            typeof window !== 'undefined' ? window.location.host : 'adoptafacil.org',
+          )}
         </span>
         <div className={styles.devices} role="group" aria-label="Tamaño de la vista previa">
           {(['desktop', 'mobile'] as const).map((value) => (

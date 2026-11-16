@@ -17,6 +17,7 @@ import {
   planHighlights,
   type PlanKey,
   type PublicAnimalSummary,
+  type PublicNetworkOrganization,
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
@@ -26,6 +27,7 @@ import { officialWhatsappUrl } from '../../../lib/contact';
 import { HOME_FAQ, publicAnimalPath } from '../../../seo/page-meta.js';
 import { useFeature } from '../../../shell/capabilities/capabilities-context';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
+import { useAdoptionNetwork } from '../model/use-adoption-network';
 import { HeroVisual } from './hero-visual';
 import {
   BoneSticker,
@@ -446,30 +448,129 @@ function CountUp({ value }: { value: number }) {
   );
 }
 
+/** true cuando el elemento está a ~600 px de la pantalla (una sola vez).
+ *  Ref de callback: la sección puede montarse después (cuando llega el
+ *  catálogo) y aun así se observa. */
+function useNearViewport<T extends Element>(): [(node: T | null) => void, boolean] {
+  const [node, setNode] = useState<T | null>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    if (!node || near) return;
+    if (typeof IntersectionObserver !== 'function') {
+      setNear(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) setNear(true);
+      },
+      { rootMargin: '600px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node, near]);
+  return [setNode, near];
+}
+
+function plural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
+}
+
+/** Tarjeta de una organización de la red: fotos reales de sus animales,
+ *  logo, ciudad y cuántos tiene en adopción (solo si el número es exacto). */
+function NetworkOrgCard({ org, index }: { org: PublicNetworkOrganization; index: number }) {
+  const photos = org.photos.slice(0, 3);
+  return (
+    <li className={styles.netCard__item} style={{ '--i': index } as CSSProperties}>
+      <Link
+        to={`/o/${encodeURIComponent(org.slug)}`}
+        className={styles.netCard}
+        data-testid="network-org"
+      >
+        <span className={styles.netCard__photos} aria-hidden="true">
+          {photos.length > 0 ? (
+            photos.map((src) => (
+              <img
+                key={src}
+                src={src}
+                alt=""
+                width={96}
+                height={96}
+                loading="lazy"
+                decoding="async"
+              />
+            ))
+          ) : (
+            <span className={styles.netCard__paws}>
+              <IconPaw />
+            </span>
+          )}
+        </span>
+        <span className={styles.netCard__body}>
+          {org.logoUrl ? (
+            <img
+              src={org.logoUrl}
+              alt=""
+              width={40}
+              height={40}
+              className={styles.netCard__logo}
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <span className={styles.netCard__initial} aria-hidden="true">
+              {org.name.charAt(0)}
+            </span>
+          )}
+          <span className={styles.netCard__text}>
+            <strong className={styles.netCard__name}>{org.name}</strong>
+            <span className={styles.netCard__meta}>
+              {org.animals > 0
+                ? `${org.animals.toLocaleString('es-CO')} ${plural(org.animals, 'animal', 'animales')} en adopción`
+                : 'Animales en adopción'}
+              {org.city && ` · ${org.city}`}
+            </span>
+          </span>
+          <IconArrowRight className={styles.netCard__arrow} aria-hidden="true" />
+        </span>
+      </Link>
+    </li>
+  );
+}
+
 /**
- * Cifras grandes de la red (solo con datos reales) junto al globo 3D, que
- * ilustra la red de organizaciones. Las cifras cuentan al entrar en pantalla y
- * las tarjetas y organizaciones aparecen escalonadas; todo con transform y
- * opacity, y quieto con "reducir movimiento".
+ * "Rescatistas de todo el país": la red en cifras REALES de toda la red
+ * (`GET /public/network`, pedido solo cuando la sección se acerca), tarjetas
+ * por organización con fotos de sus animales, las ciudades como atajos al
+ * listado y dos salidas claras: ver animales o unirse gratis. El globo 3D
+ * sigue cargándose aparte y solo cerca de la pantalla.
  */
 export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
-  const { total, organizations, cities } = snapshot;
-  if (total === 0) return null;
+  const [ref, near] = useNearViewport<HTMLElement>();
+  const network = useAdoptionNetwork(snapshot, near);
+  const { animals, organizations, cities, items } = network;
+  if (animals === 0 && snapshot.total === 0) return null;
   const stats = [
     {
       Icon: IconPaw,
-      value: total,
-      label: total === 1 ? 'animal buscando hogar' : 'animales buscando hogar',
+      value: animals,
+      label: plural(animals, 'animal buscando hogar', 'animales buscando hogar'),
     },
     {
       Icon: IconPeople,
-      value: organizations.length,
-      label: organizations.length === 1 ? 'organización publicando' : 'organizaciones publicando',
+      value: organizations ?? 0,
+      label: plural(organizations ?? 0, 'refugio o rescatista', 'refugios y rescatistas'),
     },
-    { Icon: IconGlobe, value: cities.length, label: cities.length === 1 ? 'ciudad' : 'ciudades' },
+    {
+      Icon: IconGlobe,
+      value: cities.length,
+      label: plural(cities.length, 'ciudad', 'ciudades'),
+    },
   ].filter((stat) => stat.value > 0);
   return (
     <section
+      ref={ref}
+      id="red"
       className={cn(styles.section, styles['section--deep'], styles.impact)}
       aria-labelledby="landing-impact-title"
       data-testid="landing-impact"
@@ -486,7 +587,8 @@ export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
           title="Rescatistas de todo el país, en un solo lugar."
           id="landing-impact-title"
         >
-          Cada número sale del catálogo en vivo: nada inflado, nada inventado.
+          Refugios, fundaciones y personas que rescatan publican aquí a sus animales. Cada número
+          sale del catálogo en vivo: nada inflado, nada inventado.
         </SectionHeading>
         <dl className={styles.stats}>
           {stats.map(({ Icon, value, label }) => (
@@ -503,37 +605,48 @@ export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
             </div>
           ))}
         </dl>
-        {organizations.length > 0 && (
-          <ul className={styles.orgs} aria-label="Organizaciones con animales publicados">
-            {organizations.slice(0, 12).map((org, index) => (
-              <li
-                key={org.id}
-                className={styles.orgs__item}
-                style={{ '--i': index } as CSSProperties}
-              >
-                <Link to={`/o/${encodeURIComponent(org.slug)}`} className={styles.orgChip}>
-                  {org.logoUrl ? (
-                    <img
-                      src={org.logoUrl}
-                      alt=""
-                      width={28}
-                      height={28}
-                      className={styles.orgChip__logo}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span className={styles.orgChip__initial} aria-hidden="true">
-                      {org.name.charAt(0)}
-                    </span>
-                  )}
-                  <span>
-                    {org.name}
-                    {org.city && <span className={styles.orgChip__city}> · {org.city}</span>}
-                  </span>
-                </Link>
-              </li>
+      </div>
+
+      {items.length > 0 && (
+        <div className={cn(styles.container, styles.impact__inner, styles.impact__wide)}>
+          <h3 className={styles.netTitle}>Conoce a quienes rescatan</h3>
+          <ul className={styles.netGrid} aria-label="Organizaciones con animales publicados">
+            {items.map((org, index) => (
+              <NetworkOrgCard key={org.id} org={org} index={index} />
             ))}
+            <li className={styles.netCard__item} style={{ '--i': items.length } as CSSProperties}>
+              <Link to="/register" className={cn(styles.netCard, styles['netCard--join'])}>
+                <span className={styles.netJoin__icon} aria-hidden="true">
+                  <IconHeart />
+                </span>
+                <strong className={styles.netCard__name}>¿Rescatas animales?</strong>
+                <span className={styles.netCard__meta}>
+                  Crea tu portal gratis y que más personas los conozcan.
+                </span>
+                <span className={styles.netJoin__cta}>
+                  Unirme gratis <IconArrowRight aria-hidden="true" />
+                </span>
+              </Link>
+            </li>
           </ul>
+        </div>
+      )}
+
+      <div className={cn(styles.container, styles.impact__inner, styles.impact__wide)}>
+        {cities.length > 0 && (
+          <div className={styles.netCities}>
+            <p className={styles.netCities__label}>Busca cerca de ti</p>
+            <ul className={styles.netCities__list} aria-label="Ciudades con animales en adopción">
+              {cities.slice(0, 10).map(({ city, count }) => (
+                <li key={city}>
+                  <Link to={buildAdoptPath('all', city)} className={styles.netCity}>
+                    {city}
+                    <span className={styles.netCity__count}>{count.toLocaleString('es-CO')}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <div className={styles.impact__actions}>
           <Link to={ADOPT_BASE_PATH} className={cn(styles.btn, styles['btn--light'])}>
@@ -541,7 +654,7 @@ export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
             <IconArrowRight className={styles.btn__icon} />
           </Link>
           <Link to="/register" className={cn(styles.btn, styles['btn--ghostDark'])}>
-            Sumar mi organización
+            Unirme gratis como rescatista
           </Link>
         </div>
       </div>

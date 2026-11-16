@@ -26,6 +26,7 @@ import {
   type CreateCoffeeLotInput,
   type CreateCoffeeProductInput,
   type PublicCoffeeCampaigns,
+  type PublicCoffeeFeatured,
   type PublicCoffeeOffer,
   type PublicCoffeeOrderStatus,
   type UpdateCoffeeLotInput,
@@ -160,6 +161,13 @@ export class PublicCoffeeController {
   @Get('campaigns')
   async campaigns(): Promise<PublicCoffeeCampaigns> {
     return { items: await this.coffee.campaigns() };
+  }
+
+  /** El café a la venta hoy. Va antes de `:code`; "destacado" (9 letras)
+   *  nunca coincide con un código de 8. */
+  @Get('destacado')
+  async featured(): Promise<PublicCoffeeFeatured> {
+    return { code: await this.coffee.featuredCode() };
   }
 
   @Get('orders/:reference')

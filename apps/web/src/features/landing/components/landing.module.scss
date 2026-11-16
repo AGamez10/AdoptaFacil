@@ -894,9 +894,12 @@ $teal-tint: #e3f7f3;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
 
-  /* Celular: una cifra por fila, número a la izquierda y texto a la derecha. */
+  /* Celular: las tres cifras en una fila compacta. */
   @media (max-width: 559px) {
-    grid-template-columns: 1fr;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    gap: 0.5rem;
   }
 
   gap: 0.75rem;
@@ -910,11 +913,7 @@ $teal-tint: #e3f7f3;
   justify-content: flex-end;
 
   @media (max-width: 559px) {
-    flex-direction: row-reverse;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 1rem;
-    padding: 0.9rem 1.1rem;
+    padding: 0.8rem 0.7rem 0.85rem;
   }
   border: 1px solid rgb(255 255 255 / 0.14);
   border-radius: 1.25rem;
@@ -933,7 +932,7 @@ $teal-tint: #e3f7f3;
 .stat__value {
   margin: 0;
   font-family: var(--font-brand);
-  font-size: clamp(2.5rem, 9vw, 4.25rem);
+  font-size: clamp(1.75rem, 9vw, 4.25rem);
   font-weight: var(--fw-extra);
   font-variant-numeric: tabular-nums;
   line-height: 0.95;
@@ -948,7 +947,11 @@ $teal-tint: #e3f7f3;
   margin-top: 0.75rem;
 
   @media (max-width: 559px) {
-    margin-top: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
   }
   font-size: 0.9375rem;
   font-weight: var(--fw-semibold);
@@ -973,33 +976,6 @@ $teal-tint: #e3f7f3;
   }
 }
 
-.orgs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 2rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Las organizaciones entran una tras otra cuando la lista llega a pantalla. */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .orgs__item {
-      animation: org-pop linear both;
-      animation-timeline: view();
-      animation-range: entry calc(var(--i, 0) * 4%) entry calc(40% + var(--i, 0) * 4%);
-    }
-  }
-}
-
-@keyframes org-pop {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.94);
-  }
-}
-
 .impact__actions {
   display: flex;
   flex-wrap: wrap;
@@ -1015,14 +991,267 @@ $teal-tint: #e3f7f3;
   }
 }
 
-.orgChip {
+/* Red de rescatistas: tarjetas livianas (fotos pequeñas y diferidas, sin JS
+   de animación). En celular se deslizan en fila; en escritorio, cuadrícula. */
+.impact__wide {
+  @media (min-width: 1024px) {
+    > * {
+      max-width: none;
+    }
+  }
+}
+
+.netTitle {
+  margin: 2.5rem 0 1rem;
+  font-family: var(--font-brand);
+  font-size: 1.125rem;
+  font-weight: var(--fw-bold);
+  color: #fff;
+}
+
+.netGrid {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (max-width: 639px) {
+    grid-auto-columns: min(78%, 17rem);
+    grid-auto-flow: column;
+    margin-inline: calc(var(--landing-gutter, 1.25rem) * -1);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0.25rem var(--landing-gutter, 1.25rem) 0.75rem;
+    scroll-padding-inline: var(--landing-gutter, 1.25rem);
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
+  }
+}
+
+.netCard__item {
+  display: flex;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .netCard__item {
+      animation: org-pop linear both;
+      animation-timeline: view();
+      animation-range: entry calc(var(--i, 0) * 3%) entry calc(35% + var(--i, 0) * 3%);
+    }
+  }
+}
+
+@keyframes org-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+}
+
+.netCard {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 1.25rem;
+  background: rgb(255 255 255 / 0.06);
+  color: #fff;
+  text-decoration: none;
+  transition:
+    transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
+    border-color 0.3s ease,
+    background-color 0.3s ease;
+
+  &:hover {
+    border-color: rgb(37 186 166 / 0.6);
+    background: rgb(255 255 255 / 0.1);
+    transform: translateY(-3px);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-mint);
+    outline-offset: 2px;
+  }
+}
+
+.netCard__photos {
+  display: grid;
+  height: 6.5rem;
+  flex: none;
+  overflow: hidden;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: 100%;
+  grid-auto-flow: column;
+  gap: 2px;
+  background: rgb(255 255 255 / 0.04);
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    object-fit: cover;
+  }
+}
+
+.netCard__paws {
+  display: grid;
+  place-items: center;
+  color: rgb(255 255 255 / 0.3);
+
+  svg {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+.netCard__body {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.8rem 0.9rem 0.9rem;
+}
+
+.netCard__logo,
+.netCard__initial {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  margin-top: -1.9rem;
+  border: 3px solid #13403a;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: cover;
+}
+
+.netCard__initial {
+  display: grid;
+  place-items: center;
+  background: var(--af-teal);
+  font-weight: var(--fw-extra);
+  color: var(--af-teal-deep);
+}
+
+.netCard__text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.netCard__name {
+  overflow: hidden;
+  font-size: 0.95rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.netCard__meta {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: rgb(255 255 255 / 0.72);
+}
+
+.netCard__arrow {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+  color: var(--af-teal);
+}
+
+.netCard--join {
+  justify-content: center;
+  gap: 0.35rem;
+  border-style: dashed;
+  border-color: rgb(37 186 166 / 0.55);
+  background: rgb(37 186 166 / 0.1);
+  padding: 1.1rem;
+  min-height: 10.5rem;
+
+  .netCard__name {
+    white-space: normal;
+  }
+}
+
+.netJoin__icon {
+  display: inline-grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 0.25rem;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: var(--af-teal);
+  color: #202c3c;
+
+  svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+}
+
+.netJoin__cta {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  color: var(--af-mint);
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+.netCities {
+  margin-top: 1.75rem;
+}
+
+.netCities__label {
+  margin: 0 0 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.65);
+}
+
+.netCities__list {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.netCity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   border: 1px solid rgb(255 255 255 / 0.2);
   border-radius: var(--r-full);
   background: rgb(255 255 255 / 0.06);
-  padding: 0.35rem 0.9rem 0.35rem 0.35rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.85rem;
   font-size: 0.875rem;
   font-weight: var(--fw-semibold);
   color: #fff;
@@ -1039,26 +1268,13 @@ $teal-tint: #e3f7f3;
   }
 }
 
-.orgChip__logo,
-.orgChip__initial {
-  width: 1.75rem;
-  height: 1.75rem;
-  flex: none;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.orgChip__initial {
-  display: grid;
-  place-items: center;
-  background: var(--af-teal);
-  font-weight: var(--fw-extra);
-  color: var(--af-teal-deep);
-}
-
-.orgChip__city {
-  font-weight: var(--fw-regular);
-  color: rgb(255 255 255 / 0.7);
+.netCity__count {
+  border-radius: var(--r-full);
+  background: rgb(37 186 166 / 0.25);
+  padding: 0.05rem 0.5rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--af-mint);
 }
 
 /* ------------------------------------------------------------------ pasos */

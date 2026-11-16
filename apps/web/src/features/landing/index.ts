@@ -14,10 +14,8 @@ export { HeroVisual } from './components/hero-visual';
 export { CommunityWallSection, LANDING_SOCIAL_ID } from './components/community-wall-section';
 export {
   ActiveCampaignsSection,
-  CommunityPulseSection,
   FinalCtaSection,
   LANDING_HELP_ID,
-  OpenVolunteeringSection,
   WaysToHelpSection,
 } from './components/commerce-sections';
 export {
@@ -26,4 +24,6 @@ export {
   LANDING_TEMPLATES_ID,
   TemplateGallerySection,
 } from './components/landing-showcase';
+export { CoffeeTeaser } from './components/coffee-teaser';
+export { useAdoptionNetwork } from './model/use-adoption-network';
 export { useCatalogSnapshot, type CatalogSnapshot } from './model/use-catalog-snapshot';
