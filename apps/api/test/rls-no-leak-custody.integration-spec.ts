@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { purgeOrganizations } from './support/cleanup';
 
@@ -134,6 +134,26 @@ describe('RLS cross-org no-leak (custodia)', () => {
           receivedByName: 'Equipo',
         },
       });
+      const link = await tx.custodyPaymentLink.create({
+        data: {
+          organizationId: org,
+          chargeId: id.charge,
+          token: randomBytes(32).toString('base64url'),
+          createdByUserId: user,
+        },
+      });
+      await tx.custodyOnlinePayment.create({
+        data: {
+          organizationId: org,
+          chargeId: id.charge,
+          linkId: link.id,
+          collectionId: `af-${randomUUID().replace(/-/g, '').slice(0, 29)}`,
+          amountCop: 20_000,
+        },
+      });
+      await tx.custodyOnlinePaymentSettings.create({
+        data: { organizationId: org, enabled: false },
+      });
       await tx.custodyRelease.create({
         data: {
           organizationId: org,
@@ -204,6 +224,9 @@ describe('RLS cross-org no-leak (custodia)', () => {
     'custodyRelease',
     'custodyDocument',
     'custodyEvent',
+    'custodyPaymentLink',
+    'custodyOnlinePayment',
+    'custodyOnlinePaymentSettings',
   ] as const;
 
   type Finder = { findMany: () => Promise<Array<{ organizationId: string }>> };
@@ -251,6 +274,52 @@ describe('RLS cross-org no-leak (custodia)', () => {
       tx.custodyContract.findUnique({ where: { id: ids.B.contract } }),
     );
     expect(contract).toBeNull();
+  });
+
+  it('no-leak: the public lookups only tell which organization owns a link or a reference', async () => {
+    const [linkA, attemptA] = await withOrgContext(
+      prisma,
+      orgA,
+      async (tx) =>
+        [
+          await tx.custodyPaymentLink.findFirstOrThrow(),
+          await tx.custodyOnlinePayment.findFirstOrThrow(),
+        ] as const,
+    );
+    const owner = async (sql: Prisma.Sql) =>
+      (await prisma.$queryRaw<{ id: string | null }[]>(sql))[0]?.id ?? null;
+    expect(await owner(Prisma.sql`SELECT custody_payment_link_owner(${linkA.token}) AS id`)).toBe(
+      orgA,
+    );
+    expect(
+      await owner(Prisma.sql`SELECT custody_online_payment_owner(${attemptA.collectionId}) AS id`),
+    ).toBe(orgA);
+    // Un valor desconocido o con otra forma no devuelve nada.
+    expect(
+      await owner(Prisma.sql`SELECT custody_payment_link_owner(${'z'.repeat(43)}) AS id`),
+    ).toBeNull();
+    expect(
+      await owner(Prisma.sql`SELECT custody_payment_link_owner(${"' OR 1=1 --"}) AS id`),
+    ).toBeNull();
+    expect(
+      await owner(Prisma.sql`SELECT custody_online_payment_owner(${'af-nope0000'}) AS id`),
+    ).toBeNull();
+    // Un enlace revocado deja de resolver.
+    await withOrgContext(prisma, orgA, (tx) =>
+      tx.custodyPaymentLink.update({ where: { id: linkA.id }, data: { revokedAt: new Date() } }),
+    );
+    expect(
+      await owner(Prisma.sql`SELECT custody_payment_link_owner(${linkA.token}) AS id`),
+    ).toBeNull();
+    // La base no deja encender el pago en línea sin la aceptación registrada.
+    await expect(
+      withOrgContext(prisma, orgA, (tx) =>
+        tx.custodyOnlinePaymentSettings.update({
+          where: { organizationId: orgA },
+          data: { enabled: true },
+        }),
+      ),
+    ).rejects.toThrow();
   });
 
   it('no-leak: the app role cannot delete custody rows nor rewrite what was issued', async () => {

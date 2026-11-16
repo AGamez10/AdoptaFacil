@@ -51,6 +51,9 @@ const APPEND_ONLY_TABLES = [
   'animal_behavior_disclosures',
   // Custodia y guardería: nada se borra (triggers rechazan DELETE) y lo emitido
   // es de solo inserción. Hijos antes que padres.
+  'custody_online_payments',
+  'custody_payment_links',
+  'custody_online_payment_settings',
   'custody_events',
   'custody_documents',
   'custody_payments',
