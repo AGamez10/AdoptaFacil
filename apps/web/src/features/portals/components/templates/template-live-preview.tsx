@@ -29,9 +29,7 @@ import catalogStyles from '../../styles/public-catalog.module.scss';
 import portalStyles from '../../styles/public-portal.module.scss';
 import templateStyles from './portal-templates.module.scss';
 import styles from './template-live-preview.module.scss';
-
-const PORTAL_BASE_DOMAIN =
-  (import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined) || 'adoptafacil.org';
+import { portalAddress } from '../../model/subdomain';
 
 type Device = 'desktop' | 'mobile';
 const DEVICE_WIDTH: Record<Device, number> = { desktop: 1280, mobile: 390 };
@@ -149,7 +147,7 @@ export function TemplateLivePreview({
       <div className={styles.toolbar}>
         <span className={styles.url}>
           <span className={styles.dot} />
-          {previewSlug}.{PORTAL_BASE_DOMAIN}
+          {portalAddress(previewSlug)}
         </span>
         <div className={styles.devices} role="group" aria-label="Tamaño de la vista previa">
           {(['desktop', 'mobile'] as const).map((value) => (
