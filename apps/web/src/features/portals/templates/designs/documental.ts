@@ -49,6 +49,12 @@ const CSS = `
 .tpl-documental .dc-v.on{opacity:1}
 .tpl-documental .dc-v,.tpl-documental .dc-media > .portrait{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(calc(1.06 - var(--q) * .06));transform-origin:50% 40%}
 .tpl-documental .dc-scrim{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 26%,rgba(0,0,0,0) 46%,rgba(0,0,0,.72) 100%),radial-gradient(120% 90% at 50% 40%,transparent 50%,rgba(0,0,0,.45))}
+/* Con video: velo que separa el título del video (que puede traer sus propios textos);
+   se aclara al bajar, cuando el título ya se fue. */
+.tpl-documental .dc-veil{position:absolute;inset:0;pointer-events:none;opacity:var(--c);background:linear-gradient(90deg,rgba(0,0,0,.9) 0%,rgba(0,0,0,.78) 38%,rgba(0,0,0,.3) 66%,transparent 85%),linear-gradient(0deg,rgba(0,0,0,.6) 0%,transparent 40%)}
+@media (max-width:820px){.tpl-documental .dc-veil{background:linear-gradient(180deg,transparent 0%,transparent 22%,rgba(0,0,0,.72) 42%,rgba(0,0,0,.9) 62%,rgba(0,0,0,.94) 100%)}}
+/* Sin el botón de reproducir del navegador encima (ahorro de batería): está el nuestro. */
+.tpl-documental .dc-v::-webkit-media-controls,.tpl-documental .dc-v::-webkit-media-controls-overlay-play-button,.tpl-documental .dc-v::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none}
 @media (max-width:620px){.tpl-documental .dc-scrim{background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.1) 24%,rgba(0,0,0,.55) 48%,rgba(0,0,0,.82) 100%)}}
 .tpl-documental .dc-grain{position:absolute;inset:0;opacity:.22;mix-blend-mode:overlay;pointer-events:none;background-size:180px 180px}
 .tpl-documental[data-mode=light] .dc-grain{display:none}
@@ -327,7 +333,7 @@ export const documental = premiumDesign({
         ? `<div class="dc-hud" aria-hidden="true"><b></b><span data-dc-tc>${m.VIDEO ? `${m.VIDEOS.length > 1 ? 'Rollo 1/2 · ' : ''}00:00:00:00` : 'En rodaje'}</span></div>`
         : `<div class="dc-hud" aria-hidden="true"><b></b><span>Cuaderno de campo${ORG.city ? ` · ${ORG.city}` : ''}</span></div>`;
     const ctrl = `<div class="dc-ctrl"><button type="button" data-dc-play aria-pressed="false">${PAUSE}<span>Pausar</span></button>${m.VIDEO ? `<button type="button" data-dc-sound aria-pressed="false">${MUTED}<span>Activar sonido</span></button>` : ''}</div>`;
-    const stage = `<div class="dc-film" id="dc-film"><section class="dc-stage" aria-labelledby="dc-h1">${top}<div class="dc-media">${media(m)}<div class="dc-scrim"></div>${mode === 'dark' ? '<div class="dc-grain" aria-hidden="true"></div>' : ''}</div><div class="dc-bars" aria-hidden="true"><i></i><i></i></div>${hud}
+    const stage = `<div class="dc-film" id="dc-film"><section class="dc-stage" aria-labelledby="dc-h1">${top}<div class="dc-media">${media(m)}<div class="dc-scrim"></div>${m.VIDEOS.length ? '<div class="dc-veil"></div>' : ''}${mode === 'dark' ? '<div class="dc-grain" aria-hidden="true"></div>' : ''}</div><div class="dc-bars" aria-hidden="true"><i></i><i></i></div>${hud}
       <div class="w dc-copy"><p class="dc-pre">${mode === 'dark' ? 'Un documental de' : 'Una película de campo de'} ${ORG.short}</p><h1 id="dc-h1" class="dc-h1">${titleLines(ORG.name)}</h1><p class="dc-lede">${lede}</p>
       <div class="dc-cta"><a class="k-btn" href="#dc-cat" data-magnet>${n ? 'Conoce a quién espera' : 'Conoce el refugio'} ${pic.arrow}</a><a class="dc-ghost" href="${ORG.donateHref}">${pic.heart}${COPY.helpCta}</a></div></div>
       ${ctrl}<a class="dc-cue" href="#dc-cat"><span>Desliza</span><i></i></a></section>${chapters(m)}</div>`;
@@ -403,6 +409,16 @@ function initStage(app: HTMLElement, fx: Fx, mode: 'light' | 'dark') {
     setPaused(true);
   }
   play?.addEventListener('click', () => setPaused(!paused), { signal });
+  // Si el navegador no deja arrancar el video solo (ahorro de batería), el botón
+  // pasa a "Reproducir" en vez de prometer un video que no se mueve.
+  const first = videos[0];
+  if (first && !paused) {
+    const check = window.setTimeout(() => {
+      if (!paused && first.paused && cur === 0) setPaused(true);
+    }, 2500);
+    signal.addEventListener('abort', () => window.clearTimeout(check));
+    first.addEventListener('playing', () => window.clearTimeout(check), { once: true, signal });
+  }
   sound?.addEventListener(
     'click',
     () => {
