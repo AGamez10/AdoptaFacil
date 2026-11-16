@@ -66,6 +66,9 @@ export function PortalContactInfoSection({ contact, location }: PortalContactInf
             src={embedUrl}
             loading="lazy"
             allowFullScreen
+            // Same sandbox as the template portals: the map runs, but can never
+            // navigate the portal page itself (security remediation).
+            sandbox="allow-scripts allow-same-origin allow-popups"
             referrerPolicy="no-referrer-when-downgrade"
             className="h-64 w-full rounded-md border border-border"
             data-testid="portal-contact-map"

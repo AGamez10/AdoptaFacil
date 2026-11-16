@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
+import { MAX_OPEN_OFFERS_PER_DONOR_PER_DAY } from '../src/modules/resources/resource-open-offers.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
@@ -295,6 +296,25 @@ describe('Open offers (M09) + public shareable community (M11)', () => {
       await openOffer(capped.token, { title: `Cosa ${i}` }).expect(201);
     }
     await openOffer(capped.token, { title: 'Una más' }).expect(409);
+  });
+
+  // Security remediation `resources/open-offers:cap-bypass-department-notification-fanout`:
+  // withdrawing frees an "open" slot, but not the 24 h quota — a create →
+  // withdraw loop stops after MAX_OPEN_OFFERS_PER_DONOR_PER_DAY announcements.
+  it('a create → withdraw loop stops at the 24 h quota (withdrawn offers count)', async () => {
+    const looper = await registerPerson('oo-loop');
+    for (let i = 0; i < MAX_OPEN_OFFERS_PER_DONOR_PER_DAY; i += 1) {
+      const created = await openOffer(looper.token, { title: `Vuelta ${i}` }).expect(201);
+      await request(server)
+        .patch(`/resources/open-offers/${created.body.id}/withdraw`)
+        .set('Authorization', `Bearer ${looper.token}`)
+        .expect(200);
+    }
+    const blocked = await openOffer(looper.token, { title: 'Una más' }).expect(409);
+    expect(blocked.body.message).toMatch(/24 horas/);
+    expect(await admin.resourceOpenOffer.count({ where: { donorUserId: looper.userId } })).toBe(
+      MAX_OPEN_OFFERS_PER_DONOR_PER_DAY,
+    );
   });
 
   // ------------------------------------------------------------------ comunidad

@@ -8,7 +8,10 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import sharp from 'sharp';
+import { Role } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
+import { PasswordService } from '../src/core/auth/password.service';
+import { TokenService } from '../src/core/auth/token.service';
 import type { Env } from '../src/config/env.validation';
 import { DiskStorageAdapter } from '../src/core/storage/disk-storage.adapter';
 import { STORAGE_PORT } from '../src/core/storage/storage.port';
@@ -304,5 +307,95 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
 
     // A video never goes into a private (legal document) key.
     await upload(ownerA.token, docKey, videoBytes, 'x.mp4', 'video/mp4').expect(400);
+  });
+  /**
+   * Security remediation `storage-upload-public-key-overwrite-no-rbac` and
+   * `tenant-membership-not-revalidated:jwt-org-from-auth-credential`: no role
+   * may replace the bytes behind a published key (evidence, logo, photo), a
+   * ReadOnlyAuditor writes nothing and a removed member (no role left, access
+   * token still alive) is refused.
+   */
+  describe('write-once keys and the uploader role (security remediation)', () => {
+    async function memberOf(orgId: string, role: Role): Promise<Actor> {
+      const userId = randomUUID();
+      const email = `t108-member-${randomUUID()}@test.local`;
+      await admin.user.create({
+        data: {
+          id: userId,
+          organizationId: orgId,
+          accountType: 'organization',
+          email,
+          displayName: role,
+        },
+      });
+      await admin.authCredential.create({
+        data: {
+          userId,
+          organizationId: orgId,
+          accountType: 'organization',
+          email,
+          passwordHash: await new PasswordService().hash(password),
+        },
+      });
+      await admin.userRole.create({ data: { organizationId: orgId, userId, role } });
+      const tokens = await app
+        .get(TokenService)
+        .issueTokens({ userId, organizationId: orgId, accountType: 'organization', email });
+      return { token: tokens.accessToken, userId, orgId };
+    }
+
+    const publicKey = (orgId: string, name: string) => `public/${orgId}/${randomUUID()}-${name}`;
+    const otherPhoto = () =>
+      sharp({ create: { width: 32, height: 32, channels: 3, background: { r: 0, g: 0, b: 255 } } })
+        .png()
+        .toBuffer();
+    const servedWidth = async (key: string): Promise<number | undefined> => {
+      const res = await request(server)
+        .get(`/storage/public?key=${encodeURIComponent(key)}`)
+        .buffer()
+        .parse(binaryParser)
+        .expect(200);
+      return (await sharp(res.body as Buffer).metadata()).width;
+    };
+
+    it('never replaces a published public file, whoever asks (409, bytes unchanged)', async () => {
+      const key = publicKey(ownerA.orgId, 'evidencia.png');
+      await upload(ownerA.token, key, photoBytes, 'evidencia.png', 'image/png').expect(200);
+      const volunteer = await memberOf(ownerA.orgId, Role.Volunteer);
+      const swap = await otherPhoto();
+      await upload(volunteer.token, key, swap, 'evidencia.png', 'image/png').expect(409);
+      await upload(ownerA.token, key, swap, 'evidencia.png', 'image/png').expect(409);
+      expect(await servedWidth(key)).toBe(64);
+    });
+
+    it('still lets operational roles upload a NEW key', async () => {
+      for (const role of [Role.Volunteer, Role.Operator, Role.TemporaryCollaborator]) {
+        const member = await memberOf(ownerA.orgId, role);
+        const key = publicKey(ownerA.orgId, `foto-${role}.png`);
+        await upload(member.token, key, photoBytes, 'foto.png', 'image/png').expect(200);
+      }
+    });
+
+    it('refuses a ReadOnlyAuditor (403), nothing stored', async () => {
+      const auditor = await memberOf(ownerA.orgId, Role.ReadOnlyAuditor);
+      const key = publicKey(ownerA.orgId, 'auditor.png');
+      await upload(auditor.token, key, photoBytes, 'auditor.png', 'image/png').expect(403);
+      await request(server)
+        .get(`/storage/public?key=${encodeURIComponent(key)}`)
+        .expect(404);
+    });
+
+    it('refuses a removed member whose access token is still valid (403)', async () => {
+      const operator = await memberOf(ownerA.orgId, Role.Operator);
+      await request(server)
+        .delete(`/org/members/${operator.userId}`)
+        .set('Authorization', `Bearer ${ownerA.token}`)
+        .expect(204);
+      const key = publicKey(ownerA.orgId, 'exmiembro.png');
+      await upload(operator.token, key, photoBytes, 'x.png', 'image/png').expect(403);
+      await request(server)
+        .get(`/storage/public?key=${encodeURIComponent(key)}`)
+        .expect(404);
+    });
   });
 });

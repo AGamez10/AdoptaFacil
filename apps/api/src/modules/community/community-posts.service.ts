@@ -18,6 +18,7 @@ import {
   type PostReactionCounts,
   PostType,
   type PostsPage,
+  Role,
   type UpdatePostInput,
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -38,6 +39,22 @@ const DEFAULT_PAGE = 20;
 // Emails only go into the delivery queue here (the worker sends them at the
 // provider's pace), so this cap guards memory, not SMTP throughput.
 const MAX_CAMPAIGN_NOTIFY_RECIPIENTS = 5_000;
+
+/**
+ * Security remediation `community-campaign-post-donor-broadcast-no-role-check`:
+ * a `campaign` post e-mails the organization's donors under its name, so only
+ * the roles that speak for the organization publish one. Operator stays out
+ * until the client decides otherwise. TODO(client): ¿Operator también?
+ */
+export const CAMPAIGN_POST_ORG_ROLES: readonly string[] = [Role.Owner, Role.Administrator];
+
+/**
+ * At most this many donor broadcasts per organization in a rolling 24 h. A
+ * campaign post beyond it is still published on the wall, without e-mailing
+ * the donors again. TODO(client): ajustar el tope.
+ */
+export const MAX_CAMPAIGN_BROADCASTS_PER_DAY = 3;
+const BROADCAST_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Recipients enqueued in parallel per round trip batch.
 const NOTIFY_ENQUEUE_BATCH = 100;
 
@@ -239,6 +256,34 @@ export class CommunityPostsService {
     const reserved = await this.reserveMedia(organizationId, input.images ?? []);
 
     const created = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      // An organization account posts only while it is a member (a removed
+      // person keeps the credential, never the role), and only the roles that
+      // speak for the organization may e-mail its donors (deny-by-default).
+      const held = (await tx.userRole.findMany({ where: { userId: actor.id } })).map(
+        (r) => r.role as string,
+      );
+      if (held.length === 0) {
+        throw new ForbiddenException('Ya no haces parte de esta organización.');
+      }
+      if (
+        input.type === PostType.Campaign &&
+        !held.some((role) => CAMPAIGN_POST_ORG_ROLES.includes(role))
+      ) {
+        throw new ForbiddenException(
+          'Solo el propietario o un administrador publican campañas que se envían a los donantes.',
+        );
+      }
+      const broadcastsToday =
+        input.type === PostType.Campaign
+          ? await tx.post.count({
+              where: {
+                organizationId,
+                type: PostType.Campaign,
+                createdAt: { gt: new Date(Date.now() - BROADCAST_WINDOW_MS) },
+              },
+            })
+          : 0;
+
       const row = await tx.post.create({
         data: {
           organizationId,
@@ -264,7 +309,7 @@ export class CommunityPostsService {
         include: { images: true },
       });
 
-      if (input.type === PostType.Campaign) {
+      if (input.type === PostType.Campaign && broadcastsToday < MAX_CAMPAIGN_BROADCASTS_PER_DAY) {
         const donations = await tx.donation.findMany({
           where: { organizationId, status: 'approved', reversal: null },
           select: { payer: true, donorUserId: true },

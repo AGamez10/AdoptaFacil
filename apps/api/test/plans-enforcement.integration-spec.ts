@@ -261,7 +261,8 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
 
   it('uploads respect the storage quota of the plan', async () => {
     const storage = app.get<StoragePort>(STORAGE_PORT);
-    const key = `public/${owner.orgId}/${randomUUID()}-foto.jpg`;
+    // Each reservation is a new key (keys are write-once, security remediation).
+    const newKey = () => `public/${owner.orgId}/${randomUUID()}-foto.jpg`;
     // Las fotos se recomprimen a WebP, así que la prueba usa un JPEG real.
     const photo = await sharp({
       create: { width: 64, height: 48, channels: 3, background: { r: 30, g: 120, b: 90 } },
@@ -271,7 +272,7 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     const upload = () =>
       request(server)
         .put('/storage/upload')
-        .query({ key })
+        .query({ key: newKey() })
         .set(auth(owner.token))
         .attach('file', photo, {
           filename: 'foto.jpg',

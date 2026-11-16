@@ -8,15 +8,44 @@
  * instead of risking another blocked iframe.
  */
 
-const GOOGLE_MAPS_HOSTS = /(^|\.)google\.[a-z.]+$/i;
-const MAPS_GOOGLE_HOSTS = /(^|\.)maps\.google\.[a-z.]+$/i;
+/**
+ * Security remediation `web/portals/google-maps-embed-host-suffix-bypass`: the
+ * old end-anchored regexes accepted `maps.google.<attacker-domain>` (e.g.
+ * `maps.google.evil.com`). Now the host must be one of Google's own Maps
+ * domains, EXACTLY, and the iframe URL is always rebuilt on a fixed Google
+ * host (never the raw input), so a lookalike can never reach the iframe.
+ * TLDs: the global one plus Colombia and the usual neighbours of whoever
+ * copies the link (a Maps link copied abroad keeps its local domain).
+ */
+const GOOGLE_TLDS = [
+  'com',
+  'com.co',
+  'co',
+  'com.mx',
+  'com.ar',
+  'cl',
+  'com.pe',
+  'com.ec',
+  'com.ve',
+  'com.br',
+  'es',
+  'co.uk',
+  'us',
+] as const;
+const GOOGLE_MAPS_EXACT_HOSTS: ReadonlySet<string> = new Set(
+  GOOGLE_TLDS.flatMap((tld) => [`google.${tld}`, `www.google.${tld}`, `maps.google.${tld}`]),
+);
 
-/** Is this a google.com/maps or maps.google.com URL at all? */
+/** Is this a google.com/maps or maps.google.com URL at all (https/http, a
+ *  Google Maps host exactly, no credentials, default port)? */
 export function isGoogleMapsUrl(raw: string): boolean {
   try {
     const url = new URL(raw);
-    if (MAPS_GOOGLE_HOSTS.test(url.hostname)) return true;
-    return GOOGLE_MAPS_HOSTS.test(url.hostname) && url.pathname.startsWith('/maps');
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+    if (url.username || url.password || url.port) return false;
+    const host = url.hostname.toLowerCase();
+    if (!GOOGLE_MAPS_EXACT_HOSTS.has(host)) return false;
+    return host.startsWith('maps.') || url.pathname.startsWith('/maps');
   } catch {
     return false;
   }
@@ -37,7 +66,8 @@ function coordsFromPath(pathname: string): string | null {
 /**
  * Convert a Google Maps URL to an embeddable one, or `null` when it can't be
  * done with confidence (caller should show a link instead of an iframe).
- * - Already an embed URL (`/maps/embed` or `?output=embed`) → returned as-is.
+ * - Already an embed URL (`/maps/embed` or `?output=embed`) → same query,
+ *   rebuilt on a fixed Google host (never the raw input).
  * - A `?q=...` or a `/maps/place/<name>/...` URL → rebuilt as
  *   `https://maps.google.com/maps?q=<query>&output=embed`.
  * - A bare `/maps/@lat,lng,zoom` (no name/query) → rebuilt from the EXACT
@@ -61,8 +91,14 @@ export function toGoogleMapsEmbedUrl(raw: string): string | null {
   }
   if (!isGoogleMapsUrl(raw)) return null;
 
-  if (url.pathname.includes('/maps/embed') || url.searchParams.get('output') === 'embed') {
-    return raw;
+  // Already embeddable: rebuilt on a FIXED Google host with the same query —
+  // never the caller's raw URL (host, path tricks, credentials, fragment).
+  if (url.pathname.startsWith('/maps/embed')) {
+    const path = url.pathname.startsWith('/maps/embed/v1/') ? url.pathname : '/maps/embed';
+    return `https://www.google.com${path}${url.search}`;
+  }
+  if (url.searchParams.get('output') === 'embed') {
+    return `https://maps.google.com/maps${url.search}`;
   }
 
   const query =

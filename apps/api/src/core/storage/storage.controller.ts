@@ -46,6 +46,21 @@ import { setServeHeaders } from './serve-headers';
  */
 const MULTIPART_HARD_LIMIT_BYTES = 100 * 1024 * 1024;
 
+/**
+ * Org roles that may write bytes through `PUT /storage/upload`. Every org role
+ * that creates information somewhere in the product; ReadOnlyAuditor does not
+ * (packages/contracts/src/invitation-roles.ts). Which key a role may reserve is
+ * still decided by each module's role-checked reservation endpoint.
+ */
+const UPLOAD_ORG_ROLES: ReadonlySet<string> = new Set<string>([
+  Role.Owner,
+  Role.Administrator,
+  Role.Operator,
+  Role.Veterinarian,
+  Role.Volunteer,
+  Role.TemporaryCollaborator,
+]);
+
 /** Minimal shape of a multer memory-storage file (no @types/multer installed). */
 interface UploadedFileLike {
   buffer: Buffer;
@@ -58,8 +73,9 @@ interface UploadedFileLike {
  * Serves file bytes THROUGH the API (T-108) so access control runs before any
  * byte leaves the server — files live outside the webroot with unguessable keys.
  *
- *   PUT  /storage/upload?key=…   → JWT; upload only to your OWN org's key; size +
- *                                  type validated; audited.
+ *   PUT  /storage/upload?key=…   → JWT; upload only to your OWN org's key, with an
+ *                                  active org role (organization accounts); each
+ *                                  key written once; size + type validated; audited.
  *   GET  /storage/public?key=…   → open (animal photos, org logos).
  *   GET  /storage/private?key=…  → JWT; only the OWNING org's Owner or a Platform
  *                                  admin; every download audited (UTC).
@@ -109,6 +125,17 @@ export class StorageController {
     if (user.organizationId !== parsed.organizationId) {
       throw new ForbiddenException('Cannot upload to another organization');
     }
+    // Security remediation (`storage-upload-public-key-overwrite-no-rbac`,
+    // `tenant-membership-not-revalidated`): an ORGANIZATION account writes bytes
+    // only while it holds an org role that may create information. A removed
+    // member (no role left) and a ReadOnlyAuditor get 403. Person accounts own
+    // their personal organization without a role, so they are not checked here.
+    if (user.accountType === 'organization') {
+      const held = await this.rolesOf(user.id);
+      if (![...held].some((role) => UPLOAD_ORG_ROLES.has(role))) {
+        throw new ForbiddenException('Tu cargo no permite subir archivos a esta organización.');
+      }
+    }
     if (!file || !file.buffer) {
       throw new BadRequestException('A file is required (multipart field "file")');
     }
@@ -134,6 +161,15 @@ export class StorageController {
     if (!realType || !(isMediaVideo || isAllowedUpload(realType, parsed.visibility))) {
       throw new BadRequestException(
         'El archivo no es un PDF ni una imagen válida (JPG, PNG, WebP o GIF). Revisa que no esté dañado y vuelve a intentarlo.',
+      );
+    }
+    // Every key is written ONCE, public or private: a published file (campaign
+    // accountability evidence, logo, animal photo) never changes behind the
+    // same URL — the CDN even caches it as `immutable`. A correction is a new
+    // reservation, i.e. a new key. Checked before any transcoding work.
+    if (await this.storage.readObject(key)) {
+      throw new ConflictException(
+        'Este archivo ya se subió y no se puede reemplazar. Sube una versión nueva.',
       );
     }
     // Video de una publicación de la comunidad o de la portada del portal: se
@@ -192,14 +228,6 @@ export class StorageController {
     }
     if (realType.startsWith('video/') && file.size > this.maxBytes) {
       throw new PayloadTooLargeException(`File exceeds the ${this.maxMb} MB limit`);
-    }
-
-    // Un documento privado (legal o clínico) se escribe UNA sola vez: nadie
-    // cambia el archivo que el equipo ya revisó. Una corrección es otra versión.
-    if (parsed.visibility === 'private' && (await this.storage.readObject(key))) {
-      throw new ConflictException(
-        'Este archivo ya se subió y no se puede reemplazar. Sube una versión nueva.',
-      );
     }
 
     // Las fotos se recomprimen a WebP antes de guardar; el original ya pasó el límite.

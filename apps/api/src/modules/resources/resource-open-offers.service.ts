@@ -29,6 +29,15 @@ import { clampLimit } from './resource-needs.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Security remediation `resources/open-offers:cap-bypass-department-notification-fanout`:
+ * the "5 open at once" cap alone let a create → withdraw loop announce an
+ * unlimited number of offers to every organization of a department. This
+ * rolling quota counts EVERY offer the donor created in the last 24 h,
+ * withdrawn and expired ones included. TODO(client): ajustar el tope.
+ */
+export const MAX_OPEN_OFFERS_PER_DONOR_PER_DAY = 10;
+
 /** Raw board item emitted by `resource_open_offers_board`. */
 interface RawBoardItem {
   id: string;
@@ -139,6 +148,14 @@ export class ResourceOpenOffersService {
       if (openCount >= MAX_OPEN_OFFERS_PER_DONOR) {
         throw new ConflictException(
           `Ya tienes ${MAX_OPEN_OFFERS_PER_DONOR} ofrecimientos abiertos. Retira alguno antes de dejar otro.`,
+        );
+      }
+      const createdToday = await tx.resourceOpenOffer.count({
+        where: { donorUserId: actor.id, createdAt: { gt: new Date(Date.now() - DAY_MS) } },
+      });
+      if (createdToday >= MAX_OPEN_OFFERS_PER_DONOR_PER_DAY) {
+        throw new ConflictException(
+          `Ya dejaste ${MAX_OPEN_OFFERS_PER_DONOR_PER_DAY} ofrecimientos en las últimas 24 horas. Intenta de nuevo mañana.`,
         );
       }
       const created = await tx.resourceOpenOffer.create({
