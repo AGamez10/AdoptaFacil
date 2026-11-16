@@ -237,6 +237,18 @@ describe('Animals bulk import (S2-04B-1, RF07)', () => {
     expect(res.body.message).toMatch(/500/);
   });
 
+  // Run-2 S-05: a few-KB .xlsx that expands to tens of MB is refused before
+  // ExcelJS loads it (it used to exhaust the API's memory).
+  it('rejects a compressed "bomb" workbook (400) and creates nothing', async () => {
+    const huge = 'a'.repeat(21 * 1024 * 1024);
+    const buffer = await buildXlsx([[huge, 'Perro', '', '', '', '', '', '']]);
+    expect(buffer.length).toBeLessThan(1024 * 1024);
+    const before = await admin.animal.count({ where: { organizationId: owner.orgId } });
+    const res = await uploadXlsx(owner.token, buffer).expect(400);
+    expect(res.body.message).toMatch(/demasiado grande/);
+    expect(await admin.animal.count({ where: { organizationId: owner.orgId } })).toBe(before);
+  });
+
   it('import RBAC: Owner ✓, Operator ✓, Veterinarian ✗, Volunteer ✗, ReadOnlyAuditor ✗, Person ✗', async () => {
     const buffer = await buildXlsx([['Bobby', 'Perro', '', '', '', '', '', '']]);
     await uploadXlsx(owner.token, buffer).expect(201);

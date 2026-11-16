@@ -109,7 +109,25 @@ function dateAfter(text: string, label: RegExp): Date | null {
 }
 
 /** NIT + DV leídos del texto: primero "NIT 900.123.456-7", luego dígitos sueltos. */
-export function extractNit(text: string): { base: string; dv: string } | null {
+/**
+ * Auditoría run-2 S-06: las expresiones de abajo tienen cuantificadores de
+ * espacio adyacentes (`\s*` junto a `[\d.\s]`) y retroceden de forma
+ * super-lineal sobre tiras largas de espacios (2.000 espacios ≈ 14 s). Se
+ * acota el texto y se colapsan las tiras de espacios ANTES de buscar: el NIT
+ * aparece en la primera página de un RUT o de un certificado, y ningún NIT
+ * válido depende de más de un espacio seguido.
+ */
+export const NIT_SEARCH_MAX_CHARS = 100_000;
+
+export function normalizeForNitSearch(text: string): string {
+  return text
+    .slice(0, NIT_SEARCH_MAX_CHARS)
+    .replace(/[ \t\f\v\r\u00a0]+/g, ' ')
+    .replace(/ ?\n[\s]*/g, '\n');
+}
+
+export function extractNit(raw: string): { base: string; dv: string } | null {
+  const text = normalizeForNitSearch(raw);
   const labeled = text.match(/N\.?\s*I\.?\s*T\.?\s*[:.]?\s*([\d.\s]{6,20})\s*-\s*(\d)\b/i);
   if (labeled) return { base: onlyDigits(labeled[1]), dv: labeled[2] };
   const plain = text.match(/\b(\d{3}\.?\d{3}\.?\d{3})\s*-\s*(\d)\b/);

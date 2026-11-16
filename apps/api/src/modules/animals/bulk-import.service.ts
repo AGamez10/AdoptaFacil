@@ -1,4 +1,5 @@
 import * as ExcelJS from 'exceljs';
+import { assertXlsxExpandsWithin, XlsxTooLargeError } from './xlsx-guard';
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import type {
   AnimalBreed,
@@ -123,6 +124,20 @@ export class BulkImportService {
    *  FILE (unreadable, wrong shape, over the row cap). */
   async importFile(actorUserId: string, buffer: Buffer): Promise<BulkImportResultDto> {
     const organizationId = this.requireOrgId();
+
+    try {
+      assertXlsxExpandsWithin(buffer);
+    } catch (error) {
+      if (error instanceof XlsxTooLargeError) {
+        throw new BadRequestException(
+          'El archivo es demasiado grande una vez descomprimido. Usa la plantilla y máximo ' +
+            `${BULK_IMPORT_MAX_ROWS} filas.`,
+        );
+      }
+      throw new BadRequestException(
+        'Archivo no válido. Sube un archivo .xlsx generado con la plantilla.',
+      );
+    }
 
     const workbook = new ExcelJS.Workbook();
     try {
