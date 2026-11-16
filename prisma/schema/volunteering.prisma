@@ -21,31 +21,31 @@
 /// at signup (a later edit here never reclassifies an existing enrollment).
 /// Tenant-scoped (organization_id + RLS ENABLE+FORCE + tenant_isolation).
 model VolunteerOpportunity {
-  id                       String   @id @default(uuid()) @db.Uuid
-  organizationId           String   @map("organization_id") @db.Uuid
-  title                    String
-  description              String?
-  category                 String
-  startDate                DateTime @map("start_date")
-  endDate                  DateTime @map("end_date")
+  id                      String     @id @default(uuid()) @db.Uuid
+  organizationId          String     @map("organization_id") @db.Uuid
+  title                   String
+  description             String?
+  category                String
+  startDate               DateTime   @map("start_date")
+  endDate                 DateTime   @map("end_date")
   /// Cupo — max enrollments. NULL = no cap.
-  capacity                 Int?
-  location                 String
-  requirements             String?
-  appliesToStudentService  Boolean  @default(false) @map("applies_to_student_service")
-  status                   String   @default("active")
+  capacity                Int?
+  location                String
+  requirements            String?
+  appliesToStudentService Boolean    @default(false) @map("applies_to_student_service")
+  status                  String     @default("active")
   /// Días de jornada que la organización habilita para registrar horas
   /// (dentro de start_date–end_date). Vacío = cualquier día de la convocatoria
   /// (convocatorias publicadas antes de esta regla). `create_service_hours`
   /// lo aplica en la base de datos.
-  sessionDates             DateTime[] @default([]) @map("session_dates") @db.Date
+  sessionDates            DateTime[] @default([]) @map("session_dates") @db.Date
   /// Jornada cancelada por la organización (status `cancelled`): nunca se
   /// borra; sus inscripciones abiertas pasan a `cancelled` y se avisa a cada
   /// persona con este motivo.
-  cancelledAt              DateTime? @map("cancelled_at")
-  cancellationReason       String?   @map("cancellation_reason")
-  createdAt                DateTime @default(now()) @map("created_at")
-  updatedAt                DateTime @updatedAt @map("updated_at")
+  cancelledAt             DateTime?  @map("cancelled_at")
+  cancellationReason      String?    @map("cancellation_reason")
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
 
   enrollments VolunteerEnrollment[]
 
@@ -170,30 +170,30 @@ model ServiceHoursPhoto {
 /// (`@@unique`) — issuing again is not a flow this spec defines (TODO(client)
 /// if a re-issuance/correction need ever materializes).
 model VolunteerCertificate {
-  id                      String   @id @default(uuid()) @db.Uuid
-  organizationId          String   @map("organization_id") @db.Uuid
-  enrollmentId            String   @unique @map("enrollment_id") @db.Uuid
-  volunteerUserId         String   @map("volunteer_user_id") @db.Uuid
-  volunteerName           String   @map("volunteer_name")
-  organizationName        String   @map("organization_name")
-  opportunityTitle        String   @map("opportunity_title")
-  totalApprovedHours      Float    @map("total_approved_hours")
-  periodStart             DateTime @map("period_start")
-  periodEnd               DateTime @map("period_end")
-  appliesToStudentService Boolean  @map("applies_to_student_service")
-  issuedByUserId          String   @map("issued_by_user_id") @db.Uuid
-  issuedAt                DateTime @default(now()) @map("issued_at")
+  id                          String   @id @default(uuid()) @db.Uuid
+  organizationId              String   @map("organization_id") @db.Uuid
+  enrollmentId                String   @unique @map("enrollment_id") @db.Uuid
+  volunteerUserId             String   @map("volunteer_user_id") @db.Uuid
+  volunteerName               String   @map("volunteer_name")
+  organizationName            String   @map("organization_name")
+  opportunityTitle            String   @map("opportunity_title")
+  totalApprovedHours          Float    @map("total_approved_hours")
+  periodStart                 DateTime @map("period_start")
+  periodEnd                   DateTime @map("period_end")
+  appliesToStudentService     Boolean  @map("applies_to_student_service")
+  issuedByUserId              String   @map("issued_by_user_id") @db.Uuid
+  issuedAt                    DateTime @default(now()) @map("issued_at")
   /// S-12 (FSD v3.5 Doc 8) — snapshotted from the enrollment at issuance time,
   /// same rationale as `volunteerName`/`organizationName` above. Present only
   /// for a minor's student-service enrollment.
-  guardianName            String?  @map("guardian_name")
-  guardianDocument        String?  @map("guardian_document")
-  schoolName              String?  @map("school_name")
-  schoolAgreementCode     String?  @map("school_agreement_code")
+  guardianName                String?  @map("guardian_name")
+  guardianDocument            String?  @map("guardian_document")
+  schoolName                  String?  @map("school_name")
+  schoolAgreementCode         String?  @map("school_agreement_code")
   /// Day-by-day log of every APPROVED `ServiceHours` session, derived (not
   /// duplicated capture) and snapshotted at issuance — see
   /// `VolunteerCertificateBitacoraEntry` in the contract.
-  bitacora                Json     @default("[]")
+  bitacora                    Json     @default("[]")
   /// P0-2: quien firmó por la organización AL EMITIR (congelado). Un cambio
   /// posterior de representante nunca altera un certificado ya emitido.
   /// Nulos solo en certificados anteriores a este control. true en

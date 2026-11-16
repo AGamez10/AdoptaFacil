@@ -127,16 +127,16 @@ model SponsorshipPayment {
 /// checkout URL today (TODO(client) — see the S-5-REDISEÑO closing report) —
 /// populated only once/if that contract gains one additively.
 model SponsorshipPaymentAttempt {
-  id                   String    @id @default(uuid()) @db.Uuid
-  organizationId       String    @map("organization_id") @db.Uuid
-  sponsorshipPaymentId String    @map("sponsorship_payment_id") @db.Uuid
-  attemptNumber        Int       @map("attempt_number")
-  collectionId         String    @map("collection_id")
-  paymentLinkUrl       String?   @map("payment_link_url")
-  idempotencyKey       String    @unique @map("idempotency_key")
-  expiresAt            DateTime  @map("expires_at")
-  result               String    @default("pending")
-  createdAt            DateTime  @default(now()) @map("created_at")
+  id                   String   @id @default(uuid()) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  sponsorshipPaymentId String   @map("sponsorship_payment_id") @db.Uuid
+  attemptNumber        Int      @map("attempt_number")
+  collectionId         String   @map("collection_id")
+  paymentLinkUrl       String?  @map("payment_link_url")
+  idempotencyKey       String   @unique @map("idempotency_key")
+  expiresAt            DateTime @map("expires_at")
+  result               String   @default("pending")
+  createdAt            DateTime @default(now()) @map("created_at")
 
   payment SponsorshipPayment @relation(fields: [sponsorshipPaymentId], references: [id], onDelete: Cascade)
 

@@ -92,3 +92,42 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+/*
+ * Avisos push (VAPID). Muestra el mismo aviso de la bandeja y, al tocarlo, abre
+ * la ruta interna que trae el aviso. No cachea nada ni guarda datos.
+ */
+self.addEventListener('push', (event) => {
+  let data = { title: 'AdoptaFácil', body: '', href: '/', tag: undefined };
+  try {
+    data = { ...data, ...event.data.json() };
+  } catch {
+    // Mensaje vacío o no JSON: se muestra el aviso genérico.
+  }
+  const href = typeof data.href === 'string' && data.href.startsWith('/') ? data.href : '/';
+  event.waitUntil(
+    self.registration.showNotification(String(data.title).slice(0, 200), {
+      body: String(data.body || '').slice(0, 300),
+      tag: data.tag ? String(data.tag).slice(0, 80) : undefined,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { href },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const href = (event.notification.data && event.notification.data.href) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.navigate(href).catch(() => {});
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(href);
+    }),
+  );
+});

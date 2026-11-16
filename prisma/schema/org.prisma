@@ -21,68 +21,69 @@ model Organization {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  members                  OrgMember[]
-  users                    User[]
-  roleAssignments          UserRole[]
-  auditLogs                AuditLog[]
-  legalAcceptances         LegalAcceptance[]
-  profile                  OrganizationProfile?
-  formalizationTransitions FormalizationTransition[]
-  documents                OrganizationDocument[]
-  legalRepresentatives     LegalRepresentative[]
-  dianVerificationAttempts DianVerificationAttempt[]
-  duplicateFlagsAsFlagged  OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsFlagged")
-  duplicateFlagsAsMatched  OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsMatched")
-  invitations              OrganizationInvitation[]
-  reports                  OrgReport[]
-  ledgerEntries            LedgerEntry[]
-  signerDesignations       OrgSignerDesignation[]
-  signatureRequests        OrgSignatureRequest[]
-  accountingEntries        AccountingEntry[]
-  accountingPeriodCloses   AccountingPeriodClose[]
-  accountingShares         AccountingShare[]
-  thirdPartyConsents       ThirdPartyConsent[]
-  reportApprovals          OrgReportApproval[]
-  reportPolicies           OrgReportPolicy[]
+  members                      OrgMember[]
+  users                        User[]
+  roleAssignments              UserRole[]
+  auditLogs                    AuditLog[]
+  legalAcceptances             LegalAcceptance[]
+  profile                      OrganizationProfile?
+  formalizationTransitions     FormalizationTransition[]
+  documents                    OrganizationDocument[]
+  legalRepresentatives         LegalRepresentative[]
+  dianVerificationAttempts     DianVerificationAttempt[]
+  duplicateFlagsAsFlagged      OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsFlagged")
+  duplicateFlagsAsMatched      OrganizationDuplicateFlag[]        @relation("OrganizationDuplicateFlagsMatched")
+  invitations                  OrganizationInvitation[]
+  reports                      OrgReport[]
+  ledgerEntries                LedgerEntry[]
+  signerDesignations           OrgSignerDesignation[]
+  signatureRequests            OrgSignatureRequest[]
+  accountingEntries            AccountingEntry[]
+  accountingPeriodCloses       AccountingPeriodClose[]
+  accountingShares             AccountingShare[]
+  thirdPartyConsents           ThirdPartyConsent[]
+  reportApprovals              OrgReportApproval[]
+  reportPolicies               OrgReportPolicy[]
   // Platform workspace (F19): the team's own work when this organization is a
   // platform team. See platform-workspace.prisma.
-  workspaceTickets         PlatformWorkspaceTicket[]
-  workspaceTicketEvents    PlatformWorkspaceTicketEvent[]
-  sensitiveActions         PlatformSensitiveAction[]
-  sensitiveActionDecisions PlatformSensitiveActionDecision[]
-  qrLink                   OrganizationQrLink?
-  qrScanDays               OrganizationQrScanDay[]
+  workspaceTickets             PlatformWorkspaceTicket[]
+  workspaceTicketEvents        PlatformWorkspaceTicketEvent[]
+  sensitiveActions             PlatformSensitiveAction[]
+  sensitiveActionDecisions     PlatformSensitiveActionDecision[]
+  qrLink                       OrganizationQrLink?
+  qrScanDays                   OrganizationQrScanDay[]
   // Café de AdoptaFácil (solo en la org del equipo de plataforma). See coffee.prisma.
-  coffeeProducts           CoffeeProduct[]
-  coffeeLots               CoffeeLot[]
-  coffeeOrders             CoffeeOrder[]
-  coffeeVisitDays          CoffeeVisitDay[]
-  coffeeDeliveries         CoffeeContributionDelivery[]
-  mercadopagoConnection    OrganizationMercadoPagoConnection?
-  mercadopagoPayments      MercadoPagoPayment[]
+  coffeeProducts               CoffeeProduct[]
+  coffeeLots                   CoffeeLot[]
+  coffeeOrders                 CoffeeOrder[]
+  coffeeVisitDays              CoffeeVisitDay[]
+  coffeeDeliveries             CoffeeContributionDelivery[]
+  mercadopagoConnection        OrganizationMercadoPagoConnection?
+  mercadopagoPayments          MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.
-  serviceListings          ServiceListing[]
-  serviceListingReviews    ServiceListingReview[]
-  petProfiles              PetProfile[]
-  resourceOpenOffers       ResourceOpenOffer[]
-  emailUsage               OrganizationEmailUsage[]
+  serviceListings              ServiceListing[]
+  serviceListingReviews        ServiceListingReview[]
+  petProfiles                  PetProfile[]
+  resourceOpenOffers           ResourceOpenOffer[]
+  emailUsage                   OrganizationEmailUsage[]
   // Campana de pendientes: qué avisos leyó cada persona. See notifications.prisma.
-  notificationReads        NotificationRead[]
-  userNotifications        UserNotification[]
+  notificationReads            NotificationRead[]
+  userNotifications            UserNotification[]
+  pushSubscriptions            PushSubscription[]
   // Documentación, custodia y guardería. See custody.prisma.
-  custodyResponsibles      CustodyResponsible[]
-  animalIntakes            AnimalIntake[]
-  custodyContractTemplates CustodyContractTemplate[]
-  custodyContracts         CustodyContract[]
-  custodyCharges           CustodyCharge[]
-  custodyChargeExtensions  CustodyChargeExtension[]
-  custodyPayments          CustodyPayment[]
-  custodyReleases          CustodyRelease[]
-  custodyDocuments         CustodyDocument[]
-  custodyEvents            CustodyEvent[]
+  custodyResponsibles          CustodyResponsible[]
+  animalIntakes                AnimalIntake[]
+  custodyContractTemplates     CustodyContractTemplate[]
+  custodyContracts             CustodyContract[]
+  custodyCharges               CustodyCharge[]
+  custodyChargeExtensions      CustodyChargeExtension[]
+  custodyPayments              CustodyPayment[]
+  custodyReleases              CustodyRelease[]
+  custodyDocuments             CustodyDocument[]
+  custodyEvents                CustodyEvent[]
   custodyOnlinePaymentSettings CustodyOnlinePaymentSettings?
-  custodyPaymentLinks      CustodyPaymentLink[]
-  custodyOnlinePayments    CustodyOnlinePayment[]
+  custodyPaymentLinks          CustodyPaymentLink[]
+  custodyOnlinePayments        CustodyOnlinePayment[]
 
   @@index([status])
   @@map("organizations")
@@ -285,6 +286,7 @@ model User {
   mfaFactor                 AuthMfaFactor?
   notificationReads         NotificationRead[]
   userNotifications         UserNotification[]
+  pushSubscriptions         PushSubscription[]
 
   @@unique([organizationId, email])
   @@index([organizationId])

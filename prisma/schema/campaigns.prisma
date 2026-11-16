@@ -47,12 +47,12 @@ model Campaign {
 /// it without evading RLS. FK to organizations is declared in the T-055 migration
 /// SQL (not a @relation) to avoid editing org.prisma.
 model CampaignFundingApplication {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  campaignId     String   @map("campaign_id") @db.Uuid
-  collectionId   String   @unique @map("collection_id")
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  campaignId     String    @map("campaign_id") @db.Uuid
+  collectionId   String    @unique @map("collection_id")
   net            Int
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
   /// P1-1: cuándo se restó de la campaña por un reembolso o contracargo.
   reversedAt     DateTime? @map("reversed_at")
 

@@ -66,6 +66,11 @@ export const envSchema = z.object({
   // SMTP. Swap happens in NotificationModule, no consumer changes. When `smtp`,
   // the SMTP_* vars below are REQUIRED (fail-fast, see the refine).
   NOTIFICATION_DRIVER: z.enum(['log', 'smtp']).default('log'),
+  // Notificaciones push web (VAPID). Sin estas dos claves el push queda
+  // apagado y el resto de avisos (bandeja y correo) sigue igual.
+  VAPID_PUBLIC_KEY: z.string().min(20).max(200).optional(),
+  VAPID_PRIVATE_KEY: z.string().min(20).max(200).optional(),
+  VAPID_SUBJECT: z.string().min(7).max(200).default('mailto:soporte@adoptafacil.co'),
   // SMTP credentials — read ONLY from env; never hardcoded, never committed.
   // Optional at the schema level so `log` mode boots without them; the refine
   // enforces their presence when the driver is `smtp`.
