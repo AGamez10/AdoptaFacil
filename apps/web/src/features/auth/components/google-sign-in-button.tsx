@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@adoptafacil/ui';
+import { isNativeApp } from '../../../lib/native-app';
 import { useCapabilities } from '../../../shell/capabilities';
 import styles from './google-sign-in-button.module.scss';
 
@@ -87,6 +88,9 @@ export function useGoogleClientId(): string | undefined {
 export function useGoogleSignInAvailable(): boolean {
   const { capabilities } = useCapabilities();
   const clientId = useGoogleClientId();
+  // Google bloquea su inicio de sesión dentro de vistas web embebidas
+  // (403 disallowed_useragent): en la app nativa se entra con correo y contraseña.
+  if (isNativeApp()) return false;
   return capabilities.googleSignIn && (Boolean(clientId) || import.meta.env.MODE !== 'production');
 }
 

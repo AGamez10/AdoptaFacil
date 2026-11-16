@@ -10,3 +10,7 @@ CHANGELOG.md
 # Textos legales versionados: su hash SHA-256 está fijado en packages/contracts/src/legal.ts.
 # Un cambio de formato cambiaría el hash; publica una versión nueva en vez de editarlos.
 docs/legal/*/*.md
+
+# Proyectos nativos generados por Capacitor (apps/mobile)
+apps/mobile/android/**
+apps/mobile/ios/**
