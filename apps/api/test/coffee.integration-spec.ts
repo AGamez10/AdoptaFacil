@@ -461,6 +461,275 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
     expect(other.body).toHaveLength(0);
   });
 
+  describe('ventas físicas por lote', () => {
+    const today = () =>
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+    const sell = (member: { token: string }, body: object, lot = lotId) =>
+      as(member).post(`/platform/coffee/lots/${lot}/physical-sales`, {
+        quantity: 1,
+        unitPriceCop: 27_999,
+        soldOn: today(),
+        ...body,
+      });
+    const lotOf = async () =>
+      (await as(lead1).get('/platform/coffee').expect(200)).body.products[0].lots.find(
+        (l: { id: string }) => l.id === lotId,
+      );
+    let firstSaleId = '';
+
+    beforeAll(async () => {
+      // Llegaron más bolsas al lote.
+      await as(lead1).patch(`/platform/coffee/lots/${lotId}`, { stockUnits: 10 }).expect(204);
+    });
+
+    it('deny-by-default: una organización no registra ventas; otro equipo no ve el lote', async () => {
+      await sell({ token: ownerToken }, {}).expect(403);
+      await as({ token: ownerToken }).get('/platform/coffee/physical-sales').expect(403);
+      await sell(otherTeam, {}).expect(404);
+    });
+
+    it('valida cantidad, precio, fecha y nota; solo en lotes publicados', async () => {
+      await sell(lead1, { quantity: 0 }).expect(400);
+      await sell(lead1, { unitPriceCop: 0 }).expect(400);
+      await sell(lead1, { soldOn: '2026-02-30' }).expect(400);
+      await sell(lead1, { soldOn: '2999-01-01' }).expect(400);
+      await sell(lead1, { note: 'x'.repeat(501) }).expect(400);
+
+      await as(lead1)
+        .post(`/platform/coffee/products/${productId}/lots`, {
+          lotCode: 'L3-BORRADOR',
+          salePriceCop: 30_000,
+          unitCostCop: 18_000,
+          shippingFeeCop: 0,
+          stockUnits: 5,
+          defaultCampaignId: campaignA,
+        })
+        .expect(204);
+      const draft = (
+        await as(lead1).get('/platform/coffee').expect(200)
+      ).body.products[0].lots.find((l: { lotCode: string }) => l.lotCode === 'L3-BORRADOR');
+      await sell(lead1, {}, draft.id).expect(409);
+    });
+
+    it('sin campaña elegida, el aporte va a la sugerida del lote y descuenta stock', async () => {
+      const before = await lotOf();
+      await sell(lead1, { quantity: 3, unitPriceCop: 25_000, note: 'Feria de Ibagué' }).expect(204);
+
+      const sales = await as(lead1)
+        .get(`/platform/coffee/physical-sales?lotId=${lotId}`)
+        .expect(200);
+      expect(sales.body).toHaveLength(1);
+      expect(sales.body[0]).toMatchObject({
+        kind: 'sale',
+        quantity: 3,
+        unitPriceCop: 25_000,
+        totalCop: 75_000,
+        // 20 % de (25.000 − 17.000), con la regla del lote.
+        contributionPerUnitCop: 1_600,
+        contributionTotalCop: 4_800,
+        campaignId: campaignB,
+        campaignTitle: 'Comida para el refugio',
+        campaignSource: 'lot_default',
+        soldOn: today(),
+        note: 'Feria de Ibagué',
+        reversedById: null,
+      });
+      firstSaleId = sales.body[0].id;
+
+      const after = await lotOf();
+      expect(after.unitsSoldInPerson).toBe(3);
+      expect(after.unitsSold).toBe(before.unitsSold + 3);
+      expect(after.availableUnits).toBe(before.availableUnits - 3);
+      expect(after.revenueCop).toBe(before.revenueCop + 75_000);
+      expect(after.contributionCommittedCop).toBe(before.contributionCommittedCop + 4_800);
+    });
+
+    it('la campaña que eligió el comprador recibe el aporte', async () => {
+      await sell(lead1, { campaignId: campaignC }).expect(400); // cerrada
+      await sell(lead1, { campaignId: campaignA }).expect(204);
+      const dash = await as(lead1).get('/platform/coffee').expect(200);
+      expect(dash.body.campaigns).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            campaignId: campaignA,
+            committedCop: 2_200,
+            pendingCop: 2_200,
+          }),
+          expect.objectContaining({
+            campaignId: campaignB,
+            committedCop: 4_400 + 4_800,
+            deliveredCop: 4_400,
+            pendingCop: 4_800,
+          }),
+        ]),
+      );
+      const sales = await as(lead1).get('/platform/coffee/physical-sales').expect(200);
+      expect(sales.body[0]).toMatchObject({ campaignId: campaignA, campaignSource: 'buyer' });
+
+      // El aporte de una campaña que solo recibió ventas físicas también se entrega.
+      await as(lead1)
+        .post('/platform/coffee/deliveries', {
+          campaignId: campaignA,
+          amountCop: 2_200,
+          deliveredOn: today(),
+          evidence: 'Transferencia 456',
+        })
+        .expect(204);
+    });
+
+    it('nunca pasa de las bolsas del lote, ni en persona ni en línea', async () => {
+      const { availableUnits } = await lotOf();
+      const tooMany = await sell(lead1, { quantity: availableUnits + 1 }).expect(409);
+      expect(tooMany.body.message).toContain(`Solo quedan ${availableUnits}`);
+      await sell(lead1, { quantity: availableUnits }).expect(204);
+      const sold = await checkout({}).expect(409);
+      expect(sold.body.code).toBe('OUT_OF_STOCK');
+      const offer = await request(server).get(`/public/coffee/${productCode}`).expect(200);
+      expect(offer.body.lot.availableUnits).toBe(0);
+      // El stock no baja de lo vendido (en línea + en persona) y lo apartado.
+      const lot = await lotOf();
+      await as(lead1)
+        .patch(`/platform/coffee/lots/${lotId}`, { stockUnits: lot.stockUnits - 1 })
+        .expect(409);
+
+      // Ni saltándose la API: la base de datos rechaza la sobreventa.
+      await expect(
+        admin.coffeePhysicalSale.create({
+          data: {
+            organizationId: lead1.orgId,
+            lotId,
+            kind: 'sale',
+            quantity: 1,
+            unitPriceCop: 27_999,
+            totalCop: 27_999,
+            contributionPerUnitCop: 2_200,
+            contributionTotalCop: 2_200,
+            campaignId: campaignA,
+            campaignTitle: 'Cirugía de Luna',
+            campaignOrgName: 'Fundación Café',
+            campaignSource: 'buyer',
+            soldOn: new Date(`${today()}T00:00:00Z`),
+          },
+        }),
+      ).rejects.toThrow(/not enough bags/);
+    });
+
+    it('una venta mal registrada se anula con un reverso auditado, una sola vez', async () => {
+      const before = await lotOf();
+      const balanceB = async () =>
+        (await as(lead1).get('/platform/coffee').expect(200)).body.campaigns.find(
+          (c: { campaignId: string }) => c.campaignId === campaignB,
+        );
+      const balanceBefore = await balanceB();
+      await as(lead1)
+        .post(`/platform/coffee/physical-sales/${firstSaleId}/reverse`, {})
+        .expect(400);
+      await as(otherTeam)
+        .post(`/platform/coffee/physical-sales/${firstSaleId}/reverse`, { reason: 'Error' })
+        .expect(404);
+      await as(lead1)
+        .post(`/platform/coffee/physical-sales/${firstSaleId}/reverse`, {
+          reason: 'Se registró dos veces la misma venta',
+        })
+        .expect(204);
+      await as(lead1)
+        .post(`/platform/coffee/physical-sales/${firstSaleId}/reverse`, { reason: 'Otra vez' })
+        .expect(409);
+
+      const sales = await as(lead1)
+        .get(`/platform/coffee/physical-sales?lotId=${lotId}`)
+        .expect(200);
+      const reversal = sales.body.find((s: { kind: string }) => s.kind === 'reversal');
+      expect(reversal).toMatchObject({
+        reversesSaleId: firstSaleId,
+        quantity: -3,
+        totalCop: -75_000,
+        contributionTotalCop: -4_800,
+        campaignId: campaignB,
+        note: 'Se registró dos veces la misma venta',
+      });
+      expect(sales.body.find((s: { id: string }) => s.id === firstSaleId).reversedById).toBe(
+        reversal.id,
+      );
+      await as(lead1)
+        .post(`/platform/coffee/physical-sales/${reversal.id}/reverse`, { reason: 'Deshacer' })
+        .expect(409);
+
+      const after = await lotOf();
+      expect(after.unitsSoldInPerson).toBe(before.unitsSoldInPerson - 3);
+      expect(after.availableUnits).toBe(before.availableUnits + 3);
+      expect(after.contributionCommittedCop).toBe(before.contributionCommittedCop - 4_800);
+      expect(await balanceB()).toMatchObject({
+        committedCop: balanceBefore.committedCop - 4_800,
+        pendingCop: balanceBefore.pendingCop - 4_800,
+      });
+
+      const audit = await admin.auditLog.findMany({
+        where: {
+          organizationId: lead1.orgId,
+          action: { in: ['coffee.physical_sale_recorded', 'coffee.physical_sale_reversed'] },
+        },
+      });
+      expect(audit.filter((a) => a.action === 'coffee.physical_sale_recorded')).toHaveLength(3);
+      const reversed = audit.find((a) => a.action === 'coffee.physical_sale_reversed');
+      expect(reversed).toMatchObject({ actorUserId: lead1.userId, entityId: firstSaleId });
+      // La nota es texto libre: no va a la bitácora.
+      expect(JSON.stringify(audit)).not.toContain('Feria de Ibagué');
+    });
+
+    it('el impacto público suma las bolsas y el aporte de las ventas físicas', async () => {
+      const sales = await as(lead1).get('/platform/coffee/physical-sales').expect(200);
+      const net = sales.body.reduce(
+        (
+          acc: { units: number; cop: number },
+          s: { quantity: number; contributionTotalCop: number },
+        ) => ({
+          units: acc.units + s.quantity,
+          cop: acc.cop + s.contributionTotalCop,
+        }),
+        { units: 0, cop: 0 },
+      );
+      const offer = await request(server).get(`/public/coffee/${productCode}`).expect(200);
+      expect(offer.body.impact).toEqual({
+        unitsSold: 2 + net.units,
+        contributionCommittedCop: 4_400 + net.cop,
+        contributionDeliveredCop: 4_400 + 2_200,
+      });
+      // Otro equipo no ve ventas ajenas.
+      const other = await as(otherTeam).get('/platform/coffee/physical-sales').expect(200);
+      expect(other.body).toHaveLength(0);
+    });
+
+    it('nada se edita ni se borra, ni con el superusuario; un reverso debe espejar la venta', async () => {
+      await expect(
+        admin.coffeePhysicalSale.update({ where: { id: firstSaleId }, data: { quantity: 1 } }),
+      ).rejects.toThrow(/append-only/);
+      await expect(admin.coffeePhysicalSale.delete({ where: { id: firstSaleId } })).rejects.toThrow(
+        /append-only/,
+      );
+      const [sale] = await admin.coffeePhysicalSale.findMany({
+        where: { lotId, kind: 'sale', reversal: { is: null } },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+      });
+      await expect(
+        admin.coffeePhysicalSale.create({
+          data: {
+            ...sale,
+            id: randomUUID(),
+            kind: 'reversal',
+            reversesSaleId: sale.id,
+            quantity: -sale.quantity - 1,
+            totalCop: -sale.unitPriceCop * (sale.quantity + 1),
+            contributionTotalCop: -sale.contributionPerUnitCop * (sale.quantity + 1),
+            note: 'Reverso que no cuadra',
+            createdAt: undefined,
+          },
+        }),
+      ).rejects.toThrow(/mirror/);
+    });
+  });
+
   it('lo que el comprador aceptó no se puede reescribir, ni con el superusuario', async () => {
     await expect(
       admin.coffeeOrder.update({ where: { reference: firstReference }, data: { totalCop: 1 } }),

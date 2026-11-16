@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { COFFEE_MAX_UNITS_PER_ORDER } from '@adoptafacil/contracts';
+import {
+  COFFEE_MAX_PHYSICAL_SALE_TOTAL_COP,
+  COFFEE_MAX_UNITS_PER_ORDER,
+  COFFEE_MAX_UNITS_PER_PHYSICAL_SALE,
+} from '@adoptafacil/contracts';
 
 const uuid = z.string().guid();
 const cop = (max: number) => z.number().int().min(0).max(max);
@@ -49,6 +53,31 @@ export const createDeliverySchema = z.object({
     .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)), 'Fecha inválida'),
   evidence: text(3, 1000),
 });
+
+const isoDay = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'Fecha inválida');
+
+export const createPhysicalSaleSchema = z
+  .object({
+    quantity: z.number().int().min(1).max(COFFEE_MAX_UNITS_PER_PHYSICAL_SALE),
+    unitPriceCop: cop(100_000_000).refine((v) => v > 0, 'Debe ser mayor que cero'),
+    campaignId: uuid.optional(),
+    soldOn: isoDay,
+    note: text(1, 500).optional(),
+  })
+  .refine((v) => v.quantity * v.unitPriceCop <= COFFEE_MAX_PHYSICAL_SALE_TOTAL_COP, {
+    message: 'El total de la venta es demasiado alto: regístrala en varias partes.',
+    path: ['quantity'],
+  });
+
+export const reversePhysicalSaleSchema = z.object({ reason: text(3, 500) });
+
+export const physicalSalesQuerySchema = z.object({ lotId: uuid.optional() });
 
 export const checkoutSchema = z.object({
   lotId: uuid,

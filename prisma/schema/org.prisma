@@ -58,6 +58,7 @@ model Organization {
   coffeeOrders             CoffeeOrder[]
   coffeeVisitDays          CoffeeVisitDay[]
   coffeeDeliveries         CoffeeContributionDelivery[]
+  coffeePhysicalSales      CoffeePhysicalSale[]
   mercadopagoConnection    OrganizationMercadoPagoConnection?
   mercadopagoPayments      MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.
