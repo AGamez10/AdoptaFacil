@@ -27,6 +27,7 @@ import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CommunityModule } from './modules/community/community.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { ConsentsModule } from './modules/consents/consents.module';
+import { PrivacyModule } from './modules/privacy/privacy.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { OrgExportsModule } from './modules/org-exports/org-exports.module';
@@ -139,6 +140,7 @@ import { RedisModule } from './redis/redis.module';
     AccountingModule,
     OrgExportsModule,
     ConsentsModule,
+    PrivacyModule,
     // F19 · espacio de trabajo del equipo de plataforma (tareas, doble aprobación, bitácora).
     PlatformWorkspaceModule,
   ],

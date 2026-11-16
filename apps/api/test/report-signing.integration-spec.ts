@@ -318,7 +318,10 @@ describe('Report signing: consent, separation between organizations and signers 
     await request(server).delete(`/org/signers/${designation.id}`).set(auth(B.owner)).expect(204);
 
     // La sesión de la persona deja de servir y ya no puede firmar el pendiente.
-    await decide(B.signer, pendingDoc.id, 'approved').expect(403);
+    // Run-2 R-04: refused by the auth guard itself (the person no longer
+    // holds any role in the organization), so 401 MEMBERSHIP_REVOKED.
+    const refused = await decide(B.signer, pendingDoc.id, 'approved').expect(401);
+    expect(refused.body.code).toBe('MEMBERSHIP_REVOKED');
     const after = await admin.orgSignerDesignation.findUniqueOrThrow({
       where: { id: designation.id },
     });

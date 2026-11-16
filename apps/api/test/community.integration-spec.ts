@@ -239,10 +239,13 @@ describe('Community (M11, F-8: posts, comments, likes, RBAC, moderation)', () =>
       },
     );
 
-    it('a member left without roles cannot publish at all (403)', async () => {
+    // Run-2 R-04: refused by the auth guard (401) before the service's own
+    // role check (which stays as defense in depth).
+    it('a member left without roles cannot publish at all (401, former member)', async () => {
       await setRoles([]);
-      await createPost(member.token).expect(403);
-      await createPost(member.token, campaign).expect(403);
+      const res = await createPost(member.token).expect(401);
+      expect(res.body.code).toBe('MEMBERSHIP_REVOKED');
+      await createPost(member.token, campaign).expect(401);
       expect(campaignSends()).toBe(0);
     });
 

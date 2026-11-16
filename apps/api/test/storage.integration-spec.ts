@@ -436,14 +436,18 @@ describe('Storage (T-108: disk adapter, private vs public serving)', () => {
       expect(codes).toEqual([200, 409, 409]);
     });
 
-    it('refuses a removed member whose access token is still valid (403)', async () => {
+    it('refuses a removed member whose access token is still valid (401)', async () => {
       const operator = await memberOf(ownerA.orgId, Role.Operator);
       await request(server)
         .delete(`/org/members/${operator.userId}`)
         .set('Authorization', `Bearer ${ownerA.token}`)
         .expect(204);
       const key = publicKey(ownerA.orgId, 'exmiembro.png');
-      await upload(operator.token, key, photoBytes, 'x.png', 'image/png').expect(403);
+      // Run-2 R-04: the auth guard refuses the former member first (401).
+      const refused = await upload(operator.token, key, photoBytes, 'x.png', 'image/png').expect(
+        401,
+      );
+      expect(refused.body.code).toBe('MEMBERSHIP_REVOKED');
       await request(server)
         .get(`/storage/public?key=${encodeURIComponent(key)}`)
         .expect(404);
