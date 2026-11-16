@@ -6,6 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import type { Env } from '../../config/env.validation';
+import { resolveMediaBinary } from './ffmpeg-binaries';
 
 /** Lo que el servidor guarda de un video: MP4 liviano + portada + medidas. */
 export interface TranscodedVideo {
@@ -86,8 +87,15 @@ export class VideoTranscoder {
   private readonly waiting: Array<() => void> = [];
 
   constructor(config: ConfigService<Env, true>) {
-    this.ffmpeg = config.get('FFMPEG_PATH', { infer: true }) ?? 'ffmpeg';
-    this.ffprobe = config.get('FFPROBE_PATH', { infer: true }) ?? 'ffprobe';
+    this.ffmpeg = resolveMediaBinary(
+      'ffmpeg',
+      config.get('FFMPEG_PATH', { infer: true }) ?? 'ffmpeg',
+    );
+    this.ffprobe = resolveMediaBinary(
+      'ffprobe',
+      config.get('FFPROBE_PATH', { infer: true }) ?? 'ffprobe',
+    );
+    this.logger.log(`Videos con ${this.ffmpeg} y ${this.ffprobe}`);
   }
 
   private async acquire(): Promise<void> {

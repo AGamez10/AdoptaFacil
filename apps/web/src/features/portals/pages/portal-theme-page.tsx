@@ -14,6 +14,7 @@ import {
   type PortalTheme,
   type PortalThemeConfig,
   templateUsesVideo,
+  templateVideoSlots,
 } from '@adoptafacil/contracts';
 import {
   Button,
@@ -258,6 +259,10 @@ export function PortalThemePage() {
   const [coverVideoUrl, setCoverVideoUrl] = useState<string | undefined>(undefined);
   const [coverVideoPosterUrl, setCoverVideoPosterUrl] = useState<string | undefined>(undefined);
   const [coverVideoKey, setCoverVideoKey] = useState<string | null | undefined>(undefined);
+  // Documental: segundo video (se reproduce después del primero).
+  const [coverVideo2Url, setCoverVideo2Url] = useState<string | undefined>(undefined);
+  const [coverVideo2PosterUrl, setCoverVideo2PosterUrl] = useState<string | undefined>(undefined);
+  const [coverVideo2Key, setCoverVideo2Key] = useState<string | null | undefined>(undefined);
   // Sello del pie (`portalRemoveSeal`). Solo se envía si la organización lo
   // tocó: así guardar colores con el plan vencido no choca con el 403.
   const [hideSeal, setHideSeal] = useState(false);
@@ -305,6 +310,8 @@ export function PortalThemePage() {
         }
         setCoverVideoUrl(safeMediaUrl(config.coverVideoUrl));
         setCoverVideoPosterUrl(safeMediaUrl(config.coverVideoPosterUrl));
+        setCoverVideo2Url(safeMediaUrl(config.coverVideo2Url));
+        setCoverVideo2PosterUrl(safeMediaUrl(config.coverVideo2PosterUrl));
         setPremiumAvailable(config.premiumDesignsAvailable !== false);
         setLockedTemplate(config.lockedTemplate);
         setHideSeal(config.hideSeal === true);
@@ -383,6 +390,7 @@ export function PortalThemePage() {
           // por la gratuita que se está mostrando: se omite la plantilla.
           ...(lockedTemplate && !templateTouched ? {} : { template, templateOptions }),
           ...(coverVideoKey !== undefined ? { coverVideoKey } : {}),
+          ...(coverVideo2Key !== undefined ? { coverVideo2Key } : {}),
           ...(sealTouched ? { hideSeal } : {}),
         },
       });
@@ -403,6 +411,11 @@ export function PortalThemePage() {
         setCoverVideoUrl(safeMediaUrl(themeConfig.coverVideoUrl));
         setCoverVideoPosterUrl(safeMediaUrl(themeConfig.coverVideoPosterUrl));
         setCoverVideoKey(undefined);
+      }
+      if (coverVideo2Key !== undefined) {
+        setCoverVideo2Url(safeMediaUrl(themeConfig.coverVideo2Url));
+        setCoverVideo2PosterUrl(safeMediaUrl(themeConfig.coverVideo2PosterUrl));
+        setCoverVideo2Key(undefined);
       }
       toast({
         title: 'Personalización guardada',
@@ -527,6 +540,18 @@ export function PortalThemePage() {
                     }}
                   />
                 )}
+                {templateVideoSlots(template) >= 2 && (
+                  <CoverVideoField
+                    template={template}
+                    slot={2}
+                    url={coverVideo2Url}
+                    onChange={({ key, url }) => {
+                      setCoverVideo2Key(key);
+                      setCoverVideo2Url(url);
+                      setCoverVideo2PosterUrl(undefined);
+                    }}
+                  />
+                )}
                 {template === 'clasica' && (
                   <PositionToggle
                     legend="Posición del logo"
@@ -625,6 +650,8 @@ export function PortalThemePage() {
                   logoPosition={logoPosition}
                   coverVideoUrl={coverVideoUrl}
                   coverVideoPosterUrl={coverVideoPosterUrl}
+                  coverVideo2Url={templateVideoSlots(template) >= 2 ? coverVideo2Url : undefined}
+                  coverVideo2PosterUrl={coverVideo2PosterUrl}
                 />
               </CardContent>
             </Card>

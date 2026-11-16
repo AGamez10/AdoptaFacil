@@ -41,6 +41,9 @@ const OPTIONS_KEY = '__templateOptions';
 const VIDEO_KEY = '__coverVideo';
 /** Llave de la imagen de portada de ese video (la saca el servidor al comprimirlo). */
 const POSTER_KEY = '__coverVideoPoster';
+/** Segundo video (Documental) y su portada, guardados igual. */
+const VIDEO2_KEY = '__coverVideo2';
+const POSTER2_KEY = '__coverVideo2Poster';
 
 /** Solo un video PÚBLICO de la propia organización, en mp4 o webm. */
 function assertCoverVideoKey(key: string, organizationId: string): void {
@@ -65,6 +68,8 @@ function splitStored(raw: unknown): {
   options?: unknown;
   coverVideoKey?: string;
   coverVideoPosterKey?: string;
+  coverVideo2Key?: string;
+  coverVideo2PosterKey?: string;
 } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { tokens: {} };
   const {
@@ -72,6 +77,8 @@ function splitStored(raw: unknown): {
     [OPTIONS_KEY]: options,
     [VIDEO_KEY]: coverVideoKey,
     [POSTER_KEY]: coverVideoPosterKey,
+    [VIDEO2_KEY]: coverVideo2Key,
+    [POSTER2_KEY]: coverVideo2PosterKey,
     ...tokens
   } = raw as Record<string, unknown>;
   return {
@@ -81,6 +88,10 @@ function splitStored(raw: unknown): {
     ...(typeof coverVideoKey === 'string' ? { coverVideoKey } : {}),
     ...(typeof coverVideoKey === 'string' && typeof coverVideoPosterKey === 'string'
       ? { coverVideoPosterKey }
+      : {}),
+    ...(typeof coverVideo2Key === 'string' ? { coverVideo2Key } : {}),
+    ...(typeof coverVideo2Key === 'string' && typeof coverVideo2PosterKey === 'string'
+      ? { coverVideo2PosterKey }
       : {}),
   };
 }
@@ -130,6 +141,12 @@ function present(
       : {}),
     ...(stored.coverVideoPosterKey && !locked
       ? { coverVideoPosterUrl: storage.resolvePublicUrl(stored.coverVideoPosterKey) }
+      : {}),
+    ...(stored.coverVideo2Key && !locked
+      ? { coverVideo2Url: storage.resolvePublicUrl(stored.coverVideo2Key) }
+      : {}),
+    ...(stored.coverVideo2PosterKey && !locked
+      ? { coverVideo2PosterUrl: storage.resolvePublicUrl(stored.coverVideo2PosterKey) }
       : {}),
     ...(locked ? { lockedTemplate: chosen } : {}),
   };
@@ -216,12 +233,14 @@ export class PortalThemeService {
 
     // Video de portada: omitido se conserva, `null` lo quita. Si el servidor
     // lo comprimió, dejó su imagen de portada al lado (`.poster.webp`).
-    let newPosterKey: string | undefined;
-    if (typeof input.coverVideoKey === 'string') {
-      assertCoverVideoKey(input.coverVideoKey, organizationId);
-      const poster = posterKeyFor(input.coverVideoKey);
-      if (await this.storage.readObject(poster)) newPosterKey = poster;
-    }
+    const posterOf = async (key: string | null | undefined): Promise<string | undefined> => {
+      if (typeof key !== 'string') return undefined;
+      assertCoverVideoKey(key, organizationId);
+      const poster = posterKeyFor(key);
+      return (await this.storage.readObject(poster)) ? poster : undefined;
+    };
+    const newPosterKey = await posterOf(input.coverVideoKey);
+    const newPoster2Key = await posterOf(input.coverVideo2Key);
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       // `tokens` se reemplaza entero; la plantilla guardada se conserva si
@@ -243,12 +262,18 @@ export class PortalThemeService {
         input.coverVideoKey === undefined ? previous.coverVideoKey : input.coverVideoKey;
       const coverVideoPosterKey =
         input.coverVideoKey === undefined ? previous.coverVideoPosterKey : newPosterKey;
+      const coverVideo2Key =
+        input.coverVideo2Key === undefined ? previous.coverVideo2Key : input.coverVideo2Key;
+      const coverVideo2PosterKey =
+        input.coverVideo2Key === undefined ? previous.coverVideo2PosterKey : newPoster2Key;
       const tokens = {
         ...input.tokens,
         ...(template ? { [TEMPLATE_KEY]: template } : {}),
         ...(options && Object.keys(options).length > 0 ? { [OPTIONS_KEY]: options } : {}),
         ...(coverVideoKey ? { [VIDEO_KEY]: coverVideoKey } : {}),
         ...(coverVideoKey && coverVideoPosterKey ? { [POSTER_KEY]: coverVideoPosterKey } : {}),
+        ...(coverVideo2Key ? { [VIDEO2_KEY]: coverVideo2Key } : {}),
+        ...(coverVideo2Key && coverVideo2PosterKey ? { [POSTER2_KEY]: coverVideo2PosterKey } : {}),
       } as unknown as Prisma.InputJsonValue;
       const row = await tx.portalTheme.upsert({
         where: { organizationId },
@@ -286,6 +311,7 @@ export class PortalThemeService {
             ...(input.template !== undefined ? ['template'] : []),
             ...(input.templateOptions !== undefined ? ['templateOptions'] : []),
             ...(input.coverVideoKey !== undefined ? ['coverVideo'] : []),
+            ...(input.coverVideo2Key !== undefined ? ['coverVideo2'] : []),
             ...(input.hideSeal !== undefined ? ['hideSeal'] : []),
           ],
         },

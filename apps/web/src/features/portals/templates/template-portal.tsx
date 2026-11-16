@@ -14,6 +14,8 @@ export interface TemplatePortalProps {
   themeStyle: CSSProperties;
   /** Video de portada del tema (Historias, Documental), ya saneado. */
   coverVideo?: TemplateSourceData['coverVideo'];
+  /** Segundo video (Documental). */
+  coverVideo2?: TemplateSourceData['coverVideo2'];
   /** Lo que se pinta si la plantilla no se puede usar (siempre el portal clásico). */
   fallback: ReactNode;
 }
@@ -29,6 +31,7 @@ export function TemplatePortal({
   organization,
   themeStyle,
   coverVideo = null,
+  coverVideo2 = null,
   fallback,
 }: TemplatePortalProps) {
   const [design, setDesign] = useState<TemplateDesign | null | 'failed'>(null);
@@ -56,16 +59,19 @@ export function TemplatePortal({
 
   const videoUrl = coverVideo?.url;
   const videoPoster = coverVideo?.poster;
+  const video2Url = coverVideo2?.url;
+  const video2Poster = coverVideo2?.poster;
   useEffect(() => {
     setData(
       source.status === 'ready'
         ? {
             ...source.data,
             coverVideo: videoUrl ? { url: videoUrl, poster: videoPoster } : null,
+            coverVideo2: video2Url ? { url: video2Url, poster: video2Poster } : null,
           }
         : null,
     );
-  }, [source, videoUrl, videoPoster]);
+  }, [source, videoUrl, videoPoster, video2Url, video2Poster]);
 
   const onReviewCreated = useCallback((created: Review) => {
     setData((cur) =>

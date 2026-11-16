@@ -78,6 +78,9 @@ interface Layout {
   coverVideoUrl?: string;
   /** Imagen de portada de ese video, si el servidor la sacó al comprimirlo. */
   coverVideoPosterUrl?: string;
+  /** Documental: segundo video, se reproduce después del primero. */
+  coverVideo2Url?: string;
+  coverVideo2PosterUrl?: string;
   /** Sin el sello "Hecho con AdoptaFácil" (plan con `portalRemoveSeal`). */
   hideSeal?: boolean;
 }
@@ -214,6 +217,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
               templateOptions?: unknown;
               coverVideoUrl?: unknown;
               coverVideoPosterUrl?: unknown;
+              coverVideo2Url?: unknown;
+              coverVideo2PosterUrl?: unknown;
               hideSeal?: unknown;
             }>)
           : null,
@@ -231,6 +236,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           ),
           coverVideoUrl: safeMediaUrl(body?.coverVideoUrl),
           coverVideoPosterUrl: safeMediaUrl(body?.coverVideoPosterUrl),
+          coverVideo2Url: safeMediaUrl(body?.coverVideo2Url),
+          coverVideo2PosterUrl: safeMediaUrl(body?.coverVideo2PosterUrl),
           // La API ya cruzó la elección con el plan; ante la duda, sello.
           hideSeal: body?.hideSeal === true,
         },
@@ -295,6 +302,8 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           templateOptions: resolveTemplateOptions(template, themeConfig?.templateOptions),
           coverVideoUrl: safeMediaUrl(themeConfig?.coverVideoUrl),
           coverVideoPosterUrl: safeMediaUrl(themeConfig?.coverVideoPosterUrl),
+          coverVideo2Url: safeMediaUrl(themeConfig?.coverVideo2Url),
+          coverVideo2PosterUrl: safeMediaUrl(themeConfig?.coverVideo2PosterUrl),
           // La lectura propia trae la elección; se aplica solo si el plan la incluye.
           hideSeal: themeConfig?.hideSeal === true && themeConfig.removeSealAvailable !== false,
         });
@@ -667,6 +676,11 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
         coverVideo={
           layout.coverVideoUrl
             ? { url: layout.coverVideoUrl, poster: layout.coverVideoPosterUrl }
+            : null
+        }
+        coverVideo2={
+          layout.coverVideo2Url
+            ? { url: layout.coverVideo2Url, poster: layout.coverVideo2PosterUrl }
             : null
         }
         fallback={classic}

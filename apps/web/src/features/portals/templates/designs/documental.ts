@@ -45,6 +45,8 @@ const CSS = `
 .tpl-documental .dc-media{position:absolute;inset:0;overflow:hidden;background:#0A0908;clip-path:inset(calc(var(--q) * 8svh) calc(var(--q) * 5vw) calc(var(--q) * 12svh) calc(var(--q) * 5vw) round calc(var(--q) * 26px));will-change:clip-path}
 .tpl-documental[data-mode=light] .dc-stage{background:var(--k-bg)}
 .tpl-documental[data-mode=light] .dc-media{box-shadow:0 0 0 calc(var(--q) * 14px) var(--frame)}
+.tpl-documental .dc-v{opacity:0;transition:opacity 1.2s ease}
+.tpl-documental .dc-v.on{opacity:1}
 .tpl-documental .dc-v,.tpl-documental .dc-media > .portrait{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(calc(1.06 - var(--q) * .06));transform-origin:50% 40%}
 .tpl-documental .dc-scrim{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 26%,rgba(0,0,0,0) 46%,rgba(0,0,0,.72) 100%),radial-gradient(120% 90% at 50% 40%,transparent 50%,rgba(0,0,0,.45))}
 @media (max-width:620px){.tpl-documental .dc-scrim{background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.1) 24%,rgba(0,0,0,.55) 48%,rgba(0,0,0,.82) 100%)}}
@@ -244,9 +246,14 @@ function titleLines(name: string): string {
 
 /** Lo que se ve detrás del título: el video, o un carrete con fotos reales. */
 function media(m: TplModel): string {
-  if (m.VIDEO) {
-    const poster = m.VIDEO.poster ?? m.ORG.cover;
-    return `<video class="dc-v" src="${m.VIDEO.src}"${poster ? ` poster="${poster}"` : ''} autoplay muted loop playsinline preload="metadata" aria-label="Video de ${m.ORG.name}" data-dc-video></video>`;
+  if (m.VIDEOS.length) {
+    // Con dos videos se reproducen uno tras otro (el segundo carga solo al llegar su turno).
+    const n = m.VIDEOS.length;
+    return m.VIDEOS.map((v, i) => {
+      const poster = v.poster ?? m.ORG.cover;
+      const attrs = i === 0 ? 'autoplay loop preload="metadata"' : 'preload="none"';
+      return `<video class="dc-v${i === 0 ? ' on' : ''}" src="${v.src}"${poster ? ` poster="${poster}"` : ''} ${attrs} muted playsinline aria-label="Video ${n > 1 ? `${i + 1} de ${n} ` : ''}de ${m.ORG.name}"${i ? ' aria-hidden="true"' : ''} data-dc-video></video>`;
+    }).join('');
   }
   const photos = m.ANIMALS.filter((a) => a.photo).slice(0, 6);
   const slides: string[] = m.ORG.cover
@@ -317,7 +324,7 @@ export const documental = premiumDesign({
     const top = `<header class="dc-top"><div class="w"><a class="dc-logo" href="#dc-cat"><i>${logoMark(m)}</i><span>${ORG.name}</span></a>${nav}${P.modeBtn()}</div></header>`;
     const hud =
       mode === 'dark'
-        ? `<div class="dc-hud" aria-hidden="true"><b></b><span data-dc-tc>${m.VIDEO ? '00:00:00:00' : 'En rodaje'}</span></div>`
+        ? `<div class="dc-hud" aria-hidden="true"><b></b><span data-dc-tc>${m.VIDEO ? `${m.VIDEOS.length > 1 ? 'Rollo 1/2 · ' : ''}00:00:00:00` : 'En rodaje'}</span></div>`
         : `<div class="dc-hud" aria-hidden="true"><b></b><span>Cuaderno de campo${ORG.city ? ` · ${ORG.city}` : ''}</span></div>`;
     const ctrl = `<div class="dc-ctrl"><button type="button" data-dc-play aria-pressed="false">${PAUSE}<span>Pausar</span></button>${m.VIDEO ? `<button type="button" data-dc-sound aria-pressed="false">${MUTED}<span>Activar sonido</span></button>` : ''}</div>`;
     const stage = `<div class="dc-film" id="dc-film"><section class="dc-stage" aria-labelledby="dc-h1">${top}<div class="dc-media">${media(m)}<div class="dc-scrim"></div>${mode === 'dark' ? '<div class="dc-grain" aria-hidden="true"></div>' : ''}</div><div class="dc-bars" aria-hidden="true"><i></i><i></i></div>${hud}
@@ -362,7 +369,10 @@ function initStage(app: HTMLElement, fx: Fx, mode: 'light' | 'dark') {
   const film = qs(app, '#dc-film');
   const stage = qs(app, '.dc-stage');
   if (!film || !stage) return;
-  const video = qs<HTMLVideoElement>(app, '[data-dc-video]');
+  const videos = qsa<HTMLVideoElement>(app, '[data-dc-video]');
+  let cur = 0;
+  /** El video que se está viendo (con dos, se alternan). */
+  const active = (): HTMLVideoElement | undefined => videos[cur];
   const reel = qs(app, '.dc-reel');
   const play = qs<HTMLButtonElement>(app, '[data-dc-play]');
   const sound = qs<HTMLButtonElement>(app, '[data-dc-sound]');
@@ -372,6 +382,7 @@ function initStage(app: HTMLElement, fx: Fx, mode: 'light' | 'dark') {
   let paused = false;
   const setPaused = (next: boolean) => {
     paused = next;
+    const video = active();
     if (video) {
       if (next) video.pause();
       else void video.play()?.catch(() => setPaused(true));
@@ -385,17 +396,20 @@ function initStage(app: HTMLElement, fx: Fx, mode: 'light' | 'dark') {
   };
   // Menos movimiento o ahorro de datos: el video no arranca solo (queda la portada).
   if (fx.reduce || saveData) {
-    video?.removeAttribute('autoplay');
-    if (video) video.preload = 'none';
+    for (const v of videos) {
+      v.removeAttribute('autoplay');
+      v.preload = 'none';
+    }
     setPaused(true);
   }
   play?.addEventListener('click', () => setPaused(!paused), { signal });
   sound?.addEventListener(
     'click',
     () => {
+      const video = active();
       if (!video) return;
       const on = video.muted;
-      video.muted = !on;
+      for (const v of videos) v.muted = !on;
       if (on && paused) setPaused(false);
       sound.setAttribute('aria-pressed', String(on));
       sound.innerHTML = on
@@ -404,9 +418,44 @@ function initStage(app: HTMLElement, fx: Fx, mode: 'light' | 'dark') {
     },
     { signal },
   );
+  // Dos videos: al terminar uno entra el otro con un fundido, y así en bucle.
+  if (videos.length > 1) {
+    for (const v of videos) v.loop = false;
+    videos.forEach((v, i) =>
+      v.addEventListener(
+        'ended',
+        () => {
+          if (i !== cur) return;
+          const next = (cur + 1) % videos.length;
+          const nv = videos[next];
+          if (!nv) return;
+          nv.currentTime = 0;
+          nv.muted = v.muted;
+          cur = next;
+          v.classList.remove('on');
+          v.setAttribute('aria-hidden', 'true');
+          nv.classList.add('on');
+          nv.removeAttribute('aria-hidden');
+          if (!paused) void nv.play()?.catch(() => undefined);
+        },
+        { signal },
+      ),
+    );
+    // El segundo se empieza a bajar cuando el primero ya va avanzado.
+    videos[0]?.addEventListener(
+      'timeupdate',
+      function warm(this: HTMLVideoElement) {
+        if (this.duration && this.currentTime / this.duration > 0.6 && !saveData) {
+          const second = videos[1];
+          if (second && second.preload === 'none') second.preload = 'auto';
+        }
+      },
+      { signal },
+    );
+  }
   // Carrete sin video: cambia de toma cada 6 s (nunca con menos movimiento).
   const slides = qsa(app, '.dc-sl');
-  if (!video && slides.length > 1 && !fx.reduce) {
+  if (!videos.length && slides.length > 1 && !fx.reduce) {
     let at = 0;
     const id = window.setInterval(() => {
       if (paused || document.hidden) return;
@@ -417,11 +466,12 @@ function initStage(app: HTMLElement, fx: Fx, mode: 'light' | 'dark') {
     signal.addEventListener('abort', () => window.clearInterval(id));
   }
   // Fuera de pantalla el video descansa (batería y datos), y vuelve al regresar.
-  if (video)
+  if (videos.length)
     fx.observe(
       [stage],
       (en) => {
-        if (paused) return;
+        const video = active();
+        if (paused || !video) return;
         if (en.isIntersecting) void video.play()?.catch(() => undefined);
         else video.pause();
       },
@@ -454,12 +504,13 @@ function initStage(app: HTMLElement, fx: Fx, mode: 'light' | 'dark') {
 
   // Código de tiempo del video (Sala de cine).
   const tc = qs(app, '[data-dc-tc]');
-  if (video && tc) {
+  if (videos.length && tc) {
     fx.onFrame(() => {
-      const t = video.currentTime || 0;
+      const t = active()?.currentTime || 0;
       const f = Math.floor((t % 1) * 24);
       const s = Math.floor(t);
-      tc.textContent = `00:${two(Math.floor(s / 60))}:${two(s % 60)}:${two(f)}`;
+      const roll = videos.length > 1 ? `Rollo ${cur + 1}/${videos.length} · ` : '';
+      tc.textContent = `${roll}00:${two(Math.floor(s / 60))}:${two(s % 60)}:${two(f)}`;
     }, stage);
   }
 

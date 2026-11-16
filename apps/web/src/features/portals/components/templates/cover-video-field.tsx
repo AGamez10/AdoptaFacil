@@ -17,6 +17,8 @@ export interface CoverVideoFieldProps {
   onChange: (next: { key: string | null; url?: string }) => void;
   /** Plantilla que lo muestra: cambia la recomendación de duración y formato. */
   template?: PortalTemplateId;
+  /** 2 = segundo video de Documental (se reproduce después del primero). */
+  slot?: 1 | 2;
 }
 
 const HINTS: Partial<Record<PortalTemplateId, string>> = {
@@ -32,7 +34,13 @@ const HINTS: Partial<Record<PortalTemplateId, string>> = {
  * "Guardar y publicar". Arranca sin sonido; no se reproduce solo si el
  * visitante pidió menos movimiento o ahorrar datos.
  */
-export function CoverVideoField({ url, onChange, template = 'historias' }: CoverVideoFieldProps) {
+export function CoverVideoField({
+  url,
+  onChange,
+  template = 'historias',
+  slot = 1,
+}: CoverVideoFieldProps) {
+  const tid = (name: string) => (slot === 2 ? `${name}-2` : name);
   const client = useApiClient();
   const { toast } = useToast();
   const inputId = useId();
@@ -64,13 +72,16 @@ export function CoverVideoField({ url, onChange, template = 'historias' }: Cover
   };
 
   return (
-    <div className="space-y-2" data-testid="cover-video-field">
+    <div className="space-y-2" data-testid={tid('cover-video-field')}>
       <label htmlFor={inputId} className="block text-sm font-medium">
-        Video de portada (opcional)
+        {slot === 2 ? 'Segundo video (opcional)' : 'Video de portada (opcional)'}
       </label>
       <p className="text-sm text-muted-foreground">
-        {HINTS[template] ?? HINTS.historias} MP4, MOV o WebM de hasta {COVER_VIDEO_MAX_SECONDS}{' '}
-        segundos y {COVER_VIDEO_MAX_MB} MB; lo comprimimos para que cargue rápido.
+        {slot === 2
+          ? 'Se reproduce después del primero y luego vuelven a empezar. Úsalo para otra escena: un rescate, el día a día o una adopción.'
+          : (HINTS[template] ?? HINTS.historias)}{' '}
+        MP4, MOV o WebM de hasta {COVER_VIDEO_MAX_SECONDS} segundos y {COVER_VIDEO_MAX_MB} MB; lo
+        comprimimos para que cargue rápido.
       </p>
       {url && (
         <video
@@ -84,7 +95,7 @@ export function CoverVideoField({ url, onChange, template = 'historias' }: Cover
               ? 'aspect-video w-full max-w-sm rounded-xl bg-muted object-cover'
               : 'aspect-[9/16] max-h-64 rounded-xl bg-muted object-cover'
           }
-          data-testid="cover-video-preview"
+          data-testid={tid('cover-video-preview')}
         />
       )}
       <div className="flex flex-wrap items-center gap-2">
@@ -95,7 +106,7 @@ export function CoverVideoField({ url, onChange, template = 'historias' }: Cover
           accept={COVER_VIDEO_ACCEPT}
           className="sr-only"
           onChange={(event) => void onFile(event.target.files?.[0])}
-          data-testid="cover-video-input"
+          data-testid={tid('cover-video-input')}
         />
         <Button
           type="button"
@@ -110,7 +121,7 @@ export function CoverVideoField({ url, onChange, template = 'historias' }: Cover
             type="button"
             variant="ghost"
             onClick={() => onChange({ key: null, url: undefined })}
-            data-testid="cover-video-remove"
+            data-testid={tid('cover-video-remove')}
           >
             Quitar
           </Button>

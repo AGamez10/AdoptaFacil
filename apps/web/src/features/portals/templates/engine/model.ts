@@ -59,6 +59,8 @@ export interface TemplateSourceData {
   ledger?: PublicLedgerPage | null;
   /** Video de portada guardado en el tema (Historias, Documental) y su imagen. */
   coverVideo?: { url: string; poster?: string } | null;
+  /** Segundo video (Documental): se reproduce después del primero. */
+  coverVideo2?: { url: string; poster?: string } | null;
 }
 
 export type Species = 'perro' | 'gato' | 'otro';
@@ -256,6 +258,8 @@ export interface TplModel {
   BADGES: TplBadge[];
   /** Video de portada de la organización (ya saneado), o `null` si no subió uno. */
   VIDEO: { src: string; poster: string | null } | null;
+  /** Todos los videos válidos, en orden (Documental los reproduce uno tras otro). */
+  VIDEOS: Array<{ src: string; poster: string | null }>;
   /** Reglas de visibilidad (idénticas a `OrgPublicPage`). */
   SHOW: {
     transparencia: boolean;
@@ -721,7 +725,10 @@ export function buildTemplateModel(src: TemplateSourceData, now: Date = new Date
     LEDGER: buildLedger(src.ledger),
     SOCIALS: socials,
     BADGES: badges,
-    VIDEO: buildVideo(src.coverVideo),
+    VIDEO: buildVideo(src.coverVideo) ?? buildVideo(src.coverVideo2),
+    VIDEOS: [buildVideo(src.coverVideo), buildVideo(src.coverVideo2)].filter(
+      (v): v is NonNullable<TplModel['VIDEO']> => v !== null,
+    ),
     SHOW: {
       transparencia: level > 0,
       nosotros: about.length > 0,
