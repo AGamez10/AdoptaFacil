@@ -8,6 +8,7 @@ import {
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../auth/auth.types';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { WebPushService, type WebPushPayload } from '../push/web-push.service';
 import {
   NOTIFICATION_PORT,
   type NotificationMessage,
@@ -44,6 +45,11 @@ export const ORG_OPERATIONS_ROLES: readonly Role[] = [
 const MAX_LISTED = 30;
 const SAFE_HREF = /^\/[^/]/;
 
+/** Texto del push: el mismo aviso de la bandeja, con su ruta interna. */
+function pushPayload(notice: InboxNotice): WebPushPayload {
+  return { title: notice.title, body: notice.body, href: notice.href, tag: notice.kind };
+}
+
 function firstName(name: string | null | undefined): string | undefined {
   const first = name?.trim().split(/\s+/)[0];
   return first || undefined;
@@ -64,6 +70,7 @@ export class InboxService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
+    private readonly push: WebPushService,
   ) {}
 
   private clean(notice: InboxNotice): InboxNotice {
@@ -85,8 +92,10 @@ export class InboxService {
         Prisma.sql`SELECT * FROM notify_user(${userId}::uuid, ${n.kind}::text, ${n.tone ?? 'info'}::text, ${n.title}::text, ${n.body ?? null}::text, ${n.href ?? null}::text, ${n.dedupeKey ?? null}::text)`,
       );
       const recipient = rows[0];
-      // Sin persona o aviso repetido: no se vuelve a enviar el correo.
-      if (!recipient || !recipient.inserted || !email || !recipient.email) return;
+      // Sin persona o aviso repetido: no se vuelve a enviar el correo ni el push.
+      if (!recipient || !recipient.inserted) return;
+      void this.push.sendToUser(userId, pushPayload(n));
+      if (!email || !recipient.email) return;
       const message = email({
         email: recipient.email,
         displayName: firstName(recipient.display_name) ?? 'amigo(a)',
@@ -109,7 +118,11 @@ export class InboxService {
       const rows = await this.prisma.$queryRaw<Array<{ count: number }>>(
         Prisma.sql`SELECT notify_org_staff(${organizationId}::uuid, ${roles}::text[], ${n.kind}::text, ${n.tone ?? 'info'}::text, ${n.title}::text, ${n.body ?? null}::text, ${n.href ?? null}::text, ${n.dedupeKey ?? null}::text, ${options.excludeUserId ?? null}::uuid) AS count`,
       );
-      return Number(rows[0]?.count ?? 0);
+      const count = Number(rows[0]?.count ?? 0);
+      if (count > 0) {
+        void this.push.sendToOrgStaff(organizationId, roles, options.excludeUserId, pushPayload(n));
+      }
+      return count;
     } catch (error) {
       this.logger.warn(`No se pudo avisar al equipo (${n.kind}): ${(error as Error).message}`);
       return 0;

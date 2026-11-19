@@ -13,6 +13,7 @@ import { TemplatedNotificationAdapter } from './templated-notification.adapter';
 import { OrgEmailBrandingService } from './branding/org-email-branding.service';
 import { EmailTemplateService } from './templates/email-template.service';
 import { InboxService } from './inbox/inbox.service';
+import { WebPushService } from './push/web-push.service';
 
 /** The raw transport (log stub or SMTP), before the template layer. */
 export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
@@ -40,6 +41,7 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
   providers: [
     EmailTemplateService,
     InboxService,
+    WebPushService,
     EmailDeliveryWorker,
     OrgEmailBrandingService,
     {
@@ -74,6 +76,12 @@ export const NOTIFICATION_TRANSPORT = Symbol('NOTIFICATION_TRANSPORT');
         ),
     },
   ],
-  exports: [NOTIFICATION_PORT, NOTIFICATION_TRANSPORT, EmailTemplateService, InboxService],
+  exports: [
+    NOTIFICATION_PORT,
+    NOTIFICATION_TRANSPORT,
+    EmailTemplateService,
+    InboxService,
+    WebPushService,
+  ],
 })
 export class NotificationModule {}

@@ -20,42 +20,42 @@
 /// Donación (P1). Estados: pending → approved | declined (contrato DonationStatus).
 /// approved dispara el recibo automático.
 model Donation {
-  id              String   @id @default(uuid()) @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
   /// Organización BENEFICIARIA (dueña del recaudo).
-  organizationId  String   @map("organization_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
   /// Persona autenticada que donó (fijada por el backend desde el JWT), o
   /// `null` para un donante INVITADO (checkout de invitado, requisito del
   /// cliente: donar no requiere cuenta ni login — ver OptionalJwtAuthGuard en
   /// `POST /donations`). `payer` sigue siendo el contacto capturado del donante
   /// (invitado o no); este campo es SOLO la vinculación a una cuenta.
-  donorUserId     String?  @map("donor_user_id") @db.Uuid
+  donorUserId    String?  @map("donor_user_id") @db.Uuid
   /// PaymentConcept.kind: 'organization' | 'animal' | 'campaign' (P1: organization).
-  conceptKind     String   @map("concept_kind")
+  conceptKind    String   @map("concept_kind")
   /// PaymentConcept.id (org/animal/campaña atribuida); en P1 = organization_id.
-  conceptId       String   @map("concept_id") @db.Uuid
+  conceptId      String   @map("concept_id") @db.Uuid
   /// Pesos que la persona dona (lo mismo que se le cobra).
-  intendedAmount  Int      @map("intended_amount")
+  intendedAmount Int      @map("intended_amount")
   /// Pesos efectivamente cobrados al donante.
-  amountCharged   Int      @map("amount_charged")
-  currency        String   @default("COP")
+  amountCharged  Int      @map("amount_charged")
+  currency       String   @default("COP")
   /// PaymentBreakdown itemizado y auditable (fuente: computeBreakdown de M15).
-  breakdown       Json
+  breakdown      Json
   /// Id del recaudo en el PaymentPort (correlación con el webhook); único.
-  collectionId    String   @map("collection_id")
+  collectionId   String   @map("collection_id")
   /// Clave idempotente del cliente (un reintento no duplica donación ni cobro).
-  idempotencyKey  String   @map("idempotency_key")
+  idempotencyKey String   @map("idempotency_key")
   /// DonationStatus como texto (sin enum en runtime; nota CJS del contrato).
-  status          String   @default("pending")
+  status         String   @default("pending")
   /// Contacto del donante (DonationDonor; dato personal Ley 1581).
-  payer           Json?
+  payer          Json?
   /// "Donación anónima frente a la organización" (checkout de invitado):
   /// cuando es `true`, la lectura de la ORG (`GET /donations/received`) NUNCA
   /// expone `payer`/`receipt.donor` — AdoptaFácil sigue conservando el dato
   /// real internamente (legal/certificado). No afecta lo persistido, solo lo
   /// que ese endpoint devuelve.
-  anonymous       Boolean  @default(false)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  anonymous      Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   receipt     DonationReceipt?
   certificate DonationCertificate?

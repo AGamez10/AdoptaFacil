@@ -5,6 +5,7 @@ import { RootErrorBoundary, RouteErrorBoundary, SilentErrorBoundary } from './er
 import { AppRoutes } from './router/routes';
 import { ScrollToTop } from './router/scroll-to-top';
 import { CookieConsentBanner } from './consent';
+import { InstallAppBanner } from './install';
 
 /**
  * Auth transport for the real app: 'http' talks to the backend `/auth/*`
@@ -53,6 +54,8 @@ export function Shell() {
           {/* Aviso de cookies (Ley 1581): sale hasta que el visitante decide; sin
             permiso no se carga nada de estadística ni de marketing. */}
           <CookieConsentBanner />
+          {/* Invitación a instalar la app: sale después del aviso de cookies. */}
+          <InstallAppBanner />
         </BrowserRouter>
       </AppProviders>
     </RootErrorBoundary>

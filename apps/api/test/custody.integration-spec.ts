@@ -609,6 +609,44 @@ describe('Custody (documentación, guardería, cuenta y reportes; no-leak)', () 
     expect((await b.get('/custody/contract-templates').expect(200)).body).toHaveLength(1);
   });
 
+  it('online payment with the development driver: off by default, then paid from the link', async () => {
+    const settings = await api(orgA).get('/custody/online-payments/settings').expect(200);
+    expect(settings.body.enabled).toBe(false);
+    const created = await api(orgA)
+      .post('/custody/charges', {
+        animalId,
+        responsibleId,
+        concept: 'other',
+        description: 'Baño y corte',
+        amountCop: 45000,
+        dueDate: daysFromToday(4),
+      })
+      .expect(201);
+    await api(orgA).post(`/custody/charges/${created.body.id}/payment-link`).expect(409);
+    await api(orgA)
+      .put('/custody/online-payments/settings', { enabled: true, acceptResponsibility: true })
+      .expect(200);
+    const link = await api(orgA)
+      .post(`/custody/charges/${created.body.id}/payment-link`)
+      .expect(200);
+    const token = (link.body.url as string).split('/').pop() as string;
+    const paid = await request(server)
+      .post(`/public/custody/pay/${token}/checkout`)
+      .send({ amountCop: 45000 })
+      .expect(200);
+    expect(paid.body.checkoutUrl).toBeUndefined();
+    const status = await request(server)
+      .get(`/public/custody/pay/status/${paid.body.reference}`)
+      .expect(200);
+    expect(status.body.status).toBe('approved');
+    const charges = await api(orgA).get(`/custody/charges?animalId=${animalId}`).expect(200);
+    const charge = charges.body.find((c: { id: string }) => c.id === created.body.id);
+    expect(charge).toMatchObject({ status: 'paid', balanceCop: 0 });
+    expect(charge.payments[0].method).toBe('mercadopago');
+    // No es una donación.
+    expect(await admin.donation.count({ where: { organizationId: orgA.orgId } })).toBe(0);
+  });
+
   it('RBAC: operators cannot decide, auditors only read, volunteers get nothing', async () => {
     const setRole = (role: string) =>
       admin.userRole.updateMany({ where: { userId: orgA.userId }, data: { role } });
@@ -634,6 +672,9 @@ describe('Custody (documentación, guardería, cuenta y reportes; no-leak)', () 
       .expect(403);
     await api(orgA).post(`/custody/animals/${animalId}/authority-handover`, {}).expect(403);
     await api(orgA).post('/custody/contract-templates', {}).expect(403);
+    // Encender o apagar el pago en línea es una decisión de administración.
+    await api(orgA).put('/custody/online-payments/settings', { enabled: false }).expect(403);
+    await api(orgA).get('/custody/online-payments/settings').expect(200);
 
     await setRole('read_only_auditor');
     await api(orgA).get(`/custody/animals/${animalId}/timeline`).expect(200);
@@ -644,6 +685,8 @@ describe('Custody (documentación, guardería, cuenta y reportes; no-leak)', () 
     await setRole('volunteer');
     await api(orgA).get(`/custody/animals/${animalId}/overview`).expect(403);
     await api(orgA).get('/custody/account/summary').expect(403);
+    await api(orgA).get('/custody/online-payments/settings').expect(403);
+    await api(orgA).post(`/custody/charges/${created.body.id}/payment-link`).expect(403);
     await api(orgA).get(`/custody/documents/${actaDocumentId}/file`).expect(403);
 
     await setRole('veterinarian');

@@ -12,6 +12,7 @@ import {
   type MercadoPagoCollectorCredentials,
   type MercadoPagoPaymentSnapshot,
   type NormalizedWebhookEvent,
+  type PaymentConceptKind,
   type PaymentPort,
   type PaymentStatus,
   type WebhookVerificationContext,
@@ -308,6 +309,15 @@ const NO_CUSTODY_ERROR =
  *
  * Secrets (tokens, webhook secret) are never logged nor put in an error.
  */
+/** What the payer reads on Mercado Pago and where they land afterwards. */
+function checkoutCopyFor(kind: PaymentConceptKind): { title: string; backPath: string } {
+  if (kind === 'sponsorship') return { title: 'Apadrinamiento', backPath: '/apadrinar/resultado' };
+  if (kind === 'custody') {
+    return { title: 'Guardería y custodia', backPath: '/pagar/guarderia/resultado' };
+  }
+  return { title: 'Donación', backPath: '/donaciones/resultado' };
+}
+
 @Injectable()
 export class MercadoPagoPaymentAdapter implements PaymentPort {
   private readonly logger = new Logger('MercadoPagoPaymentAdapter');
@@ -408,10 +418,8 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
 
     const breakdown = computeBreakdown(input.intendedAmount);
     const reference = mercadoPagoReferenceFor(collector.organizationId, input.idempotencyKey);
-    const sponsorship = input.concept.kind === 'sponsorship';
-    const back = new URL(
-      `${this.webBase}${sponsorship ? '/apadrinar/resultado' : '/donaciones/resultado'}`,
-    );
+    const { title, backPath } = checkoutCopyFor(input.concept.kind);
+    const back = new URL(`${this.webBase}${backPath}`);
     back.searchParams.set('reference', reference);
     const backUrl = back.toString();
     // Orders amounts are strings. COP has no cents: Mercado Pago Colombia
@@ -424,9 +432,7 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
       processing_mode: 'manual',
       total_amount: amount,
       external_reference: reference,
-      items: [
-        { title: sponsorship ? 'Apadrinamiento' : 'Donación', unit_price: amount, quantity: 1 },
-      ],
+      items: [{ title, unit_price: amount, quantity: 1 }],
       config: {
         online: {
           success_url: backUrl,

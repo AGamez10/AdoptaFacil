@@ -31,7 +31,12 @@ export type PaymentCurrency = 'COP';
 export type PaymentStatus = 'pending' | 'approved' | 'declined' | 'voided' | 'error';
 
 /** What the money is FOR (drives beneficiary/accounting; not a checkout split). */
-export type PaymentConceptKind = 'organization' | 'animal' | 'campaign' | 'sponsorship';
+/**
+ * `custody`: un cobro de guardería o custodia que la organización le hace al
+ * responsable de un animal. No es una donación: no genera recibo ni
+ * certificado de donación ni entra al libro de donaciones.
+ */
+export type PaymentConceptKind = 'organization' | 'animal' | 'campaign' | 'sponsorship' | 'custody';
 
 export interface PaymentConcept {
   kind: PaymentConceptKind;

@@ -51,6 +51,7 @@ import { CampaignFundingService } from '../campaigns/campaign-funding.service';
 import { DonationCertificatesService } from './donation-certificates.service';
 import { buildDonationAccessLink } from './donation-access-link';
 import { MercadoPagoConnectionsService } from '../payments/mercadopago-connections.service';
+import { CustodyOnlinePaymentsService } from '../custody/custody-online-payments.service';
 import { SponsorshipSettlementService } from '../sponsorships/sponsorship-settlement.service';
 import {
   MERCADOPAGO_REFERENCE_PREFIX,
@@ -154,6 +155,7 @@ export class DonationsService {
     @Optional() private readonly mercadopagoConnections?: MercadoPagoConnectionsService,
     @Optional() private readonly inbox?: InboxService,
     @Optional() private readonly sponsorshipSettlement?: SponsorshipSettlementService,
+    @Optional() private readonly custodyPayments?: CustodyOnlinePaymentsService,
   ) {
     this.webBaseUrl = config.get('WEB_BASE_URL', { infer: true });
     this.certificatesEnabled =
@@ -519,9 +521,21 @@ export class DonationsService {
         signature,
         context,
       );
-      return sponsorship?.confirmed
-        ? { applied: true, status: 'approved', donationId: null }
-        : noop;
+      if (sponsorship?.matched) {
+        return sponsorship.confirmed
+          ? { applied: true, status: 'approved', donationId: null }
+          : noop;
+      }
+      // Nor a sponsorship: maybe the online payment of a custody/boarding
+      // charge. It is NOT a donation (no receipt, no certificate, no ledger
+      // row); it only shares this URL.
+      const custody = await this.custodyPayments?.applyMercadoPagoOrder(
+        reference,
+        payload,
+        signature,
+        context,
+      );
+      return custody?.applied ? { applied: true, status: null, donationId: null } : noop;
     }
     return this.applyMercadoPagoWebhook(donation.organization_id, payload, signature, context);
   }
@@ -623,6 +637,9 @@ export class DonationsService {
     const p = event.mercadopagoPayment;
     if (!p) return;
     try {
+      // A custody/boarding charge paid online is not a donation: it stays out
+      // of the donations reconciliation (it lives in the custody account).
+      if (await this.custodyPayments?.ownsReference(p.externalReference)) return;
       const rows = await this.prisma.$queryRaw<DonationRow[]>(Prisma.sql`
         SELECT * FROM donation_by_collection_id(${p.externalReference})
       `);

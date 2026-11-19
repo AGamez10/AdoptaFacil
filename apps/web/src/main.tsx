@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client';
 import '@adoptafacil/ui/styles.css';
 import './index.css';
 import { installImageRetry } from './lib/image-retry';
+import { registerServiceWorker } from './lib/pwa';
 import { Shell } from './shell';
 
 // Una foto que falla porque la API aún no respondía se vuelve a pedir.
@@ -20,3 +21,11 @@ ReactDOM.createRoot(rootElement).render(
     <Shell />
   </React.StrictMode>,
 );
+
+// PWA: instalable desde el navegador y con pantalla sin conexión (ver public/sw.js).
+// Se registra cuando la página ya cargó; si el evento `load` ya pasó, ahora mismo.
+if (document.readyState === 'complete') {
+  void registerServiceWorker();
+} else {
+  window.addEventListener('load', () => void registerServiceWorker(), { once: true });
+}

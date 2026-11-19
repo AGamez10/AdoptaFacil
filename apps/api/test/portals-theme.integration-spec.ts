@@ -317,6 +317,73 @@ describe('Portal theme (M14: tokens + RBAC + public read)', () => {
       },
     );
 
+    (HAS_FFMPEG ? it : it.skip)(
+      'Documental: dos videos (uno de 50 s), cada uno con su portada; se quitan por separado',
+      async () => {
+        const upload = async (seconds: number) => {
+          const reserve = await request(server)
+            .post('/org/profile/uploads')
+            .set('Authorization', `Bearer ${ownerToken}`)
+            .send({ filename: 'portada.mp4', contentType: 'video/mp4' })
+            .expect(201);
+          await request(server)
+            .put('/storage/upload')
+            .query({ key: reserve.body.key, media: 'portal' })
+            .set('Authorization', `Bearer ${ownerToken}`)
+            .attach('file', makeTestVideo(seconds, '640x360'), {
+              filename: 'celular.mp4',
+              contentType: 'video/mp4',
+            })
+            .expect(200);
+          return reserve.body.key as string;
+        };
+        const first = await upload(50);
+        const second = await upload(3);
+
+        const saved = await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({
+            tokens: {},
+            template: 'documental',
+            coverVideoKey: first,
+            coverVideo2Key: second,
+          })
+          .expect(200);
+        expect(saved.body.coverVideoPosterUrl).toContain('.poster.webp');
+        expect(saved.body.coverVideo2Url).toContain(encodeURIComponent(second.split('/').pop()!));
+        expect(saved.body.coverVideo2PosterUrl).toContain('.poster.webp');
+        expect(saved.body.tokens).not.toHaveProperty('__coverVideo2');
+
+        const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+        expect(pub.body.coverVideo2Url).toBe(saved.body.coverVideo2Url);
+
+        // Quitar solo el segundo conserva el primero.
+        const removed = await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ tokens: {}, coverVideo2Key: null })
+          .expect(200);
+        expect(removed.body).not.toHaveProperty('coverVideo2Url');
+        expect(removed.body).not.toHaveProperty('coverVideo2PosterUrl');
+        expect(removed.body.coverVideoUrl).toBe(saved.body.coverVideoUrl);
+
+        // Un segundo video de otra organización no se acepta.
+        await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ tokens: {}, coverVideo2Key: 'public/00000000-0000-0000-0000-000000000000/x.mp4' })
+          .expect(403);
+
+        await request(server)
+          .put('/portals/theme')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ tokens: {}, template: 'clasica', coverVideoKey: null })
+          .expect(200);
+      },
+      180_000,
+    );
+
     it('Historias: guarda un video de portada propio y público, lo expone como URL y lo quita con null', async () => {
       const orgId = createdOrgIds[0];
       const reserve = await request(server)

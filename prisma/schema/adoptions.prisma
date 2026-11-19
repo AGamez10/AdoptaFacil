@@ -57,24 +57,24 @@ model AdoptionRequest {
 /// mano en el SQL de la migración (igual que la RLS). La firma del ADOPTANTE, que
 /// es cross-tenant, se aplica vía funciones SECURITY DEFINER de la migración.
 model AdoptionContract {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
   /// Solicitud aprobada que originó el contrato (seam contractRef de T-028a).
-  requestId      String   @map("request_id") @db.Uuid
+  requestId      String    @map("request_id") @db.Uuid
   /// Referencia al animal en M03 (sin FK cross-módulo).
-  animalId       String   @map("animal_id") @db.Uuid
+  animalId       String    @map("animal_id") @db.Uuid
   /// Versión documental (RNF05); 1 en el primer corte.
-  version        Int      @default(1)
+  version        Int       @default(1)
   /// AdoptionContractStatus como texto (sin enum en runtime; nota CJS del contrato).
-  status         String   @default("draft")
+  status         String    @default("draft")
   /// Firmantes dinámicos + estado de cada firma (AdoptionContractSigner[]).
   signers        Json
   /// Contenido canónico versionable (AdoptionContractPayload); fuente del hash.
   payload        Json
   /// SHA-256 hex del payload canónico; NULL hasta el sellado (signed).
-  contentHash    String?  @map("content_hash")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  contentHash    String?   @map("content_hash")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
   /// UTC del sellado (NULL hasta signed).
   signedAt       DateTime? @map("signed_at")
 
@@ -96,24 +96,24 @@ model AdoptionContract {
 /// organizations, adoption_contracts y adoption_requests se añaden a mano en el SQL
 /// (igual que la RLS). La relación con `evidence` SÍ se modela (ambas tablas M04).
 model AdoptionFollowUpMilestone {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  contractId     String   @map("contract_id") @db.Uuid
-  requestId      String   @map("request_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  contractId     String    @map("contract_id") @db.Uuid
+  requestId      String    @map("request_id") @db.Uuid
   /// Adoptante responsable (gate de identidad para responder).
-  adopterUserId  String   @map("adopter_user_id") @db.Uuid
+  adopterUserId  String    @map("adopter_user_id") @db.Uuid
   /// Dato personal del adoptante (Ley 1581) — denormalizado para alertas/UI.
-  adopterName    String   @map("adopter_name")
-  adopterEmail   String   @map("adopter_email")
+  adopterName    String    @map("adopter_name")
+  adopterEmail   String    @map("adopter_email")
   title          String
   /// FollowUpQuestion[] (cuestionario del hito).
-  questionnaire  Json     @default("[]")
-  dueAt          DateTime @map("due_at")
+  questionnaire  Json      @default("[]")
+  dueAt          DateTime  @map("due_at")
   /// FollowUpMilestoneStatus como texto (sin enum en runtime; nota CJS del contrato).
-  status         String   @default("scheduled")
+  status         String    @default("scheduled")
   completedAt    DateTime? @map("completed_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   evidence AdoptionFollowUpEvidence[]
 
@@ -158,34 +158,34 @@ model AdoptionFollowUpEvidence {
 /// FRONTERAS: la relación con el contrato SÍ se modela (ambas tablas M04, y la
 /// cascada desde la organización llega por ahí); el animal se referencia por id.
 model AdoptionDelivery {
-  id               String    @id @db.Uuid
-  organizationId   String    @map("organization_id") @db.Uuid
-  contractId       String    @map("contract_id") @db.Uuid
-  requestId        String    @map("request_id") @db.Uuid
-  animalId         String    @map("animal_id") @db.Uuid
-  adopterUserId    String    @map("adopter_user_id") @db.Uuid
+  id              String    @id @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  contractId      String    @map("contract_id") @db.Uuid
+  requestId       String    @map("request_id") @db.Uuid
+  animalId        String    @map("animal_id") @db.Uuid
+  adopterUserId   String    @map("adopter_user_id") @db.Uuid
   /// Dato personal del adoptante (Ley 1581) — para correo y alertas.
-  adopterName      String    @map("adopter_name")
-  adopterEmail     String    @map("adopter_email")
-  animalName       String    @map("animal_name")
+  adopterName     String    @map("adopter_name")
+  adopterEmail    String    @map("adopter_email")
+  animalName      String    @map("animal_name")
   /// AdoptionDeliveryStatus como texto.
-  status           String    @default("pending_confirmation")
+  status          String    @default("pending_confirmation")
   /// AdoptionDeliveryDetails.
-  details          Json
+  details         Json
   /// AdoptionAnimalRecord (ficha que recibe el adoptante).
-  record           Json
+  record          Json
   /// AdoptionDeliveryMilestonePlanItem[].
-  milestonePlan    Json      @map("milestone_plan")
+  milestonePlan   Json      @map("milestone_plan")
   /// SHA-256 hex del acta canónica (detalles + ficha + plan).
-  contentHash      String    @map("content_hash")
+  contentHash     String    @map("content_hash")
   /// SHA-256 hex de "id:código"; NULL cuando ya no hay código activo.
-  codeHash         String?   @map("code_hash")
-  codeExpiresAt    DateTime? @map("code_expires_at")
-  codeAttempts     Int       @default(0) @map("code_attempts")
-  createdByUserId  String    @map("created_by_user_id") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  confirmedAt      DateTime? @map("confirmed_at")
+  codeHash        String?   @map("code_hash")
+  codeExpiresAt   DateTime? @map("code_expires_at")
+  codeAttempts    Int       @default(0) @map("code_attempts")
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  confirmedAt     DateTime? @map("confirmed_at")
 
   contract AdoptionContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 

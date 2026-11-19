@@ -115,3 +115,25 @@ model UserNotification {
   @@index([userId, createdAt(sort: Desc)], map: "user_notifications_user_created_idx")
   @@map("user_notifications")
 }
+
+/// Suscripción de notificaciones push web (VAPID) de UN navegador o app
+/// instalada de una persona. Vive en el tenant de la persona (RLS). El envío a
+/// otras cuentas usa las funciones SECURITY DEFINER `push_subscriptions_for_*`
+/// (migración 20261116150000).
+model PushSubscription {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  endpoint       String   @unique
+  p256dh         String
+  auth           String
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("push_subscriptions")
+}

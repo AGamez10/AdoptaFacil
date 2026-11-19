@@ -29,9 +29,7 @@ import catalogStyles from '../../styles/public-catalog.module.scss';
 import portalStyles from '../../styles/public-portal.module.scss';
 import templateStyles from './portal-templates.module.scss';
 import styles from './template-live-preview.module.scss';
-
-const PORTAL_BASE_DOMAIN =
-  (import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined) || 'adoptafacil.org';
+import { portalAddress } from '../../model/subdomain';
 
 type Device = 'desktop' | 'mobile';
 const DEVICE_WIDTH: Record<Device, number> = { desktop: 1280, mobile: 390 };
@@ -47,6 +45,9 @@ export interface TemplateLivePreviewProps {
   /** Video de portada elegido en el editor (aún sin guardar): Historias y Documental. */
   coverVideoUrl?: string;
   coverVideoPosterUrl?: string;
+  /** Segundo video (Documental), aún sin guardar. */
+  coverVideo2Url?: string;
+  coverVideo2PosterUrl?: string;
 }
 
 /**
@@ -65,6 +66,8 @@ export function TemplateLivePreview({
   logoPosition,
   coverVideoUrl,
   coverVideoPosterUrl,
+  coverVideo2Url,
+  coverVideo2PosterUrl,
 }: TemplateLivePreviewProps) {
   // En pantallas pequeñas se abre la vista de celular (el editor usa el ancho del dispositivo).
   const [device, setDevice] = useState<Device>(() =>
@@ -85,10 +88,16 @@ export function TemplateLivePreview({
   // El video del editor (aún sin guardar) entra a la vista previa de las plantillas del motor.
   const source = useMemo(
     () =>
-      coverVideoUrl
-        ? { ...baseSource, coverVideo: { url: coverVideoUrl, poster: coverVideoPosterUrl } }
+      coverVideoUrl || coverVideo2Url
+        ? {
+            ...baseSource,
+            coverVideo: coverVideoUrl ? { url: coverVideoUrl, poster: coverVideoPosterUrl } : null,
+            coverVideo2: coverVideo2Url
+              ? { url: coverVideo2Url, poster: coverVideo2PosterUrl }
+              : null,
+          }
         : baseSource,
-    [baseSource, coverVideoUrl, coverVideoPosterUrl],
+    [baseSource, coverVideoUrl, coverVideoPosterUrl, coverVideo2Url, coverVideo2PosterUrl],
   );
   const organization = source.organization;
   const animals = source.animals;
@@ -138,7 +147,7 @@ export function TemplateLivePreview({
       <div className={styles.toolbar}>
         <span className={styles.url}>
           <span className={styles.dot} />
-          {previewSlug}.{PORTAL_BASE_DOMAIN}
+          {portalAddress(previewSlug)}
         </span>
         <div className={styles.devices} role="group" aria-label="Tamaño de la vista previa">
           {(['desktop', 'mobile'] as const).map((value) => (

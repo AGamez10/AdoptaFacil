@@ -9,6 +9,7 @@ import { DonationStatusPublicController } from './donation-status-public.control
 import { DonationCertificatesService } from './donation-certificates.service';
 import { MercadoPagoAccountsModule } from '../payments/mercadopago-accounts.module';
 import { SponsorshipsModule } from '../sponsorships/sponsorships.module';
+import { CustodyModule } from '../custody/custody.module';
 
 /**
  * M05 · Donations (T-050, P1). A Person donates to an organization, sees the
@@ -51,7 +52,15 @@ import { SponsorshipsModule } from '../sponsorships/sponsorships.module';
   // ADR-PAG-003: MercadoPagoAccountsModule resolves the org's OAuth grant.
   // SponsorshipsModule: a monthly sponsorship is paid with an order too, and
   // its notification arrives at the same Orders URL.
-  imports: [AuthModule, CampaignsModule, MercadoPagoAccountsModule, SponsorshipsModule],
+  // CustodyModule: lo mismo para el pago en línea de un cobro de guardería,
+  // que NO es una donación y solo comparte la URL del aviso.
+  imports: [
+    AuthModule,
+    CampaignsModule,
+    MercadoPagoAccountsModule,
+    SponsorshipsModule,
+    CustodyModule,
+  ],
   controllers: [
     DonationsController,
     DonationCertificatePublicController,

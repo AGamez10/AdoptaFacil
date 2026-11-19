@@ -150,7 +150,7 @@ model CoffeeContributionDelivery {
 /// (`kind = reversal`) que la anula por completo, con su motivo; nunca se
 /// edita. Los reversos llevan cantidad y montos negativos, así que la suma de
 /// las filas es lo vendido de verdad. Sin datos del comprador.
-/// Ver migración 20261116120000_coffee_physical_sales.
+/// Ver migración 20261119200000_coffee_physical_sales.
 model CoffeePhysicalSale {
   id                     String   @id @default(uuid()) @db.Uuid
   organizationId         String   @map("organization_id") @db.Uuid

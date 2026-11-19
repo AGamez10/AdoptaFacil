@@ -13,11 +13,13 @@ import {
   type CustodyBalanceLine,
   type CustodyCharge,
   type CustodyChargeStatus,
+  type CustodyPaymentMethod,
 } from '@adoptafacil/contracts';
 import {
   CHARGE_INCLUDE,
   CustodyCoreService,
   type ChargeWithRelations,
+  type StoredFile,
   type UploadedFileLike,
 } from './custody-core.service';
 import {
@@ -37,6 +39,30 @@ import {
   toDbDate,
   todayInColombia,
 } from './custody.util';
+
+/** Un pago por escribir: registrado a mano o confirmado por la pasarela. */
+export interface WritePaymentArgs {
+  chargeId: string;
+  amountCop: number;
+  /** `YYYY-MM-DD`. */
+  paidOn: string;
+  method: CustodyPaymentMethod;
+  reference?: string;
+  notes?: string;
+  /** Quien lo registra; en un pago en línea, quien creó el enlace de pago. */
+  actorUserId: string;
+  /** Nombre que queda en la constancia como quien recibe. */
+  actorName: string;
+  storedProof?: StoredFile | null;
+  /** Lo confirmó Mercado Pago: nadie lo registró a mano. */
+  online?: boolean;
+}
+
+export interface WrittenPayment {
+  paymentId: string;
+  receiptNumber: string;
+  balanceAfterCop: number;
+}
 
 const isLate = (charge: CustodyCharge): boolean =>
   charge.status === 'pending' &&
@@ -356,89 +382,78 @@ export class CustodyBillingService {
       : null;
 
     return this.core.prisma.withOrgContext(organizationId, async (tx) => {
-      // Bloquea el cobro: dos pagos a la vez no pueden pasarse del saldo.
-      await tx.$queryRaw`SELECT 1 FROM custody_charges WHERE id = ${chargeId}::uuid FOR UPDATE`;
-      const row = await this.requireCharge(tx, chargeId);
-      if (row.status === 'cancelled') {
-        throw new ConflictException('Este cobro está anulado.');
-      }
-      const before = this.core.toCharge(row);
-      if (before.balanceCop <= 0) {
-        throw new ConflictException('Este cobro ya está pagado en su totalidad.');
-      }
-      if (input.amountCop > before.balanceCop) {
-        throw new BadRequestException(
-          `El valor recibido supera el saldo del cobro (${formatCop(before.balanceCop)}). Registra el excedente en otro cobro.`,
-        );
-      }
       const actorName = await actorNameOf(tx, actorUserId);
-      const receiptNumber = await this.nextReceiptNumber(tx);
-      const payment = await tx.custodyPayment.create({
-        data: {
-          organizationId,
-          chargeId,
-          receiptNumber,
-          amountCop: input.amountCop,
-          paidOn: toDbDate(input.paidOn),
-          method: input.method,
-          reference: orNull(input.reference),
-          notes: orNull(input.notes),
-          receivedByUserId: actorUserId,
-          receivedByName: actorName,
-        },
+      await this.writePayment(tx, {
+        chargeId,
+        amountCop: input.amountCop,
+        paidOn: input.paidOn,
+        method: input.method,
+        reference: input.reference,
+        notes: input.notes,
+        actorUserId,
+        actorName,
+        storedProof,
       });
-      const balanceAfterCop = before.balanceCop - input.amountCop;
-      if (balanceAfterCop === 0) {
-        await tx.custodyCharge.update({ where: { id: chargeId }, data: { status: 'paid' } });
-      }
-      if (storedProof) {
-        await this.core.insertDocument(tx, {
-          animalId: row.animalId,
-          kind: 'bank_proof',
-          title: `Comprobante del pago ${receiptNumber}`,
-          source: 'uploaded',
-          file: storedProof,
-          actorUserId,
-          actorName,
-          chargeId,
-          paymentId: payment.id,
-          responsibleId: row.responsibleId,
-          documentDate: input.paidOn,
-        });
-      }
-      const animal = await this.core.requireAnimal(tx, row.animalId);
-      const responsible = await this.core.requireResponsible(tx, row.responsibleId);
-      const organization = await this.core.loadOrganization(tx);
-      const pdf = await renderCustodyPdf(
-        buildPaymentReceipt({
-          organization,
-          animal: this.core.animalFacts(animal),
-          responsible: this.core.toParty(responsible),
-          charge: before,
-          payment: {
-            receiptNumber,
-            amountCop: input.amountCop,
-            paidOn: input.paidOn,
-            method: input.method,
-            reference: payment.reference ?? undefined,
-            notes: payment.notes ?? undefined,
-            receivedByName: actorName,
-          },
-          balanceAfterCop,
-          hasProof: Boolean(storedProof),
-        }),
+      return this.chargeView(tx, chargeId);
+    });
+  }
+
+  /**
+   * Escribe un pago dentro de una transacción ya abierta: bloquea el cobro,
+   * valida el saldo, numera y genera la constancia, y deja historial y
+   * auditoría. Lo usan el registro manual y la confirmación de un pago en
+   * línea (`online`), que nadie registró a mano: ahí `actorName` es el nombre
+   * del medio y la auditoría queda sin persona.
+   */
+  async writePayment(
+    tx: Prisma.TransactionClient,
+    args: WritePaymentArgs,
+  ): Promise<WrittenPayment> {
+    const organizationId = this.core.orgId();
+    const { chargeId, actorUserId, actorName } = args;
+    const storedProof = args.storedProof ?? null;
+    const input = args;
+    // Bloquea el cobro: dos pagos a la vez no pueden pasarse del saldo.
+    await tx.$queryRaw`SELECT 1 FROM custody_charges WHERE id = ${chargeId}::uuid FOR UPDATE`;
+    const row = await this.requireCharge(tx, chargeId);
+    if (row.status === 'cancelled') {
+      throw new ConflictException('Este cobro está anulado.');
+    }
+    const before = this.core.toCharge(row);
+    if (before.balanceCop <= 0) {
+      throw new ConflictException('Este cobro ya está pagado en su totalidad.');
+    }
+    if (input.amountCop > before.balanceCop) {
+      throw new BadRequestException(
+        `El valor recibido supera el saldo del cobro (${formatCop(before.balanceCop)}). Registra el excedente en otro cobro.`,
       );
-      const stored = await this.core.saveFile(
-        pdf,
-        `constancia-${receiptNumber}.pdf`,
-        'application/pdf',
-      );
-      const doc = await this.core.insertDocument(tx, {
+    }
+    const receiptNumber = await this.nextReceiptNumber(tx);
+    const payment = await tx.custodyPayment.create({
+      data: {
+        organizationId,
+        chargeId,
+        receiptNumber,
+        amountCop: input.amountCop,
+        paidOn: toDbDate(input.paidOn),
+        method: input.method,
+        reference: orNull(input.reference),
+        notes: orNull(input.notes),
+        receivedByUserId: actorUserId,
+        receivedByName: actorName,
+      },
+    });
+    const balanceAfterCop = before.balanceCop - input.amountCop;
+    if (balanceAfterCop === 0) {
+      await tx.custodyCharge.update({ where: { id: chargeId }, data: { status: 'paid' } });
+    }
+    if (storedProof) {
+      await this.core.insertDocument(tx, {
         animalId: row.animalId,
-        kind: 'payment_receipt',
-        title: `Constancia de pago ${receiptNumber}`,
-        source: 'generated',
-        file: stored,
+        kind: 'bank_proof',
+        title: `Comprobante del pago ${receiptNumber}`,
+        source: 'uploaded',
+        file: storedProof,
         actorUserId,
         actorName,
         chargeId,
@@ -446,33 +461,73 @@ export class CustodyBillingService {
         responsibleId: row.responsibleId,
         documentDate: input.paidOn,
       });
-      await this.core.recordEvent(tx, {
-        animalId: row.animalId,
-        type: 'payment_received',
-        summary: `Pago de ${formatCop(input.amountCop)} recibido (constancia ${receiptNumber})`,
-        detail: row.description,
-        documentId: doc.id,
-        refs: { chargeId, paymentId: payment.id },
-        actorUserId,
-        actorName,
-      });
-      await this.core.audit.recordWithTx(tx, {
-        organizationId,
-        actorUserId,
-        action: 'custody.payment_registered',
-        entityType: 'custody_payment',
-        entityId: payment.id,
-        metadata: {
-          chargeId,
+    }
+    const animal = await this.core.requireAnimal(tx, row.animalId);
+    const responsible = await this.core.requireResponsible(tx, row.responsibleId);
+    const organization = await this.core.loadOrganization(tx);
+    const pdf = await renderCustodyPdf(
+      buildPaymentReceipt({
+        organization,
+        animal: this.core.animalFacts(animal),
+        responsible: this.core.toParty(responsible),
+        charge: before,
+        payment: {
           receiptNumber,
           amountCop: input.amountCop,
+          paidOn: input.paidOn,
           method: input.method,
-          hasProof: Boolean(storedProof),
-          documentId: doc.id,
+          reference: payment.reference ?? undefined,
+          notes: payment.notes ?? undefined,
+          receivedByName: actorName,
         },
-      });
-      return this.chargeView(tx, chargeId);
+        balanceAfterCop,
+        hasProof: Boolean(storedProof),
+      }),
+    );
+    const stored = await this.core.saveFile(
+      pdf,
+      `constancia-${receiptNumber}.pdf`,
+      'application/pdf',
+    );
+    const doc = await this.core.insertDocument(tx, {
+      animalId: row.animalId,
+      kind: 'payment_receipt',
+      title: `Constancia de pago ${receiptNumber}`,
+      source: 'generated',
+      file: stored,
+      actorUserId,
+      actorName,
+      chargeId,
+      paymentId: payment.id,
+      responsibleId: row.responsibleId,
+      documentDate: input.paidOn,
     });
+    await this.core.recordEvent(tx, {
+      animalId: row.animalId,
+      type: 'payment_received',
+      summary: `Pago de ${formatCop(input.amountCop)} recibido${args.online ? ' en línea por Mercado Pago' : ''} (constancia ${receiptNumber})`,
+      detail: row.description,
+      documentId: doc.id,
+      refs: { chargeId, paymentId: payment.id },
+      actorUserId,
+      actorName,
+    });
+    await this.core.audit.recordWithTx(tx, {
+      organizationId,
+      actorUserId: args.online ? null : actorUserId,
+      action: args.online ? 'custody.online_payment_received' : 'custody.payment_registered',
+      entityType: 'custody_payment',
+      entityId: payment.id,
+      metadata: {
+        chargeId,
+        receiptNumber,
+        amountCop: input.amountCop,
+        method: input.method,
+        hasProof: Boolean(storedProof),
+        documentId: doc.id,
+      },
+    });
+    return { paymentId: payment.id, receiptNumber, balanceAfterCop };
   }
 
   /** Anula un pago registrado por error. La constancia emitida se conserva. */
@@ -483,44 +538,70 @@ export class CustodyBillingService {
   ): Promise<CustodyCharge> {
     const organizationId = this.core.orgId();
     return this.core.prisma.withOrgContext(organizationId, async (tx) => {
-      const payment = await tx.custodyPayment.findUnique({
-        where: { id: paymentId },
-        include: { charge: true },
-      });
-      if (!payment || payment.organizationId !== organizationId) {
-        throw new NotFoundException('Pago no encontrado.');
-      }
-      if (payment.voidedAt) throw new ConflictException('Este pago ya está anulado.');
       const actorName = await actorNameOf(tx, actorUserId);
-      await tx.custodyPayment.update({
-        where: { id: paymentId },
-        data: { voidedAt: new Date(), voidedByUserId: actorUserId, voidReason: reason },
-      });
-      if (payment.charge.status === 'paid') {
-        await tx.custodyCharge.update({
-          where: { id: payment.chargeId },
-          data: { status: 'pending' },
-        });
-      }
-      await this.core.recordEvent(tx, {
-        animalId: payment.charge.animalId,
-        type: 'payment_voided',
-        summary: `Pago ${payment.receiptNumber} anulado (${formatCop(payment.amountCop)})`,
-        detail: reason,
-        refs: { chargeId: payment.chargeId, paymentId },
+      const chargeId = await this.voidPaymentInTx(tx, {
+        paymentId,
+        reason,
         actorUserId,
         actorName,
       });
-      await this.core.audit.recordWithTx(tx, {
-        organizationId,
-        actorUserId,
-        action: 'custody.payment_voided',
-        entityType: 'custody_payment',
-        entityId: paymentId,
-        metadata: { chargeId: payment.chargeId, receiptNumber: payment.receiptNumber },
-      });
-      return this.chargeView(tx, payment.chargeId);
+      return this.chargeView(tx, chargeId);
     });
+  }
+
+  /**
+   * Anula un pago dentro de una transacción ya abierta y devuelve su cobro al
+   * saldo. `online`: lo revirtió Mercado Pago (devolución o contracargo), no
+   * una persona; la auditoría queda sin persona.
+   */
+  async voidPaymentInTx(
+    tx: Prisma.TransactionClient,
+    args: {
+      paymentId: string;
+      reason: string;
+      actorUserId: string;
+      actorName: string;
+      online?: boolean;
+    },
+  ): Promise<string> {
+    const organizationId = this.core.orgId();
+    const { paymentId, reason, actorUserId, actorName } = args;
+    const payment = await tx.custodyPayment.findUnique({
+      where: { id: paymentId },
+      include: { charge: true },
+    });
+    if (!payment || payment.organizationId !== organizationId) {
+      throw new NotFoundException('Pago no encontrado.');
+    }
+    if (payment.voidedAt) throw new ConflictException('Este pago ya está anulado.');
+    await tx.custodyPayment.update({
+      where: { id: paymentId },
+      data: { voidedAt: new Date(), voidedByUserId: actorUserId, voidReason: reason },
+    });
+    if (payment.charge.status === 'paid') {
+      await tx.custodyCharge.update({
+        where: { id: payment.chargeId },
+        data: { status: 'pending' },
+      });
+    }
+    await this.core.recordEvent(tx, {
+      animalId: payment.charge.animalId,
+      type: 'payment_voided',
+      summary: `Pago ${payment.receiptNumber} anulado (${formatCop(payment.amountCop)})`,
+      detail: reason,
+      refs: { chargeId: payment.chargeId, paymentId },
+      actorUserId,
+      actorName,
+    });
+    await this.core.audit.recordWithTx(tx, {
+      organizationId,
+      actorUserId: args.online ? null : actorUserId,
+      action: args.online ? 'custody.online_payment_reversed' : 'custody.payment_voided',
+      entityType: 'custody_payment',
+      entityId: paymentId,
+      metadata: { chargeId: payment.chargeId, receiptNumber: payment.receiptNumber },
+    });
+    return payment.chargeId;
   }
 
   // --- Procedimiento de cobro -----------------------------------------------

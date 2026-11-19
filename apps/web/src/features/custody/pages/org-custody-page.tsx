@@ -9,6 +9,7 @@ import {
   type CustodyClause,
   type CustodyContract,
   type CustodyContractTemplate,
+  type CustodyOnlinePaymentSettings,
   type CustodyResponsible,
 } from '@adoptafacil/contracts';
 import {
@@ -35,6 +36,7 @@ import { useSession } from '../../../shell/auth';
 import { openBlob, useCustodyApi, type CustodyApi } from '../api/custody-api';
 import { ChargeList } from '../components/account-panel';
 import { ContractList } from '../components/contracts-panel';
+import { OnlinePaymentsCard } from '../components/online-payments-card';
 import {
   CheckField,
   Field,
@@ -239,6 +241,7 @@ export function OrgCustodyPage() {
   const [contracts, setContracts] = useState<CustodyContract[]>([]);
   const [templates, setTemplates] = useState<CustodyContractTemplate[]>([]);
   const [responsibles, setResponsibles] = useState<CustodyResponsible[]>([]);
+  const [onlinePayments, setOnlinePayments] = useState<CustodyOnlinePaymentSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ChargeFilter>('open');
   const [responsibleFilter, setResponsibleFilter] = useState('');
@@ -270,6 +273,11 @@ export function OrgCustodyPage() {
     } catch (error) {
       setLoadError(friendlyErrorMessage(error));
     }
+    // Aparte: si esto falla, la cuenta se sigue viendo (solo no se ofrece el enlace).
+    api
+      .onlinePaymentSettings()
+      .then(setOnlinePayments)
+      .catch(() => setOnlinePayments(null));
   }, [api]);
 
   useEffect(() => {
@@ -496,8 +504,17 @@ export function OrgCustodyPage() {
                 canWrite={canWrite}
                 canManage={canManage}
                 showAnimal
+                onlinePayments={onlinePayments?.enabled === true}
                 onChanged={() => void load()}
               />
+              {onlinePayments && (
+                <OnlinePaymentsCard
+                  api={api}
+                  settings={onlinePayments}
+                  canManage={canManage}
+                  onChanged={setOnlinePayments}
+                />
+              )}
             </div>
           </TabsContent>
 

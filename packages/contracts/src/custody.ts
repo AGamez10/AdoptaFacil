@@ -147,7 +147,18 @@ export const CUSTODY_ACCOUNT_STATUS_LABELS: Record<CustodyAccountStatus, string>
   overdue: 'Con saldo vencido',
 };
 
-export const CUSTODY_PAYMENT_METHODS = ['transfer', 'deposit', 'cash', 'other'] as const;
+/**
+ * `mercadopago` solo lo escribe el sistema, cuando Mercado Pago confirma un pago
+ * en línea hecho a la cuenta de la propia organización. Una persona registra a
+ * mano únicamente los de {@link CUSTODY_MANUAL_PAYMENT_METHODS}.
+ */
+export const CUSTODY_PAYMENT_METHODS = [
+  'transfer',
+  'deposit',
+  'cash',
+  'other',
+  'mercadopago',
+] as const;
 export type CustodyPaymentMethod = (typeof CUSTODY_PAYMENT_METHODS)[number];
 
 export const CUSTODY_PAYMENT_METHOD_LABELS: Record<CustodyPaymentMethod, string> = {
@@ -155,7 +166,11 @@ export const CUSTODY_PAYMENT_METHOD_LABELS: Record<CustodyPaymentMethod, string>
   deposit: 'Consignación',
   cash: 'Efectivo',
   other: 'Otro medio',
+  mercadopago: 'Mercado Pago (pago en línea)',
 };
+
+export const CUSTODY_MANUAL_PAYMENT_METHODS = ['transfer', 'deposit', 'cash', 'other'] as const;
+export type CustodyManualPaymentMethod = (typeof CUSTODY_MANUAL_PAYMENT_METHODS)[number];
 
 export const CUSTODY_RELEASE_TYPES = [
   'return_to_responsible',
@@ -272,6 +287,7 @@ export const CUSTODY_EVENT_TYPES = [
   'charge_cancelled',
   'payment_received',
   'payment_voided',
+  'online_payment_review',
   'extension_granted',
   'collection_procedure_started',
   'document_generated',
@@ -293,6 +309,7 @@ export const CUSTODY_EVENT_TYPE_LABELS: Record<CustodyEventType, string> = {
   charge_cancelled: 'Cobro anulado',
   payment_received: 'Pago recibido',
   payment_voided: 'Pago anulado',
+  online_payment_review: 'Pago en línea por revisar',
   extension_granted: 'Prórroga concedida',
   collection_procedure_started: 'Procedimiento de cobro iniciado',
   document_generated: 'Documento generado',
@@ -1044,4 +1061,93 @@ export function custodyDaysBetween(from: string, to: string): number {
   const a = Date.parse(`${from}T00:00:00Z`);
   const b = Date.parse(`${to}T00:00:00Z`);
   return Math.round((b - a) / 86_400_000);
+}
+
+// ---------------------------------------------------------------------------
+// Pago en línea de guardería y custodia (Mercado Pago, cuenta de la organización)
+// ---------------------------------------------------------------------------
+
+/** Versión del texto que la organización acepta al encender el pago en línea. */
+export const CUSTODY_ONLINE_PAYMENT_TERMS_VERSION = '2026-11-16';
+
+/**
+ * Lo que la organización acepta, con nombre y fecha, al encender el pago en
+ * línea. Se muestra tal cual en la pantalla y queda guardada la versión.
+ */
+export const CUSTODY_ONLINE_PAYMENT_TERMS: readonly string[] = [
+  'El dinero llega directo a la cuenta de Mercado Pago de la organización. AdoptaFácil no lo recibe, no lo retiene y no cobra comisión por estos pagos.',
+  'El cobro de guardería y custodia es un servicio que presta la organización. La organización es la única responsable de facturarlo (incluida la factura electrónica cuando esté obligada) y de declarar y pagar el IVA, las retenciones y los demás impuestos que correspondan.',
+  'La constancia de pago que genera AdoptaFácil es un soporte administrativo. No es una factura electrónica ni un certificado de donación.',
+  'Las devoluciones se hacen desde la cuenta de Mercado Pago de la organización. Mercado Pago descuenta su propia tarifa de esa cuenta.',
+  'Pagar o no pagar nunca condiciona la entrega o devolución del animal.',
+];
+
+/** Lo que la persona que paga lee antes de ir a Mercado Pago. */
+export const CUSTODY_ONLINE_PAYMENT_PAYER_NOTICE =
+  'El pago llega directo a la organización por Mercado Pago. Recibirás una constancia de pago, que no es una factura electrónica: si necesitas factura, pídesela a la organización.';
+
+/** Pago parcial mínimo en línea (o el saldo, si es menor). */
+export const CUSTODY_ONLINE_PAYMENT_MIN_COP = 5000;
+
+export interface CustodyOnlinePaymentSettings {
+  enabled: boolean;
+  /** La organización puede cobrar ahora (cuenta de Mercado Pago conectada). */
+  canCollect: boolean;
+  termsVersion: string;
+  acceptedAt?: string;
+  acceptedByName?: string;
+}
+
+export interface UpdateCustodyOnlinePaymentSettingsInput {
+  enabled: boolean;
+  /** Obligatorio para encender: quien enciende acepta el texto vigente. */
+  acceptResponsibility?: boolean;
+}
+
+export interface CustodyPaymentLink {
+  chargeId: string;
+  /** Enlace que se le comparte a quien paga. No pide cuenta. */
+  url: string;
+  createdAt: string;
+}
+
+export type CustodyPublicPaymentState = 'open' | 'paid' | 'cancelled' | 'unavailable';
+
+/** Lo que ve quien abre el enlace de pago. Sin datos personales del responsable. */
+export interface CustodyPublicPayment {
+  organizationName: string;
+  animalName: string;
+  conceptLabel: string;
+  description: string;
+  periodLabel?: string;
+  amountCop: number;
+  paidCop: number;
+  balanceCop: number;
+  /** `YYYY-MM-DD`. */
+  dueDate: string;
+  state: CustodyPublicPaymentState;
+  minimumCop: number;
+  notice: string;
+}
+
+export interface CustodyPublicCheckoutInput {
+  /** Sin valor se paga todo el saldo. */
+  amountCop?: number;
+}
+
+export interface CustodyPublicCheckout {
+  reference: string;
+  /** A dónde ir a pagar. Ausente si el pago quedó confirmado de inmediato. */
+  checkoutUrl?: string;
+}
+
+export type CustodyOnlinePaymentStatus = 'pending' | 'approved' | 'reversed' | 'review';
+
+/** Resultado que ve quien vuelve de Mercado Pago. */
+export interface CustodyPublicPaymentStatus {
+  status: CustodyOnlinePaymentStatus;
+  amountCop: number;
+  organizationName: string;
+  animalName: string;
+  receiptNumber?: string;
 }

@@ -4,13 +4,14 @@ import {
   CUSTODY_CHARGE_CONCEPT_LABELS,
   CUSTODY_CHARGE_SITUATION_LABELS,
   CUSTODY_DEBT_SEPARATION_NOTICE,
-  CUSTODY_PAYMENT_METHODS,
+  CUSTODY_MANUAL_PAYMENT_METHODS,
   CUSTODY_PAYMENT_METHOD_LABELS,
   CUSTODY_RECEIPT_NOTICE,
   type CustodyCharge,
   type CustodyChargeConcept,
+  type CustodyManualPaymentMethod,
   type CustodyPayment,
-  type CustodyPaymentMethod,
+  type CustodyPaymentLink,
 } from '@adoptafacil/contracts';
 import { Badge, Button, EmptyState, Input, friendlyErrorMessage, useToast } from '@adoptafacil/ui';
 import { openBlob, type CustodyApi } from '../api/custody-api';
@@ -38,7 +39,7 @@ const CONCEPT_OPTIONS = CUSTODY_CHARGE_CONCEPTS.map((value) => ({
   value,
   label: CUSTODY_CHARGE_CONCEPT_LABELS[value],
 }));
-const METHOD_OPTIONS = CUSTODY_PAYMENT_METHODS.map((value) => ({
+const METHOD_OPTIONS = CUSTODY_MANUAL_PAYMENT_METHODS.map((value) => ({
   value,
   label: CUSTODY_PAYMENT_METHOD_LABELS[value],
 }));
@@ -196,7 +197,7 @@ function PaymentDialog({
 }) {
   const [amount, setAmount] = useState('');
   const [paidOn, setPaidOn] = useState(todayInColombia());
-  const [method, setMethod] = useState<CustodyPaymentMethod | ''>('');
+  const [method, setMethod] = useState<CustodyManualPaymentMethod | ''>('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -235,7 +236,7 @@ function PaymentDialog({
           {
             amountCop: parseCopInput(amount) ?? 0,
             paidOn,
-            method: method as CustodyPaymentMethod,
+            method: method as CustodyManualPaymentMethod,
             reference: reference.trim() || undefined,
             notes: notes.trim() || undefined,
           },
@@ -432,6 +433,7 @@ export function ChargeList({
   canWrite,
   canManage,
   showAnimal,
+  onlinePayments,
   onChanged,
 }: {
   api: CustodyApi;
@@ -439,6 +441,8 @@ export function ChargeList({
   canWrite: boolean;
   canManage: boolean;
   showAnimal?: boolean;
+  /** La organización tiene encendido el pago en línea: se ofrece el enlace de pago. */
+  onlinePayments?: boolean;
   onChanged: () => void;
 }) {
   const { toast } = useToast();
@@ -447,6 +451,48 @@ export function ChargeList({
   const [collecting, setCollecting] = useState<CustodyCharge | null>(null);
   const [cancelling, setCancelling] = useState<CustodyCharge | null>(null);
   const [voiding, setVoiding] = useState<CustodyPayment | null>(null);
+  const [link, setLink] = useState<CustodyPaymentLink | null>(null);
+  const [linkBusy, setLinkBusy] = useState<string | null>(null);
+
+  const showLink = async (chargeId: string) => {
+    setLinkBusy(chargeId);
+    try {
+      setLink(await api.paymentLink(chargeId));
+    } catch (error) {
+      toast({
+        title: 'No pudimos crear el enlace de pago',
+        description: friendlyErrorMessage(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setLinkBusy(null);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link.url);
+      toast({ title: 'Enlace copiado. Compártelo con quien va a pagar.', variant: 'success' });
+    } catch {
+      toast({ title: 'Selecciona el enlace y cópialo a mano.', variant: 'destructive' });
+    }
+  };
+
+  const revokeLink = async () => {
+    if (!link) return;
+    try {
+      await api.revokePaymentLink(link.chargeId);
+      setLink(null);
+      toast({ title: 'El enlace quedó sin efecto.', variant: 'success' });
+    } catch (error) {
+      toast({
+        title: 'No pudimos dejar sin efecto el enlace',
+        description: friendlyErrorMessage(error),
+        variant: 'destructive',
+      });
+    }
+  };
 
   const done = (message: string) => {
     setPaying(null);
@@ -586,6 +632,16 @@ export function ChargeList({
                   Registrar pago
                 </Button>
               )}
+              {charge.status === 'pending' && canWrite && onlinePayments && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={linkBusy === charge.id}
+                  onClick={() => void showLink(charge.id)}
+                >
+                  Enlace de pago
+                </Button>
+              )}
               {charge.status === 'pending' && canManage && (
                 <Button size="sm" variant="outline" onClick={() => setExtending(charge)}>
                   Conceder prórroga
@@ -602,6 +658,34 @@ export function ChargeList({
                 </Button>
               )}
             </div>
+
+            {link?.chargeId === charge.id && (
+              <div className="mt-3 space-y-2 rounded-md bg-muted p-3 text-sm">
+                <p className="font-medium">Enlace de pago por Mercado Pago</p>
+                <p className="text-muted-foreground">
+                  Compártelo con quien va a pagar. No necesita cuenta en AdoptaFácil, puede pagar
+                  todo el saldo o una parte y el pago llega a la cuenta de Mercado Pago de la
+                  organización.
+                </p>
+                <Input
+                  readOnly
+                  aria-label="Enlace de pago"
+                  value={link.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => void copyLink()}>
+                    Copiar enlace
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => void revokeLink()}>
+                    Dejar sin efecto
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setLink(null)}>
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            )}
           </li>
         ))}
       </ul>
