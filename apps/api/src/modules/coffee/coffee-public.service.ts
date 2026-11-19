@@ -50,14 +50,21 @@ export function newCoffeeReference(): string {
   return `cafe-${tail}`;
 }
 
-/** Bags of a lot held by OTHER orders: paid, or pending inside their reservation. */
+/**
+ * Bags of a lot held by OTHER orders (paid, or pending inside their
+ * reservation) plus the bags sold in person (net of reversals).
+ */
 async function unitsHeldByOthers(tx: Tx, lotId: string, exceptOrderId?: string): Promise<number> {
   const rows = await tx.$queryRaw<Array<{ held: number | null }>>(Prisma.sql`
-    SELECT COALESCE(sum(quantity), 0)::int AS held
-    FROM coffee_orders
-    WHERE lot_id = ${lotId}::uuid
-      AND (${exceptOrderId ?? null}::uuid IS NULL OR id <> ${exceptOrderId ?? null}::uuid)
-      AND (status = 'paid' OR (status = 'pending' AND reserved_until > now()))`);
+    SELECT (
+      COALESCE((
+        SELECT sum(quantity) FROM coffee_orders
+        WHERE lot_id = ${lotId}::uuid
+          AND (${exceptOrderId ?? null}::uuid IS NULL OR id <> ${exceptOrderId ?? null}::uuid)
+          AND (status = 'paid' OR (status = 'pending' AND reserved_until > now()))
+      ), 0)
+      + COALESCE((SELECT sum(quantity) FROM coffee_physical_sales WHERE lot_id = ${lotId}::uuid), 0)
+    )::int AS held`);
   return rows[0]?.held ?? 0;
 }
 

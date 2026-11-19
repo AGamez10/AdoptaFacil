@@ -36,8 +36,12 @@ async function requireActiveCampaign(tx: Tx, campaignId: string): Promise<Coffee
   return campaign;
 }
 
-async function lockLot(tx: Tx, lotId: string) {
-  // RLS: only the team's own lots are visible; FOR UPDATE serializes approvals.
+/**
+ * Locks a lot of the team (RLS: only its own lots are visible). Every writer
+ * of a lot's stock (approvals, edits, physical sales, checkout, payments)
+ * takes this lock first, so they serialize in the same order.
+ */
+export async function lockCoffeeLot(tx: Tx, lotId: string) {
   const rows = await tx.$queryRaw<Array<{ id: string }>>(
     Prisma.sql`SELECT id FROM coffee_lots WHERE id = ${lotId}::uuid FOR UPDATE`,
   );
@@ -83,7 +87,7 @@ export async function executeCoffeeLotPublish(
   tx: Tx,
   payload: CoffeeLotPublishPayload,
 ): Promise<Record<string, unknown>> {
-  const lot = await lockLot(tx, payload.lotId);
+  const lot = await lockCoffeeLot(tx, payload.lotId);
   if (lot.status !== 'draft') throw new ConflictException('Ese lote ya fue publicado.');
   assertSameTerms(lot, payload);
   await requireActiveCampaign(tx, payload.defaultCampaignId);
@@ -114,7 +118,7 @@ export async function executeCoffeeLotCampaign(
   tx: Tx,
   payload: CoffeeLotCampaignPayload,
 ): Promise<Record<string, unknown>> {
-  const lot = await lockLot(tx, payload.lotId);
+  const lot = await lockCoffeeLot(tx, payload.lotId);
   if (lot.status === 'draft' || lot.status === 'closed') {
     throw new ConflictException('Ese lote ya no admite cambio de campaña.');
   }

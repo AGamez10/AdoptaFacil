@@ -53,9 +53,10 @@ model CoffeeLot {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  product      CoffeeProduct @relation(fields: [productId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  orders       CoffeeOrder[]
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product       CoffeeProduct        @relation(fields: [productId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  orders        CoffeeOrder[]
+  physicalSales CoffeePhysicalSale[]
 
   @@unique([productId, lotCode])
   @@unique([id, organizationId])
@@ -140,4 +141,49 @@ model CoffeeContributionDelivery {
   @@index([organizationId])
   @@index([campaignId])
   @@map("coffee_contribution_deliveries")
+}
+
+/// Venta física (feria, punto de venta, entrega en mano) de bolsas de un lote,
+/// registrada por el equipo. Descuenta stock del lote y suma su aporte a la
+/// campaña que eligió el comprador (o, si no eligió, la sugerida del lote).
+/// Solo inserción: una venta mal registrada se corrige con un reverso
+/// (`kind = reversal`) que la anula por completo, con su motivo; nunca se
+/// edita. Los reversos llevan cantidad y montos negativos, así que la suma de
+/// las filas es lo vendido de verdad. Sin datos del comprador.
+/// Ver migración 20261119200000_coffee_physical_sales.
+model CoffeePhysicalSale {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String   @map("organization_id") @db.Uuid
+  lotId                  String   @map("lot_id") @db.Uuid
+  /// "sale" o "reversal".
+  kind                   String
+  /// Venta que este reverso anula (solo en reversos; una sola vez).
+  reversesSaleId         String?  @map("reverses_sale_id") @db.Uuid
+  quantity               Int
+  unitPriceCop           Int      @map("unit_price_cop")
+  totalCop               Int      @map("total_cop")
+  contributionPerUnitCop Int      @map("contribution_per_unit_cop")
+  contributionTotalCop   Int      @map("contribution_total_cop")
+  campaignId             String   @map("campaign_id") @db.Uuid
+  campaignTitle          String   @map("campaign_title")
+  campaignOrgName        String   @map("campaign_org_name")
+  /// "buyer" (la eligió el comprador) o "lot_default" (la sugerida del lote).
+  campaignSource         String   @map("campaign_source")
+  /// Día de la venta en Colombia.
+  soldOn                 DateTime @map("sold_on") @db.Date
+  /// Nota de la venta (opcional) o motivo del reverso (obligatorio).
+  note                   String?
+  createdByUserId        String?  @map("created_by_user_id") @db.Uuid
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lot          CoffeeLot           @relation(fields: [lotId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  reverses     CoffeePhysicalSale? @relation("CoffeePhysicalSaleReversal", fields: [reversesSaleId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  reversal     CoffeePhysicalSale? @relation("CoffeePhysicalSaleReversal")
+
+  @@unique([id, organizationId])
+  @@unique([reversesSaleId, organizationId])
+  @@index([organizationId])
+  @@index([lotId])
+  @@map("coffee_physical_sales")
 }
