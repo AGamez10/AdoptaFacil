@@ -1,8 +1,7 @@
--- Landing pública: cifras reales de toda la red de adopción y el café que está
--- a la venta. Dos funciones SECURITY DEFINER acotadas, de solo lectura, que
--- exponen SOLO columnas que ya son públicas (nombre, slug, logo y ciudad del
--- perfil público, conteos agregados, la foto principal de animales adoptables
--- y el código del QR impreso en la bolsa de café). Ningún dato privado.
+-- Landing pública: cifras reales de toda la red de adopción. Función SECURITY
+-- DEFINER acotada, de solo lectura, que expone SOLO columnas que ya son
+-- públicas (nombre, slug, logo y ciudad del perfil público, conteos agregados
+-- y la foto principal de animales adoptables). Ningún dato privado.
 
 -- Mismo universo que `public_adoptable_animals`: organizaciones aprobadas con
 -- slug público y animales activos disponibles o en proceso.
@@ -80,29 +79,5 @@ AS $$
   );
 $$;
 
--- El producto de café activo con un lote a la venta (primero el que todavía
--- tiene bolsas). Devuelve solo su código público, el mismo del QR.
-CREATE OR REPLACE FUNCTION coffee_featured_code()
-  RETURNS TEXT
-  LANGUAGE sql
-  STABLE
-  SECURITY DEFINER
-  SET search_path = public, pg_temp
-AS $$
-  SELECT p.code
-  FROM coffee_products p
-  WHERE p.is_active = TRUE
-    AND EXISTS (SELECT 1 FROM coffee_lots l WHERE l.product_id = p.id AND l.status = 'on_sale')
-  ORDER BY
-    EXISTS (
-      SELECT 1 FROM coffee_lots l
-      WHERE l.product_id = p.id AND l.status = 'on_sale' AND coffee_lot_available(l.id) > 0
-    ) DESC,
-    p.created_at ASC
-  LIMIT 1;
-$$;
-
 REVOKE ALL ON FUNCTION public_adoption_network(INTEGER) FROM PUBLIC;
-REVOKE ALL ON FUNCTION coffee_featured_code() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public_adoption_network(INTEGER) TO adoptafacil_app;
-GRANT EXECUTE ON FUNCTION coffee_featured_code() TO adoptafacil_app;

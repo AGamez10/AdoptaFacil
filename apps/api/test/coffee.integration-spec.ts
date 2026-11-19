@@ -286,14 +286,6 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
     expect(dash.body.products[0].lots[0].status).toBe('on_sale');
   });
 
-  it('la landing encuentra un café a la venta para comprarlo', async () => {
-    const res = await request(server).get('/public/coffee/destacado').expect(200);
-    expect(res.body.code).toMatch(/^[a-hjkmnp-z2-9]{8}$/);
-    // Un código válido siempre abre su oferta con un lote a la venta.
-    const offer = await request(server).get(`/public/coffee/${res.body.code}`).expect(200);
-    expect(offer.body.lot).not.toBeNull();
-  });
-
   it('un lote publicado conserva su precio y su campaña sugerida', async () => {
     await as(lead1).patch(`/platform/coffee/lots/${lotId}`, { salePriceCop: 20_000 }).expect(409);
     await as(lead1)

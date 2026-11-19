@@ -11,7 +11,6 @@ import {
   templateDemoHref,
   templateName,
 } from '../../portals/templates/demo/demo-templates';
-import { useFeaturedCoffeeHref } from '../model/use-featured-coffee';
 import { IconArrowRight } from './landing-icons';
 import landing from './landing.module.scss';
 import styles from './showcase.module.scss';
@@ -24,6 +23,8 @@ const PRO_IDS = DEMO_TEMPLATE_IDS.filter(isPro);
 
 export const LANDING_TEMPLATES_ID = 'plantillas';
 export const LANDING_COFFEE_ID = 'cafe';
+/** Tienda pública de café: arma el pedido y paga con Mercado Pago. */
+export const COFFEE_SHOP_PATH = '/cafe';
 
 function TemplateTile({ id, pro }: { id: PortalTemplateId; pro?: boolean }) {
   return (
@@ -124,12 +125,10 @@ export function TemplateGallerySection() {
  * Café San Pedro: AdoptaFácil compra café colombiano y lo vende para sostener
  * la plataforma gratis para los refugios. El 20 % del margen bruto (precio de
  * venta menos precio de compra) de cada venta apoya a una campaña. No se
- * promete una cifra fija por bolsa, porque los precios cambian. Con un lote a
- * la venta, "Comprar café" abre la misma página del QR (`/c/<código>`): precio,
- * bolsas disponibles, campaña y pago. Sin lote, no se ofrece comprar.
+ * promete una cifra fija por bolsa, porque los precios cambian. "Comprar café
+ * en línea" abre la tienda (`/cafe`), que crea el pedido real.
  */
 export function CoffeeSection() {
-  const buyHref = useFeaturedCoffeeHref();
   return (
     <section
       id={LANDING_COFFEE_ID}
@@ -164,25 +163,15 @@ export function CoffeeSection() {
               <li>Te enviamos el café y sigues tu pedido.</li>
             </ul>
             <div className={landing.orgs__cta}>
-              {buyHref ? (
-                <Link
-                  to={buyHref}
-                  className={cn(landing.btn, landing['btn--primary'])}
-                  data-testid="coffee-buy"
-                >
-                  Comprar café
-                  <IconArrowRight className={landing.btn__icon} />
-                </Link>
-              ) : (
-                <p className={styles.coffee__fine}>
-                  La venta en línea abre con el próximo lote. Mientras tanto, puedes apoyar una
-                  campaña directamente.
-                </p>
-              )}
               <Link
-                to="/campanas"
-                className={cn(landing.btn, buyHref ? landing['btn--ghost'] : landing['btn--ink'])}
+                to={COFFEE_SHOP_PATH}
+                className={cn(landing.btn, landing['btn--primary'])}
+                data-testid="landing-coffee-buy"
               >
+                Comprar café en línea
+                <IconArrowRight className={landing.btn__icon} />
+              </Link>
+              <Link to="/campanas" className={cn(landing.btn, landing['btn--ghost'])}>
                 Ver campañas que apoyamos
               </Link>
             </div>

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { COOKIE_CONSENT_CHANGE_EVENT, readCookieConsent } from '../../../shell/consent';
-import { useFeaturedCoffeeHref } from '../model/use-featured-coffee';
 import { IconArrowRight } from './landing-icons';
-import { LANDING_COFFEE_ID } from './landing-showcase';
+import { COFFEE_SHOP_PATH } from './landing-showcase';
 import styles from './coffee-teaser.module.scss';
 
 /** Se muestra una vez por sesión. */
@@ -34,14 +33,12 @@ function markSeen(): void {
  * compra sostiene AdoptaFácil gratis para las fundaciones y se va solo. Nunca
  * tapa el aviso de cookies (espera a que la persona decida), no roba el foco,
  * se pausa mientras el puntero o el foco están encima y respeta "reducir
- * movimiento". Con un café a la venta, el botón abre la compra; si no, lleva
- * a la sección del café.
+ * movimiento". El botón abre la tienda de café en línea (`/cafe`).
  */
 export function CoffeeTeaser() {
   const [phase, setPhase] = useState<'idle' | 'shown' | 'leaving' | 'done'>('idle');
   const [paused, setPaused] = useState(false);
   const [consented, setConsented] = useState(() => readCookieConsent() !== null);
-  const buyHref = useFeaturedCoffeeHref(phase !== 'done');
   const hideTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -73,7 +70,6 @@ export function CoffeeTeaser() {
   if (phase === 'idle' || phase === 'done') return null;
 
   const close = () => setPhase('leaving');
-  const to = buyHref ?? `/#${LANDING_COFFEE_ID}`;
 
   return (
     <aside
@@ -104,12 +100,12 @@ export function CoffeeTeaser() {
           Cada bolsa sostiene AdoptaFácil gratis para refugios y fundaciones, y apoya una campaña.
         </p>
         <Link
-          to={to}
+          to={COFFEE_SHOP_PATH}
           className={styles.teaser__cta}
           onClick={() => setPhase('done')}
           data-testid="coffee-teaser-cta"
         >
-          {buyHref ? 'Comprar café' : 'Conocer el café'}
+          Comprar café
           <IconArrowRight aria-hidden="true" />
         </Link>
       </div>

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicAdoptionNetwork, PublicAnimalSummary } from '@adoptafacil/contracts';
 import { saveCookieConsent } from '../../../shell/consent';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
-import { resetFeaturedCoffeeForTests } from '../model/use-featured-coffee';
 import { COFFEE_TEASER_DELAY_MS, COFFEE_TEASER_VISIBLE_MS, CoffeeTeaser } from './coffee-teaser';
 import { ImpactSection } from './landing-sections';
 import { CoffeeSection } from './landing-showcase';
@@ -79,7 +78,6 @@ async function settle() {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  resetFeaturedCoffeeForTests();
   window.localStorage.clear();
   window.sessionStorage.clear();
 });
@@ -129,27 +127,17 @@ describe('Rescatistas de todo el país', () => {
 });
 
 describe('Café en la landing', () => {
-  it('con un lote a la venta, "Comprar café" abre la página de compra del QR', async () => {
-    stubFetch({ '/public/coffee/destacado': { code: 'cafe2345' } });
+  it('lleva a comprar en la tienda en línea (/cafe) y deja las campañas como opción', () => {
     render(
       <MemoryRouter future={router}>
         <CoffeeSection />
       </MemoryRouter>,
     );
-    await settle();
-    expect(screen.getByTestId('coffee-buy')).toHaveAttribute('href', '/c/cafe2345');
-  });
-
-  it('sin lote a la venta no ofrece comprar', async () => {
-    stubFetch({ '/public/coffee/destacado': { code: null } });
-    render(
-      <MemoryRouter future={router}>
-        <CoffeeSection />
-      </MemoryRouter>,
+    expect(screen.getByTestId('landing-coffee-buy')).toHaveAttribute('href', '/cafe');
+    expect(screen.getByRole('link', { name: 'Ver campañas que apoyamos' })).toHaveAttribute(
+      'href',
+      '/campanas',
     );
-    await settle();
-    expect(screen.queryByTestId('coffee-buy')).not.toBeInTheDocument();
-    expect(screen.getByText(/La venta en línea abre con el próximo lote/)).toBeInTheDocument();
   });
 });
 
@@ -166,7 +154,6 @@ describe('Aviso del café al entrar', () => {
     );
 
   it('espera la decisión de cookies, aparece, lleva a comprar y se va solo', async () => {
-    stubFetch({ '/public/coffee/destacado': { code: 'cafe2345' } });
     renderTeaser();
     await act(async () => {
       vi.advanceTimersByTime(COFFEE_TEASER_DELAY_MS + 100);
@@ -182,7 +169,7 @@ describe('Aviso del café al entrar', () => {
     const teaser = screen.getByTestId('coffee-teaser');
     expect(teaser).toHaveTextContent('gratis para refugios y fundaciones');
     await settle();
-    expect(screen.getByTestId('coffee-teaser-cta')).toHaveAttribute('href', '/c/cafe2345');
+    expect(screen.getByTestId('coffee-teaser-cta')).toHaveAttribute('href', '/cafe');
 
     await act(async () => {
       vi.advanceTimersByTime(COFFEE_TEASER_VISIBLE_MS + 100);
@@ -191,13 +178,12 @@ describe('Aviso del café al entrar', () => {
   });
 
   it('sale una sola vez por sesión', async () => {
-    stubFetch({ '/public/coffee/destacado': { code: null } });
     saveCookieConsent({ statistics: false, marketing: false });
     const first = renderTeaser();
     await act(async () => {
       vi.advanceTimersByTime(COFFEE_TEASER_DELAY_MS + 100);
     });
-    expect(screen.getByTestId('coffee-teaser-cta')).toHaveTextContent('Conocer el café');
+    expect(screen.getByTestId('coffee-teaser-cta')).toHaveTextContent('Comprar café');
     first.unmount();
 
     renderTeaser();

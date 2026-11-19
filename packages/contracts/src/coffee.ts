@@ -90,13 +90,6 @@ export interface CoffeeCampaignOption {
 // Público (sin sesión)
 // ---------------------------------------------------------------------------
 
-/** `GET /public/coffee/destacado` — el código del café que está a la venta hoy
- *  (el mismo del QR de la bolsa), para que la landing lleve a comprarlo.
- *  `null` cuando no hay ningún lote a la venta. */
-export interface PublicCoffeeFeatured {
-  code: string | null;
-}
-
 /** `GET /public/coffee/:code` — lo que ve quien escanea el QR. */
 export interface PublicCoffeeOffer {
   code: string;
