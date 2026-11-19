@@ -1,10 +1,11 @@
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, type ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { PlatformMfaGate } from '../../features/platform-team';
 import { useNav } from '../navigation/nav-context';
 import { LayoutErrorBoundary } from './error-boundary';
 import { Header } from './header';
-import { ContentError, FullPageLoading } from './layout-states';
+import { ShellContentErrorFallback } from '../errors/error-fallbacks';
+import { FullPageLoading } from './layout-states';
 import { MobileNavDrawer, Sidebar } from './sidebar';
 
 /**
@@ -12,9 +13,10 @@ import { MobileNavDrawer, Sidebar } from './sidebar';
  * off-canvas drawer (móvil/tablet), a header carrying the transparency indicator,
  * and the routed content region. Content is wrapped in an error boundary and a
  * Suspense boundary so a failing or lazily-loaded page degrades gracefully at the
- * layout level without blanking the shell.
+ * layout level without blanking the shell. `children` replaces the routed
+ * outlet (the app-wide 404 reuses the shell this way for signed-in users).
  */
-export function AppLayout() {
+export function AppLayout({ children }: { children?: ReactNode } = {}) {
   const location = useLocation();
   const { closeDrawer } = useNav();
 
@@ -33,13 +35,11 @@ export function AppLayout() {
         <main className="flex-1">
           <LayoutErrorBoundary
             resetKeys={[location.pathname]}
-            fallback={(_error, reset) => <ContentError onRetry={reset} />}
+            fallback={(error, reset) => <ShellContentErrorFallback error={error} reset={reset} />}
           >
             <Suspense fallback={<FullPageLoading />}>
               {/* F19: platform staff pass their second factor before any tool. */}
-              <PlatformMfaGate>
-                <Outlet />
-              </PlatformMfaGate>
+              <PlatformMfaGate>{children ?? <Outlet />}</PlatformMfaGate>
             </Suspense>
           </LayoutErrorBoundary>
         </main>

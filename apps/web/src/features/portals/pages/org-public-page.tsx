@@ -12,7 +12,7 @@ import type {
   PortalView,
 } from '@adoptafacil/contracts';
 import { resolveTemplateOptions } from '@adoptafacil/contracts';
-import { EmptyState, Skeleton } from '@adoptafacil/ui';
+import { Skeleton } from '@adoptafacil/ui';
 import { brandTokensToStyle } from '../../../shell/theme';
 import { buildPortalView } from '../model/portal-view';
 import {
@@ -58,6 +58,7 @@ import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { ownerPreviewOrganization } from '../model/owner-preview';
 import { PortalPreviewContext } from '../model/portal-preview-context';
+import { PublicErrorPage, PublicNotFoundPage } from '../../../shell/errors';
 import { TemplatePortal } from '../templates/template-portal';
 import { isEngineTemplate } from '../templates/registry';
 import { useGuideContext } from '../../guide/model/guide-context';
@@ -432,15 +433,6 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
           style={{ ...themeStyle, scrollMarginTop: '5rem' }}
         >
           {state === 'loading' && <Skeleton className="h-72 w-full" />}
-          {state === 'not-found' && (
-            <EmptyState
-              title="Organización no encontrada"
-              description="El enlace no corresponde a ninguna organización."
-            />
-          )}
-          {state === 'error' && (
-            <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
-          )}
           {state === 'ready' && view && heroProps && (
             <div className="space-y-8">
               {ownerPreview && (
@@ -599,6 +591,31 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // Plantillas del motor (14 gratuitas nuevas): pintan el mismo contenido con su
   // propio diseño. Si la plantilla no carga o los datos fallan, se muestra el
   // portal clásico de arriba: nunca queda un portal caído por el diseño elegido.
+  // Organización inexistente, suspendida o sin portal publicado: la API
+  // responde igual (404) y no se distingue a propósito, para no revelar qué
+  // organizaciones existen. Página completa con marco público y salidas.
+  if (state === 'not-found') {
+    return (
+      <PublicNotFoundPage
+        title="Organización no encontrada"
+        message="Este enlace no corresponde a ninguna organización activa. Puede que haya cambiado de dirección o que su portal aún no esté publicado."
+      />
+    );
+  }
+  if (state === 'error') {
+    return (
+      <PublicErrorPage
+        kind={typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'server'}
+        title="No se pudo cargar el portal"
+        message="Tuvimos un problema al traer la información de esta organización. Intenta de nuevo en un momento."
+        actions={[
+          { label: 'Reintentar', onClick: () => window.location.reload() },
+          { label: 'Volver al inicio', to: '/', variant: 'secondary' },
+        ]}
+      />
+    );
+  }
+
   if (state === 'ready' && view && slug && isEngineTemplate(layout.template)) {
     return (
       <TemplatePortal
