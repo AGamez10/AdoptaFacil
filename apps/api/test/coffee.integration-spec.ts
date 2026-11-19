@@ -267,6 +267,9 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
 
     const offer = await request(server).get(`/public/coffee/${productCode}`).expect(200);
     expect(offer.body.lot).toBeNull();
+    // Un lote en borrador no aparece en la tienda.
+    const shop = await request(server).get('/public/coffee').expect(200);
+    expect(shop.body.items.map((i: { code: string }) => i.code)).not.toContain(productCode);
   });
 
   it('publicar el lote exige a otro líder del equipo', async () => {
@@ -314,6 +317,29 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
     const campaigns = await request(server).get('/public/coffee/campaigns').expect(200);
     const ids = campaigns.body.items.map((c: { id: string }) => c.id);
     expect(ids).toEqual(expect.arrayContaining([campaignA, campaignB, campaignC]));
+  });
+
+  it('la tienda en línea (/cafe) lista la presentación a la venta sin costos ni sumar visitas', async () => {
+    const before = await as(lead1).get('/platform/coffee').expect(200);
+    const shop = await request(server).get('/public/coffee').expect(200);
+    expect(shop.body.onlineCheckout).toBe(true);
+    const item = shop.body.items.find((i: { code: string }) => i.code === productCode);
+    expect(item).toEqual({
+      code: productCode,
+      productName: 'Café San Pedro 250 g',
+      presentationGrams: expect.any(Number),
+      description: null,
+      salePriceCop: 27_999,
+      shippingFeeCop: 0,
+      availableUnits: 3,
+      contributionPerUnitCop: 2_200,
+    });
+    expect(JSON.stringify(shop.body)).not.toContain('17000');
+    const after = await as(lead1).get('/platform/coffee').expect(200);
+    expect(after.body.products[0].visitsTotal).toEqual(before.body.products[0].visitsTotal);
+    // La página de compra dice si se puede pagar en línea.
+    const offer = await request(server).get(`/public/coffee/${productCode}`).expect(200);
+    expect(offer.body.onlineCheckout).toBe(true);
   });
 
   let firstReference = '';

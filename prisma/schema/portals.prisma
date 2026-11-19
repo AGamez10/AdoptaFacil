@@ -81,3 +81,26 @@ model OrganizationQrScanDay {
   @@index([organizationId])
   @@map("organization_qr_scan_days")
 }
+
+/// Dominio propio del portal (plan Pro): la organización compra su dominio y
+/// lo apunta a AdoptaFácil (CNAME o A) más un TXT de verificación. Ver la
+/// migración 20261116210000_portal_custom_domains.
+model PortalCustomDomain {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @unique @map("organization_id") @db.Uuid
+  domain            String
+  /// "pending_dns" | "active".
+  status            String    @default("pending_dns")
+  verificationToken String    @map("verification_token")
+  lastCheckedAt     DateTime? @map("last_checked_at")
+  lastError         String?   @map("last_error")
+  verifiedAt        DateTime? @map("verified_at")
+  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([domain])
+  @@map("portal_custom_domains")
+}

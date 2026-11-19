@@ -232,6 +232,9 @@ services:
         VITE_API_URL: /api
         PORTALS_TLS: ${PORTALS_TLS:-off}
         VITE_PORTAL_BASE_DOMAIN: ${VITE_PORTAL_BASE_DOMAIN:-}
+        # Para reconocer un dominio propio de una organización (todo host que no
+        # sea APP_DOMAIN ni sus subdominios).
+        VITE_APP_DOMAIN: ${APP_DOMAIN:-}
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
         VITE_PAYMENT_PROVIDER: ${VITE_PAYMENT_PROVIDER:-}
     image: adoptafacil-edge:${RELEASE:-local}
@@ -240,6 +243,7 @@ services:
       APP_DOMAIN: ${APP_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL}
       PORTALS_TLS: ${PORTALS_TLS:-off}
+      CUSTOM_DOMAINS: ${CUSTOM_DOMAINS:-off}
       # Credenciales DNS del proveedor elegido en PORTALS_TLS (solo una se usa).
       # Viven en deploy/.env del servidor, nunca en el repo.
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}

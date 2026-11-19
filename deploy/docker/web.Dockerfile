@@ -26,11 +26,13 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 ARG VITE_API_URL
 ARG VITE_PORTAL_BASE_DOMAIN=
+ARG VITE_APP_DOMAIN=
 ARG VITE_GOOGLE_CLIENT_ID=
 ARG VITE_PAYMENT_PROVIDER=
 RUN test -n "$VITE_API_URL" || (echo "VITE_API_URL es obligatoria" >&2; exit 1)
 RUN VITE_API_URL="$VITE_API_URL" \
     VITE_PORTAL_BASE_DOMAIN="$VITE_PORTAL_BASE_DOMAIN" \
+    VITE_APP_DOMAIN="$VITE_APP_DOMAIN" \
     VITE_GOOGLE_CLIENT_ID="$VITE_GOOGLE_CLIENT_ID" \
     VITE_PAYMENT_PROVIDER="$VITE_PAYMENT_PROVIDER" \
     pnpm turbo run build --filter=@adoptafacil/web...
@@ -55,5 +57,5 @@ COPY --from=caddy-namecheap-build /usr/bin/caddy /usr/bin/caddy
 RUN caddy list-modules | grep -qx 'dns.providers.namecheap'
 
 FROM caddy-${PORTALS_TLS} AS edge
-COPY deploy/Caddyfile deploy/portals-*.caddy /etc/caddy/
+COPY deploy/Caddyfile deploy/portals-*.caddy deploy/custom-domains-*.caddy /etc/caddy/
 COPY --from=build /repo/apps/web/dist /srv/web

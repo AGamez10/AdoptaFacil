@@ -26,6 +26,7 @@ import {
   type CreateCoffeeLotInput,
   type CreateCoffeeProductInput,
   type PublicCoffeeCampaigns,
+  type PublicCoffeeCatalog,
   type PublicCoffeeOffer,
   type PublicCoffeeOrderStatus,
   type UpdateCoffeeLotInput,
@@ -156,6 +157,12 @@ export class PlatformCoffeeController {
 @Throttle({ default: { limit: 60, ttl: 60_000 } })
 export class PublicCoffeeController {
   constructor(private readonly coffee: CoffeePublicService) {}
+
+  /** La tienda: lo que se puede comprar en línea ahora. */
+  @Get()
+  catalog(): Promise<PublicCoffeeCatalog> {
+    return this.coffee.catalog();
+  }
 
   @Get('campaigns')
   async campaigns(): Promise<PublicCoffeeCampaigns> {

@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { PLAN_KEYS, SUBSCRIPTION_STATUSES } from '@adoptafacil/contracts';
+import {
+  MERCADOPAGO_RESOURCE_ID_PATTERN,
+  PLAN_KEYS,
+  SUBSCRIPTION_STATUSES,
+} from '@adoptafacil/contracts';
 
 /** Platform assigns, extends or cancels an organization's plan after a manual
  *  payment. A period end is mandatory for every status but `canceled`, so a
@@ -24,3 +28,9 @@ export const startPlanCheckoutSchema = z
     plan: z.enum(['crece', 'pro']),
   })
   .strict();
+
+/** `GET /org/plan/checkout/status`: Mercado Pago appends `preapproval_id` to
+ *  the back URL; other query params it adds are ignored. */
+export const planCheckoutStatusQuerySchema = z.object({
+  preapproval_id: z.string().regex(MERCADOPAGO_RESOURCE_ID_PATTERN),
+});

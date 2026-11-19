@@ -100,7 +100,7 @@ describe('planHighlights (landing and plans screen share the catalog)', () => {
     const pro = planHighlights('pro');
     expect(pro[0].text).toBe('Todo lo del plan Crece');
     expect(pro.map((h) => h.text)).toContain('Equipo sin límite de personas');
-    expect(pro.find((h) => h.text.startsWith('Dominio propio'))?.available).toBe(false);
+    expect(pro.find((h) => h.text.startsWith('Dominio propio'))?.available).toBe(true);
     // Exportar a Excel ya funciona (GET /org/exports/data.xlsx).
     expect(PLAN_CAPABILITY_INFO.dataExport.available).toBe(true);
     // Y el reporte de impacto (GET /org/exports/impact-report.pdf).

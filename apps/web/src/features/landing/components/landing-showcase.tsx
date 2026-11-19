@@ -155,9 +155,16 @@ export function CoffeeSection() {
               El detalle de cada campaña se publica cuando esté confirmado.
             </p>
             <div className={landing.orgs__cta}>
-              <Link to="/campanas" className={cn(landing.btn, landing['btn--ink'])}>
-                Ver campañas que apoyamos
+              <Link
+                to="/cafe"
+                className={cn(landing.btn, landing['btn--ink'])}
+                data-testid="landing-coffee-buy"
+              >
+                Comprar café en línea
                 <IconArrowRight className={landing.btn__icon} />
+              </Link>
+              <Link to="/campanas" className={cn(landing.btn, landing['btn--ghost'])}>
+                Ver campañas que apoyamos
               </Link>
             </div>
           </div>

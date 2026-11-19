@@ -108,12 +108,36 @@ export interface PublicCoffeeOffer {
     /** Campaña sugerida, si sigue activa. */
     suggestedCampaign: CoffeeCampaignOption | null;
   } | null;
+  /** Si se puede pagar en línea ahora (cuenta de Mercado Pago de AdoptaFácil
+   *  configurada). Ausente en respuestas viejas = sí. */
+  onlineCheckout?: boolean;
   /** Totales públicos del programa de café (todas las presentaciones del equipo). */
   impact: {
     unitsSold: number;
     contributionCommittedCop: number;
     contributionDeliveredCop: number;
   };
+}
+
+/** Una presentación a la venta en la tienda pública (`GET /public/coffee`). */
+export interface PublicCoffeeCatalogItem {
+  code: string;
+  productName: string;
+  presentationGrams: number;
+  description: string | null;
+  /** Precio de la bolsa del lote a la venta (COP). */
+  salePriceCop: number;
+  shippingFeeCop: number;
+  /** Bolsas que se pueden comprar ya; 0 = agotado por ahora. */
+  availableUnits: number;
+  contributionPerUnitCop: number;
+}
+
+/** `GET /public/coffee` — la tienda: presentaciones con un lote a la venta. */
+export interface PublicCoffeeCatalog {
+  items: PublicCoffeeCatalogItem[];
+  /** Si el pago en línea está disponible ahora. */
+  onlineCheckout: boolean;
 }
 
 /** `GET /public/coffee/campaigns` — campañas que el comprador puede elegir. */

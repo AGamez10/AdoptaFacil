@@ -44,6 +44,7 @@ import {
 } from '../model/theme';
 import { TemplatePicker } from '../components/templates/template-picker';
 import { TemplateOptionsForm } from '../components/templates/template-options-form';
+import { CustomDomainCard } from '../components/custom-domain-card';
 import { TemplateLivePreview } from '../components/templates/template-live-preview';
 import { CoverVideoField } from '../components/templates/cover-video-field';
 import { SealToggle } from '../components/templates/seal-toggle';
@@ -236,6 +237,7 @@ const SOCIAL_NAV_POSITION_OPTIONS = [
  * NO hay CSS libre: sólo tokens validados.
  */
 export function PortalThemePage() {
+  const [customDomain, setCustomDomain] = useState<string | null>(null);
   const client = useApiClient();
   const { hasAnyRole } = useSession();
   const canEdit = hasAnyRole(Role.Owner, Role.Administrator);
@@ -652,12 +654,17 @@ export function PortalThemePage() {
                   coverVideoPosterUrl={coverVideoPosterUrl}
                   coverVideo2Url={templateVideoSlots(template) >= 2 ? coverVideo2Url : undefined}
                   coverVideo2PosterUrl={coverVideo2PosterUrl}
+                  customDomain={customDomain}
                 />
               </CardContent>
             </Card>
           </div>
         </div>
       )}
+      {/* Dominio propio (Pro): la organización lo compra y aquí lo conecta. */}
+      <div className="mt-6">
+        <CustomDomainCard onActiveDomain={setCustomDomain} />
+      </div>
     </PageContainer>
   );
 }
