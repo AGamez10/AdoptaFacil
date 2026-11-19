@@ -182,10 +182,12 @@ describe('RBAC governance (AF-007, AF-008, AF-009, AF-026, AF-037)', () => {
       ]);
       const codes = results.map((r) => r.status).sort();
       // One revocation wins. The loser is stopped either by the row lock
-      // (409, last Owner) or, if the winner already committed, by the
-      // RolesGuard because it is no longer an Owner (403). Never both win.
+      // (409, last Owner) or, if the winner already committed, because it is
+      // no longer an Owner: the RolesGuard (403) or, when that was its only
+      // role in the org, the membership check of JwtAuthGuard (401, see
+      // core/auth/membership.ts). Never both win.
       expect(codes[0]).toBe(204);
-      expect([403, 409]).toContain(codes[1]);
+      expect([401, 403, 409]).toContain(codes[1]);
       const owners = await admin.userRole.findMany({
         where: { organizationId: owner.orgId, role: Role.Owner },
       });

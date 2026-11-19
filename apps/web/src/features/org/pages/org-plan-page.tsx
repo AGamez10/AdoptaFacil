@@ -30,7 +30,7 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
-import { useApiClient } from '../../../shell/api';
+import { ApiError, useApiClient } from '../../../shell/api';
 import { officialWhatsappUrl } from '../../../lib/contact';
 import { isMercadoPagoProvider } from '../../payments/lib/payment-provider';
 
@@ -68,6 +68,39 @@ function planRequestUrl(plan: PlanDefinition): string {
 }
 
 /**
+ * Qué decirle a la organización según la respuesta real de la API, en vez de
+ * un "no disponible" para todo: 409 = piloto, no hay nada que pagar; 503 sin
+ * pasarela configurada o Mercado Pago caído (la API trae el motivo); 403 = su
+ * rol no puede pagar; cualquier otro = no se pudo abrir el pago.
+ */
+export function planCheckoutErrorToast(error: unknown): { title: string; description: string } {
+  const message = ApiError.is(error) && error.message ? error.message : '';
+  if (ApiError.is(error) && error.status === 409) {
+    return {
+      title: 'No hay nada que pagar todavía',
+      description: message || 'Durante el piloto todas las funciones son gratis.',
+    };
+  }
+  if (ApiError.is(error) && error.status === 403) {
+    return {
+      title: 'Tu rol no puede pagar el plan',
+      description: 'Pídele a la persona dueña o administradora de la organización que lo active.',
+    };
+  }
+  if (ApiError.is(error) && error.status === 503) {
+    return {
+      title: 'No pudimos abrir el pago en línea',
+      description: `${message || 'El pago en línea no está disponible por ahora.'} También puedes escribirnos por WhatsApp y lo activamos contigo.`,
+    };
+  }
+  return {
+    title: 'No pudimos abrir el pago en línea',
+    description:
+      'Intenta de nuevo en unos minutos o escríbenos por WhatsApp y lo activamos contigo.',
+  };
+}
+
+/**
  * ADR-PAG-003: pagar el plan cada mes con Mercado Pago. Es ingreso de
  * AdoptaFácil por el software, así que se cobra con la cuenta de Mercado Pago
  * de AdoptaFácil (nunca con la del refugio ni con sus donaciones). Si el pago
@@ -86,13 +119,9 @@ function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
       });
       if (!isMercadoPagoCheckoutUrl(view.checkoutUrl)) throw new Error('bad checkout url');
       window.location.assign(view.checkoutUrl);
-    } catch {
+    } catch (error) {
       setBusy(false);
-      toast({
-        title: 'El pago en línea del plan aún no está disponible',
-        description: 'Escríbenos por WhatsApp y lo activamos contigo.',
-        variant: 'destructive',
-      });
+      toast({ ...planCheckoutErrorToast(error), variant: 'destructive' });
     }
   };
   return (

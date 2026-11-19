@@ -241,6 +241,36 @@ export interface PublicAnimalsPage {
   nextCursor?: string;
 }
 
+/** One organization of the public adoption network (`GET /public/network`). */
+export interface PublicNetworkOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string;
+  city?: string;
+  /** Adoptable animals it has published right now (real count). */
+  animals: number;
+  /** Up to 3 public photo URLs of its most recent adoptable animals. */
+  photos: string[];
+}
+
+/**
+ * `GET /public/network` — the whole adoption network in REAL numbers, for the
+ * landing's "Rescatistas de todo el país" section. Unlike a page of
+ * `GET /public/animals`, the counts cover every adoptable animal, not just
+ * the first 50.
+ */
+export interface PublicAdoptionNetwork {
+  /** Adoptable animals across every public organization. */
+  animals: number;
+  /** Organizations with at least one adoptable animal published. */
+  organizations: number;
+  /** Cities with adoptable animals, most animals first. */
+  cities: { city: string; count: number }[];
+  /** The organizations with the most animals (at most 12), most first. */
+  items: PublicNetworkOrganization[];
+}
+
 // ============================================================================
 // M03 write DTOs (T-104, RF07). Owner/Administrator/Operator/Veterinarian write;
 // ReadOnlyAuditor may only read. All timestamps are ISO-8601 UTC.

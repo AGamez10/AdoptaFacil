@@ -8,6 +8,7 @@ import type {
   AnimalSummary,
   AnimalSummaryPage,
   PublicAnimalsPage,
+  PublicAdoptionNetwork,
 } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port';
@@ -41,6 +42,24 @@ interface RawGlobalItem extends RawItem {
     city: string | null;
   };
 }
+
+interface RawNetwork {
+  animals: number | string;
+  organizations: number | string;
+  cities: Array<{ city: string; count: number | string }>;
+  items: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    city: string | null;
+    animals: number | string;
+    photoRefs: string[];
+  }>;
+}
+
+/** How many organizations `GET /public/network` lists (the SQL caps it at 24). */
+export const PUBLIC_NETWORK_LIMIT = 12;
 
 interface RawGlobalPage {
   items: RawGlobalItem[];
@@ -170,6 +189,34 @@ export class PublicAnimalsService {
       page: after ? 1 : page,
       limit,
       ...(hasMore && last ? { nextCursor: encodeCursor(last.createdAt, last.id) } : {}),
+    };
+  }
+
+  /**
+   * The whole public adoption network in REAL numbers (landing): totals over
+   * EVERY adoptable animal, cities and the organizations with the most
+   * animals, each with up to 3 recent photos. One bounded SECURITY DEFINER
+   * function (`public_adoption_network`), same universe as the catalog.
+   */
+  async network(): Promise<PublicAdoptionNetwork> {
+    const rows = await this.prisma.$queryRaw<Array<{ data: RawNetwork | null }>>(
+      Prisma.sql`SELECT public_adoption_network(${PUBLIC_NETWORK_LIMIT}::int) AS data`,
+    );
+    const raw = rows[0]?.data;
+    if (!raw) return { animals: 0, organizations: 0, cities: [], items: [] };
+    return {
+      animals: Number(raw.animals),
+      organizations: Number(raw.organizations),
+      cities: raw.cities.map(({ city, count }) => ({ city, count: Number(count) })),
+      items: raw.items.map((org) => ({
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        logoUrl: org.logoUrl ?? undefined,
+        city: org.city ?? undefined,
+        animals: Number(org.animals),
+        photos: org.photoRefs.map((ref) => this.storage.resolvePublicUrl(ref)),
+      })),
     };
   }
 
