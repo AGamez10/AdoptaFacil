@@ -29,25 +29,7 @@ import catalogStyles from '../../styles/public-catalog.module.scss';
 import portalStyles from '../../styles/public-portal.module.scss';
 import templateStyles from './portal-templates.module.scss';
 import styles from './template-live-preview.module.scss';
-
-const PORTAL_BASE_DOMAIN = import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined;
-
-/**
- * La dirección que de verdad abre el portal, sin inventar una: el dominio
- * propio verificado si lo hay; `<slug>.<dominio base>` solo cuando los
- * subdominios están encendidos (`VITE_PORTAL_BASE_DOMAIN`); si no, la ruta que
- * siempre funciona, `<host actual>/o/<slug>`. Pura.
- */
-export function portalPreviewAddress(
-  slug: string,
-  baseDomain: string | undefined,
-  currentHost: string,
-  customDomain?: string | null,
-): string {
-  if (customDomain) return customDomain;
-  if (baseDomain) return `${slug}.${baseDomain}`;
-  return `${currentHost}/o/${slug}`;
-}
+import { portalAddress } from '../../model/subdomain';
 
 type Device = 'desktop' | 'mobile';
 const DEVICE_WIDTH: Record<Device, number> = { desktop: 1280, mobile: 390 };
@@ -168,12 +150,7 @@ export function TemplateLivePreview({
       <div className={styles.toolbar}>
         <span className={styles.url}>
           <span className={styles.dot} />
-          {portalPreviewAddress(
-            previewSlug,
-            PORTAL_BASE_DOMAIN,
-            typeof window === 'undefined' ? 'adoptafacil.org' : window.location.host,
-            customDomain,
-          )}
+          {customDomain || portalAddress(previewSlug)}
         </span>
         <div className={styles.devices} role="group" aria-label="Tamaño de la vista previa">
           {(['desktop', 'mobile'] as const).map((value) => (

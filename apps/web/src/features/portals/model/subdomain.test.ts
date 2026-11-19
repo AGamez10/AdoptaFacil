@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isCustomPortalHost, resolveOrgSubdomain } from './subdomain';
+import { isCustomPortalHost, portalAddress, resolveOrgSubdomain } from './subdomain';
 
 describe('resolveOrgSubdomain', () => {
   it('returns null when no base domain is configured', () => {
@@ -60,5 +60,20 @@ describe('isCustomPortalHost (dominio propio de una organización Pro)', () => {
     ]) {
       expect(isCustomPortalHost(host, 'adoptafacil.org')).toBe(false);
     }
+  });
+});
+
+describe('portalAddress (vista previa del editor)', () => {
+  it('muestra el subdominio solo si los subdominios están configurados', () => {
+    expect(portalAddress('patitas', 'adoptafacil.org', 'adoptafacil.org')).toBe(
+      'patitas.adoptafacil.org',
+    );
+  });
+
+  it('sin subdominios muestra la ruta real que abre "Ver portal público"', () => {
+    expect(portalAddress('patitas', undefined, 'dev.adoptafacil.org')).toBe(
+      'dev.adoptafacil.org/o/patitas',
+    );
+    expect(portalAddress('patitas', '  ', 'localhost:5173')).toBe('localhost:5173/o/patitas');
   });
 });

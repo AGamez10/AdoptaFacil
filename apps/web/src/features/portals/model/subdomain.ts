@@ -52,3 +52,20 @@ export function isCustomPortalHost(hostname: string, appDomain: string | undefin
   if (/^[\d.]+$/.test(host) || host.includes(':')) return false;
   return host.includes('.');
 }
+
+/** Dominio de los subdominios de portal; sin él, los portales viven en `/o/<slug>`. */
+const PORTAL_BASE_DOMAIN = import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined;
+
+/**
+ * La dirección real que abre "Ver portal público": el subdominio solo cuando
+ * está configurado (producción con `VITE_PORTAL_BASE_DOMAIN`); si no, la ruta
+ * `/o/<slug>` del sitio donde se está editando (p. ej. dev.adoptafacil.org).
+ */
+export function portalAddress(
+  slug: string,
+  baseDomain: string | undefined = PORTAL_BASE_DOMAIN,
+  host: string = typeof window === 'undefined' ? 'adoptafacil.org' : window.location.host,
+): string {
+  const base = baseDomain?.trim();
+  return base ? `${slug}.${base}` : `${host}/o/${slug}`;
+}
