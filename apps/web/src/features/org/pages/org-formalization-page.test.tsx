@@ -230,4 +230,46 @@ describe('OrgFormalizationPage', () => {
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+  describe('reverificación anual del RTE', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const statusWith = (rteVigente: boolean, daysLeft: number) => ({
+      state: FormalizationState.ESAL_RTE,
+      rteVigente,
+      rteValidUntil: new Date(Date.now() + daysLeft * DAY).toISOString(),
+    });
+    const render = (status: unknown) => {
+      stubFetch((url) => {
+        if (url.includes('/org/formalization/history')) return [];
+        if (url.includes('/org/formalization/capabilities')) return {};
+        if (url.includes('/org/documents')) return [];
+        if (url.includes('/org/formalization')) return status;
+        return {};
+      });
+      renderShell({ route: '/organizacion/formalizacion', ...ownerSession() });
+    };
+
+    it('lejos del vencimiento muestra hasta cuándo vale, sin aviso', async () => {
+      render(statusWith(true, 200));
+      expect(await screen.findByText(/RTE vigente hasta el/)).toBeInTheDocument();
+      expect(screen.queryByTestId('rte-renewal')).not.toBeInTheDocument();
+    });
+
+    it('a menos de 60 días pide subir el RUT actualizado', async () => {
+      render(statusWith(true, 45));
+      const notice = await screen.findByTestId('rte-renewal');
+      expect(notice).toHaveTextContent('Cada año la DIAN pide actualizar');
+      expect(within(notice).getByRole('link', { name: 'Subir RUT actualizado' })).toHaveAttribute(
+        'href',
+        '/organizacion/documentos?subir=rut',
+      );
+    });
+
+    it('vencido explica que solo se pausaron los certificados tributarios', async () => {
+      render(statusWith(false, -3));
+      const notice = await screen.findByTestId('rte-renewal');
+      expect(notice).toHaveTextContent('Tu RTE venció');
+      expect(notice).toHaveTextContent('Pausamos solo los certificados');
+      expect(screen.queryByText(/RTE vigente/)).not.toBeInTheDocument();
+    });
+  });
 });
