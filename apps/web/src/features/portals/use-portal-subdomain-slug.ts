@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { resolveOrgSubdomain } from './model/subdomain';
-import { fetchOrganizationSlugBySubdomain } from './api/organization-by-subdomain';
+import { isCustomPortalHost, resolveOrgSubdomain } from './model/subdomain';
+import {
+  fetchOrganizationSlugByCustomDomain,
+  fetchOrganizationSlugBySubdomain,
+} from './api/organization-by-subdomain';
 
 export type PortalSubdomainState =
   /** Not on an organization subdomain (bare domain, www/app/localhost, a
@@ -28,14 +31,27 @@ export function usePortalSubdomainSlug(): PortalSubdomainState {
     window.location.hostname,
     import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined,
   );
+  // Dominio propio de una organización Pro (www.turefugio.org): todo host que
+  // no sea de AdoptaFácil. Se resuelve igual, a un slug.
+  const customHost =
+    !subdomain &&
+    isCustomPortalHost(
+      window.location.hostname,
+      import.meta.env.VITE_APP_DOMAIN as string | undefined,
+    )
+      ? window.location.hostname
+      : null;
   const [state, setState] = useState<PortalSubdomainState>(
-    subdomain ? { status: 'loading' } : { status: 'none' },
+    subdomain || customHost ? { status: 'loading' } : { status: 'none' },
   );
 
   useEffect(() => {
-    if (!subdomain) return;
+    if (!subdomain && !customHost) return;
     let active = true;
-    fetchOrganizationSlugBySubdomain(subdomain)
+    (subdomain
+      ? fetchOrganizationSlugBySubdomain(subdomain)
+      : fetchOrganizationSlugByCustomDomain(customHost as string)
+    )
       .then((slug) => {
         if (active) setState(slug ? { status: 'ready', slug } : { status: 'not-found' });
       })
@@ -47,7 +63,7 @@ export function usePortalSubdomainSlug(): PortalSubdomainState {
     };
     // `subdomain` only changes with a full navigation (new hostname ⇒ new
     // page load), so this effect intentionally runs once per mount.
-  }, [subdomain]);
+  }, [subdomain, customHost]);
 
   return state;
 }

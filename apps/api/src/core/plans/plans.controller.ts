@@ -16,6 +16,7 @@ import {
   type AssignOrganizationPlanInput,
   type OrganizationPlanView,
   type OrganizationSubscription,
+  type PlanCheckoutStatusView,
   type PlanCheckoutView,
   type StartPlanCheckoutInput,
 } from '@adoptafacil/contracts';
@@ -25,7 +26,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { Roles } from '../rbac/roles.decorator';
 import { RolesGuard } from '../rbac/roles.guard';
-import { assignPlanSchema, startPlanCheckoutSchema } from './plans.schemas';
+import {
+  assignPlanSchema,
+  planCheckoutStatusQuerySchema,
+  startPlanCheckoutSchema,
+} from './plans.schemas';
 import { PlansService } from './plans.service';
 import { PlanBillingService, type PlanWebhookOutcome } from './plan-billing.service';
 
@@ -41,8 +46,19 @@ export class OrgPlanController {
   ) {}
 
   @Get()
-  get(@CurrentUser() user: RequestUser): Promise<OrganizationPlanView> {
-    return this.plans.view(user.organizationId);
+  async get(@CurrentUser() user: RequestUser): Promise<OrganizationPlanView> {
+    const view = await this.plans.view(user.organizationId);
+    return { ...view, onlineBilling: this.billing.onlineBillingAvailable() };
+  }
+
+  /** Where a plan payment stands when the payer comes back from Mercado Pago. */
+  @Get('checkout/status')
+  checkoutStatus(
+    @CurrentUser() user: RequestUser,
+    @Query(new ZodValidationPipe(planCheckoutStatusQuerySchema))
+    query: { preapproval_id: string },
+  ): Promise<PlanCheckoutStatusView> {
+    return this.billing.checkoutStatus(user, query.preapproval_id);
   }
 
   /** ADR-PAG-003: pay the plan monthly with Mercado Pago (AdoptaFácil's own

@@ -182,7 +182,10 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
     plans = app.get(PlansService);
     reminders = app.get(PlanRemindersService);
     notifications = app.get<NotificationPort>(NOTIFICATION_PORT);
-    Object.defineProperty(app.get(PlanBillingService), 'webhookSecret', { value: SECRET });
+    Object.defineProperty(app.get(PlanBillingService), 'webhookSecret', {
+      value: SECRET,
+      configurable: true,
+    });
   });
 
   beforeEach(() => {
@@ -258,6 +261,77 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
     // Con firma válida, autorizar sin un cobro aprobado tampoco activa el plan (sin mes gratis).
     await notify('subscription_preapproval', id).expect(200);
     expect((await planOf(org)).effectivePlan).toBe('free');
+  });
+
+  it('al volver de Mercado Pago dice en qué va el pago: pendiente, en proceso, activo, rechazado o cancelado', async () => {
+    // Reutiliza 'Refugio Firma' (sigue en Gratis): el registro tiene límite de intentos.
+    const org = actors[2];
+    const status = (id: string, actor = org) =>
+      request(server)
+        .get('/org/plan/checkout/status')
+        .query({ preapproval_id: id })
+        .set(auth(actor.token));
+    const res = await request(server)
+      .post('/org/plan/checkout')
+      .set(auth(org.token))
+      .send({ plan: 'crece' })
+      .expect(200);
+    const id = new URL(res.body.checkoutUrl).searchParams.get('preapproval_id') as string;
+    const pre = fake.preapprovals.get(id) as MercadoPagoPreapproval;
+
+    expect((await status(id).expect(200)).body).toEqual({ state: 'pending', plan: 'crece' });
+    // Otra organización no puede consultar este pago (ni saber que existe).
+    await status(id, actors[0]).expect(404);
+    await status('no-existe').expect(404);
+    await status('../etc').expect(400);
+
+    pre.status = 'authorized';
+    expect((await status(id).expect(200)).body.state).toBe('processing');
+    pre.status = 'paused';
+    expect((await status(id).expect(200)).body.state).toBe('rejected');
+    pre.status = 'cancelled';
+    expect((await status(id).expect(200)).body.state).toBe('canceled');
+
+    // Con el primer cobro aprobado, el plan queda activo y así lo dice.
+    pre.status = 'authorized';
+    const charge = `ch${randomUUID().slice(0, 8)}`;
+    fake.charges.set(charge, {
+      id: charge,
+      preapprovalId: id,
+      paymentStatus: 'approved',
+      amount: pre.amount,
+      currency: 'COP',
+      chargedAt: new Date(),
+    });
+    await notify('subscription_authorized_payment', charge).expect(200);
+    expect((await status(id).expect(200)).body.state).toBe('active');
+
+    // Pagar otra vez el mismo plan activo abriría un segundo cobro: no se permite.
+    await request(server)
+      .post('/org/plan/checkout')
+      .set(auth(org.token))
+      .send({ plan: 'crece' })
+      .expect(409);
+  });
+
+  it('el botón de pago en línea solo se ofrece si la cuenta de AdoptaFácil y el webhook están configurados', async () => {
+    const org = actors[0];
+    expect((await planOf(org)).onlineBilling).toBe(true);
+    const billing = app.get(PlanBillingService);
+    Object.defineProperty(billing, 'webhookSecret', { value: undefined, configurable: true });
+    try {
+      // Sin la clave del webhook el cobro llegaría pero el plan nunca se activaría.
+      expect((await planOf(org)).onlineBilling).toBe(false);
+      await request(server)
+        .post('/org/plan/checkout')
+        .set(auth(org.token))
+        .send({ plan: 'pro' })
+        .expect(503);
+    } finally {
+      Object.defineProperty(billing, 'webhookSecret', { value: SECRET, configurable: true });
+    }
+    setEnforced(false);
+    expect((await planOf(org)).onlineBilling).toBe(false);
   });
 
   it('renovación: cada cobro aprobado extiende el periodo un mes', async () => {

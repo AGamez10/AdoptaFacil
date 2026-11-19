@@ -187,4 +187,124 @@ describe('OrgPlanPage · cancelar el plan', () => {
     await screen.findByText('Durante el piloto tienes todas las funciones sin costo.');
     expect(screen.queryByTestId('plan-cancel')).not.toBeInTheDocument();
   });
+
+  it('si la API dice que el pago en línea no está configurado, no ofrece un botón que falle', async () => {
+    stubPlan(viewFor({ effectivePlan: 'free', onlineBilling: false }));
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    expect(await screen.findByTestId('plan-request-crece')).toHaveTextContent(
+      'Quiero el plan Crece (te ayudamos por WhatsApp)',
+    );
+    expect(screen.queryByText(/con Mercado Pago/)).not.toBeInTheDocument();
+  });
+
+  it('muestra el motivo real cuando el pago no se puede abrir (no el genérico "aún no disponible")', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/org/plan/checkout') && init?.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            headers: { get: () => 'application/json' },
+            json: async () => ({
+              statusCode: 409,
+              message: 'Tu organización ya tiene este plan activo.',
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => (url.endsWith('/org/plan') ? viewFor({ onlineBilling: true }) : {}),
+        });
+      }),
+    );
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    (await screen.findByTestId('plan-pay-mercadopago-crece')).click();
+    expect(
+      (await screen.findAllByText('Tu organización ya tiene este plan activo.')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/aún no está disponible/)).not.toBeInTheDocument();
+  });
+
+  it('un plan vencido se puede volver a pagar desde su propia tarjeta', async () => {
+    stubPlan(
+      viewFor({
+        effectivePlan: 'crece',
+        onlineBilling: true,
+        subscription: {
+          organizationId: 'org-self',
+          plan: 'crece',
+          status: 'past_due',
+          currentPeriodEnd: '2026-10-31T12:00:00.000Z',
+          provider: 'mercadopago',
+          providerReference: 'pre-1',
+          discountPercent: 0,
+          updatedAt: '2026-10-01T00:00:00.000Z',
+        },
+      }),
+    );
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    expect(await screen.findByTestId('plan-pay-mercadopago-crece')).toBeInTheDocument();
+  });
+
+  it('al volver de Mercado Pago: "confirmando" mientras está en proceso y "activo" cuando se aprueba', async () => {
+    let state: 'processing' | 'active' = 'processing';
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        urls.push(url);
+        const body = url.includes('/org/plan/checkout/status')
+          ? { state, plan: 'pro' }
+          : url.endsWith('/org/plan')
+            ? viewFor({ onlineBilling: true })
+            : {};
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => body,
+        });
+      }),
+    );
+    renderShell({
+      route: '/organizacion/plan?pago=mercadopago&preapproval_id=pre123',
+      ...sessionWith([Role.Owner]),
+    });
+    expect(await screen.findByText('Estamos confirmando tu pago')).toBeInTheDocument();
+    expect(urls.some((u) => u.includes('preapproval_id=pre123'))).toBe(true);
+    state = 'active';
+    expect(
+      await screen.findByText('¡Listo! Tu plan está activo', undefined, { timeout: 7000 }),
+    ).toBeInTheDocument();
+  }, 10_000);
+
+  it('al volver de Mercado Pago con el pago rechazado lo dice claro', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const body = url.includes('/org/plan/checkout/status')
+          ? { state: 'rejected', plan: 'crece' }
+          : url.endsWith('/org/plan')
+            ? viewFor({})
+            : {};
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => body,
+        });
+      }),
+    );
+    renderShell({
+      route: '/organizacion/plan?pago=mercadopago&preapproval_id=pre9',
+      ...sessionWith([Role.Owner]),
+    });
+    expect(await screen.findByText('Mercado Pago rechazó el pago')).toBeInTheDocument();
+  });
 });

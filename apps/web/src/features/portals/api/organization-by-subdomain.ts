@@ -18,3 +18,18 @@ export async function fetchOrganizationSlugBySubdomain(subdomain: string): Promi
   const body = (await response.json()) as Partial<OrganizationSlugLookup> | null;
   return typeof body?.slug === 'string' ? body.slug : null;
 }
+
+/**
+ * Dominio propio (Pro): el slug del portal que se sirve en `host`
+ * (`GET /public/portal-domains/resolve`). `null` si el dominio no está
+ * verificado o su plan ya no lo incluye.
+ */
+export async function fetchOrganizationSlugByCustomDomain(host: string): Promise<string | null> {
+  const response = await fetch(
+    `${API_BASE}/public/portal-domains/resolve?host=${encodeURIComponent(host)}`,
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('error');
+  const body = (await response.json()) as Partial<OrganizationSlugLookup> | null;
+  return typeof body?.slug === 'string' ? body.slug : null;
+}

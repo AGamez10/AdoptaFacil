@@ -51,6 +51,7 @@ model Organization {
   sensitiveActions             PlatformSensitiveAction[]
   sensitiveActionDecisions     PlatformSensitiveActionDecision[]
   qrLink                       OrganizationQrLink?
+  customDomain                 PortalCustomDomain?
   qrScanDays                   OrganizationQrScanDay[]
   // Café de AdoptaFácil (solo en la org del equipo de plataforma). See coffee.prisma.
   coffeeProducts               CoffeeProduct[]

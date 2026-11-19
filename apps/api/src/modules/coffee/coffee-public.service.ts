@@ -18,6 +18,8 @@ import {
   type CoffeeCampaignOption,
   type CoffeeCheckoutInput,
   type CoffeeCheckoutResult,
+  type PublicCoffeeCatalog,
+  type PublicCoffeeCatalogItem,
   type PublicCoffeeOffer,
   type PublicCoffeeOrderStatus,
   type WebhookVerificationContext,
@@ -107,7 +109,16 @@ export class CoffeePublicService {
     );
     const data = rows[0]?.data;
     if (!data) throw new NotFoundException('Café no encontrado');
-    return data;
+    return { ...data, onlineCheckout: this.checkout.isConfigured() };
+  }
+
+  /** La tienda pública: presentaciones con un lote a la venta, para comprar
+   *  desde la web sin el QR de la bolsa. */
+  async catalog(): Promise<PublicCoffeeCatalog> {
+    const rows = await this.prisma.$queryRaw<Array<{ data: PublicCoffeeCatalogItem[] | null }>>(
+      Prisma.sql`SELECT coffee_public_catalog() AS data`,
+    );
+    return { items: rows[0]?.data ?? [], onlineCheckout: this.checkout.isConfigured() };
   }
 
   async campaigns(): Promise<CoffeeCampaignOption[]> {

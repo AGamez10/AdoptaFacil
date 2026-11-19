@@ -14,6 +14,9 @@ interface ImportMetaEnv {
    *  is manual (WhatsApp or form of AdoptaFácil). Unset → the plans screen says
    *  the change will be available soon. `?plan=<key>` is appended. */
   readonly VITE_BILLING_CONTACT_URL?: string;
+  /** Dominio principal de AdoptaFácil (APP_DOMAIN). Cualquier otro host se trata
+   *  como el dominio propio de una organización Pro. Sin definir: nunca. */
+  readonly VITE_APP_DOMAIN?: string;
 }
 
 interface ImportMeta {

@@ -136,3 +136,12 @@ export const portalPreviewPageSchema = z.object({
 });
 
 export type PortalPreviewPage = z.infer<typeof portalPreviewPageSchema>;
+
+/** Dominio propio: lo normaliza y valida el servicio (mensaje en español). */
+export const setPortalDomainSchema = z
+  .object({ domain: z.string().trim().min(3).max(300) })
+  .strict();
+
+const hostParam = z.string().trim().min(1).max(253);
+export const portalDomainResolveQuerySchema = z.object({ host: hostParam });
+export const portalDomainAskQuerySchema = z.object({ domain: hostParam });

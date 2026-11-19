@@ -30,8 +30,24 @@ import portalStyles from '../../styles/public-portal.module.scss';
 import templateStyles from './portal-templates.module.scss';
 import styles from './template-live-preview.module.scss';
 
-const PORTAL_BASE_DOMAIN =
-  (import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined) || 'adoptafacil.org';
+const PORTAL_BASE_DOMAIN = import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined;
+
+/**
+ * La dirección que de verdad abre el portal, sin inventar una: el dominio
+ * propio verificado si lo hay; `<slug>.<dominio base>` solo cuando los
+ * subdominios están encendidos (`VITE_PORTAL_BASE_DOMAIN`); si no, la ruta que
+ * siempre funciona, `<host actual>/o/<slug>`. Pura.
+ */
+export function portalPreviewAddress(
+  slug: string,
+  baseDomain: string | undefined,
+  currentHost: string,
+  customDomain?: string | null,
+): string {
+  if (customDomain) return customDomain;
+  if (baseDomain) return `${slug}.${baseDomain}`;
+  return `${currentHost}/o/${slug}`;
+}
 
 type Device = 'desktop' | 'mobile';
 const DEVICE_WIDTH: Record<Device, number> = { desktop: 1280, mobile: 390 };
@@ -50,6 +66,8 @@ export interface TemplateLivePreviewProps {
   /** Segundo video (Documental), aún sin guardar. */
   coverVideo2Url?: string;
   coverVideo2PosterUrl?: string;
+  /** Dominio propio ya verificado (Pro), para mostrar la dirección real. */
+  customDomain?: string | null;
 }
 
 /**
@@ -70,6 +88,7 @@ export function TemplateLivePreview({
   coverVideoPosterUrl,
   coverVideo2Url,
   coverVideo2PosterUrl,
+  customDomain,
 }: TemplateLivePreviewProps) {
   // En pantallas pequeñas se abre la vista de celular (el editor usa el ancho del dispositivo).
   const [device, setDevice] = useState<Device>(() =>
@@ -149,7 +168,12 @@ export function TemplateLivePreview({
       <div className={styles.toolbar}>
         <span className={styles.url}>
           <span className={styles.dot} />
-          {previewSlug}.{PORTAL_BASE_DOMAIN}
+          {portalPreviewAddress(
+            previewSlug,
+            PORTAL_BASE_DOMAIN,
+            typeof window === 'undefined' ? 'adoptafacil.org' : window.location.host,
+            customDomain,
+          )}
         </span>
         <div className={styles.devices} role="group" aria-label="Tamaño de la vista previa">
           {(['desktop', 'mobile'] as const).map((value) => (

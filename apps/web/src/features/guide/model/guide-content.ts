@@ -414,6 +414,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
     ],
   },
   {
+    match: /^\/cafe\/?$/,
+    title: 'Café de AdoptaFácil',
+    tips: [
+      'Elige una presentación, la campaña que quieres apoyar y paga con Mercado Pago.',
+      'Con estas ventas AdoptaFácil sigue gratis para los refugios; el 20 % del margen bruto va a la campaña que elijas.',
+    ],
+    related: [{ to: '/campanas', label: 'Ver campañas' }],
+  },
+  {
     match: /^\/tengo-para-donar/,
     title: 'Tengo algo para donar',
     tips: [
@@ -999,6 +1008,11 @@ export const PUBLIC_MAP: readonly MapEntry[] = [
     description: 'Todos los animales disponibles.',
   },
   { to: '/campanas', label: 'Campañas', description: 'Campañas activas de las organizaciones.' },
+  {
+    to: '/cafe',
+    label: 'Café de AdoptaFácil',
+    description: 'Compra en línea; sostiene la plataforma gratis para los refugios.',
+  },
   { to: '/recursos', label: 'Banco de recursos' },
   { to: '/marketplace', label: 'Marketplace' },
   {
