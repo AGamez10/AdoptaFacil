@@ -71,6 +71,43 @@ function planRequestUrl(plan: PlanDefinition): string {
 }
 
 /**
+ * Qué decirle a la organización según la respuesta real de la API, en vez de
+ * un "no disponible" para todo: 409 = piloto, no hay nada que pagar; 503 sin
+ * pasarela configurada o Mercado Pago caído (la API trae el motivo); 403 = su
+ * rol no puede pagar; cualquier otro = no se pudo abrir el pago.
+ */
+export function planCheckoutErrorToast(error: unknown): { title: string; description: string } {
+  const message = ApiError.is(error) && error.message ? error.message : '';
+  if (ApiError.is(error) && error.status === 409 && message && !/piloto/i.test(message)) {
+    // Por ejemplo «Tu organización ya tiene este plan activo.»: la API dice el motivo.
+    return { title: message, description: 'Si necesitas ayuda, escríbenos por WhatsApp.' };
+  }
+  if (ApiError.is(error) && error.status === 409) {
+    return {
+      title: 'No hay nada que pagar todavía',
+      description: message || 'Durante el piloto todas las funciones son gratis.',
+    };
+  }
+  if (ApiError.is(error) && error.status === 403) {
+    return {
+      title: 'Tu rol no puede pagar el plan',
+      description: 'Pídele a la persona dueña o administradora de la organización que lo active.',
+    };
+  }
+  if (ApiError.is(error) && error.status === 503) {
+    return {
+      title: 'No pudimos abrir el pago en línea',
+      description: `${message || 'El pago en línea no está disponible por ahora.'} También puedes escribirnos por WhatsApp y lo activamos contigo.`,
+    };
+  }
+  return {
+    title: 'No pudimos abrir el pago en línea',
+    description:
+      'Intenta de nuevo en unos minutos o escríbenos por WhatsApp y lo activamos contigo.',
+  };
+}
+
+/**
  * ADR-PAG-003: pagar el plan cada mes con Mercado Pago. Es ingreso de
  * AdoptaFácil por el software, así que se cobra con la cuenta de Mercado Pago
  * de AdoptaFácil (nunca con la del refugio ni con sus donaciones). Si el pago
@@ -91,16 +128,7 @@ function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
       window.location.assign(view.checkoutUrl);
     } catch (error) {
       setBusy(false);
-      // La API dice por qué (ya tienes el plan, Mercado Pago no respondió, el
-      // cobro en línea aún no está configurado…): se muestra tal cual.
-      const known = error instanceof ApiError && error.status < 500 ? error.message : null;
-      toast({
-        title: known ?? 'No pudimos abrir el pago con Mercado Pago',
-        description: known
-          ? 'Si necesitas ayuda, escríbenos por WhatsApp.'
-          : 'Intenta de nuevo en unos minutos o escríbenos por WhatsApp y lo activamos contigo.',
-        variant: 'destructive',
-      });
+      toast({ ...planCheckoutErrorToast(error), variant: 'destructive' });
     }
   };
   return (
