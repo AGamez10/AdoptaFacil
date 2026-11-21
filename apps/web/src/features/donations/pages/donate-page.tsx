@@ -1,26 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { isMercadoPagoCheckoutUrl, type Donation } from '@adoptafacil/contracts';
-import {
-  Button,
-  buttonVariants,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  cn,
-  EmptyState,
-  Skeleton,
-  useToast,
-} from '@adoptafacil/ui';
-import { PageContainer, PageHeader } from '../../_layout';
+import { Button, buttonVariants, cn, EmptyState, Skeleton, useToast } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
 import { isProfileGateCancelled, useProfileGate } from '../../auth/components/profile-gate';
-import { accessPathWithReturn, returnPathOf, useSession } from '../../../shell/auth';
+import { useSession } from '../../../shell/auth';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { createDonation, fetchOrganizationDonationAvailability } from '../api/donations-api';
 import { DonateForm, type DonateFormValues } from '../components/donate-form';
 import { DonationsActivatingNotice } from '../components/donations-activating-notice';
+import { BenefitSeal } from '../components/benefit-seal';
+import { DonationDirectory } from '../components/donation-directory';
+import { DonorAccountBenefits } from '../components/donor-account-benefits';
+import { useDonationDirectory } from '../hooks/use-donation-directory';
+import { diligenceChips, initialsOf, levelName } from '../model/donation-directory-view';
 import { formatCop } from '../model/donation-breakdown-view';
 import { isMercadoPagoProvider, onlinePaymentsEnabled } from '../../payments/lib/payment-provider';
 import { useNoIndex } from '../../../seo/seo';
@@ -94,7 +87,6 @@ export function DonatePage() {
   const hasSession = status === 'authenticated';
   const { toast } = useToast();
   const target = useDonationTarget();
-  const location = useLocation();
   const profileGate = useProfileGate();
 
   const [submitting, setSubmitting] = useState(false);
@@ -114,6 +106,13 @@ export function DonatePage() {
     'loading' | 'connected' | 'not-connected' | 'error'
   >('loading');
   const targetOrganizationId = target?.organizationId;
+  // Nivel, sello de beneficio y señales de la organización elegida (mismo
+  // directorio público, en caché). Solo presentación: si falla, no se muestra.
+  const directory = useDonationDirectory(Boolean(targetOrganizationId));
+  const directoryEntry =
+    directory.status === 'ready'
+      ? directory.items.find((org) => org.id === targetOrganizationId)
+      : undefined;
   // "Intentar de nuevo" tras una falla al verificar (sin recargar la página).
   const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
 
@@ -134,36 +133,13 @@ export function DonatePage() {
   }, [targetOrganizationId, availabilityAttempt, online]);
 
   if (!target) {
-    // Sin organización objetivo y CON sesión: el historial vive en `/mis-donaciones`
-    // (dentro del shell, con menú) — esta ruta es pública y no lo tiene.
-    if (hasSession) return <Navigate to="/mis-donaciones" replace />;
-
-    // Sin sesión: aviso honesto (`GET /donations/mine` es solo autenticado). Iniciar
-    // una donación NUEVA solo ocurre desde el portal público de una organización.
+    // "Quiero donar" sin organización elegida: el directorio de organizaciones,
+    // primero las más formalizadas y diligentes (con o sin sesión).
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <div className={cn('flex min-h-screen flex-col text-foreground', styles.shell)}>
         <PublicNavbar />
         <main className="flex-1">
-          <PageContainer>
-            <PageHeader
-              title="Donaciones"
-              description="Entra al portal público de una organización para donar — no necesitas una cuenta."
-            />
-            <EmptyState
-              title="Aún no elegiste a quién donar"
-              description="Explora el catálogo general o el portal de una organización y usa su botón “Donar”."
-            />
-            <p className={styles['done__hint']}>
-              ¿Ya donaste antes con una cuenta?{' '}
-              <Link
-                to={accessPathWithReturn('/login', returnPathOf(location))}
-                className="underline"
-              >
-                Inicia sesión
-              </Link>{' '}
-              para ver tu historial.
-            </p>
-          </PageContainer>
+          <DonationDirectory hasSession={hasSession} userName={user?.name} />
         </main>
         <PublicFooter />
       </div>
@@ -251,24 +227,39 @@ export function DonatePage() {
     setFormInstanceKey((k) => k + 1);
   };
 
+  const campaignLabel =
+    target.campaignId && target.campaignTitle ? target.campaignTitle : undefined;
+  const benefit = directoryEntry?.canReceiveDonations ? directoryEntry.donorBenefit : undefined;
+  const portalPath = target.organizationSlug
+    ? `/o/${encodeURIComponent(target.organizationSlug)}`
+    : undefined;
+
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className={cn('flex min-h-screen flex-col text-foreground', styles.shell)}>
       <PublicNavbar />
-      <main className="flex-1">
+      <main className={cn('flex-1', styles.checkout)}>
         {profileGate.dialog}
-        <PageContainer>
-          <PageHeader
-            title="Donar"
-            description={
-              target.campaignId && target.campaignTitle
-                ? `Tu aporte para la campaña «${target.campaignTitle}» de ${target.organizationName}.`
-                : `Tu aporte para ${target.organizationName}.`
-            }
-          />
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {target.organizationLogoUrl && (
+        <div className={styles.checkout__inner}>
+          <Link to="/donaciones" className={styles.back} data-testid="donation-change-org">
+            <span aria-hidden>←</span> Elegir otra organización
+          </Link>
+          <div className={styles.layout}>
+            <header className={styles.heading}>
+              <p className={styles.eyebrow}>Donar</p>
+              <h1 className={styles.title}>
+                {campaignLabel
+                  ? `Apoya la campaña «${campaignLabel}»`
+                  : `Dona a ${target.organizationName}`}
+              </h1>
+              <p className={styles.lead}>
+                Tú eliges el monto y pagas en Mercado Pago. AdoptaFácil no cobra comisión: el dinero
+                llega completo a la cuenta de {target.organizationName}.
+              </p>
+            </header>
+
+            <aside className={styles.summary} aria-label="Organización que recibe tu donación">
+              <div className={styles['summary__org']}>
+                {target.organizationLogoUrl ? (
                   <img
                     src={target.organizationLogoUrl}
                     alt=""
@@ -276,25 +267,52 @@ export function DonatePage() {
                     data-testid="donation-org-logo"
                     className={styles['org-logo']}
                   />
+                ) : (
+                  <span
+                    className={cn(styles['org-logo'], styles['org-logo--initials'])}
+                    aria-hidden
+                  >
+                    {initialsOf(target.organizationName)}
+                  </span>
                 )}
-                {target.organizationName}
-              </CardTitle>
-              {/* F2-03: solo lo que ya viaja en el contrato público (mismo endpoint
-                  que el portal /o/:slug consume) — el NIT es dato público una vez
-                  formalizada la org, nunca se fabrica ni se muestra el de muestra
-                  del certificado (RF14, congelado, no se toca aquí). */}
-              {(target.organizationCity || target.organizationNit) && (
-                <p className={styles['org-meta']} data-testid="donation-org-meta">
-                  {[
-                    target.organizationCity,
-                    target.organizationNit && `NIT ${target.organizationNit}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
+                <div className={styles['summary__id']}>
+                  <h2 className={styles['summary__name']}>{target.organizationName}</h2>
+                  {/* F2-03: solo lo que ya viaja en el contrato público (mismo endpoint
+                      que el portal /o/:slug consume) — el NIT es dato público una vez
+                      formalizada la org, nunca se fabrica. */}
+                  {(target.organizationCity || target.organizationNit) && (
+                    <p className={styles['org-meta']} data-testid="donation-org-meta">
+                      {[
+                        target.organizationCity,
+                        target.organizationNit && `NIT ${target.organizationNit}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
+                  {directoryEntry && (
+                    <p className={styles['summary__level']}>Nivel: {levelName(directoryEntry)}</p>
+                  )}
+                </div>
+              </div>
+              {benefit && <BenefitSeal benefit={benefit} />}
+              {directoryEntry && diligenceChips(directoryEntry).length > 0 && (
+                <ul className={styles.chips} aria-label="Señales de diligencia">
+                  {diligenceChips(directoryEntry).map((chip) => (
+                    <li key={chip.key} className={styles.chip}>
+                      {chip.label}
+                    </li>
+                  ))}
+                </ul>
               )}
-            </CardHeader>
-            <CardContent>
+              {portalPath && (
+                <Link to={portalPath} className={styles['summary__portal']}>
+                  Conoce su portal y su libro de transparencia
+                </Link>
+              )}
+            </aside>
+
+            <section className={styles.panel} aria-label="Tu donación">
               {hasSession && user?.name && (
                 <p className={styles['donor-identity']} data-testid="donor-identity">
                   Donando como <span className={styles['donor-identity__name']}>{user.name}</span>
@@ -351,30 +369,29 @@ export function DonatePage() {
                         className={cn(buttonVariants())}
                         data-testid="view-certificate-cta"
                       >
-                        Ver tu certificado de donación
+                        {benefit === 'receipt'
+                          ? 'Ver tu comprobante de donación'
+                          : 'Ver tu certificado de donación'}
                       </Link>
                       <p className={styles['done__hint']}>
-                        Disponible una vez se confirme tu pago (organizaciones ESAL con RTE
-                        vigente).
+                        {benefit === 'tax_certificate'
+                          ? 'Disponible al confirmarse tu pago. Te sirve para el descuento en tu declaración de renta.'
+                          : benefit === 'accounting_certificate'
+                            ? 'Disponible al confirmarse tu pago. Es soporte contable, sin descuento tributario.'
+                            : benefit === 'receipt'
+                              ? 'Disponible al confirmarse tu pago. No sirve para beneficio tributario.'
+                              : 'Disponible una vez se confirme tu pago (organizaciones ESAL con RTE vigente).'}
                       </p>
                     </div>
                     {/* Checkout de invitado: la cuenta se ofrece DESPUÉS de donar, nunca
                         como precondición (requisito del cliente). Solo tiene sentido para
                         quien donó sin sesión — un donante ya autenticado no la necesita. */}
                     {!hasSession && (
-                      <div className={styles['done__cert']}>
-                        <p className={styles['done__hint']}>
-                          ¿Quieres crear una cuenta gratuita en AdoptaFácil para consultar tu
-                          historial de donaciones?
-                        </p>
-                        <Link
-                          to="/register"
-                          className={cn(buttonVariants({ variant: 'outline' }))}
-                          data-testid="create-account-cta"
-                        >
-                          Crear cuenta gratuita
-                        </Link>
-                      </div>
+                      <DonorAccountBenefits
+                        title="Para tus próximas donaciones, crea tu cuenta gratis"
+                        note="Esta donación la consultas con el enlace que te enviamos al correo."
+                        returnTo="/mis-donaciones"
+                      />
                     )}
                   </div>
                 )
@@ -428,9 +445,13 @@ export function DonatePage() {
                   onDonate={donate}
                 />
               )}
-            </CardContent>
-          </Card>
-        </PageContainer>
+            </section>
+
+            {!hasSession && !done && (
+              <DonorAccountBenefits variant="compact" className={styles.account} />
+            )}
+          </div>
+        </div>
       </main>
       <PublicFooter />
     </div>

@@ -45,12 +45,19 @@ function stubFetch(handler: (url: string) => unknown) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('"Mis donaciones" (T-064) — dentro del shell, con menú', () => {
-  it('/donaciones sin organización y con sesión redirige a /mis-donaciones', async () => {
-    stubFetch(() => []);
+  it('/donaciones sin organización y con sesión muestra el directorio con acceso a su historial', async () => {
+    stubFetch(() => ({ items: [] }));
     renderShell({ route: '/donaciones', ...personSession() });
 
-    expect(await screen.findByRole('heading', { name: 'Mis donaciones' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: /principal/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /¿A quién quieres ayudar hoy\?/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('donation-directory-welcome')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver mis donaciones' })).toHaveAttribute(
+      'href',
+      '/mis-donaciones',
+    );
+    expect(screen.queryByTestId('donor-account-benefits')).not.toBeInTheDocument();
   });
 
   it('lists the donor’s own donations with org label, status badge and amount', async () => {
@@ -381,7 +388,7 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
       route: '/donaciones?organizationId=org-1&organizationName=Refugio%20Patitas',
     });
 
-    await screen.findByRole('heading', { name: 'Donar' });
+    await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ });
     expect(screen.queryByTestId('donor-identity')).not.toBeInTheDocument();
     expect(screen.getByTestId('donation-guest-name')).toBeInTheDocument();
     expect(screen.getByTestId('donation-guest-email')).toBeInTheDocument();
@@ -421,7 +428,7 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
       route: '/donaciones?organizationId=org-1&organizationName=Refugio%20Patitas',
     });
 
-    await screen.findByRole('heading', { name: 'Donar' });
+    await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ });
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.change(screen.getByTestId('donation-guest-name'), {
       target: { value: 'Invitado Test' },
@@ -436,8 +443,8 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();
-    const cta = screen.getByTestId('create-account-cta');
-    expect(cta).toHaveAttribute('href', '/register');
+    const cta = screen.getByTestId('donor-benefits-register');
+    expect(cta).toHaveAttribute('href', '/register?returnTo=%2Fmis-donaciones');
   });
 
   it('shows an honest "pago rechazado" state (declined), with a retry that reopens the form', async () => {
@@ -474,7 +481,7 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
       route: '/donaciones?organizationId=org-1&organizationName=Refugio%20Patitas',
     });
 
-    await screen.findByRole('heading', { name: 'Donar' });
+    await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ });
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.change(screen.getByTestId('donation-guest-name'), {
       target: { value: 'Invitado Test' },
@@ -533,19 +540,23 @@ describe('DonatePage — checkout de invitado (sin sesión, requisito final del 
       ...personSession(),
     });
 
-    await screen.findByRole('heading', { name: 'Donar' });
+    await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ });
     fireEvent.change(screen.getByPlaceholderText('50000'), { target: { value: '50000' } });
     fireEvent.click(screen.getByRole('button', { name: /Donar a Refugio Patitas/ }));
 
     expect(await screen.findByText(/¡Gracias por tu donación!/)).toBeInTheDocument();
-    expect(screen.queryByTestId('create-account-cta')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('donor-benefits-register')).not.toBeInTheDocument();
   });
 
   it('shows a public, non-crashing empty-state (not "Mis donaciones") when there is no target and no session', async () => {
     stubFetch(() => []);
     renderShell({ route: '/donaciones' });
 
-    expect(await screen.findByText(/Aún no elegiste a quién donar/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /¿A quién quieres ayudar hoy\?/ }),
+    ).toBeInTheDocument();
+    // El visitante sin cuenta ve qué gana al registrarse, sin que se le exija.
+    expect((await screen.findAllByTestId('donor-account-benefits')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'Mis donaciones' })).not.toBeInTheDocument();
   });
 });
@@ -633,7 +644,9 @@ describe('DonatePage — "with target" is unchanged (non-regression, T-050/T-051
       ...personSession(),
     });
 
-    expect(await screen.findByRole('heading', { name: 'Donar' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Refugio Patitas' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Mis donaciones' })).not.toBeInTheDocument();
   });
@@ -645,7 +658,7 @@ describe('DonatePage — "with target" is unchanged (non-regression, T-050/T-051
       ...personSession(),
     });
 
-    await screen.findByRole('heading', { name: 'Donar' });
+    await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ });
     const identity = screen.getByTestId('donor-identity');
     expect(identity).toHaveTextContent('Donante Tester');
     expect(identity).toHaveTextContent('donante@example.test');

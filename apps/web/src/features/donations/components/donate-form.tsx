@@ -16,6 +16,9 @@ import styles from './donate-form.module.scss';
  *  incompleto. */
 const EMAIL_LOOKS_VALID = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Montos sugeridos (COP): un toque y listo; siempre se puede escribir otro. */
+const SUGGESTED_AMOUNTS = [20_000, 50_000, 100_000, 200_000] as const;
+
 export interface DonateFormValues {
   intendedAmount: number;
   /** "¿Donar de forma anónima frente a la organización?" */
@@ -82,6 +85,41 @@ export function DonateForm({
     : undefined;
   return (
     <div className={styles.form}>
+      <div className={styles.amount}>
+        <label className={styles.label} htmlFor="donation-amount">
+          ¿Cuánto quieres donar? (COP)
+        </label>
+        <div className={styles.presets} role="group" aria-label="Montos sugeridos">
+          {SUGGESTED_AMOUNTS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={cn(styles.preset, amount === value && styles['preset--selected'])}
+              aria-pressed={amount === value}
+              onClick={() => setAmountText(String(value))}
+              data-testid={`donation-preset-${value}`}
+            >
+              {formatCop(value)}
+            </button>
+          ))}
+        </div>
+        <Input
+          id="donation-amount"
+          inputMode="numeric"
+          placeholder="50000"
+          aria-describedby={preview ? undefined : 'donation-amount-hint'}
+          value={amountText}
+          onChange={(e) => setAmountText(e.target.value.replace(/[^\d]/g, ''))}
+        />
+        {preview ? (
+          <DonationBreakdown intendedAmount={amount} organizationName={organizationName} />
+        ) : (
+          <p className={styles.hint} id="donation-amount-hint">
+            Elige un monto o escribe otro (mínimo {formatCop(MIN_DONATION_AMOUNT)}).
+          </p>
+        )}
+      </div>
+
       <fieldset className={styles.choice}>
         <legend className={styles.label}>¿Cómo quieres donar?</legend>
         <div className={styles.choice__options}>
@@ -149,25 +187,6 @@ export function DonateForm({
             No necesitas una cuenta para donar. Usamos tu correo para enviarte el recibo.
           </p>
         </>
-      )}
-
-      <label className={styles.label} htmlFor="donation-amount">
-        Monto de tu donación (COP)
-      </label>
-      <Input
-        id="donation-amount"
-        inputMode="numeric"
-        placeholder="50000"
-        value={amountText}
-        onChange={(e) => setAmountText(e.target.value.replace(/[^\d]/g, ''))}
-      />
-
-      {preview ? (
-        <DonationBreakdown intendedAmount={amount} organizationName={organizationName} />
-      ) : (
-        <p className={styles.hint}>
-          Ingresa al menos {formatCop(MIN_DONATION_AMOUNT)} para ver el desglose.
-        </p>
       )}
 
       {!hasSession && (

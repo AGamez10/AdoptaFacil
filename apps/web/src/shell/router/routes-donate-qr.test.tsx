@@ -51,8 +51,12 @@ describe('QR de donaciones — rutas públicas', () => {
     stubFetch();
     renderShell({ route: '/o/patitas/donar', ...guest });
 
-    expect(await screen.findByRole('heading', { name: 'Donar' })).toBeInTheDocument();
-    expect(screen.getByText('Tu aporte para Refugio Patitas.')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Dona a Refugio Patitas' }),
+    ).toBeInTheDocument();
     expect(await screen.findByPlaceholderText('50000')).toBeInTheDocument();
   });
 
@@ -90,7 +94,9 @@ describe('QR de donaciones — rutas públicas', () => {
     expect(
       await screen.findByRole('heading', { name: 'Página no encontrada' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Donar' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('/donar on a real organization subdomain opens that organization’s donation flow', async () => {
@@ -102,6 +108,8 @@ describe('QR de donaciones — rutas públicas', () => {
     stubFetch();
     renderShell({ route: '/donar', ...guest });
 
-    expect(await screen.findByText('Tu aporte para Refugio Patitas.')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Dona a Refugio Patitas' }),
+    ).toBeInTheDocument();
   });
 });

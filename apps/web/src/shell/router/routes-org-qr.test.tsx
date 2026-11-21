@@ -60,7 +60,9 @@ describe('QR fijo — /q/:code', () => {
     stubFetch({ slug: 'patitas', target: { kind: 'donate', id: null } });
     renderShell({ route: '/q/abcd2345', ...guest });
 
-    expect(await screen.findByText('Tu aporte para Refugio Patitas.')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Dona a Refugio Patitas' }),
+    ).toBeInTheDocument();
   });
 
   it('an unknown code shows a calm "no encontrado"', async () => {

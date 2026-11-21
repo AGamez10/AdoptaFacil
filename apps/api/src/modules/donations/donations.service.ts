@@ -26,6 +26,7 @@ import {
   type DonationPublicStatus,
   type DonationWithReceipt,
   type DonationOrganizationAvailability,
+  type PublicDonationDirectory,
   type GuestDonationAccess,
   type NormalizedWebhookEvent,
   type PaymentBreakdown,
@@ -58,6 +59,14 @@ import {
   mercadoPagoNotificationType,
 } from '../../core/payments/mercadopago-payment.adapter';
 import { isFormalState } from '../reports/report-legal-effect';
+import {
+  rankDirectory,
+  toDirectoryOrganization,
+  type RawDirectoryOrganization,
+} from './donation-directory';
+
+/** Tope del directorio público de donación (la función SQL recorta a 300). */
+const DONATION_DIRECTORY_LIMIT = 200;
 
 /**
  * How long a guest's donation access link (magic link) stays valid (client's
@@ -1235,6 +1244,21 @@ export class DonationsService {
       metadata: { collectionId: event.collectionId, mismatches },
     });
     return false;
+  }
+
+  /**
+   * PUBLIC "Quiero donar": every approved organization with a public portal,
+   * ordered to reward diligence (see `rankDirectory`). Reads a bounded
+   * SECURITY DEFINER function that only exposes already-public signals and
+   * booleans — never an account id, a document file or a reviewer.
+   */
+  async getDonationDirectory(now: Date = new Date()): Promise<PublicDonationDirectory> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ data: { items: RawDirectoryOrganization[] } | null }>
+    >(Prisma.sql`SELECT public_donation_directory(${DONATION_DIRECTORY_LIMIT}::int) AS data`);
+    const raw = rows[0]?.data?.items ?? [];
+    const mode = { mercadopago: this.mercadopago, requiresCollector: this.requiresCollector };
+    return { items: rankDirectory(raw.map((item) => toDirectoryOrganization(item, mode, now))) };
   }
 
   /**

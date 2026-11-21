@@ -261,7 +261,7 @@ function useHeroPaths(): HeroPath[] {
           key: 'donar',
           Icon: IconHeart,
           title: 'Quiero donar',
-          text: 'Elige a quién ayudas y ve el desglose',
+          text: 'Organizaciones verificadas, sin comisión',
           to: '/donaciones',
         }
       : {

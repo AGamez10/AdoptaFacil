@@ -121,7 +121,9 @@ describe('routing — public vs protected', () => {
       route: '/donaciones?organizationId=org-9&organizationName=Refugio%20Patitas',
       session: { initialStatus: 'authenticated' },
     });
-    expect(await screen.findByRole('heading', { name: 'Donar' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ }),
+    ).toBeInTheDocument();
     // Org resolved from the query → shown; NOT the "choose an org" empty state.
     expect(screen.getByText('Refugio Patitas')).toBeInTheDocument();
     expect(screen.queryByText('Elige una organización desde su portal')).not.toBeInTheDocument();
@@ -136,7 +138,9 @@ describe('routing — public vs protected', () => {
       route: '/donaciones?organizationId=org-9&organizationName=Refugio%20Patitas',
       session: { initialStatus: 'unauthenticated' },
     });
-    expect(await screen.findByRole('heading', { name: 'Donar' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /^(Dona a|Apoya la campaña)/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Refugio Patitas')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Iniciar sesión' })).not.toBeInTheDocument();
     // Sin sesión, el formulario pide identidad de invitado en vez de asumir una cuenta.
