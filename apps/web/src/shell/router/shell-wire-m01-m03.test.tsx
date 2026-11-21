@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@adoptafacil/contracts';
-import { renderShell } from '../../test-utils';
+import { openNavSections, renderShell } from '../../test-utils';
 
 /**
  * T-031 — the shell wires M01/M03's already-built surfaces (documents, animals,
@@ -111,6 +111,7 @@ describe('T-031 · menu reflects the role (first barrier)', () => {
 
   it('shows the org animal/document entries to an org role, hides platform review', async () => {
     renderShell({ route: '/', ...sessionWith([Role.Owner]) });
+    await openNavSections();
     await waitFor(() =>
       expect(within(nav()).getByRole('link', { name: 'Animales' })).toBeInTheDocument(),
     );
@@ -124,6 +125,7 @@ describe('T-031 · menu reflects the role (first barrier)', () => {
 
   it('shows platform review to a platform admin, hides the org-only entries', async () => {
     renderShell({ route: '/', ...sessionWith([Role.PlatformAdmin]) });
+    await openNavSections();
     await waitFor(() =>
       expect(
         within(nav()).getByRole('link', { name: 'Revisión de documentos' }),

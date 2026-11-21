@@ -3,11 +3,17 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { Button, Skeleton, cn } from '@adoptafacil/ui';
 import { ChevronDownIcon, CloseIcon } from '../icons';
 import { featureForPath, useCapabilities } from '../capabilities';
-import { navItems, ORG_MEMBER_ROLES, type NavItem } from '../navigation';
+import {
+  navSections,
+  personaNavItems,
+  ORG_MEMBER_ROLES,
+  type NavItem,
+  type NavSection,
+} from '../navigation';
 import { useNav } from '../navigation/nav-context';
 import { useSession } from '../auth';
 import { useApiClient } from '../api';
-import { Role, type OrgReportsReadiness } from '@adoptafacil/contracts';
+import { PLATFORM_ROLES, Role, type OrgReportsReadiness } from '@adoptafacil/contracts';
 import { Brand } from './brand';
 import { useOrgIdentity } from './use-org-identity';
 import styles from './sidebar.module.scss';
@@ -206,47 +212,188 @@ function SidebarGroup({
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const canSeeLeaf = useLeafVisibility();
   const { pathname } = useLocation();
+  const { hasAnyRole } = useSession();
+  // NAV-SECCIONES: quien trabaja en una organización (o en la plataforma) ve el
+  // menú agrupado por tareas; una persona sin cargo conserva su menú corto.
+  const worksInOrg = hasAnyRole(...ORG_MEMBER_ROLES, ...PLATFORM_ROLES);
+
+  const visibleItems = (items: NavItem[]) =>
+    items.flatMap((item) => {
+      if (!item.children) return canSeeLeaf(item) ? [item] : [];
+      const children = item.children.filter(canSeeLeaf);
+      if (!canSeeLeaf(item) && children.length === 0) return [];
+      return [{ ...item, children }];
+    });
+
+  const renderItem = (item: NavItem) => {
+    if (item.children) {
+      return (
+        <SidebarGroup
+          key={item.path}
+          item={item}
+          childItems={item.children}
+          onNavigate={onNavigate}
+        />
+      );
+    }
+    const { path, label, icon: Icon, end, comingSoon, alsoActiveFor } = item;
+    const alsoActive = alsoActiveFor?.some(
+      (extra) => pathname === extra || pathname.startsWith(`${extra}/`),
+    );
+    return (
+      <NavLink
+        key={path}
+        to={path}
+        end={end}
+        onClick={onNavigate}
+        className={({ isActive }) =>
+          cn(
+            styles['org-sidebar__link'],
+            (isActive || alsoActive) && styles['org-sidebar__link--active'],
+          )
+        }
+      >
+        <Icon />
+        <span>{label}</span>
+        {comingSoon && <span className={styles['org-sidebar__badge']}>Pronto</span>}
+      </NavLink>
+    );
+  };
 
   return (
     <nav aria-label="Navegación principal" className={styles['org-sidebar__nav']}>
-      {navItems.map((item) => {
-        if (item.children) {
-          const visibleChildren = item.children.filter(canSeeLeaf);
-          if (!canSeeLeaf(item) && visibleChildren.length === 0) return null;
+      {worksInOrg ? (
+        <SidebarSections
+          sections={navSections
+            .map((section) => ({ ...section, items: visibleItems(section.items) }))
+            .filter((section) => section.items.length > 0)}
+          renderItem={renderItem}
+        />
+      ) : (
+        visibleItems(personaNavItems).map(renderItem)
+      )}
+    </nav>
+  );
+}
+
+const SECTIONS_STORAGE_KEY = 'adoptafacil.sidebar.sections';
+
+function readStoredSections(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(SECTIONS_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function storeSections(value: Record<string, boolean>) {
+  try {
+    window.localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Navegación privada o almacenamiento bloqueado: el menú sigue funcionando.
+  }
+}
+
+/** ¿La ruta actual pertenece a esta entrada (o a uno de sus hijos)? */
+function itemMatches(item: NavItem, pathname: string): boolean {
+  const own = [item.path, ...(item.alsoActiveFor ?? [])].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+  return own || (item.children ?? []).some((child) => itemMatches(child, pathname));
+}
+
+/**
+ * NAV-SECCIONES — títulos desplegables. Por defecto se abre la sección de la
+ * pantalla actual y las marcadas `defaultOpen`; lo que la persona abra o cierre
+ * se recuerda en este navegador. "Mi actividad" (lo personal) empieza cerrada
+ * salvo que la persona no gestione animales ni la plataforma.
+ */
+function SidebarSections({
+  sections,
+  renderItem,
+}: {
+  sections: NavSection[];
+  renderItem: (item: NavItem) => JSX.Element;
+}) {
+  const { pathname } = useLocation();
+  const [manual, setManual] = useState<Record<string, boolean>>(readStoredSections);
+  const activeId = sections.find((section) =>
+    section.items.some((item) => itemMatches(item, pathname)),
+  )?.id;
+  // Quien no gestiona animales ni la plataforma (p. ej. un voluntario) ve abierta
+  // su propia actividad, que es casi todo lo que tiene.
+  const personalFirst = !sections.some((section) => section.defaultOpen);
+
+  // Al llegar a una pantalla de una sección que la persona había cerrado, se
+  // abre: la entrada activa nunca queda escondida.
+  useEffect(() => {
+    if (!activeId) return;
+    setManual((current) => {
+      if (current[activeId] !== false) return current;
+      const next = { ...current };
+      delete next[activeId];
+      storeSections(next);
+      return next;
+    });
+  }, [activeId]);
+
+  return (
+    <>
+      {sections.map((section) => {
+        if (!section.label) {
           return (
-            <SidebarGroup
-              key={item.path}
-              item={item}
-              childItems={visibleChildren}
-              onNavigate={onNavigate}
-            />
+            <div key={section.id} className={styles['org-sidebar__section-items']}>
+              {section.items.map(renderItem)}
+            </div>
           );
         }
-        if (!canSeeLeaf(item)) return null;
-        const { path, label, icon: Icon, end, comingSoon, alsoActiveFor } = item;
-        const alsoActive = alsoActiveFor?.some(
-          (extra) => pathname === extra || pathname.startsWith(`${extra}/`),
-        );
+        const fallback =
+          section.id === activeId ||
+          (section.personal ? personalFirst : Boolean(section.defaultOpen));
+        const isOpen = manual[section.id] ?? fallback;
+        const toggle = () => {
+          setManual((current) => {
+            const next = { ...current, [section.id]: !isOpen };
+            storeSections(next);
+            return next;
+          });
+        };
+        const contentId = `org-sidebar-section-${section.id}`;
         return (
-          <NavLink
-            key={path}
-            to={path}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                styles['org-sidebar__link'],
-                (isActive || alsoActive) && styles['org-sidebar__link--active'],
-              )
-            }
+          <div
+            key={section.id}
+            className={cn(
+              styles['org-sidebar__section'],
+              section.personal && styles['org-sidebar__section--personal'],
+            )}
           >
-            <Icon />
-            <span>{label}</span>
-            {comingSoon && <span className={styles['org-sidebar__badge']}>Pronto</span>}
-          </NavLink>
+            <button
+              type="button"
+              className={styles['org-sidebar__section-toggle']}
+              data-nav-section={section.id}
+              aria-expanded={isOpen}
+              aria-controls={contentId}
+              onClick={toggle}
+            >
+              <span>{section.label}</span>
+              <ChevronDownIcon
+                className={cn(
+                  styles['org-sidebar__group-chevron'],
+                  isOpen && styles['org-sidebar__group-chevron--open'],
+                )}
+              />
+            </button>
+            {isOpen && (
+              <div id={contentId} className={styles['org-sidebar__section-items']}>
+                {section.items.map(renderItem)}
+              </div>
+            )}
+          </div>
         );
       })}
-    </nav>
+    </>
   );
 }
 

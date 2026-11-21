@@ -285,3 +285,65 @@
   box-shadow: var(--shadow-lg);
   transition: transform 200ms ease-out;
 }
+
+// --- NAV-SECCIONES: títulos desplegables del menú de trabajo -------------------
+.org-sidebar__section {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.75rem;
+}
+
+// Lo personal va separado de la gestión del refugio por una línea.
+.org-sidebar__section--personal {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid hsl(0 0% 100% / 0.1);
+}
+
+.org-sidebar__section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.org-sidebar__section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.25rem;
+  border-radius: var(--r-md);
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: hsl(0 0% 100% / 0.55);
+  cursor: pointer;
+  transition: var(--transition-base);
+
+  > span:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  svg {
+    width: 0.9rem;
+    height: 0.9rem;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background-color: hsl(0 0% 100% / 0.06);
+    color: var(--text-light);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--brand-light);
+  }
+}

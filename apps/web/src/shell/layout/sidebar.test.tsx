@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@adoptafacil/contracts';
-import { renderShell } from '../../test-utils';
+import { openNavSections, renderShell } from '../../test-utils';
 
 function sessionWith(roles: Role[]) {
   return {
@@ -128,7 +128,7 @@ describe('Sidebar — org identity chip (REFACTOR-VISUAL v2, Fase 3)', () => {
   });
 });
 
-describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
+describe('Sidebar — NAV-SECCIONES y grupos desplegables', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function stubGenericFetch() {
@@ -143,59 +143,158 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
     );
   }
 
-  it('"Donaciones" starts collapsed, expands on click revealing both children, and collapses again', async () => {
+  function sectionToggle(sidebar: HTMLElement, name: string) {
+    return within(sidebar).getByRole('button', { name: new RegExp(`^${name}`) });
+  }
+
+  function sectionLabels(sidebar: HTMLElement) {
+    return Array.from(sidebar.querySelectorAll('button[data-nav-section]')).map((el) =>
+      (el.textContent ?? '').trim(),
+    );
+  }
+
+  it('NAV-SECCIONES: el dueño ve el menú agrupado por tareas, con solo "Animales y adopciones" abierta al entrar', async () => {
     stubGenericFetch();
     renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
 
     const sidebar = screen.getByTestId('org-sidebar');
-    const toggle = await within(sidebar).findByRole('button', { name: 'Donaciones' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await within(sidebar).findByRole('link', { name: 'Inicio' });
+    expect(sectionLabels(sidebar)).toEqual([
+      'Animales y adopciones',
+      'Recaudación',
+      'Comunidad',
+      'Organización',
+      'Mi actividad',
+    ]);
+    expect(sectionToggle(sidebar, 'Animales y adopciones')).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    for (const name of ['Recaudación', 'Comunidad', 'Organización', 'Mi actividad']) {
+      expect(sectionToggle(sidebar, name)).toHaveAttribute('aria-expanded', 'false');
+    }
+    for (const name of ['Animales', 'Adopciones', 'Reportes de animales', 'Custodia y guardería']) {
+      expect(within(sidebar).getByRole('link', { name })).toBeInTheDocument();
+    }
+    // Lo cerrado no se pinta: menos de la mitad de entradas a la vista.
+    expect(within(sidebar).queryByRole('link', { name: 'Campañas' })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole('link', { name: 'Mis donaciones' })).not.toBeInTheDocument();
+  });
 
+  it('NAV-SECCIONES: abrir una sección muestra sus entradas y el navegador lo recuerda', async () => {
+    stubGenericFetch();
+    const first = renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+
+    let sidebar = screen.getByTestId('org-sidebar');
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /^Recaudación/ }));
+    expect(sectionToggle(sidebar, 'Recaudación')).toHaveAttribute('aria-expanded', 'true');
+    expect(within(sidebar).getByRole('link', { name: 'Campañas' })).toHaveAttribute(
+      'href',
+      '/organizacion/campanas',
+    );
+    expect(within(sidebar).getByRole('link', { name: 'Donaciones' })).toHaveAttribute(
+      'href',
+      '/donaciones-recibidas',
+    );
+    first.unmount();
+
+    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    sidebar = screen.getByTestId('org-sidebar');
+    expect(await within(sidebar).findByRole('link', { name: 'Campañas' })).toBeInTheDocument();
+
+    fireEvent.click(sectionToggle(sidebar, 'Recaudación'));
+    expect(within(sidebar).queryByRole('link', { name: 'Campañas' })).not.toBeInTheDocument();
+  });
+
+  it('NAV-SECCIONES: la sección de la pantalla actual se abre sola y marca la entrada activa', async () => {
+    stubGenericFetch();
+    renderShell({ route: '/organizacion/apadrinamientos', ...sessionWith([Role.Owner]) });
+
+    const sidebar = screen.getByTestId('org-sidebar');
+    expect(await within(sidebar).findByRole('link', { name: 'Apadrinamientos' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(sectionToggle(sidebar, 'Recaudación')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('NAV-SECCIONES: "Reseñas" ya no aparece dos veces — "Reseñas recibidas" (del portal) y "Mis reseñas" (las propias)', async () => {
+    stubGenericFetch();
+    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    await openNavSections();
+
+    const sidebar = screen.getByTestId('org-sidebar');
+    expect(within(sidebar).getByRole('link', { name: 'Reseñas recibidas' })).toHaveAttribute(
+      'href',
+      '/organizacion/resenas',
+    );
+    expect(within(sidebar).getByRole('link', { name: 'Mis reseñas' })).toHaveAttribute(
+      'href',
+      '/resenas',
+    );
+    expect(within(sidebar).queryByRole('link', { name: 'Reseñas' })).not.toBeInTheDocument();
+    expect(
+      within(sidebar).queryByRole('link', { name: 'Reseñas del portal' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('NAV-SECCIONES: lo personal del dueño (sus donaciones, voluntariado, datos) vive en "Mi actividad"', async () => {
+    stubGenericFetch();
+    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+
+    const sidebar = screen.getByTestId('org-sidebar');
+    fireEvent.click(await within(sidebar).findByRole('button', { name: /^Mi actividad/ }));
+    for (const [name, href] of [
+      ['Mis donaciones', '/mis-donaciones'],
+      ['Mis apadrinamientos', '/apadrinar'],
+      ['Mi voluntariado', '/voluntariado'],
+      ['Mis ofertas', '/mis-ofertas'],
+      ['Uso de mis datos', '/uso-de-mis-datos'],
+    ]) {
+      expect(within(sidebar).getByRole('link', { name })).toHaveAttribute('href', href);
+    }
+  });
+
+  it('NAV-SECCIONES: un voluntario (sin gestión) ve su actividad abierta y no ve la gestión de voluntariado', async () => {
+    stubGenericFetch();
+    renderShell({ route: '/inicio', ...sessionWith([Role.Volunteer]) });
+
+    const sidebar = screen.getByTestId('org-sidebar');
+    expect(await within(sidebar).findByRole('link', { name: 'Mi voluntariado' })).toHaveAttribute(
+      'href',
+      '/voluntariado',
+    );
+    await openNavSections();
+    expect(within(sidebar).queryByRole('link', { name: 'Voluntariado' })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole('link', { name: 'Animales' })).not.toBeInTheDocument();
+  });
+
+  it('NAV-SECCIONES: una persona sin cargo conserva su menú corto, sin secciones', async () => {
+    stubGenericFetch();
+    renderShell({
+      route: '/inicio',
+      session: {
+        initialStatus: 'authenticated' as const,
+        initialUser: {
+          id: 'u2',
+          name: 'Donante',
+          email: 'donante@example.test',
+          roles: [],
+          organizationId: 'personal-1',
+          accountType: 'person' as const,
+        },
+      },
+    });
+
+    const sidebar = screen.getByTestId('org-sidebar');
+    const toggle = await within(sidebar).findByRole('button', { name: 'Donaciones' });
+    expect(sidebar.querySelector('button[data-nav-section]')).toBeNull();
     fireEvent.click(toggle);
-
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(within(sidebar).getByRole('link', { name: 'Mis donaciones' })).toHaveAttribute(
       'href',
       '/mis-donaciones',
     );
-    expect(within(sidebar).getByRole('link', { name: 'Donaciones recibidas' })).toHaveAttribute(
-      'href',
-      '/donaciones-recibidas',
-    );
-
-    fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(within(sidebar).queryByRole('link', { name: 'Mis donaciones' })).not.toBeInTheDocument();
-  });
-
-  it('el menú sigue el orden pedido: Inicio, Documentos, Donaciones, Animales, Adopciones, Apadrinamientos, Voluntariado, Banco de recursos, Comunidad, Campañas, Marketplace, Reseñas', async () => {
-    stubGenericFetch();
-    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
-
-    const sidebar = screen.getByTestId('org-sidebar');
-    await within(sidebar).findByRole('button', { name: 'Donaciones' });
-    const nav = within(sidebar).getByRole('navigation', { name: 'Navegación principal' });
-    const labels = Array.from(nav.children).map((el) =>
-      (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
-    );
-    const order = [
-      'Inicio',
-      'Documentos',
-      'Donaciones',
-      'Animales',
-      'Adopciones',
-      'Apadrinamientos',
-      'Voluntariado',
-      'Banco de recursos',
-      'Comunidad',
-      'Campañas',
-      'Marketplace',
-      'Reseñas',
-    ];
-    const positions = order.map((name) => labels.findIndex((label) => label.startsWith(name)));
-    expect(positions.every((position) => position >= 0)).toBe(true);
-    expect([...positions].sort((x, y) => x - y)).toEqual(positions);
+    expect(within(sidebar).getByRole('link', { name: 'Mis solicitudes' })).toBeInTheDocument();
   });
 
   it('"Recordatorios" ya no es entrada del menú y "Inicio" se resalta en /recordatorios', async () => {
@@ -208,49 +307,12 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
     expect(inicio.className).toContain('active');
   });
 
-  it('"Voluntariado" es un solo grupo desplegable con "Mi voluntariado" y "Gestión de voluntariado"', async () => {
-    stubGenericFetch();
-    renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
-
-    const sidebar = screen.getByTestId('org-sidebar');
-    // Ya no hay dos entradas planas "Voluntariado" / "Mi voluntariado".
-    expect(
-      within(sidebar).queryByRole('link', { name: 'Mi voluntariado' }),
-    ).not.toBeInTheDocument();
-    const toggle = await within(sidebar).findByRole('button', { name: 'Voluntariado' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-
-    fireEvent.click(toggle);
-
-    expect(within(sidebar).getByRole('link', { name: 'Mi voluntariado' })).toHaveAttribute(
-      'href',
-      '/voluntariado',
-    );
-    expect(within(sidebar).getByRole('link', { name: 'Gestión de voluntariado' })).toHaveAttribute(
-      'href',
-      '/organizacion/voluntariado',
-    );
-  });
-
-  it('un rol sin gestión de voluntariado (Volunteer) solo ve "Mi voluntariado" dentro del grupo', async () => {
-    stubGenericFetch();
-    renderShell({ route: '/inicio', ...sessionWith([Role.Volunteer]) });
-
-    const sidebar = screen.getByTestId('org-sidebar');
-    fireEvent.click(await within(sidebar).findByRole('button', { name: 'Voluntariado' }));
-
-    expect(within(sidebar).getByRole('link', { name: 'Mi voluntariado' })).toBeInTheDocument();
-    expect(
-      within(sidebar).queryByRole('link', { name: 'Gestión de voluntariado' }),
-    ).not.toBeInTheDocument();
-  });
-
   it('"Donaciones y campañas" ya no es una entrada del menú (vive dentro de Inicio)', async () => {
     stubGenericFetch();
     renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    await openNavSections();
 
     const sidebar = screen.getByTestId('org-sidebar');
-    await within(sidebar).findByRole('button', { name: 'Donaciones' });
     expect(
       within(sidebar).queryByRole('link', { name: 'Donaciones y campañas' }),
     ).not.toBeInTheDocument();
@@ -267,21 +329,10 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
     );
   });
 
-  it('auto-expands "Apadrinamientos" and marks the active child when its route is current', async () => {
-    stubGenericFetch();
-    renderShell({ route: '/organizacion/apadrinamientos', ...sessionWith([Role.Owner]) });
-
-    const sidebar = screen.getByTestId('org-sidebar');
-    const toggle = await within(sidebar).findByRole('button', { name: 'Apadrinamientos' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(
-      within(sidebar).getByRole('link', { name: 'Apadrinamientos recibidos' }),
-    ).toHaveAttribute('aria-current', 'page');
-  });
-
-  it('"Documentos": the label navigates to the real module; the chevron only expands/collapses the "Pronto" children', async () => {
+  it('"Documentos": the label navigates to the real module; the chevron only expands/collapses its children', async () => {
     stubGenericFetch();
     renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    await openNavSections();
 
     const sidebar = screen.getByTestId('org-sidebar');
     const link = await within(sidebar).findByRole('link', { name: 'Documentos' });
@@ -318,6 +369,7 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
 
     stubReadiness({ mySignerRole: 'fiscal_reviewer' });
     const signer = renderShell({ route: '/inicio', ...sessionWith([Role.ReadOnlyAuditor]) });
+    await openNavSections();
     let sidebar = screen.getByTestId('org-sidebar');
     fireEvent.click(await within(sidebar).findByRole('button', { name: 'Expandir Documentos' }));
     expect(
@@ -330,6 +382,7 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
 
     stubReadiness({});
     const plain = renderShell({ route: '/inicio', ...sessionWith([Role.ReadOnlyAuditor]) });
+    await openNavSections();
     sidebar = screen.getByTestId('org-sidebar');
     fireEvent.click(await within(sidebar).findByRole('button', { name: 'Expandir Documentos' }));
     expect(
@@ -342,6 +395,7 @@ describe('Sidebar — MENU-SUBMENUS collapsible groups', () => {
 
     stubGenericFetch();
     renderShell({ route: '/inicio', ...sessionWith([Role.Owner]) });
+    await openNavSections();
     sidebar = screen.getByTestId('org-sidebar');
     fireEvent.click(await within(sidebar).findByRole('button', { name: 'Expandir Documentos' }));
     expect(

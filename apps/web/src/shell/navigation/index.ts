@@ -1,6 +1,9 @@
 // Navigation layer of the app shell.
 export {
   navItems,
+  navSections,
+  personaNavItems,
+  type NavSection,
   type NavItem,
   ADOPTIONS_MANAGEMENT_ROLES,
   ANIMAL_VIEW_ROLES,

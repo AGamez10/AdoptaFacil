@@ -1,4 +1,4 @@
-import { render, type RenderResult } from '@testing-library/react';
+import { fireEvent, render, screen, type RenderResult } from '@testing-library/react';
 import { FEATURE_KEYS, type PublicCapabilities } from '@adoptafacil/contracts';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders, type AppProvidersProps } from './shell/app-providers';
@@ -41,4 +41,21 @@ export function renderShell({
       </MemoryRouter>
     </AppProviders>,
   );
+}
+
+/**
+ * NAV-SECCIONES: abre todas las secciones del menú de trabajo (empiezan
+ * cerradas salvo la de la pantalla actual) para que una prueba de permisos vea
+ * TODAS las entradas que el rol puede ver.
+ */
+export function expandNavSections(root: ParentNode = document): void {
+  root
+    .querySelectorAll<HTMLButtonElement>('button[data-nav-section][aria-expanded="false"]')
+    .forEach((button) => fireEvent.click(button));
+}
+
+/** Espera a que el menú pinte y abre todas sus secciones. */
+export async function openNavSections(): Promise<void> {
+  const nav = await screen.findByRole('navigation', { name: 'Navegación principal' });
+  expandNavSections(nav);
 }

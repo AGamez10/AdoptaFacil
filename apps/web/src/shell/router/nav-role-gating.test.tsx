@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@adoptafacil/contracts';
-import { renderShell } from '../../test-utils';
+import { openNavSections, renderShell } from '../../test-utils';
 
 /**
  * T-062 — fix the §13 UX gap: "Mi organización" / "Formalización" /
@@ -125,6 +125,7 @@ describe('T-062 · sidebar reflects the org gate (first barrier)', () => {
       }),
     );
     renderShell({ route: '/', ...sessionWith([Role.Owner]) });
+    await openNavSections();
     const sidebar = screen.getByTestId('org-sidebar');
     expect(await within(sidebar).findByRole('link', { name: /Alas y Huellas/ })).toHaveAttribute(
       'href',
@@ -204,6 +205,7 @@ describe('F-NAV-ADOPCIONES · "Adopciones" demands ADOPTIONS_MANAGEMENT_ROLES (d
 
   it('shows "Adopciones" to an evaluation role (Operator), pointing at the kanban', async () => {
     renderShell({ route: '/', ...sessionWith([Role.Operator]) });
+    await openNavSections();
     await waitFor(() =>
       expect(within(nav()).getByRole('link', { name: 'Adopciones' })).toHaveAttribute(
         'href',
@@ -226,6 +228,7 @@ describe('F-NAV-ADOPCIONES · "Adopciones" demands ADOPTIONS_MANAGEMENT_ROLES (d
 
   it('hides "Adopciones" from a role outside EVAL_ROLES (e.g. ReadOnlyAuditor — view-only, not an evaluator)', async () => {
     renderShell({ route: '/', ...sessionWith([Role.ReadOnlyAuditor]) });
+    await openNavSections();
     // MENU-SUBMENUS: "Documentos" stands in for the removed "Mi organización"
     // link as the stable org-gated proof-of-render entry.
     await waitFor(() =>
@@ -272,13 +275,9 @@ describe('F-DONACIONES-RECIBIDAS · "Donaciones recibidas" demands DONATIONS_MAN
 
   it('shows "Donaciones recibidas" to a management role (Operator), pointing at its route', async () => {
     renderShell({ route: '/', ...sessionWith([Role.Operator]) });
-    // MENU-SUBMENUS: "Donaciones recibidas" is now a child of the collapsible
-    // "Donaciones" group — expand it before looking for the child link.
-    await waitFor(() =>
-      expect(within(nav()).getByRole('button', { name: 'Donaciones' })).toBeInTheDocument(),
-    );
-    fireEvent.click(within(nav()).getByRole('button', { name: 'Donaciones' }));
-    expect(within(nav()).getByRole('link', { name: 'Donaciones recibidas' })).toHaveAttribute(
+    await openNavSections();
+    // NAV-SECCIONES: para un cargo de organización vive en "Recaudación" como "Donaciones".
+    expect(within(nav()).getByRole('link', { name: 'Donaciones' })).toHaveAttribute(
       'href',
       '/donaciones-recibidas',
     );
@@ -298,15 +297,15 @@ describe('F-DONACIONES-RECIBIDAS · "Donaciones recibidas" demands DONATIONS_MAN
 
   it('hides "Donaciones recibidas" from a role outside MANAGE_ROLES (ReadOnlyAuditor — view-only, not management)', async () => {
     renderShell({ route: '/', ...sessionWith([Role.ReadOnlyAuditor]) });
+    await openNavSections();
     // MENU-SUBMENUS: "Documentos" stands in for the removed "Mi organización"
     // link as the stable org-gated proof-of-render entry.
     await waitFor(() =>
       expect(within(nav()).getByRole('link', { name: 'Documentos' })).toBeInTheDocument(),
     );
-    fireEvent.click(within(nav()).getByRole('button', { name: 'Donaciones' }));
-    expect(
-      within(nav()).queryByRole('link', { name: 'Donaciones recibidas' }),
-    ).not.toBeInTheDocument();
+    // Su historial personal sigue en "Mi actividad"; lo recibido no aparece.
+    expect(within(nav()).getByRole('link', { name: 'Mis donaciones' })).toBeInTheDocument();
+    expect(within(nav()).queryByRole('link', { name: 'Donaciones' })).not.toBeInTheDocument();
   });
 });
 
@@ -347,6 +346,7 @@ describe('F1-01 · "Mis solicitudes" shows only to a Persona account (personaOnl
 
   it('hides "Mis solicitudes" from an org account, even one that can evaluate (Operator)', async () => {
     renderShell({ route: '/', ...sessionWith([Role.Operator]) });
+    await openNavSections();
     // An org-gated entry stays visible, proving the sidebar actually rendered…
     await waitFor(() =>
       expect(within(nav()).getByRole('link', { name: 'Adopciones' })).toBeInTheDocument(),
@@ -357,6 +357,7 @@ describe('F1-01 · "Mis solicitudes" shows only to a Persona account (personaOnl
 
   it('hides "Mis solicitudes" from any other org role (e.g. ReadOnlyAuditor)', async () => {
     renderShell({ route: '/', ...sessionWith([Role.ReadOnlyAuditor]) });
+    await openNavSections();
     // MENU-SUBMENUS: "Documentos" stands in for the removed "Mi organización"
     // link as the stable org-gated proof-of-render entry.
     await waitFor(() =>
@@ -383,6 +384,7 @@ describe('T-028c · "Mis seguimientos" shows only to a Persona account (personaO
 
   it('hides "Mis seguimientos" from an org account (Operator)', async () => {
     renderShell({ route: '/', ...sessionWith([Role.Operator]) });
+    await openNavSections();
     await waitFor(() =>
       expect(within(nav()).getByRole('link', { name: 'Adopciones' })).toBeInTheDocument(),
     );
