@@ -17,6 +17,8 @@ import {
   priceWithIva,
   type AssignOrganizationPlanInput,
   type OrganizationSubscription,
+  type PlanCheckoutState,
+  type PlanCheckoutStatusView,
   type PlanCheckoutView,
   type PlanKey,
   type WebhookVerificationContext,
@@ -50,6 +52,27 @@ export function addOneMonth(from: Date): Date {
   const d = new Date(from.getTime());
   d.setUTCMonth(d.getUTCMonth() + 1);
   return d;
+}
+
+/**
+ * Mercado Pago preapproval status + whether OUR row is already active with it
+ * → what the organization sees after paying. Pure.
+ */
+export function planCheckoutState(
+  mpStatus: string | null | undefined,
+  activeHere: boolean,
+): PlanCheckoutState {
+  if (activeHere) return 'active';
+  switch (mpStatus) {
+    case 'authorized':
+      return 'processing';
+    case 'paused':
+      return 'rejected';
+    case 'cancelled':
+      return 'canceled';
+    default:
+      return 'pending';
+  }
 }
 
 export interface PlanWebhookOutcome {
@@ -107,6 +130,16 @@ export class PlanBillingService {
     }
   }
 
+  /**
+   * Whether a plan can be paid online right now: plans are enforced, the
+   * platform token is set AND the webhook secret is set. Without the secret
+   * Mercado Pago would charge but the plan would never activate (every
+   * notification is refused), so the button is not even offered.
+   */
+  onlineBillingAvailable(): boolean {
+    return this.plans.enforced && this.billing.isConfigured() && Boolean(this.webhookSecret);
+  }
+
   /** `POST /org/plan/checkout` (Owner/Administrator of the caller's org). */
   async startCheckout(actor: RequestUser, plan: PaidPlan): Promise<PlanCheckoutView> {
     // While PLAN_ENFORCEMENT is off every organization already has Pro for
@@ -116,7 +149,7 @@ export class PlanBillingService {
         'Durante el piloto todas las funciones son gratis: no hay nada que pagar todavía.',
       );
     }
-    if (!this.billing.isConfigured()) {
+    if (!this.billing.isConfigured() || !this.webhookSecret) {
       throw new ServiceUnavailableException(
         'El pago de planes en línea todavía no está disponible. Escríbenos y lo activamos a mano.',
       );
@@ -129,9 +162,24 @@ export class PlanBillingService {
     const current = await this.prisma.withOrgContext(organizationId, (tx) =>
       tx.organizationSubscription.findUnique({
         where: { organizationId },
-        select: { discountPercent: true },
+        select: {
+          discountPercent: true,
+          plan: true,
+          status: true,
+          currentPeriodEnd: true,
+        },
       }),
     );
+    // Paying again for the plan that is already active and paid would open a
+    // second monthly charge for the same thing. A plan that is past due or
+    // cancelled can be paid again (the new subscription replaces the old one).
+    if (
+      current?.plan === plan &&
+      current.status === 'active' &&
+      (!current.currentPeriodEnd || current.currentPeriodEnd.getTime() > Date.now())
+    ) {
+      throw new ConflictException('Tu organización ya tiene este plan activo.');
+    }
     const monthlyAmountCop = planMonthlyAmount(plan, current?.discountPercent ?? 0);
     const reference = planSubscriptionReference(organizationId, plan);
     let created: { id: string; checkoutUrl: string };
@@ -163,6 +211,40 @@ export class PlanBillingService {
       metadata: { plan, monthlyAmountCop, provider: 'mercadopago', preapprovalId: id },
     });
     return { plan, monthlyAmountCop, checkoutUrl };
+  }
+
+  /**
+   * `GET /org/plan/checkout/status?preapproval_id=` (Owner/Administrator):
+   * where the payment stands when the payer comes back from Mercado Pago.
+   * Read back with the PLATFORM token; a subscription of another organization
+   * answers 404 (never says it exists).
+   */
+  async checkoutStatus(actor: RequestUser, preapprovalId: string): Promise<PlanCheckoutStatusView> {
+    const organizationId = actor.organizationId;
+    if (!organizationId) throw new ForbiddenException('Missing tenant context');
+    if (!this.billing.isConfigured()) throw new NotFoundException();
+    let preapproval: MercadoPagoPreapproval;
+    try {
+      preapproval = await this.billing.getPreapproval(preapprovalId);
+    } catch (error) {
+      this.logger.warn(`Plan checkout status ${preapprovalId}: ${(error as Error).message}`);
+      throw new NotFoundException('No encontramos ese pago.');
+    }
+    const ref = parsePlanSubscriptionReference(preapproval.externalReference);
+    if (!ref || ref.organizationId !== organizationId.toLowerCase()) {
+      throw new NotFoundException('No encontramos ese pago.');
+    }
+    const row = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.organizationSubscription.findUnique({
+        where: { organizationId },
+        select: { provider: true, providerReference: true, status: true },
+      }),
+    );
+    const activeHere =
+      row?.provider === 'mercadopago' &&
+      row.providerReference === preapproval.id &&
+      row.status === 'active';
+    return { state: planCheckoutState(preapproval.status, activeHere), plan: ref.plan };
   }
 
   /**

@@ -180,7 +180,7 @@ export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; avail
     label: 'Portal sin el sello "Hecho con AdoptaFácil"',
     available: true,
   },
-  customDomain: { label: 'Dominio propio (www.turefugio.org)', available: false },
+  customDomain: { label: 'Dominio propio (www.turefugio.org)', available: true },
   brandedEmails: { label: 'Correos a adoptantes y donantes con tu marca', available: true },
   dataExport: { label: 'Exportar tus datos a Excel', available: true },
   impactReport: { label: 'Reporte de impacto en PDF para donantes', available: true },
@@ -373,6 +373,9 @@ export interface OrganizationPlanView {
   /** Whether plans are enforced at all (PLAN_ENFORCEMENT). When false every
    *  organization gets `pro` and nothing is charged. */
   enforced: boolean;
+  /** Whether the plan can be paid online right now (AdoptaFácil's Mercado
+   *  Pago account is configured). Absent in older responses = unknown. */
+  onlineBilling?: boolean;
   /** The plan that is in effect right now (after expiry and grace rules). */
   effectivePlan: PlanKey;
   /** The stored subscription, or null when the org never had one (= free). */

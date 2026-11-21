@@ -143,6 +143,7 @@ const RemindersInboxPage = lazyPage(loadAnimals, 'RemindersInboxPage');
 const loadCoffee = () => import('../../features/coffee');
 const PublicCoffeePage = lazyPage(loadCoffee, 'PublicCoffeePage');
 const CoffeeOrderPage = lazyPage(loadCoffee, 'CoffeeOrderPage');
+const CoffeeShopPage = lazyPage(loadCoffee, 'CoffeeShopPage');
 const PlatformCoffeePage = lazyPage(loadCoffee, 'PlatformCoffeePage');
 const loadPlatformTeam = () => import('../../features/platform-team');
 const PlatformTeamPage = lazyPage(loadPlatformTeam, 'PlatformTeamPage');
@@ -317,6 +318,7 @@ export function AppRoutes() {
             element={<CoffeeOrLegacyShareLink coffee={<PublicCoffeePage />} />}
           />
           <Route path="/p/:id" element={<SharedPostLink />} />
+          <Route path="/cafe" element={<CoffeeShopPage />} />
           <Route path="/cafe/pedido/:reference" element={<CoffeeOrderPage />} />
           <Route
             path="/donar"

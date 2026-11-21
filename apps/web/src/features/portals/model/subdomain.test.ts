@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { portalAddress, resolveOrgSubdomain } from './subdomain';
+import { isCustomPortalHost, portalAddress, resolveOrgSubdomain } from './subdomain';
 
 describe('resolveOrgSubdomain', () => {
   it('returns null when no base domain is configured', () => {
@@ -38,6 +38,28 @@ describe('resolveOrgSubdomain', () => {
 
   it('returns null for an empty hostname', () => {
     expect(resolveOrgSubdomain('', 'adoptafacil.org')).toBeNull();
+  });
+});
+
+describe('isCustomPortalHost (dominio propio de una organización Pro)', () => {
+  it('sin el dominio de AdoptaFácil configurado nunca trata un host como propio', () => {
+    expect(isCustomPortalHost('www.turefugio.org', undefined)).toBe(false);
+  });
+  it('un dominio ajeno es el dominio propio de una organización', () => {
+    expect(isCustomPortalHost('www.turefugio.org', 'adoptafacil.org')).toBe(true);
+    expect(isCustomPortalHost('TuRefugio.com.co', 'adoptafacil.org')).toBe(true);
+  });
+  it('AdoptaFácil, sus subdominios, localhost e IPs no lo son', () => {
+    for (const host of [
+      'adoptafacil.org',
+      'www.adoptafacil.org',
+      'patitas.adoptafacil.org',
+      'localhost',
+      '127.0.0.1',
+      'app.localhost',
+    ]) {
+      expect(isCustomPortalHost(host, 'adoptafacil.org')).toBe(false);
+    }
   });
 });
 

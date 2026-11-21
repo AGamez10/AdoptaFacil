@@ -48,6 +48,8 @@ export interface TemplateLivePreviewProps {
   /** Segundo video (Documental), aún sin guardar. */
   coverVideo2Url?: string;
   coverVideo2PosterUrl?: string;
+  /** Dominio propio ya verificado (Pro), para mostrar la dirección real. */
+  customDomain?: string | null;
 }
 
 /**
@@ -68,6 +70,7 @@ export function TemplateLivePreview({
   coverVideoPosterUrl,
   coverVideo2Url,
   coverVideo2PosterUrl,
+  customDomain,
 }: TemplateLivePreviewProps) {
   // En pantallas pequeñas se abre la vista de celular (el editor usa el ancho del dispositivo).
   const [device, setDevice] = useState<Device>(() =>
@@ -147,7 +150,7 @@ export function TemplateLivePreview({
       <div className={styles.toolbar}>
         <span className={styles.url}>
           <span className={styles.dot} />
-          {portalAddress(previewSlug)}
+          {customDomain || portalAddress(previewSlug)}
         </span>
         <div className={styles.devices} role="group" aria-label="Tamaño de la vista previa">
           {(['desktop', 'mobile'] as const).map((value) => (

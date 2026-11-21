@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   BRANDED_EMAIL_MONTHLY_LIMIT,
   PLAN_ALWAYS_INCLUDED,
@@ -8,6 +9,8 @@ import {
   formatPlanLimit,
   isMercadoPagoCheckoutUrl,
   priceWithIva,
+  type PlanCheckoutState,
+  type PlanCheckoutStatusView,
   type PlanCheckoutView,
   type OrganizationPlanView,
   type PlanDefinition,
@@ -30,7 +33,7 @@ import {
   useToast,
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
-import { useApiClient } from '../../../shell/api';
+import { ApiError, useApiClient } from '../../../shell/api';
 import { officialWhatsappUrl } from '../../../lib/contact';
 import { isMercadoPagoProvider } from '../../payments/lib/payment-provider';
 
@@ -86,11 +89,16 @@ function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
       });
       if (!isMercadoPagoCheckoutUrl(view.checkoutUrl)) throw new Error('bad checkout url');
       window.location.assign(view.checkoutUrl);
-    } catch {
+    } catch (error) {
       setBusy(false);
+      // La API dice por qué (ya tienes el plan, Mercado Pago no respondió, el
+      // cobro en línea aún no está configurado…): se muestra tal cual.
+      const known = error instanceof ApiError && error.status < 500 ? error.message : null;
       toast({
-        title: 'El pago en línea del plan aún no está disponible',
-        description: 'Escríbenos por WhatsApp y lo activamos contigo.',
+        title: known ?? 'No pudimos abrir el pago con Mercado Pago',
+        description: known
+          ? 'Si necesitas ayuda, escríbenos por WhatsApp.'
+          : 'Intenta de nuevo en unos minutos o escríbenos por WhatsApp y lo activamos contigo.',
         variant: 'destructive',
       });
     }
@@ -111,15 +119,23 @@ function PlanCard({
   plan,
   current,
   enforced,
+  onlineAvailable,
+  renewable = false,
 }: {
   plan: PlanDefinition;
   current: boolean;
   enforced: boolean;
+  /** `GET /org/plan` → `onlineBilling`; absent on older APIs (then the web build decides). */
+  onlineAvailable?: boolean;
+  /** The current plan is past due or cancelled: it can be paid again. */
+  renewable?: boolean;
 }) {
   const paid = plan.monthlyPriceCop > 0;
   // While plans are not enforced every org already has Pro for free: never
-  // offer to charge for it (the API answers 409 too).
-  const onlineBilling = enforced && isMercadoPagoProvider();
+  // offer to charge for it (the API answers 409 too). The API also says when
+  // AdoptaFácil's Mercado Pago account is not configured yet, so the button
+  // is never offered just to fail.
+  const onlineBilling = enforced && (onlineAvailable ?? isMercadoPagoProvider());
   const included = PLAN_CAPABILITIES.filter((capability) => plan.capabilities[capability]);
   return (
     <Card className={current ? 'border-primary ring-2 ring-primary/30' : undefined}>
@@ -170,7 +186,7 @@ function PlanCard({
           </ul>
         )}
       </CardContent>
-      {paid && !current && (
+      {paid && (!current || renewable) && (
         <CardFooter className="flex flex-col gap-2">
           {onlineBilling && <PayWithMercadoPagoButton plan={plan} />}
           <a
@@ -183,7 +199,11 @@ function PlanCard({
             rel="noreferrer"
             data-testid={`plan-request-${plan.key}`}
           >
-            {onlineBilling ? 'Prefiero pagar por transferencia' : `Quiero el plan ${plan.name}`}
+            {onlineBilling
+              ? 'Prefiero pagar por transferencia'
+              : enforced
+                ? `Quiero el plan ${plan.name} (te ayudamos por WhatsApp)`
+                : `Quiero el plan ${plan.name}`}
           </a>
         </CardFooter>
       )}
@@ -243,6 +263,123 @@ function CancelPlanButton({ onCanceled }: { onCanceled: () => void }) {
   );
 }
 
+const CHECKOUT_COPY: Record<
+  PlanCheckoutState,
+  { title: string; body: string; tone: 'info' | 'success' | 'error' }
+> = {
+  pending: {
+    title: 'Tu pago aún no se ha completado',
+    body: 'Mercado Pago todavía no confirma que autorizaste el cobro. Si cerraste la ventana antes de terminar, vuelve a elegir el plan; no se te cobró nada.',
+    tone: 'info',
+  },
+  processing: {
+    title: 'Estamos confirmando tu pago',
+    body: 'Autorizaste el cobro mensual. En cuanto Mercado Pago apruebe el primer pago, tu plan se activa solo (suele tardar unos minutos). Te avisamos por correo.',
+    tone: 'info',
+  },
+  active: {
+    title: '¡Listo! Tu plan está activo',
+    body: 'El pago fue aprobado. Ya tienes todas las funciones del plan.',
+    tone: 'success',
+  },
+  rejected: {
+    title: 'Mercado Pago rechazó el pago',
+    body: 'No se activó el plan y no se te cobró. Prueba con otro medio de pago o escríbenos por WhatsApp.',
+    tone: 'error',
+  },
+  canceled: {
+    title: 'El pago se canceló',
+    body: 'La suscripción se canceló antes de empezar; no se te cobró nada. Puedes intentarlo de nuevo cuando quieras.',
+    tone: 'info',
+  },
+};
+
+/** Cuántas veces (cada 5 s) se pregunta el estado mientras está en proceso. */
+const CHECKOUT_POLLS = 12;
+
+/**
+ * Regreso desde Mercado Pago (`?pago=mercadopago&preapproval_id=…`): dice en
+ * qué va el pago y, mientras se confirma, vuelve a preguntar unas veces. Cuando
+ * el plan queda activo recarga la página del plan.
+ */
+function PlanCheckoutReturn({ onActive }: { onActive: () => void }) {
+  const client = useApiClient();
+  const [params, setParams] = useSearchParams();
+  const preapprovalId = params.get('pago') === 'mercadopago' ? params.get('preapproval_id') : null;
+  const [status, setStatus] = useState<PlanCheckoutStatusView | null>(null);
+  const [unknown, setUnknown] = useState(false);
+  const polls = useRef(0);
+
+  useEffect(() => {
+    if (!preapprovalId) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      try {
+        const next = await client.request<PlanCheckoutStatusView>(
+          `/org/plan/checkout/status?preapproval_id=${encodeURIComponent(preapprovalId)}`,
+        );
+        if (stopped) return;
+        setStatus(next);
+        if (next.state === 'active') {
+          onActive();
+          return;
+        }
+        if (
+          (next.state === 'processing' || next.state === 'pending') &&
+          polls.current < CHECKOUT_POLLS
+        ) {
+          polls.current += 1;
+          timer = setTimeout(check, 5000);
+        }
+      } catch {
+        if (!stopped) setUnknown(true);
+      }
+    };
+    void check();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [client, preapprovalId, onActive]);
+
+  if (!preapprovalId) return null;
+  const dismiss = () => {
+    const next = new URLSearchParams(params);
+    next.delete('pago');
+    next.delete('preapproval_id');
+    setParams(next, { replace: true });
+  };
+  const copy = status
+    ? CHECKOUT_COPY[status.state]
+    : unknown
+      ? {
+          title: 'No pudimos consultar tu pago',
+          body: 'Si Mercado Pago lo aprobó, tu plan se activa solo en unos minutos. Si no ves el cambio, escríbenos por WhatsApp.',
+          tone: 'info' as const,
+        }
+      : { title: 'Consultando tu pago…', body: 'Un momento.', tone: 'info' as const };
+  return (
+    <div
+      role="status"
+      data-testid="plan-checkout-return"
+      data-state={status?.state ?? (unknown ? 'unknown' : 'loading')}
+      className={cn(
+        'mb-4 rounded-lg border p-4 text-sm',
+        copy.tone === 'success' && 'border-emerald-300 bg-emerald-50 text-emerald-900',
+        copy.tone === 'error' && 'border-red-300 bg-red-50 text-red-900',
+        copy.tone === 'info' && 'border-sky-300 bg-sky-50 text-sky-900',
+      )}
+    >
+      <p className="font-semibold">{copy.title}</p>
+      <p className="mt-1">{copy.body}</p>
+      <Button variant="ghost" size="sm" className="mt-2" onClick={dismiss}>
+        Entendido
+      </Button>
+    </div>
+  );
+}
+
 /**
  * `/organizacion/plan` — Plan y facturación (Owner/Administrator, same roles as
  * `GET /org/plan`). Shows the plan in effect, how much of each limit is used,
@@ -293,6 +430,8 @@ export function OrgPlanPage() {
         title="Plan y facturación"
         description="Lo que protege a los animales y la transparencia es gratis siempre. Los planes de pago son opcionales: suman marca, alcance y comodidad."
       />
+
+      <PlanCheckoutReturn onActive={load} />
 
       <Card>
         <CardHeader>
@@ -385,6 +524,11 @@ export function OrgPlanPage() {
             plan={plan}
             current={view.enforced && plan.key === current}
             enforced={view.enforced}
+            onlineAvailable={view.onlineBilling}
+            renewable={
+              plan.key === current &&
+              (view.subscription?.status === 'past_due' || view.subscription?.status === 'canceled')
+            }
           />
         ))}
       </section>

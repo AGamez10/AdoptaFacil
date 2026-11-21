@@ -37,6 +37,22 @@ export function resolveOrgSubdomain(
   return label;
 }
 
+/**
+ * ¿El host actual es el dominio propio de una organización (plan Pro)? Sí
+ * cuando no es el dominio de AdoptaFácil (`VITE_APP_DOMAIN`) ni uno de sus
+ * subdominios, ni localhost ni una IP. Sin `VITE_APP_DOMAIN` (desarrollo,
+ * pruebas) nunca: la app se ve como siempre. Pura.
+ */
+export function isCustomPortalHost(hostname: string, appDomain: string | undefined): boolean {
+  const app = appDomain?.trim().toLowerCase();
+  const host = hostname.trim().toLowerCase().replace(/\.$/, '');
+  if (!app || !host) return false;
+  if (host === app || host.endsWith(`.${app}`)) return false;
+  if (host === 'localhost' || host.endsWith('.localhost')) return false;
+  if (/^[\d.]+$/.test(host) || host.includes(':')) return false;
+  return host.includes('.');
+}
+
 /** Dominio de los subdominios de portal; sin él, los portales viven en `/o/<slug>`. */
 const PORTAL_BASE_DOMAIN = import.meta.env.VITE_PORTAL_BASE_DOMAIN as string | undefined;
 

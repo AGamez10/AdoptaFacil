@@ -13,6 +13,7 @@ import {
   type CreateCoffeeProductInput,
   type CreateSensitiveActionInput,
   type PublicCoffeeCampaigns,
+  type PublicCoffeeCatalog,
   type PublicCoffeeOffer,
   type PublicCoffeeOrderStatus,
   type UpdateCoffeeLotInput,
@@ -47,6 +48,12 @@ async function readJson<T>(response: Response): Promise<T> {
     body?.code,
     body?.availableUnits,
   );
+}
+
+/** `GET /public/coffee` — la tienda: presentaciones con un lote a la venta. */
+export async function fetchCoffeeCatalog(): Promise<PublicCoffeeCatalog> {
+  const response = await fetch(`${API_BASE}/public/coffee`);
+  return readJson<PublicCoffeeCatalog>(response);
 }
 
 /** `GET /public/coffee/:code` — `null` si el código no existe. `source=qr` cuenta el escaneo. */

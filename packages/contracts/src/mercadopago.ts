@@ -118,6 +118,24 @@ export interface PlanCheckoutView {
 }
 
 /**
+ * Where a plan payment stands after the payer comes back from Mercado Pago
+ * (`GET /org/plan/checkout/status?preapproval_id=`). Read back with the
+ * PLATFORM token; only the caller's own organization's subscriptions.
+ *
+ * - `pending`: the payer has not authorized the monthly charge yet (or left).
+ * - `processing`: authorized; waiting for the first charge to be approved.
+ * - `active`: the first charge was approved and the plan is in effect.
+ * - `rejected`: Mercado Pago paused it (the charge was refused).
+ * - `canceled`: the subscription was cancelled before it started.
+ */
+export type PlanCheckoutState = 'pending' | 'processing' | 'active' | 'rejected' | 'canceled';
+
+export interface PlanCheckoutStatusView {
+  state: PlanCheckoutState;
+  plan: Exclude<PlanKey, 'free'>;
+}
+
+/**
  * `external_reference` of a plan subscription: `afplan:<orgId>:<plan>`.
  * Round-trips through Mercado Pago and back in the webhook read-back, so it
  * must be parseable without trusting anything else. The read-back is done
