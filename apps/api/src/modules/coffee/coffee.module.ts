@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../../core/auth/auth.module';
 import { CoffeeAdminService } from './coffee-admin.service';
 import { CoffeeCheckoutClient } from './coffee-checkout.client';
+import { CoffeePhysicalSalesService } from './coffee-physical-sales.service';
 import { CoffeePublicService } from './coffee-public.service';
 import {
   CoffeeWebhookController,
@@ -12,11 +13,16 @@ import {
 /**
  * Café de AdoptaFácil: presentaciones con QR fijo, lotes con stock, checkout
  * con la cuenta de Mercado Pago de AdoptaFácil y aporte del 20 % del margen
- * bruto a la campaña que elige el comprador.
+ * bruto a la campaña que elige el comprador, también en las ventas físicas.
  */
 @Module({
   imports: [AuthModule],
   controllers: [PlatformCoffeeController, PublicCoffeeController, CoffeeWebhookController],
-  providers: [CoffeeAdminService, CoffeePublicService, CoffeeCheckoutClient],
+  providers: [
+    CoffeeAdminService,
+    CoffeePhysicalSalesService,
+    CoffeePublicService,
+    CoffeeCheckoutClient,
+  ],
 })
 export class CoffeeModule {}

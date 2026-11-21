@@ -22,6 +22,18 @@ export function formatColombiaDateTime(iso: string): string {
   return colombiaDate.format(new Date(iso));
 }
 
+const colombiaDay = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Bogota',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Hoy en Colombia (`YYYY-MM-DD`), para fechas que el equipo registra. */
+export function colombiaToday(now: Date = new Date()): string {
+  return colombiaDay.format(now);
+}
+
 export const LOT_STATUS_LABEL: Record<CoffeeLotStatus, string> = {
   draft: 'Borrador',
   on_sale: 'A la venta',

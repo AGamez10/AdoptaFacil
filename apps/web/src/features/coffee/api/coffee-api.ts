@@ -8,7 +8,9 @@ import {
   type CoffeeDeliveryView,
   type CoffeeOrderStatus,
   type CoffeeOrderView,
+  type CoffeePhysicalSaleView,
   type CreateCoffeeDeliveryInput,
+  type CreateCoffeePhysicalSaleInput,
   type CreateCoffeeLotInput,
   type CreateCoffeeProductInput,
   type CreateSensitiveActionInput,
@@ -16,6 +18,7 @@ import {
   type PublicCoffeeCatalog,
   type PublicCoffeeOffer,
   type PublicCoffeeOrderStatus,
+  type ReverseCoffeePhysicalSaleInput,
   type UpdateCoffeeLotInput,
 } from '@adoptafacil/contracts';
 import type { ApiClient } from '../../../shell/api';
@@ -113,6 +116,14 @@ export function coffeeAdminApi(client: ApiClient) {
     deliveries: () => client.request<CoffeeDeliveryView[]>('/platform/coffee/deliveries'),
     createDelivery: (input: CreateCoffeeDeliveryInput) =>
       post('/platform/coffee/deliveries', input),
+    physicalSales: (lotId?: string) =>
+      client.request<CoffeePhysicalSaleView[]>(
+        `/platform/coffee/physical-sales${lotId ? `?lotId=${lotId}` : ''}`,
+      ),
+    recordPhysicalSale: (lotId: string, input: CreateCoffeePhysicalSaleInput) =>
+      post(`/platform/coffee/lots/${lotId}/physical-sales`, input),
+    reversePhysicalSale: (saleId: string, input: ReverseCoffeePhysicalSaleInput) =>
+      post(`/platform/coffee/physical-sales/${saleId}/reverse`, input),
     requestApproval: (input: CreateSensitiveActionInput) =>
       post('/platform/workspace/approvals', input),
   };

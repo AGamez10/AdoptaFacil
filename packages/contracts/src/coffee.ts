@@ -203,10 +203,15 @@ export interface CoffeeLotView {
   contributionPerUnitCop: number;
   defaultCampaignId: string | null;
   defaultCampaignTitle: string | null;
+  /** Bolsas vendidas: pagadas en línea + vendidas en persona (neto de reversos). */
   unitsSold: number;
+  /** De `unitsSold`, las vendidas en persona (neto de reversos). */
+  unitsSoldInPerson: number;
   unitsReserved: number;
   availableUnits: number;
+  /** Ventas sin envío: pedidos pagados + ventas físicas (neto de reversos). */
   revenueCop: number;
+  /** Aporte comprometido: pedidos pagados + ventas físicas (neto de reversos). */
   contributionCommittedCop: number;
   /** Hay una aprobación pendiente para publicarlo o cambiar su campaña. */
   pendingApproval: 'coffee.lot_publish' | 'coffee.lot_campaign' | null;
@@ -301,6 +306,74 @@ export interface CoffeeDeliveryView {
   amountCop: number;
   deliveredOn: string;
   evidence: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Ventas físicas (feria, punto de venta, entrega en mano)
+// ---------------------------------------------------------------------------
+
+/** Bolsas por venta física (el stock del lote manda; esto solo acota el formulario). */
+export const COFFEE_MAX_UNITS_PER_PHYSICAL_SALE = 10_000;
+
+/** Total máximo de una venta física (cabe en un entero de 32 bits). */
+export const COFFEE_MAX_PHYSICAL_SALE_TOTAL_COP = 2_000_000_000;
+
+/** `sale`: venta registrada. `reversal`: anula por completo una venta mal registrada. */
+export const COFFEE_PHYSICAL_SALE_KINDS = ['sale', 'reversal'] as const;
+export type CoffeePhysicalSaleKind = (typeof COFFEE_PHYSICAL_SALE_KINDS)[number];
+
+/** `buyer`: la campaña la eligió el comprador. `lot_default`: la sugerida del lote. */
+export type CoffeePhysicalSaleCampaignSource = 'buyer' | 'lot_default';
+
+/**
+ * `POST /platform/coffee/lots/:id/physical-sales` — venta física de un lote
+ * publicado (a la venta o en pausa). Descuenta stock y suma el aporte (misma
+ * regla del lote) a la campaña elegida, o a la sugerida del lote si no hay.
+ */
+export interface CreateCoffeePhysicalSaleInput {
+  quantity: number;
+  /** Precio por bolsa cobrado en la venta (por defecto, el del lote). */
+  unitPriceCop: number;
+  /** Campaña que eligió el comprador; si falta, la sugerida del lote. */
+  campaignId?: string;
+  /** YYYY-MM-DD: día de la venta en Colombia (no futuro). */
+  soldOn: string;
+  /** Nota opcional (lugar, evento). Sin datos personales del comprador. */
+  note?: string;
+}
+
+/** `POST /platform/coffee/physical-sales/:id/reverse` — anula una venta, una sola vez. */
+export interface ReverseCoffeePhysicalSaleInput {
+  /** Por qué se anula (queda en el registro y en la bitácora). */
+  reason: string;
+}
+
+/** `GET /platform/coffee/physical-sales` — ventas y reversos, lo más reciente primero. */
+export interface CoffeePhysicalSaleView {
+  id: string;
+  lotId: string;
+  productName: string;
+  lotCode: string;
+  kind: CoffeePhysicalSaleKind;
+  /** En un reverso: la venta que anula. */
+  reversesSaleId: string | null;
+  /** En una venta: el reverso que la anuló, si lo hay. */
+  reversedById: string | null;
+  /** Negativos en un reverso. */
+  quantity: number;
+  unitPriceCop: number;
+  totalCop: number;
+  contributionPerUnitCop: number;
+  contributionTotalCop: number;
+  campaignId: string;
+  campaignTitle: string;
+  organizationName: string;
+  campaignSource: CoffeePhysicalSaleCampaignSource;
+  /** YYYY-MM-DD (Colombia). */
+  soldOn: string;
+  /** Nota de la venta o motivo del reverso. */
+  note: string | null;
   createdAt: string;
 }
 
