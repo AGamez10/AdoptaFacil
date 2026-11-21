@@ -2,9 +2,11 @@ import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
 import type {
   DonationOrganizationAvailability,
   DonationPublicStatus,
+  PublicDonationDirectory,
 } from '@adoptafacil/contracts';
 import { DonationsService } from './donations.service';
 import { RequireFeature } from '../../core/features';
+import { PublicCache } from '../../core/cache/public-cache.decorator';
 
 /**
  * PUBLIC post-checkout status read (gateway redirect-back "gracias"
@@ -24,6 +26,14 @@ export class DonationStatusPublicController {
   @Get('public/donations/status/:reference')
   getPublic(@Param('reference') reference: string): Promise<DonationPublicStatus> {
     return this.service.getPublicStatusByCollectionId(reference);
+  }
+
+  /** "Quiero donar": organizations to donate to, ordered to reward diligence
+   *  (most formalized and diligent first; those that cannot collect last). */
+  @Get('public/donations/directory')
+  @PublicCache()
+  getDirectory(): Promise<PublicDonationDirectory> {
+    return this.service.getDonationDirectory();
   }
 
   /** Whether the org can receive online donations now (boolean only). */

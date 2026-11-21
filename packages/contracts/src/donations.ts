@@ -12,6 +12,7 @@
 // aquí. COP en pesos enteros.
 
 import type { LegalAcceptanceItem } from './legal';
+import type { FormalizationState } from './org';
 import type { PaymentBreakdown, PaymentConcept, PaymentCurrency } from './payments';
 
 /**
@@ -281,4 +282,59 @@ export interface DonationPublicStatus {
 export interface DonationOrganizationAvailability {
   organizationId: string;
   canReceiveDonations: boolean;
+}
+
+// ============================================================================
+// "Quiero donar": directorio público de organizaciones a las que donar
+// (`GET /public/donations/directory`, sin sesión). Aditivo. El orden premia la
+// diligencia: primero quien puede recibir donaciones ahora; dentro de eso, las
+// más formalizadas (ESAL con RTE vigente → ESAL → Formalizada → En proceso →
+// Informal) y, en cada nivel, las señales de diligencia que ya son públicas.
+// ============================================================================
+
+/**
+ * Qué obtiene el donante al donarle a la organización, derivado SOLO de la
+ * matriz de capacidades (`isCapabilityEnabled`), nunca escrito a mano:
+ * - `tax_certificate`        — certificado con beneficio tributario (ESAL con RTE vigente).
+ * - `accounting_certificate` — certificado como soporte contable, sin descuento (ESAL).
+ * - `receipt`                — comprobante de donación, sin efecto tributario.
+ */
+export type DonorBenefit = 'tax_certificate' | 'accounting_certificate' | 'receipt';
+
+/** Señales de diligencia públicas de una organización (cada una ya visible en su portal). */
+export interface DonationDirectorySignals {
+  /** Los documentos que exige su estado de formalización están aprobados y vigentes. */
+  documentsUpToDate: boolean;
+  /** Publicó un gasto en su libro público en los últimos 120 días. */
+  publishesExpenses: boolean;
+  /** Fecha (YYYY-MM-DD) del último gasto publicado en su libro público. */
+  lastExpenseOn?: string;
+  /** Promedio de reseñas aprobadas (1–5); ausente sin reseñas. */
+  reviewAverage?: number;
+  reviewCount: number;
+  activeCampaigns: number;
+}
+
+/** Una organización del directorio de donación. */
+export interface PublicDonationOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string;
+  city?: string;
+  /** Estado de formalización reconocido por la plataforma. */
+  formalizationState: FormalizationState;
+  /** RTE vigente (solo puede ser `true` en ESAL con RTE). */
+  rteVigente: boolean;
+  donorBenefit: DonorBenefit;
+  /** Sello "Verificada": RUT y Cámara de Comercio revisados por la plataforma. */
+  verified: boolean;
+  /** Puede cobrar una donación en línea ahora (misma regla que `availability`). */
+  canReceiveDonations: boolean;
+  signals: DonationDirectorySignals;
+}
+
+/** `GET /public/donations/directory`: ya ordenado por diligencia. */
+export interface PublicDonationDirectory {
+  items: PublicDonationOrganization[];
 }

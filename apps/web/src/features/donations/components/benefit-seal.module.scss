@@ -1,0 +1,55 @@
+.seal {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.875rem;
+  border: 1px solid transparent;
+}
+
+.seal--gold {
+  background: var(--af-sun-soft);
+  border-color: #f3d27a;
+  color: #5c4100; /* 9.6:1 sobre --af-sun-soft */
+}
+
+.seal--mint {
+  background: var(--af-mint-soft);
+  border-color: var(--af-mint);
+  color: var(--af-teal-deep);
+}
+
+.seal--neutral {
+  background: #f6f2ec;
+  border-color: var(--af-line);
+  color: var(--af-ink-soft);
+}
+
+.seal__icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.75);
+}
+
+.seal__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.seal__title {
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+}
+
+.seal__detail {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  opacity: 0.92;
+}

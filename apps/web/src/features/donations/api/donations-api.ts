@@ -6,6 +6,7 @@ import type {
   DonationReceipt,
   DonationWithReceipt,
   GuestDonationAccess,
+  PublicDonationDirectory,
 } from '@adoptafacil/contracts';
 import type { ApiClient } from '../../../shell/api';
 
@@ -104,4 +105,16 @@ export function generateDonationCertificate(
     `/donations/${encodeURIComponent(donationId)}/certificate`,
     { method: 'POST' },
   );
+}
+
+/**
+ * Public "Quiero donar" directory: organizations to donate to, already ordered
+ * by the API to reward diligence. No auth. Throws on a non-2xx.
+ */
+export async function fetchDonationDirectory(
+  signal?: AbortSignal,
+): Promise<PublicDonationDirectory> {
+  const response = await fetch(`${API_BASE}/public/donations/directory`, { signal });
+  if (!response.ok) throw new Error('error');
+  return (await response.json()) as PublicDonationDirectory;
 }

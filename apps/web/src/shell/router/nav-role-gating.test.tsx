@@ -263,7 +263,9 @@ describe('F1-02 · "/adopciones" route enforces ADOPTIONS_MANAGEMENT_ROLES on a 
 
   it('leaves "Donaciones" (Persona-facing, POST /donations has no @Roles) reachable without an org role', async () => {
     renderShell({ route: '/donaciones', ...sessionWith([]) });
-    expect(await screen.findByRole('heading', { name: 'Mis donaciones' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /¿A quién quieres ayudar hoy\?/ }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Sin acceso')).not.toBeInTheDocument();
   });
 });
