@@ -92,6 +92,25 @@ describe('RegisterPage — Organization vs Person', () => {
     expect(window.localStorage.length).toBe(0);
   });
 
+  it('con un plan de pago elegido en la landing, lo explica y al crear la cuenta abre Plan y facturación', async () => {
+    const user = userEvent.setup();
+    renderShell({ route: '/register?plan=crece', session: { initialStatus: 'unauthenticated' } });
+
+    expect(screen.getByTestId('register-plan-note')).toHaveTextContent('Elegiste el plan Crece');
+
+    await user.type(screen.getByLabelText('Nombre de la organización'), 'Fundación Patitas');
+    await user.type(screen.getByLabelText('Nombre de contacto'), 'Ana Ruiz');
+    await user.type(screen.getByLabelText('Correo electrónico'), 'org@patitas.org');
+    await user.type(screen.getByLabelText('Contraseña'), 'supersecret12');
+    await user.type(screen.getByLabelText('Confirmar contraseña'), 'supersecret12');
+    await user.click(screen.getByTestId('org-legal-terms'));
+    await user.click(screen.getByTestId('org-legal-data'));
+    await user.click(screen.getByTestId('org-legal-organization'));
+    await user.click(screen.getByRole('button', { name: 'Crear cuenta de organización' }));
+
+    expect(await screen.findByRole('heading', { name: 'Plan y facturación' })).toBeInTheDocument();
+  });
+
   it('registers a valid person and enters the shell', async () => {
     const user = userEvent.setup();
     renderShell({ route: '/register', session: { initialStatus: 'unauthenticated' } });

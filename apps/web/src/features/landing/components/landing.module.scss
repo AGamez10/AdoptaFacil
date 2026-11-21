@@ -1905,3 +1905,36 @@ $teal-tint: #e3f7f3;
 .faq__contact {
   margin-top: 1.5rem;
 }
+
+/* Acción de cada plan: siempre al pie de la tarjeta, alineada entre planes. */
+.plan {
+  position: relative;
+}
+
+.plan__cta {
+  width: 100%;
+  margin-top: auto;
+}
+
+.plan__list {
+  margin-bottom: 1.75rem;
+}
+
+.plan__flag {
+  align-self: flex-start;
+  margin-bottom: 0.75rem;
+  border-radius: var(--r-full);
+  padding: 0.2rem 0.7rem;
+  background: var(--af-ink);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: var(--fw-extra);
+}
+
+.plans__fine {
+  max-width: 44rem;
+  margin: 1.5rem 0 0;
+  color: rgb(255 255 255 / 0.72);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}

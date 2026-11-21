@@ -11,6 +11,7 @@ import {
   requiredConsentsGiven,
 } from '../../legal';
 import { Field } from '../components/field';
+import { chosenPlanPath, forgetSignupPlan, type PaidPlanKey } from '../lib/signup-plan';
 import { applySignupTemplate, forgetSignupTemplate } from '../lib/signup-template';
 import { FormAlert } from '../components/form-alert';
 import { PasswordRequirements } from '../components/password-requirements';
@@ -36,12 +37,15 @@ type OrgErrors = Partial<
 export interface RegisterOrganizationFormProps {
   /** Plantilla elegida en la vista de ejemplo, si llegó con una. */
   template?: PortalTemplateId | null;
+  /** Plan de pago elegido en la landing: al terminar se abre para pagarlo. */
+  plan?: PaidPlanKey | null;
   /** Adónde volver tras crear la cuenta, si llegó con una intención. */
   returnTo?: string | null;
 }
 
 export function RegisterOrganizationForm({
   template = null,
+  plan = null,
   returnTo = null,
 }: RegisterOrganizationFormProps) {
   const { register } = useSession();
@@ -124,6 +128,7 @@ export function RegisterOrganizationForm({
       }
     }
     forgetSignupTemplate();
+    forgetSignupPlan();
     // Aviso al aceptar: la constancia también llega por correo.
     toast({
       title: 'Cuenta creada',
@@ -139,7 +144,8 @@ export function RegisterOrganizationForm({
     }
     // Primer paso de una organización nueva: completar su perfil para que el
     // portal pueda mostrar lo que registre.
-    navigate(returnTo ?? '/organizacion', { replace: true });
+    // Si eligió un plan de pago en la landing, va directo a pagarlo.
+    navigate(returnTo ?? (plan ? chosenPlanPath(plan) : '/organizacion'), { replace: true });
   };
 
   return (

@@ -149,9 +149,12 @@ function PlanCard({
   enforced,
   onlineAvailable,
   renewable = false,
+  chosen = false,
 }: {
   plan: PlanDefinition;
   current: boolean;
+  /** Elegido en la landing antes de registrarse (`?elegir=<plan>`). */
+  chosen?: boolean;
   enforced: boolean;
   /** `GET /org/plan` → `onlineBilling`; absent on older APIs (then the web build decides). */
   onlineAvailable?: boolean;
@@ -166,12 +169,19 @@ function PlanCard({
   const onlineBilling = enforced && (onlineAvailable ?? isMercadoPagoProvider());
   const included = PLAN_CAPABILITIES.filter((capability) => plan.capabilities[capability]);
   return (
-    <Card className={current ? 'border-primary ring-2 ring-primary/30' : undefined}>
+    <Card
+      id={`plan-card-${plan.key}`}
+      className={current || chosen ? 'border-primary ring-2 ring-primary/30' : undefined}
+      data-testid={`plan-card-${plan.key}`}
+      data-chosen={chosen || undefined}
+    >
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle>{plan.name}</CardTitle>
           {current ? (
             <Badge variant="success">Tu plan</Badge>
+          ) : chosen ? (
+            <Badge variant="info">Lo elegiste</Badge>
           ) : (
             paid && <Badge variant="outline">Opcional</Badge>
           )}
@@ -416,6 +426,9 @@ function PlanCheckoutReturn({ onActive }: { onActive: () => void }) {
  */
 export function OrgPlanPage() {
   const client = useApiClient();
+  // Plan elegido en la landing antes de registrarse: se señala y se lleva a la vista.
+  const [params] = useSearchParams();
+  const chosen = params.get('elegir');
   const [view, setView] = useState<OrganizationPlanView | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -428,6 +441,11 @@ export function OrgPlanPage() {
   }, [client]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!view || !chosen) return;
+    document.getElementById(`plan-card-${chosen}`)?.scrollIntoView?.({ block: 'center' });
+  }, [view, chosen]);
 
   if (failed) {
     return (
@@ -553,6 +571,7 @@ export function OrgPlanPage() {
             current={view.enforced && plan.key === current}
             enforced={view.enforced}
             onlineAvailable={view.onlineBilling}
+            chosen={plan.key === chosen && plan.key !== current}
             renewable={
               plan.key === current &&
               (view.subscription?.status === 'past_due' || view.subscription?.status === 'canceled')

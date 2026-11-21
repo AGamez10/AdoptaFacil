@@ -8,10 +8,13 @@ export {
   LANDING_CATALOG_ID,
   LANDING_FAQ_ID,
   LANDING_ORGS_ID,
+  LANDING_PLANS_ID,
   LANDING_STEPS_ID,
   LANDING_WAITING_ID,
   ORGANIZATIONS_PATH,
   OrganizationsTeaserSection,
+  PlansSection,
+  planSignupPath,
   PromisesSection,
   WaitingAnimalsSection,
 } from './components/landing-sections';
