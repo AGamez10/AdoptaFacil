@@ -44,7 +44,7 @@ export function NationalTransparencyPublicPage() {
           <ScopeExplainer />
           <p className={styles.more}>
             ¿Quieres ver el detalle de una organización?{' '}
-            <Link to="/#transparencia">Abre el libro público de cada una</Link>.
+            <Link to="/ayudar#transparencia">Abre el libro público de cada una</Link>.
           </p>
         </div>
       </main>

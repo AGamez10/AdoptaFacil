@@ -324,6 +324,29 @@ export const PAGE_HELP: readonly PageHelp[] = [
     tips: ['Si olvidaste tu contraseña, usa "¿Olvidaste tu contraseña?" para recibir un enlace.'],
   },
   {
+    match: /^\/ayudar/,
+    title: 'Cómo ayudar',
+    tips: [
+      'Aquí está lo que la red necesita hoy: campañas, insumos, voluntariados y la comunidad.',
+      'Usa el índice de arriba para saltar a la sección que te interesa.',
+      'El libro público de cada organización muestra en qué se usa lo que recibe.',
+    ],
+    related: [
+      { to: '/campanas', label: 'Ver todas las campañas' },
+      { to: '/voluntariados', label: 'Ver voluntariados' },
+    ],
+  },
+  {
+    match: /^\/para-organizaciones/,
+    title: 'Para organizaciones',
+    tips: [
+      'Registrar tu organización es gratis y puedes empezar sin RUT ni cámara de comercio.',
+      'Los planes de pago son opcionales: lo que protege al animal y la transparencia es gratis siempre.',
+      'Puedes probar cualquier plantilla de portal antes de registrarte.',
+    ],
+    related: [{ to: '/register', label: 'Crear mi portal gratis' }],
+  },
+  {
     match: /^\/campanas/,
     title: 'Campañas',
     tips: [
@@ -1016,7 +1039,7 @@ export const PUBLIC_MAP: readonly MapEntry[] = [
   { to: '/recursos', label: 'Banco de recursos' },
   { to: '/marketplace', label: 'Marketplace' },
   {
-    to: '/#organizaciones',
+    to: '/para-organizaciones',
     label: 'Para organizaciones',
     description: 'Qué ofrece AdoptaFácil a refugios y rescatistas.',
   },

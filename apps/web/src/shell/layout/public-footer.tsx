@@ -65,6 +65,9 @@ export function PublicFooter() {
             <Link to="/guias" className={styles.footer__link}>
               Guías para adoptar
             </Link>
+            <Link to="/ayudar" className={styles.footer__link}>
+              Cómo ayudar hoy
+            </Link>
             <Link to="/campanas" className={styles.footer__link}>
               Campañas
             </Link>
@@ -89,7 +92,7 @@ export function PublicFooter() {
           </div>
           <div className={styles.footer__col}>
             <p className={styles.footer__title}>Organizaciones</p>
-            <Link to="/#organizaciones" className={styles.footer__link}>
+            <Link to="/para-organizaciones" className={styles.footer__link}>
               Para organizaciones
             </Link>
             <Link to="/register" className={styles.footer__link}>

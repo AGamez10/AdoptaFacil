@@ -25,7 +25,7 @@ describe('PublicNavbar', () => {
     expect(within(nav).getByRole('link', { name: 'Adoptar' })).toHaveAttribute('href', '/adoptar');
     expect(within(nav).getByRole('link', { name: 'Organizaciones' })).toHaveAttribute(
       'href',
-      '/#organizaciones',
+      '/para-organizaciones',
     );
 
     const help = within(nav).getByRole('button', { name: 'Ayudar' });

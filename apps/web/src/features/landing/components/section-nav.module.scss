@@ -1,0 +1,80 @@
+/*
+ * Índice de secciones: fila fija bajo el menú principal (4.25rem). Liviano a
+ * propósito: sin sombras grandes ni desenfoques caros en celular.
+ */
+.nav {
+  position: sticky;
+  top: 4.25rem;
+  z-index: 30;
+  border-bottom: 1px solid rgb(32 44 60 / 0.08);
+  background: rgb(255 255 255 / 0.96);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.rail {
+  display: flex;
+  max-width: var(--af-container);
+  gap: 0.25rem;
+  margin: 0 auto;
+  padding: 0.5rem 1.25rem;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (min-width: 640px) {
+    padding-inline: 2rem;
+  }
+
+  @media (min-width: 1024px) {
+    justify-content: center;
+  }
+}
+
+.link {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  border-radius: var(--r-full);
+  padding: 0 0.95rem;
+  color: var(--af-ink-soft);
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base);
+
+  &:hover {
+    background: rgb(32 44 60 / 0.06);
+    color: var(--af-ink);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--af-teal-ink);
+    outline-offset: 2px;
+  }
+}
+
+.link--active {
+  background: var(--af-ink);
+  color: #fff;
+
+  &:hover {
+    background: var(--af-ink);
+    color: #fff;
+  }
+}
+
+/* Al saltar a una sección, su título queda debajo del menú y del índice. */
+:global(main section[id]) {
+  scroll-margin-top: 7.75rem;
+}

@@ -11,6 +11,10 @@ import styles from './commerce.module.scss';
 
 /** Ancla de "Formas de ayudar" (la usa el hero). */
 export const LANDING_HELP_ID = 'ayudar';
+/** Página con lo que se necesita hoy: campañas, insumos, voluntariado, comunidad y libros. */
+export const HELP_PATH = '/ayudar';
+/** Página completa para organizaciones (misma ruta que `ORGANIZATIONS_PATH`). */
+const ORGANIZATIONS_PAGE = '/para-organizaciones';
 
 /**
  * "Todo AdoptaFácil": cada módulo público en una cuadrícula tipo bento, con la
@@ -35,15 +39,21 @@ export function WaysToHelpSection() {
       data-testid="landing-ways"
     >
       <div className={styles.container}>
-        <div className={cn(styles.head, 'af-reveal')}>
-          <p className={styles.eyebrow}>Todo AdoptaFácil</p>
-          <h2 id="landing-ways-title" className={styles.head__title}>
-            Hay más de una forma de cambiar una vida.
-          </h2>
-          <p className={styles.head__lead}>
-            Adoptar, donar, apoyar campañas, compartir recursos o encontrar quién cuide a tu
-            mascota: todo en un mismo lugar, con las mismas reglas claras.
-          </p>
+        <div className={cn(styles.head, styles['head--row'], 'af-reveal')}>
+          <div className={styles.head}>
+            <p className={styles.eyebrow}>Todo AdoptaFácil</p>
+            <h2 id="landing-ways-title" className={styles.head__title}>
+              Hay más de una forma de cambiar una vida.
+            </h2>
+            <p className={styles.head__lead}>
+              Adoptar, donar, apoyar campañas, compartir recursos o encontrar quién cuide a tu
+              mascota: todo en un mismo lugar, con las mismas reglas claras.
+            </p>
+          </div>
+          <Link to={HELP_PATH} className={styles.link} data-testid="landing-help-page-link">
+            Ver lo que se necesita hoy
+            <IconArrowRight aria-hidden="true" />
+          </Link>
         </div>
         <ul className={styles.bento}>
           {adopt && (
@@ -105,7 +115,7 @@ export function WaysToHelpSection() {
             className={cn(styles.tile, styles['tile--org'], 'af-reveal')}
             data-testid="way-organizaciones"
           >
-            <a href="#organizaciones" className={styles.tile__link}>
+            <Link to={ORGANIZATIONS_PAGE} className={styles.tile__link}>
               <CatMascot className={styles.tile__art} />
               <span className={styles.tile__group}>Organizaciones</span>
               <strong className={styles.tile__title}>
@@ -118,7 +128,7 @@ export function WaysToHelpSection() {
                 Conocer cómo funciona
                 <IconArrowRight aria-hidden="true" />
               </span>
-            </a>
+            </Link>
           </li>
         </ul>
       </div>
