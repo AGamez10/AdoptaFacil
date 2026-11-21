@@ -33,8 +33,12 @@ También probado: cancelar deja el plan hasta el fin de lo pagado; luego Gratis 
 Crece a Pro cancela el cobro de Crece. Una notificación repetida de Mercado Pago no cambia nada ni
 reenvía el aviso.
 
-Queda por decidir: si una organización con Pro pagado baja a Crece a mitad de mes, Crece rige
-desde el primer cobro de Crece y no conserva lo que le quedaba de Pro.
+Bajar de plan con periodo pagado (decisión del dueño, 2026-11-21): quien tiene Pro pagado y elige
+Crece conserva Pro hasta el último día pagado. Al autorizar Crece, el cobro mensual de Pro se
+detiene y Crece queda programado (`scheduled_plan`); Mercado Pago hace el primer cobro de Crece ese
+día (`start_date`) y entonces rige Crece. Si ese cobro no llega, Pro termina en su fecha y queda
+Gratis. «Cancelar mi plan» también detiene el plan programado. Probado en
+`plan-pro-activation.integration-spec.ts`.
 
 ## Lo primero: hoy los planes están apagados
 

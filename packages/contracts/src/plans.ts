@@ -366,6 +366,15 @@ export interface OrganizationSubscription {
   /** Founding-price discount for pilot shelters (0–100). */
   discountPercent: number;
   updatedAt: string;
+  /** Bajada programada (decisión del dueño, 2026-11-21): el plan pagado sigue
+   *  hasta `currentPeriodEnd` y este empieza ese día con su primer cobro.
+   *  Ausente/null = ninguna. */
+  scheduledPlan?: Exclude<PlanKey, 'free'> | null;
+}
+
+/** Whether moving from `from` to `to` is to a cheaper plan. */
+export function isPlanDowngrade(from: PlanKey, to: PlanKey): boolean {
+  return PLAN_KEYS.indexOf(to) < PLAN_KEYS.indexOf(from);
 }
 
 /** `GET /org/plan` — what the organization's Owner/Administrator sees. */

@@ -4,6 +4,7 @@ import {
   BRANDED_EMAIL_MONTHLY_LIMIT,
   PLAN_ALWAYS_INCLUDED,
   PLAN_CAPABILITIES,
+  PLAN_CATALOG,
   PLAN_CAPABILITY_INFO,
   PLAN_LIMIT_LABELS,
   formatPlanLimit,
@@ -330,6 +331,11 @@ const CHECKOUT_COPY: Record<
     body: 'La suscripción se canceló antes de empezar; no se te cobró nada. Puedes intentarlo de nuevo cuando quieras.',
     tone: 'info',
   },
+  scheduled: {
+    title: 'Cambio de plan programado',
+    body: 'Conservas tu plan actual hasta el final de lo que ya pagaste. Ese día empieza el plan nuevo con su primer cobro; hoy no se te cobra nada.',
+    tone: 'success',
+  },
 };
 
 /** Cuántas veces (cada 5 s) se pregunta el estado mientras está en proceso. */
@@ -389,7 +395,12 @@ function PlanCheckoutReturn({ onActive }: { onActive: () => void }) {
     setParams(next, { replace: true });
   };
   const copy = status
-    ? CHECKOUT_COPY[status.state]
+    ? status.state === 'scheduled' && status.startsAt
+      ? {
+          ...CHECKOUT_COPY.scheduled,
+          body: `Conservas tu plan actual hasta el ${colombiaDate.format(new Date(status.startsAt))}. Ese día empieza el plan ${PLAN_CATALOG[status.plan].name} con su primer cobro; hoy no se te cobra nada.`,
+        }
+      : CHECKOUT_COPY[status.state]
     : unknown
       ? {
           title: 'No pudimos consultar tu pago',
@@ -496,13 +507,15 @@ export function OrgPlanPage() {
                 ? `Prueba gratis: tienes Pro, plantillas Pro incluidas, hasta el ${colombiaDate.format(new Date(view.trialEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
                 : view.launchPromoEndsAt
                   ? `Lanzamiento: tienes Pro gratis hasta el ${colombiaDate.format(new Date(view.launchPromoEndsAt))}. Después pasas a Gratis, salvo que elijas un plan; tus datos no se pierden y tu portal vuelve a una plantilla gratuita.`
-                  : periodEnd && view.subscription?.status === 'canceled'
-                    ? `Cancelaste tu plan: lo puedes usar hasta el ${colombiaDate.format(new Date(periodEnd))} y no se te volverá a cobrar. Después pasas a Gratis sin perder tus datos.`
-                    : periodEnd
-                      ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
-                      : current === 'free'
-                        ? 'Sin costo y sin fecha de vencimiento.'
-                        : 'Sin fecha de vencimiento.'}
+                  : periodEnd && view.subscription?.scheduledPlan
+                    ? `Sigues en ${currentName} hasta el ${colombiaDate.format(new Date(periodEnd))}, lo que ya pagaste. Ese día empieza el plan ${PLAN_CATALOG[view.subscription.scheduledPlan].name} con su primer cobro.`
+                    : periodEnd && view.subscription?.status === 'canceled'
+                      ? `Cancelaste tu plan: lo puedes usar hasta el ${colombiaDate.format(new Date(periodEnd))} y no se te volverá a cobrar. Después pasas a Gratis sin perder tus datos.`
+                      : periodEnd
+                        ? `Se renueva el ${colombiaDate.format(new Date(periodEnd))}.`
+                        : current === 'free'
+                          ? 'Sin costo y sin fecha de vencimiento.'
+                          : 'Sin fecha de vencimiento.'}
             {view.graceEndsAt && view.subscription?.status === 'past_due' && (
               <>
                 {' '}
@@ -561,7 +574,7 @@ export function OrgPlanPage() {
         {view.enforced &&
           view.subscription &&
           view.subscription.plan !== 'free' &&
-          view.subscription.status !== 'canceled' && (
+          (view.subscription.status !== 'canceled' || Boolean(view.subscription.scheduledPlan)) && (
             <CardFooter>
               <CancelPlanButton onCanceled={load} />
             </CardFooter>

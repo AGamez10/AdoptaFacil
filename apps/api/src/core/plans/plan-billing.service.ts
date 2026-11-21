@@ -13,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   PLAN_CATALOG,
   Role,
+  isPlanDowngrade,
   mercadoPagoPreapprovalStatus,
   planHighlights,
   parsePlanSubscriptionReference,
@@ -87,6 +88,10 @@ interface AppliedPreapproval extends PlanWebhookOutcome {
   /** Mercado Pago subscription this one replaced (upgrade/downgrade): it is
    *  cancelled AFTER the commit so the organization is never charged twice. */
   replacedPreapprovalId?: string;
+  /** Other Mercado Pago subscriptions to stop after the commit (the recurring
+   *  charge of a plan whose downgrade was just scheduled, or a schedule that a
+   *  newer choice replaced). */
+  alsoCancel?: string[];
   /** Set when this notification turned a paid plan ON (new plan, new
    *  subscription or back from past due): the owners get a confirmation. */
   activated?: { organizationId: string; plan: PaidPlan; paidThrough: Date | null; key: string };
@@ -183,6 +188,7 @@ export class PlanBillingService {
           plan: true,
           status: true,
           currentPeriodEnd: true,
+          scheduledPlan: true,
         },
       }),
     );
@@ -196,6 +202,22 @@ export class PlanBillingService {
     ) {
       throw new ConflictException('Tu organización ya tiene este plan activo.');
     }
+    if (current?.scheduledPlan === plan) {
+      throw new ConflictException(
+        `Ya programaste el cambio al plan ${PLAN_CATALOG[plan].name}: empieza cuando termine lo que pagaste.`,
+      );
+    }
+    // Bajar de plan (p. ej. Pro → Crece) con un periodo ya pagado (decisión del
+    // dueño, 2026-11-21): el plan pagado sigue hasta el final y el nuevo empieza
+    // ese día; Mercado Pago hace el primer cobro en esa fecha, no hoy.
+    const effective = await this.plans.effectivePlan(organizationId);
+    const startDate =
+      current?.currentPeriodEnd &&
+      current.currentPeriodEnd.getTime() > Date.now() + 60 * 60 * 1000 &&
+      effective !== 'free' &&
+      isPlanDowngrade(effective, plan)
+        ? current.currentPeriodEnd
+        : undefined;
     const monthlyAmountCop = planMonthlyAmount(plan, current?.discountPercent ?? 0);
     const reference = planSubscriptionReference(organizationId, plan);
     let created: { id: string; checkoutUrl: string };
@@ -208,6 +230,7 @@ export class PlanBillingService {
         backUrl: `${this.webBaseUrl}/organizacion/plan?pago=mercadopago`,
         // A new checkout per click; Mercado Pago dedups only true retries.
         idempotencyKey: `${reference}:${Date.now()}`,
+        ...(startDate ? { startDate } : {}),
       });
     } catch (error) {
       // The reason (Mercado Pago's own message) goes to the log; the person
@@ -253,9 +276,22 @@ export class PlanBillingService {
     const row = await this.prisma.withOrgContext(organizationId, (tx) =>
       tx.organizationSubscription.findUnique({
         where: { organizationId },
-        select: { provider: true, providerReference: true, status: true },
+        select: {
+          provider: true,
+          providerReference: true,
+          status: true,
+          scheduledProviderReference: true,
+          currentPeriodEnd: true,
+        },
       }),
     );
+    if (row?.scheduledProviderReference === preapproval.id && preapproval.status === 'authorized') {
+      return {
+        state: 'scheduled',
+        plan: ref.plan,
+        startsAt: row.currentPeriodEnd?.toISOString() ?? null,
+      };
+    }
     const activeHere =
       row?.provider === 'mercadopago' &&
       row.providerReference === preapproval.id &&
@@ -314,6 +350,9 @@ export class PlanBillingService {
   private async afterApply(outcome: AppliedPreapproval): Promise<PlanWebhookOutcome> {
     if (outcome.replacedPreapprovalId) {
       await this.cancelAtGateway(outcome.replacedPreapprovalId, 'replaced');
+    }
+    for (const id of outcome.alsoCancel ?? []) {
+      await this.cancelAtGateway(id, 'scheduled change');
     }
     if (outcome.activated) {
       await this.notifyActivated(outcome.activated);
@@ -447,10 +486,28 @@ export class PlanBillingService {
     const current = await this.prisma.withOrgContext(organizationId, (tx) =>
       tx.organizationSubscription.findUnique({ where: { organizationId } }),
     );
-    if (!current || current.status === 'canceled' || current.plan === 'free') {
+    const scheduled = current?.scheduledProviderReference ?? null;
+    if (!current || current.plan === 'free' || (current.status === 'canceled' && !scheduled)) {
       throw new ConflictException('Tu organización no tiene un plan de pago activo.');
     }
-    if (current.provider === 'mercadopago' && current.providerReference) {
+    if (scheduled) {
+      // También se detiene el plan programado: no empieza ni cobra.
+      try {
+        await this.billing.cancelPreapproval(scheduled);
+      } catch (error) {
+        this.logger.error(
+          `Scheduled plan cancel failed at Mercado Pago: ${(error as Error).message}`,
+        );
+        throw new ServiceUnavailableException(
+          'No pudimos cancelar el cobro en Mercado Pago. Intenta de nuevo en unos minutos.',
+        );
+      }
+    }
+    if (
+      current.provider === 'mercadopago' &&
+      current.providerReference &&
+      current.status !== 'canceled'
+    ) {
       // Primero se detiene el cobro: si Mercado Pago falla no marcamos nada
       // como cancelado (la organización vería "cancelado" y le seguirían cobrando).
       try {
@@ -465,7 +522,7 @@ export class PlanBillingService {
     return this.prisma.withOrgContext(organizationId, async (tx) => {
       const row = await tx.organizationSubscription.update({
         where: { organizationId },
-        data: { status: 'canceled' },
+        data: { status: 'canceled', scheduledPlan: null, scheduledProviderReference: null },
       });
       await this.audit.recordWithTx(tx, {
         organizationId,
@@ -488,6 +545,7 @@ export class PlanBillingService {
         providerReference: row.providerReference,
         discountPercent: row.discountPercent,
         updatedAt: row.updatedAt.toISOString(),
+        scheduledPlan: null,
       };
     });
   }
@@ -504,6 +562,22 @@ export class PlanBillingService {
   ): Promise<OrganizationSubscription> {
     const view = await this.plans.platformGet(organizationId);
     const previous = view.subscription;
+    const scheduled = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.organizationSubscription.findUnique({
+        where: { organizationId },
+        select: { scheduledProviderReference: true },
+      }),
+    );
+    if (scheduled?.scheduledProviderReference) {
+      try {
+        await this.billing.cancelPreapproval(scheduled.scheduledProviderReference);
+      } catch (error) {
+        this.logger.error(`Platform plan change: cancel failed (${(error as Error).message})`);
+        throw new ServiceUnavailableException(
+          'No se pudo cancelar el cobro de Mercado Pago de esta organización; no se cambió el plan.',
+        );
+      }
+    }
     if (
       previous?.provider === 'mercadopago' &&
       previous.providerReference &&
@@ -532,6 +606,73 @@ export class PlanBillingService {
       });
     }
     return saved;
+  }
+
+  /**
+   * The payer authorized a CHEAPER plan while a higher one is paid until a
+   * future date (decisión del dueño, 2026-11-21): the higher plan keeps
+   * working until the end of what was paid, and the new one starts that day
+   * with its first charge. The old recurring charge is stopped (status
+   * `canceled`, no grace) so the organization is never charged twice. Any
+   * other authorization without a charge changes nothing (#92).
+   */
+  private async scheduleDowngrade(
+    tx: Prisma.TransactionClient,
+    ref: { organizationId: string; plan: PaidPlan },
+    preapproval: MercadoPagoPreapproval,
+    previous: {
+      id: string;
+      plan: string;
+      status: string;
+      provider: string;
+      providerReference: string | null;
+      currentPeriodEnd: Date | null;
+      scheduledProviderReference: string | null;
+    } | null,
+  ): Promise<AppliedPreapproval> {
+    const now = Date.now();
+    if (
+      !previous ||
+      previous.plan === 'free' ||
+      previous.providerReference === preapproval.id ||
+      previous.scheduledProviderReference === preapproval.id ||
+      !previous.currentPeriodEnd ||
+      previous.currentPeriodEnd.getTime() <= now ||
+      !isPlanDowngrade(previous.plan as PlanKey, ref.plan)
+    ) {
+      return { applied: false };
+    }
+    const stopRecurring =
+      previous.provider === 'mercadopago' &&
+      previous.providerReference &&
+      previous.status !== 'canceled'
+        ? previous.providerReference
+        : undefined;
+    await tx.organizationSubscription.update({
+      where: { organizationId: ref.organizationId },
+      data: {
+        scheduledPlan: ref.plan,
+        scheduledProviderReference: preapproval.id,
+        ...(stopRecurring ? { status: 'canceled' } : {}),
+      },
+    });
+    await this.audit.recordWithTx(tx, {
+      organizationId: ref.organizationId,
+      actorUserId: null,
+      action: 'organization.plan_downgrade_scheduled',
+      entityType: 'organization_subscription',
+      entityId: previous.id,
+      metadata: {
+        fromPlan: previous.plan,
+        plan: ref.plan,
+        startsAt: previous.currentPeriodEnd.toISOString(),
+        preapprovalId: preapproval.id,
+      },
+    });
+    const alsoCancel = [stopRecurring, previous.scheduledProviderReference].filter(
+      (id): id is string => Boolean(id),
+    );
+    return { applied: true, ...(alsoCancel.length ? { alsoCancel } : {}) };
   }
 
   /**
@@ -583,7 +724,7 @@ export class PlanBillingService {
       // (`subscription_authorized_payment`). If the first charge fails, the
       // org never gets a free month.
       if (status === 'active' && !paidThrough) {
-        return { applied: false };
+        return this.scheduleDowngrade(tx, ref, preapproval, previous);
       }
       // A late charge of a subscription this organization already REPLACED
       // (Mercado Pago charged it before processing our cancellation) must not
@@ -626,6 +767,23 @@ export class PlanBillingService {
           return { applied: false, replacedPreapprovalId: preapproval.id };
         }
       }
+      // The scheduled plan was cancelled or paused before it started: the
+      // schedule is dropped (the plan already paid still ends on its date).
+      if (status !== 'active' && previous?.scheduledProviderReference === preapproval.id) {
+        await tx.organizationSubscription.update({
+          where: { organizationId: ref.organizationId },
+          data: { scheduledPlan: null, scheduledProviderReference: null },
+        });
+        await this.audit.recordWithTx(tx, {
+          organizationId: ref.organizationId,
+          actorUserId: null,
+          action: 'organization.plan_schedule_dropped',
+          entityType: 'organization_subscription',
+          entityId: previous.id,
+          metadata: { preapprovalId: preapproval.id, plan: ref.plan },
+        });
+        return { applied: true };
+      }
       // Cancelling/pausing only touches the subscription THIS preapproval made.
       if (
         status !== 'active' &&
@@ -646,13 +804,24 @@ export class PlanBillingService {
         provider: 'mercadopago',
         providerReference: preapproval.id,
         currentPeriodEnd,
+        // A charge always settles the plan: no schedule is left pending.
+        ...(status === 'active' ? { scheduledPlan: null, scheduledProviderReference: null } : {}),
       };
+      // Another schedule that this charge supersedes (e.g. scheduled Crece,
+      // then paid Pro again) is stopped so it never charges.
+      const supersededSchedule =
+        status === 'active' &&
+        previous?.scheduledProviderReference &&
+        previous.scheduledProviderReference !== preapproval.id
+          ? previous.scheduledProviderReference
+          : undefined;
       const unchanged =
         previous &&
         previous.plan === data.plan &&
         previous.status === data.status &&
         previous.provider === data.provider &&
         previous.providerReference === data.providerReference &&
+        (status !== 'active' || previous.scheduledProviderReference === null) &&
         (previous.currentPeriodEnd?.getTime() ?? null) === (currentPeriodEnd?.getTime() ?? null);
       if (unchanged) return { applied: false };
 
@@ -694,6 +863,7 @@ export class PlanBillingService {
       return {
         applied: true,
         ...(replaced ? { replacedPreapprovalId: replaced } : {}),
+        ...(supersededSchedule ? { alsoCancel: [supersededSchedule] } : {}),
         ...(turnedOn
           ? {
               activated: {

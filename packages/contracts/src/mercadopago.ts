@@ -127,12 +127,17 @@ export interface PlanCheckoutView {
  * - `active`: the first charge was approved and the plan is in effect.
  * - `rejected`: Mercado Pago paused it (the charge was refused).
  * - `canceled`: the subscription was cancelled before it started.
+ * - `scheduled`: a move to a cheaper plan was authorized; the plan already paid
+ *   keeps working until `startsAt`, when the new one starts with its first charge.
  */
-export type PlanCheckoutState = 'pending' | 'processing' | 'active' | 'rejected' | 'canceled';
+export type PlanCheckoutState =
+  'pending' | 'processing' | 'active' | 'rejected' | 'canceled' | 'scheduled';
 
 export interface PlanCheckoutStatusView {
   state: PlanCheckoutState;
   plan: Exclude<PlanKey, 'free'>;
+  /** Only with `scheduled`: when the new plan starts (ISO-8601 UTC). */
+  startsAt?: string | null;
 }
 
 /**

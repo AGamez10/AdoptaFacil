@@ -275,6 +275,52 @@ describe('OrgPlanPage · cancelar el plan', () => {
     expect(await screen.findByTestId('plan-pay-mercadopago-crece')).toBeInTheDocument();
   });
 
+  it('bajada programada: dice hasta cuándo sigue Pro y cuándo empieza Crece, al volver y en el plan', async () => {
+    const end = '2026-12-20T15:00:00.000Z';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const body = url.includes('/org/plan/checkout/status')
+          ? { state: 'scheduled', plan: 'crece', startsAt: end }
+          : url.endsWith('/org/plan')
+            ? viewFor({
+                effectivePlan: 'pro',
+                subscription: {
+                  organizationId: 'org-self',
+                  plan: 'pro',
+                  status: 'canceled',
+                  currentPeriodEnd: end,
+                  provider: 'mercadopago',
+                  providerReference: 'pre-pro',
+                  discountPercent: 0,
+                  updatedAt: end,
+                  scheduledPlan: 'crece',
+                },
+              })
+            : {};
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => body,
+        });
+      }),
+    );
+    renderShell({
+      route: '/organizacion/plan?pago=mercadopago&preapproval_id=pre-crece',
+      ...sessionWith([Role.Owner]),
+    });
+    expect(await screen.findByText('Cambio de plan programado')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Conservas tu plan actual hasta el 20 de diciembre de 2026/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Sigues en Pro hasta el 20 de diciembre de 2026.*empieza el plan Crece/),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('plan-cancel')).toBeInTheDocument();
+  });
+
   it('al volver de Mercado Pago: "confirmando" mientras está en proceso y "activo" cuando se aprueba', async () => {
     let state: 'processing' | 'active' = 'processing';
     const urls: string[] = [];

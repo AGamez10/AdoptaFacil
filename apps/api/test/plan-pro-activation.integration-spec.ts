@@ -31,6 +31,7 @@ class FakeBillingClient {
   preapprovals = new Map<string, MercadoPagoPreapproval>();
   charges = new Map<string, MercadoPagoAuthorizedPayment>();
   cancelled: string[] = [];
+  startDates = new Map<string, Date | undefined>();
   private seq = 0;
 
   isConfigured(): boolean {
@@ -40,8 +41,10 @@ class FakeBillingClient {
   async createMonthlySubscription(input: {
     externalReference: string;
     amountCop: number;
+    startDate?: Date;
   }): Promise<{ id: string; checkoutUrl: string }> {
     const id = `prepro${++this.seq}${randomUUID().slice(0, 6)}`;
+    this.startDates.set(id, input.startDate);
     this.preapprovals.set(id, {
       id,
       status: 'pending',
@@ -140,6 +143,34 @@ describe('Pagar un plan activa lo que promete (Mercado Pago simulado, de punta a
       .send({ type, data: { id: dataId } });
   }
 
+  /** Abre el pago y lo autoriza en Mercado Pago, sin cobro todavía. */
+  async function authorize(actor: Actor, plan: 'crece' | 'pro'): Promise<string> {
+    const res = await request(server)
+      .post('/org/plan/checkout')
+      .set(auth(actor.token))
+      .send({ plan })
+      .expect(200);
+    const id = new URL(res.body.checkoutUrl).searchParams.get('preapproval_id') as string;
+    (fake.preapprovals.get(id) as MercadoPagoPreapproval).status = 'authorized';
+    await notify('subscription_preapproval', id).expect(200);
+    return id;
+  }
+
+  /** Mercado Pago aprueba un cobro de la suscripción `id`. */
+  async function charge(id: string): Promise<void> {
+    const pre = fake.preapprovals.get(id) as MercadoPagoPreapproval;
+    const chargeId = `chpro${randomUUID().slice(0, 8)}`;
+    fake.charges.set(chargeId, {
+      id: chargeId,
+      preapprovalId: id,
+      paymentStatus: 'approved',
+      amount: pre.amount,
+      currency: 'COP',
+      chargedAt: new Date(),
+    });
+    await notify('subscription_authorized_payment', chargeId).expect(200);
+  }
+
   /** Lo que hace la persona: pagar en Mercado Pago, que autoriza y cobra. */
   async function pay(actor: Actor, plan: 'crece' | 'pro'): Promise<{ id: string; charge: string }> {
     const res = await request(server)
@@ -184,15 +215,19 @@ describe('Pagar un plan activa lo que promete (Mercado Pago simulado, de punta a
    * leen de `GET /org/plan`.
    */
   const probes: Partial<Record<PlanCapability, (a: Actor) => Promise<boolean>>> = {
+    // El exporte tiene límite de descargas (429) DESPUÉS del guard de plan: aquí
+    // solo importa si el plan lo bloquea (403 PLAN_REQUIRED).
     dataExport: async (a) =>
-      (await request(server).get('/org/exports/data.xlsx').set(auth(a.token))).status === 200,
+      [200, 429].includes(
+        (await request(server).get('/org/exports/data.xlsx').set(auth(a.token))).status,
+      ),
     impactReport: async (a) => {
       const now = new Date();
       const start = ymd(new Date(now.getTime() - 30 * 86_400_000));
       const res = await request(server)
         .get(`/org/exports/impact-report.pdf?start=${start}&end=${ymd(now)}`)
         .set(auth(a.token));
-      return res.status === 200;
+      return [200, 429].includes(res.status);
     },
     portalPremiumDesigns: async (a) =>
       (
@@ -389,5 +424,97 @@ describe('Pagar un plan activa lo que promete (Mercado Pago simulado, de punta a
     expect(await probeAll(org)).toEqual(expected('pro'));
     const avisos = sent.filter((m) => m.template?.event === 'plan.activated');
     expect(avisos.map((m) => m.template?.data.plan)).toEqual(['Crece', 'Pro']);
+  });
+
+  describe('bajar de Pro a Crece con Pro ya pagado (decisión del dueño, 2026-11-21)', () => {
+    it('Pro sigue hasta el fin de lo pagado; Crece empieza ese día con su primer cobro, sin doble cobro', async () => {
+      const org = await registerOrg('Refugio Baja a Crece');
+      const { id: proId } = await pay(org, 'pro');
+      const proEnd = (await planView(org)).subscription.currentPeriodEnd as string;
+
+      const creceId = await authorize(org, 'crece');
+      // El primer cobro de Crece queda para el día en que termina Pro, no hoy.
+      expect(fake.startDates.get(creceId)?.toISOString()).toBe(proEnd);
+      // El cobro mensual de Pro se detiene: nunca se cobran los dos.
+      expect(fake.cancelled).toContain(proId);
+
+      const view = await planView(org);
+      expect(view.effectivePlan).toBe('pro');
+      expect(view.subscription).toMatchObject({
+        plan: 'pro',
+        scheduledPlan: 'crece',
+        currentPeriodEnd: proEnd,
+      });
+      expect(await probeAll(org)).toEqual(expected('pro'));
+      const status = await request(server)
+        .get('/org/plan/checkout/status')
+        .query({ preapproval_id: creceId })
+        .set(auth(org.token))
+        .expect(200);
+      expect(status.body).toEqual({ state: 'scheduled', plan: 'crece', startsAt: proEnd });
+      // Volver a pedir Crece no abre otro cobro.
+      await request(server)
+        .post('/org/plan/checkout')
+        .set(auth(org.token))
+        .send({ plan: 'crece' })
+        .expect(409);
+      // Mercado Pago avisa que la suscripción de Pro quedó cancelada: nada cambia.
+      await notify('subscription_preapproval', proId).expect(200);
+      expect((await planView(org)).subscription.scheduledPlan).toBe('crece');
+      expect(sent.filter((m) => m.template?.data?.plan === 'Crece')).toHaveLength(0);
+
+      // Termina lo pagado de Pro y Mercado Pago cobra el primer mes de Crece.
+      await admin.organizationSubscription.update({
+        where: { organizationId: org.orgId },
+        data: { currentPeriodEnd: new Date(Date.now() - 60_000) },
+      });
+      await charge(creceId);
+      const after = await planView(org);
+      expect(after.effectivePlan).toBe('crece');
+      expect(after.subscription).toMatchObject({
+        plan: 'crece',
+        status: 'active',
+        providerReference: creceId,
+        scheduledPlan: null,
+      });
+      expect(await probeAll(org)).toEqual(expected('crece'));
+      expect(
+        sent
+          .filter((m) => m.template?.event === 'plan.activated')
+          .map((m) => m.template?.data.plan),
+      ).toEqual(['Pro', 'Crece']);
+    });
+
+    it('si Crece nunca cobra, Pro termina en su fecha y queda Gratis; cancelar también detiene el plan programado', async () => {
+      const org = await registerOrg('Refugio Programa y Cancela');
+      await pay(org, 'pro');
+      const creceId = await authorize(org, 'crece');
+
+      await request(server).post('/org/plan/cancel').set(auth(org.token)).expect(200);
+      expect(fake.cancelled).toContain(creceId);
+      const view = await planView(org);
+      expect(view.effectivePlan).toBe('pro');
+      expect(view.subscription).toMatchObject({ status: 'canceled', scheduledPlan: null });
+
+      await admin.organizationSubscription.update({
+        where: { organizationId: org.orgId },
+        data: { currentPeriodEnd: new Date(Date.now() - 60_000) },
+      });
+      expect((await planView(org)).effectivePlan).toBe('free');
+    });
+
+    it('sin periodo pagado por delante, Crece rige desde su primer cobro como siempre', async () => {
+      const org = await registerOrg('Refugio Baja Sin Saldo');
+      await pay(org, 'pro');
+      await admin.organizationSubscription.update({
+        where: { organizationId: org.orgId },
+        data: { status: 'past_due', currentPeriodEnd: new Date(Date.now() - 60_000) },
+      });
+      const creceId = await authorize(org, 'crece');
+      expect(fake.startDates.get(creceId)).toBeUndefined();
+      expect((await planView(org)).subscription.scheduledPlan).toBeNull();
+      await charge(creceId);
+      expect((await planView(org)).effectivePlan).toBe('crece');
+    });
   });
 });
