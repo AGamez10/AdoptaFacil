@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { Role } from '@adoptafacil/contracts';
 import { SessionProvider } from '../../../shell/auth';
 import { HomePage } from './home-page';
@@ -38,7 +39,9 @@ function renderHome(roles: Role[]) {
         accountType: roles.length ? 'organization' : 'person',
       }}
     >
-      <HomePage />
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
     </SessionProvider>,
   );
 }
@@ -79,13 +82,16 @@ describe('HomePage — system-health block is platform-admin only (F-VISUAL-02)'
     renderHome([Role.Owner]);
     expect(screen.getByRole('heading', { name: 'Inicio' })).toBeInTheDocument();
     expect(screen.queryByText('Estado del sistema')).not.toBeInTheDocument();
-    // Resumen de Inicio + estado de la organización. Sin el módulo de pagos
-    // encendido (sin CapabilitiesProvider = todo apagado) no pide el detalle
-    // de donaciones/campañas, que la API respondería con 404.
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    // Resumen de Inicio + estado de la organización + perfil (para "Primeros
+    // pasos"). Sin el módulo de pagos encendido (sin CapabilitiesProvider =
+    // todo apagado) no pide el detalle de donaciones/campañas, que la API
+    // respondería con 404, ni el estado de los cobros.
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
     const urls = vi.mocked(fetch).mock.calls.map((call) => String(call[0]));
     expect(urls.some((url) => url.includes('/org/summary'))).toBe(true);
     expect(urls.some((url) => url.includes('/org/status'))).toBe(true);
+    expect(urls.some((url) => url.includes('/org/profile'))).toBe(true);
+    expect(urls.some((url) => url.includes('/org/mercadopago/status'))).toBe(false);
     expect(urls.some((url) => url.includes('/org/dashboard/donations'))).toBe(false);
   });
 
@@ -176,5 +182,38 @@ describe('HomePage — org summary block is Owner/Administrator/Operator only (S
     renderHome([Role.Administrator]);
     expect(await screen.findByText('No se pudo cargar el resumen.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
+});
+
+describe('HomePage — "Primeros pasos" para un refugio que empieza (NAV-SECCIONES)', () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it('muestra los pasos pendientes con enlace directo y el siguiente resaltado', async () => {
+    renderHome([Role.Owner]);
+    const card = await screen.findByTestId('first-steps-card');
+    // ORG_SUMMARY_BODY: 45 animales y 60% de formalización → 2 de 3 listos; el
+    // perfil (sin logo ni descripción en el mock) es lo que falta.
+    expect(card).toHaveTextContent('2 de 3 listos');
+    expect(screen.getByRole('link', { name: 'Completar perfil' })).toHaveAttribute(
+      'href',
+      '/organizacion',
+    );
+  });
+
+  it('se puede ocultar y no vuelve a aparecer', async () => {
+    renderHome([Role.Owner]);
+    fireEvent.click(
+      within(await screen.findByTestId('first-steps-card')).getByRole('button', {
+        name: 'Ocultar',
+      }),
+    );
+    expect(screen.queryByTestId('first-steps-card')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('adoptafacil.first-steps.hidden.org-1')).toBe('1');
+  });
+
+  it('un Operador no la ve (los primeros pasos son del dueño o administrador)', async () => {
+    renderHome([Role.Operator]);
+    await screen.findByText('Animales activos');
+    expect(screen.queryByTestId('first-steps-card')).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLOSED_CAPABILITIES, Role } from '@adoptafacil/contracts';
-import { OPEN_CAPABILITIES, renderShell } from '../../test-utils';
+import { OPEN_CAPABILITIES, openNavSections, renderShell } from '../../test-utils';
 
 /**
  * Ola 1 · R1-1 / R0-2: with the capabilities production publishes today
@@ -55,11 +55,20 @@ describe('switched-off modules (R1-1)', () => {
 
   it('hides their menu entries and keeps the MVP ones', async () => {
     renderShell({ route: '/inicio', session: owner, capabilities: CLOSED_CAPABILITIES });
-    const nav = await screen.findByRole('navigation', { name: 'Navegación principal' });
-    for (const label of ['Donaciones', 'Apadrinamientos', 'Banco de recursos', 'Comunidad']) {
-      expect(within(nav).queryByRole('button', { name: label })).toBeNull();
-    }
-    for (const label of ['Marketplace', 'Reseñas del portal', 'Reseñas']) {
+    await openNavSections();
+    const nav = screen.getByRole('navigation', { name: 'Navegación principal' });
+    expect(within(nav).queryByRole('button', { name: 'Banco de recursos' })).toBeNull();
+    for (const label of [
+      'Donaciones',
+      'Apadrinamientos',
+      'Muro de publicaciones',
+      'Marketplace',
+      'Reseñas recibidas',
+      'Mis donaciones',
+      'Mis apadrinamientos',
+      'Mis ofertas',
+      'Mis reseñas',
+    ]) {
       expect(within(nav).queryByRole('link', { name: label })).toBeNull();
     }
     expect(within(nav).getByRole('link', { name: 'Animales' })).toBeInTheDocument();
@@ -68,11 +77,13 @@ describe('switched-off modules (R1-1)', () => {
 
   it('shows them again when the API turns them on', async () => {
     renderShell({ route: '/inicio', session: owner, capabilities: OPEN_CAPABILITIES });
-    const nav = await screen.findByRole('navigation', { name: 'Navegación principal' });
+    await openNavSections();
+    const nav = screen.getByRole('navigation', { name: 'Navegación principal' });
     await waitFor(() =>
-      expect(within(nav).getByRole('button', { name: 'Donaciones' })).toBeInTheDocument(),
+      expect(within(nav).getByRole('link', { name: 'Donaciones' })).toBeInTheDocument(),
     );
     expect(within(nav).getByRole('link', { name: 'Marketplace' })).toBeInTheDocument();
+    expect(within(nav).getByRole('button', { name: 'Banco de recursos' })).toBeInTheDocument();
   });
 });
 

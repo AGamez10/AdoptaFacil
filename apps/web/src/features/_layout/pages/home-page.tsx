@@ -20,6 +20,7 @@ import {
 } from '@adoptafacil/ui';
 import { formatCop } from '../../donations';
 import { deriveActionItems } from '../model/action-items';
+import { FirstStepsCard } from '../components/first-steps-card';
 import { OrgDonationsDashboardSection } from '../../org/components/org-donations-dashboard-section';
 import { OrgStatusCard } from '../../org/components/org-status-card';
 import { fetchHealth } from '../../../lib/api';
@@ -148,6 +149,8 @@ export function HomePage() {
 
           {summary.status === 'ready' && (
             <>
+              <FirstStepsCard summary={summary.data} />
+
               {deriveActionItems(summary.data).length > 0 && (
                 <Card>
                   <CardHeader>

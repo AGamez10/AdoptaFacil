@@ -16,6 +16,8 @@ afterEach(() => {
   // La intención pendiente y la bienvenida viven en sessionStorage
   // (shell/auth/pending-intent.ts): no deben pasar de una prueba a otra.
   window.sessionStorage.clear();
+  // Secciones del menú abiertas/cerradas (shell/layout/sidebar.tsx).
+  window.localStorage.removeItem('adoptafacil.sidebar.sections');
 });
 
 // jsdom does not implement matchMedia; responsive helpers and some Radix

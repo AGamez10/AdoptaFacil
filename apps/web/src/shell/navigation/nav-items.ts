@@ -345,38 +345,22 @@ export interface NavItem {
   alsoActiveFor?: readonly string[];
 }
 
-export const navItems: NavItem[] = [
-  // ORDEN DEL MENÚ (pedido del cliente): Inicio, Documentos, Donaciones, Animales,
-  // Adopciones, Apadrinamientos, Voluntariado, Banco de recursos, Comunidad,
-  // Campañas, Marketplace, Reseñas; después, solo para plataforma, sus bandejas y
-  // dashboards. "Recordatorios" ya no es una entrada: vive en Inicio (campana de
-  // pendientes del encabezado) y su ruta `/recordatorios` resalta "Inicio".
-  // F-LANDING-01: "/" is now the PUBLIC general portal, outside the shell — the
-  // authenticated home moved to /inicio (see shell/router/routes.tsx).
-  {
+/**
+ * NAV-SECCIONES — cada entrada del menú se declara UNA vez aquí (ruta, etiqueta,
+ * ícono y gate de roles). Los dos árboles de abajo solo las ordenan: agrupar
+ * nunca cambia quién ve qué ni a dónde lleva (el gate de la ruta sigue siendo la
+ * segunda barrera).
+ */
+const leaf = {
+  inicio: {
     path: '/inicio',
     label: 'Inicio',
     icon: HomeIcon,
     end: true,
-    // La bandeja de recordatorios es parte del módulo Inicio: resalta "Inicio" mientras se usa.
     alsoActiveFor: ['/recordatorios'],
   },
-  // MENU-SUBMENUS: el ítem plano "Mi organización" (T-062, ORG_MEMBER_ROLES)
-  // se retiró de esta lista — el bloque del nombre de la org en la cabecera
-  // del sidebar (SidebarIdentity) ahora navega a esa misma ruta `/organizacion`
-  // (ver sidebar.tsx). Ningún rol ni ruta cambia, solo el punto de entrada.
-  //
-  // "Documentos" es un grupo NAVEGABLE: el texto navega al módulo real
-  // (/organizacion/documentos, ORG_DOCUMENTS_ROLES — sin cambios) y un chevron
-  // aparte despliega los dos placeholders "Pronto". OJO: ORG_DOCUMENTS_ROLES
-  // (Owner/Administrator/ReadOnlyAuditor) es MÁS ANGOSTO que ORG_MEMBER_ROLES
-  // (todos los roles de org) — Operator/Volunteer/TemporaryCollaborator/
-  // Veterinarian pueden ver los hijos "Pronto" sin poder ver ni navegar el
-  // padre. Para no cambiarle el alcance a nadie (criterio "mismos permisos de
-  // siempre"), el sidebar renderiza el grupo si CUALQUIERA de padre/hijos es
-  // visible, y solo activa el link del padre cuando su propio rol lo permite
-  // (ver sidebar.tsx) — así ningún rol pierde ni gana acceso a nada.
-  {
+  // Documentos de la organización (M01, RF03) con sus pantallas hermanas.
+  documentos: {
     path: '/organizacion/documentos',
     label: 'Documentos',
     icon: ShieldIcon,
@@ -418,336 +402,369 @@ export const navItems: NavItem[] = [
       },
     ],
   },
-  // M13: cada persona decide si su nombre y documento aparecen en los reportes
-  // y certificados de las organizaciones con las que ha donado o trabajado.
-  {
-    path: '/uso-de-mis-datos',
-    label: 'Uso de mis datos',
-    icon: ShieldIcon,
-  },
-  // MENU-SUBMENUS: "Donaciones" agrupa las dos entradas planas que existían
-  // (mismas rutas, mismos roles de siempre) — el padre solo expande/colapsa,
-  // nunca navega (no tiene página propia).
-  {
-    path: '/mis-donaciones',
-    label: 'Donaciones',
+  usoDeMisDatos: { path: '/uso-de-mis-datos', label: 'Uso de mis datos', icon: ShieldIcon },
+  misDonaciones: { path: '/mis-donaciones', label: 'Mis donaciones', icon: HeartIcon },
+  donacionesRecibidas: {
+    path: '/donaciones-recibidas',
+    label: 'Donaciones recibidas',
     icon: HeartIcon,
-    children: [
-      // Antes era el propio ítem "Donaciones" — cualquier autenticado, sin
-      // @Roles en el backend. Se renombra a "Mis donaciones" solo para
-      // distinguirla de "Donaciones recibidas" dentro del grupo.
-      { path: '/mis-donaciones', label: 'Mis donaciones', icon: HeartIcon },
-      // F-DONACIONES-RECIBIDAS: la contraparte de gestión de org (GET
-      // /donations/received, MANAGE_ROLES) — idéntica a como estaba.
-      {
-        path: '/donaciones-recibidas',
-        label: 'Donaciones recibidas',
-        icon: HeartIcon,
-        roles: DONATIONS_MANAGEMENT_ROLES,
-      },
-    ],
+    roles: DONATIONS_MANAGEMENT_ROLES,
   },
-  // T-065: "Transparencia" REMOVED from the menu entirely — the screen was only
-  // ever a placeholder ("se implementará en la Ola 1..."); the REAL transparency
-  // indicator (Nivel/%/Rendición) already lives in the persistent header bar on
-  // every page (shell/transparency), so nothing is actually lost. The `/transparencia`
-  // ROUTE stays registered (routes.tsx) but now redirects home instead of showing
-  // the stale placeholder text — reversible post-30 once a real screen exists.
-  // M03 · animales + recordatorios clínicos (T-031, wires T-104/T-106). Reuses
-  // PawIcon; a dedicated "bell" for reminders is a reported gap in shell/icons.
-  { path: '/animales', label: 'Animales', icon: PawIcon, roles: ANIMAL_VIEW_ROLES },
-  // Reporte consolidado (PDF, CSV, Excel) e individual de animales.
-  {
+  animales: { path: '/animales', label: 'Animales', icon: PawIcon, roles: ANIMAL_VIEW_ROLES },
+  reportesAnimales: {
     path: '/reportes-animales',
     label: 'Reportes de animales',
     icon: PawIcon,
     roles: CUSTODY_VIEW_ROLES,
   },
-  // Guardería: vencimientos, pagos, contratos y plantillas.
-  {
+  custodia: {
     path: '/organizacion/custodia',
     label: 'Custodia y guardería',
     icon: ShieldIcon,
     roles: CUSTODY_VIEW_ROLES,
   },
-  // "Recordatorios" salió del menú: se consulta desde la campana del encabezado (Inicio).
-  {
+  adopciones: {
     path: '/adopciones',
     label: 'Adopciones',
     icon: PawIcon,
     roles: ADOPTIONS_MANAGEMENT_ROLES,
   },
-  // F1-01: entrada SEPARADA del kanban de organización de arriba — "Adopciones"
-  // es para quien evalúa (Owner/Administrador/Operador); "Mis solicitudes" es
-  // para la Persona que postuló. GET /adoptions/mine no tiene gate de rol
-  // (cualquier autenticado), así que el filtro real es `personaOnly` — ver su
-  // doc en NavItem para por qué no puede expresarse con `roles`.
-  { path: '/mis-solicitudes', label: 'Mis solicitudes', icon: PawIcon, personaOnly: true },
-  // T-028c: el adoptante responde sus hitos de seguimiento post-adopción.
-  { path: '/mis-seguimientos', label: 'Mis seguimientos', icon: PawIcon, personaOnly: true },
-  // Ajuste 6: ficha de los animales recibidos (entrega confirmada).
-  { path: '/mis-animales', label: 'Mis animales', icon: PawIcon, personaOnly: true },
-  // MENU-SUBMENUS: "Apadrinamientos" agrupa "Mis apadrinamientos" (donante,
-  // sin @Roles) y la gestión de la org ("Apadrinamientos recibidos", antes
-  // el ítem plano "Apadrinamientos", SPONSORSHIP_VIEW_ROLES) — mismas rutas y
-  // roles de siempre; el padre solo expande/colapsa.
-  {
-    path: '/apadrinar',
-    label: 'Apadrinamientos',
-    icon: HeartIcon,
-    children: [
-      // M07 · "mis apadrinamientos" (S2-03, RF17) — apadrinar/ver el propio
-      // historial, sin @Roles en el backend, igual que Donaciones: visible a
-      // cualquier usuario autenticado.
-      { path: '/apadrinar', label: 'Mis apadrinamientos', icon: HeartIcon },
-      // M07 · apadrinamientos RECIBIDOS por la organización (S2-03, RF17).
-      // Gated a SPONSORSHIP_VIEW_ROLES — calcado VERBATIM de
-      // `SponsorshipsController`'s VIEW_ROLES (sin Operator, a diferencia de
-      // Campañas; ver comentario histórico en esa constante).
-      {
-        path: '/organizacion/apadrinamientos',
-        label: 'Apadrinamientos recibidos',
-        icon: HeartIcon,
-        roles: SPONSORSHIP_VIEW_ROLES,
-      },
-    ],
+  misSolicitudes: {
+    path: '/mis-solicitudes',
+    label: 'Mis solicitudes',
+    icon: PawIcon,
+    personaOnly: true,
   },
-  // Ajuste 13 · anuncio urgente a los contactos propios (Owner/Administrator).
-  {
+  misSeguimientos: {
+    path: '/mis-seguimientos',
+    label: 'Mis seguimientos',
+    icon: PawIcon,
+    personaOnly: true,
+  },
+  misAnimales: { path: '/mis-animales', label: 'Mis animales', icon: PawIcon, personaOnly: true },
+  misApadrinamientos: { path: '/apadrinar', label: 'Mis apadrinamientos', icon: HeartIcon },
+  apadrinamientosRecibidos: {
+    path: '/organizacion/apadrinamientos',
+    label: 'Apadrinamientos recibidos',
+    icon: HeartIcon,
+    roles: SPONSORSHIP_VIEW_ROLES,
+  },
+  anuncios: {
     path: '/organizacion/anuncios',
     label: 'Anuncios urgentes',
     icon: AlertTriangleIcon,
     roles: ORG_PLAN_ROLES,
   },
-  // Equipo · invitar personas con un cargo fijo, cambiar su cargo o retirarlas.
-  // Mismo @Roles que /org/members y /org/invitations (Owner, Administrator).
-  {
+  miembros: {
     path: '/organizacion/miembros',
     label: 'Miembros del equipo',
     icon: UsersIcon,
     roles: ORG_MEMBERS_ROLES,
   },
-  // Planes y suscripciones · plan en efecto, uso de límites y los tres planes.
-  {
-    path: '/organizacion/plan',
-    label: 'Plan',
-    icon: BoxIcon,
-    roles: ORG_PLAN_ROLES,
-  },
-  // M14 · portal personalization by tokens (T-027) — REMOVED from the sidebar
-  // (S2-04A §4): it now lives as a button inside "Mi organización"'s action bar
-  // (OrgProfilePage, S2-01/S2-REORG), not as a top-level nav entry. The ROUTE
-  // (`/organizacion/portal`) and its guard are UNCHANGED — see routes.tsx.
-  // M08 (S-6, RF18/RF19): this was a Fase-12 "Coming Soon" placeholder
-  // (backend didn't exist yet) — now that the module is built, the entry
-  // becomes real: `comingSoon` is dropped and `roles` is tightened from the
-  // generic `ORG_MEMBER_ROLES` placeholder to the real
-  // `VOLUNTEERING_VIEW_ROLES` (copied VERBATIM from the controller). Same
-  // path/label/icon — this UPDATES the existing entry, not a new one.
-  // MENU-SUBMENUS (mismo patrón que "Donaciones"): "Voluntariado" agrupa la gestión
-  // interna de la organización y la vista de la Persona — mismas rutas y mismos roles
-  // de siempre; el padre solo expande/colapsa. Un usuario ve solo los hijos que le
-  // corresponden (la gestión exige `VOLUNTEERING_VIEW_ROLES`; "Mi voluntariado" es de
-  // cualquier autenticado).
-  {
-    path: '/voluntariado',
-    label: 'Voluntariado',
+  plan: { path: '/organizacion/plan', label: 'Plan', icon: BoxIcon, roles: ORG_PLAN_ROLES },
+  miVoluntariado: { path: '/voluntariado', label: 'Mi voluntariado', icon: HeartIcon },
+  gestionVoluntariado: {
+    path: '/organizacion/voluntariado',
+    label: 'Gestión de voluntariado',
     icon: HeartIcon,
-    children: [
-      // M08 (S-6, RF18/RF19) · explorar oportunidades, inscribirse, registrar horas y
-      // descargar certificados. Sin @Roles en el backend (cualquier Persona autenticada).
-      { path: '/voluntariado', label: 'Mi voluntariado', icon: HeartIcon },
-      // M08 (S-6) · gestión interna de voluntariado de la organización.
-      {
-        path: '/organizacion/voluntariado',
-        label: 'Gestión de voluntariado',
-        icon: HeartIcon,
-        roles: VOLUNTEERING_VIEW_ROLES,
-      },
-    ],
+    roles: VOLUNTEERING_VIEW_ROLES,
   },
-  // MENU-SUBMENUS: "Banco de recursos" agrupa "Mis ofertas" (donante, sin
-  // @Roles — cualquier autenticado, igual que "Mis donaciones") y la gestión
-  // de la org ("Necesidades recibidas", RESOURCE_VIEW_ROLES) — mismo patrón
-  // que el grupo "Donaciones" (F-6, M09).
-  {
-    path: '/mis-ofertas',
-    label: 'Banco de recursos',
+  misOfertas: { path: '/mis-ofertas', label: 'Mis ofertas', icon: BoxIcon },
+  necesidades: {
+    path: '/organizacion/recursos',
+    label: 'Necesidades recibidas',
     icon: BoxIcon,
-    children: [
-      { path: '/mis-ofertas', label: 'Mis ofertas', icon: BoxIcon },
-      {
-        path: '/organizacion/recursos',
-        label: 'Necesidades recibidas',
-        icon: BoxIcon,
-        roles: RESOURCE_VIEW_ROLES,
-      },
-      {
-        path: '/organizacion/recursos/ofrecimientos',
-        label: 'Ofrecimientos de la comunidad',
-        icon: BoxIcon,
-        roles: RESOURCE_MANAGE_ROLES,
-      },
-    ],
+    roles: RESOURCE_VIEW_ROLES,
   },
-  // MENU-SUBMENUS: "Comunidad" agrupa el feed cruzado ("Comunidad", sin
-  // @Roles — cualquier autenticado, igual que "Mis donaciones"/"Mis
-  // ofertas") y "Mis publicaciones" (idem, sin @Roles) — mismo patrón que
-  // los grupos "Donaciones"/"Banco de recursos" (F-8, M11).
-  {
-    path: '/comunidad',
-    label: 'Comunidad',
-    icon: ChatIcon,
-    children: [
-      { path: '/comunidad', label: 'Feed', icon: ChatIcon },
-      { path: '/mis-publicaciones', label: 'Mis publicaciones', icon: ChatIcon },
-      { path: '/mis-mascotas', label: 'Mis mascotas', icon: PawIcon },
-      { path: '/mi-negocio', label: 'Mi negocio', icon: ShoppingBagIcon },
-    ],
+  ofrecimientos: {
+    path: '/organizacion/recursos/ofrecimientos',
+    label: 'Ofrecimientos de la comunidad',
+    icon: BoxIcon,
+    roles: RESOURCE_MANAGE_ROLES,
   },
-  // S2-01: "Campañas" RESTORED — T-065 removed it because the link pointed at
-  // the PUBLIC portal route and exited the shell; the in-shell management
-  // screen (/organizacion/campanas) now exists, so the entry points there
-  // instead, gated to CAMPAIGNS_VIEW_ROLES (never Persona/PlatformAdmin). The
-  // public route (/campanas) is unchanged — a donor still reaches it from the
-  // org's public portal (/o/:slug), never from this menu.
-  {
+  feed: { path: '/comunidad', label: 'Feed', icon: ChatIcon },
+  misPublicaciones: { path: '/mis-publicaciones', label: 'Mis publicaciones', icon: ChatIcon },
+  misMascotas: { path: '/mis-mascotas', label: 'Mis mascotas', icon: PawIcon },
+  miNegocio: { path: '/mi-negocio', label: 'Mi negocio', icon: ShoppingBagIcon },
+  campanas: {
     path: '/organizacion/campanas',
     label: 'Campañas',
     icon: MegaphoneIcon,
     roles: CAMPAIGNS_VIEW_ROLES,
   },
-  // F-7 (M10, marketplace simplificado): catálogo de productos de la
-  // organización, contacto por WhatsApp — mismo patrón plano que "Campañas"
-  // arriba, gated a MARKETPLACE_VIEW_ROLES (calcado del @Roles real).
-  {
+  marketplace: {
     path: '/organizacion/marketplace',
     label: 'Marketplace',
     icon: ShoppingBagIcon,
     roles: MARKETPLACE_VIEW_ROLES,
   },
-  // RF14 · Libro público: ingresos y gastos que se publican en el portal.
-  {
+  libroPublico: {
     path: '/organizacion/libro-publico',
     label: 'Libro público',
     icon: ShieldIcon,
     roles: ORG_LEDGER_ROLES,
   },
-  // Fix (M12/S7-b) · lo que el Owner/Administrator necesita para poder usar
-  // "marcar como spam": ver las reseñas públicas de SU organización primero.
-  // Gated a ORG_REVIEWS_ROLES, calcado del @Roles real de `GET /reviews/org`.
-  {
+  resenasPortal: {
     path: '/organizacion/resenas',
     label: 'Reseñas del portal',
     icon: ChatIcon,
     roles: ORG_REVIEWS_ROLES,
   },
-  // M12 (S-7, RF23) · "Mis reseñas" — lo que la Persona ha reseñado y su
-  // estado. Sin @Roles en el backend (cualquier Persona autenticada), mismo
-  // criterio que "Mi voluntariado"/"Mis apadrinamientos".
-  {
-    path: '/resenas',
-    label: 'Reseñas',
-    icon: ChatIcon,
-  },
-  // M01 · revisión documental de PLATAFORMA (T-031, wires T-103). Audiencia de
-  // plataforma, no de organización — separada del resto del menú.
-  {
+  misResenas: { path: '/resenas', label: 'Mis reseñas', icon: ChatIcon },
+  // Plataforma (PlatformAdmin / PlatformSuperAdmin).
+  revisionDocumentos: {
     path: '/plataforma/documentos',
     label: 'Revisión de documentos',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
   },
-  // M01, S-3 · organizaciones posiblemente duplicadas (mitigación de riesgo
-  // "Captación ilegal / LA-FT", §16). Audiencia de PLATAFORMA — ruta hermana
-  // de la revisión de documentos, misma zona.
-  // R2-1 · aprobación de organizaciones (solo las aprobadas son públicas).
-  {
+  aprobarOrganizaciones: {
     path: '/plataforma/organizaciones',
     label: 'Aprobar organizaciones',
     icon: ShieldIcon,
     roles: PLATFORM_DUPLICATES_ROLES,
   },
-  {
+  planesOrganizaciones: {
     path: '/plataforma/planes',
     label: 'Planes de organizaciones',
     icon: ShieldIcon,
     roles: PLATFORM_PLANS_ROLES,
   },
-  {
+  duplicadas: {
     path: '/plataforma/organizaciones-duplicadas',
     label: 'Organizaciones duplicadas',
     icon: AlertTriangleIcon,
     roles: PLATFORM_DUPLICATES_ROLES,
   },
-  // M11 · moderación básica de la comunidad, audiencia de PLATAFORMA (F-8).
-  {
+  moderacionComunidad: {
     path: '/plataforma/comunidad',
     label: 'Moderación de comunidad',
     icon: ChatIcon,
     roles: COMMUNITY_MODERATION_ROLES,
   },
-  // Comunidad · revisión de perfiles y reseñas del directorio de servicios.
-  {
+  directorioServicios: {
     path: '/plataforma/servicios',
     label: 'Directorio de servicios',
     icon: ShoppingBagIcon,
     roles: COMMUNITY_MODERATION_ROLES,
   },
-  // M12 (S-7, RF23) · moderación de reseñas, audiencia de PLATAFORMA — ruta
-  // hermana de /plataforma/documentos y /plataforma/organizaciones-duplicadas.
-  {
+  moderacionResenas: {
     path: '/plataforma/resenas',
     label: 'Moderación de reseñas',
     icon: ChatIcon,
     roles: PLATFORM_REVIEWS_ROLES,
   },
-  // M13 (S-8, RF24) · dashboards por audiencia de PLATAFORMA — conteos
-  // consolidados de las tres colas ya existentes (documentos, duplicidad,
-  // reseñas). Ruta hermana de las otras vistas /plataforma/*.
-  {
+  dashboardPlataforma: {
     path: '/plataforma/dashboard',
     label: 'Dashboard de plataforma',
     icon: ShieldIcon,
     roles: PLATFORM_ADMIN_DASHBOARD_ROLES,
   },
-  // M13 (S-8, RF24) · dashboard financiero — SOLO PlatformSuperAdmin, nunca
-  // un PlatformAdmin normal (RBAC deny-by-default sobre cifras financieras).
-  {
+  dashboardFinanciero: {
     path: '/plataforma/dashboard/financiero',
     label: 'Dashboard financiero',
     icon: ShieldIcon,
     roles: PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
   },
-  // M01/T-030 · S-15 (pedido del cliente): fotos del banner del portal
-  // general ("/", HeroPhotoGrid) — mismos roles que el resto de /plataforma/*.
-  {
+  banner: {
     path: '/plataforma/banner',
     label: 'Banner del portal',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
   },
-  // Café de AdoptaFácil: presentaciones con QR fijo, lotes, pedidos y aportes.
-  {
+  cafe: {
     path: '/plataforma/cafe',
     label: 'Café de AdoptaFácil',
     icon: ShoppingBagIcon,
     roles: PLATFORM_COFFEE_ROLES,
   },
-  // F19 · espacio de trabajo del equipo de plataforma: tareas, doble
-  // aprobación, personas del equipo, bitácora y "Mi seguridad".
-  {
+  equipo: {
     path: '/plataforma/equipo',
     label: 'Equipo y seguridad',
     icon: ShieldIcon,
     roles: PLATFORM_TEAM_ROLES,
   },
-  // Correos: plantillas de los correos por evento y de los envíos masivos,
-  // editables con vista previa y versiones — mismos roles que /plataforma/*.
-  {
+  correos: {
     path: '/plataforma/correos',
     label: 'Correos',
     icon: ShieldIcon,
     roles: PLATFORM_DOCUMENTS_ROLES,
   },
+} satisfies Record<string, NavItem>;
+
+/**
+ * Menú de una PERSONA (donante/adoptante sin cargo en ninguna organización).
+ * Es corto y se mantiene plano, con los grupos desplegables de siempre.
+ */
+export const personaNavItems: NavItem[] = [
+  leaf.inicio,
+  {
+    path: '/mis-donaciones',
+    label: 'Donaciones',
+    icon: HeartIcon,
+    children: [leaf.misDonaciones, leaf.donacionesRecibidas],
+  },
+  leaf.misSolicitudes,
+  leaf.misSeguimientos,
+  leaf.misAnimales,
+  {
+    path: '/apadrinar',
+    label: 'Apadrinamientos',
+    icon: HeartIcon,
+    children: [leaf.misApadrinamientos, leaf.apadrinamientosRecibidos],
+  },
+  {
+    path: '/voluntariado',
+    label: 'Voluntariado',
+    icon: HeartIcon,
+    children: [leaf.miVoluntariado, leaf.gestionVoluntariado],
+  },
+  {
+    path: '/mis-ofertas',
+    label: 'Banco de recursos',
+    icon: BoxIcon,
+    children: [leaf.misOfertas, leaf.necesidades, leaf.ofrecimientos],
+  },
+  {
+    path: '/comunidad',
+    label: 'Comunidad',
+    icon: ChatIcon,
+    children: [leaf.feed, leaf.misPublicaciones, leaf.misMascotas, leaf.miNegocio],
+  },
+  { ...leaf.misResenas, label: 'Reseñas' },
+  leaf.usoDeMisDatos,
 ];
+
+/**
+ * Una sección del menú de trabajo: un título corto y sus entradas. La sección
+ * entera se oculta si la sesión no puede ver ninguna de sus entradas.
+ */
+export interface NavSection {
+  /** Clave estable (estado abierto/cerrado guardado en el navegador). */
+  id: string;
+  /** Título visible; sin título = entradas sueltas arriba del todo (Inicio). */
+  label?: string;
+  items: NavItem[];
+  /** Abierta la primera vez (además de la que contiene la ruta actual). */
+  defaultOpen?: boolean;
+  /**
+   * Lo PERSONAL de quien trabaja en una organización (sus propias donaciones,
+   * reseñas, voluntariado…). Va al final y cerrada para no competir con la
+   * gestión del refugio; se abre sola si es lo único que la persona puede ver.
+   */
+  personal?: boolean;
+}
+
+/**
+ * NAV-SECCIONES — menú de quien trabaja en una organización o en la plataforma.
+ * Agrupado por tareas para que un dueño de refugio que entra por primera vez
+ * vea cinco títulos en vez de veinte entradas sueltas. Ninguna entrada cambia de
+ * ruta ni de roles respecto al menú plano anterior.
+ */
+export const navSections: NavSection[] = [
+  { id: 'inicio', items: [leaf.inicio] },
+  {
+    id: 'animales',
+    label: 'Animales y adopciones',
+    defaultOpen: true,
+    items: [leaf.animales, leaf.adopciones, leaf.reportesAnimales, leaf.custodia, leaf.anuncios],
+  },
+  {
+    id: 'recaudacion',
+    label: 'Recaudación',
+    items: [
+      // Dentro de "Recaudación" basta el nombre corto: lo propio está en "Mi actividad".
+      { ...leaf.donacionesRecibidas, label: 'Donaciones' },
+      { ...leaf.apadrinamientosRecibidos, label: 'Apadrinamientos' },
+      leaf.campanas,
+      leaf.marketplace,
+      leaf.libroPublico,
+    ],
+  },
+  {
+    id: 'comunidad',
+    label: 'Comunidad',
+    items: [
+      { ...leaf.gestionVoluntariado, label: 'Voluntariado' },
+      {
+        path: '/organizacion/recursos',
+        label: 'Banco de recursos',
+        icon: BoxIcon,
+        children: [leaf.necesidades, leaf.ofrecimientos],
+      },
+      { ...leaf.feed, label: 'Muro de publicaciones' },
+      { ...leaf.resenasPortal, label: 'Reseñas recibidas' },
+    ],
+  },
+  {
+    id: 'organizacion',
+    label: 'Organización',
+    items: [leaf.documentos, leaf.miembros, leaf.plan],
+  },
+  {
+    id: 'plataforma-organizaciones',
+    label: 'Organizaciones',
+    defaultOpen: true,
+    items: [
+      leaf.revisionDocumentos,
+      leaf.aprobarOrganizaciones,
+      leaf.planesOrganizaciones,
+      leaf.duplicadas,
+    ],
+  },
+  {
+    id: 'plataforma-moderacion',
+    label: 'Moderación',
+    items: [leaf.moderacionComunidad, leaf.directorioServicios, leaf.moderacionResenas],
+  },
+  {
+    id: 'plataforma',
+    label: 'Plataforma',
+    items: [
+      leaf.dashboardPlataforma,
+      leaf.dashboardFinanciero,
+      leaf.banner,
+      leaf.cafe,
+      leaf.equipo,
+      leaf.correos,
+    ],
+  },
+  {
+    id: 'personal',
+    label: 'Mi actividad',
+    personal: true,
+    items: [
+      leaf.misDonaciones,
+      leaf.misApadrinamientos,
+      leaf.miVoluntariado,
+      leaf.misSolicitudes,
+      leaf.misSeguimientos,
+      leaf.misAnimales,
+      leaf.misOfertas,
+      leaf.misPublicaciones,
+      leaf.misMascotas,
+      leaf.miNegocio,
+      leaf.misResenas,
+      leaf.usoDeMisDatos,
+    ],
+  },
+];
+
+/**
+ * Todas las entradas, sin repetir ruta (primero el menú de trabajo, luego el de
+ * persona). Lo usa el "mapa del sitio" del asistente de guía.
+ */
+export const navItems: NavItem[] = (() => {
+  const seen = new Set<string>();
+  const out: NavItem[] = [];
+  for (const item of [...navSections.flatMap((s) => s.items), ...personaNavItems]) {
+    if (item.children) {
+      out.push(item);
+      continue;
+    }
+    if (seen.has(item.path)) continue;
+    seen.add(item.path);
+    out.push(item);
+  }
+  return out;
+})();
