@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,7 +12,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   PLAN_CATALOG,
+  Role,
   mercadoPagoPreapprovalStatus,
+  planHighlights,
   parsePlanSubscriptionReference,
   planSubscriptionReference,
   priceWithIva,
@@ -35,6 +38,7 @@ import {
   mercadoPagoNotificationDataId,
   mercadoPagoNotificationType,
 } from '../payments/mercadopago-payment.adapter';
+import { NOTIFICATION_PORT, type NotificationPort } from '../notifications/notification.port';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlansService } from './plans.service';
 
@@ -83,6 +87,17 @@ interface AppliedPreapproval extends PlanWebhookOutcome {
   /** Mercado Pago subscription this one replaced (upgrade/downgrade): it is
    *  cancelled AFTER the commit so the organization is never charged twice. */
   replacedPreapprovalId?: string;
+  /** Set when this notification turned a paid plan ON (new plan, new
+   *  subscription or back from past due): the owners get a confirmation. */
+  activated?: { organizationId: string; plan: PaidPlan; paidThrough: Date | null; key: string };
+}
+
+/** Lo que el correo de activación dice que quedó habilitado. Puro. */
+export function planActivatedBenefits(plan: PaidPlan): string {
+  return planHighlights(plan)
+    .filter((item) => item.available)
+    .map((item) => `• ${item.text}`)
+    .join('\n');
 }
 
 /**
@@ -111,6 +126,7 @@ export class PlanBillingService {
     private readonly billing: MercadoPagoBillingClient,
     private readonly plans: PlansService,
     config: ConfigService<Env, true>,
+    @Inject(NOTIFICATION_PORT) private readonly notifications: NotificationPort,
   ) {
     this.webBaseUrl = (config.get('WEB_BASE_URL', { infer: true }) as string).replace(/\/+$/, '');
     this.webhookSecret = config.get('MERCADOPAGO_WEBHOOK_SECRET', { infer: true }) as
@@ -299,7 +315,69 @@ export class PlanBillingService {
     if (outcome.replacedPreapprovalId) {
       await this.cancelAtGateway(outcome.replacedPreapprovalId, 'replaced');
     }
+    if (outcome.activated) {
+      await this.notifyActivated(outcome.activated);
+    }
     return { applied: outcome.applied };
+  }
+
+  /**
+   * Best-effort: tells the organization's Owners that the plan is on and what
+   * it unlocked. A failure is logged and never undoes the activation.
+   */
+  private async notifyActivated(input: NonNullable<AppliedPreapproval['activated']>) {
+    try {
+      const { organizationId, plan, paidThrough, key } = input;
+      const found = await this.prisma.withOrgContext(organizationId, async (tx) => {
+        const [org, owners] = await Promise.all([
+          tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+          tx.userRole.findMany({
+            where: { organizationId, role: Role.Owner },
+            select: { userId: true },
+          }),
+        ]);
+        const users = await tx.user.findMany({
+          where: { id: { in: owners.map((o) => o.userId) } },
+          select: { email: true },
+        });
+        return { name: org?.name ?? 'tu organización', emails: users.map((u) => u.email) };
+      });
+      const planName = PLAN_CATALOG[plan].name;
+      const benefits = planActivatedBenefits(plan);
+      const link = `${this.webBaseUrl}/organizacion/plan`;
+      const until = paidThrough
+        ? new Intl.DateTimeFormat('es-CO', {
+            timeZone: 'America/Bogota',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }).format(paidThrough)
+        : 'que la plataforma lo indique';
+      for (const to of found.emails.filter(Boolean)) {
+        await this.notifications.send({
+          to,
+          subject: `Tu plan ${planName} ya está activo`,
+          body:
+            `Hola, equipo de ${found.name}:\n\nRecibimos el pago y tu plan ${planName} ya está activo. ` +
+            `Desde ahora tienes habilitado:\n\n${benefits}\n\nTu periodo pagado va hasta el ${until}. ` +
+            `Ver tu plan: ${link}`,
+          template: {
+            event: 'plan.activated',
+            data: {
+              organizacion: found.name,
+              plan: planName,
+              vence: paidThrough ? paidThrough.toISOString() : null,
+              beneficios: benefits,
+              enlace: link,
+            },
+            organizationName: found.name,
+          },
+          idempotencyKey: `plan.activated:${organizationId}:${key}:${to}`,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`Plan activation email skipped: ${(error as Error).message}`);
+    }
   }
 
   /**
@@ -440,7 +518,20 @@ export class PlanBillingService {
         );
       }
     }
-    return this.plans.assign(actorUserId, organizationId, input);
+    const saved = await this.plans.assign(actorUserId, organizationId, input);
+    const turnedOn =
+      saved.plan !== 'free' &&
+      saved.status === 'active' &&
+      (previous?.plan !== saved.plan || previous.status !== 'active');
+    if (turnedOn) {
+      await this.notifyActivated({
+        organizationId,
+        plan: saved.plan as PaidPlan,
+        paidThrough: saved.currentPeriodEnd ? new Date(saved.currentPeriodEnd) : null,
+        key: `manual:${saved.plan}:${saved.currentPeriodEnd ?? 'open'}`,
+      });
+    }
+    return saved;
   }
 
   /**
@@ -594,7 +685,26 @@ export class PlanBillingService {
         previous.status !== 'canceled'
           ? previous.providerReference
           : undefined;
-      return { applied: true, ...(replaced ? { replacedPreapprovalId: replaced } : {}) };
+      // Se enciende el plan: otro plan, otra suscripción o vuelve de pago vencido.
+      const turnedOn =
+        status === 'active' &&
+        (previous?.plan !== ref.plan ||
+          previous.status !== 'active' ||
+          previous.providerReference !== preapproval.id);
+      return {
+        applied: true,
+        ...(replaced ? { replacedPreapprovalId: replaced } : {}),
+        ...(turnedOn
+          ? {
+              activated: {
+                organizationId: ref.organizationId,
+                plan: ref.plan,
+                paidThrough: currentPeriodEnd,
+                key: `${preapproval.id}:${ref.plan}`,
+              },
+            }
+          : {}),
+      };
     });
   }
 }

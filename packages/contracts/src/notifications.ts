@@ -40,6 +40,7 @@ export const EMAIL_EVENT_KEYS = [
   'platform.announcement',
   'org.urgent_announcement',
   'coffee.purchase_receipt',
+  'plan.activated',
 ] as const;
 
 export type EmailEventKey = (typeof EMAIL_EVENT_KEYS)[number];

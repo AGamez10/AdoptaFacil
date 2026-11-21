@@ -34,7 +34,7 @@ import {
 } from '@adoptafacil/ui';
 import { PageContainer, PageHeader } from '../../_layout';
 import { ApiError, useApiClient } from '../../../shell/api';
-import { officialWhatsappUrl } from '../../../lib/contact';
+import { OFFICIAL_WHATSAPP_DISPLAY, officialWhatsappUrl } from '../../../lib/contact';
 import { isMercadoPagoProvider } from '../../payments/lib/payment-provider';
 
 /** Labels, limits and the always-free list come from the plan catalog in
@@ -194,7 +194,7 @@ function PlanCard({
         {paid && (
           <p className="text-xs text-muted-foreground">
             {cop.format(priceWithIva(plan.monthlyPriceCop))} con IVA, o{' '}
-            {cop.format(plan.annualPriceCop)} al año + IVA (2 meses gratis)
+            {cop.format(plan.annualPriceCop)} al año + IVA por transferencia (2 meses gratis)
           </p>
         )}
       </CardHeader>
@@ -531,6 +531,22 @@ export function OrgPlanPage() {
               <strong>{formatLimit('storageMb', view.usage.storageMb)}</strong>
               {view.limits.storageMb !== null &&
                 ` de ${formatLimit('storageMb', view.limits.storageMb)}`}
+            </p>
+          )}
+          {view.capabilities.prioritySupport && (
+            <p className="mt-2 text-sm" data-testid="plan-priority-support">
+              Soporte prioritario:{' '}
+              <a
+                className="font-medium underline underline-offset-2"
+                href={officialWhatsappUrl(
+                  `Hola, somos una organización con plan ${currentName} y necesitamos soporte prioritario.`,
+                )}
+                target="_blank"
+                rel="noreferrer"
+              >
+                escríbenos por WhatsApp al {OFFICIAL_WHATSAPP_DISPLAY}
+              </a>
+              . Tu plan incluye atención primero.
             </p>
           )}
           {view.usage.brandedEmails && (

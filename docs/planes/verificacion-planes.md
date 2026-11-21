@@ -7,6 +7,35 @@ contra PostgreSQL 16 y Redis reales, con los planes **encendidos** y la promoci�
 Cobro con Mercado Pago: `apps/api/test/plan-billing.integration-spec.ts` (11 pruebas, Mercado Pago
 simulado sin red). Resultado: 105/105 en las suites de planes, portal, exportes y correos.
 
+## Verificación 2026-11-21: pagar un plan activa lo que promete
+
+Evidencia: `apps/api/test/plan-pro-activation.integration-spec.ts` (Mercado Pago simulado, planes
+encendidos, sin promoción ni prueba). Una organización en Gratis paga con el flujo real
+(checkout → autorización → cobro aprobado por webhook firmado) y, sin que nadie de la plataforma
+haga nada, cada derecho se prueba por HTTP antes y después del pago.
+
+| Promesa de la tarjeta (landing y Plan y facturación) | Crece | Pro        | Tras el pago aprobado                                                                                                       |
+| ---------------------------------------------------- | ----- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Plantillas Pro del portal                            | sí    | sí         | ✅ se habilita y el portal público la muestra                                                                               |
+| Portal sin el sello                                  | sí    | sí         | ✅                                                                                                                          |
+| Correos con tu marca                                 | 5.000 | 20.000     | ✅ (tope visible en Plan y facturación)                                                                                     |
+| Exportar a Excel y reporte de impacto PDF            | sí    | sí         | ✅ 403 → 200                                                                                                                |
+| Cierre mensual, exporte contable completo, contador  | sí    | sí         | ✅                                                                                                                          |
+| Miembros del equipo                                  | 10    | sin límite | ✅                                                                                                                          |
+| Dominio propio                                       | —     | sí         | ✅ (necesita `CUSTOM_DOMAINS` configurado en el servidor)                                                                   |
+| Soporte prioritario por WhatsApp                     | —     | sí         | ✅ desde este PR la pantalla de Pro muestra el canal; lo atiende el equipo                                                  |
+| Patrocinio de empresas                               | —     | sí         | 🕒 «Próximamente» en la tarjeta (no se promete como disponible)                                                             |
+| Aviso al dueño                                       | sí    | sí         | ✅ desde este PR: correo «Tu plan Pro ya está activo» con la plantilla                                                      |
+| Precio anual                                         | sí    | sí         | ⚠️ en línea solo hay cobro mensual; el anual se paga por transferencia y la plataforma lo activa (ahora la tarjeta lo dice) |
+
+También probado: cancelar deja el plan hasta el fin de lo pagado; luego Gratis sin borrar nada
+(la plantilla Pro y el «sin sello» quedan guardados) y al volver a pagar regresan solos. Subir de
+Crece a Pro cancela el cobro de Crece. Una notificación repetida de Mercado Pago no cambia nada ni
+reenvía el aviso.
+
+Queda por decidir: si una organización con Pro pagado baja a Crece a mitad de mes, Crece rige
+desde el primer cobro de Crece y no conserva lo que le quedaba de Pro.
+
 ## Lo primero: hoy los planes están apagados
 
 `PLAN_ENFORCEMENT` viene apagado por defecto (`env.validation.ts`, `deploy/api.env.example`

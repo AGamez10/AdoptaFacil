@@ -79,6 +79,21 @@ describe('OrgPlanPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('Pro muestra el canal de soporte prioritario por WhatsApp', async () => {
+    stubPlan(viewFor({ effectivePlan: 'pro' }));
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    const support = await screen.findByTestId('plan-priority-support');
+    expect(support.querySelector('a')?.getAttribute('href')).toMatch(/^https:\/\/wa\.me\//);
+    expect(support).toHaveTextContent('Soporte prioritario');
+  });
+
+  it('Crece no ofrece soporte prioritario (es de Pro)', async () => {
+    stubPlan(viewFor({ effectivePlan: 'crece' }));
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    expect(await screen.findByText('Estás en el plan Crece')).toBeInTheDocument();
+    expect(screen.queryByTestId('plan-priority-support')).not.toBeInTheDocument();
+  });
+
   it('says everything is included at no cost while plans are not enforced', async () => {
     stubPlan(viewFor({ enforced: false, effectivePlan: 'pro' }));
     renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Administrator]) });
