@@ -61,6 +61,7 @@ export class SponsorshipPaymentPollerService {
   /** Mercado Pago confirms through its signed notification
    *  (`SponsorshipSettlementService`); its adapter has no status read. */
   private readonly polls: boolean;
+  private readonly sponsorshipsLink: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -71,6 +72,7 @@ export class SponsorshipPaymentPollerService {
     @Optional() private readonly inbox?: InboxService,
   ) {
     this.polls = config.get('PAYMENT_DRIVER', { infer: true }) !== 'mercadopago';
+    this.sponsorshipsLink = `${(config.get('WEB_BASE_URL', { infer: true }) ?? 'http://localhost:5173').replace(/\/+$/, '')}/apadrinar`;
   }
 
   async pollPending(): Promise<void> {
@@ -216,6 +218,36 @@ export class SponsorshipPaymentPollerService {
           body: first
             ? `¡Gracias! Desde hoy apadrinas a ${animal} en ${organization} con ${money} al mes. Tu pago llegó directo a la organización. Cada mes te avisaremos cuando toque el siguiente pago; lo haces desde "Mis apadrinamientos".`
             : `Tu pago de ${money} del apadrinamiento de ${animal} (${month}) llegó directo a ${organization}. ¡Gracias por seguir ahí!`,
+          // El primero comparte la clave con la bienvenida de SponsorshipsService:
+          // la cola descarta el repetido y la persona recibe UNA bienvenida.
+          idempotencyKey: first
+            ? `sponsorship.welcome:${sponsorship.id}`
+            : `sponsorship.payment_received:${sponsorship.id}:${period}`,
+          template: first
+            ? {
+                event: 'sponsorship.welcome',
+                organizationName: org?.name ?? undefined,
+                organizationId,
+                data: {
+                  animal,
+                  organizacion: organization,
+                  monto: details.plan?.amount ?? 0,
+                  enlace: this.sponsorshipsLink,
+                },
+              }
+            : {
+                event: 'sponsorship.payment_received',
+                organizationName: org?.name ?? undefined,
+                organizationId,
+                data: {
+                  nombre: displayName,
+                  animal,
+                  organizacion: organization,
+                  monto: details.plan?.amount ?? 0,
+                  mes: month,
+                  enlace: this.sponsorshipsLink,
+                },
+              },
         }),
       );
       await this.inbox.toOrgStaff(organizationId, {

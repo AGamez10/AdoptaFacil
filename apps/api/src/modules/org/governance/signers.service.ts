@@ -82,6 +82,12 @@ export class SignersService {
           `Si no reconoces a ${organizationName} o no eres su ${label}, ignora este correo: ` +
           'sin tu aprobación, tu firma nunca se usa.',
         idempotencyKey: `signer.welcome:${designationId}`,
+        template: {
+          event: 'org.signer_welcome',
+          organizationName,
+          organizationId: this.tenant.getOrganizationId() ?? undefined,
+          data: { nombre: fullName, cargo: label },
+        },
       })
       .catch(() => undefined);
   }

@@ -4,6 +4,8 @@ import type { EmailBrand } from '../branding/org-email-branding';
 import type { EmailEventDefinition } from './email-catalog';
 import { renderLayout, renderTextFooter } from './email-layout';
 import {
+  cleanText,
+  escapeHtml,
   renderInlineHtml,
   renderParagraphs,
   renderPlain,
@@ -68,6 +70,62 @@ export function composeEmail(
   );
 
   return { subject, preheader, html, text: textParts.join('\n') };
+}
+
+// ---------------------------------------------------------------------------
+// Red de seguridad: un correo que llega SIN plantilla de catálogo (texto plano
+// armado por el módulo) igual sale con la plantilla de AdoptaFácil. El texto se
+// escapa entero (nunca se interpreta como HTML) y solo los enlaces http(s)
+// sueltos se vuelven <a>; las líneas con viñeta (`- `, `• `) se dibujan como
+// lista. Ningún correo de AdoptaFácil vuelve a salir "pelado".
+// ---------------------------------------------------------------------------
+
+const URL_IN_TEXT = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/g;
+const GREETING = /^(hola|buen[oa]s?)\b/i;
+
+/** Escaped HTML of one plain-text fragment, with bare http(s) URLs linked. */
+function linkify(text: string): string {
+  let html = '';
+  let last = 0;
+  for (const match of text.matchAll(URL_IN_TEXT)) {
+    const url = match[0];
+    html += escapeHtml(text.slice(last, match.index));
+    const safe = escapeHtml(url);
+    html += `<a class="af-link" href="${safe}" target="_blank" rel="noopener" style="color:#198072;word-break:break-all;">${safe}</a>`;
+    last = (match.index ?? 0) + url.length;
+  }
+  return html + escapeHtml(text.slice(last));
+}
+
+export function composePlainEmail(subject: string, body: string, webBaseUrl: string): EmailPreview {
+  const cleanSubject = cleanText(subject, true).slice(0, 200) || 'Aviso de AdoptaFácil';
+  const paragraphs = cleanText(body)
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const preheader = cleanText(
+    paragraphs.find((p) => !GREETING.test(p) || p.length > 40) ?? '',
+    true,
+  )
+    .replace(URL_IN_TEXT, '')
+    .slice(0, 140);
+  const html = renderLayout({
+    theme: 'community',
+    icon: '🐾',
+    kicker: 'Aviso de AdoptaFácil',
+    category: 'transactional',
+    preheaderHtml: escapeHtml(preheader),
+    headingHtml: escapeHtml(cleanSubject),
+    paragraphsHtml: paragraphs.map((p) =>
+      p
+        .split('\n')
+        .map((line) => linkify(line))
+        .join('<br>'),
+    ),
+    webBaseUrl,
+  });
+  const text = [cleanText(body).trim(), '', renderTextFooter('transactional')].join('\n');
+  return { subject: cleanSubject, preheader, html, text };
 }
 
 // ---------------------------------------------------------------------------

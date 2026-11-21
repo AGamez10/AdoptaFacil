@@ -10,6 +10,12 @@ function makeTemplates(overrides: Partial<Record<keyof EmailTemplateService, jes
       content: def.defaults,
     })),
     isSuppressed: jest.fn().mockResolvedValue(false),
+    wrapPlain: jest.fn((subject: string, body: string) => ({
+      subject,
+      preheader: '',
+      html: `<html>${subject}</html>`,
+      text: `${body}\n—\nAdoptaFácil`,
+    })),
     render: jest.fn(() => ({
       subject: 'Asunto de plantilla',
       preheader: '',
@@ -24,12 +30,37 @@ function makeTemplates(overrides: Partial<Record<keyof EmailTemplateService, jes
 const plain = { to: 'ana@example.co', subject: 'Respaldo', body: 'cuerpo de respaldo' };
 
 describe('TemplatedNotificationAdapter', () => {
-  it('passes messages without a template through untouched', async () => {
+  it('wraps messages without a template in the generic AdoptaFácil layout', async () => {
     const inner = { send: jest.fn() };
     const templates = makeTemplates();
     await new TemplatedNotificationAdapter(inner, templates).send(plain);
-    expect(inner.send).toHaveBeenCalledWith(plain);
+    expect(templates.wrapPlain).toHaveBeenCalledWith('Respaldo', 'cuerpo de respaldo');
+    expect(inner.send).toHaveBeenCalledWith({
+      ...plain,
+      body: 'cuerpo de respaldo\n—\nAdoptaFácil',
+      html: '<html>Respaldo</html>',
+    });
     expect(templates.resolve).not.toHaveBeenCalled();
+  });
+
+  it('leaves a message that already has HTML untouched (editor test send)', async () => {
+    const inner = { send: jest.fn() };
+    const templates = makeTemplates();
+    const withHtml = { ...plain, html: '<p>ya diseñado</p>' };
+    await new TemplatedNotificationAdapter(inner, templates).send(withHtml);
+    expect(inner.send).toHaveBeenCalledWith(withHtml);
+    expect(templates.wrapPlain).not.toHaveBeenCalled();
+  });
+
+  it('still sends the plain message if the generic layout fails', async () => {
+    const inner = { send: jest.fn() };
+    const templates = makeTemplates({
+      wrapPlain: jest.fn(() => {
+        throw new Error('boom');
+      }),
+    });
+    await new TemplatedNotificationAdapter(inner, templates).send(plain);
+    expect(inner.send).toHaveBeenCalledWith(plain);
   });
 
   it('renders the active template and keeps the caller fields (attachments)', async () => {
@@ -115,7 +146,11 @@ describe('TemplatedNotificationAdapter', () => {
       ...plain,
       template: { event: 'auth.password_reset', data: { enlace: 'https://x.co' } },
     });
-    expect(inner.send).toHaveBeenCalledWith(plain);
+    // El respaldo en texto plano también sale con el diseño genérico.
+    expect(inner.send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: plain.to, subject: 'Respaldo' }),
+    );
+    expect(inner.send.mock.calls[0][0].html).toBe('<html>Respaldo</html>');
   });
 
   describe('correos con la marca de la organización', () => {

@@ -3,6 +3,7 @@ import { EMAIL_CATALOG, getEmailEvent } from './email-catalog';
 import {
   buildUnsubscribeUrl,
   composeEmail,
+  composePlainEmail,
   hashEmail,
   signUnsubscribe,
   verifyUnsubscribe,
@@ -47,6 +48,9 @@ describe('email catalog', () => {
       'auth.password_reset',
       'org.invitation',
       'platform.team_invitation',
+      // Sin estos el contador o revisor fiscal no recibe su enlace personal.
+      'reports.signature_request',
+      'accounting.share',
     ]);
   });
 
@@ -233,5 +237,50 @@ describe('regressions', () => {
 
   it('an empty value inside **bold** leaves no stray asterisks', () => {
     expect(renderInlineHtml('Total **{{monto}}** hoy', { monto: '' })).toBe('Total  hoy');
+  });
+});
+
+describe('composePlainEmail (red de seguridad: correo sin plantilla)', () => {
+  const body =
+    'Hola,\n\nTu pago se aprobó <b>tarde</b>.\n\nRevisa: https://app.adoptafacil.test/cafe?ref=A&b=1.\n\n- uno\n- dos';
+
+  it('sale con el diseño de AdoptaFácil, no en texto pelado', () => {
+    const email = composePlainEmail('Asunto\r\nBcc: x@y.co', body, WEB);
+    expect(email.html).toContain('Adopta<span');
+    expect(email.html).toContain('Aviso de AdoptaFácil');
+    expect(email.html).toContain('Ley 1581 de 2012');
+    // Una sola línea: nada de cabeceras inyectadas por el asunto.
+    expect(email.subject).toBe('Asunto Bcc: x@y.co');
+  });
+
+  it('escapa el texto y solo enlaza URLs http(s), sin el punto final', () => {
+    const email = composePlainEmail('Aviso', body, WEB);
+    expect(email.html).not.toContain('<b>tarde</b>');
+    expect(email.html).toContain('&lt;b&gt;tarde&lt;/b&gt;');
+    expect(email.html).toContain('href="https://app.adoptafacil.test/cafe?ref=A&amp;b=1"');
+    expect(composePlainEmail('x', 'javascript:alert(1)', WEB).html).not.toContain(
+      'href="javascript',
+    );
+  });
+
+  it('dibuja las viñetas como lista y conserva el texto plano con pie', () => {
+    const email = composePlainEmail('Aviso', body, WEB);
+    expect(email.html).toContain('✓</td>');
+    expect(email.text.startsWith('Hola,')).toBe(true);
+    expect(email.text).toContain('Ley 1581 de 2012');
+    expect(email.preheader).toBe('Tu pago se aprobó <b>tarde</b>.');
+  });
+});
+
+describe('cada evento del catálogo se arma con su ejemplo', () => {
+  it.each(EMAIL_CATALOG.map((d) => [d.event, d] as const))('%s', (_event, d) => {
+    const email = composeEmail(d, d.defaults, exampleValues(d.variables), {
+      organizationName: 'Fundación Huellitas de Amor',
+      webBaseUrl: WEB,
+    });
+    expect(email.subject.trim()).not.toBe('');
+    expect(email.html).not.toMatch(/\{\{|\}\}/);
+    expect(email.text).not.toMatch(/\{\{|\}\}/);
+    if (d.ctaUrlVariable && d.defaults.ctaLabel) expect(email.html).toContain('af-btn');
   });
 });

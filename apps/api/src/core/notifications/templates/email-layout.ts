@@ -36,6 +36,9 @@ const THEMES: Record<EmailTheme, ThemeStyle> = {
   volunteering: { accent: '#4F7CAC', soft: '#EAF1F8', icon: '🤝', kicker: 'Voluntariado' },
   community: { accent: '#25BAA6', soft: '#E6F7F4', icon: '📣', kicker: 'Novedades' },
   alert: { accent: '#E5604A', soft: '#FDECE8', icon: '⏰', kicker: 'Aviso importante' },
+  documents: { accent: '#4F7CAC', soft: '#EAF1F8', icon: '📄', kicker: 'Documentos y firmas' },
+  plan: { accent: '#F2B84B', soft: '#FDF4E2', icon: '⭐', kicker: 'Tu plan en AdoptaFácil' },
+  health: { accent: '#4C9A52', soft: '#EBF5EC', icon: '🩺', kicker: 'Salud de los animales' },
 };
 
 // Accent palette the editor offers (item 12). Decorative only, like the themes.
@@ -78,6 +81,8 @@ export interface LayoutInput {
   /** Optional overrides chosen in the editor (closed palette, validated). */
   accentColor?: EmailAccentColor;
   icon?: EmailIcon;
+  /** Optional kicker override (generic wrapper of a plain-text email). */
+  kicker?: string;
   category: EmailCategory;
   /** Escaped HTML. */
   preheaderHtml: string;
@@ -115,6 +120,7 @@ export function renderLayout(input: LayoutInput): string {
     ...THEMES[input.theme],
     ...(input.accentColor ? ACCENTS[input.accentColor] : {}),
     ...(input.icon ? { icon: input.icon } : {}),
+    ...(input.kicker ? { kicker: escapeHtml(input.kicker) } : {}),
   };
   const org = input.organizationName ? escapeHtml(input.organizationName) : '';
   const web = escapeHtml(input.webBaseUrl);
