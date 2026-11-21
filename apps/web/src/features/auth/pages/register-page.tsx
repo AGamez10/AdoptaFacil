@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { NEW_ORG_TRIAL_DAYS, PORTAL_TEMPLATES } from '@adoptafacil/contracts';
+import { NEW_ORG_TRIAL_DAYS, PLAN_CATALOG, PORTAL_TEMPLATES } from '@adoptafacil/contracts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@adoptafacil/ui';
 import type { AccountType } from '../../../shell/api';
 import { accessPathWithReturn, safeReturnTo, useSession } from '../../../shell/auth';
@@ -9,6 +9,7 @@ import { templateDemoHref, templateName } from '../../portals/templates/demo/dem
 import { AuthLayout } from '../components/auth-layout';
 import { FormAlert } from '../components/form-alert';
 import { GoogleSignInButton, useGoogleSignInAvailable } from '../components/google-sign-in-button';
+import { readSignupPlan } from '../lib/signup-plan';
 import { readSignupTemplate } from '../lib/signup-template';
 import { RegisterOrganizationForm } from './register-organization-form';
 import { RegisterPersonForm } from './register-person-form';
@@ -29,6 +30,8 @@ export function RegisterPage() {
   const [search] = useSearchParams();
   // Plantilla elegida en la vista de ejemplo: queda como la del portal nuevo.
   const template = useMemo(() => readSignupTemplate(search), [search]);
+  // Plan de pago elegido en la landing: se paga después, desde el panel.
+  const plan = useMemo(() => readSignupPlan(search), [search]);
   // Adónde volver después de crear la cuenta (validado contra open redirect).
   const returnTo = safeReturnTo(search.get('returnTo'));
   // La intención sobrevive a recargas y a ir y volver desde "Iniciar sesión".
@@ -36,7 +39,7 @@ export function RegisterPage() {
   // Quien llega desde una acción (donar, jornada, oferta) es una persona: abre
   // esa pestaña. Sin intención, la pestaña de organización sigue primero.
   const [accountType, setAccountType] = useState<AccountType>(
-    intentLabel && !template ? 'person' : 'organization',
+    intentLabel && !template && !plan ? 'person' : 'organization',
   );
   const { signInWithGoogle } = useSession();
   const googleAvailable = useGoogleSignInAvailable();
@@ -110,6 +113,16 @@ export function RegisterPage() {
           <TabsTrigger value="person">Persona</TabsTrigger>
         </TabsList>
         <TabsContent value="organization" className="mt-4">
+          {plan && (
+            <p
+              className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground"
+              data-testid="register-plan-note"
+            >
+              Elegiste el plan <strong>{PLAN_CATALOG[plan].name}</strong>. Primero creas la cuenta
+              de tu organización, sin costo. Al terminar te llevamos a &ldquo;Plan y
+              facturación&rdquo; para pagarlo con Mercado Pago cuando quieras.
+            </p>
+          )}
           {template && (
             <p
               className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground"
@@ -132,7 +145,7 @@ export function RegisterPage() {
               </Link>
             </p>
           )}
-          <RegisterOrganizationForm template={template} returnTo={returnTo} />
+          <RegisterOrganizationForm template={template} plan={plan} returnTo={returnTo} />
         </TabsContent>
         <TabsContent value="person" className="mt-4">
           <RegisterPersonForm onRegistered={() => finish({ isNewAccount: true })} />

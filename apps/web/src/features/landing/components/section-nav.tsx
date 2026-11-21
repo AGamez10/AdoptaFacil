@@ -17,9 +17,9 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Índice de la página: una fila fija bajo el menú con las secciones que hay
- * en ella, que marca dónde estás al bajar (scroll-spy con
- * IntersectionObserver, sin escuchar el scroll). Solo muestra las secciones
+ * Índice "En esta página": una fila con las secciones que hay en ella, que
+ * marca la que estás leyendo (IntersectionObserver, sin escuchar el scroll).
+ * No es fija, para que el menú principal sea la única barra al bajar. Solo muestra las secciones
  * que de verdad se montaron (una sección sin datos no aparece) y en celular
  * es una fila deslizable que mantiene a la vista la sección activa.
  */

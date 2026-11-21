@@ -7,7 +7,9 @@ import { IconArrowRight } from '../components/landing-icons';
 import {
   ForOrganizationsSection,
   LANDING_ORGS_ID,
+  LANDING_PLANS_ID,
   ORGANIZATIONS_PATH,
+  PlansSection,
   PromisesSection,
 } from '../components/landing-sections';
 import { LANDING_TEMPLATES_ID, TemplateGallerySection } from '../components/landing-showcase';
@@ -18,8 +20,8 @@ import { PageIntro } from './page-intro';
 
 const SECTIONS = [
   { id: LANDING_ORGS_ID, label: 'Qué incluye' },
-  { id: 'planes', label: 'Planes' },
   { id: LANDING_TEMPLATES_ID, label: 'Plantillas' },
+  { id: LANDING_PLANS_ID, label: 'Planes' },
   { id: 'confianza', label: 'Lo que cuidamos' },
 ];
 
@@ -59,6 +61,7 @@ export function OrganizationsPage() {
         <SectionNav label="Secciones de la página para organizaciones" items={SECTIONS} />
         <ForOrganizationsSection />
         <TemplateGallerySection />
+        <PlansSection />
         <PromisesSection />
       </main>
       <PublicFooter />

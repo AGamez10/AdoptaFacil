@@ -68,7 +68,7 @@ describe('GeneralPortalPage (landing)', () => {
     );
     expect(within(paths).getByRole('link', { name: /Soy una organización/ })).toHaveAttribute(
       'href',
-      '/para-organizaciones',
+      '#organizaciones',
     );
     expect(document.getElementById('ayudar')).not.toBeNull();
     expect(document.getElementById('organizaciones')).not.toBeNull();
@@ -414,8 +414,8 @@ describe('GeneralPortalPage (landing)', () => {
     ).toMatch(/^https:\/\/wa\.me\/573028528926\?text=/);
   });
 
-  it('/para-organizaciones shows the same optional plans and prices as the plans screen, flagging what is not built yet', async () => {
-    renderLanding(0, OrganizationsPage);
+  it('shows the same optional plans and prices as the plans screen, flagging what is not built yet', async () => {
+    renderLanding();
     await settle();
     expect(
       within(screen.getByTestId('plan-free')).getByText('Gratis, siempre'),
@@ -432,7 +432,7 @@ describe('GeneralPortalPage (landing)', () => {
     expect(screen.getByTestId('landing-plans').textContent).not.toMatch(/Muy pronto/);
   });
 
-  it('is short: only the essential sections, with a section index, and the rest on its own page', async () => {
+  it('leads organizations to templates and plans, with one navigation bar and the rest on its own page', async () => {
     renderLanding(3);
     await settle();
     for (const testId of [
@@ -441,37 +441,27 @@ describe('GeneralPortalPage (landing)', () => {
       'landing-ledger',
       'landing-guides',
       'landing-community',
-      'landing-plans',
     ]) {
       expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
     }
+    // Una sola barra: sin índice de secciones aparte.
+    expect(screen.queryByTestId('section-nav')).not.toBeInTheDocument();
     const teaser = screen.getByTestId('landing-orgs-teaser');
-    expect(within(teaser).getByRole('link', { name: 'Ver planes y plantillas' })).toHaveAttribute(
+    expect(within(teaser).getByRole('link', { name: 'Ver planes' })).toHaveAttribute(
       'href',
-      '/para-organizaciones',
+      '#planes',
     );
     expect(within(teaser).getByRole('link', { name: /Crear mi portal gratis/ })).toHaveAttribute(
       'href',
       '/register',
     );
+    // La galería de plantillas vuelve al inicio: es el gancho para refugios.
+    expect(document.getElementById('plantillas')).not.toBeNull();
+    // Cada plan lleva al registro de organización; los de pago con el plan elegido.
+    expect(screen.getByTestId('plan-cta-free')).toHaveAttribute('href', '/register');
+    expect(screen.getByTestId('plan-cta-crece')).toHaveAttribute('href', '/register?plan=crece');
+    expect(screen.getByTestId('plan-cta-pro')).toHaveAttribute('href', '/register?plan=pro');
     expect(screen.getByTestId('landing-help-page-link')).toHaveAttribute('href', '/ayudar');
-    const index = screen.getByRole('navigation', { name: 'Secciones de la página de inicio' });
-    const labels = within(index)
-      .getAllByRole('link')
-      .map((link) => link.textContent);
-    // Sin fichas cargadas no hay "Te esperan": el índice no ofrece secciones vacías.
-    expect(labels).toEqual([
-      'Cómo adoptar',
-      'Rescatistas',
-      'Ayudar',
-      'Café',
-      'Organizaciones',
-      'Preguntas',
-    ]);
-    expect(within(index).getByRole('link', { name: 'Preguntas' })).toHaveAttribute(
-      'href',
-      '#preguntas',
-    );
   });
 
   it('sends old links to sections that left the landing to their new page', async () => {
@@ -483,23 +473,20 @@ describe('GeneralPortalPage (landing)', () => {
     );
     render(
       <MemoryRouter
-        initialEntries={['/#plantillas']}
+        initialEntries={['/#campanas']}
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <SessionProvider initialStatus="unauthenticated">
           <Routes>
             <Route path="/" element={<GeneralPortalPage />} />
-            <Route path="/para-organizaciones" element={<OrganizationsPage />} />
+            <Route path="/ayudar" element={<HelpPage />} />
           </Routes>
         </SessionProvider>
       </MemoryRouter>,
     );
-    expect(await screen.findByTestId('organizations-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('help-page')).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', {
-        level: 1,
-        name: 'Tu organización, en orden y a la vista de quienes quieren ayudar.',
-      }),
+      screen.getByRole('heading', { level: 1, name: 'Lo que la red de rescate necesita hoy.' }),
     ).toBeInTheDocument();
     await settle();
   });

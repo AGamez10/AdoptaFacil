@@ -276,7 +276,7 @@ function useHeroPaths(): HeroPath[] {
       Icon: IconPeople,
       title: 'Soy una organización',
       text: 'Tu portal y tus adopciones, gratis',
-      to: ORGANIZATIONS_PATH,
+      to: `#${LANDING_ORGS_ID}`,
     },
   ];
 }
@@ -861,6 +861,97 @@ function planPrice(key: PlanKey): string {
   return `$${plan.monthlyPriceCop.toLocaleString('es-CO')} al mes`;
 }
 
+/** Ancla de los planes (landing y /para-organizaciones). */
+export const LANDING_PLANS_ID = 'planes';
+
+/** Registro de organización con el plan elegido (el pago se hace en el panel). */
+export function planSignupPath(key: PlanKey): string {
+  return key === 'free' ? '/register' : `/register?plan=${key}`;
+}
+
+/**
+ * Tarjetas de planes con su acción: Gratis lleva al registro de organización;
+ * Crece y Pro llevan al mismo registro con el plan elegido, y al terminar la
+ * cuenta se abre "Plan y facturación" con ese plan para pagarlo con Mercado
+ * Pago. Precios y listas del catálogo único (`PLAN_CATALOG`).
+ */
+export function PlansSection() {
+  return (
+    <section
+      id={LANDING_PLANS_ID}
+      className={cn(styles.section, styles['section--ink'])}
+      aria-labelledby="landing-plans-title"
+      data-testid="landing-plans"
+    >
+      <div className={styles.container}>
+        <SectionHeading
+          tone="dark"
+          eyebrow="Planes para organizaciones"
+          title="Empieza gratis. Crece cuando quieras."
+          id="landing-plans-title"
+        >
+          Lo que protege al animal, al adoptante y la transparencia es gratis para siempre. Los
+          planes de pago son opcionales: suman marca, alcance y comodidad. Al lanzar, cada
+          organización tiene Pro gratis por {LAUNCH_PRO_PROMO_MONTHS} meses.
+        </SectionHeading>
+        <ul className={styles.plans__grid}>
+          {PLAN_KEYS.map((key) => {
+            const paid = PLAN_CATALOG[key].monthlyPriceCop > 0;
+            return (
+              <li
+                key={key}
+                className={cn(styles.plan, 'af-reveal', key === 'free' && styles['plan--featured'])}
+                data-testid={`plan-${key}`}
+              >
+                {key === 'free' && (
+                  <span className={styles.plan__flag}>Recomendado para empezar</span>
+                )}
+                <p className={styles.plan__name}>{PLAN_CATALOG[key].name}</p>
+                <p className={styles.plan__price}>{planPrice(key)}</p>
+                {paid && (
+                  <p className={styles.plan__note}>
+                    Opcional · + IVA, o{' '}
+                    {`$${PLAN_CATALOG[key].annualPriceCop.toLocaleString('es-CO')}`} al año
+                  </p>
+                )}
+                <p className={styles.plan__tagline}>{PLAN_CATALOG[key].tagline}</p>
+                <ul className={styles.plan__list}>
+                  {planHighlights(key).map((item) => (
+                    <li key={item.text}>
+                      <IconCheck className={styles.plan__check} />
+                      <span>
+                        {item.text}
+                        {!item.available && <span className={styles.plan__soon}>Próximamente</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to={planSignupPath(key)}
+                  className={cn(
+                    styles.btn,
+                    paid ? styles['btn--light'] : styles['btn--ink'],
+                    styles.plan__cta,
+                  )}
+                  data-testid={`plan-cta-${key}`}
+                >
+                  {paid ? `Elegir ${PLAN_CATALOG[key].name}` : 'Crear mi portal gratis'}
+                  <IconArrowRight className={styles.btn__icon} />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <p className={styles.plans__fine}>
+          Primero creas tu cuenta de organización sin costo. Si elegiste Crece o Pro, al terminar te
+          llevamos a &ldquo;Plan y facturación&rdquo; para pagarlo con Mercado Pago, y puedes
+          cancelarlo cuando quieras.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export function ForOrganizationsSection() {
   return (
     <section
@@ -918,55 +1009,16 @@ export function ForOrganizationsSection() {
             ))}
           </ul>
         </div>
-
-        <div id="planes" className={styles.plans} data-testid="landing-plans">
-          <h3 className={styles.plans__title}>Planes para organizaciones</h3>
-          <p className={styles.plans__lead}>
-            Lo que protege al animal, al adoptante y la transparencia es gratis para siempre. Los
-            planes de pago son opcionales: suman marca, alcance y comodidad. Al lanzar, cada
-            organización tiene Pro gratis por {LAUNCH_PRO_PROMO_MONTHS} meses.
-          </p>
-          <ul className={styles.plans__grid}>
-            {PLAN_KEYS.map((key) => (
-              <li
-                key={key}
-                className={cn(styles.plan, 'af-reveal', key === 'free' && styles['plan--featured'])}
-                data-testid={`plan-${key}`}
-              >
-                <p className={styles.plan__name}>{PLAN_CATALOG[key].name}</p>
-                <p className={styles.plan__price}>{planPrice(key)}</p>
-                {PLAN_CATALOG[key].monthlyPriceCop > 0 && (
-                  <p className={styles.plan__note}>
-                    Opcional · + IVA, o{' '}
-                    {`$${PLAN_CATALOG[key].annualPriceCop.toLocaleString('es-CO')}`} al año
-                  </p>
-                )}
-                <p className={styles.plan__tagline}>{PLAN_CATALOG[key].tagline}</p>
-                <ul className={styles.plan__list}>
-                  {planHighlights(key).map((item) => (
-                    <li key={item.text}>
-                      <IconCheck className={styles.plan__check} />
-                      <span>
-                        {item.text}
-                        {!item.available && <span className={styles.plan__soon}>Próximamente</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </section>
   );
 }
 
 /**
- * Versión corta para la landing: qué recibe una organización y dos salidas
- * claras (registrarse o ver planes y plantillas en su propia página). El
- * detalle vive en {@link ORGANIZATIONS_PATH} para que la portada no sea un
- * scroll infinito.
+ * Entrada para organizaciones en la landing: qué reciben, con alcance
+ * nacional, y dos salidas (registrarse o ver los planes). Le siguen las
+ * plantillas y los planes; el detalle completo vive en
+ * {@link ORGANIZATIONS_PATH}.
  */
 export function OrganizationsTeaserSection() {
   return (
@@ -981,20 +1033,21 @@ export function OrganizationsTeaserSection() {
           <SectionHeading
             tone="dark"
             eyebrow="Para refugios, fundaciones y rescatistas"
-            title="Tu organización, con su casa digital. Gratis."
+            title="Tu refugio, visible en todo el país. Gratis."
             id="landing-orgs-teaser-title"
           >
-            Portal propio, animales con expediente y adopciones con contrato. Lo que protege al
-            animal y la transparencia es gratis para siempre; los planes de pago son opcionales.
+            Rescatistas de cualquier ciudad de Colombia ya publican aquí. Tu portal se ve desde
+            cualquier lugar del mundo, con tus animales, tus adopciones con contrato y donaciones
+            con desglose claro. Lo esencial es gratis para siempre.
           </SectionHeading>
           <div className={styles.orgs__cta}>
             <Link to="/register" className={cn(styles.btn, styles['btn--primary'])}>
               Crear mi portal gratis
               <IconArrowRight className={styles.btn__icon} />
             </Link>
-            <Link to={ORGANIZATIONS_PATH} className={cn(styles.btn, styles['btn--ghostDark'])}>
-              Ver planes y plantillas
-            </Link>
+            <a href={`#${LANDING_PLANS_ID}`} className={cn(styles.btn, styles['btn--ghostDark'])}>
+              Ver planes
+            </a>
           </div>
         </div>
         <ul className={styles.features}>

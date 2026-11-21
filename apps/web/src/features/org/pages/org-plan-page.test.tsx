@@ -52,6 +52,16 @@ function stubPlan(view: OrganizationPlanView) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('OrgPlanPage', () => {
+  it('señala el plan que la organización eligió en la landing antes de registrarse', async () => {
+    stubPlan(viewFor({ effectivePlan: 'free' }));
+    renderShell({ route: '/organizacion/plan?elegir=crece', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByText('Lo elegiste')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-card-crece')).toHaveAttribute('data-chosen', 'true');
+    expect(screen.getByTestId('plan-card-pro')).not.toHaveAttribute('data-chosen');
+    expect(screen.getByTestId('plan-pay-mercadopago-crece')).toBeInTheDocument();
+  });
+
   it('shows the free plan, member usage and the three plans with prices + IVA', async () => {
     stubPlan(viewFor({ effectivePlan: 'free' }));
     renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });

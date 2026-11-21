@@ -1,11 +1,8 @@
 /*
- * Índice de secciones: fila fija bajo el menú principal (4.25rem). Liviano a
- * propósito: sin sombras grandes ni desenfoques caros en celular.
+ * Índice "En esta página" de /ayudar y /para-organizaciones. No es fijo: el
+ * único menú que acompaña al bajar es el principal (nunca dos barras).
  */
 .nav {
-  position: sticky;
-  top: 4.25rem;
-  z-index: 30;
   border-bottom: 1px solid rgb(32 44 60 / 0.08);
   background: rgb(255 255 255 / 0.96);
 
@@ -76,5 +73,5 @@
 
 /* Al saltar a una sección, su título queda debajo del menú y del índice. */
 :global(main section[id]) {
-  scroll-margin-top: 7.75rem;
+  scroll-margin-top: 4.75rem;
 }

@@ -70,7 +70,7 @@ export function TemplateDemoPage() {
   // La ayuda explica el ejemplo y se ve tan discreta como en un portal real.
   useGuideContext(template ? { kind: 'template-demo', templateName: name } : null);
 
-  if (!template) return <Navigate to="/para-organizaciones#plantillas" replace />;
+  if (!template) return <Navigate to="/#plantillas" replace />;
 
   return (
     <div className="min-h-screen bg-background" data-testid="template-demo-page">
@@ -120,7 +120,7 @@ function DemoBar({ template, ownData }: { template: PortalTemplateId; ownData: b
     >
       <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-6">
         <Link
-          to="/para-organizaciones#plantillas"
+          to="/#plantillas"
           className="text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           ← Plantillas

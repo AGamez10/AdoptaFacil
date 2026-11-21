@@ -72,13 +72,14 @@ export function TemplateGallerySection() {
     >
       <div className={landing.container}>
         <div className={landing.heading}>
-          <p className={landing.eyebrow}>Plantillas para tu portal</p>
+          <p className={landing.eyebrow}>Tu página web, gratis desde el primer día</p>
           <h2 id="landing-templates-title" className={landing.heading__title}>
-            Elige la forma de tu portal.
+            Tu refugio, con una página que enamora.
           </h2>
           <p className={landing.heading__lead}>
-            Cambias el diseño cuando quieras. Tus animales, tus datos y tus campañas se ven igual en
-            cada plantilla.
+            Elige una plantilla, ábrela de ejemplo y regístrate con ella: tu portal queda en línea
+            el mismo día, se ve desde cualquier país y cambias el diseño cuando quieras sin perder
+            tus animales, tus datos ni tus campañas.
           </p>
         </div>
 

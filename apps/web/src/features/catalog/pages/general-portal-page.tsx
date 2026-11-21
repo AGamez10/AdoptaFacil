@@ -13,32 +13,16 @@ import {
   FinalCtaSection,
   ImpactSection,
   LANDING_CATALOG_ID,
-  LANDING_COFFEE_ID,
-  LANDING_FAQ_ID,
-  LANDING_HELP_ID,
-  LANDING_ORGS_ID,
-  LANDING_STEPS_ID,
-  LANDING_WAITING_ID,
   LandingHero,
   OrganizationsTeaserSection,
-  SectionNav,
+  PlansSection,
+  TemplateGallerySection,
   WaitingAnimalsSection,
   WaysToHelpSection,
   useCatalogSnapshot,
   useScrollToHash,
 } from '../../landing';
 import { buildAdoptPath } from '../model/adopt-filters';
-
-/** Índice de la landing: siete paradas, en el orden del embudo. */
-const LANDING_SECTIONS = [
-  { id: LANDING_WAITING_ID, label: 'Te esperan' },
-  { id: LANDING_STEPS_ID, label: 'Cómo adoptar' },
-  { id: 'red', label: 'Rescatistas' },
-  { id: LANDING_HELP_ID, label: 'Ayudar' },
-  { id: LANDING_COFFEE_ID, label: 'Café' },
-  { id: LANDING_ORGS_ID, label: 'Organizaciones' },
-  { id: LANDING_FAQ_ID, label: 'Preguntas' },
-];
 
 /** Anclas que salieron de la landing: los enlaces viejos llegan a su página. */
 const MOVED_ANCHORS: Record<string, string> = {
@@ -47,8 +31,6 @@ const MOVED_ANCHORS: Record<string, string> = {
   '#comunidad': '/ayudar#comunidad',
   '#transparencia': '/ayudar#transparencia',
   '#guias': '/ayudar#guias',
-  '#plantillas': '/para-organizaciones#plantillas',
-  '#planes': '/para-organizaciones#planes',
 };
 
 const LEGACY_SPECIES: Record<string, 'dog' | 'cat'> = { perros: 'dog', gatos: 'cat' };
@@ -128,27 +110,28 @@ export function GeneralPortalPage() {
       <PublicNavbar />
 
       <main className="flex-1">
-        {/* Landing corta (2026-11): solo lo que convierte, en orden de embudo,
-            con un índice fijo para saltar entre secciones. Lo demás vive en
-            su propia página: /ayudar (campañas, insumos, voluntariado,
-            comunidad, libros públicos, servicios y guías) y
-            /para-organizaciones (propuesta, planes, plantillas y confianza).
+        {/* Landing (2026-11): una sola barra de navegación (la principal) y el
+            embudo en este orden. Lo demás vive en /ayudar y
+            /para-organizaciones.
             1. Engancha: hero con los tres caminos; el aviso del café aparece
                y se va solo.
-            2. Enamora: animales reales y lo fácil que es adoptar.
-            3. Prueba: la red de rescatistas con cifras reales.
-            4. Actúa: formas de ayudar y el café.
-            5. Organizaciones: resumen con enlace a su página.
+            2. Enamora: animales reales esperando.
+            3. Prueba: la red de rescatistas de todo el país, con cifras reales.
+            4. Organizaciones (nuestro mayor activo): propuesta, plantillas
+               (tu página web gratis desde el primer día) y planes con su
+               acción de registro.
+            5. Adoptantes y aliados: cómo adoptar, formas de ayudar y café.
             6. Resuelve: preguntas y el cierre.
             Ninguna cifra que no salga de la API. */}
         <LandingHero snapshot={snapshot} />
-        <SectionNav label="Secciones de la página de inicio" items={LANDING_SECTIONS} />
         <WaitingAnimalsSection snapshot={snapshot} />
-        <AdoptionStepsSection photos={heroBannerPhotos} />
         <ImpactSection snapshot={snapshot} />
+        <OrganizationsTeaserSection />
+        <TemplateGallerySection />
+        <PlansSection />
+        <AdoptionStepsSection photos={heroBannerPhotos} />
         <WaysToHelpSection />
         <CoffeeSection />
-        <OrganizationsTeaserSection />
         <FaqSection />
         <FinalCtaSection />
       </main>
