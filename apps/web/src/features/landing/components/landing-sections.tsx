@@ -59,6 +59,12 @@ import styles from './landing.module.scss';
 export const LANDING_CATALOG_ID = 'adoptar';
 /** Ancla de la sección para organizaciones. */
 export const LANDING_ORGS_ID = 'organizaciones';
+/** Página completa para organizaciones: propuesta, planes, plantillas y confianza. */
+export const ORGANIZATIONS_PATH = '/para-organizaciones';
+/** Anclas del índice de la landing. */
+export const LANDING_WAITING_ID = 'te-esperan';
+export const LANDING_STEPS_ID = 'como-adoptar';
+export const LANDING_FAQ_ID = 'preguntas';
 
 function SectionHeading({
   eyebrow,
@@ -270,7 +276,7 @@ function useHeroPaths(): HeroPath[] {
       Icon: IconPeople,
       title: 'Soy una organización',
       text: 'Tu portal y tus adopciones, gratis',
-      to: `#${LANDING_ORGS_ID}`,
+      to: ORGANIZATIONS_PATH,
     },
   ];
 }
@@ -363,6 +369,7 @@ export function WaitingAnimalsSection({ snapshot }: { snapshot: CatalogSnapshot 
   if (animals.length === 0) return null;
   return (
     <section
+      id={LANDING_WAITING_ID}
       className={cn(styles.section, styles['section--cream'], styles['section--tight-top'])}
       aria-labelledby="landing-waiting-title"
       data-testid="landing-waiting"
@@ -697,6 +704,7 @@ export interface AdoptionStepsSectionProps {
 export function AdoptionStepsSection({ photos = [] }: AdoptionStepsSectionProps) {
   return (
     <section
+      id={LANDING_STEPS_ID}
       className={cn(styles.section, styles['section--cream'])}
       aria-labelledby="landing-steps-title"
     >
@@ -755,6 +763,7 @@ export function CommunitySection() {
   const communityOn = useFeature('community');
   return (
     <section
+      id="servicios"
       className={cn(styles.section, styles['section--sky'])}
       aria-labelledby="landing-community-title"
       data-testid="landing-community"
@@ -910,7 +919,7 @@ export function ForOrganizationsSection() {
           </ul>
         </div>
 
-        <div className={styles.plans} data-testid="landing-plans">
+        <div id="planes" className={styles.plans} data-testid="landing-plans">
           <h3 className={styles.plans__title}>Planes para organizaciones</h3>
           <p className={styles.plans__lead}>
             Lo que protege al animal, al adoptante y la transparencia es gratis para siempre. Los
@@ -953,6 +962,59 @@ export function ForOrganizationsSection() {
   );
 }
 
+/**
+ * Versión corta para la landing: qué recibe una organización y dos salidas
+ * claras (registrarse o ver planes y plantillas en su propia página). El
+ * detalle vive en {@link ORGANIZATIONS_PATH} para que la portada no sea un
+ * scroll infinito.
+ */
+export function OrganizationsTeaserSection() {
+  return (
+    <section
+      id={LANDING_ORGS_ID}
+      className={cn(styles.section, styles['section--ink'])}
+      aria-labelledby="landing-orgs-teaser-title"
+      data-testid="landing-orgs-teaser"
+    >
+      <div className={cn(styles.container, styles.orgsGrid)}>
+        <div>
+          <SectionHeading
+            tone="dark"
+            eyebrow="Para refugios, fundaciones y rescatistas"
+            title="Tu organización, con su casa digital. Gratis."
+            id="landing-orgs-teaser-title"
+          >
+            Portal propio, animales con expediente y adopciones con contrato. Lo que protege al
+            animal y la transparencia es gratis para siempre; los planes de pago son opcionales.
+          </SectionHeading>
+          <div className={styles.orgs__cta}>
+            <Link to="/register" className={cn(styles.btn, styles['btn--primary'])}>
+              Crear mi portal gratis
+              <IconArrowRight className={styles.btn__icon} />
+            </Link>
+            <Link to={ORGANIZATIONS_PATH} className={cn(styles.btn, styles['btn--ghostDark'])}>
+              Ver planes y plantillas
+            </Link>
+          </div>
+        </div>
+        <ul className={styles.features}>
+          {ORG_FEATURES.slice(0, 4).map(({ Icon, title, text }) => (
+            <li key={title} className={cn(styles.feature, 'af-reveal')}>
+              <span className={styles.feature__icon} aria-hidden="true">
+                <Icon />
+              </span>
+              <div>
+                <h3 className={styles.feature__title}>{title}</h3>
+                <p className={styles.feature__text}>{text}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 const PROMISES = [
   {
     Icon: IconLock,
@@ -973,7 +1035,7 @@ const PROMISES = [
 
 export function PromisesSection() {
   return (
-    <section className={styles.section} aria-labelledby="landing-promises-title">
+    <section id="confianza" className={styles.section} aria-labelledby="landing-promises-title">
       <div className={styles.container}>
         <SectionHeading
           eyebrow="Confianza"
@@ -1004,6 +1066,7 @@ export function PromisesSection() {
 export function FaqSection() {
   return (
     <section
+      id={LANDING_FAQ_ID}
       className={cn(styles.section, styles['section--cream'])}
       aria-labelledby="landing-faq-title"
       data-testid="landing-faq"
