@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, type CoffeeLot, type CoffeeOrder } from '@prisma/client';
+import { Prisma, type CoffeeLot, type CoffeeOrder, type CoffeePhysicalSale } from '@prisma/client';
 import {
   coffeeContributionPerUnit,
   coffeeQrUrl,
@@ -30,7 +30,7 @@ import { AuditService } from '../../core/audit/audit.service';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CoffeeCheckoutClient } from './coffee-checkout.client';
-import { coffeeCampaignOption } from './coffee-lot-approvals';
+import { coffeeCampaignOption, lockCoffeeLot } from './coffee-lot-approvals';
 
 type Tx = Prisma.TransactionClient;
 
@@ -91,7 +91,7 @@ export class CoffeeAdminService {
 
   async dashboard(): Promise<CoffeeDashboard> {
     return this.prisma.withTenant(async (tx) => {
-      const [products, orders, deliveries, visits, pending] = await Promise.all([
+      const [products, orders, physical, deliveries, visits, pending] = await Promise.all([
         tx.coffeeProduct.findMany({
           include: { lots: { orderBy: { createdAt: 'desc' } } },
           orderBy: { createdAt: 'asc' },
@@ -104,6 +104,17 @@ export class CoffeeAdminService {
             reservedUntil: true,
             totalCop: true,
             shippingFeeCop: true,
+            contributionTotalCop: true,
+            campaignId: true,
+            campaignTitle: true,
+            campaignOrgName: true,
+          },
+        }),
+        tx.coffeePhysicalSale.findMany({
+          select: {
+            lotId: true,
+            quantity: true,
+            totalCop: true,
             contributionTotalCop: true,
             campaignId: true,
             campaignTitle: true,
@@ -161,6 +172,7 @@ export class CoffeeAdminService {
             this.lotView(
               l,
               orders.filter((o) => o.lotId === l.id),
+              physical.filter((s) => s.lotId === l.id),
               titles,
               pendingByLot.get(l.id) ?? null,
             ),
@@ -168,20 +180,27 @@ export class CoffeeAdminService {
         };
       });
 
+      // Comprometido: pedidos pagados + ventas físicas (los reversos restan).
       const balances = new Map<string, CoffeeCampaignBalance>();
-      for (const o of orders) {
-        if (o.status !== 'paid') continue;
-        const b = balances.get(o.campaignId) ?? {
-          campaignId: o.campaignId,
-          campaignTitle: o.campaignTitle,
-          organizationName: o.campaignOrgName,
+      const commit = (
+        row: Pick<
+          CoffeeOrder,
+          'campaignId' | 'campaignTitle' | 'campaignOrgName' | 'contributionTotalCop'
+        >,
+      ) => {
+        const b = balances.get(row.campaignId) ?? {
+          campaignId: row.campaignId,
+          campaignTitle: row.campaignTitle,
+          organizationName: row.campaignOrgName,
           committedCop: 0,
           deliveredCop: 0,
           pendingCop: 0,
         };
-        b.committedCop += o.contributionTotalCop;
-        balances.set(o.campaignId, b);
-      }
+        b.committedCop += row.contributionTotalCop;
+        balances.set(row.campaignId, b);
+      };
+      for (const o of orders) if (o.status === 'paid') commit(o);
+      for (const sale of physical) commit(sale);
       for (const d of deliveries) {
         const b = balances.get(d.campaignId);
         if (b) b.deliveredCop += d._sum.amountCop ?? 0;
@@ -299,7 +318,7 @@ export class CoffeeAdminService {
    */
   async updateLot(actor: RequestUser, lotId: string, input: UpdateCoffeeLotInput): Promise<void> {
     await this.prisma.withTenant(async (tx) => {
-      const lot = await this.lockLot(tx, lotId);
+      const lot = await lockCoffeeLot(tx, lotId);
       if (lot.status === 'closed') throw new ConflictException('Ese lote está cerrado.');
       const data: Prisma.CoffeeLotUpdateInput = {};
       if (lot.status === 'draft') {
@@ -326,10 +345,15 @@ export class CoffeeAdminService {
           where: { lotId },
           select: { status: true, quantity: true, reservedUntil: true },
         });
+        const physical = await tx.coffeePhysicalSale.aggregate({
+          where: { lotId },
+          _sum: { quantity: true },
+        });
         const { sold, reserved } = unitsHeld(orders);
-        if (input.stockUnits < sold + reserved) {
+        const held = sold + reserved + (physical._sum.quantity ?? 0);
+        if (input.stockUnits < held) {
           throw new ConflictException(
-            `El stock no puede quedar por debajo de ${sold + reserved} bolsas (vendidas o apartadas).`,
+            `El stock no puede quedar por debajo de ${held} bolsas (vendidas o apartadas).`,
           );
         }
         data.stockUnits = input.stockUnits;
@@ -360,7 +384,7 @@ export class CoffeeAdminService {
     action: 'pause' | 'resume' | 'close',
   ): Promise<void> {
     await this.prisma.withTenant(async (tx) => {
-      const lot = await this.lockLot(tx, lotId);
+      const lot = await lockCoffeeLot(tx, lotId);
       const next: Record<typeof action, { from: CoffeeLotStatus[]; to: CoffeeLotStatus }> = {
         pause: { from: ['on_sale'], to: 'paused' },
         resume: { from: ['paused'], to: 'on_sale' },
@@ -471,16 +495,22 @@ export class CoffeeAdminService {
   }
 
   /**
-   * Registra una entrega del aporte a una campaña que recibió aportes del café
-   * (solo a esas: no se puede "entregar" a una campaña sin compromiso). Una
-   * corrección es otra entrega, negativa, con su explicación.
+   * Registra una entrega del aporte a una campaña que recibió aportes del café,
+   * en línea o en persona (solo a esas: no se puede "entregar" a una campaña
+   * sin compromiso). Una corrección es otra entrega, negativa, con su
+   * explicación.
    */
   async createDelivery(actor: RequestUser, input: CreateCoffeeDeliveryInput): Promise<void> {
     await this.prisma.withTenant(async (tx) => {
-      const committed = await tx.coffeeOrder.findFirst({
-        where: { campaignId: input.campaignId, status: 'paid' },
-        select: { campaignTitle: true },
-      });
+      const committed =
+        (await tx.coffeeOrder.findFirst({
+          where: { campaignId: input.campaignId, status: 'paid' },
+          select: { campaignTitle: true },
+        })) ??
+        (await tx.coffeePhysicalSale.findFirst({
+          where: { campaignId: input.campaignId, kind: 'sale' },
+          select: { campaignTitle: true },
+        }));
       if (!committed) {
         throw new BadRequestException('Esa campaña no tiene aportes comprometidos del café.');
       }
@@ -504,14 +534,6 @@ export class CoffeeAdminService {
         metadata: { campaignId: input.campaignId, amountCop: input.amountCop },
       });
     });
-  }
-
-  private async lockLot(tx: Tx, lotId: string): Promise<CoffeeLot> {
-    const rows = await tx.$queryRaw<Array<{ id: string }>>(
-      Prisma.sql`SELECT id FROM coffee_lots WHERE id = ${lotId}::uuid FOR UPDATE`,
-    );
-    if (!rows[0]) throw new NotFoundException('Ese lote no es de tu equipo.');
-    return tx.coffeeLot.findUniqueOrThrow({ where: { id: lotId } });
   }
 
   private async requireCampaign(tx: Tx, campaignId: string): Promise<CoffeeCampaignOption> {
@@ -546,11 +568,16 @@ export class CoffeeAdminService {
       | 'shippingFeeCop'
       | 'contributionTotalCop'
     >[],
+    physical: Pick<CoffeePhysicalSale, 'quantity' | 'totalCop' | 'contributionTotalCop'>[],
     titles: Map<string, string>,
     pendingApproval: CoffeeLotView['pendingApproval'],
   ): CoffeeLotView {
-    const { sold, reserved } = unitsHeld(orders);
+    const { sold: soldOnline, reserved } = unitsHeld(orders);
     const paid = orders.filter((o) => o.status === 'paid');
+    const sum = <T>(rows: T[], pick: (row: T) => number) =>
+      rows.reduce((acc, row) => acc + pick(row), 0);
+    const soldInPerson = sum(physical, (s) => s.quantity);
+    const sold = soldOnline + soldInPerson;
     return {
       id: l.id,
       productId: l.productId,
@@ -569,10 +596,13 @@ export class CoffeeAdminService {
       defaultCampaignId: l.defaultCampaignId,
       defaultCampaignTitle: l.defaultCampaignId ? (titles.get(l.defaultCampaignId) ?? null) : null,
       unitsSold: sold,
+      unitsSoldInPerson: soldInPerson,
       unitsReserved: reserved,
       availableUnits: Math.max(l.stockUnits - sold - reserved, 0),
-      revenueCop: paid.reduce((acc, o) => acc + o.totalCop - o.shippingFeeCop, 0),
-      contributionCommittedCop: paid.reduce((acc, o) => acc + o.contributionTotalCop, 0),
+      revenueCop:
+        sum(paid, (o) => o.totalCop - o.shippingFeeCop) + sum(physical, (s) => s.totalCop),
+      contributionCommittedCop:
+        sum(paid, (o) => o.contributionTotalCop) + sum(physical, (s) => s.contributionTotalCop),
       pendingApproval,
       publishedAt: l.publishedAt?.toISOString() ?? null,
       createdAt: l.createdAt.toISOString(),

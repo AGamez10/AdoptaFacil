@@ -51,6 +51,7 @@ model Organization {
   sensitiveActions             PlatformSensitiveAction[]
   sensitiveActionDecisions     PlatformSensitiveActionDecision[]
   qrLink                       OrganizationQrLink?
+  customDomain                 PortalCustomDomain?
   qrScanDays                   OrganizationQrScanDay[]
   // Café de AdoptaFácil (solo en la org del equipo de plataforma). See coffee.prisma.
   coffeeProducts               CoffeeProduct[]
@@ -58,6 +59,7 @@ model Organization {
   coffeeOrders                 CoffeeOrder[]
   coffeeVisitDays              CoffeeVisitDay[]
   coffeeDeliveries             CoffeeContributionDelivery[]
+  coffeePhysicalSales          CoffeePhysicalSale[]
   mercadopagoConnection        OrganizationMercadoPagoConnection?
   mercadopagoPayments          MercadoPagoPayment[]
   // Comunidad, primer corte del ecosistema. See community.prisma.
@@ -137,6 +139,10 @@ model OrganizationProfile {
   slug               String?  @unique
   formalizationState String   @default("informal") @map("formalization_state")
   rteVigente         Boolean  @default(false) @map("rte_vigente")
+  /// Hasta cuándo vale el RTE reconocido: el próximo plazo anual de la DIAN
+  /// (`rteValidUntilFrom`). Al vencer sin RUT nuevo aprobado, `rteVigente` pasa
+  /// a false y se suspenden solo los certificados con beneficio tributario.
+  rteValidUntil      DateTime? @map("rte_valid_until")
   /// { level, label?, criteria[] } — VerificationLevel contract.
   verificationLevel  Json?    @map("verification_level")
   /// Legal/organizational type (OrganizationType contract, RF01/T-030). Public

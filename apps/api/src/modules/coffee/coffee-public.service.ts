@@ -18,6 +18,8 @@ import {
   type CoffeeCampaignOption,
   type CoffeeCheckoutInput,
   type CoffeeCheckoutResult,
+  type PublicCoffeeCatalog,
+  type PublicCoffeeCatalogItem,
   type PublicCoffeeOffer,
   type PublicCoffeeOrderStatus,
   type WebhookVerificationContext,
@@ -50,14 +52,21 @@ export function newCoffeeReference(): string {
   return `cafe-${tail}`;
 }
 
-/** Bags of a lot held by OTHER orders: paid, or pending inside their reservation. */
+/**
+ * Bags of a lot held by OTHER orders (paid, or pending inside their
+ * reservation) plus the bags sold in person (net of reversals).
+ */
 async function unitsHeldByOthers(tx: Tx, lotId: string, exceptOrderId?: string): Promise<number> {
   const rows = await tx.$queryRaw<Array<{ held: number | null }>>(Prisma.sql`
-    SELECT COALESCE(sum(quantity), 0)::int AS held
-    FROM coffee_orders
-    WHERE lot_id = ${lotId}::uuid
-      AND (${exceptOrderId ?? null}::uuid IS NULL OR id <> ${exceptOrderId ?? null}::uuid)
-      AND (status = 'paid' OR (status = 'pending' AND reserved_until > now()))`);
+    SELECT (
+      COALESCE((
+        SELECT sum(quantity) FROM coffee_orders
+        WHERE lot_id = ${lotId}::uuid
+          AND (${exceptOrderId ?? null}::uuid IS NULL OR id <> ${exceptOrderId ?? null}::uuid)
+          AND (status = 'paid' OR (status = 'pending' AND reserved_until > now()))
+      ), 0)
+      + COALESCE((SELECT sum(quantity) FROM coffee_physical_sales WHERE lot_id = ${lotId}::uuid), 0)
+    )::int AS held`);
   return rows[0]?.held ?? 0;
 }
 
@@ -107,7 +116,16 @@ export class CoffeePublicService {
     );
     const data = rows[0]?.data;
     if (!data) throw new NotFoundException('Café no encontrado');
-    return data;
+    return { ...data, onlineCheckout: this.checkout.isConfigured() };
+  }
+
+  /** La tienda pública: presentaciones con un lote a la venta, para comprar
+   *  desde la web sin el QR de la bolsa. */
+  async catalog(): Promise<PublicCoffeeCatalog> {
+    const rows = await this.prisma.$queryRaw<Array<{ data: PublicCoffeeCatalogItem[] | null }>>(
+      Prisma.sql`SELECT coffee_public_catalog() AS data`,
+    );
+    return { items: rows[0]?.data ?? [], onlineCheckout: this.checkout.isConfigured() };
   }
 
   async campaigns(): Promise<CoffeeCampaignOption[]> {

@@ -19,21 +19,21 @@ suscripción tiene Pro gratis 3 meses desde `PLAN_LAUNCH_DATE` y después queda 
 ✅ = el servidor lo hace cumplir y una prueba lo demuestra · ⚠️ = se vende pero el servidor
 no lo controla · 🕒 = marcado «próximamente» en la oferta (no se promete como disponible)
 
-| Derecho                                 | Gratis    | Crece     | Pro        | Dónde se hace cumplir                                                                  | Estado                                      |
-| --------------------------------------- | --------- | --------- | ---------- | -------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Miembros del equipo                     | 3         | 10        | sin límite | invitaciones (crear y aceptar) y, desde este PR, asignación directa de rol             | ✅ (hueco corregido aquí)                   |
-| Almacenamiento                          | 1 GB      | 10 GB     | 50 GB      | subida genérica (fotos de animales, logo), documentos, marketplace, soportes contables | ✅                                          |
-| Plantillas Pro del portal ("historias") | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                  | ✅                                          |
-| Quitar sello "Hecho con AdoptaFácil"    | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                  | ✅                                          |
-| Correos con la marca de la organización | no        | 5.000/mes | 20.000/mes | cola de correos (pasado el tope sale con marca AdoptaFácil)                            | ✅                                          |
-| Exportar datos a Excel                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/data.xlsx`                                                | ✅                                          |
-| Reporte de impacto PDF                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/impact-report.pdf`                                        | ✅                                          |
-| Todos los diseños gratuitos del portal  | sí        | sí        | sí         | —                                                                                      | ✅                                          |
-| Personalización avanzada del portal     | sí        | sí        | sí         | incluida en todos los planes desde el 2026-11-06 (no se vende como exclusiva)          | ✅                                          |
-| Soporte prioritario por WhatsApp        | —         | —         | sí         | no hay código: es un proceso del equipo                                                | ⚠️ marcado disponible, depende de operación |
-| Dominio propio                          | —         | —         | sí         | no construido                                                                          | 🕒                                          |
-| Patrocinio de empresas                  | —         | —         | sí         | no construido                                                                          | 🕒                                          |
-| Límite "Diseños de portal" (5)          | 5         | 5         | 5          | ninguno; igual en los tres planes                                                      | sin efecto                                  |
+| Derecho                                 | Gratis    | Crece     | Pro        | Dónde se hace cumplir                                                                                                  | Estado                                      |
+| --------------------------------------- | --------- | --------- | ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Miembros del equipo                     | 3         | 10        | sin límite | invitaciones (crear y aceptar) y, desde este PR, asignación directa de rol                                             | ✅ (hueco corregido aquí)                   |
+| Almacenamiento                          | 1 GB      | 10 GB     | 50 GB      | subida genérica (fotos de animales, logo), documentos, marketplace, soportes contables                                 | ✅                                          |
+| Plantillas Pro del portal ("historias") | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                                                  | ✅                                          |
+| Quitar sello "Hecho con AdoptaFácil"    | bloqueado | sí        | sí         | `PUT /portals/theme` + portal público                                                                                  | ✅                                          |
+| Correos con la marca de la organización | no        | 5.000/mes | 20.000/mes | cola de correos (pasado el tope sale con marca AdoptaFácil)                                                            | ✅                                          |
+| Exportar datos a Excel                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/data.xlsx`                                                                                | ✅                                          |
+| Reporte de impacto PDF                  | 403       | 200       | 200        | `PlanGuard` en `/org/exports/impact-report.pdf`                                                                        | ✅                                          |
+| Todos los diseños gratuitos del portal  | sí        | sí        | sí         | —                                                                                                                      | ✅                                          |
+| Personalización avanzada del portal     | sí        | sí        | sí         | incluida en todos los planes desde el 2026-11-06 (no se vende como exclusiva)                                          | ✅                                          |
+| Soporte prioritario por WhatsApp        | —         | —         | sí         | no hay código: es un proceso del equipo                                                                                | ⚠️ marcado disponible, depende de operación |
+| Dominio propio                          | —         | —         | sí         | la org compra el dominio; CNAME + TXT; verificación DNS y HTTPS on-demand (`portal-custom-domain.integration-spec.ts`) | ✅ (encender con `CUSTOM_DOMAINS=on`)       |
+| Patrocinio de empresas                  | —         | —         | sí         | no construido                                                                                                          | 🕒                                          |
+| Límite "Diseños de portal" (5)          | 5         | 5         | 5          | ninguno; igual en los tres planes                                                                                      | sin efecto                                  |
 
 Lo que nunca se cobra (contrato, seguimientos, auditoría, documentos legales, comprobantes,
 recaudo de donaciones) no lleva ningún bloqueo de plan, como dice el catálogo. Los archivos
@@ -80,7 +80,7 @@ Quien paga con Mercado Pago y renueva normalmente no recibe nada.
    con un usuario de prueba antes de cobrar dinero real.
 2. **Factura electrónica** del plan: no se genera; la emite el contador. 🧾
 3. **Soporte prioritario por WhatsApp** (Pro) depende del equipo, no del código.
-4. **Dominio propio** y **patrocinio de empresas** siguen «próximamente».
+4. **Patrocinio de empresas** sigue «próximamente». El **dominio propio** está construido (ver `docs/operacion/DOMINIO-PROPIO.md`).
 5. El límite "Diseños de portal" (5) es igual en los tres planes y no se aplica.
 
 ## Correcciones de esta verificación

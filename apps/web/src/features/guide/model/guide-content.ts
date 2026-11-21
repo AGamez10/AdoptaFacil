@@ -324,6 +324,29 @@ export const PAGE_HELP: readonly PageHelp[] = [
     tips: ['Si olvidaste tu contraseña, usa "¿Olvidaste tu contraseña?" para recibir un enlace.'],
   },
   {
+    match: /^\/ayudar/,
+    title: 'Cómo ayudar',
+    tips: [
+      'Aquí está lo que la red necesita hoy: campañas, insumos, voluntariados y la comunidad.',
+      'Usa el índice de arriba para saltar a la sección que te interesa.',
+      'El libro público de cada organización muestra en qué se usa lo que recibe.',
+    ],
+    related: [
+      { to: '/campanas', label: 'Ver todas las campañas' },
+      { to: '/voluntariados', label: 'Ver voluntariados' },
+    ],
+  },
+  {
+    match: /^\/para-organizaciones/,
+    title: 'Para organizaciones',
+    tips: [
+      'Registrar tu organización es gratis y puedes empezar sin RUT ni cámara de comercio.',
+      'Los planes de pago son opcionales: lo que protege al animal y la transparencia es gratis siempre.',
+      'Puedes probar cualquier plantilla de portal antes de registrarte.',
+    ],
+    related: [{ to: '/register', label: 'Crear mi portal gratis' }],
+  },
+  {
     match: /^\/campanas/,
     title: 'Campañas',
     tips: [
@@ -412,6 +435,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
       'Mientras Mercado Pago confirma el pago, esta página se actualiza sola.',
       'Parte de lo que pagaste va a la campaña que se muestra en el pedido.',
     ],
+  },
+  {
+    match: /^\/cafe\/?$/,
+    title: 'Café de AdoptaFácil',
+    tips: [
+      'Elige una presentación, la campaña que quieres apoyar y paga con Mercado Pago.',
+      'Con estas ventas AdoptaFácil sigue gratis para los refugios; el 20 % del margen bruto va a la campaña que elijas.',
+    ],
+    related: [{ to: '/campanas', label: 'Ver campañas' }],
   },
   {
     match: /^\/tengo-para-donar/,
@@ -999,10 +1031,15 @@ export const PUBLIC_MAP: readonly MapEntry[] = [
     description: 'Todos los animales disponibles.',
   },
   { to: '/campanas', label: 'Campañas', description: 'Campañas activas de las organizaciones.' },
+  {
+    to: '/cafe',
+    label: 'Café de AdoptaFácil',
+    description: 'Compra en línea; sostiene la plataforma gratis para los refugios.',
+  },
   { to: '/recursos', label: 'Banco de recursos' },
   { to: '/marketplace', label: 'Marketplace' },
   {
-    to: '/#organizaciones',
+    to: '/para-organizaciones',
     label: 'Para organizaciones',
     description: 'Qué ofrece AdoptaFácil a refugios y rescatistas.',
   },

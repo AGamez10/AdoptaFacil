@@ -8,6 +8,11 @@ import { PortalPreviewController } from './portal-preview.controller';
 import { PortalPreviewService } from './portal-preview.service';
 import { OrgQrController, PublicOrgQrController } from './org-qr.controller';
 import { OrgQrService } from './org-qr.service';
+import {
+  OrgPortalDomainController,
+  PublicPortalDomainController,
+} from './portal-domain.controller';
+import { PortalDnsLookup, PortalDomainService } from './portal-domain.service';
 
 /**
  * M14 · Portals (T-027) — per-organization brand personalization by TOKENS.
@@ -29,7 +34,17 @@ import { OrgQrService } from './org-qr.service';
     PortalPreviewController,
     OrgQrController,
     PublicOrgQrController,
+    OrgPortalDomainController,
+    PublicPortalDomainController,
   ],
-  providers: [PortalThemeService, PortalSubdomainService, PortalPreviewService, OrgQrService],
+  providers: [
+    PortalThemeService,
+    PortalSubdomainService,
+    PortalPreviewService,
+    OrgQrService,
+    // Dominio propio (Pro): verificación por DNS y autorización de HTTPS.
+    PortalDomainService,
+    PortalDnsLookup,
+  ],
 })
 export class PortalsModule {}

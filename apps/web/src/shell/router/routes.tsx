@@ -71,6 +71,10 @@ const NationalTransparencyPublicPage = lazyPage(
   () => import('../../features/transparency/pages/national-transparency-public-page'),
   'NationalTransparencyPublicPage',
 );
+// Páginas que salieron de la landing para que la portada sea corta.
+const loadLandingPages = () => import('../../features/landing/pages');
+const HelpPage = lazyPage(loadLandingPages, 'HelpPage');
+const OrganizationsPage = lazyPage(loadLandingPages, 'OrganizationsPage');
 const TemplateDemoPage = lazyPage(
   () => import('../../features/portals/pages/template-demo-page'),
   'TemplateDemoPage',
@@ -143,6 +147,7 @@ const RemindersInboxPage = lazyPage(loadAnimals, 'RemindersInboxPage');
 const loadCoffee = () => import('../../features/coffee');
 const PublicCoffeePage = lazyPage(loadCoffee, 'PublicCoffeePage');
 const CoffeeOrderPage = lazyPage(loadCoffee, 'CoffeeOrderPage');
+const CoffeeShopPage = lazyPage(loadCoffee, 'CoffeeShopPage');
 const PlatformCoffeePage = lazyPage(loadCoffee, 'PlatformCoffeePage');
 const loadPlatformTeam = () => import('../../features/platform-team');
 const PlatformTeamPage = lazyPage(loadPlatformTeam, 'PlatformTeamPage');
@@ -265,6 +270,9 @@ export function AppRoutes() {
           {/* Listado público de adopción con URLs limpias por especie y ciudad
           (rediseño 2026-10): /adoptar, /adoptar/perros, /adoptar/perros/bogota. */}
           <Route path="/adoptar" element={<AdoptPage />} />
+          {/* Lo que la red necesita hoy y la página para organizaciones (2026-11). */}
+          <Route path="/ayudar" element={<HelpPage />} />
+          <Route path="/para-organizaciones" element={<OrganizationsPage />} />
           <Route path="/adoptar/:especie" element={<AdoptPage />} />
           <Route path="/adoptar/:especie/:ciudad" element={<AdoptPage />} />
           {/* Guías públicas de adopción (SEO, rediseño 2026-10). */}
@@ -317,6 +325,7 @@ export function AppRoutes() {
             element={<CoffeeOrLegacyShareLink coffee={<PublicCoffeePage />} />}
           />
           <Route path="/p/:id" element={<SharedPostLink />} />
+          <Route path="/cafe" element={<CoffeeShopPage />} />
           <Route path="/cafe/pedido/:reference" element={<CoffeeOrderPage />} />
           <Route
             path="/donar"

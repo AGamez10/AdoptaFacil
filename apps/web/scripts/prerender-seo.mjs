@@ -276,7 +276,9 @@ function buildPages(animals) {
       ['Perros en adopción', '/adoptar/perros'],
       ['Gatos en adopción', '/adoptar/gatos'],
       ['Quiero ayudar: campañas activas', '/campanas'],
+      ['Lo que la red necesita hoy', '/ayudar'],
       ['Soy una organización: crear mi portal gratis', '/register'],
+      ['Planes y plantillas para organizaciones', '/para-organizaciones'],
       ['Guías para adoptar', '/guias'],
       ...guides.map((g) => [g.title, `/guias/${g.slug}`]),
       ...cityIndex(animals)
@@ -342,6 +344,43 @@ function buildPages(animals) {
     text: campaigns.description,
     links: [],
     priority: '0.6',
+  });
+
+  const helpMeta = STATIC_PAGES['/ayudar'];
+  pages.push({
+    path: '/ayudar',
+    ...helpMeta,
+    jsonLd: [
+      breadcrumb([
+        ['Inicio', '/'],
+        ['Cómo ayudar', '/ayudar'],
+      ]),
+    ],
+    heading: 'Lo que la red de rescate necesita hoy.',
+    text: helpMeta.description,
+    links: [
+      ['Campañas activas', '/campanas'],
+      ['Voluntariados', '/voluntariados'],
+      ['Transparencia Nacional', '/transparencia-nacional'],
+      ['Guías para adoptar', '/guias'],
+    ],
+    priority: '0.7',
+  });
+
+  const orgsMeta = STATIC_PAGES['/para-organizaciones'];
+  pages.push({
+    path: '/para-organizaciones',
+    ...orgsMeta,
+    jsonLd: [
+      breadcrumb([
+        ['Inicio', '/'],
+        ['Para organizaciones', '/para-organizaciones'],
+      ]),
+    ],
+    heading: 'Tu organización, en orden y a la vista de quienes quieren ayudar.',
+    text: orgsMeta.description,
+    links: [['Crear mi portal gratis', '/register']],
+    priority: '0.8',
   });
 
   const guidesMeta = STATIC_PAGES['/guias'];
@@ -498,8 +537,14 @@ function llmsTxt(pages) {
     '',
     '## Para quien quiere ayudar',
     link('Campañas', '/campanas', STATIC_PAGES['/campanas'].description),
+    link('Cómo ayudar', '/ayudar', STATIC_PAGES['/ayudar'].description),
     '',
     '## Para organizaciones',
+    link(
+      'Para organizaciones',
+      '/para-organizaciones',
+      STATIC_PAGES['/para-organizaciones'].description,
+    ),
     link(
       'Registrar una organización',
       '/register',

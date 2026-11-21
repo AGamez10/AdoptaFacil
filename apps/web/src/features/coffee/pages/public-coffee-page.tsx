@@ -8,6 +8,7 @@ import {
   type PublicCoffeeOffer,
 } from '@adoptafacil/contracts';
 import { Badge, Button, EmptyState, Input, Skeleton } from '@adoptafacil/ui';
+import { officialWhatsappUrl } from '../../../lib/contact';
 import { useDocumentTitle } from '../../../lib/use-document-title';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import {
@@ -204,6 +205,31 @@ export function PublicCoffeePage() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Cuando llegue el próximo lote podrás comprarlo aquí mismo, con este mismo QR.
                 </p>
+              </section>
+            ) : offer.onlineCheckout === false ? (
+              <section
+                className="rounded-2xl border bg-background p-5"
+                data-testid="coffee-offline"
+              >
+                <p className="text-2xl font-extrabold">{formatCop(lot.salePriceCop)}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {offer.presentationGrams} g · cada bolsa aporta{' '}
+                  {formatCop(lot.contributionPerUnitCop)} a una campaña
+                </p>
+                <h2 className="mt-4 text-lg font-bold">El pago en línea se abre muy pronto</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Mientras tanto te lo vendemos por WhatsApp, con el mismo precio y el mismo aporte.
+                </p>
+                <a
+                  className="mt-3 inline-flex rounded-full bg-[var(--af-teal-ink)] px-5 py-2 font-bold text-white"
+                  href={officialWhatsappUrl(
+                    `Hola, quiero comprar ${offer.productName} (lote ${lot.lotCode}).`,
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Pedir por WhatsApp
+                </a>
               </section>
             ) : (
               <form className="space-y-6" onSubmit={submit} noValidate>

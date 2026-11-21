@@ -264,6 +264,47 @@ export function computeOrganizationCapabilities(
   };
 }
 
+// ============================================================================
+// Reverificación anual del RTE. La ESAL debe actualizar su registro en el RTE
+// cada año ante la DIAN (ET art. 364-5; DUR 1625 de 2016 art. 1.2.1.5.1.9);
+// quien no lo hace pasa al régimen ordinario. AdoptaFácil reconoce el RTE hasta
+// el siguiente plazo anual y pide un RUT nuevo antes de que llegue.
+// ============================================================================
+
+/** Plazo anual de actualización del RTE (mes 1-12 y día, hora de Colombia).
+ *  En 2026 fue el 30 de junio. TODO(client): el contador confirma cada año. */
+export const RTE_ANNUAL_DEADLINE = { month: 6, day: 30 } as const;
+
+/** Días antes del vencimiento en que se avisa a la organización. */
+export const RTE_REMINDER_DAYS = [60, 30] as const;
+export type RteReminderStage = (typeof RTE_REMINDER_DAYS)[number];
+
+const RTE_DAY_MS = 24 * 60 * 60 * 1000;
+/** Colombia es UTC-5 todo el año (sin horario de verano). */
+const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/**
+ * Hasta cuándo vale un RTE reconocido en `approvedAt`: el final (23:59:59 hora
+ * de Colombia) del próximo plazo anual estrictamente posterior. Puro.
+ */
+export function rteValidUntilFrom(approvedAt: Date): Date {
+  const { month, day } = RTE_ANNUAL_DEADLINE;
+  const endOf = (year: number) =>
+    new Date(Date.UTC(year, month - 1, day, 23, 59, 59) + BOGOTA_OFFSET_MS);
+  const local = new Date(approvedAt.getTime() - BOGOTA_OFFSET_MS);
+  const thisYear = endOf(local.getUTCFullYear());
+  return approvedAt.getTime() < thisYear.getTime() ? thisYear : endOf(local.getUTCFullYear() + 1);
+}
+
+/** Qué aviso toca en `now` para un RTE que vence en `validUntil`: el más
+ *  cercano ya alcanzado (30 antes que 60). Vencido, ninguno. Puro. */
+export function rteReminderStage(validUntil: Date, now: Date): RteReminderStage | null {
+  const left = validUntil.getTime() - now.getTime();
+  if (left < 0) return null;
+  const reached = RTE_REMINDER_DAYS.filter((days) => left <= days * RTE_DAY_MS);
+  return reached.length > 0 ? (Math.min(...reached) as RteReminderStage) : null;
+}
+
 /** 403 cuando una acción exige un estado formal que la organización aún no
  *  tiene. La web lo reconoce por `code` y ofrece el camino para avanzar. */
 export const FORMALIZATION_REQUIRED_CODE = 'FORMALIZATION_REQUIRED';

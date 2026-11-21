@@ -115,7 +115,10 @@ Modelo: ADR-PAG-003 (cada refugio conecta su cuenta por OAuth; sin custodia y si
 
 1. Aplicación con Checkout Pro, Suscripciones y OAuth habilitados. Copia el **Client ID** y el **Client Secret**, primero los de prueba y luego los de producción.
 2. Redirect URL: `https://adoptafacil.org/api/org/mercadopago/callback`.
-3. Webhooks: la URL `https://adoptafacil.org/api/billing/webhooks/mercadopago` con el evento "Planes y suscripciones". Copia la **clave secreta**.
+3. Webhooks (son dos aplicaciones, ver `docs/pagos/mercadopago-oauth.md` §7):
+   - App **Checkout Pro (Orders)**: `https://adoptafacil.org/api/donations/webhook/mercadopago`, evento "Order". Su clave secreta va a `MERCADOPAGO_ORDERS_WEBHOOK_SECRET`. Confirma donaciones y pagos de guardería.
+   - App **Suscripciones**: `https://adoptafacil.org/api/billing/webhooks/mercadopago`, eventos "Planes y suscripciones". Su clave secreta va a `MERCADOPAGO_WEBHOOK_SECRET`. Confirma planes; el café usa la misma clave con su propia URL por pago (`/api/coffee/webhooks/mercadopago`), que no se registra en el panel.
+   - Si Cloudflare está en modo proxy (nube naranja), estas rutas necesitan la regla de excepción de `AUDITORIA-CLOUDFLARE.md` §4: si Bot Fight Mode o un desafío las bloquea, los pagos se cobran pero nunca se confirman.
 4. Solo si se cobran planes: el **Access Token de producción** de la cuenta de AdoptaFácil.
 5. Usuarios de prueba (vendedor y comprador) para el sandbox.
 

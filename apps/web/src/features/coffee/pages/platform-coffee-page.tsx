@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   coffeeContributionPerUnit,
   coffeeQrScanUrl,
@@ -24,58 +24,24 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  useToast,
 } from '@adoptafacil/ui';
 import { qrDataUrl } from '../../../lib/qr';
 import { useApiClient } from '../../../shell/api';
 import { PageContainer, PageHeader } from '../../_layout';
 import { coffeeAdminApi, type CoffeeAdminApi } from '../api/coffee-api';
+import { Field, selectClass, useAction } from '../components/panel-kit';
 import {
+  acceptsPhysicalSales,
+  PhysicalSaleForm,
+  PhysicalSalesTab,
+} from '../components/physical-sales';
+import {
+  colombiaToday,
   formatColombiaDateTime,
   formatCop,
   LOT_STATUS_LABEL,
   ORDER_STATUS_LABEL,
 } from '../model/coffee-format';
-
-const selectClass =
-  'h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-1 text-sm">
-      <span className="font-medium">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function errorText(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : 'Inténtalo de nuevo.';
-}
-
-/** Hook mínimo: una acción con aviso de éxito o error y recarga. */
-function useAction(reload: () => Promise<void>) {
-  const { toast } = useToast();
-  const [busy, setBusy] = useState(false);
-  const run = useCallback(
-    async (fn: () => Promise<unknown>, ok: string) => {
-      setBusy(true);
-      try {
-        await fn();
-        toast({ title: ok });
-        await reload();
-        return true;
-      } catch (error) {
-        toast({ title: 'No se pudo', description: errorText(error), variant: 'destructive' });
-        return false;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [reload, toast],
-  );
-  return { busy, run };
-}
 
 function ProductQr({ product }: { product: CoffeeProductView }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -293,8 +259,9 @@ function LotRow({
         <div>
           <dt className="text-muted-foreground">Stock</dt>
           <dd>
-            {lot.stockUnits} · {lot.unitsSold} vendidas · {lot.unitsReserved} apartadas ·{' '}
-            {lot.availableUnits} libres
+            {lot.stockUnits} · {lot.unitsSold} vendidas
+            {lot.unitsSoldInPerson > 0 ? ` (${lot.unitsSoldInPerson} en persona)` : ''} ·{' '}
+            {lot.unitsReserved} apartadas · {lot.availableUnits} libres
           </dd>
         </div>
         <div>
@@ -364,7 +331,11 @@ function LotRow({
         </div>
       )}
 
-      {(lot.status === 'on_sale' || lot.status === 'paused') && (
+      {acceptsPhysicalSales(lot) && (
+        <PhysicalSaleForm lot={lot} campaigns={campaigns} api={api} reload={reload} />
+      )}
+
+      {acceptsPhysicalSales(lot) && (
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Cambiar campaña sugerida (doble aprobación)">
             <select
@@ -632,7 +603,7 @@ function ContributionsTab({
   const { busy, run } = useAction(loadAll);
   const [campaignId, setCampaignId] = useState('');
   const [amount, setAmount] = useState('');
-  const [day, setDay] = useState(new Date().toISOString().slice(0, 10));
+  const [day, setDay] = useState(colombiaToday());
   const [evidence, setEvidence] = useState('');
 
   useEffect(() => {
@@ -665,7 +636,7 @@ function ContributionsTab({
       {dashboard.campaigns.length === 0 ? (
         <EmptyState
           title="Aún no hay aportes"
-          description="Aparecen cuando se paga la primera bolsa."
+          description="Aparecen cuando se paga o se vende en persona la primera bolsa."
         />
       ) : (
         <div className="overflow-x-auto">
@@ -752,8 +723,9 @@ function ContributionsTab({
 /**
  * `/plataforma/cafe` — el café de AdoptaFácil para el equipo de plataforma:
  * presentaciones con su QR fijo, lotes con stock (publicar y cambiar la
- * campaña sugerida piden doble aprobación), pedidos para despachar y el
- * aporte comprometido frente al entregado por campaña.
+ * campaña sugerida piden doble aprobación), pedidos para despachar, ventas
+ * físicas por lote (se corrigen con un reverso, nunca se editan) y el aporte
+ * comprometido frente al entregado por campaña.
  */
 export function PlatformCoffeePage() {
   const client = useApiClient();
@@ -790,6 +762,7 @@ export function PlatformCoffeePage() {
           <TabsList>
             <TabsTrigger value="lotes">Presentaciones y lotes</TabsTrigger>
             <TabsTrigger value="pedidos">Pedidos</TabsTrigger>
+            <TabsTrigger value="ventas-fisicas">Ventas físicas</TabsTrigger>
             <TabsTrigger value="aportes">Aportes a campañas</TabsTrigger>
           </TabsList>
           <TabsContent value="lotes">
@@ -797,6 +770,9 @@ export function PlatformCoffeePage() {
           </TabsContent>
           <TabsContent value="pedidos">
             <OrdersTab api={api} />
+          </TabsContent>
+          <TabsContent value="ventas-fisicas">
+            <PhysicalSalesTab api={api} reload={reload} />
           </TabsContent>
           <TabsContent value="aportes">
             <ContributionsTab dashboard={dashboard} api={api} reload={reload} />

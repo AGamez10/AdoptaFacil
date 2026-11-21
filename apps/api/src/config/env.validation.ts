@@ -298,6 +298,19 @@ export const envSchema = z.object({
   // Días de prueba Pro de cada organización nueva. Sin valor rige
   // NEW_ORG_TRIAL_DAYS (packages/contracts, 14 días); 0 apaga la prueba.
   PLAN_NEW_ORG_TRIAL_DAYS: z.coerce.number().int().min(0).max(365).optional(),
+  // Dominio propio del portal (Pro). Sin CUSTOM_DOMAIN_CNAME_TARGET la función
+  // está apagada (la organización ve "aún no disponible"). El destino es un
+  // nombre de AdoptaFácil que resuelve al servidor SIN el proxy de Cloudflare
+  // (p. ej. portales.adoptafacil.org, nube gris) y CUSTOM_DOMAIN_IPV4 la IP
+  // pública del servidor, para quien conecta la raíz del dominio con un
+  // registro A. Ver docs/operacion/DOMINIO-PROPIO.md.
+  CUSTOM_DOMAIN_CNAME_TARGET: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/, 'debe ser un nombre de host')
+    .optional(),
+  CUSTOM_DOMAIN_IPV4: z.ipv4().optional(),
   // Written approval reference (PSP confirmation + legal review, D1–D7/D17)
   // that production requires before FEATURE_PAYMENTS or FEATURE_SPONSORSHIPS
   // can be turned on. Free text (ticket, email date, document id); it is only

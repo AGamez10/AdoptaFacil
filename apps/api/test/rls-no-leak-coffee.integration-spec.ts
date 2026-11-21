@@ -5,8 +5,8 @@ import { newCoffeeReference } from '../src/modules/coffee/coffee-public.service'
 import { purgeOrganizations } from './support/cleanup';
 
 /**
- * RNF03 gate para el café (presentaciones, lotes, pedidos, visitas y
- * entregas): un equipo nunca ve ni escribe lo de otro. Conecta como
+ * RNF03 gate para el café (presentaciones, lotes, pedidos, visitas,
+ * entregas y ventas físicas): un equipo nunca ve ni escribe lo de otro. Conecta como
  * `adoptafacil_app` (no superusuario). Cada nombre lleva "no-leak" para el
  * gate `test:rls`.
  */
@@ -56,6 +56,10 @@ describe('RLS cross-org no-leak (café)', () => {
           salePriceCop: 28_000,
           unitCostCop: 17_000,
           stockUnits: 10,
+          // Publicado: solo así admite ventas físicas.
+          status: 'on_sale',
+          defaultCampaignId: randomUUID(),
+          publishedAt: new Date(),
         },
       });
       await tx.coffeeOrder.create({
@@ -80,6 +84,23 @@ describe('RLS cross-org no-leak (café)', () => {
           shippingDepartment: 'Tolima',
           privacyAcceptedAt: new Date(),
           reservedUntil: new Date(Date.now() + 60_000),
+        },
+      });
+      await tx.coffeePhysicalSale.create({
+        data: {
+          organizationId: org,
+          lotId: ids[key].lot,
+          kind: 'sale',
+          quantity: 2,
+          unitPriceCop: 28_000,
+          totalCop: 56_000,
+          contributionPerUnitCop: 2_200,
+          contributionTotalCop: 4_400,
+          campaignId: randomUUID(),
+          campaignTitle: 'Campaña',
+          campaignOrgName: 'Fundación',
+          campaignSource: 'lot_default',
+          soldOn: new Date('2026-11-01'),
         },
       });
       await tx.coffeeContributionDelivery.create({
@@ -130,6 +151,7 @@ describe('RLS cross-org no-leak (café)', () => {
     'coffeeOrder',
     'coffeeVisitDay',
     'coffeeContributionDelivery',
+    'coffeePhysicalSale',
   ] as const;
 
   it('no-leak: each team sees only its own coffee rows, in every table', async () => {
@@ -175,7 +197,7 @@ describe('RLS cross-org no-leak (café)', () => {
     expect(touched.count).toBe(0);
   });
 
-  it('no-leak: the app role cannot write visits, nor change or delete deliveries', async () => {
+  it('no-leak: the app role cannot write visits, nor change or delete deliveries or sales', async () => {
     await expect(
       withOrgContext(prisma, teamA, (tx) =>
         tx.coffeeVisitDay.create({
@@ -193,6 +215,36 @@ describe('RLS cross-org no-leak (café)', () => {
     ).rejects.toThrow();
     await expect(
       withOrgContext(prisma, teamA, (tx) => tx.coffeeOrder.deleteMany({})),
+    ).rejects.toThrow();
+    await expect(
+      withOrgContext(prisma, teamA, (tx) => tx.coffeePhysicalSale.deleteMany({})),
+    ).rejects.toThrow();
+    await expect(
+      withOrgContext(prisma, teamA, (tx) =>
+        tx.coffeePhysicalSale.updateMany({ data: { quantity: 1 } }),
+      ),
+    ).rejects.toThrow();
+    // Ni registrar una venta en el lote de otro equipo.
+    await expect(
+      withOrgContext(prisma, teamA, (tx) =>
+        tx.coffeePhysicalSale.create({
+          data: {
+            organizationId: teamA,
+            lotId: ids.B.lot,
+            kind: 'sale',
+            quantity: 1,
+            unitPriceCop: 28_000,
+            totalCop: 28_000,
+            contributionPerUnitCop: 2_200,
+            contributionTotalCop: 2_200,
+            campaignId: randomUUID(),
+            campaignTitle: 'Campaña',
+            campaignOrgName: 'Fundación',
+            campaignSource: 'buyer',
+            soldOn: new Date('2026-11-01'),
+          },
+        }),
+      ),
     ).rejects.toThrow();
   });
 });

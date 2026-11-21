@@ -22,12 +22,16 @@ import {
   type CoffeeDeliveryView,
   type CoffeeOrderStatus,
   type CoffeeOrderView,
+  type CoffeePhysicalSaleView,
   type CreateCoffeeDeliveryInput,
+  type CreateCoffeePhysicalSaleInput,
   type CreateCoffeeLotInput,
   type CreateCoffeeProductInput,
   type PublicCoffeeCampaigns,
+  type PublicCoffeeCatalog,
   type PublicCoffeeOffer,
   type PublicCoffeeOrderStatus,
+  type ReverseCoffeePhysicalSaleInput,
   type UpdateCoffeeLotInput,
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -37,14 +41,18 @@ import { ZodValidationPipe } from '../../core/auth/zod-validation.pipe';
 import { Roles } from '../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../core/rbac/roles.guard';
 import { CoffeeAdminService } from './coffee-admin.service';
+import { CoffeePhysicalSalesService } from './coffee-physical-sales.service';
 import { type CoffeeWebhookOutcome, CoffeePublicService } from './coffee-public.service';
 import {
   checkoutSchema,
   createDeliverySchema,
   createLotSchema,
+  createPhysicalSaleSchema,
   createProductSchema,
   offerQuerySchema,
   orderStatusQuerySchema,
+  physicalSalesQuerySchema,
+  reversePhysicalSaleSchema,
   updateLotSchema,
 } from './coffee.schemas';
 
@@ -57,7 +65,10 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.PlatformAdmin, Role.PlatformSuperAdmin)
 export class PlatformCoffeeController {
-  constructor(private readonly admin: CoffeeAdminService) {}
+  constructor(
+    private readonly admin: CoffeeAdminService,
+    private readonly physicalSales: CoffeePhysicalSalesService,
+  ) {}
 
   @Get()
   dashboard(): Promise<CoffeeDashboard> {
@@ -116,6 +127,35 @@ export class PlatformCoffeeController {
     return this.admin.setLotStatus(actor, id, 'close');
   }
 
+  /** Ventas físicas y sus reversos (todas o las de un lote). */
+  @Get('physical-sales')
+  listPhysicalSales(
+    @Query(new ZodValidationPipe(physicalSalesQuerySchema)) query: { lotId?: string },
+  ): Promise<CoffeePhysicalSaleView[]> {
+    return this.physicalSales.list(query.lotId);
+  }
+
+  @Post('lots/:id/physical-sales')
+  @HttpCode(204)
+  recordPhysicalSale(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) lotId: string,
+    @Body(new ZodValidationPipe(createPhysicalSaleSchema)) dto: CreateCoffeePhysicalSaleInput,
+  ): Promise<void> {
+    return this.physicalSales.record(actor, lotId, dto);
+  }
+
+  /** Una venta mal registrada no se edita: se anula con un reverso auditado. */
+  @Post('physical-sales/:id/reverse')
+  @HttpCode(204)
+  reversePhysicalSale(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) saleId: string,
+    @Body(new ZodValidationPipe(reversePhysicalSaleSchema)) dto: ReverseCoffeePhysicalSaleInput,
+  ): Promise<void> {
+    return this.physicalSales.reverse(actor, saleId, dto);
+  }
+
   @Get('orders')
   orders(
     @Query(new ZodValidationPipe(orderStatusQuerySchema)) query: { status?: CoffeeOrderStatus },
@@ -156,6 +196,12 @@ export class PlatformCoffeeController {
 @Throttle({ default: { limit: 60, ttl: 60_000 } })
 export class PublicCoffeeController {
   constructor(private readonly coffee: CoffeePublicService) {}
+
+  /** La tienda: lo que se puede comprar en línea ahora. */
+  @Get()
+  catalog(): Promise<PublicCoffeeCatalog> {
+    return this.coffee.catalog();
+  }
 
   @Get('campaigns')
   async campaigns(): Promise<PublicCoffeeCampaigns> {

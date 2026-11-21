@@ -1,0 +1,11 @@
+# CUSTOM_DOMAINS=on: dominios propios de las organizaciones Pro
+# (www.turefugio.org). Cualquier host que no sea de AdoptaFácil cae aquí; el
+# certificado se emite al primer acceso solo si la API lo autoriza
+# (on_demand_tls ask en el Caddyfile: dominio verificado y plan vigente).
+# La web, en ese host, pregunta a la API qué portal mostrar.
+https:// {
+	tls {
+		on_demand
+	}
+	import app
+}

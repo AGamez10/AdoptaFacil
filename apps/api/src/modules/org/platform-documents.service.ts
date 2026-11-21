@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  DocumentType,
   type DocumentReviewQueueItem,
   type OrganizationDocument,
   type ReviewOrganizationDocumentInput,
 } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DocumentsService } from './documents.service';
+import { RteReverificationService } from './rte-reverification.service';
 
 /** Map the review decision verb to the stored status it produces. */
 const DECISION_STATUS: Record<ReviewOrganizationDocumentInput['decision'], string> = {
@@ -34,6 +36,7 @@ export class PlatformDocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly documents: DocumentsService,
+    private readonly rte: RteReverificationService,
   ) {}
 
   /** Pending/UnderReview documents across all organizations, oldest first. */
@@ -72,9 +75,19 @@ export class PlatformDocumentsService {
       // document decision above already committed and is audited by the
       // DEFINER function — a failure here must never revert or fail it.
       try {
-        await this.prisma.withOrgContext(decided.organizationId, (tx) =>
-          this.documents.recomputeAndPersistVerification(tx, decided.organizationId),
-        );
+        await this.prisma.withOrgContext(decided.organizationId, async (tx) => {
+          await this.documents.recomputeAndPersistVerification(tx, decided.organizationId);
+          // Reverificación anual: un RUT nuevo aprobado renueva el RTE de una
+          // ESAL con RTE hasta el siguiente plazo de la DIAN.
+          if (input.decision === 'approve' && decided.type === DocumentType.Rut) {
+            await this.rte.renewOnApprovedRut(
+              tx,
+              decided.organizationId,
+              documentId,
+              reviewerUserId,
+            );
+          }
+        });
       } catch (error) {
         this.logger.warn(
           `Verification recompute failed for org=${decided.organizationId} after deciding document=${documentId}: ${(error as Error).message}`,

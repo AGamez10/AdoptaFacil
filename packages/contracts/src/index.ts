@@ -41,3 +41,4 @@ export * from './platform-workspace';
 export * from './coffee';
 export * from './accounting';
 export * from './custody';
+export * from './portal-domains';

@@ -149,6 +149,16 @@ export const STATIC_PAGES = {
     description:
       'Apoya cirugías, alimento y esterilizaciones de organizaciones de rescate animal en Colombia. Cada campaña muestra su meta, su avance y en qué se gastó.',
   },
+  '/ayudar': {
+    title: 'Cómo ayudar a perros y gatos rescatados en Colombia',
+    description:
+      'Campañas con meta y evidencia, insumos que piden los refugios, voluntariados y las cuentas abiertas de cada organización de rescate animal en Colombia.',
+  },
+  '/para-organizaciones': {
+    title: 'Plataforma gratis para refugios y fundaciones de animales',
+    description:
+      'Portal propio, animales con expediente, adopciones con contrato y donaciones con desglose para refugios, fundaciones y rescatistas de Colombia. Gratis para siempre; planes opcionales.',
+  },
   '/transparencia-nacional': {
     title: 'Transparencia Nacional del rescate animal en Colombia',
     description:

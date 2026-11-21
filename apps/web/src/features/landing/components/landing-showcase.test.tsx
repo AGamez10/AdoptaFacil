@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { NEW_ORG_TRIAL_DAYS, PORTAL_TEMPLATES } from '@adoptafacil/contracts';
 import { DEMO_TEMPLATE_IDS } from '../../portals/templates/demo/demo-templates';
-import { TemplateGallerySection } from './landing-showcase';
+import { CoffeeSection, TemplateGallerySection } from './landing-showcase';
 
 describe('Galería de plantillas de la landing', () => {
   it('separa gratuitas y Pro, sin repetir ninguna ni anunciar "Próximamente"', () => {
@@ -33,6 +33,21 @@ describe('Galería de plantillas de la landing', () => {
     expect(screen.queryByText(/Próximamente/i)).not.toBeInTheDocument();
     expect(screen.getByTestId('landing-pro-templates')).toHaveTextContent(
       `gratis durante tus primeros ${NEW_ORG_TRIAL_DAYS} días`,
+    );
+  });
+});
+
+describe('Café de la landing', () => {
+  it('lleva a comprar en línea (/cafe), no solo a ver campañas', () => {
+    render(
+      <MemoryRouter>
+        <CoffeeSection />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('landing-coffee-buy')).toHaveAttribute('href', '/cafe');
+    expect(screen.getByRole('link', { name: 'Ver campañas que apoyamos' })).toHaveAttribute(
+      'href',
+      '/campanas',
     );
   });
 });

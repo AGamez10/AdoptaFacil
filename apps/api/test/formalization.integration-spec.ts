@@ -1,3 +1,4 @@
+import { rteValidUntilFrom } from '@adoptafacil/contracts';
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -251,6 +252,12 @@ describe('Formalization state machine (M01, RF02)', () => {
       evidenceDocumentId: rutDocId,
     }).expect(201);
     expect(rte.body.status).toEqual({ state: 'esal_rte', rteVigente: true });
+    // Reverificación anual: el RTE vale hasta el próximo plazo de la DIAN.
+    const status = await request(server)
+      .get('/org/formalization')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(status.body.rteValidUntil).toBe(rteValidUntilFrom(new Date()).toISOString());
   });
 
   it('R2-2: an org role (even Owner) cannot call the platform endpoint (403)', async () => {

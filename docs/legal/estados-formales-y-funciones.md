@@ -36,7 +36,14 @@ Las ESAL se constituyen por acta o documento privado y adquieren personería al 
 | Certificado de donación como soporte contable, sin descuento | ❌                    | ❌         | ❌          | ✅   | (lo reemplaza el de abajo) | Contable                       | Contador          |
 | Certificado de donación **con** beneficio tributario         | ❌                    | ❌         | ❌          | ❌   | ✅                         | Tributario                     | Contador          |
 
-Regla de vigencia: si una ESAL con RTE no tiene el RTE vigente (`rteVigente = false`), la plataforma la trata como ESAL y deja de emitir certificados tributarios. La DIAN cambia de oficio la responsabilidad 04 por la 05 cuando una entidad sale del RTE, así que un RUT reciente es la mejor prueba disponible.
+Regla de vigencia: si una ESAL con RTE no tiene el RTE vigente (`rteVigente = false`), la plataforma la trata como ESAL y deja de emitir certificados tributarios.
+
+**Reverificación anual (implementada).** El RTE que reconoce la plataforma vale hasta el siguiente plazo anual de actualización ante la DIAN: el 30 de junio, a las 23:59 hora de Colombia (`RTE_ANNUAL_DEADLINE` y `rteValidUntilFrom` en `legal-capabilities.ts`; columna `organization_profiles.rte_valid_until`).
+
+- Un trabajo diario (`rte-reverification.service.ts`) escribe a los Owners a **60 y 30 días** del vencimiento para que suban su RUT reciente con la responsabilidad 04.
+- Si vence sin un RUT nuevo aprobado, pone `rteVigente = false`. Solo se suspende el certificado con beneficio tributario; el estado, las donaciones, los comprobantes y los certificados ya emitidos no cambian. Queda en la auditoría (`formalization.rte_expired`).
+- Cuando la plataforma **aprueba un RUT** de una ESAL con RTE, el RTE se renueva hasta el siguiente plazo (`formalization.rte_reverified`, con el documento como evidencia). El revisor confirma la responsabilidad 04 en el informe de verificación antes de aprobar.
+- Las ESAL con RTE vigente al desplegar quedan hasta el 30 de junio de 2027. La DIAN cambia de oficio la responsabilidad 04 por la 05 cuando una entidad sale del RTE, así que un RUT reciente es la mejor prueba disponible.
 
 ### Por qué cada corte
 
