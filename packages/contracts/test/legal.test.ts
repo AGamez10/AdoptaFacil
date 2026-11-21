@@ -6,6 +6,7 @@ import {
   getLegalDocument,
   LEGAL_CONSENT_GROUPS,
   LEGAL_DOCUMENTS,
+  legalAudienceFor,
   requiredGuestLegalDocuments,
   requiredLegalDocuments,
 } from '../src/legal';
@@ -73,9 +74,59 @@ describe('qué debe aceptar cada quien', () => {
     expect(groupOf('terms')).not.toBe(groupOf('data_authorization'));
   });
 
-  it('las casillas obligatorias cubren exactamente los documentos obligatorios', () => {
-    const covered = LEGAL_CONSENT_GROUPS.filter((g) => !g.optional).flatMap((g) => g.documents);
-    expect([...covered].sort()).toEqual(requiredLegalDocuments('organization').sort());
+  it('las casillas obligatorias cubren exactamente los documentos obligatorios de cada papel', () => {
+    const required = (audience: 'person' | 'organization' | 'member') =>
+      LEGAL_CONSENT_GROUPS.filter(
+        (g) =>
+          !g.optional &&
+          (!g.organizationOnly || audience === 'organization') &&
+          (!g.memberOnly || audience === 'member'),
+      )
+        .flatMap((g) => g.documents)
+        .sort();
+    expect(required('organization')).toEqual(requiredLegalDocuments('organization').sort());
+    expect(required('member')).toEqual(requiredLegalDocuments('member').sort());
+    expect(required('person')).toEqual(requiredLegalDocuments('person').sort());
+  });
+});
+
+describe('miembros invitados a un equipo', () => {
+  it('un miembro invitado NO acepta el contrato de la organización ni declara que la obliga', () => {
+    expect(requiredLegalDocuments('member')).not.toContain('org_terms');
+    expect(requiredLegalDocuments('member')).toContain('member_terms');
+    expect(requiredLegalDocuments('member')).toEqual(
+      expect.arrayContaining(requiredLegalDocuments('person')),
+    );
+  });
+
+  it('quien registra o es propietario de la organización no acepta las condiciones de miembro', () => {
+    expect(requiredLegalDocuments('organization')).not.toContain('member_terms');
+    expect(requiredLegalDocuments('person')).not.toContain('member_terms');
+  });
+
+  it('el papel legal sale del rol: solo el propietario habla por la organización', () => {
+    expect(legalAudienceFor('organization', ['owner'])).toBe('organization');
+    expect(legalAudienceFor('organization', ['administrator', 'owner'])).toBe('organization');
+    for (const role of [
+      'administrator',
+      'operator',
+      'veterinarian',
+      'volunteer',
+      'temporary_collaborator',
+      'read_only_auditor',
+      'platform_admin',
+      'platform_super_admin',
+    ]) {
+      expect(legalAudienceFor('organization', [role])).toBe('member');
+    }
+    expect(legalAudienceFor('organization', [])).toBe('member');
+    expect(legalAudienceFor('person', [])).toBe('person');
+  });
+
+  it('el texto de miembro dice que no obliga a la organización', () => {
+    const doc = getLegalDocument('member_terms');
+    const text = readFileSync(join(DOCS_DIR, doc.slug, `${doc.version}.md`), 'utf8');
+    expect(text).toContain('no acepta ese contrato en nombre de la Organización');
   });
 });
 

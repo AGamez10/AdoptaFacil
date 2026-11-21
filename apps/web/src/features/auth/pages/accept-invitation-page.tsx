@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { type InvitationPreview, invitationRoleCopy, PLATFORM_ROLES } from '@adoptafacil/contracts';
+import {
+  type InvitationPreview,
+  invitationRoleCopy,
+  legalAudienceForInvitation,
+  PLATFORM_ROLES,
+} from '@adoptafacil/contracts';
 import { Button, useToast } from '@adoptafacil/ui';
 import { toApiError, useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
@@ -60,6 +65,10 @@ export function AcceptInvitationPage() {
   const [state, setState] = useState<'loading' | 'ready' | 'invalid'>(
     token ? 'loading' : 'invalid',
   );
+
+  // Solo quien es invitado como propietario acepta en nombre de la
+  // organización; cualquier otro cargo acepta las condiciones de miembro.
+  const audience = invitation ? legalAudienceForInvitation(invitation.role) : 'member';
 
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
@@ -123,7 +132,7 @@ export function AcceptInvitationPage() {
       if (first) refs[first].current?.focus();
       return;
     }
-    if (!requiredConsentsGiven('organization', consents)) {
+    if (!requiredConsentsGiven(audience, consents)) {
       setLegalError(
         'Para crear la cuenta debes aceptar los términos y autorizar el tratamiento de datos.',
       );
@@ -141,7 +150,7 @@ export function AcceptInvitationPage() {
         token,
         displayName: displayName.trim(),
         password,
-        legalAcceptances: acceptancesFrom('organization', consents),
+        legalAcceptances: acceptancesFrom(audience, consents),
       });
     } catch (error) {
       failWith(error);
@@ -180,7 +189,7 @@ export function AcceptInvitationPage() {
 
   const acceptWithGoogle = async (idToken: string) => {
     setFormError(null);
-    if (!requiredConsentsGiven('organization', consents)) {
+    if (!requiredConsentsGiven(audience, consents)) {
       // La autorización de datos es previa (Ley 1581): Google ya respondió,
       // así que solo falta marcar las casillas y confirmar.
       setGoogleToken(idToken);
@@ -195,7 +204,7 @@ export function AcceptInvitationPage() {
       await acceptInvitationWithGoogle({
         token,
         idToken,
-        legalAcceptances: acceptancesFrom('organization', consents),
+        legalAcceptances: acceptancesFrom(audience, consents),
       });
     } catch (error) {
       setGoogleToken(null);
@@ -353,7 +362,7 @@ export function AcceptInvitationPage() {
 
         <div ref={legalRef}>
           <LegalConsentFields
-            audience="organization"
+            audience={audience}
             value={consents}
             onChange={setConsents}
             error={legalError}

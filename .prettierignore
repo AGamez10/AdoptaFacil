@@ -14,3 +14,7 @@ docs/legal/*/*.md
 # Proyectos nativos generados por Capacitor (apps/mobile)
 apps/mobile/android/**
 apps/mobile/ios/**
+
+# Matriz de roles generada por apps/api/src/core/rbac/role-matrix.spec.ts: la prueba compara
+# el archivo byte a byte con lo que genera; se regenera, no se formatea.
+docs/seguridad/matriz-roles-api.md

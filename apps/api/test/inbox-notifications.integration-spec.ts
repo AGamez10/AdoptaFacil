@@ -6,7 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { hashInvitationToken } from '../src/modules/org/governance/invitations.service';
 import { purgeOrganizations } from './support/cleanup';
-import { LEGAL_ORG, LEGAL_PERSON } from './support/legal';
+import { LEGAL_MEMBER, LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import { approveTestOrganization } from './support/organization-status';
 import { completeTestProfile } from './support/profile';
 
@@ -92,7 +92,7 @@ describe('Inbox notifications + visible resource bank', () => {
     });
     const res = await request(server)
       .post('/auth/invitations/accept')
-      .send({ ...LEGAL_ORG, token, displayName: 'Camila Equipo', password })
+      .send({ ...LEGAL_MEMBER, token, displayName: 'Camila Equipo', password })
       .expect(201);
     return {
       token: res.body.tokens.accessToken,

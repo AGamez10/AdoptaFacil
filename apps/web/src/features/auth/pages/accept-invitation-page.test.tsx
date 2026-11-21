@@ -118,7 +118,11 @@ describe('AcceptInvitationPage (/invitacion)', () => {
 
     await user.click(screen.getByTestId('invite-legal-terms'));
     await user.click(screen.getByTestId('invite-legal-data'));
-    await user.click(screen.getByTestId('invite-legal-organization'));
+    // A veterinarian joins the team: they accept the member conditions, never
+    // the organization's contract "on its behalf".
+    expect(screen.queryByTestId('invite-legal-organization')).not.toBeInTheDocument();
+    expect(screen.queryByText(/declaro que puedo obligarla/)).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('invite-legal-member'));
     await user.click(screen.getByRole('button', { name: 'Crear mi cuenta' }));
 
     await vi.waitFor(() => expect(accepted).toHaveLength(1));
@@ -127,6 +131,32 @@ describe('AcceptInvitationPage (/invitacion)', () => {
       displayName: 'Laura Pérez',
       password: 'supersecret12',
     });
-    expect(accepted[0].legalAcceptances?.length).toBeGreaterThan(0);
+    const keys = (accepted[0].legalAcceptances ?? []).map((a) => a.key);
+    expect(keys).toContain('member_terms');
+    expect(keys).not.toContain('org_terms');
+  });
+
+  it.each([
+    Role.Administrator,
+    Role.Operator,
+    Role.Veterinarian,
+    Role.Volunteer,
+    Role.TemporaryCollaborator,
+    Role.ReadOnlyAuditor,
+    Role.PlatformAdmin,
+  ])('a %s invitation never asks to accept on behalf of the organization', async (role) => {
+    stubPreview({ ...VET, role });
+    renderShell({ route: route(), session: { initialStatus: 'unauthenticated' } });
+    await screen.findByRole('heading', { name: 'Únete a Refugio Arrullo Animal' });
+    expect(screen.getByTestId('invite-legal-member')).toBeInTheDocument();
+    expect(screen.queryByTestId('invite-legal-organization')).not.toBeInTheDocument();
+  });
+
+  it('only an Owner invitation accepts the organization contract on its behalf', async () => {
+    stubPreview({ ...VET, role: Role.Owner });
+    renderShell({ route: route(), session: { initialStatus: 'unauthenticated' } });
+    await screen.findByRole('heading', { name: 'Únete a Refugio Arrullo Animal' });
+    expect(screen.getByTestId('invite-legal-organization')).toBeInTheDocument();
+    expect(screen.queryByTestId('invite-legal-member')).not.toBeInTheDocument();
   });
 });
