@@ -258,6 +258,9 @@ const CSS = `
 .tpl-portada .r-dir dl > div{display:block}
 .tpl-portada .r-dir dd a{text-decoration:none}
 .tpl-portada .r-acts-note{margin-top:22px;font-size:13px;color:var(--soft)}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-portada{--lg-card:transparent;--lg-bd:1px solid var(--rule);--lg-sh:none;--lg-r:0px;--lg-fd:'Instrument Serif',serif;--lg-fw:400;--lg-ls:-.01em;--lg-soft:var(--soft);--lg-line:var(--rule);--lg-acc:var(--ink);--lg-acc-ink:var(--paper)}
 `;
 
 type SecId =

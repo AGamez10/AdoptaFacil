@@ -267,6 +267,9 @@ const CSS = `
 .tpl-match .x-contact .map iframe{position:absolute;inset:0}
 .tpl-match .x-row a.t{text-decoration:none;color:inherit}
 .tpl-match .x-logo .tpl-logo-img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-match{--lg-card:var(--card);--lg-bd:0;--lg-sh:0 0 0 1px var(--line),0 20px 40px -30px rgba(43,26,18,.35);--lg-r:28px;--lg-fw:800;--lg-ls:-.04em;--lg-soft:var(--soft);--lg-line:var(--line);--lg-acc:var(--like);--lg-acc-ink:#fff}
 `;
 
 const DECKS: Record<string, (a: TplAnimal) => boolean> = {

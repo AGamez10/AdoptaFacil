@@ -259,6 +259,9 @@ const CSS = `
 .tpl-estudio .e-contact .map{position:relative}
 .tpl-estudio .e-contact .map iframe{position:absolute;inset:0}
 .tpl-estudio .e-nav .nm .tpl-logo-img{width:22px;height:22px;border-radius:6px;object-fit:cover}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-estudio{--lg-card:var(--card);--lg-bd:0;--lg-sh:0 0 0 1px var(--line);--lg-r:24px;--lg-fw:700;--lg-ls:-.04em;--lg-soft:var(--soft);--lg-line:var(--line);--lg-acc:var(--ink);--lg-acc-ink:var(--card)}
 `;
 
 export const estudio: TemplateDesign = {

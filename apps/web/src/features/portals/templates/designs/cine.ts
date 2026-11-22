@@ -264,6 +264,9 @@ const CSS = `
 .tpl-cine .k-hall .map{position:relative}
 .tpl-cine .k-hall .map iframe{position:absolute;inset:0}
 .tpl-cine .k-slide .tpl-art{inset:0}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-cine{--lg-card:rgba(244,237,225,.03);--lg-bd:1px solid var(--line);--lg-sh:none;--lg-r:0px;--lg-fd:'Gloock',serif;--lg-fw:400;--lg-ls:-.01em;--lg-soft:var(--soft);--lg-line:var(--line);--lg-acc:var(--gold);--lg-acc-ink:var(--bg)}
 `;
 
 const FILTERS: Record<string, (a: TplAnimal) => boolean> = {

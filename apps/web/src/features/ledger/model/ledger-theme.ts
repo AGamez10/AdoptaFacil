@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react';
  * Apariencia del libro público tomada de la plantilla ACTIVA del portal: el
  * diálogo "Ver libro completo" se viste con el mismo fondo, tinta, tipografías,
  * acento y redondeo que la sección donde el visitante lo abrió. Se lee de los
- * estilos ya calculados por el navegador, así sirve para las 19 plantillas (y
+ * estilos ya calculados por el navegador, así sirve para todas las plantillas (y
  * para sus modos claro y oscuro) sin que cada diseño declare nada nuevo.
  */
 export interface LedgerTheme {
@@ -16,6 +16,14 @@ export interface LedgerTheme {
   headFont: string;
   radius: string;
   scheme: 'light' | 'dark';
+  /**
+   * Forma de las tarjetas del libro en la propia página (fondo, borde y
+   * sombra), el saldo destacado y la letra de las cifras. Opcional: solo
+   * existe cuando la sección ya pintó sus totales.
+   */
+  card?: { bg: string; border: string; shadow: string };
+  highlight?: { bg: string; ink: string };
+  figures?: { font: string; weight: string; spacing: string };
 }
 
 type Rgba = [number, number, number, number];
@@ -69,6 +77,21 @@ function resolveColor(host: Element, value: string): Rgba | null {
   const c = parseColor(getComputedStyle(probe).color);
   probe.remove();
   return c;
+}
+
+function toEm(spacing: string, fontSize: string): string {
+  const ls = parseFloat(spacing);
+  const fs = parseFloat(fontSize);
+  if (!Number.isFinite(ls) || !Number.isFinite(fs) || fs <= 0) return '0';
+  return `${Math.round((ls / fs) * 1000) / 1000}em`;
+}
+
+function firstOf(scope: Element, selectors: string[]): Element | null {
+  for (const sel of selectors) {
+    const el = scope.querySelector(sel);
+    if (el) return el;
+  }
+  return null;
 }
 
 /**
@@ -126,12 +149,16 @@ export function readLedgerTheme(
   // en varias plantillas usa una tipografía de detalle).
   const body = section.querySelector('.af-led li, .k-sub, li, td') ?? root;
   // Redondeo: el de las tarjetas del propio libro; si no, el de otras tarjetas.
+  // Por prioridad (no por orden en la página: `dl` va antes que sus tarjetas).
   const card =
-    section.querySelector('.af-led dl > div, .x-table, table, dl') ??
-    root.querySelector('.k-nd, .k-act, .k-pr, figure, article');
+    firstOf(section, ['.af-led dl > div', '.x-table', 'table', 'dl']) ??
+    firstOf(root, ['.k-nd', '.k-act', '.k-pr', 'figure', 'article']);
   const radius = card ? getComputedStyle(card).borderTopLeftRadius : '';
 
+  const cards = readCards(section, bgC);
+
   return {
+    ...cards,
     bg: css(bgC),
     ink: css(inkC),
     accent: css(accent),
@@ -141,6 +168,62 @@ export function readLedgerTheme(
     radius: radius ? `min(${radius}, 22px)` : '14px',
     scheme: luminance(bgC) > 0.35 ? 'light' : 'dark',
   };
+}
+
+/**
+ * Tarjetas de totales del bloque `.af-led` que pinta la plantilla: la primera
+ * da la forma de las tarjetas y la última (el saldo) el destacado. Se copian
+ * los valores calculados, que salen del CSS propio de la plantilla.
+ */
+function readCards(
+  section: Element,
+  bgC: Rgba,
+): Pick<LedgerTheme, 'card' | 'highlight' | 'figures'> {
+  const tiles = section.querySelectorAll('.af-led dl > div');
+  const first = tiles[0];
+  const last = tiles[tiles.length - 1];
+  if (!first || !last || first === last) return {};
+  const out: Pick<LedgerTheme, 'card' | 'highlight' | 'figures'> = {};
+
+  const f = getComputedStyle(first);
+  const cardBg = parseColor(f.backgroundColor);
+  const bw = parseFloat(f.borderTopWidth) || 0;
+  out.card = {
+    // Un fondo translúcido se ve igual sobre el fondo del diálogo (es el de la sección).
+    bg: cardBg && cardBg[3] > 0 ? f.backgroundColor : 'transparent',
+    border:
+      bw > 0 && f.borderTopStyle !== 'none'
+        ? `${Math.min(bw, 3)}px ${f.borderTopStyle} ${f.borderTopColor}`
+        : '0 solid transparent',
+    shadow: f.boxShadow && f.boxShadow !== 'none' ? f.boxShadow : 'none',
+  };
+
+  const l = getComputedStyle(last);
+  const hiC = parseColor(l.backgroundColor);
+  const hiInk = parseColor(l.color);
+  const img = l.backgroundImage && l.backgroundImage !== 'none' ? l.backgroundImage : '';
+  // Solo se copia un saldo destacado que se lea bien: con color sólido se mide
+  // el contraste; un degradado se acepta si la plantilla lo pinta sobre su color.
+  if (hiInk && opaque(hiC) && contrast(hiC, bgC) >= 1.3 && contrast(hiInk, hiC) >= 3) {
+    out.highlight = {
+      bg: img ? `${img}, ${l.backgroundColor}` : l.backgroundColor,
+      ink: css(hiInk),
+    };
+  } else if (hiInk && img && /gradient\(/.test(img)) {
+    out.highlight = { bg: img, ink: css(hiInk) };
+  }
+
+  const dd = first.querySelector('dd');
+  if (dd) {
+    const d = getComputedStyle(dd);
+    out.figures = {
+      font: d.fontFamily,
+      weight: d.fontWeight || '700',
+      // En em: las cifras del diálogo tienen otro tamaño que las de la página.
+      spacing: toEm(d.letterSpacing, d.fontSize),
+    };
+  }
+  return out;
 }
 
 /** Variables CSS que consume el libro con estilo de plantilla. */
@@ -153,6 +236,17 @@ export function ledgerThemeStyle(t: LedgerTheme): CSSProperties {
     '--led-font': t.font,
     '--led-head': t.headFont,
     '--led-r': t.radius,
+    ...(t.card && {
+      '--led-card': t.card.bg,
+      '--led-card-bd': t.card.border,
+      '--led-card-sh': t.card.shadow,
+    }),
+    ...(t.highlight && { '--led-hi': t.highlight.bg, '--led-hi-ink': t.highlight.ink }),
+    ...(t.figures && {
+      '--led-num': t.figures.font,
+      '--led-num-w': t.figures.weight,
+      '--led-num-ls': t.figures.spacing,
+    }),
     colorScheme: t.scheme,
   } as CSSProperties;
 }
