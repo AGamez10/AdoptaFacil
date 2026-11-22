@@ -1238,7 +1238,7 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       'Se envía cuando Mercado Pago aprueba el cobro de un plan Crece o Pro (contratar, subir o bajar de plan) o la plataforma lo activa a mano.',
     audience: 'Dueños de la organización',
     category: 'transactional',
-    theme: 'team',
+    theme: 'plan',
     required: false,
     variables: [
       ORG,
