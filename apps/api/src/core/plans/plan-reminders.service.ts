@@ -190,7 +190,8 @@ export class PlanRemindersService {
       const sub = await tx.organizationSubscription.findUnique({ where: { organizationId } });
       // Sin suscripción: el aviso es el del fin del Pro gratis (prueba o lanzamiento).
       const stage = !sub && free ? freeProReminderFor(free.endsAt, now) : null;
-      const due = sub ? planReminderFor(sub, now) : null;
+      // Con una bajada programada no hay "tu plan termina": sigue el plan nuevo.
+      const due = sub && !sub.scheduledPlan ? planReminderFor(sub, now) : null;
       if (!due && !stage) return null;
       const owners = await tx.userRole.findMany({
         where: { organizationId, role: Role.Owner },

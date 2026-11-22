@@ -14,22 +14,27 @@
 /// organización solo la LEE (`GET /org/plan`); la escribe la plataforma
 /// (`PUT /platform/organizations/:id/plan`) tras un pago manual, con auditoría.
 model OrganizationSubscription {
-  id                String    @id @default(uuid()) @db.Uuid
-  organizationId    String    @unique @map("organization_id") @db.Uuid
+  id                         String    @id @default(uuid()) @db.Uuid
+  organizationId             String    @unique @map("organization_id") @db.Uuid
   /// PlanKey como texto: free | crece | pro.
-  plan              String
+  plan                       String
   /// SubscriptionStatus como texto: trialing | active | past_due | canceled.
-  status            String
+  status                     String
   /// Fin del periodo pagado o de prueba (UTC). NULL = sin vencimiento.
-  currentPeriodEnd  DateTime? @map("current_period_end")
+  currentPeriodEnd           DateTime? @map("current_period_end")
   /// BillingProvider como texto. Hoy solo `manual` (link de pago + factura).
-  provider          String    @default("manual")
+  provider                   String    @default("manual")
   /// Referencia libre del pago (número de factura, id de transferencia).
-  providerReference String?   @map("provider_reference")
+  providerReference          String?   @map("provider_reference")
   /// Descuento de precio fundador para refugios del piloto (0–100).
-  discountPercent   Int       @default(0) @map("discount_percent")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  discountPercent            Int       @default(0) @map("discount_percent")
+  /// Bajada de plan programada (p. ej. Pro → Crece): el plan pagado sigue
+  /// hasta `currentPeriodEnd` y este empieza ese día, con su primer cobro.
+  scheduledPlan              String?   @map("scheduled_plan")
+  /// Suscripción de Mercado Pago (preapproval) del plan programado.
+  scheduledProviderReference String?   @map("scheduled_provider_reference")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   @@map("organization_subscriptions")
 }

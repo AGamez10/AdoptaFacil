@@ -98,6 +98,8 @@ export class MercadoPagoBillingClient {
     amountCop: number;
     backUrl: string;
     idempotencyKey: string;
+    /** First charge on this date instead of right away (scheduled downgrade). */
+    startDate?: Date;
   }): Promise<{ id: string; checkoutUrl: string }> {
     const response = await this.fetchFn(`${this.baseUrl}/preapproval`, {
       method: 'POST',
@@ -118,6 +120,7 @@ export class MercadoPagoBillingClient {
           frequency_type: 'months',
           transaction_amount: input.amountCop,
           currency_id: 'COP',
+          ...(input.startDate ? { start_date: input.startDate.toISOString() } : {}),
         },
       }),
       signal: mercadoPagoTimeoutSignal(),

@@ -55,6 +55,7 @@ export const EMAIL_EVENT_KEYS = [
   'animals.clinical_reminder',
   'coffee.refund_notice',
   'sponsorship.payment_received',
+  'plan.activated',
 ] as const;
 
 export type EmailEventKey = (typeof EMAIL_EVENT_KEYS)[number];
