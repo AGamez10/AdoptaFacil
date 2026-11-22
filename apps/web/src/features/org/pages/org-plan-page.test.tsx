@@ -79,6 +79,21 @@ describe('OrgPlanPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('Pro muestra el canal de soporte prioritario por WhatsApp', async () => {
+    stubPlan(viewFor({ effectivePlan: 'pro' }));
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    const support = await screen.findByTestId('plan-priority-support');
+    expect(support.querySelector('a')?.getAttribute('href')).toMatch(/^https:\/\/wa\.me\//);
+    expect(support).toHaveTextContent('Soporte prioritario');
+  });
+
+  it('Crece no ofrece soporte prioritario (es de Pro)', async () => {
+    stubPlan(viewFor({ effectivePlan: 'crece' }));
+    renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
+    expect(await screen.findByText('Estás en el plan Crece')).toBeInTheDocument();
+    expect(screen.queryByTestId('plan-priority-support')).not.toBeInTheDocument();
+  });
+
   it('says everything is included at no cost while plans are not enforced', async () => {
     stubPlan(viewFor({ enforced: false, effectivePlan: 'pro' }));
     renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Administrator]) });
@@ -258,6 +273,52 @@ describe('OrgPlanPage · cancelar el plan', () => {
     );
     renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
     expect(await screen.findByTestId('plan-pay-mercadopago-crece')).toBeInTheDocument();
+  });
+
+  it('bajada programada: dice hasta cuándo sigue Pro y cuándo empieza Crece, al volver y en el plan', async () => {
+    const end = '2026-12-20T15:00:00.000Z';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        const body = url.includes('/org/plan/checkout/status')
+          ? { state: 'scheduled', plan: 'crece', startsAt: end }
+          : url.endsWith('/org/plan')
+            ? viewFor({
+                effectivePlan: 'pro',
+                subscription: {
+                  organizationId: 'org-self',
+                  plan: 'pro',
+                  status: 'canceled',
+                  currentPeriodEnd: end,
+                  provider: 'mercadopago',
+                  providerReference: 'pre-pro',
+                  discountPercent: 0,
+                  updatedAt: end,
+                  scheduledPlan: 'crece',
+                },
+              })
+            : {};
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => body,
+        });
+      }),
+    );
+    renderShell({
+      route: '/organizacion/plan?pago=mercadopago&preapproval_id=pre-crece',
+      ...sessionWith([Role.Owner]),
+    });
+    expect(await screen.findByText('Cambio de plan programado')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Conservas tu plan actual hasta el 20 de diciembre de 2026/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Sigues en Pro hasta el 20 de diciembre de 2026.*empieza el plan Crece/),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('plan-cancel')).toBeInTheDocument();
   });
 
   it('al volver de Mercado Pago: "confirmando" mientras está en proceso y "activo" cuando se aprueba', async () => {

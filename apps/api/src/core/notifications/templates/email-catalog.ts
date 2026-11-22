@@ -1231,6 +1231,41 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       ctaLabel: 'Ver mi apadrinamiento',
     },
   },
+  {
+    event: 'plan.activated',
+    label: 'Plan de pago activado',
+    description:
+      'Se envía cuando Mercado Pago aprueba el cobro de un plan Crece o Pro (contratar, subir o bajar de plan) o la plataforma lo activa a mano.',
+    audience: 'Dueños de la organización',
+    category: 'transactional',
+    theme: 'team',
+    required: false,
+    variables: [
+      ORG,
+      v('plan', 'Plan activado', 'Pro'),
+      v('vence', 'Fin del periodo pagado', '2026-12-21T05:00:00.000Z', 'date'),
+      v(
+        'beneficios',
+        'Lo que queda habilitado (lista)',
+        '• Dominio propio (www.turefugio.org)\n• Soporte prioritario por WhatsApp',
+      ),
+      v('enlace', 'Enlace a Plan y facturación', 'https://adoptafacil.co/organizacion/plan', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu plan {{plan}} ya está activo',
+      preheader: 'Todo lo del plan {{plan}} quedó habilitado para {{organizacion}}.',
+      heading: 'Bienvenidos al plan {{plan}}',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\n' +
+        'Recibimos el pago y tu plan **{{plan}}** ya está activo. No tienes que hacer nada más: ' +
+        'desde ahora tienes habilitado:\n\n{{beneficios}}\n\n' +
+        'Tu periodo pagado va hasta el **{{vence}}**. Puedes ver tu plan, cambiarlo o cancelarlo cuando quieras.',
+      ctaLabel: 'Ver mi plan',
+      footerNote:
+        'Este cobro es de AdoptaFácil por el software; nunca toca las donaciones de tu organización.',
+    },
+  },
 ];
 
 const BY_EVENT = new Map(EMAIL_CATALOG.map((d) => [d.event, d]));

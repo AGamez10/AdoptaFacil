@@ -49,6 +49,7 @@ function toContract(row: SubscriptionRow): OrganizationSubscription {
     providerReference: row.providerReference,
     discountPercent: row.discountPercent,
     updatedAt: row.updatedAt.toISOString(),
+    scheduledPlan: (row.scheduledPlan as OrganizationSubscription['scheduledPlan']) ?? null,
   };
 }
 
@@ -278,7 +279,12 @@ export class PlansService {
       const row = await tx.organizationSubscription.upsert({
         where: { organizationId },
         create: { organizationId, provider: 'manual', ...data },
-        update: { provider: 'manual', ...data },
+        update: {
+          provider: 'manual',
+          ...data,
+          scheduledPlan: null,
+          scheduledProviderReference: null,
+        },
       });
       await this.audit.recordWithTx(tx, {
         organizationId,
