@@ -5,9 +5,11 @@ import {
   type LegalConsentGroup,
 } from '@adoptafacil/contracts';
 
-/** Quién ve las casillas: una cuenta de persona, una de organización o un
- *  donante sin cuenta (que no ve la autorización comercial). */
-export type ConsentAudience = 'person' | 'organization' | 'guest';
+/** Quién ve las casillas: una cuenta de persona, quien registra o es
+ *  propietario de una organización (acepta en su nombre), un miembro invitado
+ *  a un equipo (no obliga a la organización) o un donante sin cuenta (que no
+ *  ve la autorización comercial). */
+export type ConsentAudience = 'person' | 'organization' | 'member' | 'guest';
 
 export type ConsentState = Partial<Record<LegalConsentGroup['id'], boolean>>;
 
@@ -15,7 +17,9 @@ export type ConsentState = Partial<Record<LegalConsentGroup['id'], boolean>>;
 export function consentGroupsFor(audience: ConsentAudience): LegalConsentGroup[] {
   return LEGAL_CONSENT_GROUPS.filter(
     (g) =>
-      (!g.organizationOnly || audience === 'organization') && (!g.optional || audience !== 'guest'),
+      (!g.organizationOnly || audience === 'organization') &&
+      (!g.memberOnly || audience === 'member') &&
+      (!g.optional || audience !== 'guest'),
   );
 }
 

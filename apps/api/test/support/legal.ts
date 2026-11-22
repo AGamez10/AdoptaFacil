@@ -15,6 +15,11 @@ export const LEGAL_PERSON = {
 export const LEGAL_ORG = {
   legalAcceptances: currentLegalAcceptanceItems(requiredLegalDocuments('organization')),
 };
+/** Lo que acepta quien entra por invitación con un cargo distinto de
+ *  propietario: condiciones de miembro, nunca el contrato de la organización. */
+export const LEGAL_MEMBER = {
+  legalAcceptances: currentLegalAcceptanceItems(requiredLegalDocuments('member')),
+};
 
 /** Lo que acepta un donante sin cuenta en el formulario de donación. */
 export const LEGAL_GUEST = {
