@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ResourceNeedPublic, ResourceOpenOfferPublic } from '@adoptafacil/contracts';
 import { EmptyState, Skeleton } from '@adoptafacil/ui';
-import { PublicFooter, PublicNavbar } from '../../../shell/layout';
+import { PublicFooter, PublicNavbar, PublicPageBody, PublicPageHero } from '../../../shell/layout';
 import { listPublicNeeds, listPublicOpenOffers } from '../api/public-resources';
 import { NeedCard } from '../components/need-card';
 import { PublicOpenOffers } from '../components/public-open-offers';
@@ -49,39 +49,39 @@ export function PublicResourcesPage() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <PublicNavbar />
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6">
-        <header className="mb-8 space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Banco de recursos</h1>
-          <p className="text-sm text-muted-foreground">
-            Necesidades activas de las organizaciones de rescate y lo que la comunidad está
-            ofreciendo — dona en especie o toma lo que le sirve a tu organización.
-          </p>
-        </header>
-
-        {state === 'loading' && <Skeleton className="h-64 w-full" />}
-        {state === 'error' && (
-          <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
-        )}
-        {state === 'ready' && items.length === 0 && (
-          <div className="space-y-8">
-            <PublicOpenOffers items={offers} />
-            <OpenOfferInvite empty />
-            <OtherWaysToHelp />
-          </div>
-        )}
-        {state === 'ready' && items.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((need) => (
-              <NeedCard key={need.id} need={need} />
-            ))}
-          </div>
-        )}
-        {state === 'ready' && items.length > 0 && (
-          <div className="mt-10 space-y-8">
-            <PublicOpenOffers items={offers} />
-            <OpenOfferInvite />
-          </div>
-        )}
+      <main className="flex-1">
+        <PublicPageHero
+          eyebrow="Ayuda en especie"
+          tone="sky"
+          title="Banco de recursos"
+          lead="Necesidades activas de las organizaciones de rescate y lo que la comunidad está ofreciendo — dona en especie o toma lo que le sirve a tu organización."
+        />
+        <PublicPageBody>
+          {state === 'loading' && <Skeleton className="h-64 w-full" />}
+          {state === 'error' && (
+            <EmptyState title="No se pudo cargar" description="Inténtalo de nuevo más tarde." />
+          )}
+          {state === 'ready' && items.length === 0 && (
+            <div className="space-y-8">
+              <PublicOpenOffers items={offers} />
+              <OpenOfferInvite empty />
+              <OtherWaysToHelp />
+            </div>
+          )}
+          {state === 'ready' && items.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {items.map((need) => (
+                <NeedCard key={need.id} need={need} />
+              ))}
+            </div>
+          )}
+          {state === 'ready' && items.length > 0 && (
+            <div className="mt-10 space-y-8">
+              <PublicOpenOffers items={offers} />
+              <OpenOfferInvite />
+            </div>
+          )}
+        </PublicPageBody>
       </main>
 
       <PublicFooter />

@@ -315,7 +315,7 @@ export function VolunteerOpportunityDetailPage() {
                 {opportunity.sessionDates && opportunity.sessionDates.length > 0 ? (
                   <p>{opportunity.sessionDates.map(formatDayEs).join(' · ')}</p>
                 ) : (
-                  <p className="text-amber-700">
+                  <p className="text-[hsl(var(--warning-foreground))]">
                     Sin días definidos: los voluntarios pueden registrar horas en cualquier día de
                     la convocatoria. Habilita los días de jornada para controlarlo.
                   </p>

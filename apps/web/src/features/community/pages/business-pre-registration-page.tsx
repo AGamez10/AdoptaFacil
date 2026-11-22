@@ -76,7 +76,9 @@ export function BusinessPreRegistrationPage() {
     <div className="flex min-h-screen flex-col">
       <PublicNavbar />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight">Quiero que mi negocio aparezca</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+          Quiero que mi negocio aparezca
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Si tienes una veterinaria, peluquería, paseos, tienda o eres un profesional que cuida
           animales, deja aquí tus datos. <strong>No necesitas crear una cuenta.</strong> Usaremos

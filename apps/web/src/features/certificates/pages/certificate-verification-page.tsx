@@ -27,6 +27,7 @@ import {
 } from '../api/donation-certificate';
 import { formatBogota, formatCop } from '../model/certificate-format';
 import { useNoIndex } from '../../../seo/seo';
+import { PublicFooter, PublicNavbar, PublicPageBody, PublicPageHero } from '../../../shell/layout';
 import styles from './certificate-verification-page.module.scss';
 
 type VerifyState = 'idle' | 'loading' | 'valid' | 'invalid' | 'error';
@@ -120,236 +121,245 @@ export function CertificateVerificationPage() {
   }, [codeParam]);
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6">
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Verificar un certificado o reporte</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className={styles.intro}>
-              Ingresa el código del certificado de donación, del certificado de voluntariado (VOL-…)
-              o el folio del reporte (ADF-REP-…) para comprobar su autenticidad.
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                aria-label="Código del certificado"
-                placeholder="ADF-CERT-2026-000742"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
-              <Button onClick={() => verify(code)}>Verificar</Button>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <PublicNavbar />
+      <main className="flex-1">
+        <PublicPageHero
+          eyebrow="Verificación pública"
+          tone="mint"
+          title="Verificar un certificado o reporte"
+          lead="Ingresa el código del certificado de donación, del certificado de voluntariado (VOL-…) o el folio del reporte (ADF-REP-…) para comprobar su autenticidad."
+        >
+          <form
+            className="flex max-w-xl flex-col gap-2 sm:flex-row"
+            onSubmit={(event) => {
+              event.preventDefault();
+              verify(code);
+            }}
+          >
+            <Input
+              aria-label="Código del certificado"
+              placeholder="ADF-CERT-2026-000742"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="h-12 bg-card"
+            />
+            <Button type="submit" size="lg">
+              Verificar
+            </Button>
+          </form>
+        </PublicPageHero>
+        <PublicPageBody narrow className="space-y-6">
+          {state === 'loading' && <Skeleton className="h-48 w-full" />}
 
-        {state === 'loading' && <Skeleton className="h-48 w-full" />}
-
-        {state === 'valid' && result && (
-          <Card data-testid="verification-result" className={styles.result}>
-            <CardHeader className="gap-2">
-              <div className={styles['result__title-row']}>
-                <CardTitle>
-                  {result.revokedAt ? 'Certificado anulado' : 'Certificado válido'}
-                </CardTitle>
-                {result.revokedAt ? (
-                  <Badge variant="destructive" data-testid="certificate-revoked">
-                    Anulado
-                  </Badge>
-                ) : (
-                  <Badge variant="success">Auténtico</Badge>
-                )}
-              </div>
-              <p className={styles['result__intro']}>
-                {result.revokedAt
-                  ? `Lo emitió una ESAL con RTE vigente, pero el pago de la donación se reembolsó o se contracargó el ${formatBogota(result.revokedAt)}. Este certificado ya no sirve como soporte de la donación.`
-                  : 'Evidencia de autenticidad emitida por una ESAL con RTE vigente.'}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <dl className={styles.evidence} data-testid="authenticity-evidence">
-                <div>
-                  <dt className={styles['evidence__label']}>Emisor</dt>
-                  <dd className={styles['evidence__value']}>
-                    {result.organizationName} · NIT {result.organizationNit}
-                    <span className="ml-2 align-middle">
-                      <Badge variant="success">ESAL · RTE</Badge>
-                    </span>
-                  </dd>
+          {state === 'valid' && result && (
+            <Card data-testid="verification-result" className={styles.result}>
+              <CardHeader className="gap-2">
+                <div className={styles['result__title-row']}>
+                  <CardTitle>
+                    {result.revokedAt ? 'Certificado anulado' : 'Certificado válido'}
+                  </CardTitle>
+                  {result.revokedAt ? (
+                    <Badge variant="destructive" data-testid="certificate-revoked">
+                      Anulado
+                    </Badge>
+                  ) : (
+                    <Badge variant="success">Auténtico</Badge>
+                  )}
                 </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Donante</dt>
-                  <dd className={styles['evidence__value']}>{result.donorName}</dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Monto</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {formatCop(result.amount)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Fecha de emisión</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {formatBogota(result.issuedAt)}
-                  </dd>
-                </div>
-                <div className={styles['evidence__wide']}>
-                  <dt className={styles['evidence__label']}>Hash del documento</dt>
-                  <dd className={styles['evidence__hash']}>{result.contentHash}</dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
-        )}
-
-        {state === 'valid' && report && (
-          <Card data-testid="report-verification-result" className={styles.result}>
-            <CardHeader className="gap-2">
-              <div className={styles['result__title-row']}>
-                <CardTitle>Reporte auténtico</CardTitle>
-                <Badge variant={REPORT_EFFECT[report.legalEffect].variant}>
-                  {REPORT_EFFECT[report.legalEffect].label}
-                </Badge>
-              </div>
-              <p className={styles['result__intro']}>
-                Este folio fue generado en AdoptaFácil y su contenido está sellado. Compara la
-                huella con la impresa al pie del documento: si coinciden, el documento no fue
-                alterado.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <dl className={styles.evidence}>
-                <div>
-                  <dt className={styles['evidence__label']}>Documento</dt>
-                  <dd className={styles['evidence__value']}>{REPORT_KIND_LABEL[report.kind]}</dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Organización</dt>
-                  <dd className={styles['evidence__value']}>{report.organizationName}</dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Período</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {formatDay(report.periodStart)} al {formatDay(report.periodEnd)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Generado</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {formatBogota(report.createdAt)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Firmado por</dt>
-                  <dd className={styles['evidence__value']}>
-                    {report.signers.length
-                      ? report.signers
-                          .map((s) => `${s.fullName} (${SIGNER_ROLE_LABEL[s.role] ?? s.role})`)
-                          .join(', ')
-                      : 'Sin firmas'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Registros</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {report.rowCount}
-                  </dd>
-                </div>
-                <div className={styles['evidence__wide']}>
-                  <dt className={styles['evidence__label']}>Huella SHA-256 del contenido</dt>
-                  <dd className={styles['evidence__hash']}>{report.contentHash}</dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
-        )}
-
-        {state === 'valid' && volunteer && (
-          <Card data-testid="volunteer-verification-result" className={styles.result}>
-            <CardHeader className="gap-2">
-              <div className={styles['result__title-row']}>
-                <CardTitle>
-                  {volunteer.appliesToStudentService
-                    ? 'Constancia de servicio social auténtica'
-                    : 'Certificado de voluntariado auténtico'}
-                </CardTitle>
-                <Badge variant="success">Auténtico</Badge>
-              </div>
-              <p className={styles['result__intro']}>
-                Este certificado lo expidió la organización en AdoptaFácil y no se puede modificar
-                después de emitido. Compara los datos con el documento que tienes: deben coincidir.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <dl className={styles.evidence}>
-                <div>
-                  <dt className={styles['evidence__label']}>Voluntario(a)</dt>
-                  <dd className={styles['evidence__value']}>{volunteer.volunteerName}</dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Organización</dt>
-                  <dd className={styles['evidence__value']}>{volunteer.organizationName}</dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Jornada</dt>
-                  <dd className={styles['evidence__value']}>{volunteer.opportunityTitle}</dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Horas certificadas</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {volunteer.totalApprovedHours} h en {volunteer.sessions}{' '}
-                    {volunteer.sessions === 1 ? 'sesión aprobada' : 'sesiones aprobadas'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Período</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {formatDay(volunteer.periodStart.slice(0, 10))} al{' '}
-                    {formatDay(volunteer.periodEnd.slice(0, 10))}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Fecha de emisión</dt>
-                  <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
-                    {formatBogota(volunteer.issuedAt)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className={styles['evidence__label']}>Firmado por</dt>
-                  <dd className={styles['evidence__value']}>
-                    {volunteer.signerFullName
-                      ? `${volunteer.signerFullName}${
-                          volunteer.signerPosition ? ` (${volunteer.signerPosition})` : ''
-                        }`
-                      : 'Sin firma registrada'}
-                  </dd>
-                </div>
-                {volunteer.schoolName && (
+                <p className={styles['result__intro']}>
+                  {result.revokedAt
+                    ? `Lo emitió una ESAL con RTE vigente, pero el pago de la donación se reembolsó o se contracargó el ${formatBogota(result.revokedAt)}. Este certificado ya no sirve como soporte de la donación.`
+                    : 'Evidencia de autenticidad emitida por una ESAL con RTE vigente.'}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <dl className={styles.evidence} data-testid="authenticity-evidence">
                   <div>
-                    <dt className={styles['evidence__label']}>Institución educativa</dt>
-                    <dd className={styles['evidence__value']}>{volunteer.schoolName}</dd>
+                    <dt className={styles['evidence__label']}>Emisor</dt>
+                    <dd className={styles['evidence__value']}>
+                      {result.organizationName} · NIT {result.organizationNit}
+                      <span className="ml-2 align-middle">
+                        <Badge variant="success">ESAL · RTE</Badge>
+                      </span>
+                    </dd>
                   </div>
-                )}
-                <div className={styles['evidence__wide']}>
-                  <dt className={styles['evidence__label']}>Código</dt>
-                  <dd className={styles['evidence__hash']}>{volunteer.verificationCode}</dd>
+                  <div>
+                    <dt className={styles['evidence__label']}>Donante</dt>
+                    <dd className={styles['evidence__value']}>{result.donorName}</dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Monto</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {formatCop(result.amount)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Fecha de emisión</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {formatBogota(result.issuedAt)}
+                    </dd>
+                  </div>
+                  <div className={styles['evidence__wide']}>
+                    <dt className={styles['evidence__label']}>Hash del documento</dt>
+                    <dd className={styles['evidence__hash']}>{result.contentHash}</dd>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          )}
+
+          {state === 'valid' && report && (
+            <Card data-testid="report-verification-result" className={styles.result}>
+              <CardHeader className="gap-2">
+                <div className={styles['result__title-row']}>
+                  <CardTitle>Reporte auténtico</CardTitle>
+                  <Badge variant={REPORT_EFFECT[report.legalEffect].variant}>
+                    {REPORT_EFFECT[report.legalEffect].label}
+                  </Badge>
                 </div>
-              </dl>
-            </CardContent>
-          </Card>
-        )}
+                <p className={styles['result__intro']}>
+                  Este folio fue generado en AdoptaFácil y su contenido está sellado. Compara la
+                  huella con la impresa al pie del documento: si coinciden, el documento no fue
+                  alterado.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <dl className={styles.evidence}>
+                  <div>
+                    <dt className={styles['evidence__label']}>Documento</dt>
+                    <dd className={styles['evidence__value']}>{REPORT_KIND_LABEL[report.kind]}</dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Organización</dt>
+                    <dd className={styles['evidence__value']}>{report.organizationName}</dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Período</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {formatDay(report.periodStart)} al {formatDay(report.periodEnd)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Generado</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {formatBogota(report.createdAt)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Firmado por</dt>
+                    <dd className={styles['evidence__value']}>
+                      {report.signers.length
+                        ? report.signers
+                            .map((s) => `${s.fullName} (${SIGNER_ROLE_LABEL[s.role] ?? s.role})`)
+                            .join(', ')
+                        : 'Sin firmas'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Registros</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {report.rowCount}
+                    </dd>
+                  </div>
+                  <div className={styles['evidence__wide']}>
+                    <dt className={styles['evidence__label']}>Huella SHA-256 del contenido</dt>
+                    <dd className={styles['evidence__hash']}>{report.contentHash}</dd>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          )}
 
-        {state === 'invalid' && (
-          <EmptyState
-            title="Código no encontrado"
-            description="No pudimos verificar ese código. Revisa que esté completo e inténtalo de nuevo."
-          />
-        )}
+          {state === 'valid' && volunteer && (
+            <Card data-testid="volunteer-verification-result" className={styles.result}>
+              <CardHeader className="gap-2">
+                <div className={styles['result__title-row']}>
+                  <CardTitle>
+                    {volunteer.appliesToStudentService
+                      ? 'Constancia de servicio social auténtica'
+                      : 'Certificado de voluntariado auténtico'}
+                  </CardTitle>
+                  <Badge variant="success">Auténtico</Badge>
+                </div>
+                <p className={styles['result__intro']}>
+                  Este certificado lo expidió la organización en AdoptaFácil y no se puede modificar
+                  después de emitido. Compara los datos con el documento que tienes: deben
+                  coincidir.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <dl className={styles.evidence}>
+                  <div>
+                    <dt className={styles['evidence__label']}>Voluntario(a)</dt>
+                    <dd className={styles['evidence__value']}>{volunteer.volunteerName}</dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Organización</dt>
+                    <dd className={styles['evidence__value']}>{volunteer.organizationName}</dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Jornada</dt>
+                    <dd className={styles['evidence__value']}>{volunteer.opportunityTitle}</dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Horas certificadas</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {volunteer.totalApprovedHours} h en {volunteer.sessions}{' '}
+                      {volunteer.sessions === 1 ? 'sesión aprobada' : 'sesiones aprobadas'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Período</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {formatDay(volunteer.periodStart.slice(0, 10))} al{' '}
+                      {formatDay(volunteer.periodEnd.slice(0, 10))}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Fecha de emisión</dt>
+                    <dd className={cn(styles['evidence__value'], styles['evidence__value--plain'])}>
+                      {formatBogota(volunteer.issuedAt)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={styles['evidence__label']}>Firmado por</dt>
+                    <dd className={styles['evidence__value']}>
+                      {volunteer.signerFullName
+                        ? `${volunteer.signerFullName}${
+                            volunteer.signerPosition ? ` (${volunteer.signerPosition})` : ''
+                          }`
+                        : 'Sin firma registrada'}
+                    </dd>
+                  </div>
+                  {volunteer.schoolName && (
+                    <div>
+                      <dt className={styles['evidence__label']}>Institución educativa</dt>
+                      <dd className={styles['evidence__value']}>{volunteer.schoolName}</dd>
+                    </div>
+                  )}
+                  <div className={styles['evidence__wide']}>
+                    <dt className={styles['evidence__label']}>Código</dt>
+                    <dd className={styles['evidence__hash']}>{volunteer.verificationCode}</dd>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          )}
 
-        {state === 'error' && (
-          <EmptyState title="No se pudo verificar" description="Inténtalo de nuevo más tarde." />
-        )}
-      </div>
-    </main>
+          {state === 'invalid' && (
+            <EmptyState
+              title="Código no encontrado"
+              description="No pudimos verificar ese código. Revisa que esté completo e inténtalo de nuevo."
+            />
+          )}
+
+          {state === 'error' && (
+            <EmptyState title="No se pudo verificar" description="Inténtalo de nuevo más tarde." />
+          )}
+        </PublicPageBody>
+      </main>
+      <PublicFooter />
+    </div>
   );
 }

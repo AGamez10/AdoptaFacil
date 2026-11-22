@@ -116,7 +116,7 @@ export function renderInline(text: string): ReactNode[] {
     }
     if (part.startsWith('⟦') && part.endsWith('⟧')) {
       return (
-        <mark key={index} className="rounded bg-amber-100 px-1 text-amber-900">
+        <mark key={index} className="rounded bg-[var(--af-sun-soft)] px-1 text-[var(--af-ink)]">
           {part}
         </mark>
       );
@@ -154,7 +154,7 @@ function renderBlocks(markdown: string): ReactNode[] {
           <aside
             key={index}
             role="note"
-            className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900"
+            className="rounded-md border border-[var(--af-sun)] bg-[var(--af-sun-soft)] p-3 text-[var(--af-ink)]"
           >
             {renderInline(block.text)}
           </aside>

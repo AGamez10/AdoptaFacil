@@ -17,6 +17,9 @@ $ink: #1d1a16;
    ======================================================================== */
 .page {
   min-height: 100vh;
+  // Dentro del portal, los títulos genéricos (tarjetas, diálogos, h1–h4) usan
+  // la tipografía de la plantilla, no la de la plataforma.
+  --font-heading: var(--tpl-heading-font, var(--font-display));
   // Las medidas de las plantillas siguen el ancho de la página (o de la tarjeta de
   // vista previa), no el de la ventana del navegador.
   container-type: inline-size;

@@ -299,7 +299,7 @@ export function AdoptionContractPage() {
   const dataComplete = missingFields.length === 0;
   const missingNotice = dataComplete ? null : (
     <p
-      className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+      className="rounded-md border border-[var(--af-sun)] bg-[var(--af-sun-soft)] p-3 text-sm text-[var(--af-ink)]"
       role="status"
       data-testid="contract-missing-fields"
     >
@@ -897,9 +897,7 @@ export function AdoptionContractPage() {
                   className="block text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
                 />
               )}
-              {signatureBase64 && (
-                <p className="text-xs font-medium text-emerald-600">✓ Firma lista</p>
-              )}
+              {signatureBase64 && <p className="text-xs font-medium text-primary">✓ Firma lista</p>}
               <Button
                 size="sm"
                 disabled={busyAction || !signatureBase64 || !dataComplete}

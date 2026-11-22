@@ -54,12 +54,12 @@
 @layer base {
   :root {
     /* Surfaces */
-    --background: 180 23% 97%; /* "bg-cool" from the brand palette */
-    --foreground: 214 32% 18%; /* brand navy */
+    --background: 34 100% 97%; /* marca v3: --af-cream (#fff8ef), un solo lienzo para toda la plataforma */
+    --foreground: 212 39% 13%; /* marca v3: --af-ink (#14202e) */
     --card: 0 0% 100%;
-    --card-foreground: 214 32% 18%;
+    --card-foreground: 212 39% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 214 32% 18%;
+    --popover-foreground: 212 39% 13%;
 
     /* Primary — AdoptaFácil teal (call to action). The true logo hex
        (#25BAA6, H172 S67 L44) measures only 2.43:1 for white text — darkened
@@ -67,21 +67,21 @@
        focus ring (which reuses --primary) clears the 3:1 UI-contrast floor
        against both --background and --card. The undarkened hex lives on as
        --brand-teal below for decorative, non-text use. */
-    --primary: 172 67% 30%;
+    --primary: 172 79% 24%; /* marca v3: --af-teal-ink (#0d6c5f), 6.3:1 con blanco */
     --primary-foreground: 0 0% 100%;
 
     /* Secondary — soft navy-tinted neutral, for supporting surfaces */
-    --secondary: 213 20% 93%;
-    --secondary-foreground: 214 32% 18%;
+    --secondary: 37 42% 89%;
+    --secondary-foreground: 212 39% 13%;
 
     /* Muted — low-emphasis surfaces and text */
-    --muted: 213 20% 95%;
-    --muted-foreground: 215 26% 31%; /* brand navy-soft */
+    --muted: 37 47% 93%;
+    --muted-foreground: 213 19% 30%; /* marca v3: --af-ink-soft (#3f4c5c) */
 
     /* Accent — teal-light tint for hover/highlight, navy text for AA
        (the mockup's own teal-dark-on-teal-light pair only measures 3.41:1) */
-    --accent: 169 55% 94%;
-    --accent-foreground: 214 32% 18%;
+    --accent: 160 64% 95%; /* --af-mint-soft */
+    --accent-foreground: 212 39% 13%;
 
     /* Semantic status — UNCHANGED, see file comment above */
     --destructive: 0 72% 45%;
@@ -102,13 +102,13 @@
        contrast against both --card and --background (F-BORDE methodology). */
     --border: 213 15% 54%;
     --input: 213 15% 52%;
-    --ring: 172 67% 30%;
+    --ring: 172 79% 24%;
 
     /* Dark navy surface (Button "dark" variant, future dark shell surfaces).
        Distinct from --brand-navy below: this one is theme-aware (lighter in
        dark mode, see .dark) so it still reads as a raised surface there. */
-    --navy: 214 32% 18%;
-    --navy-soft: 215 26% 31%;
+    --navy: 173 69% 14%; /* marca v3: --af-teal-deep (#0b3d37), igual que el pie público */
+    --navy-soft: 172 61% 20%;
 
     /* Raw brand swatches — literal logo colors for decorative/non-text use
        (icons, illustrations, marketing accents). Constant across themes; NOT

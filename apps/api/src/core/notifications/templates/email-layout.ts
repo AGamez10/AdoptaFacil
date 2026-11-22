@@ -24,11 +24,11 @@ interface ThemeStyle {
   kicker: string;
 }
 
-// Brand palette (packages/ui globals.scss): teal #25BAA6 / #198072, navy
-// #202D3E, coral #FF8F66, gold #F2B84B. Accents are decorative (bar, icon
+// Brand palette (marca v3, packages/ui tokens.scss): teal #25BAA6 / #0D6C5F, tinta
+// #14202E, verde profundo #0B3D37, coral #FF8F66, gold #F2B84B. Accents are decorative (bar, icon
 // bubble); text and the button keep AA contrast on white.
 const THEMES: Record<EmailTheme, ThemeStyle> = {
-  security: { accent: '#202D3E', soft: '#E8ECF2', icon: '🔒', kicker: 'Seguridad de tu cuenta' },
+  security: { accent: '#0B3D37', soft: '#E8FAF4', icon: '🔒', kicker: 'Seguridad de tu cuenta' },
   team: { accent: '#25BAA6', soft: '#E6F7F4', icon: '👥', kicker: 'Invitación a un equipo' },
   donation: { accent: '#FF8F66', soft: '#FFF0EA', icon: '💛', kicker: 'Donaciones' },
   sponsorship: { accent: '#F2B84B', soft: '#FDF4E2', icon: '🐾', kicker: 'Apadrinamientos' },
@@ -44,7 +44,7 @@ const THEMES: Record<EmailTheme, ThemeStyle> = {
 // Accent palette the editor offers (item 12). Decorative only, like the themes.
 const ACCENTS: Record<EmailAccentColor, { accent: string; soft: string }> = {
   teal: { accent: '#25BAA6', soft: '#E6F7F4' },
-  navy: { accent: '#202D3E', soft: '#E8ECF2' },
+  navy: { accent: '#0B3D37', soft: '#E8FAF4' },
   coral: { accent: '#FF8F66', soft: '#FFF0EA' },
   gold: { accent: '#F2B84B', soft: '#FDF4E2' },
   blue: { accent: '#4F7CAC', soft: '#EAF1F8' },
@@ -53,10 +53,10 @@ const ACCENTS: Record<EmailAccentColor, { accent: string; soft: string }> = {
   green: { accent: '#4C9A52', soft: '#EBF5EC' },
 };
 
-const INK = '#202D3E';
-const MUTED = '#5B6878';
-const BUTTON = '#198072';
-const PAGE_BG = '#F2F5F4';
+const INK = '#14202E';
+const MUTED = '#3F4C5C';
+const BUTTON = '#0D6C5F';
+const PAGE_BG = '#FFF8EF';
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 // Modo oscuro (Apple Mail, iOS, Outlook.com/app, Thunderbird): los clientes que

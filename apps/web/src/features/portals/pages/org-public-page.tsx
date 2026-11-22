@@ -467,7 +467,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 <div
                   role="status"
                   data-testid="portal-owner-preview"
-                  className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950"
+                  className="rounded-2xl border border-[var(--af-sun)] bg-[var(--af-sun-soft)] px-5 py-4 text-sm text-[var(--af-ink)]"
                 >
                   <strong>Vista previa privada.</strong> Solo tu equipo ve esta página. Tu portal
                   será público cuando la plataforma apruebe tu organización; mientras tanto puedes

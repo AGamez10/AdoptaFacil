@@ -404,7 +404,7 @@ function ProductsTab({
   return (
     <div className="space-y-6">
       {!dashboard.checkoutEnabled && (
-        <p className="rounded-xl bg-amber-100 p-3 text-sm text-amber-900">
+        <p className="rounded-xl bg-[var(--af-sun-soft)] p-3 text-sm text-[var(--af-ink)]">
           El pago en línea está apagado: falta configurar la cuenta de Mercado Pago de AdoptaFácil
           (MERCADOPAGO_PLATFORM_ACCESS_TOKEN). La página del QR se ve, pero no se puede comprar.
         </p>

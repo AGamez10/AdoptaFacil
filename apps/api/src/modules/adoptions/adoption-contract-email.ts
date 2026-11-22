@@ -123,12 +123,12 @@ export function buildContractCopyHtml(input: AdoptionContractCopyEmailInput): st
   const intro = roleIntro(input, animal, org);
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contrato de adopción firmado</title></head>
-<body style="margin:0;padding:0;background:#f4f1ea;font-family:Georgia,'Times New Roman',serif;color:#1f2a24">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1ea;padding:24px 12px">
+<body style="margin:0;padding:0;background:#fff8ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#14202e">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fff8ef;padding:24px 12px">
 <tr><td align="center">
-<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e3ddd0">
-<tr><td style="background:#1d4d3b;padding:22px 28px;color:#ffffff">
-<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.85">${org}</div>
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #efe6d8">
+<tr><td style="background:#0b3d37;padding:22px 28px;color:#ffffff">
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.85">${org}</div>
 <div style="font-size:24px;line-height:1.25;margin-top:6px">Contrato de adopción de ${animal}, firmado</div>
 </td></tr>
 <tr><td style="padding:26px 28px 8px;font-size:16px;line-height:1.6">
@@ -137,20 +137,20 @@ export function buildContractCopyHtml(input: AdoptionContractCopyEmailInput): st
 <p style="margin:0 0 14px">Adjuntamos el contrato completo en PDF, con las firmas de todas las partes.</p>
 </td></tr>
 <tr><td style="padding:0 28px">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f5ef;border-radius:8px;border:1px solid #ebe6da">
-<tr><td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#3d4a43">
-<strong style="color:#1f2a24">Firmado el</strong> ${date}<br>
-<strong style="color:#1f2a24">Huella SHA-256</strong><br>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fdf6ec;border-radius:8px;border:1px solid #efe6d8">
+<tr><td style="padding:14px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#3f4c5c">
+<strong style="color:#14202e">Firmado el</strong> ${date}<br>
+<strong style="color:#14202e">Huella SHA-256</strong><br>
 <span style="font-family:'Courier New',monospace;font-size:12px;word-break:break-all">${hash}</span>
 </td></tr></table>
 </td></tr>
 <tr><td align="center" style="padding:24px 28px">
-<a href="${link}" style="display:inline-block;background:#1d4d3b;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:12px 22px;border-radius:6px">Ver el contrato en AdoptaFácil</a>
+<a href="${link}" style="display:inline-block;background:#0d6c5f;color:#ffffff;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;padding:12px 22px;border-radius:999px">Ver el contrato en AdoptaFácil</a>
 </td></tr>
-<tr><td style="padding:0 28px 26px;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.6;color:#5c6a62">
+<tr><td style="padding:0 28px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#3f4c5c">
 Cada parte recibe una copia idéntica y el documento queda guardado en AdoptaFácil. La huella permite comprobar que el contenido no cambió desde la firma. Si algo no coincide con lo que firmaste, responde a ${org}.
 </td></tr>
-<tr><td style="background:#f7f5ef;padding:14px 28px;font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#7a857f;border-top:1px solid #ebe6da">
+<tr><td style="background:#fdf6ec;padding:14px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11.5px;color:#5b6676;border-top:1px solid #efe6d8">
 ${org} usa AdoptaFácil para gestionar sus adopciones. AdoptaFácil no es parte del contrato.
 </td></tr>
 </table>
