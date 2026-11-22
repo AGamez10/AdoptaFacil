@@ -40,6 +40,21 @@ export const EMAIL_EVENT_KEYS = [
   'platform.announcement',
   'org.urgent_announcement',
   'coffee.purchase_receipt',
+  // Correos que antes salían en texto plano, sin la plantilla de marca.
+  'auth.mfa_enabled',
+  'legal.acceptance_recorded',
+  'org.signer_welcome',
+  'reports.signature_request',
+  'accounting.share',
+  'plan.renewal_due',
+  'plan.payment_failed',
+  'plan.ending',
+  'plan.free_pro_ending',
+  'org.rte_expiring',
+  'org.rte_expired',
+  'animals.clinical_reminder',
+  'coffee.refund_notice',
+  'sponsorship.payment_received',
   'plan.activated',
 ] as const;
 
@@ -63,9 +78,14 @@ export type EmailTheme =
   | 'adoption'
   | 'volunteering'
   | 'community'
-  | 'alert';
+  | 'alert'
+  // Aditivos: firmas y documentos, plan de la organización, salud animal.
+  | 'documents'
+  | 'plan'
+  | 'health';
 
-export type EmailVariableKind = 'text' | 'money' | 'date' | 'number' | 'url';
+/** `day`: solo la fecha (sin hora), p. ej. vencimientos. */
+export type EmailVariableKind = 'text' | 'money' | 'date' | 'day' | 'number' | 'url';
 
 export interface EmailVariableDescriptor {
   /** Placeholder name used as `{{name}}` in the template. */

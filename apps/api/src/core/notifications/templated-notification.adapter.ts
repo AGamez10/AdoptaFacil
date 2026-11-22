@@ -17,7 +17,8 @@ import type { NotificationMessage, NotificationPort } from './notification.port'
  *    subject/body go out instead (fail open on service emails, so a receipt or
  *    a password reset is never lost).
  *
- * Messages without `template` pass through untouched. Never logs bodies or
+ * Messages without `template` go out in the generic AdoptaFácil layout (their
+ * text escaped, bare links clickable), so no email leaves unbranded. Never logs bodies or
  * addresses beyond what the inner adapter already logs.
  *
  * With `template.organizationId` and a branding port, the email may go out
@@ -39,7 +40,7 @@ export class TemplatedNotificationAdapter implements NotificationPort {
     const { template, ...plain } = message;
     const def = template ? getEmailEvent(template.event) : undefined;
     if (!template || !def) {
-      return this.inner.send(plain);
+      return this.inner.send(this.wrapPlain(plain));
     }
 
     if (def.category === 'bulk') {
@@ -82,7 +83,7 @@ export class TemplatedNotificationAdapter implements NotificationPort {
       this.logger.warn(
         `email event=${def.event} template failed, sending plain fallback (${(error as Error).message})`,
       );
-      return this.inner.send(plain);
+      return this.inner.send(this.wrapPlain(plain));
     }
 
     return this.inner.send({
@@ -94,5 +95,20 @@ export class TemplatedNotificationAdapter implements NotificationPort {
       ...(branding ? { fromName: branding.fromName } : {}),
       ...(branding?.replyTo ? { replyTo: branding.replyTo } : {}),
     });
+  }
+
+  /**
+   * Red de seguridad: un correo sin plantilla de catálogo (o cuya plantilla
+   * falló) sale igual con el diseño de AdoptaFácil. Si ya trae HTML (la prueba
+   * del editor) o el envoltorio falla, sale tal cual: nunca se pierde.
+   */
+  private wrapPlain(message: NotificationMessage): NotificationMessage {
+    if (message.html) return message;
+    try {
+      const wrapped = this.templates.wrapPlain(message.subject, message.body);
+      return { ...message, subject: wrapped.subject, body: wrapped.text, html: wrapped.html };
+    } catch {
+      return message;
+    }
   }
 }

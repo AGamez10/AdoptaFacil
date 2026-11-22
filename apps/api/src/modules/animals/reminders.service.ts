@@ -11,7 +11,8 @@ import {
   type ClinicalReminder,
   type ReminderResolution,
   ReminderStatus,
-  type ReminderType,
+  ReminderType,
+  Role,
 } from '@adoptafacil/contracts';
 import { AuditService } from '../../core/audit/audit.service';
 import type { Env } from '../../config/env.validation';
@@ -22,6 +23,25 @@ import {
   type NotificationPort,
 } from '../../core/notifications/notification.port';
 import { canResolve, statusForResolution } from './reminders.window';
+
+/** Qué toca, en palabras del equipo (correo del recordatorio). */
+const REMINDER_TYPE_LABEL: Record<ReminderType, string> = {
+  [ReminderType.Vaccine]: 'vacuna',
+  [ReminderType.Treatment]: 'tratamiento',
+  [ReminderType.Surgery]: 'control de cirugía',
+  [ReminderType.Sterilization]: 'control de esterilización',
+  [ReminderType.Allergy]: 'control de alergia',
+  [ReminderType.Disability]: 'control de discapacidad',
+  [ReminderType.Medication]: 'medicamento',
+  [ReminderType.Diagnosis]: 'control de diagnóstico',
+};
+
+/** Quienes reciben por correo los recordatorios clínicos de la organización. */
+const CLINICAL_REMINDER_ROLES: readonly Role[] = [
+  Role.Owner,
+  Role.Administrator,
+  Role.Veterinarian,
+];
 
 /** Row returned by the SECURITY DEFINER cross-tenant due scan. */
 interface DueRow {
@@ -161,12 +181,51 @@ export class RemindersService {
 
     let ok = true;
     try {
-      await this.notifications.send({
-        to: `org:${organizationId}`,
-        subject: `Recordatorio: ${reminder.reminderType}`,
-        // NO clinical detail — only ids/type/date.
-        body: `Animal ${reminder.animalId} — vence ${reminder.dueDate.toISOString()}`,
-      });
+      // Antes iba a la seudo-dirección `org:<id>`, que ningún servidor de correo
+      // entrega: ahora va a quienes atienden la salud de los animales.
+      const { animalName, organizationName, emails } = await this.prisma.withOrgContext(
+        organizationId,
+        async (tx) => {
+          const [animal, org, roles] = await Promise.all([
+            tx.animal.findUnique({ where: { id: reminder.animalId }, select: { name: true } }),
+            tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+            tx.userRole.findMany({
+              where: { organizationId, role: { in: [...CLINICAL_REMINDER_ROLES] } },
+              select: { userId: true },
+            }),
+          ]);
+          const users = await tx.user.findMany({
+            where: { id: { in: [...new Set(roles.map((r) => r.userId))] } },
+            select: { email: true },
+          });
+          return {
+            animalName: animal?.name ?? 'Un animal',
+            organizationName: org?.name ?? undefined,
+            emails: users.map((u) => u.email).filter(Boolean),
+          };
+        },
+      );
+      const type = REMINDER_TYPE_LABEL[reminder.reminderType as ReminderType] ?? 'control';
+      const link = `${this.config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '')}/animales/${reminder.animalId}`;
+      for (const to of emails) {
+        await this.notifications.send({
+          to,
+          // Solo el tipo y la fecha: ningún detalle clínico viaja por correo.
+          subject: `Recordatorio: ${type} de ${animalName}`,
+          body: `A ${animalName} le toca ${type}; vence el ${reminder.dueDate.toISOString().slice(0, 10)}.\n\n${link}`,
+          idempotencyKey: `clinical.reminder:${reminder.id}:${to}`,
+          template: {
+            event: 'animals.clinical_reminder',
+            organizationName,
+            data: {
+              animal: animalName,
+              tipo: type,
+              fecha: reminder.dueDate.toISOString(),
+              enlace: link,
+            },
+          },
+        });
+      }
     } catch {
       ok = false;
     }

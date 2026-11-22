@@ -801,6 +801,436 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       body: 'Hola,\n\n{{mensaje}}',
     },
   },
+  // -------------------------------------------------------------------------
+  // Correos que antes salían en texto plano (sin la plantilla de marca). Cada
+  // uno conserva su texto plano como respaldo si la plantilla no se puede armar.
+  // -------------------------------------------------------------------------
+  {
+    event: 'auth.mfa_enabled',
+    label: 'Verificación en dos pasos activada',
+    description:
+      'Se envía cuando una persona del equipo de plataforma activa la verificación en dos pasos.',
+    audience: 'La persona dueña de la cuenta',
+    category: 'transactional',
+    theme: 'security',
+    required: false,
+    variables: [],
+    defaults: {
+      subject: 'Activaste la verificación en dos pasos en AdoptaFácil',
+      preheader: 'Desde ahora te pediremos también el código de tu app.',
+      heading: 'Tu cuenta quedó más protegida',
+      body:
+        'Hola,\n\nLa **verificación en dos pasos** quedó activa en tu cuenta del equipo de AdoptaFácil. ' +
+        'Desde ahora, además de tu contraseña, te pediremos el código de tu app de autenticación.',
+      footerNote:
+        'Si no fuiste tú, avisa de inmediato a tu líder de equipo para que bloquee la cuenta.',
+    },
+  },
+  {
+    event: 'legal.acceptance_recorded',
+    label: 'Constancia de aceptación de términos',
+    description:
+      'Se envía cuando una persona acepta los términos, la política de datos u otro documento legal.',
+    audience: 'La persona que aceptó',
+    category: 'transactional',
+    theme: 'security',
+    required: false,
+    variables: [
+      v('fecha', 'Fecha y hora de la aceptación', '2026-11-21T15:30:00.000Z', 'date'),
+      v(
+        'documentos',
+        'Documentos aceptados (lista con su versión)',
+        '• Términos y condiciones (versión 2026-11)\n• Política de tratamiento de datos (versión 2026-11)',
+      ),
+      v(
+        'enlace',
+        'Enlace a "Mis autorizaciones"',
+        'https://adoptafacil.co/mis-autorizaciones',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Registramos tu aceptación en AdoptaFácil',
+      preheader: 'Guardamos la versión exacta de cada documento que aceptaste.',
+      heading: 'Quedó registrada tu aceptación',
+      body:
+        'Hola,\n\nEl **{{fecha}}** quedó registrada tu aceptación de estos documentos:\n\n' +
+        '{{documentos}}\n\n' +
+        'Guardamos la versión exacta de cada texto, la fecha y hora, y la dirección IP y el navegador ' +
+        'desde los que aceptaste. Puedes consultar tu historial y retirar las autorizaciones opcionales cuando quieras.',
+      ctaLabel: 'Ver mis autorizaciones',
+      footerNote:
+        'Para ejercer tus derechos sobre tus datos personales (Ley 1581 de 2012) escribe a adoptafacil.oficial@gmail.com.',
+    },
+  },
+  {
+    event: 'org.signer_welcome',
+    label: 'Bienvenida a contador o revisor fiscal',
+    description:
+      'Se envía cuando una organización vincula a su contador público o revisor fiscal como firmante.',
+    audience: 'El contador o revisor fiscal (no necesita cuenta)',
+    category: 'transactional',
+    theme: 'documents',
+    required: false,
+    variables: [
+      ORG,
+      v('nombre', 'Nombre de la persona', 'Carlos Pérez'),
+      v('cargo', 'Cargo de firmante', 'contador público'),
+    ],
+    defaults: {
+      subject: '{{organizacion}} te vinculó como su {{cargo}} en AdoptaFácil',
+      preheader: 'No necesitas cuenta: te escribiremos cuando necesiten tu firma.',
+      heading: 'Eres el {{cargo}} de {{organizacion}}',
+      body:
+        'Hola {{nombre}},\n\n**{{organizacion}}** te registró como su **{{cargo}}** en AdoptaFácil, la ' +
+        'plataforma con la que lleva sus adopciones y donaciones.\n\n' +
+        'No necesitas crear una cuenta ni una contraseña. Así funciona:\n\n' +
+        '• Cuando la organización necesite tu firma (por ejemplo, el cierre mensual del libro de donaciones o el informe de donaciones), te llegará un correo con un enlace personal de un solo uso.\n' +
+        '• La primera vez registras tu firma (dibujada o con una foto sobre papel blanco) y autorizas que se guarde cifrada solo en esta organización.\n' +
+        '• Las siguientes veces solo revisas el documento y lo apruebas con tu número de documento. Tu firma se estampa únicamente en lo que tú apruebes, uno por uno; también puedes rechazarlo.\n\n' +
+        'La organización también puede compartirte su información contable de cada mes con un enlace seguro. ' +
+        'AdoptaFácil prepara y concilia la información; **no firma ni certifica por ti**.',
+      footerNote:
+        'Si no reconoces a {{organizacion}} o no eres su {{cargo}}, ignora este correo: sin tu aprobación, tu firma nunca se usa.',
+    },
+  },
+  {
+    event: 'reports.signature_request',
+    label: 'Solicitud de firma de un documento',
+    description:
+      'Se envía a cada firmante (representante legal, contador o revisor fiscal) cuando la organización genera un documento que necesita su firma.',
+    audience: 'La persona que debe firmar',
+    category: 'transactional',
+    theme: 'documents',
+    // Sin este correo el contador o revisor fiscal no recibe su enlace de firma.
+    required: true,
+    variables: [
+      ORG,
+      v('cargo', 'Cargo de quien firma', 'revisor fiscal'),
+      v('documento', 'Qué documento es', 'el informe de donaciones'),
+      v('folio', 'Folio del documento', 'INF-2026-0042'),
+      v(
+        'instrucciones',
+        'Cómo firmar (depende de si tiene cuenta y si es su primera vez)',
+        'Ábrelo para ver el documento y aprobarlo o rechazarlo. El enlace sirve una sola vez y vence en 7 días.',
+      ),
+      v(
+        'enlace',
+        'Enlace para revisar y firmar',
+        'https://adoptafacil.co/firmar#token=demo',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: '{{organizacion}} necesita tu firma como {{cargo}}',
+      preheader: '{{documento}} · folio {{folio}}',
+      heading: 'Tienes un documento por firmar',
+      body:
+        'Hola,\n\n**{{organizacion}}** generó {{documento}} con folio **{{folio}}** y necesita tu firma como **{{cargo}}**.\n\n' +
+        '{{instrucciones}}\n\n' +
+        'Mientras no lo autorices, el documento queda pendiente de firma y no se emite.',
+      ctaLabel: 'Revisar y firmar',
+      footerNote:
+        'Si no esperabas este correo, ignóralo: sin tu aprobación no se estampa tu firma.',
+    },
+  },
+  {
+    event: 'accounting.share',
+    label: 'Contabilidad compartida con el contador',
+    description:
+      'Se envía cuando la organización comparte el libro auxiliar de donaciones de un mes con su contador o revisor fiscal.',
+    audience: 'El contador o revisor fiscal (no necesita cuenta)',
+    category: 'transactional',
+    theme: 'documents',
+    // El enlace solo llega por correo.
+    required: true,
+    variables: [
+      ORG,
+      v('nombre', 'Nombre de la persona', 'Carlos Pérez'),
+      v('cargo', 'Cargo de firmante', 'contador público'),
+      v('periodo', 'Mes compartido', 'octubre de 2026'),
+      v('dias', 'Días que dura el enlace', '30', 'number'),
+      v(
+        'enlace',
+        'Enlace personal a la contabilidad',
+        'https://adoptafacil.co/contabilidad-compartida#token=demo',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: '{{organizacion}} te compartió su contabilidad de donaciones de {{periodo}}',
+      preheader: 'Libro auxiliar, conciliación y exporte. El enlace vence en {{dias}} días.',
+      heading: 'Contabilidad de {{periodo}}',
+      body:
+        'Hola {{nombre}},\n\n**{{organizacion}}** te compartió, como su {{cargo}}, el libro auxiliar de donaciones de **{{periodo}}**:\n\n' +
+        '• Renglones de cada donación\n• Conciliación contra Mercado Pago\n• Exporte para tu programa contable\n\n' +
+        'No necesitas cuenta. **El enlace es personal y vence en {{dias}} días.**\n\n' +
+        'AdoptaFácil prepara y concilia la información; no firma ni certifica por ti. Si la organización te pide ' +
+        'firmar el cierre del mes, te llegará otro correo con un enlace de firma.',
+      ctaLabel: 'Abrir la contabilidad',
+      footerNote: 'Si no esperabas este correo, ignóralo.',
+    },
+  },
+  {
+    event: 'plan.renewal_due',
+    label: 'Plan por vencer (pago manual)',
+    description: 'Se envía 7 días antes de que venza un plan pagado a mano, que nadie cobra solo.',
+    audience: 'Las personas dueñas de la organización',
+    category: 'transactional',
+    theme: 'plan',
+    required: false,
+    variables: [
+      ORG,
+      v('plan', 'Nombre del plan', 'Pro'),
+      v('fecha', 'Fecha de vencimiento', '2026-11-28T05:00:00.000Z', 'day'),
+      v('enlace', 'Enlace a "Plan"', 'https://adoptafacil.co/organizacion/plan', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu plan {{plan}} vence pronto',
+      preheader: 'Vence el {{fecha}}. Renuévalo para no perder sus funciones.',
+      heading: 'Tu plan {{plan}} vence pronto',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\nTu plan **{{plan}}** de AdoptaFácil vence el **{{fecha}}**. ' +
+        'Como lo pagaste a mano, nadie lo cobra automáticamente: renuévalo desde la sección Plan.',
+      ctaLabel: 'Renovar mi plan',
+      footerNote:
+        'No se borra nada: si tu plan termina, tus animales, adopciones y documentos siguen ahí y tu portal vuelve a una plantilla gratuita.',
+    },
+  },
+  {
+    event: 'plan.payment_failed',
+    label: 'No se pudo cobrar el plan',
+    description:
+      'Se envía cuando Mercado Pago no pudo cobrar el plan o el periodo pagado ya terminó.',
+    audience: 'Las personas dueñas de la organización',
+    category: 'transactional',
+    theme: 'alert',
+    required: false,
+    variables: [
+      ORG,
+      v('plan', 'Nombre del plan', 'Pro'),
+      v('fecha', 'Hasta cuándo sigue funcionando', '2026-11-28T05:00:00.000Z', 'day'),
+      v('enlace', 'Enlace a "Plan"', 'https://adoptafacil.co/organizacion/plan', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'No pudimos cobrar tu plan {{plan}}',
+      preheader: 'Sigue funcionando hasta el {{fecha}}.',
+      heading: 'No pudimos cobrar tu plan {{plan}}',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\nNo pudimos cobrar tu plan **{{plan}}**. Sigue funcionando hasta el **{{fecha}}**; ' +
+        'revisa tu medio de pago en Mercado Pago o paga de nuevo desde la sección Plan.',
+      ctaLabel: 'Revisar mi plan',
+      footerNote:
+        'No se borra nada: si tu plan termina, tus animales, adopciones y documentos siguen ahí y tu portal vuelve a una plantilla gratuita.',
+    },
+  },
+  {
+    event: 'plan.ending',
+    label: 'Plan cancelado por terminar',
+    description: 'Se envía 7 días antes de que termine un plan que la organización canceló.',
+    audience: 'Las personas dueñas de la organización',
+    category: 'transactional',
+    theme: 'plan',
+    required: false,
+    variables: [
+      ORG,
+      v('plan', 'Nombre del plan', 'Pro'),
+      v('fecha', 'Último día del plan', '2026-11-28T05:00:00.000Z', 'day'),
+      v('enlace', 'Enlace a "Plan"', 'https://adoptafacil.co/organizacion/plan', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu plan {{plan}} termina pronto',
+      preheader: 'Lo puedes usar hasta el {{fecha}} y no se te volverá a cobrar.',
+      heading: 'Tu plan {{plan}} termina pronto',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\nCancelaste tu plan **{{plan}}**; lo puedes usar hasta el **{{fecha}}** ' +
+        'y no se te volverá a cobrar. Si cambias de opinión, elige un plan cuando quieras.',
+      ctaLabel: 'Ver planes',
+      footerNote:
+        'No se borra nada: si tu plan termina, tus animales, adopciones y documentos siguen ahí y tu portal vuelve a una plantilla gratuita.',
+    },
+  },
+  {
+    event: 'plan.free_pro_ending',
+    label: 'Termina el Pro gratis',
+    description:
+      'Se envía cuando termina la prueba gratis de Pro de una organización nueva o el Pro gratis del lanzamiento.',
+    audience: 'Las personas dueñas de la organización',
+    category: 'transactional',
+    theme: 'plan',
+    required: false,
+    variables: [
+      ORG,
+      v('que', 'Qué termina', 'Tu prueba gratis de Pro'),
+      v('cuando', 'Cuándo termina', 'termina el 28 de noviembre de 2026'),
+      v('enlace', 'Enlace a "Plan"', 'https://adoptafacil.co/organizacion/plan', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: '{{que}} {{cuando}}',
+      preheader: 'Después tu organización pasa al plan Gratis. No se borra nada.',
+      heading: '{{que}} {{cuando}}',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\n{{que}} en AdoptaFácil **{{cuando}}**. Después tu organización pasa al plan Gratis.\n\n' +
+        'No se borra nada: tus animales, adopciones y documentos siguen ahí. Si tu portal usa una plantilla Pro, ' +
+        'vuelve solo a una gratuita; la que elegiste queda guardada y regresa en cuanto actives Crece o Pro.',
+      ctaLabel: 'Elegir mi plan',
+    },
+  },
+  {
+    event: 'org.rte_expiring',
+    label: 'RTE por vencer',
+    description:
+      'Se envía a 60 y a 30 días de que venza el Régimen Tributario Especial reconocido a la organización.',
+    audience: 'Las personas dueñas de la organización',
+    category: 'transactional',
+    theme: 'documents',
+    required: false,
+    variables: [
+      ORG,
+      v('fecha', 'Fecha de vencimiento del RTE', '2027-03-31T05:00:00.000Z', 'day'),
+      v('dias', 'Días que faltan', '30', 'number'),
+      v(
+        'enlace',
+        'Enlace para subir el RUT',
+        'https://adoptafacil.co/organizacion/formalizacion',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu RTE vence pronto: sube tu RUT actualizado',
+      preheader: 'Vale hasta el {{fecha}} (faltan unos {{dias}} días).',
+      heading: 'Actualiza tu RUT antes del {{fecha}}',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\nCada año la DIAN pide actualizar el registro en el Régimen Tributario Especial. ' +
+        'El RTE que reconocimos para tu organización vale hasta el **{{fecha}}** (faltan unos {{dias}} días).\n\n' +
+        'Cuando hagas la actualización, descarga tu RUT reciente con la **responsabilidad 04** y súbelo. ' +
+        'Si no lo recibimos antes de esa fecha, pausamos solo los certificados de donación con beneficio tributario hasta que lo apruebe el equipo.',
+      ctaLabel: 'Subir mi RUT',
+      footerNote:
+        'No se borra nada: tus donaciones, comprobantes y certificados ya emitidos siguen ahí. Solo cambia lo que se emite desde ahora.',
+    },
+  },
+  {
+    event: 'org.rte_expired',
+    label: 'RTE vencido',
+    description:
+      'Se envía cuando vence el RTE sin un RUT actualizado aprobado: se pausan los certificados con beneficio tributario.',
+    audience: 'Las personas dueñas de la organización',
+    category: 'transactional',
+    theme: 'alert',
+    required: false,
+    variables: [
+      ORG,
+      v('fecha', 'Fecha en que venció', '2026-03-31T05:00:00.000Z', 'day'),
+      v(
+        'enlace',
+        'Enlace para subir el RUT',
+        'https://adoptafacil.co/organizacion/formalizacion',
+        'url',
+      ),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu RTE venció: pausamos los certificados con beneficio tributario',
+      preheader: 'Sube tu RUT reciente para reactivarlos.',
+      heading: 'Tu RTE venció',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\nEl Régimen Tributario Especial que reconocimos para tu organización venció el **{{fecha}}** ' +
+        'y no hemos recibido un RUT actualizado. Desde hoy tus donantes reciben el comprobante sin beneficio tributario en lugar del certificado.\n\n' +
+        'Para reactivarlo, sube tu RUT reciente con la **responsabilidad 04**. Apenas el equipo lo apruebe, vuelves a emitir certificados.',
+      ctaLabel: 'Subir mi RUT',
+      footerNote:
+        'No se borra nada: tus donaciones, comprobantes y certificados ya emitidos siguen ahí. Solo cambia lo que se emite desde ahora.',
+    },
+  },
+  {
+    event: 'animals.clinical_reminder',
+    label: 'Recordatorio clínico de un animal',
+    description:
+      'Se envía cuando se acerca o venció una vacuna, desparasitación u otro control de un animal de la organización.',
+    audience: 'Dueños, administración y veterinaria de la organización',
+    category: 'transactional',
+    theme: 'health',
+    required: false,
+    variables: [
+      ORG,
+      ANIMAL,
+      v('tipo', 'Qué toca', 'vacuna'),
+      v('fecha', 'Fecha en que vence', '2026-11-25T05:00:00.000Z', 'day'),
+      v('enlace', 'Enlace a la ficha del animal', 'https://adoptafacil.co/animales/demo', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Recordatorio: {{tipo}} de {{animal}}',
+      preheader: 'Vence el {{fecha}}.',
+      heading: '{{animal}} tiene un control pendiente',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\nA **{{animal}}** le toca **{{tipo}}**; vence el **{{fecha}}**.\n\n' +
+        'Cuando lo atiendan, márquenlo como atendido en su ficha para que deje de aparecer en los recordatorios.',
+      ctaLabel: 'Ver la ficha',
+    },
+  },
+  {
+    event: 'coffee.refund_notice',
+    label: 'Café: pago sin bolsas disponibles',
+    description:
+      'Se envía cuando un pago de café se aprueba después de que se agotó el lote: se devolverá el dinero.',
+    audience: 'La persona que compró',
+    category: 'transactional',
+    theme: 'alert',
+    required: false,
+    variables: [
+      v('referencia', 'Referencia del pedido', 'CAF-2026-0042'),
+      v('enlace', 'Enlace al pedido', 'https://adoptafacil.co/cafe/pedido/CAF-2026-0042', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Tu pago de café llegó cuando ya no quedaban bolsas',
+      preheader: 'Te devolveremos el dinero completo.',
+      heading: 'Te devolveremos tu dinero',
+      body:
+        'Hola,\n\nTu pago se aprobó cuando las bolsas de este lote ya se habían vendido. ' +
+        '**Te devolveremos el dinero completo** por el mismo medio de pago y te escribiremos para confirmarlo.\n\n' +
+        'Referencia: **{{referencia}}**',
+      ctaLabel: 'Ver mi pedido',
+    },
+  },
+  {
+    event: 'sponsorship.payment_received',
+    label: 'Pago de apadrinamiento recibido',
+    description:
+      'Se envía cuando llega el pago de un apadrinamiento (el primero o el de un nuevo mes).',
+    audience: 'La persona que apadrina',
+    category: 'transactional',
+    theme: 'sponsorship',
+    required: false,
+    variables: [
+      ORG,
+      ANIMAL,
+      v('nombre', 'Nombre de la persona', 'Laura'),
+      v('monto', 'Valor pagado', '30000', 'money'),
+      v('mes', 'Mes pagado', 'noviembre de 2026'),
+      v('enlace', 'Enlace a "Mis apadrinamientos"', 'https://adoptafacil.co/apadrinar', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Recibimos tu apadrinamiento de {{mes}} para {{animal}}',
+      preheader: 'Tu pago llegó directo a {{organizacion}}.',
+      heading: '¡Gracias, {{nombre}}!',
+      body:
+        'Hola {{nombre}},\n\nTu pago de **{{monto}}** del apadrinamiento de **{{animal}}** ({{mes}}) llegó directo a **{{organizacion}}**.\n\n' +
+        'Cada mes te avisaremos cuando toque el siguiente pago. ¡Gracias por seguir ahí!',
+      ctaLabel: 'Ver mi apadrinamiento',
+    },
+  },
   {
     event: 'plan.activated',
     label: 'Plan de pago activado',
@@ -808,7 +1238,7 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
       'Se envía cuando Mercado Pago aprueba el cobro de un plan Crece o Pro (contratar, subir o bajar de plan) o la plataforma lo activa a mano.',
     audience: 'Dueños de la organización',
     category: 'transactional',
-    theme: 'team',
+    theme: 'plan',
     required: false,
     variables: [
       ORG,

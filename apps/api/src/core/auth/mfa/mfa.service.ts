@@ -288,6 +288,7 @@ export class MfaService {
           'Hola,\n\nLa verificación en dos pasos quedó activa en tu cuenta del equipo de ' +
           'AdoptaFácil. Desde ahora, además de tu contraseña, te pediremos el código de tu app.\n\n' +
           'Si no fuiste tú, avisa de inmediato a tu líder de equipo para que bloquee la cuenta.',
+        template: { event: 'auth.mfa_enabled', data: {} },
       });
     } catch (error) {
       // The factor is active either way; a failed courtesy email must not undo it.

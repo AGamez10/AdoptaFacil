@@ -86,6 +86,11 @@ const DATE_CO = new Intl.DateTimeFormat('es-CO', {
   timeZone: 'America/Bogota',
 });
 
+const DAY_CO = new Intl.DateTimeFormat('es-CO', {
+  dateStyle: 'long',
+  timeZone: 'America/Bogota',
+});
+
 /** Turn a raw value into its display text for the variable's kind. */
 export function formatValue(
   kind: EmailVariableKind,
@@ -104,6 +109,10 @@ export function formatValue(
     case 'date': {
       const d = new Date(String(raw));
       return Number.isNaN(d.getTime()) ? '' : DATE_CO.format(d);
+    }
+    case 'day': {
+      const d = new Date(String(raw));
+      return Number.isNaN(d.getTime()) ? '' : DAY_CO.format(d);
     }
     case 'url':
       return safeUrl(String(raw));

@@ -191,6 +191,22 @@ export class RteReverificationService {
         body,
         // Un aviso por etapa y por vencimiento: correr el escaneo cada día no repite.
         idempotencyKey: `rte.reminder:${organizationId}:${found.stage}:${day}:${to}`,
+        template:
+          found.stage === 'expired'
+            ? {
+                event: 'org.rte_expired',
+                organizationName,
+                data: { fecha: found.validUntil.toISOString(), enlace: this.uploadUrl },
+              }
+            : {
+                event: 'org.rte_expiring',
+                organizationName,
+                data: {
+                  fecha: found.validUntil.toISOString(),
+                  dias: found.stage,
+                  enlace: this.uploadUrl,
+                },
+              },
       });
     }
     return { reminders: found.emails.length, expired: found.stage === 'expired' };
