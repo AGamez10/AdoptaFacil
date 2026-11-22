@@ -13,14 +13,30 @@ body {
   color: var(--text-dark);
 }
 
-/* Títulos con la tipografía de marca v3 (Bricolage Grotesque). Los portales
-   de cada organización fijan su propia fuente con --font-display. */
+/* Títulos con la tipografía de marca v3 (Bricolage Grotesque) en toda la
+   plataforma. Los portales de cada organización cambian --font-heading por
+   la de su plantilla. */
 h1,
 h2,
-h3 {
-  font-family: var(--font-brand);
+h3,
+h4 {
+  font-family: var(--font-heading);
   font-weight: var(--fw-bold);
   letter-spacing: -0.015em;
+}
+
+/* Controles nativos (casillas, radios, rangos, barras de progreso) con el
+   color de marca en vez del azul del navegador. */
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'],
+progress {
+  accent-color: hsl(var(--primary));
+}
+
+::selection {
+  background-color: var(--af-mint);
+  color: var(--af-ink);
 }
 
 /* Números tabulares para montos/cifras — nunca mono para dinero. */

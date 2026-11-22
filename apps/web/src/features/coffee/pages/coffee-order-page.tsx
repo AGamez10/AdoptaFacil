@@ -99,7 +99,9 @@ export function CoffeeOrderPage() {
         {state.status === 'ready' && (
           <article className="space-y-5 rounded-2xl border bg-background p-6">
             <header className="space-y-1">
-              <h1 className="text-2xl font-extrabold">{HEADLINE[state.order.status].title}</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                {HEADLINE[state.order.status].title}
+              </h1>
               <p className="text-muted-foreground">{HEADLINE[state.order.status].text}</p>
             </header>
             <dl className="space-y-2 text-sm">

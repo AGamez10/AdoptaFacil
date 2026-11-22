@@ -22,6 +22,7 @@ import {
 import { formatCop } from '../../donations';
 import { deriveActionItems } from '../model/action-items';
 import { FirstStepsCard } from '../components/first-steps-card';
+import { PersonHomeTiles } from '../components/person-home-tiles';
 import { OrgDonationsDashboardSection } from '../../org/components/org-donations-dashboard-section';
 import { OrgStatusCard } from '../../org/components/org-status-card';
 import { Link } from 'react-router-dom';
@@ -122,10 +123,13 @@ export function HomePage() {
     if (canViewSummary) loadSummary();
   }, [canViewSummary, loadSummary]);
 
+  // Persona (adoptante, donante, voluntaria): sin organización ni plataforma.
+  const isPerson = !canViewSummary && !hasOwnWork && !isPlatformAdmin;
+
   const now = new Date();
-  const description = canViewSummary
-    ? `${greetingLabel(now)}, ${user?.name} · ${formatLongDateEs(now)}`
-    : 'Portal AdoptaFácil — navegación y transparencia.';
+  const description = user?.name
+    ? `${greetingLabel(now)}, ${user.name} · ${formatLongDateEs(now)}`
+    : formatLongDateEs(now);
 
   return (
     <PageContainer>
@@ -270,6 +274,12 @@ export function HomePage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {isPerson && (
+        <section className="mb-6" aria-label="Accesos directos">
+          <PersonHomeTiles />
+        </section>
       )}
 
       {canViewSummary && <OrgStatusCard hideWhenApproved />}

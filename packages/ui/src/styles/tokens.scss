@@ -29,6 +29,10 @@
   --font-display: 'Fraunces', Georgia, serif;
   --font-sans:
     'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Títulos de TODA la plataforma (paneles, públicas, diálogos, tarjetas).
+     Los portales de cada organización la cambian por la tipografía de su
+     plantilla (`--tpl-heading-font`, Fraunces por defecto) en su raíz. */
+  --font-heading: var(--font-brand);
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Escala tipográfica (ratio ~1.25) */
@@ -52,7 +56,7 @@
   /* ---------------------------------------------------------------------
    * Color — extraído del mockup (logo real: navy #202D3E / teal #25BAA6).
    * --------------------------------------------------------------------- */
-  --bg-primary: #f7fafa;
+  --bg-primary: #fff8ef; /* = --af-cream: un solo lienzo */
   --bg-surface: #ffffff;
 
   /* AA: #25BAA6 sobre blanco mide ~2.4:1 — NO usar --brand para texto/UI
@@ -61,8 +65,8 @@
      ≥18px negrita; para texto normal usa --text-dark o el navy). --brand
      queda para fondos decorativos, sobre --navy, o rellenos grandes. */
   --brand: #25baa6;
-  --brand-dark: #1c9483;
-  --brand-light: #e7f8f5;
+  --brand-dark: #0d6c5f; /* = --af-teal-ink (AA para texto) */
+  --brand-light: #e8faf4;
 
   // --navy/--navy-soft NOT redeclared here on purpose: globals.scss's shadcn
   // block already defines them (bare HSL channels, "214 32% 18%") for
@@ -72,8 +76,8 @@
   // (`background-color: var(--navy)` with no `hsl()`) is invalid and gets
   // silently dropped — always wrap: `hsl(var(--navy))` / `hsl(var(--navy-soft))`.
 
-  --text-dark: #202d3e;
-  --text-muted: #9ca3af;
+  --text-dark: #14202e; /* = --af-ink */
+  --text-muted: #5b6676; /* 5.5:1 sobre crema (antes #9ca3af, 2.5:1) */
   --text-light: #ffffff;
 
   --accent-gold: #f2b94d;
@@ -89,8 +93,8 @@
 
   /* Hairline decorativo (tarjetas) — DISTINTO del --border de shadcn (ese
      sigue siendo el de controles de formulario, auditado a 3:1). */
-  --border-hairline: #edf1f1;
-  --border-hairline-strong: #e2e8f0;
+  --border-hairline: #efe6d8;
+  --border-hairline-strong: #e4d8c5;
 
   /* ---------------------------------------------------------------------
    * Elevación — sombras tenues en capas (nada de sombras duras).

@@ -1,0 +1,92 @@
+/*
+ * Encabezado y cuerpo comunes de las páginas públicas (marca v3).
+ *
+ * Un solo patrón para todas las páginas que cuelgan de la barra pública:
+ * franja de color a todo el ancho, eyebrow en mayúsculas, h1 en
+ * Bricolage extra-negrita y una frase de apoyo. Así /marketplace,
+ * /voluntariados, /recursos, /legal, /servicios o /verificar se ven
+ * igual que /campanas, /guias o /para-organizaciones.
+ */
+
+.container {
+  width: 100%;
+  max-width: var(--af-container);
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+
+  @media (min-width: 640px) {
+    padding-inline: 2rem;
+  }
+}
+
+.hero {
+  color: var(--af-ink);
+  padding-block: 2.5rem 2.75rem;
+
+  @media (min-width: 768px) {
+    padding-block: 3.75rem 4rem;
+  }
+
+  &[data-tone='cream'] {
+    background: var(--af-cream);
+  }
+  &[data-tone='mint'] {
+    background: var(--af-mint);
+  }
+  &[data-tone='sun'] {
+    background: var(--af-sun);
+  }
+  &[data-tone='sky'] {
+    background: var(--af-sky);
+  }
+  &[data-tone='coral'] {
+    background: var(--af-coral-soft);
+  }
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--af-teal-ink);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-extra);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  .hero[data-tone='sun'] & {
+    color: var(--af-ink);
+  }
+}
+
+.title {
+  max-width: 48rem;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2.25rem, 6vw, 4rem);
+  font-weight: var(--fw-extra);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.lead {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  color: var(--af-ink-soft);
+  font-size: var(--fs-body-lg);
+  line-height: 1.6;
+
+  .hero[data-tone='sun'] & {
+    color: var(--af-ink);
+  }
+}
+
+.extra {
+  margin-top: 1.75rem;
+}
+
+.body {
+  padding-block: 2.5rem 4.5rem;
+}
+
+.body[data-narrow] > * {
+  max-width: 56rem;
+}

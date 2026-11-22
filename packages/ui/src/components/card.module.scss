@@ -15,9 +15,10 @@
 }
 
 .card__title {
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
+  letter-spacing: -0.015em;
   font-size: var(--fs-h3);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   line-height: 1.2;
 }
 

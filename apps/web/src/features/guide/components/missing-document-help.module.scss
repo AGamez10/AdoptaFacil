@@ -30,8 +30,9 @@
 }
 
 .help__title {
-  font-family: var(--font-display);
-  font-weight: var(--fw-semibold);
+  font-family: var(--font-heading);
+  letter-spacing: -0.015em;
+  font-weight: var(--fw-bold);
   color: hsl(var(--foreground));
 }
 

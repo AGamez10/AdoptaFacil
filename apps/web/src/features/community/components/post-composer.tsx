@@ -279,7 +279,9 @@ export function PostComposer({ userName, isOrganization, onCreated }: PostCompos
               <p
                 className={cn(
                   'text-right text-xs',
-                  body.length > MAX_BODY - 100 ? 'text-amber-700' : 'text-muted-foreground',
+                  body.length > MAX_BODY - 100
+                    ? 'text-[hsl(var(--warning-foreground))]'
+                    : 'text-muted-foreground',
                 )}
               >
                 {body.length} / {MAX_BODY}

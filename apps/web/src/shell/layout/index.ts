@@ -12,3 +12,4 @@ export {
   ContentError,
   type FullPageErrorProps,
 } from './layout-states';
+export { PublicPageHero, PublicPageBody, type PublicHeroTone } from './public-page-hero';

@@ -484,7 +484,7 @@ function ReportCard({
                 </label>
               ))}
             {!signers.includes('legal_representative') && (
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-[hsl(var(--warning-foreground))]">
                 Sin la firma del representante legal el reporte sale como informativo.
               </p>
             )}
