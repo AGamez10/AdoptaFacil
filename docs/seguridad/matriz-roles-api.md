@@ -11,7 +11,7 @@ Es la primera barrera (el rol). Las reglas que dependen de datos (firmante desig
 prueban las suites de integración. El resumen en palabras está en
 `docs/seguridad/roles-y-organizaciones.md`, sección 9.
 
-Rutas: 477. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86. Públicas: 83.
+Rutas: 478. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86. Públicas: 84.
 
 | Ruta | Prop. | Admin | Oper. | Vet. | Vol. | Temp. | Audit. | P.Admin | P.Super | Otro acceso |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | --- |
@@ -396,6 +396,7 @@ Rutas: 477. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86
 | `GET /public/resources/needs/:id` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/resources/open-offers` |  |  |  |  |  |  |  |  |  | pública |
 | `POST /public/security/csp-report` |  |  |  |  |  |  |  |  |  | pública |
+| `GET /public/seo/sitemap.xml` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/share/p/:id` |  |  |  |  |  |  |  |  |  | pública |
 | `POST /public/signature-requests/decision` |  |  |  |  |  |  |  |  |  | pública |
 | `POST /public/signature-requests/pdf` |  |  |  |  |  |  |  |  |  | pública |
