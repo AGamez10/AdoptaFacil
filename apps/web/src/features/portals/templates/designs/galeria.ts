@@ -209,6 +209,9 @@ const CSS = `
 .tpl-galeria .g-cont .map iframe{position:absolute;inset:0}
 .tpl-galeria .g-need-a{text-decoration:none;color:inherit}
 .tpl-galeria .g-tile.dup{pointer-events:none}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-galeria{--lg-card:var(--wall);--lg-bd:1px solid var(--line);--lg-sh:none;--lg-r:0px;--lg-fd:'Bodoni Moda',serif;--lg-fw:400;--lg-ls:-.015em;--lg-soft:var(--soft);--lg-line:var(--line);--lg-acc:var(--ink);--lg-acc-ink:var(--bg)}
 `;
 
 type RoomKey = 'nuevos' | 'jovenes' | 'espera' | 'senior';

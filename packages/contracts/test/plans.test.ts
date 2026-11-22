@@ -70,8 +70,13 @@ describe('plan catalog', () => {
       'velitas',
       'terminal',
       'documental',
+      // 2026-11-22: serie moderna, Halo y Prisma de pago; Brisa y Bento gratis.
+      'halo',
+      'prisma',
     ]);
     expect(isPremiumTemplate('historias')).toBe(false);
+    expect(isPremiumTemplate('brisa')).toBe(false);
+    expect(isPremiumTemplate('bento')).toBe(false);
   });
 
   it('finds the cheapest plan for a limit', () => {

@@ -112,7 +112,7 @@ export function MyAuthorizationsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Mis autorizaciones</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Mis autorizaciones</h1>
         <p className="text-sm text-muted-foreground">
           Lo que aceptaste, en qué versión y cuándo. Guardamos también la IP y el navegador desde
           los que aceptaste, como prueba de tu autorización.

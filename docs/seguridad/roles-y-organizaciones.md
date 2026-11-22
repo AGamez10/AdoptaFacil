@@ -219,9 +219,11 @@ vista en el PR. Esa prueba también fija las reglas que no se pueden romper:
   "solo lo propio" (su cuenta, sus donaciones, sus solicitudes…);
 - el auditor solo escribe su propia firma, la decisión de un reporte que le toca
   firmar y la marca de avisos leídos;
-- voluntario y colaborador temporal solo ven el estado de la organización y la
-  vista previa de su portal (lo que promete su invitación);
-- el veterinario solo entra a animales, historia clínica y recordatorios;
+- voluntario y colaborador temporal solo ven el estado de la organización, la
+  vista previa de su portal y su panel "Mi trabajo" (`/team/me/*`), sin datos
+  de adoptantes ni donantes (lo que promete su invitación);
+- el veterinario solo entra a animales, historia clínica, recordatorios y su
+  panel; publicar le exige el permiso expreso `animals.publish`;
 - el gobierno del equipo y de la cuenta es solo de propietario y administrador,
   y lo del representante legal, solo del propietario;
 - los roles de plataforma solo entran a `/platform`, y los de organización nunca.
@@ -230,15 +232,48 @@ vista en el PR. Esa prueba también fija las reglas que no se pueden romper:
 de cada cargo, y `nav-roles-vs-api.test.ts` (web) exige que cada menú pida los
 mismos roles que la API para su página.
 
-| Cargo                        | Puede                                                                                                                                                                                  | No puede                                                                                                      |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Propietario                  | Todo lo de la organización; además dar o quitar el cargo de propietario, retirar roles, designar firmantes, enviar a revisión, formalización y política de firmas                      | Nada de plataforma                                                                                            |
-| Administrador                | Operación completa: animales, adopciones, campañas, voluntariado, donaciones, apadrinamientos, contabilidad, reportes, perfil, portal, dominio, plan, cobros; invitar y cambiar cargos | Tocar a un propietario, designar firmantes, enviar a revisión, formalización, firmar como representante legal |
-| Operador                     | Animales e historia clínica, adopciones y contratos, campañas y evidencias, recursos, custodia, ver donaciones recibidas y libro público                                               | Equipo, plan, perfil, portal, documentos legales, contabilidad, reportes, voluntariado, apadrinamientos       |
-| Veterinario/a                | Animales, historia clínica, recordatorios de salud, evaluación de comportamiento                                                                                                       | Adopciones, campañas, dinero, equipo, documentos                                                              |
-| Voluntario/a                 | Estado de la organización y vista previa del portal; su voluntariado personal                                                                                                          | Datos de animales, donantes y adoptantes                                                                      |
-| Colaborador/a temporal       | Igual que voluntario                                                                                                                                                                   | Igual que voluntario                                                                                          |
-| Auditor/a de solo lectura    | Leer animales, clínica, campañas, contabilidad, reportes, documentos, voluntariado, apadrinamientos, libro y custodia                                                                  | Crear, editar o borrar                                                                                        |
-| Contador/a, revisor/a fiscal | Lo del auditor, más registrar su propia firma y firmar los reportes de su cargo                                                                                                        | Firmar por otro, cualquier otra escritura                                                                     |
-| Admin. de plataforma         | Solo `/platform` (revisión de organizaciones, documentos, moderación), con segundo factor obligatorio                                                                                  | Entrar a los datos de una organización por sus rutas                                                          |
-| Superadmin de plataforma     | Lo del admin de plataforma, más el tablero financiero y aprobar acciones sensibles                                                                                                     | Igual                                                                                                         |
+| Cargo                        | Puede                                                                                                                                                                                                                         | No puede                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Propietario                  | Todo lo de la organización; además dar o quitar el cargo de propietario, retirar roles, designar firmantes, enviar a revisión, formalización y política de firmas                                                             | Nada de plataforma                                                                                                                |
+| Administrador                | Operación completa: animales, adopciones, campañas, voluntariado, donaciones, apadrinamientos, contabilidad, reportes, perfil, portal, dominio, plan, cobros; invitar y cambiar cargos                                        | Tocar a un propietario, designar firmantes, enviar a revisión, formalización, firmar como representante legal                     |
+| Operador                     | Animales e historia clínica, publicar en el portal, adopciones y contratos, campañas y evidencias, recursos, custodia (crea cobros, ver §9.1), encargar tareas y animales al equipo, ver donaciones recibidas y libro público | Equipo, plan, perfil, portal, documentos legales, contabilidad, reportes, voluntariado, apadrinamientos; anular o devolver cobros |
+| Veterinario/a                | Animales, historia clínica, recordatorios de salud, evaluación de comportamiento; marcar "apto para adopción"; publicar solo con permiso expreso                                                                              | Publicar sin ese permiso, adopciones, campañas, dinero, equipo, documentos                                                        |
+| Voluntario/a                 | Estado de la organización y vista previa del portal; "Mi trabajo": sus tareas, ficha básica de los animales a su cargo y registro de cuidados; jornadas, horas y certificados                                                 | Datos de adoptantes y donantes, historia clínica, animales que no tiene a cargo                                                   |
+| Colaborador/a temporal       | Igual que voluntario                                                                                                                                                                                                          | Igual que voluntario                                                                                                              |
+| Auditor/a de solo lectura    | Leer animales, clínica, campañas, contabilidad, reportes, documentos, voluntariado, apadrinamientos, libro y custodia                                                                                                         | Crear, editar o borrar                                                                                                            |
+| Contador/a, revisor/a fiscal | Lo del auditor, más registrar su propia firma y firmar los reportes de su cargo                                                                                                                                               | Firmar por otro, cualquier otra escritura                                                                                         |
+| Admin. de plataforma         | Solo `/platform` (revisión de organizaciones, documentos, moderación), con segundo factor obligatorio                                                                                                                         | Entrar a los datos de una organización por sus rutas                                                                              |
+| Superadmin de plataforma     | Lo del admin de plataforma, más el tablero financiero y aprobar acciones sensibles                                                                                                                                            | Igual                                                                                                                             |
+
+### 9.1 Reglas por cargo que decide el servicio (2026-11-22)
+
+Decisión del dueño: el panel de cada cargo tiene que tener sentido para ese
+cargo. Lo que no cabe en `@Roles` se decide en el servicio, dentro de la
+transacción de la organización:
+
+- **Veterinario: ficha clínica primero.** Crea y edita fichas e historia
+  clínica, y marca a un animal como apto para adopción
+  (`POST /animals/:id/adoption-readiness`, auditado; avisa a quien publica).
+  Un animal que crea queda `unavailable` (fuera del portal). Publicar o retirar
+  (cambiar el estado a uno público, `activate`/`deactivate`) le responde 403,
+  salvo que el propietario o un administrador le dé el permiso expreso
+  `animals.publish` (`PUT /org/members/:userId/permissions`, tabla
+  `member_permission_grants`, auditado como `member.permissions_changed`). El
+  permiso se borra si le cambian el cargo o lo retiran.
+- **Operador: crea cobros de custodia** con autoría auditada y al valor de la
+  tarifa: mensualidad (`boarding_fee`) y alimentación (`food`) deben ser
+  exactamente las del contrato emitido o vigente; gastos (`veterinary`,
+  `transport`, `other`) exigen soporte; el recargo por mora (`late_fee`) es
+  solo de propietario y administrador. Anular o devolver sigue siendo solo de
+  propietario y administrador.
+- **Voluntario y colaborador temporal: panel mínimo** en `/mi-trabajo`
+  (`/team/me/*`): sus tareas (las marca hechas), la ficha básica de los
+  animales que tiene a cargo (sin adoptantes, donantes ni historia clínica) y
+  el registro de cuidados (paseo, alimentación, limpieza, observación;
+  `animal_care_logs`, solo se agrega, hasta 7 días atrás). Solo registra
+  cuidados de un animal con un encargo abierto a su nombre (si no, 404).
+  Jornadas, horas y certificados siguen en `/voluntariado`. Quien necesite más
+  recibe el cargo de operador.
+- **Encargos** (`team_assignments`): los crean propietario, administrador y
+  operador (`POST /team/assignments`) para cualquier cargo del equipo menos el
+  auditor; la persona recibe un aviso en su bandeja.

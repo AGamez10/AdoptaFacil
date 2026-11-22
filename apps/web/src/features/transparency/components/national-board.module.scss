@@ -1,6 +1,6 @@
 // Tablero de Transparencia Nacional. Superficie y tinta salen de los tokens de
 // la app (claro/oscuro); las dos series usan los dos primeros tonos validados
-// de la paleta categórica (azul = recibido, naranja = usado), con su paso propio
+// de la paleta categórica (verde de marca = recibido, coral = usado), con su paso propio
 // para el modo oscuro. La identidad nunca va solo por color: leyenda, etiquetas
 // y la tabla equivalente acompañan cada gráfico.
 
@@ -10,8 +10,8 @@
   --nt-soft: hsl(var(--muted-foreground, 215 16% 40%));
   --nt-line: hsl(var(--border, 214 20% 88%));
   --nt-tile: color-mix(in srgb, var(--nt-ink) 4%, var(--nt-surface));
-  --nt-in: #2a78d6;
-  --nt-out: #eb6834;
+  --nt-in: #0f8070; // verde de marca (4.6:1 sobre blanco)
+  --nt-out: #d9573a; // coral de marca, tono AA para gráficos
   --nt-r: 1rem;
 
   display: grid;

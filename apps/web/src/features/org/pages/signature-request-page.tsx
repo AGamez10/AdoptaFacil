@@ -183,7 +183,7 @@ export function SignatureRequestPage() {
 
   return (
     <main className="mx-auto max-w-2xl space-y-4 px-4 py-10">
-      <h1 className="text-2xl font-semibold">Solicitud de firma</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Solicitud de firma</h1>
 
       {error && !result && (
         <p

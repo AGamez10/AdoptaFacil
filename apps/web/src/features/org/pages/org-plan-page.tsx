@@ -415,9 +415,10 @@ function PlanCheckoutReturn({ onActive }: { onActive: () => void }) {
       data-state={status?.state ?? (unknown ? 'unknown' : 'loading')}
       className={cn(
         'mb-4 rounded-lg border p-4 text-sm',
-        copy.tone === 'success' && 'border-emerald-300 bg-emerald-50 text-emerald-900',
-        copy.tone === 'error' && 'border-red-300 bg-red-50 text-red-900',
-        copy.tone === 'info' && 'border-sky-300 bg-sky-50 text-sky-900',
+        copy.tone === 'success' &&
+          'border-[var(--af-mint)] bg-[var(--af-mint-soft)] text-[var(--af-ink)]',
+        copy.tone === 'error' && 'border-destructive/40 bg-destructive/10 text-destructive',
+        copy.tone === 'info' && 'border-[var(--af-sky)] bg-[var(--af-sky)]/50 text-[var(--af-ink)]',
       )}
     >
       <p className="font-semibold">{copy.title}</p>

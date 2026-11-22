@@ -224,7 +224,7 @@ export function MarketplacePage() {
         <p
           role="status"
           data-testid="marketplace-missing-whatsapp"
-          className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          className="mb-4 rounded-md border border-[var(--af-sun)] bg-[var(--af-sun-soft)] p-3 text-sm text-[var(--af-ink)]"
         >
           Tus productos se ven en el marketplace, pero los compradores aún no tienen cómo
           escribirte: agrega el WhatsApp de la organización en{' '}

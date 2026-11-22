@@ -82,7 +82,7 @@ describe('email-layout con marca', () => {
       brand: { accent: 'red;background:url(x)', button: '#12345', buttonText: 'x' },
     });
     expect(html).not.toContain('url(x)');
-    expect(html).toContain('bgcolor="#198072"');
+    expect(html).toContain('bgcolor="#0D6C5F"');
   });
 
   it('sin marca: se ve igual que antes', () => {

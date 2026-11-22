@@ -214,7 +214,10 @@ export function CustomDomainCard({
               registro en “Solo DNS” (nube gris).
             </p>
             {view.lastError && (
-              <p className="rounded-md bg-amber-50 p-2 text-amber-900" role="status">
+              <p
+                className="rounded-md bg-[var(--af-sun-soft)] p-2 text-[var(--af-ink)]"
+                role="status"
+              >
                 {PORTAL_DOMAIN_CHECK_ERRORS[view.lastError]}
                 {view.lastCheckedAt &&
                   ` (revisado el ${colombiaDateTime.format(new Date(view.lastCheckedAt))})`}

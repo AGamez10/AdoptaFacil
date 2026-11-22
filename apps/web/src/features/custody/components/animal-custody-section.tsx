@@ -544,7 +544,7 @@ export function AnimalCustodySection({
           {finalizeError && (
             <ul
               role="alert"
-              className="list-disc rounded-md bg-red-50 py-2 pl-8 pr-3 text-sm text-red-800"
+              className="list-disc rounded-md bg-destructive/10 py-2 pl-8 pr-3 text-sm text-destructive"
             >
               {finalizeError.map((item) => (
                 <li key={item}>{item}</li>

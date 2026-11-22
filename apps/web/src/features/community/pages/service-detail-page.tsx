@@ -138,7 +138,7 @@ export function ServiceDetailPage() {
                     {SERVICE_CATEGORY_SINGULAR[service.category]} · {service.city},{' '}
                     {service.department}
                   </p>
-                  <h1 className="text-2xl font-extrabold text-foreground sm:text-3xl">
+                  <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
                     {service.name}
                   </h1>
                   {service.isPartner && <PartnerBadge className="mt-1" />}
@@ -166,7 +166,7 @@ export function ServiceDetailPage() {
                       href={whatsapp}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded-xl bg-primary px-4 py-3 text-center font-semibold text-primary-foreground hover:bg-primary/90"
+                      className="rounded-full bg-primary px-4 py-3 text-center font-semibold text-primary-foreground hover:bg-primary/90"
                     >
                       Escribir por WhatsApp
                     </a>
@@ -278,7 +278,7 @@ export function ServiceDetailPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="rounded-xl bg-primary px-5 py-2 font-semibold text-primary-foreground disabled:opacity-60"
+                    className="rounded-full bg-primary px-5 py-2 font-semibold text-primary-foreground disabled:opacity-60"
                   >
                     Enviar reseña
                   </button>

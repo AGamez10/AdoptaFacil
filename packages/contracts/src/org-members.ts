@@ -9,6 +9,7 @@
 // ============================================================================
 
 import { Role } from './auth';
+import type { MemberPermission } from './team-work';
 
 /** Cargos que se pueden dar al invitar desde "Miembros". El propietario no se
  *  invita: un propietario existente puede pasar a otra persona a propietario. */
@@ -33,6 +34,8 @@ export interface OrgTeamMember {
   signerRole?: 'accountant' | 'fiscal_reviewer';
   /** ISO-8601 UTC: cuándo se creó su cuenta en la organización. */
   joinedAt: string;
+  /** Permisos expresos además de su cargo (aditivo, 2026-11-22). */
+  permissions?: MemberPermission[];
 }
 
 /** Puestos del plan: personas con cargo (sin firmantes) + invitaciones pendientes. */

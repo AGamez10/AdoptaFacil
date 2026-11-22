@@ -71,6 +71,8 @@ const READS = [
   'GET /org/signers',
   'GET /org/plan',
   'GET /org/status',
+  'GET /team/me/work',
+  'GET /team/assignments',
   'GET /platform/dashboard/admin',
 ];
 
@@ -84,6 +86,9 @@ const WRITES = [
   'POST /campaigns',
   'POST /org/signers',
   'POST /org/status/submit',
+  'POST /team/assignments',
+  'PUT /org/members/:userId/permissions',
+  'POST /animals/:id/adoption-readiness',
 ];
 
 describe('Role matrix over HTTP (one account per org role)', () => {

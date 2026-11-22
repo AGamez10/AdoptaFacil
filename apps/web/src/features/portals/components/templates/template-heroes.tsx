@@ -149,7 +149,11 @@ export function EditorialHero({
 
       <div className={styles.editorial__media}>
         <div className={styles.editorial__arch} data-shape={options.photoShape ?? 'arco'}>
-          {cover ? <img src={cover} alt="" /> : <div className={styles.editorial__archFallback} />}
+          {cover ? (
+            <img src={cover} alt="" {...{ fetchpriority: 'high' }} />
+          ) : (
+            <div className={styles.editorial__archFallback} />
+          )}
         </div>
         {featured.length > 0 && (
           <div className={styles.editorial__strip}>
@@ -209,7 +213,11 @@ export function CarnetHero({
         </header>
         <div className={styles.carnet__body}>
           <div className={styles.carnet__photo}>
-            {cover ? <img src={cover} alt="" /> : <Paw className={styles.carnet__photoPaw} />}
+            {cover ? (
+              <img src={cover} alt="" {...{ fetchpriority: 'high' }} />
+            ) : (
+              <Paw className={styles.carnet__photoPaw} />
+            )}
           </div>
           <div className={styles.carnet__data}>
             <dl>
@@ -558,7 +566,7 @@ export function HistoriasHero({
                 data-testid="historias-cover-video"
               />
             ) : cover ? (
-              <img src={cover} alt="" />
+              <img src={cover} alt="" {...{ fetchpriority: 'high' }} />
             ) : null}
           </div>
           <div className={historias.content}>

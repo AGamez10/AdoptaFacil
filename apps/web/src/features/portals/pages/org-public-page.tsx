@@ -24,7 +24,7 @@ import {
   safeTemplate,
 } from '../model/theme';
 import { fetchPublicAnimals } from '../api/public-animals';
-import { fetchPublicOrganization, fetchPublicThemeBody } from '../api/public-organization';
+import { fetchPublicOrganization } from '../api/public-organization';
 import { PortalProfileSection } from '../components/portal-profile-section';
 import {
   CarnetHero,
@@ -53,7 +53,9 @@ import { PortalAdoptionSteps } from '../components/portal-adoption-steps';
 import { PortalMobileActionBar } from '../components/portal-mobile-action-bar';
 import { buildDonateHref } from '../components/portal-donate-cta';
 import { useFeature } from '../../../shell/capabilities';
-import { useDocumentTitle } from '../../../lib/use-document-title';
+import { portalDescription, portalTitle, shelterLd } from '../../../seo/page-meta.js';
+import { fetchEarlyOr, portalThemeUrl } from '../api/early-fetch';
+import { absoluteUrl, breadcrumbLd, useSeo } from '../../../seo/seo';
 import { useDonationAvailability } from '../../donations/hooks/use-donation-availability';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
@@ -203,21 +205,22 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       return data;
     });
 
-    const brand = fetchPublicThemeBody(slug)
-      .then(
-        (body) =>
-          body as {
-            tokens?: unknown;
-            logoPosition?: unknown;
-            socialNavPosition?: unknown;
-            template?: unknown;
-            templateOptions?: unknown;
-            coverVideoUrl?: unknown;
-            coverVideoPosterUrl?: unknown;
-            coverVideo2Url?: unknown;
-            coverVideo2PosterUrl?: unknown;
-            hideSeal?: unknown;
-          } | null,
+    const brand = fetchEarlyOr(portalThemeUrl(slug))
+      .then((response) =>
+        response.ok
+          ? (response.json() as Promise<{
+              tokens?: unknown;
+              logoPosition?: unknown;
+              socialNavPosition?: unknown;
+              template?: unknown;
+              templateOptions?: unknown;
+              coverVideoUrl?: unknown;
+              coverVideoPosterUrl?: unknown;
+              coverVideo2Url?: unknown;
+              coverVideo2PosterUrl?: unknown;
+              hideSeal?: unknown;
+            }>)
+          : null,
       )
       .then((body) => ({
         tokens: safePortalTheme(body?.tokens),
@@ -353,7 +356,33 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // mezclaba documentos revisados por la plataforma con un estado de
   // formalización que hoy declara la propia organización (SEC-003). Los
   // documentos revisados se muestran como sellos en el hero.
-  useDocumentTitle(view?.profile.organization.name);
+  // SEO del portal: título con la ciudad, descripción real, canónica en
+  // /o/<slug> (también desde su subdominio) y `AnimalShelter` en JSON-LD. La
+  // vista previa de una organización aún no aprobada nunca va al índice.
+  const seoOrg = view?.profile.organization;
+  const portalPath = slug ? `/o/${encodeURIComponent(slug)}` : undefined;
+  useSeo({
+    title: seoOrg
+      ? portalTitle(seoOrg)
+      : state === 'not-found'
+        ? 'Organización no encontrada'
+        : undefined,
+    description: seoOrg ? portalDescription(seoOrg, animalTotal) : undefined,
+    path: portalPath,
+    image: seoOrg?.coverPhotos?.[0] ?? seoOrg?.logoUrl,
+    noindex: ownerPreview || state === 'not-found',
+    jsonLd:
+      seoOrg && portalPath && !ownerPreview
+        ? [
+            shelterLd(seoOrg, portalPath, absoluteUrl),
+            breadcrumbLd([
+              { name: 'Inicio', path: '/' },
+              { name: 'Adoptar', path: '/adoptar' },
+              { name: seoOrg.name, path: portalPath },
+            ]),
+          ]
+        : [],
+  });
 
   // El botón de Ayuda se vuelve discreto y su WhatsApp lleva a ESTA organización.
   const guideOrg = state === 'ready' ? view?.profile.organization : undefined;
@@ -463,7 +492,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
                 <div
                   role="status"
                   data-testid="portal-owner-preview"
-                  className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950"
+                  className="rounded-2xl border border-[var(--af-sun)] bg-[var(--af-sun-soft)] px-5 py-4 text-sm text-[var(--af-ink)]"
                 >
                   <strong>Vista previa privada.</strong> Solo tu equipo ve esta página. Tu portal
                   será público cuando la plataforma apruebe tu organización; mientras tanto puedes

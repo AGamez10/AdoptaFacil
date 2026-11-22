@@ -89,13 +89,11 @@ export function PortalProfileSection({
     <section aria-labelledby={HEADING_ID} className={styles.hero} data-logo={logoPosition}>
       <div className={styles.hero__media} aria-hidden="true">
         {cover ? (
-          // Portada = LCP del portal: se pide con prioridad alta en cuanto
-          // aparece (React 18 no conoce `fetchPriority`; va en minúscula).
           <img
             src={cover}
             alt=""
             className={styles.hero__image}
-            decoding="async"
+            // Es el LCP del portal: el HTML prerenderizado ya la precarga.
             {...{ fetchpriority: 'high' }}
           />
         ) : (

@@ -80,7 +80,7 @@ export function PublicPostPage() {
           <article className="space-y-6" data-testid="public-post">
             <header className="space-y-3">
               <Badge variant={typeVariant(post.type)}>{TYPE_LABELS[post.type]}</Badge>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{headline}</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{headline}</h1>
               <p className="text-sm text-muted-foreground">
                 {post.isOrganization ? 'Publicado por la organización ' : 'Publicado por '}
                 <span className="font-medium text-foreground">{post.authorDisplayName}</span> ·{' '}

@@ -151,7 +151,9 @@ export function Notice({
   return (
     <p
       className={`rounded-md px-3 py-2 text-xs ${
-        tone === 'warning' ? 'bg-amber-50 text-amber-900' : 'bg-muted text-muted-foreground'
+        tone === 'warning'
+          ? 'bg-[var(--af-sun-soft)] text-[var(--af-ink)]'
+          : 'bg-muted text-muted-foreground'
       }`}
     >
       {children}
@@ -272,7 +274,10 @@ export function FormDialog({
         <form className="space-y-4" onSubmit={(e) => void submit(e)} noValidate>
           {children}
           {error && (
-            <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div
+              role="alert"
+              className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
               <p>{error}</p>
               {missing.length > 0 && (
                 <ul className="mt-1 list-disc pl-5">
@@ -289,7 +294,7 @@ export function FormDialog({
             </Button>
             <Button
               type="submit"
-              className={destructive ? 'bg-red-700 text-white hover:bg-red-800' : undefined}
+              className={destructive ? 'bg-destructive text-white hover:bg-red-800' : undefined}
               disabled={busy}
             >
               {busy ? 'Guardando…' : submitLabel}

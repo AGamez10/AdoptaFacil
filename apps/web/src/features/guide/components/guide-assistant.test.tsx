@@ -358,7 +358,7 @@ describe('GuideAssistant · "Dónde se gestiona" respeta el rol', () => {
     fireEvent.click(screen.getByTestId('guide-toggle'));
     const role = screen.getByTestId('guide-role');
     expect(role).toHaveTextContent('Lo que puedes hacer como Voluntario/a');
-    expect(role).toHaveTextContent(/no da acceso a datos de animales, donantes ni adoptantes/);
+    expect(role).toHaveTextContent(/no da acceso a datos de adoptantes ni donantes/);
   });
 
   it('con varios cargos muestra el de más permisos, y una persona sin equipo no ve cargo', () => {

@@ -4,17 +4,17 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@adoptafacil/ui/styles.css';
 import './index.css';
-import { startPortalEarlyFetch } from './features/portals/api/public-organization';
+import { startEarlyPortalFetches } from './features/portals/api/early-fetch';
 import { installImageRetry } from './lib/image-retry';
 import { registerServiceWorker } from './lib/pwa';
 import { Shell } from './shell';
 
+// Portal y ficha: el perfil, el tema y el animal se piden ya, en paralelo con
+// el resto de la carga (ver early-fetch.ts).
+startEarlyPortalFetches(window.location.pathname);
+
 // Una foto que falla porque la API aún no respondía se vuelve a pedir.
 installImageRetry();
-
-// Portal abierto directo: su organización y su portada se piden ya, en paralelo
-// con el código de la página.
-startPortalEarlyFetch(window.location.pathname);
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

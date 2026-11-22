@@ -29,10 +29,9 @@ import { usePublicTheme } from '../templates/use-public-theme';
 import { useTemplateAssets } from '../templates/use-template-assets';
 import { useGuideContext } from '../../guide/model/guide-context';
 import styles from './public-animal-detail-page.module.scss';
+import { fetchEarlyOr, portalProfileUrl } from '../api/early-fetch';
 
 const SIMILAR_MAX = 4;
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 type DetailState = 'loading' | 'ready' | 'not-found' | 'error';
 type PublicOrgProfile = PublicAnimalOrg;
@@ -169,7 +168,7 @@ export function PublicAnimalDetailPage() {
   useEffect(() => {
     if (!slug) return;
     let active = true;
-    fetch(`${API_BASE}/public/organizations/${encodeURIComponent(slug)}`)
+    fetchEarlyOr(portalProfileUrl(slug))
       .then((response) => (response.ok ? (response.json() as Promise<PublicOrgProfile>) : null))
       .then((body) => {
         if (active && body?.name) setOrg(body);

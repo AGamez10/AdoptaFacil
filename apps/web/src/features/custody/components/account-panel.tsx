@@ -606,7 +606,7 @@ export function ChargeList({
                     {canManage && !payment.voidedAt && (
                       <button
                         type="button"
-                        className="text-red-700 underline underline-offset-4"
+                        className="text-destructive underline underline-offset-4"
                         onClick={() => setVoiding(payment)}
                       >
                         Anular pago

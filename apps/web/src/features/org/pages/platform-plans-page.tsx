@@ -134,7 +134,7 @@ function OrganizationPlanEditor({ org }: { org: PlatformOrganizationListItem }) 
         {!view.enforced && ' (los planes están apagados: hoy todas tienen Pro)'}
       </p>
       {paysOnline && (
-        <p className="text-sm text-amber-700" role="note">
+        <p className="text-sm text-[hsl(var(--warning-foreground))]" role="note">
           Esta organización paga con Mercado Pago. Si guardas un cambio aquí, se cancela su cobro
           mensual en Mercado Pago y el plan pasa a manejarse a mano.
         </p>

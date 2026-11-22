@@ -29,7 +29,9 @@ import {
   type BulkImportResultDto,
   type CreateAnimalBreedInput,
   type CreateAnimalInput,
+  ANIMAL_READINESS_ROLES,
   Role,
+  type SetAdoptionReadinessInput,
   type UpdateAnimalInput,
 } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
@@ -42,12 +44,15 @@ import { AnimalsService } from './animals.service';
 import { BulkImportService } from './bulk-import.service';
 import {
   addPhotoSchema,
+  adoptionReadinessSchema,
   createAnimalSchema,
   createBreedSchema,
   updateAnimalSchema,
 } from './animals.schemas';
 
-/** Roles that may CREATE/EDIT an animal record (§13 M03 matrix). */
+/** Roles that may CREATE/EDIT an animal record (§13 M03 matrix). Publicar
+ *  (activar, retirar o poner un estado público) lo decide además el servicio:
+ *  el veterinario solo con el permiso expreso `animals.publish`. */
 const WRITE_ROLES = [Role.Owner, Role.Administrator, Role.Operator, Role.Veterinarian] as const;
 /** Roles that may VIEW (write roles + the read-only auditor). */
 const VIEW_ROLES = [...WRITE_ROLES, Role.ReadOnlyAuditor] as const;
@@ -178,6 +183,18 @@ export class AnimalsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<Animal> {
     return this.service.setActive(actor.id, id, false);
+  }
+
+  /** Marcar "apto para adopción" (el veterinario avisa a quien publica). */
+  @Post(':id/adoption-readiness')
+  @HttpCode(200)
+  @Roles(...ANIMAL_READINESS_ROLES)
+  setAdoptionReadiness(
+    @CurrentUser() actor: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(adoptionReadinessSchema)) dto: SetAdoptionReadinessInput,
+  ): Promise<Animal> {
+    return this.service.setAdoptionReadiness(actor.id, id, dto);
   }
 
   @Delete(':id')

@@ -55,5 +55,7 @@ import { PublicAnimalsService } from './public-animals.service';
     RemindersScheduler,
     PublicAnimalsService,
   ],
+  // SeoModule arma el sitemap dinámico con el mismo catálogo público.
+  exports: [PublicAnimalsService],
 })
 export class AnimalsModule {}

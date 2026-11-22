@@ -252,6 +252,9 @@ const CSS = `
 .tpl-hilo .h-run .rd.pw span{width:50%;color:var(--ink)}
 .tpl-hilo .h-art{position:relative;height:min(600px,70vh);min-height:440px;border-radius:36px;border:2px solid var(--ink);box-shadow:var(--sh);overflow:hidden}
 @media (max-width:900px){.tpl-hilo .h-art{height:340px;min-height:0}}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-hilo{--lg-card:#fff;--lg-bd:2px solid var(--ink);--lg-sh:var(--sh);--lg-r:20px;--lg-fd:'Syne',sans-serif;--lg-fw:700;--lg-ls:-.03em;--lg-soft:var(--soft);--lg-line:color-mix(in srgb,var(--ink) 22%,transparent);--lg-acc:var(--butter);--lg-acc-ink:var(--ink)}
 `;
 
 type Filter = 'todos' | 'perro' | 'gato' | 'otro' | 'nuevos' | 'bebes' | 'senior';

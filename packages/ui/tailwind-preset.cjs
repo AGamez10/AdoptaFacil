@@ -89,6 +89,8 @@ module.exports = {
       fontFamily: {
         sans: 'var(--font-sans)',
         display: 'var(--font-display)',
+        heading: 'var(--font-heading)',
+        brand: 'var(--font-brand)',
         mono: 'var(--font-mono)',
       },
       ringOffsetWidth: {

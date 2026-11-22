@@ -250,6 +250,9 @@ const CSS = `
 .tpl-aurora .a-contact .map iframe{position:absolute;inset:0}
 .tpl-aurora .a-camp .art{position:relative;min-height:200px;border-radius:24px;overflow:hidden;margin-top:18px}
 .tpl-aurora .a-nav .nm .tpl-logo-img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-aurora{--lg-card:var(--glass);--lg-bd:1px solid var(--edge);--lg-sh:none;--lg-r:24px;--lg-fw:400;--lg-ls:-.03em;--lg-soft:var(--soft);--lg-line:var(--edge);--lg-acc:var(--brand);--lg-acc-ink:var(--brand-ink)}
 `;
 
 const FILTERS: Array<[string, string, (a: TplAnimal) => boolean]> = [

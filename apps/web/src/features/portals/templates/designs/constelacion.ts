@@ -235,6 +235,9 @@ const CSS = `
 .tpl-constelacion .o-contact .map{position:relative}
 .tpl-constelacion .o-contact .map iframe{position:absolute;inset:0}
 .tpl-constelacion .o-nav .nm .tpl-logo-img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-constelacion{--lg-card:var(--card);--lg-bd:1px solid var(--line);--lg-sh:none;--lg-r:24px;--lg-fd:'Instrument Serif',Georgia,serif;--lg-fw:400;--lg-ls:-.02em;--lg-soft:var(--soft);--lg-line:var(--line);--lg-acc:var(--star);--lg-acc-ink:var(--bg)}
 `;
 
 const FILTERS: Array<[string, string, (a: TplAnimal) => boolean]> = [

@@ -29,12 +29,17 @@ ARG VITE_PORTAL_BASE_DOMAIN=
 ARG VITE_APP_DOMAIN=
 ARG VITE_GOOGLE_CLIENT_ID=
 ARG VITE_PAYMENT_PROVIDER=
+# SEO (opcional): URL de una API en marcha para prerenderizar fichas, portales
+# y campañas en el build. Sin ella el build solo prerenderiza las páginas fijas
+# y el sitemap vivo de la API (/api/public/seo/sitemap.xml) lista el resto.
+ARG SEO_API_URL=
 RUN test -n "$VITE_API_URL" || (echo "VITE_API_URL es obligatoria" >&2; exit 1)
 RUN VITE_API_URL="$VITE_API_URL" \
     VITE_PORTAL_BASE_DOMAIN="$VITE_PORTAL_BASE_DOMAIN" \
     VITE_APP_DOMAIN="$VITE_APP_DOMAIN" \
     VITE_GOOGLE_CLIENT_ID="$VITE_GOOGLE_CLIENT_ID" \
     VITE_PAYMENT_PROVIDER="$VITE_PAYMENT_PROVIDER" \
+    SEO_API_URL="$SEO_API_URL" \
     pnpm turbo run build --filter=@adoptafacil/web...
 
 FROM ${CADDY_IMAGE} AS caddy-off

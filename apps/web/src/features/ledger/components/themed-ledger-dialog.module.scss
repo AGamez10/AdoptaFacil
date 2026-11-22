@@ -132,9 +132,10 @@ $warn: #c27a00;
 
   > div {
     padding: 16px 18px;
-    border: 1px solid var(--led-line);
+    border: var(--led-card-bd, 1px solid var(--led-line));
     border-radius: var(--led-r);
-    background: var(--led-tile);
+    background: var(--led-card, var(--led-tile));
+    box-shadow: var(--led-card-sh, none);
   }
 
   dt {
@@ -147,9 +148,10 @@ $warn: #c27a00;
 
   dd {
     margin: 6px 0 0;
-    font-family: var(--led-head);
-    font-size: clamp(19px, 2.6vw, 24px);
-    font-weight: 700;
+    font-family: var(--led-num, var(--led-head));
+    font-size: clamp(19px, 2.6vw, 26px);
+    font-weight: var(--led-num-w, 700);
+    letter-spacing: var(--led-num-ls, normal);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -162,10 +164,11 @@ $warn: #c27a00;
     color: var(--led-out);
   }
 
-  .balance {
+  .balance.balance {
     border-color: transparent;
-    background: var(--led-acc);
-    color: var(--led-acc-ink);
+    background: var(--led-hi, var(--led-acc));
+    box-shadow: none;
+    color: var(--led-hi-ink, var(--led-acc-ink));
 
     dt {
       color: inherit;
@@ -229,8 +232,10 @@ $warn: #c27a00;
     margin: 0;
     padding: 0;
     list-style: none;
-    border: 1px solid var(--led-line);
+    border: var(--led-card-bd, 1px solid var(--led-line));
     border-radius: var(--led-r);
+    background: var(--led-card, transparent);
+    box-shadow: var(--led-card-sh, none);
     overflow: hidden;
   }
 
@@ -321,7 +326,9 @@ $warn: #c27a00;
 }
 
 .amount {
-  font-weight: 700;
+  font-family: var(--led-num, inherit);
+  font-weight: var(--led-num-w, 700);
+  letter-spacing: var(--led-num-ls, normal);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 

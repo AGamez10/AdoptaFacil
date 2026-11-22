@@ -56,7 +56,9 @@ export function EmailUnsubscribePage() {
               </p>
               {state === 'done' ? (
                 <>
-                  <h1 className="text-2xl font-bold">Listo, no te escribiremos más novedades</h1>
+                  <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                    Listo, no te escribiremos más novedades
+                  </h1>
                   <p className="text-muted-foreground">
                     {o
                       ? 'Ya no recibirás anuncios ni novedades de esta organización. Las demás organizaciones y AdoptaFácil podrán seguir escribiéndote.'
@@ -67,7 +69,9 @@ export function EmailUnsubscribePage() {
                 </>
               ) : state === 'invalid' ? (
                 <>
-                  <h1 className="text-2xl font-bold">Este enlace no es válido</h1>
+                  <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                    Este enlace no es válido
+                  </h1>
                   <p className="text-muted-foreground">
                     Revisa que copiaste el enlace completo desde el correo. También puedes usar el
                     botón "Cancelar suscripción" de tu bandeja de entrada.
@@ -75,7 +79,7 @@ export function EmailUnsubscribePage() {
                 </>
               ) : (
                 <>
-                  <h1 className="text-2xl font-bold">
+                  <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
                     {o
                       ? '¿Dejar de recibir correos de esta organización?'
                       : '¿Dejar de recibir novedades por correo?'}

@@ -68,7 +68,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
         <div className="mt-auto pt-3">
           <Link
             to={`/servicios/${encodeURIComponent(service.id)}`}
-            className="block rounded-lg border-2 border-primary py-2 text-center text-sm font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground"
+            className="block rounded-full border-2 border-primary py-2 text-center text-sm font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground"
           >
             Ver perfil y contacto
           </Link>

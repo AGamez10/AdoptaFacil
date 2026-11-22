@@ -655,3 +655,51 @@ describe('AnimalsPage — activar apadrinamiento desde el panel de detalle (S2-0
     expect(await screen.findByText('Ya no recibe padrinos nuevos')).toBeInTheDocument();
   });
 });
+
+describe('AnimalsPage — apto para adopción y publicación (decisión 2026-11-22)', () => {
+  function stubWithCalls(grants: string[]) {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    stubFetch((url, init) => {
+      const method = init?.method ?? 'GET';
+      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (url.endsWith('/team/me/permissions')) return { permissions: grants };
+      if (url.includes('/animals/breeds')) return [];
+      if (url.includes('/care-logs')) return [];
+      if (method === 'GET' && url.includes('/animals')) {
+        return [animal('a1', 'Firulais', { status: 'unavailable' })];
+      }
+      return {};
+    });
+    return calls;
+  }
+
+  it('a vet marks the animal apt for adoption but does not get to publish it', async () => {
+    const calls = stubWithCalls([]);
+    renderShell({ route: '/animales', ...sessionWith([Role.Veterinarian]) });
+
+    await selectRow('Firulais');
+    expect(screen.getByText('Fuera del portal')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Publicar en el portal' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar apto para adopción' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'POST' && c.url.endsWith('/animals/a1/adoption-readiness'))
+          ?.body,
+      ).toEqual({ ready: true }),
+    );
+  });
+
+  it('a vet with the express permission can publish', async () => {
+    const calls = stubWithCalls(['animals.publish']);
+    renderShell({ route: '/animales', ...sessionWith([Role.Veterinarian]) });
+
+    await selectRow('Firulais');
+    fireEvent.click(await screen.findByRole('button', { name: 'Publicar en el portal' }));
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'PATCH' && c.url.endsWith('/animals/a1'))?.body,
+      ).toEqual({ status: 'available' }),
+    );
+  });
+});

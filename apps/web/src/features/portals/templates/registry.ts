@@ -23,6 +23,8 @@ export const ENGINE_TEMPLATE_IDS = [
   'constelacion',
   'portada',
   'hilo',
+  'brisa',
+  'bento',
   // Premium (tier 'paid'): se desbloquean con `portalPremiumDesigns` (Crece y Pro).
   'album',
   'linterna',
@@ -30,6 +32,8 @@ export const ENGINE_TEMPLATE_IDS = [
   'velitas',
   'terminal',
   'documental',
+  'halo',
+  'prisma',
 ] as const satisfies readonly PortalTemplateId[];
 
 export type EngineTemplateId = (typeof ENGINE_TEMPLATE_IDS)[number];
@@ -56,6 +60,10 @@ const LOADERS: Record<EngineTemplateId, () => Promise<TemplateDesign>> = {
   velitas: () => import('./designs/velitas').then((x) => x.velitas),
   terminal: () => import('./designs/terminal').then((x) => x.terminal),
   documental: () => import('./designs/documental').then((x) => x.documental),
+  brisa: () => import('./designs/brisa').then((x) => x.brisa),
+  bento: () => import('./designs/bento').then((x) => x.bento),
+  halo: () => import('./designs/halo').then((x) => x.halo),
+  prisma: () => import('./designs/prisma').then((x) => x.prisma),
 };
 
 export function isEngineTemplate(id: string): id is EngineTemplateId {

@@ -106,8 +106,18 @@
 
 	handle {
 		root * /srv/web
-		try_files {path} /index.html
-		header /index.html Cache-Control "no-cache"
+		# SEO: /adoptar/perros sirve el HTML prerenderizado /adoptar/perros/index.html
+		# (título, canónica, JSON-LD y contenido sin JavaScript). Antes `{path}` no
+		# casaba con la carpeta y todo caía en la portada. Lo demás (rutas privadas,
+		# 404, páginas creadas tras el build) recibe el cascarón app.html.
+		try_files {path} {path}/index.html /app.html
+		# Imágenes sin hash (public/): un día. El HTML (portada, páginas
+		# prerenderizadas y app.html) se revalida siempre para que un build nuevo
+		# llegue de inmediato. /assets/* ya trae su caché inmutable (arriba).
+		@static path *.webp *.png *.jpg *.jpeg *.svg *.ico *.woff2 *.mp4
+		header @static Cache-Control "public, max-age=86400"
+		@document not path /assets/* *.webp *.png *.jpg *.jpeg *.svg *.ico *.woff2 *.mp4
+		header @document Cache-Control "no-cache"
 		# PWA: el service worker y el manifiesto se revisan en cada visita para que
 		# una versión nueva llegue sin esperar a que caduque una caché.
 		header /sw.js Cache-Control "no-cache"

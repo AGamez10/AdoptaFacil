@@ -510,7 +510,7 @@ export function OrgLegalRepresentativePage() {
                     </p>
                   )}
                   {signatureBase64 && (
-                    <p className="text-xs font-medium text-emerald-600">✓ Firma lista</p>
+                    <p className="text-xs font-medium text-primary">✓ Firma lista</p>
                   )}
                 </div>
 

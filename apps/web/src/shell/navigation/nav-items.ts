@@ -269,6 +269,18 @@ export const MARKETPLACE_VIEW_ROLES = [
  */
 export const ORG_MEMBER_ROLES = ORG_ROLES;
 
+/** "Mi trabajo" (tareas, animales a cargo y cuidados) · copiado VERBATIM del
+ *  `@Roles` de `MyTeamWorkController` (`GET /team/me/work`): todo el equipo
+ *  operativo, sin el auditor de solo lectura. */
+export const TEAM_WORK_ROLES = [
+  Role.Owner,
+  Role.Administrator,
+  Role.Operator,
+  Role.Veterinarian,
+  Role.Volunteer,
+  Role.TemporaryCollaborator,
+] as const;
+
 /**
  * Primary portal sections shown in the sidebar (§M14 portales).
  *
@@ -411,6 +423,12 @@ const leaf = {
     roles: DONATIONS_MANAGEMENT_ROLES,
   },
   animales: { path: '/animales', label: 'Animales', icon: PawIcon, roles: ANIMAL_VIEW_ROLES },
+  miTrabajo: {
+    path: '/mi-trabajo',
+    label: 'Mi trabajo',
+    icon: UsersIcon,
+    roles: TEAM_WORK_ROLES,
+  },
   reportesAnimales: {
     path: '/reportes-animales',
     label: 'Reportes de animales',
@@ -662,7 +680,7 @@ export interface NavSection {
  * ruta ni de roles respecto al menú plano anterior.
  */
 export const navSections: NavSection[] = [
-  { id: 'inicio', items: [leaf.inicio] },
+  { id: 'inicio', items: [leaf.inicio, leaf.miTrabajo] },
   {
     id: 'animales',
     label: 'Animales y adopciones',

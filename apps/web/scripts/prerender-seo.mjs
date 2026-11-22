@@ -9,12 +9,14 @@
  * También escribe `sitemap.xml` y `robots.txt`.
  *
  * Variables de entorno (ninguna es obligatoria):
- *   SITE_URL o VITE_SITE_URL   dominio público (https://…). Sin él no hay
- *                              URLs absolutas: se omiten canónicas y sitemap.
+ *   SITE_URL o VITE_SITE_URL   dominio público (https://…). Si falta, se arma
+ *                              con VITE_APP_DOMAIN (el despliegue con Caddy).
+ *                              Sin ninguno no hay URLs absolutas: se omiten
+ *                              canónicas y sitemap.
  *   SEO_API_URL o VITE_API_URL API para listar animales y ciudades reales.
  *                              Si no responde, solo se generan las rutas fijas.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -27,8 +29,13 @@ import {
   animalDescription,
   animalTitle,
   buildAdoptPath,
+  campaignDescription,
+  campaignTitle,
   citySlug,
+  portalDescription,
+  portalTitle,
   publicAnimalPath,
+  shelterLd,
 } from '../src/seo/page-meta.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,8 +43,22 @@ const dist = join(root, 'dist');
 const guides = JSON.parse(await readFile(join(root, 'src/seo/guides.json'), 'utf8'));
 
 const SITE_NAME = 'AdoptaFácil';
-const SITE_URL = (process.env.SITE_URL || process.env.VITE_SITE_URL || '').replace(/\/+$/, '');
+const APP_DOMAIN = (process.env.VITE_APP_DOMAIN || '').trim();
+const SITE_URL = (
+  process.env.SITE_URL ||
+  process.env.VITE_SITE_URL ||
+  (APP_DOMAIN ? `https://${APP_DOMAIN}` : '')
+).replace(/\/+$/, '');
 const API_URL = (process.env.SEO_API_URL || process.env.VITE_API_URL || '').replace(/\/+$/, '');
+/** Idioma y país del sitio. Al abrir otro país, cada versión declara el suyo
+ *  y se enlazan entre sí con hreflang (ver `alternates` en renderHtml). */
+const LOCALE = process.env.SEO_LOCALE || 'es-CO';
+/** El sitemap vivo de la API (fichas, portales, ciudades y campañas de hoy),
+ *  con la URL PÚBLICA de la API (VITE_API_URL), no la interna del build. */
+const PUBLIC_API = (process.env.VITE_API_URL || '/api').replace(/\/+$/, '');
+const DYNAMIC_SITEMAP = SITE_URL
+  ? `${/^https?:\/\//.test(PUBLIC_API) ? PUBLIC_API : `${SITE_URL}${PUBLIC_API}`}/public/seo/sitemap.xml`
+  : '';
 const OG_IMAGE = '/og-adoptafacil.jpg';
 /** Canales oficiales (mismos de `src/lib/contact.ts`). */
 const OFFICIAL_EMAIL = 'adoptafacil.oficial@gmail.com';
@@ -92,11 +113,54 @@ async function fetchAnimals() {
   return all;
 }
 
+async function fetchJson(path) {
+  const response = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+/** Perfil público de cada organización con animales publicados (portal). */
+async function fetchOrganizations(animals) {
+  if (!API_URL) return [];
+  const slugs = [...new Set(animals.map((a) => a.organization?.slug).filter(Boolean))];
+  const found = [];
+  // De a cuatro: no saturar la API en el build.
+  for (let i = 0; i < slugs.length; i += 4) {
+    const batch = await Promise.all(
+      slugs.slice(i, i + 4).map((slug) =>
+        fetchJson(`/public/organizations/${encodeURIComponent(slug)}`)
+          .then((org) => ({ ...org, slug: org.slug ?? slug }))
+          .catch(() => null),
+      ),
+    );
+    found.push(...batch.filter(Boolean));
+  }
+  return found;
+}
+
+/** Campañas activas (las cerradas no se prerenderizan ni van al sitemap). */
+async function fetchCampaigns() {
+  if (!API_URL) return [];
+  const all = [];
+  try {
+    for (let offset = 0; offset < 1_000; offset += 50) {
+      const body = await fetchJson(`/public/campaigns?limit=50&offset=${offset}`);
+      const items = Array.isArray(body?.items) ? body.items : [];
+      all.push(...items.filter((c) => c.status === 'active'));
+      if (items.length < 50 || offset + 50 >= (body?.total ?? 0)) break;
+    }
+  } catch (error) {
+    console.warn(`[seo] No se pudo leer ${API_URL}/public/campaigns (${error.message}).`);
+  }
+  return all;
+}
+
 /* -------------------------------------------------------------- rutas */
 
 /** @typedef {{ path: string; title: string; description: string; image?: string; type?: string;
  *  jsonLd: object[]; heading: string; text: string; links: [string, string][]; lastmod?: string;
- *  faq?: { q: string; a: string }[];
+ *  faq?: { q: string; a: string }[]; preloadImage?: string;
+ *  route?: string;
  *  priority: string }} Page */
 
 /** Ciudades con animales publicados, agrupadas por su slug ("Bogotá" y
@@ -226,7 +290,7 @@ function adoptPage(species, city, animals, cities) {
   };
 }
 
-function buildPages(animals) {
+function buildPages(animals, organizations = [], campaignList = []) {
   /** @type {Page[]} */
   const pages = [];
   const home = STATIC_PAGES['/'];
@@ -310,6 +374,7 @@ function buildPages(animals) {
       title,
       description: animalDescription(a, a.organization?.name, city),
       image: a.photoUrl,
+      preloadImage: a.photoUrl,
       jsonLd: [
         breadcrumb([
           ['Inicio', '/'],
@@ -322,11 +387,73 @@ function buildPages(animals) {
       text: animalDescription(a, a.organization?.name, city),
       links: [
         [
-          `Más ${SPECIES_PLURAL[a.species].toLowerCase()} en adopción`,
+          `Más ${SPECIES_PLURAL[a.species].toLowerCase()} en adopción${city ? ` en ${city}` : ''}`,
           buildAdoptPath(a.species, city),
         ],
+        ...(a.organization?.name
+          ? [[`Conoce a ${a.organization.name}`, `/o/${encodeURIComponent(a.organization.slug)}`]]
+          : []),
       ],
+      lastmod: lastmodOf([a]),
       priority: '0.6',
+    });
+  }
+
+  // Portal de cada organización: AnimalShelter con ciudad (nunca la dirección).
+  for (const org of organizations) {
+    const path = `/o/${encodeURIComponent(org.slug)}`;
+    const own = animals.filter((a) => a.organization?.slug === org.slug);
+    pages.push({
+      path,
+      title: portalTitle(org),
+      description: portalDescription(org, own.length),
+      image: org.coverPhotos?.[0] ?? org.logoUrl,
+      preloadImage: org.coverPhotos?.[0],
+      route: 'src/features/portals/pages/org-public-page.tsx',
+      jsonLd: [
+        shelterLd(org, path, abs),
+        breadcrumb([
+          ['Inicio', '/'],
+          ['Adoptar', '/adoptar'],
+          [org.name, path],
+        ]),
+      ],
+      heading: org.name,
+      text: portalDescription(org, own.length),
+      links: [
+        ...own
+          .slice(0, 24)
+          .map((a) => [
+            `${a.name}, ${a.species === 'cat' ? 'gato' : a.species === 'dog' ? 'perro' : 'animal'} en adopción`,
+            publicAnimalPath(org.slug, a),
+          ]),
+        ...(org.location?.city
+          ? [[adoptTitle('all', org.location.city), buildAdoptPath('all', org.location.city)]]
+          : []),
+      ],
+      lastmod: lastmodOf(own),
+      priority: '0.8',
+    });
+  }
+
+  for (const c of campaignList) {
+    const path = `/campanas/${c.id}`;
+    pages.push({
+      path,
+      title: campaignTitle(c),
+      description: campaignDescription(c),
+      jsonLd: [
+        breadcrumb([
+          ['Inicio', '/'],
+          ['Campañas', '/campanas'],
+          [c.title, path],
+        ]),
+      ],
+      heading: c.title,
+      text: campaignDescription(c),
+      links: [['Todas las campañas', '/campanas']],
+      lastmod: typeof c.createdAt === 'string' ? c.createdAt.slice(0, 10) : undefined,
+      priority: '0.5',
     });
   }
 
@@ -342,7 +469,7 @@ function buildPages(animals) {
     ],
     heading: 'Campañas de recaudación',
     text: campaigns.description,
-    links: [],
+    links: campaignList.map((c) => [`${c.title} (${c.organizationName})`, `/campanas/${c.id}`]),
     priority: '0.6',
   });
 
@@ -382,6 +509,41 @@ function buildPages(animals) {
     links: [['Crear mi portal gratis', '/register']],
     priority: '0.8',
   });
+
+  for (const [path, heading, links] of [
+    [
+      '/transparencia-nacional',
+      'Transparencia Nacional del rescate animal',
+      [
+        ['Campañas activas', '/campanas'],
+        ['Cómo ayudar', '/ayudar'],
+      ],
+    ],
+    [
+      '/voluntariados',
+      'Voluntariados en refugios y fundaciones',
+      [
+        ['Cómo ayudar', '/ayudar'],
+        ['Perros y gatos en adopción', '/adoptar'],
+      ],
+    ],
+  ]) {
+    const meta = STATIC_PAGES[path];
+    pages.push({
+      path,
+      ...meta,
+      jsonLd: [
+        breadcrumb([
+          ['Inicio', '/'],
+          [meta.title, path],
+        ]),
+      ],
+      heading,
+      text: meta.description,
+      links,
+      priority: '0.6',
+    });
+  }
 
   const guidesMeta = STATIC_PAGES['/guias'];
   pages.push({
@@ -444,16 +606,42 @@ function buildPages(animals) {
 
 /* ------------------------------------------------------------ escritura */
 
+/** Manifiesto de Vite (`build.manifest`): qué archivos necesita cada ruta. */
+let viteManifest = {};
+function routeChunks(route) {
+  if (!route || !viteManifest[route]) return [];
+  const files = new Set();
+  const visit = (key) => {
+    const entry = viteManifest[key];
+    // El paquete inicial (isEntry) ya lo pide el index.html.
+    if (!entry || entry.isEntry || files.has(entry.file)) return;
+    files.add(entry.file);
+    for (const dep of entry.imports ?? []) visit(dep);
+  };
+  visit(route);
+  return [...files];
+}
+
 function renderHtml(template, page, { canonical }) {
   const fullTitle = `${page.title} · ${SITE_NAME}`;
   const image = page.image ?? abs(OG_IMAGE);
   const head = [
     canonical && SITE_URL ? `<link rel="canonical" href="${esc(abs(page.path))}" />` : '',
     canonical && SITE_URL ? `<meta property="og:url" content="${esc(abs(page.path))}" />` : '',
-    // Un solo idioma: hreflang que se apunta a sí mismo (es-CO) y x-default.
+    // Hoy un solo país: hreflang que se apunta a sí mismo (LOCALE) y x-default.
+    // Al abrir otro mercado, cada versión suma aquí su par (p. ej. es-MX).
     canonical && SITE_URL
-      ? `<link rel="alternate" hreflang="es-CO" href="${esc(abs(page.path))}" />\n    <link rel="alternate" hreflang="x-default" href="${esc(abs(page.path))}" />`
+      ? `<link rel="alternate" hreflang="${esc(LOCALE)}" href="${esc(abs(page.path))}" />\n    <link rel="alternate" hreflang="x-default" href="${esc(abs(page.path))}" />`
       : '',
+    // La portada del portal es su LCP: pedirla desde el HTML, sin esperar a
+    // que React y la API la descubran (en móvil, de ~5,6 s a ~2,5 s).
+    page.preloadImage && /^https?:\/\//.test(page.preloadImage)
+      ? `<link rel="preload" as="image" href="${esc(page.preloadImage)}" fetchpriority="high" />`
+      : '',
+    // El código de la ruta (carga diferida), pedido ya desde el HTML en paralelo
+    // con el paquete principal en vez de en cadena tras él. Los datos los
+    // adelanta `features/portals/api/early-fetch.ts`.
+    ...routeChunks(page.route).map((file) => `<link rel="modulepreload" href="/${esc(file)}" />`),
     `<meta name="twitter:title" content="${esc(`${page.title} · ${SITE_NAME}`)}" />`,
     `<meta name="twitter:description" content="${esc(page.description)}" />`,
     `<meta name="twitter:image" content="${esc(page.image ?? abs(OG_IMAGE))}" />`,
@@ -480,6 +668,11 @@ function renderHtml(template, page, { canonical }) {
     )
     .replace(/(<meta\s+property="og:type"\s+content=")[^"]*(")/, `$1${page.type ?? 'website'}$2`)
     .replace(/(<meta\s+property="og:image"\s+content=")[^"]*(")/, `$1${esc(image)}$2`)
+    .replace(/<html lang="[^"]*">/, `<html lang="${esc(LOCALE)}">`)
+    .replace(
+      /(<meta\s+property="og:locale"\s+content=")[^"]*(")/,
+      `$1${esc(LOCALE.replace('-', '_'))}$2`,
+    )
     .replace('<!--seo-head-->', head)
     .replace('<!--seo-body-->', body);
 }
@@ -534,10 +727,25 @@ function llmsTxt(pages) {
           ...cityPages.map((p) => link(p.title, p.path, p.description.split('. ')[0] + '.')),
         ]
       : []),
+    ...(pages.some((p) => /^\/o\/[^/]+$/.test(p.path))
+      ? [
+          '',
+          '## Refugios y fundaciones',
+          ...pages
+            .filter((p) => /^\/o\/[^/]+$/.test(p.path))
+            .map((p) => link(p.heading, p.path, p.description)),
+        ]
+      : []),
     '',
     '## Para quien quiere ayudar',
     link('Campañas', '/campanas', STATIC_PAGES['/campanas'].description),
     link('Cómo ayudar', '/ayudar', STATIC_PAGES['/ayudar'].description),
+    link('Voluntariados', '/voluntariados', STATIC_PAGES['/voluntariados'].description),
+    link(
+      'Transparencia Nacional',
+      '/transparencia-nacional',
+      STATIC_PAGES['/transparencia-nacional'].description,
+    ),
     '',
     '## Para organizaciones',
     link(
@@ -564,13 +772,29 @@ async function main() {
   if (!template.includes('<!--seo-head-->')) {
     throw new Error('[seo] dist/index.html no tiene el marcador <!--seo-head-->.');
   }
+  try {
+    viteManifest = JSON.parse(await readFile(join(dist, '.vite/manifest.json'), 'utf8'));
+  } catch {
+    viteManifest = {};
+  }
   const animals = await fetchAnimals();
-  const pages = buildPages(animals);
+  const [organizations, campaignList] = await Promise.all([
+    fetchOrganizations(animals),
+    fetchCampaigns(),
+  ]);
+  const pages = buildPages(animals, organizations, campaignList);
+
+  // `app.html`: el cascarón del SPA para rutas privadas, 404 y páginas creadas
+  // después del build. Sin canónica ni contenido: cada pantalla pone la suya.
+  // Así la portada (`index.html`) sí lleva canónica y contenido propios.
+  await writeFile(
+    join(dist, 'app.html'),
+    template.replace('<!--seo-head-->', '').replace('<!--seo-body-->', ''),
+  );
 
   for (const page of pages) {
     if (page.path === '/') {
-      // index.html también responde las rutas privadas (rewrite del SPA): sin canónica.
-      await writeFile(join(dist, 'index.html'), renderHtml(template, page, { canonical: false }));
+      await writeFile(join(dist, 'index.html'), renderHtml(template, page, { canonical: true }));
       continue;
     }
     const file = join(dist, page.path, 'index.html');
@@ -582,28 +806,30 @@ async function main() {
     'User-agent: *',
     'Allow: /',
     ...PRIVATE_PATHS.map((path) => `Disallow: ${path}`),
-    ...(SITE_URL ? ['', `Sitemap: ${SITE_URL}/sitemap.xml`] : []),
+    ...(SITE_URL ? ['', `Sitemap: ${SITE_URL}/sitemap.xml`, `Sitemap: ${DYNAMIC_SITEMAP}`] : []),
     '',
   ].join('\n');
   await writeFile(join(dist, 'robots.txt'), robots);
   await writeFile(join(dist, 'llms.txt'), llmsTxt(pages));
+  // El manifiesto solo sirve al build: no se publica.
+  await rm(join(dist, '.vite'), { recursive: true, force: true });
 
   if (SITE_URL) {
     const urls = pages
       .map(
         (page) =>
-          `  <url><loc>${esc(abs(page.path))}</loc>${page.lastmod ? `<lastmod>${page.lastmod}</lastmod>` : ''}<priority>${page.priority}</priority></url>`,
+          `  <url><loc>${esc(abs(page.path))}</loc>${page.lastmod ? `<lastmod>${page.lastmod}</lastmod>` : ''}${/^https:\/\//.test(page.image ?? '') ? `<image:image><image:loc>${esc(page.image)}</image:loc></image:image>` : ''}</url>`,
       )
       .join('\n');
     await writeFile(
       join(dist, 'sitemap.xml'),
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}\n</urlset>\n`,
     );
   } else {
     console.warn('[seo] Sin SITE_URL: se omiten canónicas absolutas y sitemap.xml.');
   }
   console.log(
-    `[seo] ${pages.length} páginas prerenderizadas (${animals.length} animales)${SITE_URL ? ' + sitemap.xml' : ''} + robots.txt + llms.txt`,
+    `[seo] ${pages.length} páginas prerenderizadas (${animals.length} animales, ${organizations.length} portales, ${campaignList.length} campañas)${SITE_URL ? ' + sitemap.xml' : ''} + robots.txt + llms.txt`,
   );
 }
 

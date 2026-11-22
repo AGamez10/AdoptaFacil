@@ -80,7 +80,9 @@ export function SessionDaysPicker({ id, value, onChange, start, end }: SessionDa
             )}
           </div>
           {value.length === 0 ? (
-            <p className="text-xs font-medium text-amber-700">Aún no has habilitado ningún día.</p>
+            <p className="text-xs font-medium text-[hsl(var(--warning-foreground))]">
+              Aún no has habilitado ningún día.
+            </p>
           ) : (
             <ul className="flex flex-wrap gap-2" aria-label="Días habilitados">
               {value.map((day) => {
@@ -89,7 +91,9 @@ export function SessionDaysPicker({ id, value, onChange, start, end }: SessionDa
                   <li
                     key={day}
                     className={`flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${
-                      outside ? 'border-red-300 bg-red-50 text-red-800' : 'border-border bg-muted'
+                      outside
+                        ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                        : 'border-border bg-muted'
                     }`}
                   >
                     {formatDayEs(day)}

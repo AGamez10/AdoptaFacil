@@ -118,7 +118,9 @@ export function AccountingSharePage() {
   const t = preview?.totals;
   return (
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-10">
-      <h1 className="text-2xl font-semibold">Contabilidad compartida</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+        Contabilidad compartida
+      </h1>
       {error && (
         <p
           role="alert"

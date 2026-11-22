@@ -11,7 +11,7 @@ Es la primera barrera (el rol). Las reglas que dependen de datos (firmante desig
 prueban las suites de integración. El resumen en palabras está en
 `docs/seguridad/roles-y-organizaciones.md`, sección 9.
 
-Rutas: 465. Con `@Roles`: 296. Autenticadas sin `@Roles` (cada una revisada): 86. Públicas: 83.
+Rutas: 478. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86. Públicas: 84.
 
 | Ruta | Prop. | Admin | Oper. | Vet. | Vol. | Temp. | Audit. | P.Admin | P.Super | Otro acceso |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | --- |
@@ -45,7 +45,7 @@ Rutas: 465. Con `@Roles`: 296. Autenticadas sin `@Roles` (cada una revisada): 86
 | `GET /adoptions/followups/mine` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
 | `GET /adoptions/mine` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
 | `GET /animals` | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |  |  |  |
-| `POST /animals` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
+| `POST /animals` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  | Vet.: la ficha queda fuera del portal ("no disponible") hasta que alguien con permiso la publique |
 | `POST /animals/:animalId/behavior-disclosures` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
 | `GET /animals/:animalId/behavior-disclosures/current` | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |  |  |  |
 | `GET /animals/:animalId/clinical-events` | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |  |  |  |
@@ -58,9 +58,10 @@ Rutas: 465. Con `@Roles`: 296. Autenticadas sin `@Roles` (cada una revisada): 86
 | `POST /animals/:animalId/clinical-events/uploads` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
 | `DELETE /animals/:id` | ✓ | ✓ |  |  |  |  |  |  |  |  |
 | `GET /animals/:id` | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |  |  |  |
-| `PATCH /animals/:id` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
-| `POST /animals/:id/activate` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
-| `POST /animals/:id/deactivate` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
+| `PATCH /animals/:id` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  | Vet.: sin el permiso expreso «publicar animales» solo cambia el estado a "no disponible" |
+| `POST /animals/:id/activate` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  | Vet.: solo con el permiso expreso «publicar animales» |
+| `POST /animals/:id/adoption-readiness` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
+| `POST /animals/:id/deactivate` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  | Vet.: solo con el permiso expreso «publicar animales» |
 | `POST /animals/:id/photos` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
 | `DELETE /animals/:id/photos/:photoId` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
 | `POST /animals/:id/register-death` | ✓ | ✓ |  |  |  |  |  |  |  |  |
@@ -132,7 +133,7 @@ Rutas: 465. Con `@Roles`: 296. Autenticadas sin `@Roles` (cada una revisada): 86
 | `POST /custody/animals/:animalId/report` | ✓ | ✓ | ✓ |  |  |  |  |  |  |  |
 | `GET /custody/animals/:animalId/timeline` | ✓ | ✓ | ✓ |  |  |  | ✓ |  |  |  |
 | `GET /custody/charges` | ✓ | ✓ | ✓ |  |  |  | ✓ |  |  |  |
-| `POST /custody/charges` | ✓ | ✓ | ✓ |  |  |  |  |  |  |  |
+| `POST /custody/charges` | ✓ | ✓ | ✓ |  |  |  |  |  |  | Oper.: mensualidad y alimentación por la tarifa del contrato, otros gastos con soporte, sin recargos por mora |
 | `POST /custody/charges/:id/cancel` | ✓ | ✓ |  |  |  |  |  |  |  |  |
 | `POST /custody/charges/:id/collection` | ✓ | ✓ |  |  |  |  |  |  |  |  |
 | `POST /custody/charges/:id/extensions` | ✓ | ✓ |  |  |  |  |  |  |  |  |
@@ -235,6 +236,7 @@ Rutas: 465. Con `@Roles`: 296. Autenticadas sin `@Roles` (cada una revisada): 86
 | `POST /org/legal-representative` | ✓ |  |  |  |  |  | ✓ |  |  |  |
 | `GET /org/members` | ✓ | ✓ |  |  |  |  |  |  |  |  |
 | `DELETE /org/members/:userId` | ✓ | ✓ |  |  |  |  |  |  |  |  |
+| `PUT /org/members/:userId/permissions` | ✓ | ✓ |  |  |  |  |  |  |  |  |
 | `PUT /org/members/:userId/role` | ✓ | ✓ |  |  |  |  |  |  |  |  |
 | `GET /org/mercadopago/callback` |  |  |  |  |  |  |  |  |  | pública |
 | `DELETE /org/mercadopago/connect` | ✓ | ✓ |  |  |  |  |  |  |  |  |
@@ -394,6 +396,7 @@ Rutas: 465. Con `@Roles`: 296. Autenticadas sin `@Roles` (cada una revisada): 86
 | `GET /public/resources/needs/:id` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/resources/open-offers` |  |  |  |  |  |  |  |  |  | pública |
 | `POST /public/security/csp-report` |  |  |  |  |  |  |  |  |  | pública |
+| `GET /public/seo/sitemap.xml` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/share/p/:id` |  |  |  |  |  |  |  |  |  | pública |
 | `POST /public/signature-requests/decision` |  |  |  |  |  |  |  |  |  | pública |
 | `POST /public/signature-requests/pdf` |  |  |  |  |  |  |  |  |  | pública |
@@ -464,6 +467,16 @@ Rutas: 465. Con `@Roles`: 296. Autenticadas sin `@Roles` (cada una revisada): 86
 | `GET /storage/private` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
 | `GET /storage/public` |  |  |  |  |  |  |  |  |  | pública |
 | `PUT /storage/upload` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `GET /team/animals/:animalId/care-logs` | ✓ | ✓ | ✓ | ✓ |  |  | ✓ |  |  |  |
+| `GET /team/assignees` | ✓ | ✓ | ✓ |  |  |  |  |  |  |  |
+| `GET /team/assignments` | ✓ | ✓ | ✓ |  |  |  | ✓ |  |  |  |
+| `POST /team/assignments` | ✓ | ✓ | ✓ |  |  |  |  |  |  |  |
+| `POST /team/assignments/:id/cancel` | ✓ | ✓ | ✓ |  |  |  |  |  |  |  |
+| `GET /team/me/animals/:animalId/care-logs` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |  | solo animales a cargo de quien pregunta |
+| `POST /team/me/animals/:animalId/care-logs` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |  | solo animales a cargo de quien pregunta |
+| `POST /team/me/assignments/:id/complete` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |  | solo sus propias tareas |
+| `GET /team/me/permissions` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |  |  |
+| `GET /team/me/work` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |  |  |
 | `GET /volunteer-certificates` | ✓ | ✓ |  |  |  |  | ✓ |  |  |  |
 | `POST /volunteer-certificates/:enrollmentId` | ✓ | ✓ |  |  |  |  |  |  |  |  |
 | `GET /volunteer-certificates/:id` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |

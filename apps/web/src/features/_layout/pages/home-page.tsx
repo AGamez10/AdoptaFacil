@@ -8,6 +8,7 @@ import {
 import {
   Badge,
   Button,
+  buttonVariants,
   Card,
   CardContent,
   CardDescription,
@@ -21,8 +22,10 @@ import {
 import { formatCop } from '../../donations';
 import { deriveActionItems } from '../model/action-items';
 import { FirstStepsCard } from '../components/first-steps-card';
+import { PersonHomeTiles } from '../components/person-home-tiles';
 import { OrgDonationsDashboardSection } from '../../org/components/org-donations-dashboard-section';
 import { OrgStatusCard } from '../../org/components/org-status-card';
+import { Link } from 'react-router-dom';
 import { fetchHealth } from '../../../lib/api';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
@@ -86,6 +89,9 @@ export function HomePage() {
   // Donations/campaigns/sponsorships detail needs the payments module (R1-1).
   const paymentsOn = useFeature('payments');
   const canViewSummary = hasAnyRole(...SUMMARY_ROLES);
+  // Veterinario, voluntario y colaborador temporal: su inicio lleva a su panel.
+  const isVet = hasAnyRole(Role.Veterinarian);
+  const hasOwnWork = hasAnyRole(Role.Veterinarian, Role.Volunteer, Role.TemporaryCollaborator);
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [summary, setSummary] = useState<SummaryState>({ status: 'loading' });
@@ -117,10 +123,13 @@ export function HomePage() {
     if (canViewSummary) loadSummary();
   }, [canViewSummary, loadSummary]);
 
+  // Persona (adoptante, donante, voluntaria): sin organización ni plataforma.
+  const isPerson = !canViewSummary && !hasOwnWork && !isPlatformAdmin;
+
   const now = new Date();
-  const description = canViewSummary
-    ? `${greetingLabel(now)}, ${user?.name} · ${formatLongDateEs(now)}`
-    : 'Portal AdoptaFácil — navegación y transparencia.';
+  const description = user?.name
+    ? `${greetingLabel(now)}, ${user.name} · ${formatLongDateEs(now)}`
+    : formatLongDateEs(now);
 
   return (
     <PageContainer>
@@ -232,6 +241,45 @@ export function HomePage() {
             </>
           )}
         </div>
+      )}
+
+      {!canViewSummary && hasOwnWork && (
+        <Card className="mb-6" data-testid="home-my-work">
+          <CardHeader>
+            <CardTitle>{isVet ? 'Tu panel clínico' : 'Tu trabajo en el equipo'}</CardTitle>
+            <CardDescription>
+              {isVet
+                ? 'Recordatorios de salud, fichas clínicas y los animales a tu cargo.'
+                : 'Tus tareas, los animales a tu cargo y tu voluntariado.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Link to="/mi-trabajo" className={buttonVariants({ size: 'sm' })}>
+              Ir a mi trabajo
+            </Link>
+            {isVet ? (
+              <Link
+                to="/recordatorios"
+                className={buttonVariants({ size: 'sm', variant: 'outline' })}
+              >
+                Recordatorios de salud
+              </Link>
+            ) : (
+              <Link
+                to="/voluntariado"
+                className={buttonVariants({ size: 'sm', variant: 'outline' })}
+              >
+                Mi voluntariado
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isPerson && (
+        <section className="mb-6" aria-label="Accesos directos">
+          <PersonHomeTiles />
+        </section>
       )}
 
       {canViewSummary && <OrgStatusCard hideWhenApproved />}
