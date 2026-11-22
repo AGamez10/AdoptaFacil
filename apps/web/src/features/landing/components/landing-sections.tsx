@@ -916,7 +916,8 @@ export function PlansSection() {
                 {paid && (
                   <p className={styles.plan__note}>
                     Opcional · + IVA, o{' '}
-                    {`$${PLAN_CATALOG[key].annualPriceCop.toLocaleString('es-CO')}`} al año
+                    {`$${PLAN_CATALOG[key].annualPriceCop.toLocaleString('es-CO')}`} al año por
+                    transferencia
                   </p>
                 )}
                 <p className={styles.plan__tagline}>{PLAN_CATALOG[key].tagline}</p>
