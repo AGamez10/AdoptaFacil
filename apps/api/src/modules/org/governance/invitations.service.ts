@@ -23,7 +23,7 @@ import {
   type LegalAcceptanceItem,
   type OrganizationInvitation,
   OrganizationStatus,
-  requiredLegalDocuments,
+  requiredLegalDocumentsForInvitation,
   Role,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../../config/env.validation';
@@ -411,13 +411,15 @@ export class InvitationsService {
     input: AcceptInvitationInput,
     context: LegalRequestContext = {},
   ): Promise<AuthSession> {
-    // Autorización previa (Ley 1581 art. 9), igual que el registro: la persona
-    // entra a una cuenta de organización, así que acepta los mismos documentos.
+    // Autorización previa (Ley 1581 art. 9), igual que el registro. Lo que se
+    // acepta depende del cargo invitado: solo un propietario acepta el
+    // contrato de la organización en su nombre; cualquier otro cargo acepta
+    // las condiciones de miembro, que NO obligan a la organización.
+    const { row } = await this.resolve(input.token);
     const acceptances: LegalAcceptanceItem[] = this.legal.assertAcceptances(
       input.legalAcceptances,
-      requiredLegalDocuments('organization'),
+      requiredLegalDocumentsForInvitation(row.role),
     );
-    const { row } = await this.resolve(input.token);
     await this.assertEmailFree(row.email);
     return this.createInvitedAccount({
       row,
@@ -439,9 +441,12 @@ export class InvitationsService {
     input: AcceptInvitationWithGoogleInput,
     context: LegalRequestContext = {},
   ): Promise<AuthSession> {
+    // Se resuelve primero la invitación: el cargo decide qué documentos se
+    // aceptan (ver `accept`). Un token inválido responde lo mismo que antes.
+    const { row } = await this.resolve(input.token);
     const acceptances: LegalAcceptanceItem[] = this.legal.assertAcceptances(
       input.legalAcceptances,
-      requiredLegalDocuments('organization'),
+      requiredLegalDocumentsForInvitation(row.role),
     );
     let claims: IdentityClaims;
     try {
@@ -453,7 +458,6 @@ export class InvitationsService {
     if (!claims.emailVerified) {
       throw new UnauthorizedException('Google account email is not verified.');
     }
-    const { row } = await this.resolve(input.token);
     if (claims.email.trim().toLowerCase() !== row.email) {
       throw new ForbiddenException({
         message: 'This invitation was sent to a different email',

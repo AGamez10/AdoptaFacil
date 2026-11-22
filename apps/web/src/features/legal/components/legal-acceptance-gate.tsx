@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { getLegalDocument, type LegalDocumentKey } from '@adoptafacil/contracts';
+import {
+  getLegalDocument,
+  type LegalAudience,
+  type LegalDocumentKey,
+} from '@adoptafacil/contracts';
 import {
   Button,
   Dialog,
@@ -13,7 +17,12 @@ import {
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
 import { acceptLegalDocuments, fetchLegalStatus } from '../api/legal-api';
-import { type ConsentState, acceptancesFrom, requiredConsentsGiven } from '../model/consent';
+import {
+  type ConsentAudience,
+  type ConsentState,
+  acceptancesFrom,
+  requiredConsentsGiven,
+} from '../model/consent';
 import { LegalConsentFields } from './legal-consent-fields';
 
 /**
@@ -31,6 +40,9 @@ export function LegalAcceptanceGate() {
   const { user } = useSession();
   const { toast } = useToast();
   const [pending, setPending] = useState<LegalDocumentKey[]>([]);
+  // Papel que decide la API (propietario, miembro o persona); sin él, el tipo
+  // de cuenta como antes.
+  const [serverAudience, setServerAudience] = useState<LegalAudience | undefined>();
   const [consents, setConsents] = useState<ConsentState>({});
   const [error, setError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
@@ -39,7 +51,9 @@ export function LegalAcceptanceGate() {
     let active = true;
     fetchLegalStatus(client)
       .then((status) => {
-        if (active) setPending(Array.isArray(status?.pending) ? status.pending : []);
+        if (!active) return;
+        setPending(Array.isArray(status?.pending) ? status.pending : []);
+        setServerAudience(status?.audience);
       })
       .catch(() => undefined);
     return () => {
@@ -47,7 +61,8 @@ export function LegalAcceptanceGate() {
     };
   }, [client, user?.id]);
 
-  const audience = user?.accountType === 'organization' ? 'organization' : 'person';
+  const audience: ConsentAudience =
+    serverAudience ?? (user?.accountType === 'organization' ? 'organization' : 'person');
 
   const accept = useCallback(async () => {
     if (!requiredConsentsGiven(audience, consents)) {
@@ -61,6 +76,7 @@ export function LegalAcceptanceGate() {
         documents: acceptancesFrom(audience, consents),
       });
       setPending(status.pending);
+      if (status.audience) setServerAudience(status.audience);
       toast({
         title: 'Registramos tu aceptación',
         description: `Versión ${getLegalDocument('terms').version}. Te enviamos una constancia a tu correo.`,

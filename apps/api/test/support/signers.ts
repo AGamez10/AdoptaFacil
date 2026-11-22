@@ -8,7 +8,7 @@ import type {
   NotificationMessage,
   NotificationPort,
 } from '../../src/core/notifications/notification.port';
-import { LEGAL_ORG } from './legal';
+import { LEGAL_MEMBER } from './legal';
 
 /** Captura los correos (la invitación vive SOLO en el enlace enviado). */
 export class CapturingNotificationPort implements NotificationPort {
@@ -55,7 +55,7 @@ export async function inviteSigner(
       token: decodeURIComponent(match[1]),
       displayName,
       password: 'password-1234',
-      ...LEGAL_ORG,
+      ...LEGAL_MEMBER,
     })
     .expect(201);
   return {

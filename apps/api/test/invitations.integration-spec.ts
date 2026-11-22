@@ -13,7 +13,7 @@ import {
   type NotificationPort,
 } from '../src/core/notifications/notification.port';
 import { purgeOrganizations } from './support/cleanup';
-import { LEGAL_ORG } from './support/legal';
+import { LEGAL_MEMBER, LEGAL_ORG } from './support/legal';
 
 /**
  * Ola 1 · R2-3 (AF-017, condition C9) over HTTP against the real app: member
@@ -102,7 +102,7 @@ describe('Member invitations (R2-3, AF-017)', () => {
   const accept = (token: string, extra: Record<string, unknown> = {}) =>
     request(server)
       .post('/auth/invitations/accept')
-      .send({ token, displayName: 'Invitada', password, ...LEGAL_ORG, ...extra });
+      .send({ token, displayName: 'Invitada', password, ...LEGAL_MEMBER, ...extra });
 
   /** The raw token lives ONLY in the emailed link, in its fragment. */
   function lastTokenFor(email: string): string {
@@ -267,7 +267,7 @@ describe('Member invitations (R2-3, AF-017)', () => {
       where: { subjectType: 'user', subjectId: res.body.user.id },
     });
     expect(legal.map((r) => r.documentKey).sort()).toEqual(
-      LEGAL_ORG.legalAcceptances.map((i) => i.key).sort(),
+      LEGAL_MEMBER.legalAcceptances.map((i) => i.key).sort(),
     );
     expect(res.body.user).toMatchObject({
       email: inv.email,
@@ -296,7 +296,7 @@ describe('Member invitations (R2-3, AF-017)', () => {
   const acceptWithGoogle = (token: string, idToken: string, extra: Record<string, unknown> = {}) =>
     request(server)
       .post('/auth/invitations/accept/google')
-      .send({ token, idToken, ...LEGAL_ORG, ...extra });
+      .send({ token, idToken, ...LEGAL_MEMBER, ...extra });
 
   it('accepting with Google creates the same account when Google vouches for the invited email', async () => {
     const inv = await invited(Role.Volunteer);
