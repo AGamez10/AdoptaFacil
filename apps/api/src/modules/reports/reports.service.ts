@@ -759,28 +759,42 @@ export class ReportsService {
             : 'el reporte de servicio social';
     await Promise.all(
       notify.map(({ email, role, token, firstTime }) => {
-        const how = token
+        const roleLabel = SIGNER_ROLE_LABEL[role].toLowerCase();
+        const link = token
+          ? `${this.webBaseUrl}/firmar#token=${encodeURIComponent(token)}`
+          : `${this.webBaseUrl}/organizacion/documentos-por-firmar`;
+        const steps = token
           ? (firstTime
               ? 'Es la primera vez: en el enlace registras tu firma y autorizas que la ' +
                 'organización la guarde. Solo se estampará en los documentos que tú apruebes, ' +
                 'uno por uno.\n\n'
               : '') +
-            `Ábrelo para ver el documento y aprobarlo o rechazarlo (sirve una sola vez y vence en ${SIGNATURE_REQUEST_DAYS} días):\n\n` +
-            `${this.webBaseUrl}/firmar#token=${encodeURIComponent(token)}\n\n`
-          : 'Revísalo y autorízalo (o recházalo) con tu propia cuenta aquí:\n\n' +
-            `${this.webBaseUrl}/organizacion/documentos-por-firmar\n\n`;
+            `Ábrelo para ver el documento y aprobarlo o rechazarlo (sirve una sola vez y vence en ${SIGNATURE_REQUEST_DAYS} días).`
+          : 'Revísalo y autorízalo (o recházalo) con tu propia cuenta, en "Documentos por firmar".';
         return this.notifications
           .send({
             to: email,
-            subject: `${orgName} necesita tu firma como ${SIGNER_ROLE_LABEL[role].toLowerCase()}`,
+            subject: `${orgName} necesita tu firma como ${roleLabel}`,
             body:
               'Hola,\n\n' +
               `${orgName} generó ${kindLabel} con folio ${row.code} y necesita tu firma como ` +
-              `${SIGNER_ROLE_LABEL[role].toLowerCase()}.\n\n` +
-              how +
+              `${roleLabel}.\n\n` +
+              `${steps}\n\n${link}\n\n` +
               'Mientras no lo autorices, el documento queda pendiente de firma y no se emite. ' +
               'Si no esperabas este correo, ignóralo.',
             ...(token ? {} : { idempotencyKey: `report.signature_request:${row.id}:${role}` }),
+            template: {
+              event: 'reports.signature_request',
+              organizationName: payload.organization?.name ?? undefined,
+              organizationId: row.organizationId,
+              data: {
+                cargo: roleLabel,
+                documento: kindLabel,
+                folio: row.code,
+                instrucciones: steps,
+                enlace: link,
+              },
+            },
           })
           .catch(() => undefined);
       }),

@@ -5,6 +5,7 @@ import {
   PLAN_CATALOG,
   TRIAL_REMINDER_DAYS_BEFORE,
   graceEnd,
+  type EmailEventKey,
   type PlanKey,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
@@ -108,6 +109,21 @@ export function planReminderMessage(
   }
 }
 
+/** Evento de correo (plantilla de marca) de cada recordatorio de plan. */
+const PLAN_REMINDER_EVENT: Record<PlanReminderKind, EmailEventKey> = {
+  renewal_due: 'plan.renewal_due',
+  payment_failed: 'plan.payment_failed',
+  ending: 'plan.ending',
+};
+
+function freeProWhat(reason: 'launch' | 'trial'): string {
+  return reason === 'trial' ? 'Tu prueba gratis de Pro' : 'Tu Pro gratis del lanzamiento';
+}
+
+function freeProWhen(stage: FreeProReminderStage, endsAt: Date): string {
+  return stage === 'today' ? 'termina hoy' : `termina el ${colombiaDate.format(endsAt)}`;
+}
+
 /** Asunto y cuerpo del aviso de fin del Pro gratis. Puro. */
 export function freeProReminderMessage(
   stage: FreeProReminderStage,
@@ -116,8 +132,8 @@ export function freeProReminderMessage(
   endsAt: Date,
   planUrl: string,
 ): { subject: string; body: string } {
-  const what = reason === 'trial' ? 'Tu prueba gratis de Pro' : 'Tu Pro gratis del lanzamiento';
-  const when = stage === 'today' ? 'termina hoy' : `termina el ${colombiaDate.format(endsAt)}`;
+  const what = freeProWhat(reason);
+  const when = freeProWhen(stage, endsAt);
   return {
     subject: `${what} ${when}`,
     body: `Hola, equipo de ${organizationName}:\n\n${what} en AdoptaFácil ${when}. Después tu organización pasa al plan Gratis.\n\nNo se borra nada: tus animales, adopciones y documentos siguen ahí. Si tu portal usa una plantilla Pro, vuelve solo a una gratuita; la que elegiste queda guardada y regresa en cuanto actives Crece o Pro en ${planUrl}.`,
@@ -195,12 +211,22 @@ export class PlanRemindersService {
         this.planUrl,
       );
       const day = free.endsAt.toISOString().slice(0, 10);
+      const what = freeProWhat(free.reason);
       for (const to of found.emails) {
         await this.notifications.send({
           to,
           subject,
           body,
           idempotencyKey: `plan.free-pro:${organizationId}:${found.stage}:${day}:${to}`,
+          template: {
+            event: 'plan.free_pro_ending',
+            organizationName,
+            data: {
+              que: what,
+              cuando: freeProWhen(found.stage, free.endsAt),
+              enlace: this.planUrl,
+            },
+          },
         });
       }
       return found.emails.length;
@@ -220,6 +246,15 @@ export class PlanRemindersService {
         subject,
         body,
         idempotencyKey: `plan.reminder:${organizationId}:${found.due.kind}:${day}:${to}`,
+        template: {
+          event: PLAN_REMINDER_EVENT[found.due.kind],
+          organizationName,
+          data: {
+            plan: PLAN_CATALOG[found.sub.plan as PlanKey].name,
+            fecha: found.due.endsAt.toISOString(),
+            enlace: this.planUrl,
+          },
+        },
       });
     }
     return found.emails.length;

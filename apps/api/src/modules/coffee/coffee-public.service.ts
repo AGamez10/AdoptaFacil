@@ -468,6 +468,10 @@ export class CoffeePublicService {
           'Hola,\n\nTu pago se aprobó cuando las bolsas de este lote ya se habían vendido. ' +
           'Te devolveremos el dinero completo por el mismo medio de pago y te escribiremos ' +
           `para confirmarlo.\n\nReferencia: ${reference}\n${this.orderLink(reference)}`,
+        template: {
+          event: 'coffee.refund_notice',
+          data: { referencia: reference, enlace: this.orderLink(reference) },
+        },
       });
     } catch (error) {
       this.logger.warn(`coffee refund notice failed for ${reference}: ${(error as Error).message}`);

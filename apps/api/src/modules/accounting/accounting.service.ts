@@ -944,6 +944,18 @@ export class AccountingService {
           'AdoptaFácil prepara y concilia la información; no firma ni certifica por ti. Si la ' +
           'organización te pide firmar el cierre del mes, te llegará otro correo con un enlace de firma.\n\n' +
           'Si no esperabas este correo, ignóralo.',
+        template: {
+          event: 'accounting.share',
+          organizationName: orgName,
+          organizationId,
+          data: {
+            nombre: signerName,
+            cargo: SIGNER_ROLE_LABEL[signerRole].toLowerCase(),
+            periodo: accountingPeriodLabel(period),
+            dias: ACCOUNTING_SHARE_DAYS,
+            enlace: `${this.webBaseUrl}/contabilidad-compartida#token=${encodeURIComponent(token)}`,
+          },
+        },
       })
       .catch(() => undefined);
     return {

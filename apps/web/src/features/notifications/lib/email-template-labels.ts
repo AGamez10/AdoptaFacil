@@ -20,6 +20,9 @@ export const THEME_ICONS: Record<EmailTheme, string> = {
   volunteering: '🤝',
   community: '📣',
   alert: '⏰',
+  documents: '📄',
+  plan: '⭐',
+  health: '🩺',
 };
 
 export const FIELD_HELP = {

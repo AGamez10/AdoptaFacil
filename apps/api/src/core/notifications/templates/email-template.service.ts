@@ -29,6 +29,7 @@ import {
   buildOneClickUnsubscribeUrl,
   buildUnsubscribeUrl,
   composeEmail,
+  composePlainEmail,
   hashEmail,
   verifyUnsubscribe,
 } from './email-compose';
@@ -116,6 +117,11 @@ export class EmailTemplateService {
       where: { emailHash: hashEmail(email), category: { in: categories } },
     });
     return Boolean(row);
+  }
+
+  /** Generic AdoptaFácil layout for an email sent without a catalog template. */
+  wrapPlain(subject: string, body: string): RenderedEmail {
+    return composePlainEmail(subject, body, this.webBaseUrl);
   }
 
   /** Render the email a recipient gets for this event, with the active copy. */

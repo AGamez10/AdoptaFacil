@@ -284,7 +284,8 @@ export class LegalService {
     items: readonly LegalAcceptanceItem[],
   ): Promise<void> {
     if (!to || items.length === 0) return;
-    const when = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+    const now = new Date();
+    const when = now.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
     const lines = items.map((i) => {
       const doc = getLegalDocument(i.key);
       return `- ${doc.title} (versión ${doc.version}): ${this.webBaseUrl}/legal/${doc.slug}/${doc.version}`;
@@ -300,6 +301,19 @@ export class LegalService {
           'Guardamos la versión exacta de cada texto, la fecha y hora, y la dirección IP y el navegador desde los que aceptaste. ' +
           'Puedes consultar tu historial en la plataforma y retirar las autorizaciones opcionales cuando quieras.\n\n' +
           'Para ejercer tus derechos sobre tus datos personales escribe a adoptafacil.oficial@gmail.com.',
+        template: {
+          event: 'legal.acceptance_recorded',
+          data: {
+            fecha: now.toISOString(),
+            documentos: items
+              .map((i) => {
+                const doc = getLegalDocument(i.key);
+                return `• ${doc.title} (versión ${doc.version})`;
+              })
+              .join('\n'),
+            enlace: `${this.webBaseUrl}/mis-autorizaciones`,
+          },
+        },
       });
     } catch {
       this.logger.warn(
