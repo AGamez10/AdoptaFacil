@@ -170,6 +170,34 @@ Segunda dimensión de estado, independiente de la formalización:
 - Pendiente para la experiencia (R3-6, `apps/web`): pantalla de equipo para
   invitar y la página `/invitacion` que lee el token del fragmento.
 
+### 7.1 Qué acepta quien entra por invitación (2026-11-21)
+
+Antes, todo invitado (voluntario, operador, auditor, contador…) aceptaba las
+_Condiciones para organizaciones_ con la casilla "En nombre de la organización…
+declaro que puedo obligarla", como si fuera su representante legal. Ahora lo que
+se acepta depende del cargo invitado (`legalAudienceForInvitation` en
+`@adoptafacil/contracts`):
+
+| Cargo invitado                                                               | Acepta                                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Propietario                                                                  | Términos, alcance, datos y **Condiciones para organizaciones** (habla por la organización) |
+| Cualquier otro (incluidos contador, revisor fiscal y personal de plataforma) | Términos, alcance, datos y **Condiciones para miembros de un equipo** (no la obliga)       |
+
+- El texto nuevo es `docs/legal/condiciones-miembros-equipo/2026-11-21.md`
+  (borrador sujeto a abogado): el miembro actúa dentro de su cargo y por encargo
+  de la organización, no la representa, guarda la confidencialidad de los datos
+  de terceros y firma solo lo que su cargo o designación permiten.
+- La API valida el cargo de la invitación (400 `LEGAL_ACCEPTANCE_REQUIRED` con
+  `missing`), y la constancia de un miembro **nunca** registra el contrato de la
+  organización aunque el cliente lo envíe.
+- `GET /legal/me` devuelve `audience` (`organization`, `member` o `person`) y lo
+  pendiente según los roles actuales: si un miembro asciende a propietario se le
+  pide aceptar las condiciones de la organización; los miembros que entraron
+  antes de este cambio verán una vez la casilla de las condiciones de miembro.
+- Pruebas: `invitation-legal-by-role.integration-spec.ts` (API),
+  `accept-invitation-page.test.tsx` y `consent.test.ts` (web), `legal.test.ts`
+  (contratos).
+
 ## 8. Cómo revertir
 
 Hay una migración, `20261008050000_ola1_org_status_invitations` (aditiva). Para
@@ -179,3 +207,38 @@ recrear las 12 funciones públicas desde sus migraciones anteriores y quitar las
 columnas de estado). Nunca se aplica en un entorno compartido sin aprobación del
 dueño. Los hashes ya convertidos a Argon2id **no** vuelven a bcrypt: si se
 revirtiera esa parte, esas cuentas necesitarían reseteo de contraseña.
+
+## 9. Matriz de roles: qué puede hacer cada cargo (2026-11-21)
+
+La matriz completa, ruta por ruta, es `docs/seguridad/matriz-roles-api.md`. La
+genera `apps/api/src/core/rbac/role-matrix.spec.ts` desde los decoradores reales
+y falla si alguien cambia un permiso sin regenerarla, así cada cambio queda a la
+vista en el PR. Esa prueba también fija las reglas que no se pueden romper:
+
+- toda ruta autenticada declara `@Roles` o está en la lista revisada de rutas
+  "solo lo propio" (su cuenta, sus donaciones, sus solicitudes…);
+- el auditor solo escribe su propia firma, la decisión de un reporte que le toca
+  firmar y la marca de avisos leídos;
+- voluntario y colaborador temporal solo ven el estado de la organización y la
+  vista previa de su portal (lo que promete su invitación);
+- el veterinario solo entra a animales, historia clínica y recordatorios;
+- el gobierno del equipo y de la cuenta es solo de propietario y administrador,
+  y lo del representante legal, solo del propietario;
+- los roles de plataforma solo entran a `/platform`, y los de organización nunca.
+
+`role-matrix-http.integration-spec.ts` lo comprueba por HTTP con una cuenta real
+de cada cargo, y `nav-roles-vs-api.test.ts` (web) exige que cada menú pida los
+mismos roles que la API para su página.
+
+| Cargo                        | Puede                                                                                                                                                                                  | No puede                                                                                                      |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Propietario                  | Todo lo de la organización; además dar o quitar el cargo de propietario, retirar roles, designar firmantes, enviar a revisión, formalización y política de firmas                      | Nada de plataforma                                                                                            |
+| Administrador                | Operación completa: animales, adopciones, campañas, voluntariado, donaciones, apadrinamientos, contabilidad, reportes, perfil, portal, dominio, plan, cobros; invitar y cambiar cargos | Tocar a un propietario, designar firmantes, enviar a revisión, formalización, firmar como representante legal |
+| Operador                     | Animales e historia clínica, adopciones y contratos, campañas y evidencias, recursos, custodia, ver donaciones recibidas y libro público                                               | Equipo, plan, perfil, portal, documentos legales, contabilidad, reportes, voluntariado, apadrinamientos       |
+| Veterinario/a                | Animales, historia clínica, recordatorios de salud, evaluación de comportamiento                                                                                                       | Adopciones, campañas, dinero, equipo, documentos                                                              |
+| Voluntario/a                 | Estado de la organización y vista previa del portal; su voluntariado personal                                                                                                          | Datos de animales, donantes y adoptantes                                                                      |
+| Colaborador/a temporal       | Igual que voluntario                                                                                                                                                                   | Igual que voluntario                                                                                          |
+| Auditor/a de solo lectura    | Leer animales, clínica, campañas, contabilidad, reportes, documentos, voluntariado, apadrinamientos, libro y custodia                                                                  | Crear, editar o borrar                                                                                        |
+| Contador/a, revisor/a fiscal | Lo del auditor, más registrar su propia firma y firmar los reportes de su cargo                                                                                                        | Firmar por otro, cualquier otra escritura                                                                     |
+| Admin. de plataforma         | Solo `/platform` (revisión de organizaciones, documentos, moderación), con segundo factor obligatorio                                                                                  | Entrar a los datos de una organización por sus rutas                                                          |
+| Superadmin de plataforma     | Lo del admin de plataforma, más el tablero financiero y aprobar acciones sensibles                                                                                                     | Igual                                                                                                         |

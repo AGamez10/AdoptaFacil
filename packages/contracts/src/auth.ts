@@ -287,9 +287,10 @@ export interface AcceptInvitationInput {
   displayName: string;
   password: string;
   /** Documentos legales aceptados en la pantalla de la invitación (versión
-   *  vista). Como en el registro, la API exige los obligatorios de una cuenta
-   *  de organización en su versión vigente y responde 400 si faltan
-   *  (Ley 1581, autorización previa). */
+   *  vista). La API exige los obligatorios del cargo invitado en su versión
+   *  vigente (`requiredLegalDocumentsForInvitation`): un propietario acepta las
+   *  condiciones de la organización; cualquier otro cargo, las de miembro de
+   *  equipo, que no la obligan. Responde 400 si faltan (Ley 1581). */
   legalAcceptances?: LegalAcceptanceItem[];
 }
 

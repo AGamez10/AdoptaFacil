@@ -5,6 +5,8 @@ import {
   getLegalDocument,
   LEGAL_DOCUMENTS,
   type LegalAcceptanceChannel,
+  legalAudienceFor,
+  type LegalAudience,
   type LegalAcceptanceItem,
   type LegalAcceptanceRecord,
   type LegalDocumentKey,
@@ -56,11 +58,15 @@ export class LegalService {
   /**
    * Valida que `items` traiga TODOS los documentos de `required` y que cada
    * documento enviado sea conocido, no informativo y esté en su versión
-   * vigente. Devuelve la lista sin duplicados. 400 con mensaje claro si no.
+   * vigente. Devuelve la lista sin duplicados (y sin las condiciones de otro
+   * papel, ver abajo). 400 con mensaje claro si no.
    */
   assertAcceptances(
     items: readonly LegalAcceptanceItem[] | undefined,
     required: readonly LegalDocumentKey[],
+    /** Condiciones de papel que esta cuenta sí puede aceptar (por defecto, las
+     *  que `required` exige). */
+    roleBoundAllowed: readonly LegalDocumentKey[] = required,
   ): LegalAcceptanceItem[] {
     const byKey = new Map<LegalDocumentKey, LegalAcceptanceItem>();
     for (const item of items ?? []) {
@@ -88,7 +94,15 @@ export class LegalService {
         missing,
       });
     }
-    return [...byKey.values()];
+    // Las condiciones que dependen del papel (contrato de la organización,
+    // condiciones de miembro) solo se registran para quien le corresponden:
+    // un miembro invitado no deja constancia de haber obligado a la
+    // organización aunque el cliente la envíe.
+    return [...byKey.values()].filter((item) => {
+      const acceptance = getLegalDocument(item.key).acceptance;
+      const roleBound = acceptance === 'required_organization' || acceptance === 'required_member';
+      return !roleBound || roleBoundAllowed.includes(item.key);
+    });
   }
 
   /** Inserta las filas de aceptación (o revocación) dentro de una transacción
@@ -139,7 +153,26 @@ export class LegalService {
     });
   }
 
+  /**
+   * Papel legal de la cuenta: quien es propietario habla por la organización
+   * (acepta su contrato); cualquier otro cargo de un equipo es un miembro que
+   * no la obliga (acepta las condiciones de miembro). Se lee de `user_roles`
+   * en cada consulta, así un ascenso o un descenso de cargo cambia lo que la
+   * persona debe aceptar.
+   */
+  async audienceOf(user: RequestUser): Promise<LegalAudience> {
+    if (user.accountType !== 'organization') return 'person';
+    const roles = await this.prisma.withOrgContext(user.organizationId, (tx) =>
+      tx.userRole.findMany({ where: { userId: user.id }, select: { role: true } }),
+    );
+    return legalAudienceFor(
+      user.accountType,
+      roles.map((r) => r.role),
+    );
+  }
+
   async getStatus(user: RequestUser): Promise<LegalStatus> {
+    const audience = await this.audienceOf(user);
     const rows = await this.prisma.withOrgContext(user.organizationId, (tx) =>
       tx.legalAcceptance.findMany({
         where: { subjectType: 'user', subjectId: user.id },
@@ -163,11 +196,12 @@ export class LegalService {
     // El registro más reciente de cada documento EN SU VERSIÓN VIGENTE decide.
     const latestCurrent = (key: LegalDocumentKey) =>
       history.find((h) => h.key === key && h.version === getLegalDocument(key).version);
-    const pending = requiredLegalDocuments(user.accountType).filter(
+    const pending = requiredLegalDocuments(audience).filter(
       (key) => latestCurrent(key)?.action !== 'accepted',
     );
     return {
       pending,
+      audience,
       commercialAuthorized: latestCurrent('commercial_authorization')?.action === 'accepted',
       aiTrainingAuthorized: latestCurrent('ai_training_authorization')?.action === 'accepted',
       history,
@@ -180,11 +214,9 @@ export class LegalService {
     items: readonly LegalAcceptanceItem[],
     context: LegalRequestContext,
   ): Promise<LegalStatus> {
-    const allowed = new Set<LegalDocumentKey>([
-      ...requiredLegalDocuments(user.accountType),
-      ...optionalLegalDocuments(),
-    ]);
-    const valid = this.assertAcceptances(items, []).filter((i) => allowed.has(i.key));
+    const required = requiredLegalDocuments(await this.audienceOf(user));
+    const allowed = new Set<LegalDocumentKey>([...required, ...optionalLegalDocuments()]);
+    const valid = this.assertAcceptances(items, [], required).filter((i) => allowed.has(i.key));
     if (valid.length === 0) {
       throw new BadRequestException('No hay documentos para aceptar.');
     }

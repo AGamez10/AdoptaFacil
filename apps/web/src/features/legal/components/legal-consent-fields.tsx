@@ -48,6 +48,14 @@ function label(group: LegalConsentGroup['id']): ReactNode {
           y declaro que puedo obligarla.
         </>
       );
+    case 'member':
+      return (
+        <>
+          Acepto las <DocLink docKey="member_terms">Condiciones para miembros de un equipo</DocLink>
+          : actúo dentro del cargo que me asigne la organización, guardo la confidencialidad de sus
+          datos y no la represento ni la obligo.
+        </>
+      );
     case 'commercial':
       return (
         <>
