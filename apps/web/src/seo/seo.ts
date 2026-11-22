@@ -13,10 +13,15 @@ export const SITE_NAME = 'AdoptaFácil';
 export const DEFAULT_DESCRIPTION =
   'Adopta perros y gatos de refugios, fundaciones y rescatistas de toda Colombia. Conoce su historia, solicita en línea y firma un contrato claro.';
 
-/** Dominio público del sitio. `VITE_SITE_URL` en producción; si falta, el actual. */
+/**
+ * Dominio público del sitio. `VITE_SITE_URL`; si falta, `VITE_APP_DOMAIN` (el
+ * despliegue con Caddy) y, por último, el actual. Así un portal abierto desde
+ * su subdominio canoniza en el dominio principal (/o/<slug>) y no compite con él.
+ */
 export function siteUrl(): string {
   const configured = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/+$/, '');
-  return configured || window.location.origin;
+  const appDomain = (import.meta.env.VITE_APP_DOMAIN as string | undefined)?.trim();
+  return configured || (appDomain ? `https://${appDomain}` : window.location.origin);
 }
 
 export function absoluteUrl(path: string): string {

@@ -42,6 +42,9 @@ export function forbidMockAuthInProduction(): Plugin {
 export default defineConfig({
   plugins: [forbidMockAuthInProduction(), react()],
   resolve: { alias: contractsSourceAlias },
+  // Manifiesto para el prerender SEO: precarga el código de la ruta de cada
+  // página pública (scripts/prerender-seo.mjs lo lee y luego lo borra).
+  build: { manifest: true },
   // Vite's envDir defaults to the project root (this folder, apps/web), but
   // the repo keeps a single .env at the monorepo root (see `pnpm setup:env`).
   // Without this, VITE_* vars set only at the root (e.g. VITE_GOOGLE_CLIENT_ID)

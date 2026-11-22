@@ -137,6 +137,107 @@ export function animalDescription(animal, orgName, city) {
   return `Conoce a ${animal.name}, ${SPECIES_SINGULAR[animal.species]}${breed} que busca hogar.${who}${where}${who || where ? '.' : ''} Solicita su adopción en línea con AdoptaFácil.`;
 }
 
+/** Recorta un texto libre a `max` caracteres sin partir palabras. */
+function clip(text, max) {
+  const clean = String(text ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,.;:]+$/, '')}…`;
+}
+
+/**
+ * Portal de una organización: "Fundación X: perros y gatos en adopción en Cali".
+ * @param {{ name: string; location?: { city?: string } }} org
+ */
+export function portalTitle(org) {
+  const city = org.location?.city?.trim();
+  return `${org.name}: perros y gatos en adopción${city ? ` en ${city}` : ''}`;
+}
+
+/**
+ * Descripción del portal: la que escribió la organización (recortada a lo que
+ * muestra Google) o, si es muy corta, una frase con sus datos reales.
+ * @param {{ name: string; description?: string; location?: { city?: string } }} org
+ * @param {number | null | undefined} [animals]
+ */
+export function portalDescription(org, animals) {
+  const own = clip(org.description, 155);
+  if (own.length >= 60) return own;
+  const city = org.location?.city?.trim();
+  const count =
+    typeof animals === 'number' && animals > 0
+      ? `${animals} ${animals === 1 ? 'animal espera' : 'animales esperan'} hogar`
+      : 'Conoce a sus perros y gatos en adopción';
+  return `${count} con ${org.name}${city ? ` en ${city}` : ''}. Solicita la adopción en línea, apoya sus campañas y mira en qué usa cada donación.`;
+}
+
+/**
+ * Datos estructurados del portal: `AnimalShelter` (schema.org, subtipo de
+ * `LocalBusiness`). Solo ciudad y departamento, nunca la dirección exacta:
+ * muchos rescatistas trabajan desde su casa. `abs` vuelve absoluta una ruta.
+ * @param {{ name: string; slug?: string; description?: string; logoUrl?: string;
+ *   coverPhotos?: string[]; location?: { city?: string; department?: string; country?: string };
+ *   socialLinks?: object }} org
+ * @param {string} path
+ * @param {(path: string) => string} abs
+ */
+export function shelterLd(org, path, abs) {
+  const city = org.location?.city?.trim();
+  const region = org.location?.department?.trim();
+  const sameAs = Object.values(org.socialLinks ?? {}).filter(
+    (url) => typeof url === 'string' && /^https:\/\//.test(url),
+  );
+  const image = [org.logoUrl, ...(org.coverPhotos ?? [])].filter(
+    (url) => typeof url === 'string' && /^https?:\/\//.test(url),
+  );
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'AnimalShelter',
+    '@id': `${abs(path)}#organizacion`,
+    name: org.name,
+    url: abs(path),
+    ...(org.description ? { description: clip(org.description, 300) } : {}),
+    ...(org.logoUrl && /^https?:\/\//.test(org.logoUrl) ? { logo: org.logoUrl } : {}),
+    ...(image.length ? { image } : {}),
+    ...(city || region
+      ? {
+          address: {
+            '@type': 'PostalAddress',
+            ...(city ? { addressLocality: city } : {}),
+            ...(region ? { addressRegion: region } : {}),
+            addressCountry: 'CO',
+          },
+        }
+      : {}),
+    areaServed: city ? { '@type': 'City', name: city } : { '@type': 'Country', name: 'Colombia' },
+    ...(sameAs.length ? { sameAs } : {}),
+  };
+}
+
+/**
+ * Campaña: título para buscadores.
+ * @param {{ title: string; organizationName: string }} campaign
+ */
+export function campaignTitle(campaign) {
+  return `${campaign.title} · Campaña de ${campaign.organizationName}`;
+}
+
+/**
+ * @param {{ title: string; description?: string; organizationName: string; goalAmount: number; raisedAmount: number }} campaign
+ */
+export function campaignDescription(campaign) {
+  const own = clip(campaign.description, 120);
+  /** @param {number} n */
+  const cop = (n) => `$${Math.round(n).toLocaleString('es-CO')}`;
+  const progress = `Meta ${cop(campaign.goalAmount)}, van ${cop(campaign.raisedAmount)}.`;
+  return own.length >= 40
+    ? `${own} ${progress}`
+    : `${campaign.organizationName} recauda para «${campaign.title}». ${progress} Mira el avance y en qué se usa cada aporte.`;
+}
+
 /** Páginas públicas fijas. @type {Record<string, { title: string; description: string }>} */
 export const STATIC_PAGES = {
   '/': {
@@ -163,6 +264,11 @@ export const STATIC_PAGES = {
     title: 'Transparencia Nacional del rescate animal en Colombia',
     description:
       'Cuánto se recibe y en qué se usa en el rescate animal de Colombia: la suma de los libros públicos de todas las organizaciones aprobadas en AdoptaFácil, sin datos de donantes.',
+  },
+  '/voluntariados': {
+    title: 'Voluntariado con animales rescatados en Colombia',
+    description:
+      'Encuentra voluntariados en refugios y fundaciones de rescate animal de Colombia: paseos, cuidado, eventos de adopción y apoyo profesional. Postúlate en línea.',
   },
   '/guias': {
     title: 'Guías para adoptar y cuidar a tu perro',

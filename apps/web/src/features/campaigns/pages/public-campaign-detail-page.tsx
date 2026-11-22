@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
+import { CampaignStatus } from '@adoptafacil/contracts';
 import type { CampaignAccountabilityReport, CampaignPublic } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -12,6 +13,8 @@ import {
   EmptyState,
   Skeleton,
 } from '@adoptafacil/ui';
+import { campaignDescription, campaignTitle } from '../../../seo/page-meta.js';
+import { breadcrumbLd, useSeo } from '../../../seo/seo';
 import { useFeature } from '../../../shell/capabilities';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { getCampaignAccountability, getPublicCampaign } from '../api/public-campaigns';
@@ -98,6 +101,28 @@ export function PublicCampaignDetailPage() {
       active = false;
     };
   }, [id]);
+
+  useSeo({
+    title: campaign
+      ? campaignTitle(campaign)
+      : state === 'not-found'
+        ? 'Campaña no encontrada'
+        : undefined,
+    description: campaign ? campaignDescription(campaign) : undefined,
+    path: campaign ? `/campanas/${campaign.id}` : undefined,
+    // Una campaña cerrada o vencida no debe competir con las activas.
+    noindex:
+      state === 'not-found' || (campaign ? campaign.status !== CampaignStatus.Active : false),
+    jsonLd: campaign
+      ? [
+          breadcrumbLd([
+            { name: 'Inicio', path: '/' },
+            { name: 'Campañas', path: '/campanas' },
+            { name: campaign.title, path: `/campanas/${campaign.id}` },
+          ]),
+        ]
+      : [],
+  });
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-foreground">

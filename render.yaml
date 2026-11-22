@@ -198,7 +198,10 @@ services:
       # que React Router la resuelva client-side (si no, F5 en /organizacion da 404).
       - type: rewrite
         source: /*
-        destination: /index.html
+        # app.html: el cascarón sin canónica (la portada index.html sí la lleva).
+        # Render aplica la regla solo si no existe un archivo para la ruta, así
+        # que las páginas prerenderizadas (/adoptar/perros/index.html) se sirven tal cual.
+        destination: /app.html
     envVars:
       - key: NODE_VERSION
         value: '24'

@@ -89,7 +89,13 @@ export function PortalProfileSection({
     <section aria-labelledby={HEADING_ID} className={styles.hero} data-logo={logoPosition}>
       <div className={styles.hero__media} aria-hidden="true">
         {cover ? (
-          <img src={cover} alt="" className={styles.hero__image} />
+          <img
+            src={cover}
+            alt=""
+            className={styles.hero__image}
+            // Es el LCP del portal: el HTML prerenderizado ya la precarga.
+            {...{ fetchpriority: 'high' }}
+          />
         ) : (
           <div className={styles.hero__imageFallback} />
         )}

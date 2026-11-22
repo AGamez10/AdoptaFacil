@@ -1,6 +1,7 @@
 import type { AnimalSpecies, AnimalSummary, AnimalSummaryPage } from '@adoptafacil/contracts';
 
 import type { ApiClient } from '../../../shell/api';
+import { fetchEarlyOr, publicAnimalUrl } from './early-fetch';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -77,8 +78,8 @@ export async function fetchPublicAnimal(
   ref: string,
   signal?: AbortSignal,
 ): Promise<AnimalSummary | null> {
-  const url = `${API_BASE}/public/organizations/${encodeURIComponent(slug)}/animals/${encodeURIComponent(ref)}`;
-  const response = await fetch(url, signal ? { signal } : undefined);
+  const url = publicAnimalUrl(slug, ref);
+  const response = await fetchEarlyOr(url, signal ? { signal } : undefined);
   if (response.status === 404 || response.status === 400) return null;
   if (!response.ok) {
     throw new Error('error');

@@ -53,7 +53,9 @@ import { PortalAdoptionSteps } from '../components/portal-adoption-steps';
 import { PortalMobileActionBar } from '../components/portal-mobile-action-bar';
 import { buildDonateHref } from '../components/portal-donate-cta';
 import { useFeature } from '../../../shell/capabilities';
-import { useDocumentTitle } from '../../../lib/use-document-title';
+import { portalDescription, portalTitle, shelterLd } from '../../../seo/page-meta.js';
+import { fetchEarlyOr, portalThemeUrl } from '../api/early-fetch';
+import { absoluteUrl, breadcrumbLd, useSeo } from '../../../seo/seo';
 import { useDonationAvailability } from '../../donations/hooks/use-donation-availability';
 import { useApiClient } from '../../../shell/api';
 import { useSession } from '../../../shell/auth';
@@ -63,8 +65,6 @@ import { PublicErrorPage, PublicNotFoundPage } from '../../../shell/errors';
 import { TemplatePortal } from '../templates/template-portal';
 import { isEngineTemplate } from '../templates/registry';
 import { useGuideContext } from '../../guide/model/guide-context';
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 type LoadState = 'loading' | 'ready' | 'not-found' | 'error';
 
@@ -196,7 +196,6 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     let active = true;
     setPublicMissing(false);
     setOwnerPreview(false);
-    const encoded = encodeURIComponent(slug);
 
     // The profile drives the page state (404/error). The theme (colors +
     // layout, S2-PORTAL) is best-effort: if it fails or is absent, the portal
@@ -206,7 +205,7 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       return data;
     });
 
-    const brand = fetch(`${API_BASE}/public/organizations/${encoded}/theme`)
+    const brand = fetchEarlyOr(portalThemeUrl(slug))
       .then((response) =>
         response.ok
           ? (response.json() as Promise<{
@@ -357,7 +356,33 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
   // mezclaba documentos revisados por la plataforma con un estado de
   // formalización que hoy declara la propia organización (SEC-003). Los
   // documentos revisados se muestran como sellos en el hero.
-  useDocumentTitle(view?.profile.organization.name);
+  // SEO del portal: título con la ciudad, descripción real, canónica en
+  // /o/<slug> (también desde su subdominio) y `AnimalShelter` en JSON-LD. La
+  // vista previa de una organización aún no aprobada nunca va al índice.
+  const seoOrg = view?.profile.organization;
+  const portalPath = slug ? `/o/${encodeURIComponent(slug)}` : undefined;
+  useSeo({
+    title: seoOrg
+      ? portalTitle(seoOrg)
+      : state === 'not-found'
+        ? 'Organización no encontrada'
+        : undefined,
+    description: seoOrg ? portalDescription(seoOrg, animalTotal) : undefined,
+    path: portalPath,
+    image: seoOrg?.coverPhotos?.[0] ?? seoOrg?.logoUrl,
+    noindex: ownerPreview || state === 'not-found',
+    jsonLd:
+      seoOrg && portalPath && !ownerPreview
+        ? [
+            shelterLd(seoOrg, portalPath, absoluteUrl),
+            breadcrumbLd([
+              { name: 'Inicio', path: '/' },
+              { name: 'Adoptar', path: '/adoptar' },
+              { name: seoOrg.name, path: portalPath },
+            ]),
+          ]
+        : [],
+  });
 
   // El botón de Ayuda se vuelve discreto y su WhatsApp lleva a ESTA organización.
   const guideOrg = state === 'ready' ? view?.profile.organization : undefined;

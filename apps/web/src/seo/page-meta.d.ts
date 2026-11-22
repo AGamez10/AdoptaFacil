@@ -29,8 +29,39 @@ export declare function animalDescription(
   city: string | null | undefined,
 ): string;
 export declare const STATIC_PAGES: Record<
-  '/' | '/ayudar' | '/campanas' | '/guias' | '/para-organizaciones' | '/transparencia-nacional',
+  | '/'
+  | '/ayudar'
+  | '/campanas'
+  | '/guias'
+  | '/para-organizaciones'
+  | '/transparencia-nacional'
+  | '/voluntariados',
   { title: string; description: string }
 >;
 export declare const HOME_FAQ: { q: string; a: string }[];
 export declare const ORGANIZATION_DESCRIPTION: string;
+type PortalOrgInput = {
+  name: string;
+  slug?: string;
+  description?: string;
+  logoUrl?: string;
+  coverPhotos?: string[];
+  location?: { city?: string; department?: string; country?: string };
+  socialLinks?: object;
+};
+export declare function portalTitle(org: PortalOrgInput): string;
+export declare function portalDescription(org: PortalOrgInput, animals?: number | null): string;
+export declare function shelterLd(
+  org: PortalOrgInput,
+  path: string,
+  abs: (path: string) => string,
+): Record<string, unknown>;
+type CampaignInput = {
+  title: string;
+  description?: string;
+  organizationName: string;
+  goalAmount: number;
+  raisedAmount: number;
+};
+export declare function campaignTitle(campaign: CampaignInput): string;
+export declare function campaignDescription(campaign: CampaignInput): string;

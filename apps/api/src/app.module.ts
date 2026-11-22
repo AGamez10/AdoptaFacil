@@ -24,6 +24,7 @@ import { HealthModule } from './health/health.module';
 import { AdoptionsModule } from './modules/adoptions/adoptions.module';
 import { AnimalsModule } from './modules/animals/animals.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { SeoModule } from './modules/seo/seo.module';
 import { CommunityModule } from './modules/community/community.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { ConsentsModule } from './modules/consents/consents.module';
@@ -113,6 +114,7 @@ import { RedisModule } from './redis/redis.module';
     DonationsModule,
     // M06 · fundraising campaigns (RF15 / T-053).
     CampaignsModule,
+    SeoModule,
     // M07 · recurring sponsorships base (RF17 / T-056, no payment yet).
     SponsorshipsModule,
     // M15 · pagos: conexión OAuth de la cuenta de Mercado Pago de cada
