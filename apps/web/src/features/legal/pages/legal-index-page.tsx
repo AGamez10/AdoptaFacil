@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
-import { LEGAL_DOCUMENTS, legalPath } from '../model/legal-content';
+import { LEGAL_DOCUMENTS, legalPath } from '../model/legal-path';
 
 /** `/legal`: todos los documentos legales vigentes y cómo contactarnos. */
 export function LegalIndexPage() {

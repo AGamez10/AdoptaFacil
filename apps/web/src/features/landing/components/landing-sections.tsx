@@ -29,6 +29,7 @@ import { useFeature } from '../../../shell/capabilities/capabilities-context';
 import type { CatalogSnapshot } from '../model/use-catalog-snapshot';
 import { useAdoptionNetwork } from '../model/use-adoption-network';
 import { HeroVisual } from './hero-visual';
+import { useWhenIdle } from '../model/use-when-idle';
 import {
   BoneSticker,
   CatMascot,
@@ -554,7 +555,11 @@ function NetworkOrgCard({ org, index }: { org: PublicNetworkOrganization; index:
  */
 export function ImpactSection({ snapshot }: { snapshot: CatalogSnapshot }) {
   const [ref, near] = useNearViewport<HTMLElement>();
-  const network = useAdoptionNetwork(snapshot, near);
+  // Se pide apenas la página queda libre (no al llegar a la sección): así las
+  // tarjetas ya están cuando la persona baja y la sección no crece de golpe
+  // empujando lo que está leyendo (antes: CLS 0,25 en celular, 0,42 escritorio).
+  const idle = useWhenIdle();
+  const network = useAdoptionNetwork(snapshot, near || idle);
   const { animals, organizations, cities, items } = network;
   if (animals === 0 && snapshot.total === 0) return null;
   const stats = [

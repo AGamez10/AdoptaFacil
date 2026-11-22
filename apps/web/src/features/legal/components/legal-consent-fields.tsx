@@ -4,7 +4,7 @@ import {
   type LegalConsentGroup,
   type LegalDocumentKey,
 } from '@adoptafacil/contracts';
-import { legalPath } from '../model/legal-content';
+import { legalPath } from '../model/legal-path';
 import { type ConsentAudience, type ConsentState, consentGroupsFor } from '../model/consent';
 
 function DocLink({ docKey, children }: { docKey: LegalDocumentKey; children: ReactNode }) {

@@ -2,7 +2,8 @@ import { Link, useParams } from 'react-router-dom';
 import { EmptyState } from '@adoptafacil/ui';
 import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { LegalMarkdown } from '../components/legal-markdown';
-import { getLegalContent, legalPath, listLegalVersions } from '../model/legal-content';
+import { getLegalContent, listLegalVersions } from '../model/legal-content';
+import { legalPath } from '../model/legal-path';
 
 /**
  * Página pública de un documento legal: `/legal/:slug` (versión vigente) o

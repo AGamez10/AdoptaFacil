@@ -18,7 +18,7 @@ import {
 } from '@adoptafacil/ui';
 import { useApiClient } from '../../../shell/api';
 import { acceptLegalDocuments, fetchLegalStatus, revokeLegalDocument } from '../api/legal-api';
-import { legalPath } from '../model/legal-content';
+import { legalPath } from '../model/legal-path';
 
 const CHANNEL: Record<string, string> = {
   registration: 'Registro',

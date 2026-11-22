@@ -24,7 +24,7 @@ import {
   safeTemplate,
 } from '../model/theme';
 import { fetchPublicAnimals } from '../api/public-animals';
-import { fetchPublicOrganization } from '../api/public-organization';
+import { fetchPublicOrganization, fetchPublicThemeBody } from '../api/public-organization';
 import { PortalProfileSection } from '../components/portal-profile-section';
 import {
   CarnetHero,
@@ -63,8 +63,6 @@ import { PublicErrorPage, PublicNotFoundPage } from '../../../shell/errors';
 import { TemplatePortal } from '../templates/template-portal';
 import { isEngineTemplate } from '../templates/registry';
 import { useGuideContext } from '../../guide/model/guide-context';
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 type LoadState = 'loading' | 'ready' | 'not-found' | 'error';
 
@@ -196,7 +194,6 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
     let active = true;
     setPublicMissing(false);
     setOwnerPreview(false);
-    const encoded = encodeURIComponent(slug);
 
     // The profile drives the page state (404/error). The theme (colors +
     // layout, S2-PORTAL) is best-effort: if it fails or is absent, the portal
@@ -206,22 +203,21 @@ export function OrgPublicPage({ slugOverride }: OrgPublicPageProps = {}) {
       return data;
     });
 
-    const brand = fetch(`${API_BASE}/public/organizations/${encoded}/theme`)
-      .then((response) =>
-        response.ok
-          ? (response.json() as Promise<{
-              tokens?: unknown;
-              logoPosition?: unknown;
-              socialNavPosition?: unknown;
-              template?: unknown;
-              templateOptions?: unknown;
-              coverVideoUrl?: unknown;
-              coverVideoPosterUrl?: unknown;
-              coverVideo2Url?: unknown;
-              coverVideo2PosterUrl?: unknown;
-              hideSeal?: unknown;
-            }>)
-          : null,
+    const brand = fetchPublicThemeBody(slug)
+      .then(
+        (body) =>
+          body as {
+            tokens?: unknown;
+            logoPosition?: unknown;
+            socialNavPosition?: unknown;
+            template?: unknown;
+            templateOptions?: unknown;
+            coverVideoUrl?: unknown;
+            coverVideoPosterUrl?: unknown;
+            coverVideo2Url?: unknown;
+            coverVideo2PosterUrl?: unknown;
+            hideSeal?: unknown;
+          } | null,
       )
       .then((body) => ({
         tokens: safePortalTheme(body?.tokens),

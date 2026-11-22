@@ -49,3 +49,102 @@ html {
   border-radius: var(--r-md, 8px);
   transition: outline-color 0.4s ease;
 }
+
+/*
+ * Transición entre pantallas (ViewTransitionRouter). La página sale hacia un
+ * lado y la nueva entra del otro, en 0,28 s y solo con opacity/transform (no
+ * repinta ni recalcula el diseño). La barra superior, el menú lateral y los
+ * avisos fijos llevan nombre propio, así que quedan quietos.
+ *
+ * Solo aplica a las transiciones de navegación ('forward'/'backward'): el
+ * cambio de modo claro/oscuro de las plantillas usa su propia animación de
+ * raíz y no se toca. Con "reducir movimiento" el router ni siquiera inicia la
+ * transición; la regla de abajo es la segunda red de seguridad.
+ */
+@keyframes af-page-out-left {
+  to {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+@keyframes af-page-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(36px);
+  }
+}
+@keyframes af-page-out-right {
+  to {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes af-page-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:active-view-transition-type(forward, backward)::view-transition-old(root),
+  html:active-view-transition-type(forward, backward)::view-transition-new(root) {
+    animation-duration: 0.28s;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    animation-fill-mode: both;
+  }
+  html:active-view-transition-type(forward, backward)::view-transition-old(root) {
+    animation-duration: 0.16s;
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  html:active-view-transition-type(forward)::view-transition-old(root) {
+    animation-name: af-page-out-left;
+  }
+  html:active-view-transition-type(forward)::view-transition-new(root) {
+    animation-name: af-page-in-right;
+  }
+  html:active-view-transition-type(backward)::view-transition-old(root) {
+    animation-name: af-page-out-right;
+  }
+  html:active-view-transition-type(backward)::view-transition-new(root) {
+    animation-name: af-page-in-left;
+  }
+
+  /* Chrome 111-124 y Safari 18.0-18.1: View Transitions sin `types`. Reglas
+     aparte: un selector desconocido invalidaría toda la lista. */
+  html[data-nav-direction]::view-transition-old(root),
+  html[data-nav-direction]::view-transition-new(root) {
+    animation-duration: 0.28s;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    animation-fill-mode: both;
+  }
+  html[data-nav-direction]::view-transition-old(root) {
+    animation-duration: 0.16s;
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  html[data-nav-direction='forward']::view-transition-old(root) {
+    animation-name: af-page-out-left;
+  }
+  html[data-nav-direction='forward']::view-transition-new(root) {
+    animation-name: af-page-in-right;
+  }
+  html[data-nav-direction='backward']::view-transition-old(root) {
+    animation-name: af-page-out-right;
+  }
+  html[data-nav-direction='backward']::view-transition-new(root) {
+    animation-name: af-page-in-left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Mientras la transición corre, la página no recibe toques sobre la foto. */
+::view-transition {
+  pointer-events: none;
+}

@@ -106,6 +106,7 @@ export function DonateForm({
         <Input
           id="donation-amount"
           inputMode="numeric"
+          autoComplete="transaction-amount"
           placeholder="50000"
           aria-describedby={preview ? undefined : 'donation-amount-hint'}
           value={amountText}
@@ -167,6 +168,7 @@ export function DonateForm({
           <Input
             id="donation-guest-name"
             data-testid="donation-guest-name"
+            autoComplete="name"
             placeholder="Nombre y apellido"
             value={guestName}
             onChange={(e) => setGuestName(e.target.value)}
@@ -179,6 +181,8 @@ export function DonateForm({
             id="donation-guest-email"
             data-testid="donation-guest-email"
             type="email"
+            autoComplete="email"
+            spellCheck={false}
             placeholder="tucorreo@ejemplo.com"
             value={guestEmail}
             onChange={(e) => setGuestEmail(e.target.value)}

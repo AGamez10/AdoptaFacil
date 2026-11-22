@@ -42,7 +42,29 @@ export function lazyPage<M extends Record<string, any>, K extends keyof M>(
     throw preload();
   }
   LazyPage.displayName = `Lazy(${String(name)})`;
+  // Precarga por intención (apuntar o tocar un enlace): si falla no deja
+  // guardado el error; la visita real vuelve a intentarlo.
+  LazyPage.preload = () =>
+    Loaded
+      ? Promise.resolve()
+      : load().then(
+          (module) => {
+            Loaded ??= module[name] as ComponentType;
+          },
+          () => undefined,
+        );
   return LazyPage as M[K];
+}
+
+/** Una pantalla diferida que se puede bajar antes de visitarla. */
+export interface Preloadable {
+  preload?: () => Promise<unknown>;
+}
+
+/** Baja de antemano el archivo de una pantalla diferida (sin errores visibles). */
+export function preloadPage(page: unknown): void {
+  const preload = (page as Preloadable | null)?.preload;
+  if (typeof preload === 'function') void preload();
 }
 
 /** Descarga de una vez todas las pantallas diferidas que ya se declararon. */

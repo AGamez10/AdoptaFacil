@@ -1,6 +1,8 @@
 /* Navegación pública — marca v3. Vidrio cálido sobre la portada crema. */
 .navbar {
   position: sticky;
+  /* Queda quieta mientras cambia la pantalla (ViewTransitionRouter). */
+  view-transition-name: af-topbar;
   top: 0;
   z-index: 30;
   border-bottom: 1px solid rgb(20 32 46 / 0.06);

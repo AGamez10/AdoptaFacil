@@ -37,23 +37,10 @@ import { AdoptPage, GeneralPortalPage } from '../../features/catalog';
 import { GuidePage, GuidesIndexPage } from '../../features/guias';
 import { HomePage } from '../../features/_layout';
 import { NotFoundRoute, PublicNotFoundPage } from '../errors';
-import {
-  CompleteProfilePage,
-  WelcomeNotice,
-  ForgotPasswordPage,
-  LoginPage,
-  RegisterPage,
-  ResetPasswordPage,
-  AcceptInvitationPage,
-} from '../../features/auth';
+import { WelcomeNotice, LoginPage } from '../../features/auth';
 import { PublicAnimalDetailPage } from '../../features/portals/pages/public-animal-detail-page';
 import { usePortalSubdomainSlug } from '../../features/portals/use-portal-subdomain-slug';
-import {
-  LegalAcceptanceGate,
-  LegalDocumentPage,
-  LegalIndexPage,
-  MyAuthorizationsPage,
-} from '../../features/legal';
+import { LegalAcceptanceGate, LegalIndexPage, MyAuthorizationsPage } from '../../features/legal';
 import { lazyPage } from './lazy-page';
 import { CoffeeOrLegacyShareLink, SharedPostLink } from './short-links';
 
@@ -66,6 +53,32 @@ const OrgPublicPage = lazyPage(
 const PortalThemePage = lazyPage(
   () => import('../../features/portals/pages/portal-theme-page'),
   'PortalThemePage',
+);
+// Cuenta: registro, recuperación, invitaciones y completar perfil.
+const RegisterPage = lazyPage(
+  () => import('../../features/auth/pages/register-page'),
+  'RegisterPage',
+);
+const ForgotPasswordPage = lazyPage(
+  () => import('../../features/auth/pages/forgot-password-page'),
+  'ForgotPasswordPage',
+);
+const ResetPasswordPage = lazyPage(
+  () => import('../../features/auth/pages/reset-password-page'),
+  'ResetPasswordPage',
+);
+const AcceptInvitationPage = lazyPage(
+  () => import('../../features/auth/pages/accept-invitation-page'),
+  'AcceptInvitationPage',
+);
+const CompleteProfilePage = lazyPage(
+  () => import('../../features/auth/pages/complete-profile-page'),
+  'CompleteProfilePage',
+);
+// Textos legales: todas las versiones publicadas pesan más de 140 KB.
+const LegalDocumentPage = lazyPage(
+  () => import('../../features/legal/pages/legal-document-page'),
+  'LegalDocumentPage',
 );
 const NationalTransparencyPublicPage = lazyPage(
   () => import('../../features/transparency/pages/national-transparency-public-page'),
@@ -149,7 +162,7 @@ const PublicCoffeePage = lazyPage(loadCoffee, 'PublicCoffeePage');
 const CoffeeOrderPage = lazyPage(loadCoffee, 'CoffeeOrderPage');
 const CoffeeShopPage = lazyPage(loadCoffee, 'CoffeeShopPage');
 const PlatformCoffeePage = lazyPage(loadCoffee, 'PlatformCoffeePage');
-const loadPlatformTeam = () => import('../../features/platform-team');
+const loadPlatformTeam = () => import('../../features/platform-team/pages/platform-team-page');
 const PlatformTeamPage = lazyPage(loadPlatformTeam, 'PlatformTeamPage');
 const loadAdoptions = () => import('../../features/adoptions');
 const AdoptionContractPage = lazyPage(loadAdoptions, 'AdoptionContractPage');
@@ -222,6 +235,46 @@ const AnimalDetailPage = lazyPage(() => import('../pages/animal-detail-page'), '
  * Exposed as an element (not a data router) so tests can mount it under a
  * <MemoryRouter initialEntries={…}> to exercise public vs protected routing.
  */
+/**
+ * Pantallas diferidas que conviene bajar en cuanto la persona muestra la
+ * intención de ir (apunta o toca el enlace): así, al hacer clic, la pantalla
+ * ya está y la transición es inmediata. Solo los recorridos más usados; el
+ * resto se baja al visitarlo, como siempre. Lo usa `IntentPreloader`.
+ */
+export const ROUTE_PRELOADS: ReadonlyArray<readonly [pattern: string, page: unknown]> = [
+  // Público
+  ['/o/:slug', OrgPublicPage],
+  ['/o/:slug/donar', OrgDonateRedirectPage],
+  ['/donar', OrgDonateRedirectPage],
+  ['/register', RegisterPage],
+  ['/forgot', ForgotPasswordPage],
+  ['/invitacion', AcceptInvitationPage],
+  ['/legal/:slug/*', LegalDocumentPage],
+  ['/ayudar', HelpPage],
+  ['/para-organizaciones', OrganizationsPage],
+  ['/plantillas/:id', TemplateDemoPage],
+  ['/transparencia-nacional', NationalTransparencyPublicPage],
+  ['/campanas/*', PublicCampaignsPage],
+  ['/recursos/*', PublicResourcesPage],
+  ['/marketplace/*', PublicMarketplacePage],
+  ['/voluntariados', PublicVolunteeringPage],
+  ['/servicios/*', ServicesDirectoryPage],
+  ['/verificar/*', CertificateVerificationPage],
+  ['/cafe/*', CoffeeShopPage],
+  // Panel
+  ['/organizacion/*', OrgProfilePage],
+  ['/plataforma/*', PlatformAdminDashboardPage],
+  ['/animales/*', AnimalsPage],
+  ['/adopciones/*', AdoptionsKanbanPage],
+  ['/mis-solicitudes', MyAdoptionRequestsPage],
+  ['/mis-donaciones', MyDonationsPage],
+  ['/donaciones-recibidas', ReceivedDonationsPage],
+  ['/comunidad/*', CommunityFeedPage],
+  ['/voluntariado', MyVolunteeringPage],
+  ['/apadrinar', SponsorPage],
+  ['/mis-ofertas', MyResourceOffersPage],
+];
+
 export function AppRoutes() {
   // Real portal subdomains (F-1, M14): when the current host resolves to an
   // organization (`<subdomain>.<VITE_PORTAL_BASE_DOMAIN>`), "/" renders that
