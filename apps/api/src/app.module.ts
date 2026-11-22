@@ -45,6 +45,7 @@ import { CustodyModule } from './modules/custody/custody.module';
 import { ResourcesModule } from './modules/resources/resources.module';
 import { SponsorshipsModule } from './modules/sponsorships/sponsorships.module';
 import { VolunteeringModule } from './modules/volunteering/volunteering.module';
+import { TeamModule } from './modules/team/team.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queues/queue.module';
 import { RedisModule } from './redis/redis.module';
@@ -126,6 +127,7 @@ import { RedisModule } from './redis/redis.module';
     CommunityModule,
     // M08 · voluntariado + servicio social estudiantil (RF18/RF19, Ola 3, S-6).
     VolunteeringModule,
+    TeamModule,
     // M12 · reputación: reseñas, calificación e indicadores públicos (RF23, S-7).
     ReputationModule,
     LedgerModule,

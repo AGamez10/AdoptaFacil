@@ -86,6 +86,10 @@ model Organization {
   custodyOnlinePaymentSettings CustodyOnlinePaymentSettings?
   custodyPaymentLinks          CustodyPaymentLink[]
   custodyOnlinePayments        CustodyOnlinePayment[]
+  // Trabajo del equipo por cargo. See team.prisma.
+  memberPermissionGrants       MemberPermissionGrant[]
+  teamAssignments              TeamAssignment[]
+  animalCareLogs               AnimalCareLog[]
 
   @@index([status])
   @@map("organizations")
@@ -121,48 +125,48 @@ model FormalizationTransition {
 /// returns only public columns (so RLS is never evaded by a raw select). One
 /// profile per organization (1:1).
 model OrganizationProfile {
-  id                 String   @id @default(uuid()) @db.Uuid
-  organizationId     String   @unique @map("organization_id") @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @unique @map("organization_id") @db.Uuid
   nit                String?
-  legalName          String?  @map("legal_name")
+  legalName          String?   @map("legal_name")
   description        String?
-  logoUrl            String?  @map("logo_url")
-  coverPhotos        String[] @map("cover_photos")
+  logoUrl            String?   @map("logo_url")
+  coverPhotos        String[]  @map("cover_photos")
   whatsapp           String?
-  contactEmail       String?  @map("contact_email")
+  contactEmail       String?   @map("contact_email")
   phone              String?
   /// { country, department, city, address } — OrganizationLocation contract.
   location           Json?
   /// { instagram, facebook, tiktok, website } — OrganizationSocialLinks.
-  socialLinks        Json?    @map("social_links")
-  subdomain          String?  @unique
-  slug               String?  @unique
-  formalizationState String   @default("informal") @map("formalization_state")
-  rteVigente         Boolean  @default(false) @map("rte_vigente")
+  socialLinks        Json?     @map("social_links")
+  subdomain          String?   @unique
+  slug               String?   @unique
+  formalizationState String    @default("informal") @map("formalization_state")
+  rteVigente         Boolean   @default(false) @map("rte_vigente")
   /// Hasta cuándo vale el RTE reconocido: el próximo plazo anual de la DIAN
   /// (`rteValidUntilFrom`). Al vencer sin RUT nuevo aprobado, `rteVigente` pasa
   /// a false y se suspenden solo los certificados con beneficio tributario.
   rteValidUntil      DateTime? @map("rte_valid_until")
   /// { level, label?, criteria[] } — VerificationLevel contract.
-  verificationLevel  Json?    @map("verification_level")
+  verificationLevel  Json?     @map("verification_level")
   /// Legal/organizational type (OrganizationType contract, RF01/T-030). Public
   /// exposure is gated by the platform `show_organization_type` policy.
-  organizationType   String?  @map("organization_type")
+  organizationType   String?   @map("organization_type")
   /// Free text: mission/history/"quiénes somos" (S2-PORTAL). Rendered in the
   /// public portal's "Nosotros" tab; the tab is hidden when this is empty.
-  aboutUs            String?  @map("about_us")
+  aboutUs            String?   @map("about_us")
   /// { hours?, fullAddress?, mapUrl?, additionalPhones? } — OrganizationExtendedContact
   /// contract (S2-PORTAL). Rendered in the public portal's "Información" tab;
   /// the tab is hidden when this is empty/absent.
-  extendedContact    Json?    @map("extended_contact")
+  extendedContact    Json?     @map("extended_contact")
   /// { status, attemptsCount, lastAttemptAt?, nextRetryAt? } — DianVerificationStatus
   /// contract (S-2, RNF07). Recomputed as a side effect of each verification
   /// attempt (DianVerificationService), never set directly — same "computed,
   /// never hand-written" convention as `verificationLevel` above. `null` means
   /// no verification has ever been attempted (org hasn't reached ESAL yet).
-  dianVerification   Json?    @map("dian_verification")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  dianVerification   Json?     @map("dian_verification")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 

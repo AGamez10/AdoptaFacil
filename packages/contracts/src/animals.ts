@@ -104,6 +104,14 @@ export interface Animal {
   /** Full photo metadata (ref + order + resolved url). `photos` above stays the
    *  ordered URL list for legacy/portal consumers. */
   photoRecords?: AnimalPhoto[];
+  // --- Apto para adopción (2026-11-22, aditivo) -------------------------------
+  /** ISO-8601 UTC: cuándo alguien del equipo (p. ej. el veterinario) lo marcó
+   *  apto para adopción. Ausente = sin marcar. No publica nada por sí solo. */
+  adoptionReadyAt?: string;
+  /** Nombre de quien lo marcó apto. */
+  adoptionReadyByName?: string;
+  /** Nota para quien publica. */
+  adoptionReadyNote?: string;
 }
 
 /**

@@ -7,6 +7,10 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  MEMBER_PERMISSION_LABELS,
+  MEMBER_PERMISSION_ROLES,
+  MEMBER_PERMISSIONS,
+  type MemberPermission,
   ORG_ROLES,
   PLAN_CATALOG,
   Role,
@@ -68,7 +72,7 @@ export class MembersService {
   async list(): Promise<OrgTeamView> {
     const organizationId = this.requireOrgId();
     const plan = await this.plans.effectivePlan(organizationId);
-    const { users, roles, signers, used, pending } = await this.prisma.withOrgContext(
+    const { users, roles, signers, used, pending, grants } = await this.prisma.withOrgContext(
       organizationId,
       async (tx) => ({
         users: await tx.user.findMany({
@@ -84,6 +88,10 @@ export class MembersService {
         signers: await tx.orgSignerDesignation.findMany({
           where: { organizationId, revokedAt: null },
           select: { userId: true, role: true },
+        }),
+        grants: await tx.memberPermissionGrant.findMany({
+          where: { organizationId },
+          select: { userId: true, permission: true },
         }),
         used: await this.plans.countMembers(tx, organizationId),
         pending: await tx.organizationInvitation.count({
@@ -104,6 +112,12 @@ export class MembersService {
       rolesByUser.set(row.userId, [...(rolesByUser.get(row.userId) ?? []), row.role as Role]);
     }
     const signerByUser = new Map(signers.map((s) => [s.userId, s.role]));
+    const grantsByUser = new Map<string, MemberPermission[]>();
+    for (const grant of grants) {
+      const permission = grant.permission as MemberPermission;
+      if (!MEMBER_PERMISSIONS.includes(permission)) continue;
+      grantsByUser.set(grant.userId, [...(grantsByUser.get(grant.userId) ?? []), permission]);
+    }
 
     const all: OrgTeamMember[] = users.map((user) => {
       const userRoles = (rolesByUser.get(user.id) ?? []).sort(
@@ -117,6 +131,9 @@ export class MembersService {
         roles: userRoles,
         ...(signerRole === 'accountant' || signerRole === 'fiscal_reviewer' ? { signerRole } : {}),
         joinedAt: user.createdAt.toISOString(),
+        ...(userRoles.length > 0 && grantsByUser.has(user.id)
+          ? { permissions: grantsByUser.get(user.id) }
+          : {}),
       };
     });
 
@@ -165,6 +182,9 @@ export class MembersService {
         await this.plans.assertWithinLimit(organizationId, 'members', members + 1, plan);
       }
       await tx.userRole.deleteMany({ where: { organizationId, userId, role: { not: role } } });
+      // Un permiso expreso va con el cargo para el que se dio: al cambiar de
+      // cargo se pierde y, si hace falta, se vuelve a dar.
+      await tx.memberPermissionGrant.deleteMany({ where: { organizationId, userId } });
       await tx.userRole.upsert({
         where: { organizationId_userId_role: { organizationId, userId, role } },
         create: { organizationId, userId, role },
@@ -205,6 +225,7 @@ export class MembersService {
         await this.assertAnotherOwner(tx, organizationId, userId);
       }
       await tx.userRole.deleteMany({ where: { organizationId, userId } });
+      await tx.memberPermissionGrant.deleteMany({ where: { organizationId, userId } });
       await tx.refreshToken.deleteMany({ where: { userId } });
       await this.audit.recordWithTx(tx, {
         organizationId,
@@ -213,6 +234,59 @@ export class MembersService {
         entityType: 'user',
         entityId: target.id,
         metadata: { roles: current },
+      });
+    });
+  }
+
+  /**
+   * Reemplaza los permisos expresos de una persona del equipo. Cada permiso
+   * solo se da al cargo para el que existe (hoy: publicar animales, a un
+   * veterinario). Queda en la auditoría qué se dio y qué se quitó.
+   */
+  async setPermissions(
+    actorUserId: string,
+    userId: string,
+    permissions: MemberPermission[],
+  ): Promise<void> {
+    const organizationId = this.requireOrgId();
+    await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const { target, current } = await this.loadTarget(tx, organizationId, actorUserId, userId);
+      if (current.length === 0) {
+        throw new ConflictException('Esta persona ya no hace parte del equipo.');
+      }
+      for (const permission of permissions) {
+        const roles = MEMBER_PERMISSION_ROLES[permission];
+        if (!current.some((role) => roles.includes(role))) {
+          throw new BadRequestException(
+            `«${MEMBER_PERMISSION_LABELS[permission]}» solo se le da a un veterinario.`,
+          );
+        }
+      }
+      const existing = await tx.memberPermissionGrant.findMany({
+        where: { organizationId, userId },
+        select: { permission: true },
+      });
+      const before = existing.map((row) => row.permission as MemberPermission);
+      const added = permissions.filter((p) => !before.includes(p));
+      const removed = before.filter((p) => !permissions.includes(p));
+      if (added.length === 0 && removed.length === 0) return;
+      if (removed.length > 0) {
+        await tx.memberPermissionGrant.deleteMany({
+          where: { organizationId, userId, permission: { in: removed } },
+        });
+      }
+      for (const permission of added) {
+        await tx.memberPermissionGrant.create({
+          data: { organizationId, userId, permission, grantedByUserId: actorUserId },
+        });
+      }
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId,
+        action: 'member.permissions_changed',
+        entityType: 'user',
+        entityId: target.id,
+        metadata: { added, removed },
       });
     });
   }

@@ -1,8 +1,16 @@
 import { useState } from 'react';
-import { Role, type Animal, type AnimalSex, type ComputedAge } from '@adoptafacil/contracts';
+import {
+  CARE_LOG_VIEW_ROLES,
+  PUBLIC_ANIMAL_STATUSES,
+  Role,
+  type Animal,
+  type AnimalSex,
+  type ComputedAge,
+} from '@adoptafacil/contracts';
 import { Badge, Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@adoptafacil/ui';
 import { useSession } from '../../../shell/auth';
 import { AnimalCustodySection } from '../../custody';
+import { AnimalCareLogSection } from '../../team/components/care-log-list';
 import { AnimalCarnetSection } from './animal-carnet-section';
 import { AnimalDocumentosSection } from './animal-documentos-section';
 import { AnimalRegistroClinicoSection } from './animal-registro-clinico-section';
@@ -49,6 +57,11 @@ export interface AnimalDetailPanelProps {
   onSponsor: (animal: Animal) => void;
   onDeclareBehavior: (animal: Animal) => void;
   onReactivate: (animal: Animal) => void;
+  /** Publica o retira del portal (por cargo, o el veterinario con permiso expreso). */
+  canPublish?: boolean;
+  onPublish?: (animal: Animal) => void;
+  /** Marcar o quitar "apto para adopción". */
+  onReadiness?: (animal: Animal, ready: boolean) => void;
   /** Solo se usa en móvil (`lg:hidden`) para volver a la lista. */
   onBack: () => void;
 }
@@ -73,9 +86,14 @@ export function AnimalDetailPanel({
   onSponsor,
   onDeclareBehavior,
   onReactivate,
+  canPublish = false,
+  onPublish,
+  onReadiness,
   onBack,
 }: AnimalDetailPanelProps) {
-  const [tab, setTab] = useState<'carnet' | 'registro' | 'documentos' | 'custodia'>('carnet');
+  const [tab, setTab] = useState<'carnet' | 'registro' | 'documentos' | 'custodia' | 'cuidados'>(
+    'carnet',
+  );
   const { hasAnyRole } = useSession();
   // Mismos roles que exige `GET /custody/animals/:id/overview`.
   const canViewCustody = hasAnyRole(
@@ -84,7 +102,10 @@ export function AnimalDetailPanel({
     Role.Operator,
     Role.ReadOnlyAuditor,
   );
+  const canViewCare = hasAnyRole(...CARE_LOG_VIEW_ROLES);
   const isInactive = animal.isActive === false;
+  const inAdoption = animal.status !== 'adopted' && animal.status !== 'deceased';
+  const isPublic = !isInactive && PUBLIC_ANIMAL_STATUSES.includes(animal.status);
   const photo = animal.photos[0];
 
   return (
@@ -110,7 +131,20 @@ export function AnimalDetailPanel({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className={styles.detail__name}>{animal.name}</h2>
             {isInactive && <Badge variant="destructive">Inactivo</Badge>}
+            {!isInactive && inAdoption && !isPublic && (
+              <Badge variant="secondary">Fuera del portal</Badge>
+            )}
+            {animal.adoptionReadyAt && inAdoption && (
+              <Badge variant="success">Apto para adopción</Badge>
+            )}
           </div>
+          {animal.adoptionReadyAt && inAdoption && (
+            <p className="text-xs text-muted-foreground" data-testid="adoption-ready-note">
+              Marcado apto por {animal.adoptionReadyByName ?? 'el equipo'}
+              {animal.adoptionReadyNote ? `: ${animal.adoptionReadyNote}` : '.'}
+              {!isPublic && !canPublish && ' Un administrador u operador lo publica.'}
+            </p>
+          )}
           <p className={styles.detail__subline}>{detailSubline(animal)}</p>
           {animal.tags && animal.tags.length > 0 && (
             <div className={styles.detail__tags}>
@@ -165,7 +199,21 @@ export function AnimalDetailPanel({
               onClick={() => onDeclareBehavior(animal)}
             />
           )}
-          {isInactive && canManage && (
+          {canManage && inAdoption && onReadiness && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onReadiness(animal, !animal.adoptionReadyAt)}
+            >
+              {animal.adoptionReadyAt ? 'Quitar apto' : 'Marcar apto para adopción'}
+            </Button>
+          )}
+          {canPublish && inAdoption && !isPublic && !isInactive && onPublish && (
+            <Button size="sm" onClick={() => onPublish(animal)}>
+              Publicar en el portal
+            </Button>
+          )}
+          {isInactive && canPublish && (
             <Button size="sm" variant="outline" onClick={() => onReactivate(animal)}>
               Reactivar
             </Button>
@@ -184,6 +232,7 @@ export function AnimalDetailPanel({
               <TabsTrigger value="registro">Registro clínico</TabsTrigger>
               <TabsTrigger value="documentos">Documentos</TabsTrigger>
               {canViewCustody && <TabsTrigger value="custodia">Custodia</TabsTrigger>}
+              {canViewCare && <TabsTrigger value="cuidados">Cuidados</TabsTrigger>}
             </TabsList>
           </div>
 
@@ -198,6 +247,12 @@ export function AnimalDetailPanel({
           <TabsContent value="documentos">
             <AnimalDocumentosSection animalId={animal.id} />
           </TabsContent>
+
+          {canViewCare && (
+            <TabsContent value="cuidados">
+              <AnimalCareLogSection animalId={animal.id} />
+            </TabsContent>
+          )}
 
           {canViewCustody && (
             <TabsContent value="custodia">

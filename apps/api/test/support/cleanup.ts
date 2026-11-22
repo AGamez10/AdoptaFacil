@@ -64,6 +64,10 @@ const APPEND_ONLY_TABLES = [
   'custody_contract_templates',
   'animal_intakes',
   'custody_responsibles',
+  // Trabajo del equipo: la bitácora de cuidados es solo inserción y los
+  // encargos cuelgan del animal; ambos antes de `animals`.
+  'animal_care_logs',
+  'team_assignments',
   'animals',
   'sponsorship_status_history',
   'legal_representatives',

@@ -56,6 +56,7 @@ const BACKING: Array<[keyof typeof nav, string]> = [
   ['CUSTODY_VIEW_ROLES', 'GET /custody/contracts'],
   ['ORG_PLAN_ROLES', 'GET /org/plan'],
   ['ORG_MEMBERS_ROLES', 'GET /org/members'],
+  ['TEAM_WORK_ROLES', 'GET /team/me/work'],
   ['CAMPAIGNS_VIEW_ROLES', 'GET /campaigns'],
   ['SPONSORSHIP_VIEW_ROLES', 'GET /sponsorships'],
   ['VOLUNTEERING_VIEW_ROLES', 'GET /volunteer-opportunities'],

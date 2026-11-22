@@ -9,14 +9,19 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { type ChangeMemberRoleInput, type OrgTeamView, Role } from '@adoptafacil/contracts';
+import {
+  type ChangeMemberRoleInput,
+  type OrgTeamView,
+  Role,
+  type SetMemberPermissionsInput,
+} from '@adoptafacil/contracts';
 import type { RequestUser } from '../../../core/auth/auth.types';
 import { CurrentUser } from '../../../core/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../../core/auth/zod-validation.pipe';
 import { Roles } from '../../../core/rbac/roles.decorator';
 import { RolesGuard } from '../../../core/rbac/roles.guard';
-import { changeMemberRoleSchema } from './governance.schemas';
+import { changeMemberRoleSchema, setMemberPermissionsSchema } from './governance.schemas';
 import { MembersService } from './members.service';
 
 /** Equipo de la organización (pantalla "Miembros"). Propietario y
@@ -40,6 +45,17 @@ export class MembersController {
     @Body(new ZodValidationPipe(changeMemberRoleSchema)) dto: ChangeMemberRoleInput,
   ): Promise<void> {
     return this.members.changeRole(actor.id, userId, dto.role);
+  }
+
+  /** Permisos expresos además del cargo (hoy: que un veterinario publique). */
+  @Put(':userId/permissions')
+  @HttpCode(204)
+  setPermissions(
+    @CurrentUser() actor: RequestUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body(new ZodValidationPipe(setMemberPermissionsSchema)) dto: SetMemberPermissionsInput,
+  ): Promise<void> {
+    return this.members.setPermissions(actor.id, userId, dto.permissions);
   }
 
   @Delete(':userId')

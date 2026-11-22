@@ -77,3 +77,11 @@ export const createBreedSchema = z
     name: z.string().trim().min(1).max(80),
   })
   .strict();
+
+/** `POST /animals/:id/adoption-readiness`: marcar o desmarcar "apto para adopción". */
+export const adoptionReadinessSchema = z
+  .object({
+    ready: z.boolean(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .strict();

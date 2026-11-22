@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OrganizationStatus } from '@adoptafacil/contracts';
+import { MEMBER_PERMISSIONS, OrganizationStatus } from '@adoptafacil/contracts';
 import { newPasswordSchema } from '../../../core/auth/auth.schemas';
 import { legalAcceptancesSchema } from '../../../core/legal/legal.schemas';
 import { orgRoleSchema } from '../../../core/rbac/rbac.schemas';
@@ -53,3 +53,13 @@ export const acceptInvitationGoogleSchema = z
 
 /** `PUT /org/members/:userId/role`. Only organization roles (never platform). */
 export const changeMemberRoleSchema = z.object({ role: orgRoleSchema }).strict();
+
+/** `PUT /org/members/:userId/permissions`: la lista completa de permisos expresos. */
+export const setMemberPermissionsSchema = z
+  .object({
+    permissions: z
+      .array(z.enum(MEMBER_PERMISSIONS as [string, ...string[]]))
+      .max(MEMBER_PERMISSIONS.length)
+      .transform((list) => [...new Set(list)]),
+  })
+  .strict();

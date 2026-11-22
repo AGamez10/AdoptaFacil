@@ -1,12 +1,16 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  CUSTODY_ADMIN_ONLY_CONCEPTS,
   CUSTODY_CHARGE_CONCEPT_LABELS,
+  type CustodyChargeConcept,
+  CUSTODY_TARIFF_CONCEPTS,
   CUSTODY_DEBT_SEPARATION_NOTICE,
   type CustodyAccountSummary,
   type CustodyAlert,
@@ -14,7 +18,9 @@ import {
   type CustodyCharge,
   type CustodyChargeStatus,
   type CustodyPaymentMethod,
+  Role,
 } from '@adoptafacil/contracts';
+import { orgRolesOf } from '../../core/rbac/member-permissions';
 import {
   CHARGE_INCLUDE,
   CustodyCoreService,
@@ -63,6 +69,9 @@ export interface WrittenPayment {
   receiptNumber: string;
   balanceAfterCop: number;
 }
+
+/** Contratos cuya tarifa ya rige: emitidos o vigentes (nunca un borrador). */
+const TARIFF_CONTRACT_STATUSES = ['issued', 'active'];
 
 const isLate = (charge: CustodyCharge): boolean =>
   charge.status === 'pending' &&
@@ -127,11 +136,19 @@ export class CustodyBillingService {
     await this.core.prisma.withOrgContext(organizationId, async (tx) => {
       await this.core.requireAnimal(tx, input.animalId);
       await this.core.requireResponsible(tx, input.responsibleId);
-      if (input.contractId) {
-        const contract = await tx.custodyContract.findUnique({ where: { id: input.contractId } });
-        if (!contract || contract.animalId !== input.animalId) {
-          throw new BadRequestException('El contrato no corresponde a este animal.');
-        }
+      const contract = input.contractId
+        ? await tx.custodyContract.findUnique({ where: { id: input.contractId } })
+        : null;
+      if (input.contractId && (!contract || contract.animalId !== input.animalId)) {
+        throw new BadRequestException('El contrato no corresponde a este animal.');
+      }
+      // El operador cobra lo pactado (decisión del dueño, 2026-11-22): la
+      // mensualidad y la alimentación por el valor exacto del contrato, y los
+      // demás gastos con su soporte. Un recargo por mora, anular o devolver lo
+      // decide el propietario o un administrador.
+      const roles = await orgRolesOf(tx, organizationId, actorUserId);
+      if (!roles.includes(Role.Owner) && !roles.includes(Role.Administrator)) {
+        this.assertOperatorCharge(input, contract, Boolean(file?.buffer?.length));
       }
     });
     const support = file?.buffer?.length
@@ -200,6 +217,41 @@ export class CustodyBillingService {
       });
       return this.chargeView(tx, row.id);
     });
+  }
+
+  /** Reglas del cobro que crea un operador (ver `createCharge`). */
+  private assertOperatorCharge(
+    input: ChargeDto,
+    contract: { status: string; monthlyFeeCop: number; foodFeeCop: number | null } | null,
+    hasSupport: boolean,
+  ): void {
+    const concept = input.concept as CustodyChargeConcept;
+    if ((CUSTODY_ADMIN_ONLY_CONCEPTS as readonly string[]).includes(concept)) {
+      throw new ForbiddenException(
+        'Un recargo por mora lo decide el propietario o un administrador.',
+      );
+    }
+    if ((CUSTODY_TARIFF_CONCEPTS as readonly string[]).includes(concept)) {
+      if (!contract || !TARIFF_CONTRACT_STATUSES.includes(contract.status)) {
+        throw new BadRequestException(
+          'Este cobro sigue la tarifa del contrato: elige el contrato emitido de este animal.',
+        );
+      }
+      const tariff = concept === 'boarding_fee' ? contract.monthlyFeeCop : contract.foodFeeCop;
+      if (tariff === null) {
+        throw new BadRequestException('El contrato no pacta un valor de alimentación.');
+      }
+      if (input.amountCop !== tariff) {
+        throw new BadRequestException(
+          `El valor debe ser el de la tarifa del contrato (${formatCop(tariff)}). ` +
+            'Otro valor lo registra un administrador.',
+        );
+      }
+      return;
+    }
+    if (!hasSupport) {
+      throw new BadRequestException('Adjunta el soporte del gasto (factura o recibo).');
+    }
   }
 
   /** Anula un cobro registrado por error. Con pagos vigentes, primero se anulan. */

@@ -28,6 +28,7 @@ import {
   PLATFORM_REVIEWS_ROLES,
   PLATFORM_SUPER_ADMIN_DASHBOARD_ROLES,
   PLATFORM_TEAM_ROLES,
+  TEAM_WORK_ROLES,
   RESOURCE_VIEW_ROLES,
   RESOURCE_MANAGE_ROLES,
   SPONSORSHIP_VIEW_ROLES,
@@ -181,6 +182,8 @@ const PlatformEmailTemplatesPage = lazyPage(loadNotifications, 'PlatformEmailTem
 const loadCertificates = () => import('../../features/certificates');
 const CertificateEmissionPage = lazyPage(loadCertificates, 'CertificateEmissionPage');
 const CertificateVerificationPage = lazyPage(loadCertificates, 'CertificateVerificationPage');
+const loadTeam = () => import('../../features/team');
+const MyWorkPage = lazyPage(loadTeam, 'MyWorkPage');
 const loadVolunteering = () => import('../../features/volunteering');
 const MyVolunteeringPage = lazyPage(loadVolunteering, 'MyVolunteeringPage');
 const PublicVolunteeringPage = lazyPage(loadVolunteering, 'PublicVolunteeringPage');
@@ -536,6 +539,16 @@ export function AppRoutes() {
               lleva `@Roles` (cualquier Persona autenticada), así que la ruta
               no lleva <RequireRoles>. */}
                 <Route path="voluntariado" element={<MyVolunteeringPage />} />
+                {/* "Mi trabajo": tareas, animales a cargo y cuidados de cada persona
+              del equipo (`/team/me/*`, mismos roles que su controlador). */}
+                <Route
+                  path="mi-trabajo"
+                  element={
+                    <RequireRoles roles={TEAM_WORK_ROLES}>
+                      <MyWorkPage />
+                    </RequireRoles>
+                  }
+                />
                 {/* M09 · ofrecer ayuda / mis ofertas (F-6). Mismo SEAM que
               donaciones/apadrinamientos: `POST /resources/offers` y
               `GET /resources/offers/mine` no llevan `@Roles` (cualquier
