@@ -232,6 +232,9 @@ const CSS = `
 .tpl-mosaico .m-contact .map iframe{position:absolute;inset:0}
 .tpl-mosaico a.m-card,.tpl-mosaico a.m-cell{text-decoration:none;color:inherit}
 .tpl-mosaico .m-mark .tpl-logo-img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+
+/* Libro público con el lenguaje de la plantilla (ver engine/ledger.ts). */
+.tpl-mosaico{--lg-card:var(--card);--lg-bd:1px solid var(--line);--lg-sh:none;--lg-r:24px;--lg-fd:'Schibsted Grotesk',sans-serif;--lg-fw:900;--lg-ls:-.03em;--lg-soft:var(--soft);--lg-line:var(--line);--lg-acc:var(--ink);--lg-acc-ink:var(--card)}
 `;
 
 type Key = 'sp' | 'size' | 'age';

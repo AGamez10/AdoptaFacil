@@ -134,6 +134,9 @@ const CSS = `
     @keyframes prGauge{from{--prp:0}}
   }
 }
+
+/* Libro público: el saldo se destaca como la primera tarjeta de "Cómo ayudar". */
+.af-tpl.tpl-prisma{--lg-hi:linear-gradient(135deg,var(--c1),var(--c2));--lg-acc-ink:#fff}
 `;
 
 const card = (a: TplAnimal, i: number) =>
