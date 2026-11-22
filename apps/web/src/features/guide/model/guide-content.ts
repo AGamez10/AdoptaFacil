@@ -892,6 +892,15 @@ export const PAGE_HELP: readonly PageHelp[] = [
     related: [REPORTS_LINK],
   },
   {
+    match: /^\/mi-trabajo/,
+    title: 'Mi trabajo',
+    tips: [
+      'Tus tareas y los animales que el equipo dejó a tu cargo.',
+      'Registra cada cuidado (paseo, alimentación, limpieza u observación): el veterinario y el equipo lo ven en la ficha.',
+      'Si coordinas, desde aquí encargas tareas y animales a otras personas del equipo.',
+    ],
+  },
+  {
     match: /^\/recordatorios/,
     title: 'Recordatorios',
     tips: ['Vacunas y tratamientos que se acercan, según el expediente clínico de cada animal.'],

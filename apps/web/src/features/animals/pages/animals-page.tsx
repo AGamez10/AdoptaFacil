@@ -5,6 +5,7 @@ import {
   type AnimalStatus,
   type ComputedAge,
   type Organization,
+  PUBLIC_ANIMAL_STATUSES,
   Role,
 } from '@adoptafacil/contracts';
 import {
@@ -33,6 +34,8 @@ import { AnimalBehaviorDisclosureModal } from '../components/animal-behavior-dis
 import { AnimalSponsorshipPlanModal } from '../components/animal-sponsorship-plan-modal';
 import { BulkImportDialog } from '../components/bulk-import-dialog';
 import { MissingSlugBanner } from '../components/missing-slug-banner';
+import { setAdoptionReadiness } from '../../team/api/team-api';
+import { useCanPublishAnimals } from '../../team/hooks/use-can-publish-animals';
 import { PawEmptyIcon, PlusIcon, SearchIcon, UploadIcon } from '../components/icons';
 import styles from './animals-page.module.scss';
 
@@ -93,6 +96,8 @@ export function AnimalsPage() {
     hasRole(Role.Operator) ||
     hasRole(Role.Veterinarian);
   const canDelete = hasRole(Role.Owner) || hasRole(Role.Administrator);
+  // Publicar o retirar del portal: por cargo o, el veterinario, con permiso expreso.
+  const canPublish = useCanPublishAnimals();
   // S2-04B-1: narrower than `canManage` — Veterinarian may create/edit one
   // animal but not bulk-import (matches the backend's BULK_IMPORT_ROLES).
   const canBulkImport =
@@ -195,6 +200,48 @@ export function AnimalsPage() {
     } catch (error) {
       toast({
         title: 'No se pudo reactivar',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const publish = async (animal: Animal): Promise<void> => {
+    try {
+      if (!PUBLIC_ANIMAL_STATUSES.includes(animal.status)) {
+        await client.request<Animal>(`/animals/${animal.id}`, {
+          method: 'PATCH',
+          json: { status: 'available' },
+        });
+      }
+      if (animal.isActive === false) {
+        await client.request<Animal>(`/animals/${animal.id}/activate`, { method: 'POST' });
+      }
+      await load();
+      toast({ title: `${animal.name} ya está en el portal`, variant: 'success' });
+    } catch (error) {
+      toast({
+        title: 'No se pudo publicar',
+        description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const markReady = async (animal: Animal, ready: boolean): Promise<void> => {
+    try {
+      await setAdoptionReadiness(client, animal.id, ready);
+      await load();
+      toast({
+        title: ready
+          ? `${animal.name} quedó apto para adopción`
+          : `${animal.name} ya no está marcado como apto`,
+        description: ready && !canPublish ? 'Avisamos a quienes publican en el portal.' : undefined,
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: 'No se pudo guardar',
         description: error instanceof Error ? error.message : 'Inténtalo de nuevo.',
         variant: 'destructive',
       });
@@ -343,6 +390,9 @@ export function AnimalsPage() {
                   canManage={canManage}
                   canDelete={canDelete}
                   canManageSponsorship={canManageSponsorship}
+                  canPublish={canPublish}
+                  onPublish={(a) => void publish(a)}
+                  onReadiness={(a, ready) => void markReady(a, ready)}
                   onEdit={(a) => {
                     setEditingAnimal(a);
                     setModalOpen(true);

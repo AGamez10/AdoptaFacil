@@ -660,7 +660,19 @@ describe('Custody (documentación, guardería, cuenta y reportes; no-leak)', () 
     };
 
     await setRole('operator');
-    const created = await api(orgA).post('/custody/charges', charge).expect(201);
+    // El operador cobra un gasto con su soporte (decisión del dueño, 2026-11-22).
+    await api(orgA).post('/custody/charges', charge).expect(400);
+    const created = await request(server)
+      .post('/custody/charges')
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .field('animalId', charge.animalId)
+      .field('responsibleId', charge.responsibleId)
+      .field('concept', charge.concept)
+      .field('description', charge.description)
+      .field('amountCop', String(charge.amountCop))
+      .field('dueDate', charge.dueDate)
+      .attach('file', PDF, { filename: 'soporte.pdf', contentType: 'application/pdf' })
+      .expect(201);
     await api(orgA)
       .post(`/custody/charges/${created.body.id}/extensions`, {
         newDueDate: daysFromToday(9),

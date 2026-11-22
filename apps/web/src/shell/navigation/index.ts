@@ -32,6 +32,7 @@ export {
   RESOURCE_VIEW_ROLES,
   RESOURCE_MANAGE_ROLES,
   SPONSORSHIP_VIEW_ROLES,
+  TEAM_WORK_ROLES,
   VOLUNTEERING_VIEW_ROLES,
 } from './nav-items';
 export { NavProvider, useNav } from './nav-context';

@@ -203,18 +203,46 @@ const READ_ONLY_AUDITOR_WRITES = [
   'POST /org/reports/:id/decision',
 ];
 
-/** Voluntario y colaborador temporal: su copia de invitación promete que el
- *  cargo NO da acceso a datos de animales, donantes ni adoptantes. */
+/** Voluntario y colaborador temporal: panel mínimo (decisión del dueño,
+ *  2026-11-22). Su trabajo ("Mi trabajo": tareas, ficha básica de los animales
+ *  a su cargo y la bitácora de cuidados, que el servicio limita a lo suyo), el
+ *  estado de la organización y la vista previa del portal. Nunca datos de
+ *  adoptantes ni donantes; su voluntariado (jornadas, horas, certificados) va
+ *  por las rutas de "solo lo propio". */
 const NO_DATA_ROLE_ROUTES = [
   'GET /org/portal/preview',
   'GET /org/portal/preview/animals',
   'GET /org/portal/preview/campaigns',
   'GET /org/status',
+  'GET /team/me/animals/:animalId/care-logs',
+  'GET /team/me/permissions',
+  'GET /team/me/work',
+  'POST /team/me/animals/:animalId/care-logs',
+  'POST /team/me/assignments/:id/complete',
 ];
+
+/** Rutas donde el cargo deja pasar pero el servicio decide algo más fino. Sale
+ *  en la columna "Otro acceso" de la matriz. */
+const SERVICE_RULES: Record<string, string> = {
+  'POST /animals':
+    'Vet.: la ficha queda fuera del portal ("no disponible") hasta que alguien con permiso la publique',
+  'PATCH /animals/:id':
+    'Vet.: sin el permiso expreso «publicar animales» solo cambia el estado a "no disponible"',
+  'POST /animals/:id/activate': 'Vet.: solo con el permiso expreso «publicar animales»',
+  'POST /animals/:id/deactivate': 'Vet.: solo con el permiso expreso «publicar animales»',
+  'POST /custody/charges':
+    'Oper.: mensualidad y alimentación por la tarifa del contrato, otros gastos con soporte, sin recargos por mora',
+  'GET /team/me/animals/:animalId/care-logs': 'solo animales a cargo de quien pregunta',
+  'POST /team/me/animals/:animalId/care-logs': 'solo animales a cargo de quien pregunta',
+  'POST /team/me/assignments/:id/complete': 'solo sus propias tareas',
+};
+
+/** Lo que el veterinario NO hace por su cargo sin el permiso expreso. */
+const VETERINARIAN_NEEDS_GRANT = ['POST /animals/:id/activate', 'POST /animals/:id/deactivate'];
 
 /** Veterinario: animales, historia clínica, recordatorios y avisos. */
 const VETERINARIAN_SCOPE =
-  /^\/(animals|clinical-reminders|org\/pending-reads|org\/status|org\/portal\/preview)(\/|$)/;
+  /^\/(animals|clinical-reminders|org\/pending-reads|org\/status|org\/portal\/preview|team\/me|team\/animals\/:animalId\/care-logs)(\/|$)/;
 
 /** Gobierno del equipo y de la cuenta de la organización: nadie por debajo de
  *  Administrador entra (invitar, cambiar cargos, retirar, firmantes, plan,
@@ -237,6 +265,7 @@ const TEAM_GOVERNANCE = [
   'POST /org/plan/checkout',
   'POST /org/signers',
   'POST /rbac/roles',
+  'PUT /org/members/:userId/permissions',
   'PUT /org/members/:userId/role',
   'PUT /org/portal/domain',
   'PUT /org/profile',
@@ -267,6 +296,8 @@ function renderDoc(): string {
     [Role.PlatformSuperAdmin, 'P.Super'],
   ];
   const access = (r: RouteEntry): string => {
+    const rule = SERVICE_RULES[key(r)];
+    if (rule) return rule;
     if (r.roles) return '';
     if (authenticated(r)) return 'cualquier cuenta (sin `@Roles`)';
     return 'pública';
@@ -339,20 +370,29 @@ describe('matriz de roles de la API', () => {
   });
 
   it.each([Role.Volunteer, Role.TemporaryCollaborator])(
-    '%s no ve datos de animales, donantes ni adoptantes (lo que promete su invitación)',
+    '%s tiene un panel mínimo, sin datos de adoptantes ni donantes (lo que promete su invitación)',
     (role) => {
       expect(routesOf(role)).toEqual([...NO_DATA_ROLE_ROUTES].sort());
       expect(invitationRoleCopy(role).duties.join(' ')).toMatch(
-        /no da acceso a datos de animales, donantes ni adoptantes/,
+        /no da acceso a datos de adoptantes ni donantes/,
       );
     },
   );
 
-  it('el veterinario solo entra a animales, historia clínica y recordatorios', () => {
+  it('el veterinario solo entra a animales, historia clínica, recordatorios y su trabajo', () => {
     const outside = ROUTES.filter(allows(Role.Veterinarian)).filter(
       (r) => !VETERINARIAN_SCOPE.test(r.path),
     );
     expect(outside.map(key)).toEqual([]);
+  });
+
+  it('el veterinario no publica por su cargo: lo decide el servicio con el permiso expreso', () => {
+    for (const k of VETERINARIAN_NEEDS_GRANT) {
+      expect(SERVICE_RULES[k]).toMatch(/permiso expreso/);
+    }
+    for (const k of Object.keys(SERVICE_RULES)) {
+      expect(ROUTES.some((r) => key(r) === k)).toBe(true);
+    }
   });
 
   it('el gobierno del equipo y de la cuenta es solo de propietario y administrador', () => {

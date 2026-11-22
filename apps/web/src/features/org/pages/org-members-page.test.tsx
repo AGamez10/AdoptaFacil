@@ -110,6 +110,36 @@ describe('OrgMembersPage', () => {
     expect([...roleSelect.options].map((o) => o.value)).not.toContain(Role.Owner);
   });
 
+  it('lets the admin give a vet the express permission to publish animals', async () => {
+    const view = teamView();
+    view.members.push({
+      userId: 'vet-1',
+      displayName: 'Valeria',
+      email: 'valeria@refugio.test',
+      roles: [Role.Veterinarian],
+      permissions: [],
+      joinedAt: '2026-03-01T00:00:00.000Z',
+    });
+    const calls = stubApi(view);
+    renderShell({
+      route: '/organizacion/miembros',
+      ...sessionWith([Role.Administrator], 'admin-1'),
+    });
+
+    expect(await screen.findByText('Valeria')).toBeInTheDocument();
+    const toggles = screen.getAllByRole('checkbox', { name: 'Puede publicar animales' });
+    // Solo el veterinario tiene el interruptor.
+    expect(toggles).toHaveLength(1);
+    fireEvent.click(toggles[0]!);
+
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === 'PUT' && c.url.endsWith('/org/members/vet-1/permissions'))
+          ?.body,
+      ).toEqual({ permissions: ['animals.publish'] }),
+    );
+  });
+
   it('invites by email with the chosen role', async () => {
     const calls = stubApi(teamView());
     renderShell({ route: '/organizacion/miembros', ...sessionWith([Role.Owner]) });

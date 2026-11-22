@@ -36,6 +36,12 @@ model Animal {
   /// frontend only SUGGESTS common values — this is not a closed catalog.
   tags                 String[]  @default([])
   isActive             Boolean   @default(true) @map("is_active")
+  /// "Apto para adopción": lo marca quien conoce la salud del animal (p. ej. el
+  /// veterinario). No publica nada: publicar (is_active + estado público) es
+  /// de Owner/Administrator/Operator o de quien tenga el permiso expreso.
+  adoptionReadyAt      DateTime? @map("adoption_ready_at")
+  adoptionReadyBy      String?   @map("adoption_ready_by_user_id") @db.Uuid
+  adoptionReadyNote    String?   @map("adoption_ready_note")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
@@ -51,6 +57,9 @@ model Animal {
   custodyReleases     CustodyRelease[]
   custodyDocuments    CustodyDocument[]
   custodyEvents       CustodyEvent[]
+  // Trabajo del equipo. See team.prisma.
+  teamAssignments     TeamAssignment[]
+  careLogs            AnimalCareLog[]
 
   @@index([organizationId])
   @@index([organizationId, isActive])

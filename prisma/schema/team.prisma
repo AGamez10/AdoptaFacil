@@ -1,0 +1,76 @@
+// Módulo: trabajo del equipo por cargo (org/team).
+// Permisos expresos por persona, tareas y animales a cargo, y la bitácora de
+// cuidados. Las tres tablas son de la organización: organization_id + RLS
+// ENABLE + FORCE + tenant_isolation (migración 20261122140000_team_roles_work).
+
+/// Permiso expreso que el Owner/Administrator da a UNA persona del equipo, por
+/// encima de lo que su cargo permite. Hoy solo existe `animals.publish` para el
+/// veterinario (decisión del dueño, 2026-11-22). Quitarlo borra la fila; la
+/// auditoría conserva quién lo dio y quién lo quitó.
+model MemberPermissionGrant {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  /// MemberPermission.
+  permission      String
+  grantedByUserId String   @map("granted_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, permission])
+  @@index([organizationId])
+  @@map("member_permission_grants")
+}
+
+/// Algo que el equipo le encarga a una persona: una tarea (`task`) o un animal
+/// a su cargo (`animal_care`). Nunca se borra: se completa o se cancela.
+model TeamAssignment {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  /// TeamAssignmentKind.
+  kind              String
+  assigneeUserId    String    @map("assignee_user_id") @db.Uuid
+  animalId          String?   @map("animal_id") @db.Uuid
+  title             String
+  details           String?
+  dueDate           DateTime? @map("due_date") @db.Date
+  /// TeamAssignmentStatus.
+  status            String    @default("open")
+  createdByUserId   String    @map("created_by_user_id") @db.Uuid
+  completedAt       DateTime? @map("completed_at")
+  completedByUserId String?   @map("completed_by_user_id") @db.Uuid
+  completionNote    String?   @map("completion_note")
+  cancelledAt       DateTime? @map("cancelled_at")
+  cancelledByUserId String?   @map("cancelled_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal?      @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, assigneeUserId, status])
+  @@index([animalId])
+  @@map("team_assignments")
+}
+
+/// Un cuidado registrado sobre un animal (paseo, alimentación, limpieza,
+/// observación). Solo inserción: lo escrito no se edita ni se borra.
+model AnimalCareLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  animalId       String   @map("animal_id") @db.Uuid
+  authorUserId   String   @map("author_user_id") @db.Uuid
+  /// CareLogKind.
+  kind           String
+  note           String?
+  occurredAt     DateTime @map("occurred_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  animal       Animal       @relation(fields: [animalId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([animalId, occurredAt])
+  @@map("animal_care_logs")
+}

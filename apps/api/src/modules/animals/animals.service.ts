@@ -25,6 +25,8 @@ import {
   type AnimalStatus,
   type CreateAnimalBreedInput,
   type CreateAnimalInput,
+  PUBLIC_ANIMAL_STATUSES,
+  type SetAdoptionReadinessInput,
   SponsorshipStatus,
   type UpdateAnimalInput,
 } from '@adoptafacil/contracts';
@@ -34,6 +36,7 @@ import type {
 } from '../../core/notifications/notification.port';
 import { NOTIFICATION_PORT } from '../../core/notifications/notification.port';
 import { AuditService } from '../../core/audit/audit.service';
+import { canPublishAnimals } from '../../core/rbac/member-permissions';
 import { InboxService } from '../../core/notifications/inbox/inbox.service';
 import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.util';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -45,6 +48,14 @@ import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port'
 type AnimalWithRelations = AnimalRow & { photos: PhotoRow[]; breed: BreedRow | null };
 
 /** Adoption request statuses that block a delete/soft-remove (RF07 §3.4). */
+/** Estado con el que queda la ficha que crea quien no publica: guardada, fuera
+ *  del portal, hasta que alguien con permiso la publique. */
+const UNPUBLISHED_STATUS: AnimalStatus = 'unavailable';
+
+const NOT_PUBLISHER_MESSAGE =
+  'Publicar o retirar un animal del portal lo hace un administrador u operador. ' +
+  'Puedes marcarlo como apto para adopción para avisarles.';
+
 const ACTIVE_ADOPTION_STATUSES = ['new', 'in_review', 'approved'] as const;
 
 /** Row from `sponsorship_active_sponsors_for_animal()` (M07 hallazgo QA, raw
@@ -84,7 +95,21 @@ export class AnimalsService {
     };
   }
 
-  private toAnimal(row: AnimalWithRelations): Animal {
+  /** Nombres de quienes marcaron "apto para adopción" (mismo tenant, RLS). */
+  private async readyNames(
+    tx: Prisma.TransactionClient,
+    rows: Array<{ adoptionReadyBy: string | null }>,
+  ): Promise<Map<string, string>> {
+    const ids = [...new Set(rows.map((r) => r.adoptionReadyBy).filter((id): id is string => !!id))];
+    if (ids.length === 0) return new Map();
+    const users = await tx.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, displayName: true },
+    });
+    return new Map(users.map((u) => [u.id, u.displayName]));
+  }
+
+  private toAnimal(row: AnimalWithRelations, readyNames?: Map<string, string>): Animal {
     const photos = [...row.photos].sort((a, b) => a.order - b.order).map((p) => this.toPhoto(p));
     const breedName = row.breed?.name ?? row.customBreed ?? undefined;
     const computedAge = computeAge(row.birthDate, row.approximateAgeMonths, new Date());
@@ -109,6 +134,15 @@ export class AnimalsService {
       computedAge,
       isActive: row.isActive,
       photoRecords: photos,
+      ...(row.adoptionReadyAt
+        ? {
+            adoptionReadyAt: row.adoptionReadyAt.toISOString(),
+            adoptionReadyByName: row.adoptionReadyBy
+              ? readyNames?.get(row.adoptionReadyBy)
+              : undefined,
+            adoptionReadyNote: row.adoptionReadyNote ?? undefined,
+          }
+        : {}),
     };
   }
 
@@ -156,6 +190,10 @@ export class AnimalsService {
       if (input.breedId) {
         await this.assertBreed(tx, input.breedId, input.species);
       }
+      // Quien no publica (el veterinario sin permiso expreso) deja la ficha
+      // guardada fuera del portal; la publica un administrador u operador.
+      const publisher = await canPublishAnimals(tx, organizationId, actorUserId);
+      const status = publisher ? (input.status ?? 'available') : UNPUBLISHED_STATUS;
       const animal = await tx.animal.create({
         data: {
           organizationId,
@@ -163,7 +201,7 @@ export class AnimalsService {
           species: input.species,
           sex: input.sex,
           size: input.size,
-          status: input.status ?? 'available',
+          status,
           breedId: input.breedId ?? null,
           customBreed: input.customBreed ?? null,
           birthDate: input.birthDate ? new Date(input.birthDate) : null,
@@ -184,7 +222,12 @@ export class AnimalsService {
         action: 'animal.created',
         entityType: 'animal',
         entityId: animal.id,
-        metadata: { species: input.species, status: animal.status, photos: reserved.length },
+        metadata: {
+          species: input.species,
+          status: animal.status,
+          photos: reserved.length,
+          ...(publisher ? {} : { awaitingPublication: true }),
+        },
       });
 
       return this.toAnimal(animal);
@@ -195,26 +238,31 @@ export class AnimalsService {
    *  surfaces deactivated ones too. */
   async list(includeInactive = false): Promise<Animal[]> {
     const organizationId = this.requireOrgId();
-    const rows = await this.prisma.withOrgContext(organizationId, (tx) =>
-      tx.animal.findMany({
+    const { rows, names } = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const found = await tx.animal.findMany({
         where: { organizationId, ...(includeInactive ? {} : { isActive: true }) },
         include: { photos: true, breed: true },
         orderBy: { createdAt: 'desc' },
-      }),
-    );
-    return rows.map((row) => this.toAnimal(row));
+      });
+      return { rows: found, names: await this.readyNames(tx, found) };
+    });
+    return rows.map((row) => this.toAnimal(row, names));
   }
 
   /** One animal record (including deactivated), with derived age and photos. */
   async get(id: string): Promise<Animal> {
     const organizationId = this.requireOrgId();
-    const row = await this.prisma.withOrgContext(organizationId, (tx) =>
-      tx.animal.findUnique({ where: { id }, include: { photos: true, breed: true } }),
-    );
+    const { row, names } = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const found = await tx.animal.findUnique({
+        where: { id },
+        include: { photos: true, breed: true },
+      });
+      return { row: found, names: found ? await this.readyNames(tx, [found]) : new Map() };
+    });
     if (!row || row.organizationId !== organizationId) {
       throw new NotFoundException('Animal not found');
     }
-    return this.toAnimal(row);
+    return this.toAnimal(row, names);
   }
 
   /** Patch an animal record; audited. */
@@ -235,6 +283,16 @@ export class AnimalsService {
         existing.approximateAgeMonths === null
       ) {
         throw new BadRequestException('Indica la fecha de nacimiento o una edad aproximada.');
+      }
+      // Cambiar el estado decide si la ficha sale en el portal. Quien no
+      // publica solo puede sacarla ("no disponible", p. ej. en tratamiento).
+      if (
+        input.status !== undefined &&
+        input.status !== existing.status &&
+        input.status !== UNPUBLISHED_STATUS &&
+        !(await canPublishAnimals(tx, organizationId, actorUserId))
+      ) {
+        throw new ForbiddenException(NOT_PUBLISHER_MESSAGE);
       }
       const updated = await tx.animal.update({
         where: { id },
@@ -266,7 +324,7 @@ export class AnimalsService {
         entityId: id,
         metadata: { fields: Object.keys(input) },
       });
-      return this.toAnimal(updated);
+      return this.toAnimal(updated, await this.readyNames(tx, [updated]));
     });
   }
 
@@ -277,6 +335,9 @@ export class AnimalsService {
       const existing = await tx.animal.findUnique({ where: { id } });
       if (!existing) {
         throw new NotFoundException('Animal not found');
+      }
+      if (!(await canPublishAnimals(tx, organizationId, actorUserId))) {
+        throw new ForbiddenException(NOT_PUBLISHER_MESSAGE);
       }
       const updated = await tx.animal.update({
         where: { id },
@@ -290,8 +351,67 @@ export class AnimalsService {
         entityType: 'animal',
         entityId: id,
       });
-      return this.toAnimal(updated);
+      return this.toAnimal(updated, await this.readyNames(tx, [updated]));
     });
+  }
+
+  /**
+   * Marca (o desmarca) al animal "apto para adopción". Lo hace quien conoce su
+   * salud, típicamente el veterinario; NO publica: avisa a quienes publican
+   * (propietario, administradores, operadores) para que decidan.
+   */
+  async setAdoptionReadiness(
+    actorUserId: string,
+    id: string,
+    input: SetAdoptionReadinessInput,
+  ): Promise<Animal> {
+    const organizationId = this.requireOrgId();
+    const animal = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const existing = await tx.animal.findUnique({ where: { id } });
+      if (!existing) {
+        throw new NotFoundException('Animal not found');
+      }
+      if (existing.status === 'deceased' || existing.status === 'adopted') {
+        throw new ConflictException('Este animal ya no está en adopción.');
+      }
+      const note = input.ready ? input.note?.trim() || null : null;
+      const updated = await tx.animal.update({
+        where: { id },
+        data: input.ready
+          ? { adoptionReadyAt: new Date(), adoptionReadyBy: actorUserId, adoptionReadyNote: note }
+          : { adoptionReadyAt: null, adoptionReadyBy: null, adoptionReadyNote: null },
+        include: { photos: true, breed: true },
+      });
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId,
+        action: input.ready ? 'animal.adoption_ready_marked' : 'animal.adoption_ready_cleared',
+        entityType: 'animal',
+        entityId: id,
+        metadata: { hasNote: Boolean(note) },
+      });
+      return this.toAnimal(updated, await this.readyNames(tx, [updated]));
+    });
+    const published =
+      animal.isActive !== false &&
+      (PUBLIC_ANIMAL_STATUSES as readonly AnimalStatus[]).includes(animal.status);
+    if (input.ready && !published) {
+      await this.inbox?.toOrgStaff(
+        organizationId,
+        {
+          kind: 'animals.adoption_ready',
+          tone: 'success',
+          title: `${animal.name} está apto para adopción`,
+          body: `${animal.adoptionReadyByName ?? 'El equipo'} lo marcó apto${
+            animal.adoptionReadyNote ? `: ${animal.adoptionReadyNote}` : '.'
+          } Revisa su ficha y publícalo cuando esté listo.`,
+          href: `/animales/${animal.id}`,
+          dedupeKey: `animal_ready:${animal.id}:${animal.adoptionReadyAt ?? ''}`,
+        },
+        { excludeUserId: actorUserId },
+      );
+    }
+    return animal;
   }
 
   /** "Delete" an animal record from the UI's perspective (S2-04A §3.4). A

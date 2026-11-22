@@ -65,7 +65,8 @@ function RoleGuide() {
         <CardTitle className="text-base">Qué puede hacer cada cargo</CardTitle>
         <CardDescription>
           Los cargos son fijos: eliges uno por persona y el sistema le muestra solo lo que ese cargo
-          permite. Esto es exactamente lo que la persona lee en su correo de invitación.
+          permite. Esto es exactamente lo que la persona lee en su correo de invitación. A un
+          veterinario, además, le puedes dar el permiso de publicar animales en el portal.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -185,6 +186,24 @@ export function OrgMembersPage() {
       `${member.displayName} ahora es ${label(next)}`,
       'No se pudo cambiar el cargo',
     );
+
+  const canPublishAnimals = (member: OrgTeamMember) =>
+    member.permissions?.includes('animals.publish') ?? false;
+
+  const togglePublish = (member: OrgTeamMember) => {
+    const granting = !canPublishAnimals(member);
+    return act(
+      () =>
+        client.request(`/org/members/${member.userId}/permissions`, {
+          method: 'PUT',
+          json: { permissions: granting ? ['animals.publish'] : [] },
+        }),
+      granting
+        ? `${member.displayName} ya puede publicar animales`
+        : `${member.displayName} ya no publica animales`,
+      'No se pudo cambiar el permiso',
+    );
+  };
 
   function removeMember(member: OrgTeamMember) {
     if (
@@ -384,6 +403,16 @@ export function OrgMembersPage() {
                               </option>
                             ))}
                           </select>
+                          {member.roles.includes(Role.Veterinarian) && (
+                            <label className="flex items-center gap-1.5 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={canPublishAnimals(member)}
+                                onChange={() => void togglePublish(member)}
+                              />
+                              Puede publicar animales
+                            </label>
+                          )}
                           <Button size="sm" variant="outline" onClick={() => removeMember(member)}>
                             Retirar
                           </Button>

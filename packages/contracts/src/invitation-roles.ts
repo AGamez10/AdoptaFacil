@@ -47,6 +47,8 @@ const ORG_ROLE_COPY: Partial<Record<Role, InvitationRoleCopy>> = {
       'Registrar animales y actualizar sus fichas e historia clínica',
       'Evaluar solicitudes de adopción, contratos, entregas y seguimientos',
       'Crear campañas, publicar evidencias y necesidades de recursos',
+      'Encargar tareas y animales a cargo a otras personas del equipo',
+      'Registrar cobros de custodia según la tarifa del contrato; anularlos o devolverlos lo decide un administrador',
       'Consultar las donaciones recibidas',
     ],
   },
@@ -57,7 +59,8 @@ const ORG_ROLE_COPY: Partial<Record<Role, InvitationRoleCopy>> = {
       'Registrar y actualizar la historia clínica, vacunas y tratamientos',
       'Atender los recordatorios de salud de cada animal',
       'Registrar la evaluación de comportamiento antes de una adopción',
-      'Actualizar las fichas de los animales',
+      'Actualizar las fichas y marcar a un animal como apto para adopción',
+      'Publicarlo en el portal lo hace un administrador u operador, salvo que te den ese permiso',
     ],
   },
   [Role.ReadOnlyAuditor]: {
@@ -73,18 +76,19 @@ const ORG_ROLE_COPY: Partial<Record<Role, InvitationRoleCopy>> = {
     label: 'Voluntario/a',
     summary: 'Harás parte del equipo de voluntariado de la organización.',
     duties: [
-      'Tener tu cuenta dentro del equipo de la organización',
-      'Ver el estado de la organización y la vista previa de su portal',
-      'La organización te asignará tus tareas; este cargo no da acceso a datos de animales, donantes ni adoptantes',
+      'Ver tus tareas y la ficha básica de los animales a tu cargo',
+      'Registrar sus cuidados: paseos, alimentación, limpieza y observaciones',
+      'Inscribirte a jornadas, registrar tus horas y descargar tus certificados',
+      'Este cargo no da acceso a datos de adoptantes ni donantes',
     ],
   },
   [Role.TemporaryCollaborator]: {
     label: 'Colaborador/a temporal',
     summary: 'Apoyarás a la organización por un tiempo definido.',
     duties: [
-      'Tener tu cuenta dentro del equipo de la organización',
+      'Ver y completar las tareas que te encarguen, y cuidar a los animales a tu cargo',
       'Ver el estado de la organización y la vista previa de su portal',
-      'Este cargo no da acceso a datos de animales, donantes ni adoptantes',
+      'Este cargo no da acceso a datos de adoptantes ni donantes',
     ],
   },
   [Role.PlatformAdmin]: {
