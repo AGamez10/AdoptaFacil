@@ -132,7 +132,13 @@ describe('OrgPublicPage — rich public portal', () => {
     expect(screen.queryByText('RTE vigente')).not.toBeInTheDocument();
     expect(screen.queryByText('Formalizada')).not.toBeInTheDocument();
     expect(screen.queryByText(/Verificación nivel/)).not.toBeInTheDocument();
-    expect(document.title).toBe('Refugio Patitas · AdoptaFácil');
+    expect(document.title).toBe(
+      'Refugio Patitas: perros y gatos en adopción en Bogotá · AdoptaFácil',
+    );
+    const ld = Array.from(document.head.querySelectorAll('script[type="application/ld+json"]')).map(
+      (node) => JSON.parse(node.textContent ?? '{}') as { '@type'?: string },
+    );
+    expect(ld.map((block) => block['@type'])).toEqual(['AnimalShelter', 'BreadcrumbList']);
   });
 
   it('shows the org-type badge with its label when the projection carries the type (T-030)', async () => {

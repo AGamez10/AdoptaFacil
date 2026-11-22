@@ -6,6 +6,8 @@ import { PublicFooter, PublicNavbar } from '../../../shell/layout';
 import { listPublicVolunteerOpportunities } from '../api/public-volunteering';
 import { VolunteerOpportunityCard } from '../components/volunteer-opportunity-card';
 import { OPPORTUNITY_QUERY_PARAM } from '../model/volunteering-view';
+import { STATIC_PAGES } from '../../../seo/page-meta.js';
+import { useSeo } from '../../../seo/seo';
 
 type ListState = 'loading' | 'ready' | 'error';
 // Tope del backend (`public_volunteer_opportunities` acota a 50).
@@ -24,6 +26,7 @@ export function PublicVolunteeringPage() {
   const [state, setState] = useState<ListState>('loading');
   const [search] = useSearchParams();
   const highlightedId = search.get(OPPORTUNITY_QUERY_PARAM);
+  useSeo({ ...STATIC_PAGES['/voluntariados'], path: '/voluntariados' });
 
   useEffect(() => {
     let active = true;

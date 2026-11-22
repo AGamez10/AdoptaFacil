@@ -6,6 +6,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["SITE_URL", "SEO_API_URL", "SEO_LOCALE"],
       "outputs": ["dist/**"]
     },
     "lint": {

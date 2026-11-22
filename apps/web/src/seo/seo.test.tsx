@@ -9,9 +9,15 @@ import {
   animalDescription,
   animalTitle,
   animalUrlSegment,
+  campaignDescription,
+  campaignTitle,
   parseAnimalUrlSegment,
+  portalDescription,
+  portalTitle,
   publicAnimalPath,
+  shelterLd,
 } from './page-meta.js';
+import caddyfile from '../../../../deploy/Caddyfile?raw';
 import { breadcrumbLd, useSeo } from './seo';
 
 function Probe({ noindex = false }: { noindex?: boolean }) {
@@ -158,5 +164,58 @@ describe('URL pública de un animal (sin id interno)', () => {
     for (const bad of [undefined, '', 'luna', 'luna-k7m2qp8', 'luna-k7m2qp8i', "' OR 1=1 --"]) {
       expect(parseAnimalUrlSegment(bad)).toBeNull();
     }
+  });
+});
+
+describe('portal y campañas (SEO)', () => {
+  const org = {
+    name: 'Fundación Patitas',
+    slug: 'patitas',
+    logoUrl: 'https://cdn.test/logo.png',
+    coverPhotos: ['https://cdn.test/portada.jpg'],
+    location: { city: 'Cali', department: 'Valle del Cauca', address: 'Calle 1 # 2-3' },
+    socialLinks: { instagram: 'https://instagram.com/patitas', facebook: 'javascript:alert(1)' },
+  };
+
+  it('titula el portal con su ciudad y describe con datos reales si no hay texto propio', () => {
+    expect(portalTitle(org)).toBe('Fundación Patitas: perros y gatos en adopción en Cali');
+    expect(portalDescription(org, 12)).toMatch(
+      /^12 animales esperan hogar con Fundación Patitas en Cali\./,
+    );
+    const long = 'Rescatamos perros y gatos en Cali desde 2015. '.repeat(10);
+    const own = portalDescription({ ...org, description: long });
+    expect(own.length).toBeLessThanOrEqual(155);
+    expect(own.endsWith('…')).toBe(true);
+  });
+
+  it('AnimalShelter con ciudad y departamento, nunca la dirección exacta ni enlaces no https', () => {
+    const ld = shelterLd(org, '/o/patitas', (path) => `https://adoptafacil.test${path}`);
+    expect(ld).toMatchObject({
+      '@type': 'AnimalShelter',
+      url: 'https://adoptafacil.test/o/patitas',
+      address: { addressLocality: 'Cali', addressRegion: 'Valle del Cauca', addressCountry: 'CO' },
+      sameAs: ['https://instagram.com/patitas'],
+    });
+    expect(JSON.stringify(ld)).not.toContain('Calle 1');
+    expect(JSON.stringify(ld)).not.toContain('javascript:');
+  });
+
+  it('describe una campaña con su meta y su avance en pesos', () => {
+    const campaign = {
+      title: 'Cirugía de Toby',
+      organizationName: 'Patitas',
+      goalAmount: 1500000,
+      raisedAmount: 300000,
+    };
+    expect(campaignTitle(campaign)).toBe('Cirugía de Toby · Campaña de Patitas');
+    expect(campaignDescription(campaign)).toContain('Meta $1.500.000, van $300.000.');
+  });
+});
+
+describe('despliegue (Caddy) del HTML prerenderizado', () => {
+  it('sirve /ruta/index.html para /ruta y el cascarón app.html para lo demás', () => {
+    // Antes `try_files {path} /index.html`: /adoptar/perros no casaba con su
+    // carpeta y TODA URL respondía el HTML de la portada a los buscadores.
+    expect(caddyfile).toMatch(/try_files \{path\} \{path\}\/index\.html \/app\.html/);
   });
 });

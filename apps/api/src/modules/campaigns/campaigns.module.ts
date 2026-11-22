@@ -34,6 +34,6 @@ import { PublicOrgCampaignsController } from './public-org-campaigns.controller'
     CampaignFundingService,
     PublicCampaignsService,
   ],
-  exports: [CampaignFundingService],
+  exports: [CampaignFundingService, PublicCampaignsService],
 })
 export class CampaignsModule {}
