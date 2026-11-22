@@ -161,6 +161,9 @@ export const PORTAL_TEMPLATE_IDS = [
   'constelacion',
   'portada',
   'hilo',
+  // Serie moderna (2026-11-22): dos gratuitas.
+  'brisa',
+  'bento',
   // Premium (plan Crece o Pro, entitlement `portalPremiumDesigns`).
   'album',
   'linterna',
@@ -169,6 +172,9 @@ export const PORTAL_TEMPLATE_IDS = [
   'terminal',
   // Premium con video de portada largo (30 a 60 s) como eje de toda la página.
   'documental',
+  // Serie moderna (2026-11-22): dos de pago.
+  'halo',
+  'prisma',
 ] as const;
 export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
@@ -313,7 +319,21 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     tagline: 'Neo-brutalista: un hilo recorre la página y stickers con física.',
     // Decisión del cliente (2026-11-15): pasa a Pro.
     tier: 'paid',
-  }, // Premium: dos experiencias (clara y oscura) sobre las mismas secciones.
+  },
+  // Serie moderna (2026-11-22): APIs web actuales, livianas y con mejora progresiva.
+  {
+    id: 'brisa',
+    name: 'Brisa',
+    tagline: 'Luminosa y aireada: fotos grandes, vidrio suave y tu color como una aurora.',
+    tier: 'free',
+  },
+  {
+    id: 'bento',
+    name: 'Bento',
+    tagline: 'Todo en bloques, como una app moderna: cada sección es una pieza que encaja.',
+    tier: 'free',
+  },
+  // Premium: dos experiencias (clara y oscura) sobre las mismas secciones.
   {
     id: 'album',
     name: 'Álbum',
@@ -349,6 +369,20 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     name: 'Documental',
     tagline:
       'Tu video abre el portal a pantalla completa y te acompaña mientras bajas: de día, una película de campo; de noche, una sala de cine.',
+    tier: 'paid',
+  },
+  {
+    id: 'halo',
+    name: 'Halo',
+    tagline:
+      'Como la página de lanzamiento de un producto: tu portada se abre al bajar y cada animal entra con luz propia. De día y de noche.',
+    tier: 'paid',
+  },
+  {
+    id: 'prisma',
+    name: 'Prisma',
+    tagline:
+      'Vidrio y luz de colores: fichas que se inclinan al pasar y un catálogo que se reacomoda con suavidad. Cristal y neón.',
     tier: 'paid',
   },
 ];
@@ -443,12 +477,16 @@ export const PORTAL_TEMPLATE_OPTIONS: Readonly<
   constelacion: [],
   portada: [],
   hilo: [],
+  brisa: [],
+  bento: [],
   album: [],
   linterna: [],
   revelado: [],
   velitas: [],
   terminal: [],
   documental: [],
+  halo: [],
+  prisma: [],
 };
 
 /**
