@@ -69,18 +69,21 @@ const CSS = `
 .tpl-bento .bn-f{grid-column:11/13;display:flex;flex-direction:column;justify-content:space-between;gap:10px;background:var(--brand);color:var(--brand-ink)}
 .tpl-bento .bn-f svg{width:clamp(26px,22cqi,40px)}
 .tpl-bento .bn-f b{font-weight:800;font-size:clamp(20px,16cqi,30px);letter-spacing:-.03em;line-height:1}
-.tpl-bento .bn-f .bn-lab{color:inherit;opacity:.8}
+.tpl-bento .bn-f .bn-lab{color:inherit}
 @media (max-width:1000px){.tpl-bento .bn-a,.tpl-bento .bn-b{grid-column:1/-1}.tpl-bento .bn-b{min-height:300px;grid-row:span 1}.tpl-bento .bn-a{grid-row:span 1}.tpl-bento .bn-c,.tpl-bento .bn-d,.tpl-bento .bn-e,.tpl-bento .bn-f{grid-column:span 6}}
 @media (max-width:560px){.tpl-bento .bn-grid{grid-auto-rows:minmax(132px,auto)}.tpl-bento .bn-d{grid-column:1/-1}.tpl-bento .bn-c,.tpl-bento .bn-e,.tpl-bento .bn-f{grid-column:span 6}.tpl-bento .bn-c{grid-column:1/-1}}
 
 .tpl-bento .k-sec{padding-block:clamp(36px,5vw,72px)}
 .tpl-bento .k-hd{margin-bottom:clamp(18px,2.4vw,30px)}
-.tpl-bento .k-eb{font-size:12px;letter-spacing:.14em}
+.tpl-bento .k-eb{font-size:12px;letter-spacing:.14em;color:color-mix(in oklab,var(--brand) 60%,var(--ink))}
+.tpl-bento .k-nd .k,.tpl-bento .k-nd a,.tpl-bento .k-lnk{color:color-mix(in oklab,var(--brand) 60%,var(--ink))}
 .tpl-bento .k-h2{font-size:clamp(32px,4.4vw,60px);line-height:.98;letter-spacing:-.05em;font-weight:800}
 .tpl-bento .k-acts{gap:var(--gap)}
 .tpl-bento .k-act{border-radius:var(--k-r);box-shadow:var(--k-sh);min-height:190px}
+.tpl-bento .k-act:first-child p,.tpl-bento .k-act:first-child .n{opacity:1}
 .tpl-bento .k-needs,.tpl-bento .k-prods,.tpl-bento .k-revs{gap:var(--gap)}
 .tpl-bento .k-help{border-radius:36px}
+.tpl-bento .k-help p{opacity:1}
 .tpl-bento .k-contact{box-shadow:var(--k-sh)}
 .tpl-bento .k-empty{background:var(--card)}
 
@@ -92,7 +95,7 @@ const CSS = `
 .tpl-bento .k-chips{display:flex;gap:4px;flex-wrap:wrap}
 .tpl-bento .k-chip{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;border:0;cursor:pointer;background:transparent;font-weight:700;font-size:14px}
 .tpl-bento .k-chip:hover{background:var(--tint)}
-.tpl-bento .k-chip span{font-size:12px;opacity:.55;font-variant-numeric:tabular-nums}
+.tpl-bento .k-chip span{font-size:12px;opacity:.8;font-variant-numeric:tabular-nums}
 .tpl-bento .k-chip[aria-pressed="true"]{background:var(--ink);color:#fff}
 .tpl-bento .k-sort{margin-left:auto}
 .tpl-bento .k-sort select{height:44px;border-radius:999px;border:0;padding:0 14px;background:var(--tint);font-weight:700;font-size:14px;cursor:pointer}
@@ -143,6 +146,8 @@ const CSS = `
     @keyframes bnIn{from{opacity:0;scale:.92;translate:0 30px}}
     .tpl-bento .bn-meter i{animation:bnFill linear both;animation-timeline:view();animation-range:entry 30% cover 40%}
     @keyframes bnFill{from{scale:0 1}}
+    /* En la portada la barra ya está a la vista: se llena por tiempo, no por scroll. */
+    .tpl-bento .bn-hero .bn-meter i{animation:bnFill 1.2s .3s cubic-bezier(.2,.8,.2,1) both;animation-timeline:auto}
   }
 }
 `;

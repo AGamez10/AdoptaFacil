@@ -1,4 +1,4 @@
-import type { TplAnimal } from '../engine/model';
+import { EMPTY, type TplAnimal } from '../engine/model';
 import { animalArt, leadImage, leadSource, meta, revealFallback } from '../engine/modern';
 import { pic, premiumDesign, scopedTransition, vtName } from '../engine/premium';
 import { availLine, fmt, logoMark, paw, qs, qsa } from '../engine/runtime';
@@ -16,6 +16,10 @@ const CSS = `
 .tpl-halo{--k-fd:'Geist',system-ui,sans-serif;--k-fw:700;--k-ls:-.045em;--k-r:24px;font-family:'Geist',system-ui,sans-serif;--glow:color-mix(in oklab,var(--brand) 70%,#7AA8FF)}
 .tpl-halo[data-mode=light]{--k-bg:#FBFBFD;--k-ink:#1D1D1F;--k-soft:#6E6E73;--k-line:rgba(0,0,0,.08);--k-card:#FFFFFF;--k-tint:#F2F2F5;--k-sh:0 0 0 1px rgba(0,0,0,.05),0 20px 40px -30px rgba(0,0,0,.25);--hx:.55;color-scheme:light}
 .tpl-halo[data-mode=dark]{--k-bg:#000000;--k-ink:#F5F5F7;--k-soft:#A1A1A6;--k-line:rgba(255,255,255,.1);--k-card:#111113;--k-tint:rgba(255,255,255,.06);--k-sh:0 0 0 1px rgba(255,255,255,.08);--hx:1;color-scheme:dark}
+.tpl-halo[data-mode=light] :is(.k-eb,.k-nd .k,.k-nd a,.k-lnk){color:color-mix(in oklab,var(--brand) 60%,var(--k-ink))!important}
+.tpl-halo[data-mode=dark] :is(.k-eb,.k-nd .k,.k-nd a,.k-lnk){color:color-mix(in oklab,var(--brand) 45%,var(--k-ink))!important}
+.tpl-halo .k-chip span{opacity:.85}
+@media (max-width:860px){.tpl-halo .k-revs{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr);overflow:visible}}
 .tpl-halo .rv{--i:0}
 .tpl-halo .hl-top{position:sticky;top:0;z-index:40;isolation:isolate}
 .tpl-halo .hl-top::before{content:"";position:absolute;inset:0;z-index:-1;background:color-mix(in srgb,var(--k-bg) 80%,transparent);box-shadow:0 1px 0 var(--k-line)}
@@ -157,7 +161,7 @@ export const halo = premiumDesign({
     ].join('');
     const rail =
       n >= 4
-        ? `<div class="hl-railw"><div class="w"><div class="hl-nb"><button type="button" data-rail="-1" aria-label="Anteriores">${pic.back}</button><button type="button" data-rail="1" aria-label="Siguientes">${pic.arrow}</button></div></div><div class="hl-rail" id="hl-rail" role="region" aria-label="Algunos de los que esperan hogar">${ANIMALS.slice(0, 10).map(slide).join('')}</div></div>`
+        ? `<div class="hl-railw"><div class="w"><div class="hl-nb"><button type="button" data-rail="-1" aria-label="Anteriores">${pic.back}</button><button type="button" data-rail="1" aria-label="Siguientes">${pic.arrow}</button></div></div><div class="hl-rail" id="hl-rail" tabindex="0" role="region" aria-label="Algunos de los que esperan hogar">${ANIMALS.slice(0, 10).map(slide).join('')}</div></div>`
         : '';
     return `
 <header class="hl-top"><div class="w"><a class="hl-id" href="#hl-top"><i>${logoMark(m)}</i><b>${ORG.name}</b></a><nav class="hl-nav" aria-label="Secciones"><a href="#hl-cat">Adopta</a><a href="#hl-camp">Campaña</a><a href="#hl-ldg">Transparencia</a></nav>${P.modeBtn()}<a class="hl-don" href="${ORG.donateHref}">Donar</a></div></header>
@@ -173,7 +177,7 @@ ${P.acts(P.hd('Cómo participar', 'Tres maneras de cambiar una vida'))}
 <section class="k-sec" data-sec="animales" id="hl-cat">
   <div class="w">${P.hd('En adopción', n === 1 ? 'Te está esperando.' : 'Te están esperando.', '', n ? 'Desliza la vitrina o busca en el catálogo completo.' : '')}</div>
   ${rail}
-  <div class="w" style="margin-top:clamp(24px,3vw,40px)">${n ? P.catControls('hl-f', 'Busca por nombre o raza') : ''}<div class="hl-grid" id="hl-grid"></div><button type="button" class="k-more" id="hl-more" hidden></button></div>
+  <div class="w" style="margin-top:clamp(24px,3vw,40px)">${n ? P.catControls('hl-f', 'Busca por nombre o raza') : ''}<div class="hl-grid" id="hl-grid">${n ? '' : `<p class="k-empty">${EMPTY.animales}</p>`}</div><button type="button" class="k-more" id="hl-more" hidden></button></div>
 </section>
 ${P.campaign(
   () => `<section class="w k-sec" data-sec="campana" id="hl-camp"><div class="hl-camp">
@@ -209,7 +213,10 @@ ${P.foot()}`;
     const btns = qsa<HTMLButtonElement>(app, '[data-rail]');
     const sync = () => {
       const max = rail.scrollWidth - rail.clientWidth - 2;
-      btns.forEach((b) => (b.disabled = b.dataset.rail === '-1' ? rail.scrollLeft <= 2 : rail.scrollLeft >= max));
+      btns.forEach(
+        (b) =>
+          (b.disabled = b.dataset.rail === '-1' ? rail.scrollLeft <= 2 : rail.scrollLeft >= max),
+      );
     };
     btns.forEach((b) =>
       b.addEventListener(

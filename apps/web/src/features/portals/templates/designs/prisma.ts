@@ -1,4 +1,4 @@
-import type { TplAnimal } from '../engine/model';
+import { EMPTY, type TplAnimal } from '../engine/model';
 import { animalArt, leadSource, meta, revealFallback } from '../engine/modern';
 import { pic, premiumDesign, scopedTransition, vtName } from '../engine/premium';
 import { availLine, fmt, logoMark, paw, qs } from '../engine/runtime';
@@ -17,6 +17,10 @@ const CSS = `
 .tpl-prisma{--k-fd:'Sora',system-ui,sans-serif;--k-fw:700;--k-ls:-.04em;--k-r:26px;font-family:'Sora',system-ui,sans-serif;--c1:var(--brand);--c2:color-mix(in oklab,var(--brand) 30%,#8B5CF6);--c3:color-mix(in oklab,var(--brand) 25%,#F472B6);--c4:color-mix(in oklab,var(--brand) 25%,#38BDF8)}
 .tpl-prisma[data-mode=light]{--k-bg:#F6F5FB;--k-ink:#17142A;--k-soft:#5F5A78;--k-line:rgba(23,20,42,.1);--k-card:rgba(255,255,255,.78);--k-tint:rgba(23,20,42,.05);--k-sh:0 0 0 1px rgba(255,255,255,.7),0 1px 0 rgba(23,20,42,.04),0 24px 48px -30px rgba(52,30,120,.35);--edge:rgba(255,255,255,.9);--glass:rgba(255,255,255,.55);color-scheme:light}
 .tpl-prisma[data-mode=dark]{--k-bg:#07060D;--k-ink:#F3F1FF;--k-soft:#A7A2C4;--k-line:rgba(190,180,255,.14);--k-card:rgba(22,19,40,.82);--k-tint:rgba(190,180,255,.08);--k-sh:0 0 0 1px rgba(190,180,255,.14),0 30px 60px -30px rgba(0,0,0,.8);--edge:rgba(190,180,255,.28);--glass:rgba(20,17,36,.55);color-scheme:dark}
+.tpl-prisma[data-mode=light] :is(.k-eb,.k-nd .k,.k-nd a,.k-lnk){color:color-mix(in oklab,var(--brand) 60%,var(--k-ink))!important}
+.tpl-prisma[data-mode=dark] :is(.k-eb,.k-nd .k,.k-nd a,.k-lnk){color:color-mix(in oklab,var(--brand) 45%,var(--k-ink))!important}
+.tpl-prisma .k-chip span{opacity:.85}
+@media (max-width:860px){.tpl-prisma .k-revs{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr);overflow:visible}}
 .tpl-prisma .rv{--i:0}
 .tpl-prisma .pr-bg{position:absolute;inset:0 0 auto;height:min(1100px,140vh);overflow:hidden;pointer-events:none;z-index:0}
 .tpl-prisma .pr-bg i{position:absolute;border-radius:50%;will-change:transform;animation:prFloat 24s ease-in-out infinite alternate}
@@ -78,6 +82,7 @@ const CSS = `
 
 .tpl-prisma .k-act,.tpl-prisma .k-nd,.tpl-prisma .k-pr,.tpl-prisma .k-revs figure,.tpl-prisma .k-contact,.tpl-prisma .k-empty{box-shadow:var(--k-sh);background:var(--k-card)}
 .tpl-prisma .k-act:first-child{background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff}
+.tpl-prisma .k-act:first-child p{color:#fff;opacity:.92}
 .tpl-prisma .k-help{background:conic-gradient(from 200deg at 50% 120%,var(--c1),var(--c2),var(--c3),var(--c4),var(--c1));color:#fff}
 .tpl-prisma .k-help .k-btn{background:#fff;color:#17142A!important}
 .tpl-prisma .k-btn{border-radius:18px;background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff!important}
@@ -172,7 +177,7 @@ ${P.tbar()}
   <div class="pr-fan" id="pr-fan"><div class="pr-stack">${fan}</div></div>
 </div></section>
 ${P.acts(P.hd('Cómo participar', 'Elige tu forma de ayudar'))}
-<section class="w k-sec" data-sec="animales" id="pr-cat">${P.hd('En adopción', n === 1 ? 'Quién espera' : 'Quiénes esperan', '', n ? 'Pasa el cursor sobre una ficha y elige con calma.' : '')}${n ? P.catControls('pr-f', 'Busca por nombre o raza') : ''}<div class="pr-grid" id="pr-grid"></div><button type="button" class="k-more" id="pr-more" hidden></button></section>
+<section class="w k-sec" data-sec="animales" id="pr-cat">${P.hd('En adopción', n === 1 ? 'Quién espera' : 'Quiénes esperan', '', n ? 'Pasa el cursor sobre una ficha y elige con calma.' : '')}${n ? P.catControls('pr-f', 'Busca por nombre o raza') : ''}<div class="pr-grid" id="pr-grid">${n ? '' : `<p class="k-empty">${EMPTY.animales}</p>`}</div><button type="button" class="k-more" id="pr-more" hidden></button></section>
 ${P.campaign(
   () => `<section class="w k-sec" data-sec="campana" id="pr-camp"><div class="pr-camp rv">
   <div class="tx"><p class="k-eb">Campaña activa${CAMPAIGN.category ? ` · ${CAMPAIGN.category}` : ''}</p><h2>${CAMPAIGN.title}</h2>${CAMPAIGN.description ? `<p class="k-sub" style="margin:0">${CAMPAIGN.description}</p>` : ''}
@@ -213,8 +218,14 @@ ${P.foot()}`;
       if (!e) return;
       if (fan && fan.contains(e.target as Node)) {
         const r = fan.getBoundingClientRect();
-        fan.style.setProperty('--rx', `${(((e.clientY - r.top) / r.height - 0.5) * -10).toFixed(2)}deg`);
-        fan.style.setProperty('--ry', `${(((e.clientX - r.left) / r.width - 0.5) * 14).toFixed(2)}deg`);
+        fan.style.setProperty(
+          '--rx',
+          `${(((e.clientY - r.top) / r.height - 0.5) * -10).toFixed(2)}deg`,
+        );
+        fan.style.setProperty(
+          '--ry',
+          `${(((e.clientX - r.left) / r.width - 0.5) * 14).toFixed(2)}deg`,
+        );
       }
       const c = (e.target as Element | null)?.closest<HTMLElement>('.pr-card');
       if (c) {

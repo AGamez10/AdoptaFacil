@@ -95,7 +95,7 @@ const CSS = `
 .tpl-brisa .k-q input{border:0;outline:0;background:transparent;min-width:0;width:100%;font-size:16px}
 .tpl-brisa .k-chips{display:flex;gap:6px;flex-wrap:wrap}
 .tpl-brisa .k-chip{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;border:0;cursor:pointer;background:#fff;box-shadow:0 0 0 1px var(--line);font-weight:600;font-size:15px;transition:background .2s,color .2s}
-.tpl-brisa .k-chip span{font-size:12px;opacity:.6;font-variant-numeric:tabular-nums}
+.tpl-brisa .k-chip span{font-size:12px;opacity:.8;font-variant-numeric:tabular-nums}
 .tpl-brisa .k-chip[aria-pressed="true"]{background:var(--ink);color:#fff;box-shadow:none}
 .tpl-brisa .k-sort select{height:44px;border-radius:999px;border:0;padding:0 14px;background:#fff;box-shadow:0 0 0 1px var(--line);font-weight:600;font-size:15px;cursor:pointer}
 .tpl-brisa .k-cnt{margin:18px 0 22px;font-size:14px;color:var(--soft)}
@@ -168,8 +168,7 @@ const PAGE = 12;
 export const brisa: TemplateDesign = {
   id: 'brisa',
   kit: true,
-  fonts:
-    'family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Figtree:wght@400..700',
+  fonts: 'family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Figtree:wght@400..700',
   css: CSS,
   html(m, KIT) {
     const { ORG, ANIMALS, CAMPAIGN, SHOW } = m;
@@ -243,7 +242,7 @@ ${KIT.help()}
     const { m, motion } = env;
     const hdr = qs(app, '.br-hdr');
     // Sin animaciones ligadas al scroll, la cabecera se asienta con un observador.
-    if (hdr && typeof CSS !== 'undefined' && !CSS.supports?.('animation-timeline: scroll()')) {
+    if (hdr && !window.CSS?.supports?.('animation-timeline: scroll()')) {
       const top = qs(app, '#br-top');
       if (top)
         motion.observe([top], (en) => hdr.classList.toggle('on', en.intersectionRatio < 0.9), {

@@ -66,10 +66,15 @@ export function modernCatalog(
   env: TemplateEnv,
   o: Omit<CatOptions, 'transition'> & { signal?: AbortSignal },
 ) {
-  return bindCatalog(app, env, { signal: o.signal ?? env.motion.signal }, {
-    ...o,
-    transition: scopedTransition,
-  });
+  return bindCatalog(
+    app,
+    env,
+    { signal: o.signal ?? env.motion.signal },
+    {
+      ...o,
+      transition: scopedTransition,
+    },
+  );
 }
 
 /** Etiqueta corta "Perra · 2 años". */
