@@ -340,6 +340,8 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
     // Pro (p. ej. Documental) llevan la marca y el aviso de la promoción.
     expect(screen.getByTestId('template-option-clasica')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-option-carnet')).toHaveTextContent('Gratis');
+    expect(screen.getByTestId('template-option-brisa')).toHaveTextContent('Gratis');
+    expect(screen.getByTestId('template-option-bento')).toHaveTextContent('Gratis');
     expect(screen.getByTestId('template-upsell')).toHaveTextContent(/incluidas gratis/i);
     // La sección Pro aparece UNA sola vez y agrupa todas las plantillas de pago.
     expect(screen.getAllByTestId('template-group-pro')).toHaveLength(1);
@@ -356,6 +358,8 @@ describe('PortalThemePage — plantilla del portal (Ola 3)', () => {
       'revelado',
       'velitas',
       'terminal',
+      'halo',
+      'prisma',
     ]) {
       expect(within(pro).getByTestId(`template-option-${id}`)).toHaveTextContent('Pro');
     }

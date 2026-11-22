@@ -314,13 +314,50 @@ export interface CatOptions {
   sort?: CatalogFilter['sort'];
   render: (shown: TplAnimal[], all: TplAnimal[]) => string;
   after?: (host: HTMLElement, shown: TplAnimal[]) => void;
+  /**
+   * Envuelve cada repintado que pide el visitante (filtro, búsqueda, orden,
+   * "ver más") para animarlo, p. ej. con {@link scopedTransition}. Sin él, el
+   * catálogo se repinta de inmediato.
+   */
+  transition?: (host: HTMLElement, update: () => void) => void;
 }
+
+type ScopedVT = HTMLElement & {
+  startViewTransition?: (cb: () => void) => { ready: Promise<void> };
+};
+
+/**
+ * Transición de vista ACOTADA a un elemento (`element.startViewTransition`):
+ * solo se anima ese bloque y el resto de la página sigue interactivo, sin chocar
+ * con las transiciones entre rutas de la app. Donde el navegador no la tiene, o
+ * el visitante pidió menos movimiento, el cambio se aplica al instante.
+ */
+export function scopedTransition(el: HTMLElement, update: () => void): void {
+  const scope = el as ScopedVT;
+  const reduce =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce || typeof scope.startViewTransition !== 'function') return update();
+  try {
+    scope.startViewTransition(update).ready.catch(() => undefined);
+  } catch {
+    update();
+  }
+}
+
+/** Nombre de transición seguro para un id (solo letras, dígitos y guiones). */
+export const vtName = (prefix: string, id: string): string =>
+  `${prefix}-${id.replace(/[^A-Za-z0-9-]/g, '')}`;
 
 /**
  * Catálogo con búsqueda, especie (solo las que existen), orden y páginas: así
  * una organización con 100 animales no pinta 100 tarjetas de una vez.
  */
-export function bindCatalog(app: HTMLElement, env: TemplateEnv, fx: Fx, o: CatOptions) {
+export function bindCatalog(
+  app: HTMLElement,
+  env: TemplateEnv,
+  fx: Pick<Fx, 'signal'>,
+  o: CatOptions,
+) {
   const { m, catalog } = env;
   const root = qs(app, '#' + o.id);
   const host = qs(app, o.grid);
@@ -364,6 +401,8 @@ export function bindCatalog(app: HTMLElement, env: TemplateEnv, fx: Fx, o: CatOp
     more.innerHTML = `${o.moreLabel || 'Ver'} ${Math.min(o.page, L.length - k)} más <span>quedan ${L.length - k}</span>`;
     o.after?.(host, L.slice(0, k));
   };
+  const run = (keep = false) =>
+    o.transition ? o.transition(host, () => paint(keep)) : paint(keep);
   const press = (b: Element | null) =>
     qsa(chips, '.k-chip').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   chips.addEventListener(
@@ -374,7 +413,7 @@ export function bindCatalog(app: HTMLElement, env: TemplateEnv, fx: Fx, o: CatOp
       press(b);
       f.sp = b.dataset.k === 'nuevo' ? '' : b.dataset.k;
       f.isNew = b.dataset.k === 'nuevo';
-      paint();
+      run();
     },
     { signal },
   );
@@ -385,7 +424,7 @@ export function bindCatalog(app: HTMLElement, env: TemplateEnv, fx: Fx, o: CatOp
       clearTimeout(t);
       t = window.setTimeout(() => {
         f.q = q.value;
-        paint();
+        run();
       }, 140);
     },
     { signal },
@@ -394,7 +433,7 @@ export function bindCatalog(app: HTMLElement, env: TemplateEnv, fx: Fx, o: CatOp
     'change',
     (e) => {
       f.sort = (e.target as HTMLSelectElement).value as CatalogFilter['sort'];
-      paint();
+      run();
     },
     { signal },
   );
@@ -402,7 +441,7 @@ export function bindCatalog(app: HTMLElement, env: TemplateEnv, fx: Fx, o: CatOp
     'click',
     () => {
       n += o.page;
-      paint(true);
+      run(true);
     },
     { signal },
   );
@@ -415,7 +454,7 @@ export function bindCatalog(app: HTMLElement, env: TemplateEnv, fx: Fx, o: CatOp
       f.isNew = false;
       q.value = '';
       press(qs(chips, '.k-chip'));
-      paint();
+      run();
     },
     { signal },
   );
