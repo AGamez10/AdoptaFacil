@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { reportQuery } from '../api/custody-api';
-import { formatDate, missingDataOf, parseCopInput } from './custody-view';
+import {
+  formatDate,
+  missingDataOf,
+  parseCopInput,
+  paymentLinkMessage,
+  whatsappShareUrl,
+} from './custody-view';
 
 describe('custody view model', () => {
   it('lee valores en pesos con o sin puntos y rechaza lo que no es un entero positivo', () => {
@@ -35,5 +41,20 @@ describe('custody view model', () => {
     expect(reportQuery({ custody: 'in_custody', includeInactive: true })).toBe(
       '?custody=in_custody&includeInactive=true',
     );
+  });
+
+  it('arma el mensaje del enlace de pago sin datos del responsable y lo pasa a WhatsApp', () => {
+    const url = 'https://adoptafacil.test/pagar/guarderia/abc_123';
+    const message = paymentLinkMessage(
+      { animalName: 'Luna', description: 'Mensualidad noviembre', balanceCop: 350000 },
+      url,
+    );
+    expect(message).toContain('Mensualidad noviembre');
+    expect(message).toContain('Luna');
+    expect(message).toMatch(/350\.000/);
+    expect(message.endsWith(url)).toBe(true);
+    const wa = whatsappShareUrl(message);
+    expect(wa.startsWith('https://wa.me/?text=')).toBe(true);
+    expect(decodeURIComponent(wa.slice('https://wa.me/?text='.length))).toBe(message);
   });
 });

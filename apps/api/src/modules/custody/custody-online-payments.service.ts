@@ -20,16 +20,19 @@ import {
   CUSTODY_ONLINE_PAYMENT_TERMS_VERSION,
   type CollectionResult,
   type CustodyOnlinePaymentSettings,
+  Role,
   type CustodyPaymentLink,
   type CustodyPublicCheckout,
   type CustodyPublicPayment,
   type CustodyPublicPaymentState,
   type CustodyPublicPaymentStatus,
+  type MercadoPagoCollectorCredentials,
   type NormalizedWebhookEvent,
   type PaymentPort,
   type WebhookVerificationContext,
 } from '@adoptafacil/contracts';
 import type { Env } from '../../config/env.validation';
+import { type InboxNotice, InboxService } from '../../core/notifications/inbox/inbox.service';
 import { PAYMENT_PORT } from '../../core/payments/payment.port';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { MercadoPagoConnectionsService } from '../payments/mercadopago-connections.service';
@@ -48,6 +51,17 @@ export interface CustodyOnlinePaymentOutcome {
 const LINK_GONE = 'Este enlace de pago no existe o ya no está vigente.';
 const NOT_COLLECTING =
   'Esta organización no está recibiendo pagos en línea en este momento. Escríbele para acordar otro medio de pago.';
+/** Dónde ve el equipo la cuenta de custodia (vencimientos y pagos). */
+const CUSTODY_HREF = '/organizacion/custodia';
+/** Quiénes reciben los avisos de dinero de guardería: los mismos que registran cobros. */
+const CUSTODY_MONEY_ROLES = [Role.Owner, Role.Administrator, Role.Operator] as const;
+
+/** Resultado de confirmar o revertir, con el aviso que se manda al terminar. */
+interface Settled {
+  applied: boolean;
+  notice?: InboxNotice;
+}
+
 /** Nombre que queda en la constancia como quien recibe un pago en línea. */
 const ONLINE_RECEIVER = 'Pago en línea (Mercado Pago)';
 
@@ -83,6 +97,7 @@ export class CustodyOnlinePaymentsService {
     @Inject(PAYMENT_PORT) private readonly payments: PaymentPort,
     config: ConfigService<Env, true>,
     @Optional() private readonly connections?: MercadoPagoConnectionsService,
+    @Optional() private readonly inbox?: InboxService,
   ) {
     this.mercadopago = config.get('PAYMENT_DRIVER', { infer: true }) === 'mercadopago';
     this.webBase = config.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
@@ -460,6 +475,36 @@ export class CustodyOnlinePaymentsService {
       throw new ForbiddenException('Webhook verification failed.');
     }
     if (event.collectionId !== reference) return { matched: true, applied: false };
+    return this.applyVerifiedEvent(organizationId, reference, event, mercadopagoCollector);
+  }
+
+  /**
+   * Conciliación (relectura mensual con el token de la organización): aplica a
+   * un pago de guardería un pago que Mercado Pago ya reportó, igual que si
+   * hubiera llegado su aviso. Cubre el aviso perdido: un pago aprobado que
+   * nunca se registró queda registrado aquí, una sola vez. `matched=false` si
+   * la referencia no es un pago de guardería de ESTA organización.
+   */
+  async applyReadBack(
+    organizationId: string,
+    event: NormalizedWebhookEvent,
+    collector: MercadoPagoCollectorCredentials,
+  ): Promise<CustodyOnlinePaymentOutcome> {
+    const owner = await this.organizationOfReference(event.collectionId);
+    if (owner !== organizationId) return { matched: false, applied: false };
+    return this.applyVerifiedEvent(organizationId, event.collectionId, event, collector);
+  }
+
+  /**
+   * Un evento YA verificado (aviso firmado y releído, o relectura directa con
+   * el token de la organización): confirma, revierte o deja para revisión.
+   */
+  private async applyVerifiedEvent(
+    organizationId: string,
+    reference: string,
+    event: NormalizedWebhookEvent,
+    mercadopagoCollector: MercadoPagoCollectorCredentials | undefined,
+  ): Promise<CustodyOnlinePaymentOutcome> {
     const gatewayPaymentId = event.mercadopagoPayment?.paymentId ?? event.eventId;
 
     if (event.status === 'voided') {
@@ -511,25 +556,25 @@ export class CustodyOnlinePaymentsService {
    * dinero SÍ llegó: no se inventa un pago, queda un aviso para que la
    * organización lo revise y devuelva lo que sobre desde su Mercado Pago.
    */
-  private settle(
+  private async settle(
     organizationId: string,
     reference: string,
     gatewayPaymentId: string,
   ): Promise<boolean> {
-    return this.inOrganization(organizationId, async (tx) => {
+    const result = await this.inOrganization(organizationId, async (tx): Promise<Settled> => {
       await tx.$queryRaw`SELECT 1 FROM custody_online_payments WHERE collection_id = ${reference} FOR UPDATE`;
       const attempt = await tx.custodyOnlinePayment.findUnique({
         where: { collectionId: reference },
         include: { link: { select: { createdByUserId: true } } },
       });
-      if (!attempt || attempt.status !== 'pending') return false;
+      if (!attempt || attempt.status !== 'pending') return { applied: false };
 
       await tx.$queryRaw`SELECT 1 FROM custody_charges WHERE id = ${attempt.chargeId}::uuid FOR UPDATE`;
       const row = await tx.custodyCharge.findUnique({
         where: { id: attempt.chargeId },
         include: CHARGE_INCLUDE,
       });
-      if (!row) return false;
+      if (!row) return { applied: false };
       const balanceCop = this.core.toCharge(row).balanceCop;
       if (row.status === 'cancelled' || balanceCop < attempt.amountCop) {
         await tx.custodyOnlinePayment.update({
@@ -561,7 +606,17 @@ export class CustodyOnlinePaymentsService {
             chargeStatus: row.status,
           },
         });
-        return true;
+        return {
+          applied: true,
+          notice: {
+            kind: 'custody.online_payment_review',
+            tone: 'warning',
+            title: `Revisa un pago en línea de ${row.animal.name}`,
+            body: `Llegó un pago de ${formatCop(attempt.amountCop)} por "${row.description}" que el cobro ya no admite. El dinero está en la cuenta de Mercado Pago de la organización.`,
+            href: CUSTODY_HREF,
+            dedupeKey: `custody_online_review:${attempt.id}`,
+          },
+        };
       }
 
       const written = await this.billing.writePayment(tx, {
@@ -583,8 +638,20 @@ export class CustodyOnlinePaymentsService {
           settledAt: new Date(),
         },
       });
-      return true;
+      return {
+        applied: true,
+        notice: {
+          kind: 'custody.online_payment_received',
+          tone: 'success',
+          title: `Pago en línea recibido por ${row.animal.name}`,
+          body: `${formatCop(attempt.amountCop)} por "${row.description}" llegaron a la cuenta de Mercado Pago de la organización. La constancia ${written.receiptNumber} quedó en la cuenta del responsable.`,
+          href: CUSTODY_HREF,
+          dedupeKey: `custody_online_paid:${attempt.id}`,
+        },
+      };
     });
+    await this.notify(organizationId, result.notice);
+    return result.applied;
   }
 
   /**
@@ -592,12 +659,12 @@ export class CustodyOnlinePaymentsService {
    * y el cobro vuelve a su saldo. La constancia emitida se conserva en el
    * historial, igual que al anular un pago a mano.
    */
-  private reverse(
+  private async reverse(
     organizationId: string,
     reference: string,
     kind: 'refund' | 'chargeback',
   ): Promise<boolean> {
-    return this.inOrganization(organizationId, async (tx) => {
+    const result = await this.inOrganization(organizationId, async (tx): Promise<Settled> => {
       await tx.$queryRaw`SELECT 1 FROM custody_online_payments WHERE collection_id = ${reference} FOR UPDATE`;
       const attempt = await tx.custodyOnlinePayment.findUnique({
         where: { collectionId: reference },
@@ -606,7 +673,7 @@ export class CustodyOnlinePaymentsService {
           payment: { select: { id: true, voidedAt: true } },
         },
       });
-      if (!attempt || attempt.status !== 'approved' || !attempt.payment) return false;
+      if (!attempt || attempt.status !== 'approved' || !attempt.payment) return { applied: false };
       if (!attempt.payment.voidedAt) {
         await this.billing.voidPaymentInTx(tx, {
           paymentId: attempt.payment.id,
@@ -623,7 +690,31 @@ export class CustodyOnlinePaymentsService {
         where: { id: attempt.id },
         data: { status: 'reversed', reversalKind: kind, reversedAt: new Date() },
       });
-      return true;
+      return {
+        applied: true,
+        notice: {
+          kind: 'custody.online_payment_reversed',
+          tone: 'warning',
+          title:
+            kind === 'chargeback'
+              ? 'Contracargo de un pago en línea de guardería'
+              : 'Devolución de un pago en línea de guardería',
+          body: `Mercado Pago informó ${kind === 'chargeback' ? 'un contracargo' : 'la devolución'} de ${formatCop(attempt.amountCop)}. El pago quedó anulado y el cobro volvió a su saldo.`,
+          href: CUSTODY_HREF,
+          dedupeKey: `custody_online_reversed:${attempt.id}`,
+        },
+      };
     });
+    await this.notify(organizationId, result.notice);
+    return result.applied;
+  }
+
+  /**
+   * Aviso al equipo que cobra (dueño, administración y operación) después de
+   * confirmar la transacción. Si falla, el pago ya quedó registrado igual.
+   */
+  private async notify(organizationId: string, notice: InboxNotice | undefined): Promise<void> {
+    if (!notice || !this.inbox) return;
+    await this.inbox.toOrgStaff(organizationId, notice, { roles: CUSTODY_MONEY_ROLES });
   }
 }
