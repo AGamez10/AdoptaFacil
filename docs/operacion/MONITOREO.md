@@ -48,7 +48,21 @@ contenedor redis: exited
 
 - Caddy: acceso en JSON por stdout. API, Postgres, Redis: stdout. Docker los
   rota (10 MB × 5 por servicio). Consultar: `docker compose ... logs -f api`.
-- Pendiente (fuera de este PR): logs estructurados de la API sin datos
-  personales y captura de errores con contexto (p. ej. Sentry autoalojado o
-  GlitchTip), que tocan el arranque de la API (zona del hilo "Arranque seguro y
-  flags").
+- Errores de la API: ver "Alertas de la API" abajo.
+
+## Alertas de la API (auditoría go/no-go 2026-11-23, B1)
+
+La API usa el **mismo** `ALERT_WEBHOOK_URL` de `deploy/.env` (el compose se lo
+pasa a `api` y `worker`). Avisa sola, sin esperar a que un usuario se queje:
+
+| Qué                                 | Cuándo avisa                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| Error 500 (o 503) en cualquier ruta | La primera vez; la misma ruta con el mismo error no se repite en 15 min; máximo 30 por hora |
+| Conciliación de pagos que falla     | Si la cuenta de Mercado Pago de algún refugio no se pudo releer                             |
+| Conciliación que recupera pagos     | Si encontró pagos aprobados cuyo aviso no había llegado (señal de caída o de webhook roto)  |
+
+El texto lleva la ruta como plantilla (`POST /donations/:id`), la clase del
+error y su mensaje **sin** correos, números largos (documentos, teléfonos,
+tarjetas), ids ni tokens. La respuesta al usuario no cambia. Sin
+`ALERT_WEBHOOK_URL` todo queda solo en el log y la API lo advierte al arrancar.
+Código: `apps/api/src/core/observability/alerts.service.ts`.
