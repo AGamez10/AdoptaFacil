@@ -95,6 +95,13 @@ export function ServicesDirectoryPage() {
             </button>
           </form>
 
+          <p className="mb-4 text-sm">
+            ¿Adoptaste en AdoptaFácil?{' '}
+            <Link to="/beneficios" className="font-semibold text-primary hover:underline">
+              Mira los beneficios que te esperan
+            </Link>
+          </p>
+
           <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Tipo de servicio">
             <button
               type="button"
@@ -140,7 +147,7 @@ export function ServicesDirectoryPage() {
           {state === 'ready' && items.length === 0 && category === 'all' && !city && (
             <EmptyState
               title="Muy pronto verás aquí los primeros servicios"
-              description="Estamos sumando veterinarias, peluquerías, paseadores y tiendas. Si tienes un negocio para mascotas, publícalo gratis."
+              description="Estamos sumando veterinarias, peluquerías, paseadores y tiendas. Si tienes un negocio para mascotas, publícalo gratis desde Negocios aliados."
             />
           )}
           {state === 'ready' && items.length > 0 && (
@@ -151,28 +158,21 @@ export function ServicesDirectoryPage() {
             </div>
           )}
 
-          <section className="mt-12 flex flex-col items-start gap-3 rounded-2xl bg-brand-teal/10 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <section className="mt-12 flex flex-col items-start gap-4 rounded-2xl bg-brand-teal/10 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold">¿Tienes un negocio para mascotas?</h2>
               <p className="text-sm text-muted-foreground">
-                Déjanos tus datos sin crear cuenta, o publica tu perfil si ya tienes una. Lo
-                revisamos antes de mostrarlo.
+                Publícalo gratis, recibe a las familias que adoptan y gana el sello de Aliado de
+                AdoptaFácil. Revisamos cada perfil antes de mostrarlo.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                to="/servicios/prerregistro"
-                className="rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
-              >
-                Quiero aparecer aquí
-              </Link>
-              <Link
-                to="/mi-negocio"
-                className="rounded-xl border border-border px-5 py-3 font-semibold hover:bg-muted"
-              >
-                Publicar mi negocio
-              </Link>
-            </div>
+            <Link
+              to="/negocios-aliados"
+              className="shrink-0 rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground hover:bg-primary/90"
+              data-testid="publish-business-cta"
+            >
+              Publicar mi negocio gratis
+            </Link>
           </section>
         </PublicPageBody>
       </main>

@@ -7,7 +7,9 @@ export { MyPostsPage } from './pages/my-posts-page';
 export { CommunityModerationPage } from './pages/community-moderation-page';
 // Primer corte del ecosistema: directorio de servicios + ficha de mascota.
 export { ServicesDirectoryPage } from './pages/services-directory-page';
-export { BusinessPreRegistrationPage } from './pages/business-pre-registration-page';
+// Negocios aliados: página pública (única puerta de entrada) y beneficios por adoptar.
+export { BusinessAlliesPage } from './pages/business-allies-page';
+export { AdopterBenefitsPage } from './pages/adopter-benefits-page';
 export { ServiceDetailPage } from './pages/service-detail-page';
 export { MyServicesPage } from './pages/my-services-page';
 export { MyPetsPage } from './pages/my-pets-page';

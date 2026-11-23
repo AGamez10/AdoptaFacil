@@ -24,7 +24,9 @@ const FEATURE_PATHS: ReadonlyArray<readonly [FeatureKey, readonly string[]]> = [
     [
       // Primer corte del ecosistema: directorio, negocio propio, mascotas.
       '/servicios',
+      '/negocios-aliados',
       '/mi-negocio',
+      '/beneficios',
       '/mis-mascotas',
       '/plataforma/servicios',
     ],

@@ -3,6 +3,8 @@ export {
   navItems,
   navSections,
   personaNavItems,
+  businessNavItems,
+  BUSINESS_ACTIVATED_EVENT,
   type NavSection,
   type NavItem,
   ADOPTIONS_MANAGEMENT_ROLES,

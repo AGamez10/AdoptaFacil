@@ -11,7 +11,7 @@ Es la primera barrera (el rol). Las reglas que dependen de datos (firmante desig
 prueban las suites de integración. El resumen en palabras está en
 `docs/seguridad/roles-y-organizaciones.md`, sección 9.
 
-Rutas: 478. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86. Públicas: 84.
+Rutas: 493. Con `@Roles`: 311. Autenticadas sin `@Roles` (cada una revisada): 96. Públicas: 86.
 
 | Ruta | Prop. | Admin | Oper. | Vet. | Vol. | Temp. | Audit. | P.Admin | P.Super | Otro acceso |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | --- |
@@ -99,6 +99,16 @@ Rutas: 478. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86
 | `POST /clinical-reminders/:id/acknowledge` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
 | `POST /clinical-reminders/:id/dismiss` | ✓ | ✓ | ✓ | ✓ |  |  |  |  |  |  |
 | `POST /coffee/webhooks/mercadopago` |  |  |  |  |  |  |  |  |  | pública |
+| `POST /community/benefits/:id/pass` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `GET /community/benefits/mine` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `POST /community/business/activate` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `GET /community/business/benefits` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `POST /community/business/benefits` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `PATCH /community/business/benefits/:id` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `PATCH /community/business/consent` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `GET /community/business/me` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `POST /community/business/redeem` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
+| `GET /community/business/redemptions` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
 | `DELETE /community/comments/:id` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
 | `GET /community/pets` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
 | `POST /community/pets` |  |  |  |  |  |  |  |  |  | cualquier cuenta (sin `@Roles`) |
@@ -290,11 +300,14 @@ Rutas: 478. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86
 | `POST /platform/coffee/physical-sales/:id/reverse` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `POST /platform/coffee/products` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `POST /platform/coffee/products/:id/lots` |  |  |  |  |  |  |  | ✓ | ✓ |  |
+| `GET /platform/community/benefits` |  |  |  |  |  |  |  | ✓ | ✓ |  |
+| `PATCH /platform/community/benefits/:id/moderate` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `GET /platform/community/posts` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `PATCH /platform/community/posts/:id/moderate` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `GET /platform/community/service-reviews` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `PATCH /platform/community/service-reviews/:id/moderate` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `GET /platform/community/services` |  |  |  |  |  |  |  | ✓ | ✓ |  |
+| `GET /platform/community/services/:id/impact` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `PATCH /platform/community/services/:id/moderate` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `PATCH /platform/community/services/:id/partner` |  |  |  |  |  |  |  | ✓ | ✓ |  |
 | `GET /platform/dashboard/admin` |  |  |  |  |  |  |  | ✓ | ✓ |  |
@@ -354,13 +367,15 @@ Rutas: 478. Con `@Roles`: 308. Autenticadas sin `@Roles` (cada una revisada): 86
 | `POST /public/coffee/:code/checkout` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/coffee/campaigns` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/coffee/orders/:reference` |  |  |  |  |  |  |  |  |  | pública |
+| `GET /public/community/benefits` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/community/leaders` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/community/posts` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/community/posts/:id` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/community/posts/:id/card.png` |  |  |  |  |  |  |  |  |  | pública |
-| `POST /public/community/pre-registrations` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/community/services` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/community/services/:id` |  |  |  |  |  |  |  |  |  | pública |
+| `GET /public/community/services/:id/benefits` |  |  |  |  |  |  |  |  |  | pública |
+| `GET /public/community/services/:id/impact` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/community/services/:id/reviews` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/config/features` |  |  |  |  |  |  |  |  |  | pública |
 | `GET /public/custody/pay/:token` |  |  |  |  |  |  |  |  |  | pública |

@@ -6,6 +6,8 @@ import { featureForPath, useCapabilities } from '../capabilities';
 import {
   navSections,
   personaNavItems,
+  businessNavItems,
+  BUSINESS_ACTIVATED_EVENT,
   ORG_MEMBER_ROLES,
   type NavItem,
   type NavSection,
@@ -44,6 +46,44 @@ function useSignerSeat(): boolean | null {
     };
   }, [asksServer, client]);
   return asksServer ? seat : null;
+}
+
+/**
+ * ¿Esta persona activó el panel de negocio? Solo se pregunta al servidor si es
+ * una cuenta de persona y el módulo de comunidad está encendido; cualquier
+ * error deja el menú de persona de siempre.
+ */
+function useBusinessMode(): boolean {
+  const client = useApiClient();
+  const { user } = useSession();
+  const { capabilities } = useCapabilities();
+  const asks = user?.accountType === 'person' && capabilities.features.community === true;
+  const [business, setBusiness] = useState(false);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const onActivated = () => setTick((n) => n + 1);
+    window.addEventListener(BUSINESS_ACTIVATED_EVENT, onActivated);
+    return () => window.removeEventListener(BUSINESS_ACTIVATED_EVENT, onActivated);
+  }, []);
+  useEffect(() => {
+    if (!asks) {
+      setBusiness(false);
+      return undefined;
+    }
+    let active = true;
+    client
+      .request<{ account: unknown }>('/community/business/me')
+      .then((overview) => {
+        if (active) setBusiness(Boolean(overview?.account));
+      })
+      .catch(() => {
+        if (active) setBusiness(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [asks, client, user?.id, tick]);
+  return asks && business;
 }
 
 /** Shared visibility check for a leaf entry (top-level or inside a group). */
@@ -216,6 +256,8 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   // NAV-SECCIONES: quien trabaja en una organización (o en la plataforma) ve el
   // menú agrupado por tareas; una persona sin cargo conserva su menú corto.
   const worksInOrg = hasAnyRole(...ORG_MEMBER_ROLES, ...PLATFORM_ROLES);
+  // Negocio aliado: su panel primero; lo personal, plegado.
+  const business = useBusinessMode();
 
   const visibleItems = (items: NavItem[]) =>
     items.flatMap((item) => {
@@ -270,7 +312,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
           renderItem={renderItem}
         />
       ) : (
-        visibleItems(personaNavItems).map(renderItem)
+        visibleItems(business ? businessNavItems : personaNavItems).map(renderItem)
       )}
     </nav>
   );

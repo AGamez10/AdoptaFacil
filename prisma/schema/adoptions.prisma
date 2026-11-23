@@ -187,7 +187,8 @@ model AdoptionDelivery {
   updatedAt       DateTime  @updatedAt @map("updated_at")
   confirmedAt     DateTime? @map("confirmed_at")
 
-  contract AdoptionContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contract      AdoptionContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  benefitPasses BenefitPass[]
 
   @@index([organizationId])
   @@index([contractId])

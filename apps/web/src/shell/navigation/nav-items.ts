@@ -504,6 +504,7 @@ const leaf = {
   misPublicaciones: { path: '/mis-publicaciones', label: 'Mis publicaciones', icon: ChatIcon },
   misMascotas: { path: '/mis-mascotas', label: 'Mis mascotas', icon: PawIcon },
   miNegocio: { path: '/mi-negocio', label: 'Mi negocio', icon: ShoppingBagIcon },
+  beneficios: { path: '/beneficios', label: 'Beneficios por adoptar', icon: HeartIcon },
   campanas: {
     path: '/organizacion/campanas',
     label: 'Campañas',
@@ -647,10 +648,44 @@ export const personaNavItems: NavItem[] = [
     path: '/comunidad',
     label: 'Comunidad',
     icon: ChatIcon,
-    children: [leaf.feed, leaf.misPublicaciones, leaf.misMascotas, leaf.miNegocio],
+    children: [leaf.feed, leaf.misPublicaciones, leaf.misMascotas, leaf.beneficios, leaf.miNegocio],
   },
   { ...leaf.misResenas, label: 'Reseñas' },
   leaf.usoDeMisDatos,
+];
+
+/** Evento que dispara el panel de negocio al activarse, para que el menú
+ *  cambie sin recargar la página. */
+export const BUSINESS_ACTIVATED_EVENT = 'adoptafacil:business-activated';
+
+/**
+ * Menú de un NEGOCIO aliado (cuenta de persona con el panel de negocio
+ * activo): lo del negocio primero y corto; lo personal (si el dueño también
+ * adopta o dona) queda plegado en "Mi actividad personal". Mismos permisos
+ * que el menú de persona: agrupar es solo visual.
+ */
+export const businessNavItems: NavItem[] = [
+  { ...leaf.miNegocio, label: 'Panel del negocio' },
+  { ...leaf.misOfertas, label: 'Aportes a refugios' },
+  { ...leaf.feed, label: 'Comunidad' },
+  { ...leaf.misResenas, label: 'Reseñas' },
+  leaf.usoDeMisDatos,
+  {
+    path: '/inicio',
+    label: 'Mi actividad personal',
+    icon: HomeIcon,
+    children: [
+      leaf.misDonaciones,
+      leaf.misSolicitudes,
+      leaf.misSeguimientos,
+      leaf.misAnimales,
+      leaf.beneficios,
+      leaf.misApadrinamientos,
+      leaf.miVoluntariado,
+      leaf.misPublicaciones,
+      leaf.misMascotas,
+    ],
+  },
 ];
 
 /**
@@ -761,6 +796,7 @@ export const navSections: NavSection[] = [
       leaf.misOfertas,
       leaf.misPublicaciones,
       leaf.misMascotas,
+      leaf.beneficios,
       leaf.miNegocio,
       leaf.misResenas,
       leaf.usoDeMisDatos,

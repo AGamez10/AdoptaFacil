@@ -141,7 +141,7 @@ describe('GeneralPortalPage (landing)', () => {
     );
     expect(
       within(community).getByRole('link', { name: 'Tengo un negocio para mascotas' }),
-    ).toHaveAttribute('href', '/mi-negocio');
+    ).toHaveAttribute('href', '/negocios-aliados');
   });
 
   it("/ayudar, with real data, lists open needs, volunteering and each organization's public ledger", async () => {
