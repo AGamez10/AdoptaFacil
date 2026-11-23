@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { LEGAL_CONTROLLER } from '@adoptafacil/contracts';
 import { PublicFooter, PublicNavbar, PublicPageBody, PublicPageHero } from '../../../shell/layout';
 import { LEGAL_DOCUMENTS, legalPath } from '../model/legal-path';
 
@@ -34,6 +35,52 @@ export function LegalIndexPage() {
               </li>
             ))}
           </ul>
+          <section className="space-y-2 text-sm" data-testid="legal-operator">
+            <h2 className="text-lg font-semibold">Quién opera AdoptaFácil</h2>
+            <p>
+              AdoptaFácil es un servicio de software. Lo opera y es responsable del tratamiento de
+              tus datos:
+            </p>
+            <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+              <dt className="text-muted-foreground">Titular</dt>
+              <dd>
+                {LEGAL_CONTROLLER.name}
+                {LEGAL_CONTROLLER.kind === 'natural_person' ? ', persona natural' : ''}
+              </dd>
+              <dt className="text-muted-foreground">NIT</dt>
+              <dd>{LEGAL_CONTROLLER.nit}</dd>
+              {LEGAL_CONTROLLER.economicActivity && (
+                <>
+                  <dt className="text-muted-foreground">Actividad (RUT)</dt>
+                  <dd>
+                    {LEGAL_CONTROLLER.economicActivity.ciiu} ·{' '}
+                    {LEGAL_CONTROLLER.economicActivity.description}
+                  </dd>
+                </>
+              )}
+              {LEGAL_CONTROLLER.taxResponsibilities && (
+                <>
+                  <dt className="text-muted-foreground">Responsabilidad tributaria</dt>
+                  <dd>
+                    {LEGAL_CONTROLLER.taxResponsibilities
+                      .map((r) => `${r.code} · ${r.description}`)
+                      .join('; ')}
+                  </dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">Dirección</dt>
+              <dd>{LEGAL_CONTROLLER.address}</dd>
+              <dt className="text-muted-foreground">Teléfono</dt>
+              <dd>{LEGAL_CONTROLLER.phone}</dd>
+              <dt className="text-muted-foreground">Correo</dt>
+              <dd>{LEGAL_CONTROLLER.email}</dd>
+            </dl>
+            <p className="text-muted-foreground">
+              Las donaciones no pasan por AdoptaFácil: van directo a la cuenta de Mercado Pago de
+              cada refugio, que es quien las recibe. AdoptaFácil solo cobra por su propio servicio
+              de software (los planes opcionales).
+            </p>
+          </section>
           <section className="space-y-2 text-sm">
             <h2 className="text-lg font-semibold">Tus datos y reportes</h2>
             <p>

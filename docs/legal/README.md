@@ -10,7 +10,7 @@
 | Qué es y qué no es AdoptaFácil (principios, límites, reportes)                    | `alcance/2026-10-15.md`                    | Forma parte de los términos (casilla 1)                                     |
 | Autorización para el tratamiento de datos                                         | `autorizacion-datos/2026-10-15.md`         | Toda cuenta y todo donante sin cuenta (casilla 2, separada de los términos) |
 | Política de tratamiento de datos personales                                       | `politica-de-datos/2026-11-07.md`          | Se acepta con la autorización (casilla 2)                                   |
-| Condiciones para organizaciones y acuerdo de tratamiento de datos (transmisión)   | `condiciones-organizaciones/2026-10-15.md` | Solo cuentas de organización (casilla 3)                                    |
+| Condiciones para organizaciones y acuerdo de tratamiento de datos (transmisión)   | `condiciones-organizaciones/2026-11-23.md` | Solo cuentas de organización (casilla 3)                                    |
 | Autorización opcional para usos comerciales                                       | `autorizacion-comercial/2026-10-15.md`     | Opcional, nunca marcada, revocable (casilla 4)                              |
 | Autorización opcional para mejorar el producto y entrenar inteligencia artificial | `autorizacion-ia/2026-10-15.md`            | Opcional, aparte de la comercial, nunca marcada, revocable (casilla 5)      |
 | Aviso de privacidad                                                               | `aviso-de-privacidad/2026-10-15.md`        | Informativo                                                                 |
@@ -28,17 +28,35 @@ En la web se leen en `/legal`, `/legal/<slug>` y `/legal/<slug>/<versión>`.
 
 ## Quién es el responsable mientras no hay sociedad
 
-AdoptaFácil la opera, mientras se constituye la sociedad, **una persona natural comerciante** con su RUT (actividad de servicios tecnológicos) y matrícula mercantil. Sus datos viven en **un solo lugar**: `LEGAL_CONTROLLER` en `packages/contracts/src/legal-controller.ts`. Los textos usan marcadores (`{{titular}}`, `{{titular.nombre}}`, …) que la web sustituye al mostrarlos.
+AdoptaFácil la opera, mientras se constituye la sociedad, **una persona natural con actividad comercial**, según su RUT (formulario 001 de la DIAN, generado el 2026-10-12):
 
-- **Completar los datos:** editar `LEGAL_CONTROLLER`. No cambia el hash de los textos (el hash cubre la plantilla) y no obliga a re-aceptar.
+| Dato                  | Valor (RUT)                                                                                                  | Dónde se publica                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Nombre                | Andres Felipe Gamez Arias (casillas 31 a 34)                                                                 | Textos legales, `/legal`, pie de la web y de los correos                                             |
+| Tipo de contribuyente | Persona natural (casilla 24)                                                                                 | Igual                                                                                                |
+| NIT y DV              | 1.004.356.866-5 (casillas 5 y 6; el DV se comprueba en `legal.test.ts`)                                      | Igual                                                                                                |
+| Actividad principal   | CIIU 6201, desarrollo de sistemas informáticos, desde 2026-05-20 (casillas 46 y 47)                          | `/legal`                                                                                             |
+| Responsabilidades     | 05: impuesto de renta y complementarios, régimen ordinario (casilla 53). **No tiene la 48 (IVA)**            | `/legal`; por eso los planes se cobran sin IVA (`PLAN_IVA_RATE = 0`)                                 |
+| Dirección             | Carrera 97 C Sur # 71-30, Condominios del Recreo 2, Bogotá D.C. (casillas 38 a 41)                           | Textos legales, `/legal`, pies (Ley 1480, art. 50, y Decreto 1377 de 2013, art. 13, piden dirección) |
+| Teléfono              | 302 852 8926 (casilla 44, el mismo WhatsApp oficial, D10)                                                    | Igual                                                                                                |
+| Correo                | adoptafacil.oficial@gmail.com (contacto oficial, D10). El correo personal de la casilla 42 **no** se publica | Igual                                                                                                |
+| Cédula                | No se publica aparte: en una persona natural el NIT es el mismo número                                       | —                                                                                                    |
+| Matrícula mercantil   | El RUT no la trae. Vacía hasta que el dueño la confirme; mientras tanto el texto no la menciona              | —                                                                                                    |
+
+Todo vive en **un solo lugar**: `LEGAL_CONTROLLER` en `packages/contracts/src/legal-controller.ts`. Los textos usan marcadores (`{{titular}}`, `{{titular.nombre}}`, …) que la web sustituye al mostrarlos; el pie de la web, la página `/legal` y el pie de todos los correos leen `legalControllerFooterLine()`.
+
+- **Completar o corregir datos:** editar `LEGAL_CONTROLLER`. No cambia el hash de los textos (el hash cubre la plantilla) y no obliga a re-aceptar.
+- **Si el titular se vuelve responsable de IVA** (responsabilidad 48 en el RUT): poner `vatResponsible: true`; los planes vuelven a mostrar y cobrar "+ IVA". Antes, publicar una versión nueva de las Condiciones para organizaciones si cambia la sección 5.
 - **Al constituir la sociedad:** cambiar `kind` a `'company'` y sus datos, y publicar una versión nueva de los textos con el aviso de cesión (Términos, sección 16). Así queda prueba de que los usuarios fueron avisados.
 - **Cesión:** Términos 16, Autorización de datos, Política (sección 1) y Condiciones para organizaciones 5A.3 dicen que el contrato, la base de datos y las autorizaciones pasarán a la sociedad.
 - **Firma electrónica:** Términos 14 (Ley 527 de 1999, Decreto 2364 de 2012).
-- **Documentos que genera la plataforma:** Términos 15. Todos los PDF (reportes, certificados de voluntariado, contratos de adopción, carnés) y el certificado de donación llevan el aviso `PLATFORM_DOCUMENT_NOTICE`.
+- **Documentos que genera la plataforma:** Términos 15. Todos los PDF (reportes, certificados de voluntariado, contratos de adopción, carnés) y el certificado de donación llevan el aviso `PLATFORM_DOCUMENT_NOTICE`. Los emite la organización (D9), no el titular de AdoptaFácil.
+
+**Versión 2026-11-23 de las Condiciones para organizaciones.** Solo cambia la sección 5: (1) deja dicho que AdoptaFácil solo cobra su servicio de software y nunca parte de las donaciones; (3) ya no promete factura electrónica en todo caso: comprobante de cada cobro con la identificación tributaria, factura cuando la ley lo exija, y sin IVA mientras el titular no sea responsable. Los propietarios de organizaciones verán el diálogo de nueva versión una vez.
 
 ## Datos que faltan (marcados ⟦así⟧ en los textos o en `LEGAL_CONTROLLER`)
 
-- Nombre completo, cédula, NIT del RUT, matrícula mercantil, ciudad y dirección de la persona natural. Luego, razón social y NIT de la sociedad. Fecha de publicación. Dominio: adoptafacil.org (ya completado).
+- Nombre, NIT, dirección y ciudad de la persona natural: **completados desde el RUT** (2026-11-23). Falta la matrícula mercantil (si existe). Luego, razón social y NIT de la sociedad. Fecha de publicación. Dominio: adoptafacil.org (ya completado).
 - Encargados: Hostinger (VPS), Cloudflare (dominio y red), correo, copias de seguridad y Mercado Pago (cuenta propia de cada organización), en la política, sección 7. Falta confirmar el **país del centro de datos** elegido al contratar; como Hostinger es extranjera, puede ser transferencia internacional. Proveedores de correo y copias de seguridad, y el país donde procesa cada uno: pendientes.
 - Plazos: conservación de datos tras cerrar la cuenta, conservación de evidencia de reportes, atención de reportes, aviso de cambios (propuesto 15 días), aviso de precios (30 días), aviso de incidentes a organizaciones (72 horas), exportación al terminar (30 días), registro de trazabilidad (10 años).
 
@@ -65,7 +83,7 @@ Las respuestas del asesor del cliente a estas preguntas, contrastadas con los te
 1. Contenido mínimo y firmas del certificado de donación con efectos tributarios.
 2. Régimen de facturación de los planes que AdoptaFácil cobra a las organizaciones.
 3. Plazos de conservación de soportes contables.
-4. Obligaciones de la persona natural comerciante: régimen (simple o ordinario), facturación electrónica de los planes, y retenciones.
+4. Obligaciones de la persona natural: el RUT solo trae la responsabilidad 05 (renta, régimen ordinario). Confirmar si debe agregar la 49 (no responsable de IVA) o la 48 si supera el tope de ingresos, si está obligada a facturar electrónicamente los planes (la 52 no aparece), y retenciones. Las ventas de café no son la actividad 6201: confirmar si hay que agregar una actividad secundaria.
 5. Si el aviso de los documentos generados ("no reemplaza la certificación de contador público ni de revisor fiscal") basta, y qué reportes necesitan firma de contador.
 
 ## Qué no cubre todavía el producto

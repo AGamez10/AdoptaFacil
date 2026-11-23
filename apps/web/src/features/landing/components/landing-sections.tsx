@@ -13,6 +13,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   LAUNCH_PRO_PROMO_MONTHS,
   PLAN_CATALOG,
+  PLAN_PRICES_ADD_IVA,
   PLAN_KEYS,
   planHighlights,
   type PlanKey,
@@ -915,7 +916,7 @@ export function PlansSection() {
                 <p className={styles.plan__price}>{planPrice(key)}</p>
                 {paid && (
                   <p className={styles.plan__note}>
-                    Opcional · + IVA, o{' '}
+                    {PLAN_PRICES_ADD_IVA ? 'Opcional · + IVA, o' : 'Opcional · sin IVA, o'}{' '}
                     {`$${PLAN_CATALOG[key].annualPriceCop.toLocaleString('es-CO')}`} al año por
                     transferencia
                   </p>
