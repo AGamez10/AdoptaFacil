@@ -40,6 +40,14 @@ async function bootstrap(): Promise<void> {
   const port = process.env.PORT
     ? Number(process.env.PORT)
     : config.get('API_PORT', { infer: true });
+  if (
+    config.get('NODE_ENV', { infer: true }) === 'production' &&
+    !config.get('ALERT_WEBHOOK_URL', { infer: true })
+  ) {
+    new Logger('Bootstrap').warn(
+      'ALERT_WEBHOOK_URL vacía: los errores 500 y los fallos de conciliación de pagos solo quedan en el log (ver docs/operacion/MONITOREO.md).',
+    );
+  }
   await app.listen(port, '0.0.0.0');
   new Logger('Bootstrap').log(
     `AdoptaFácil API listening on http://0.0.0.0:${port} (APP_ROLE=${role})`,

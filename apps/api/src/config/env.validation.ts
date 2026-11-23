@@ -56,6 +56,18 @@ export const envSchema = z.object({
   METRICS_TOKEN: z.string().min(24).optional(),
   // Una línea JSON por petición (id, método, ruta plantilla, estado, ms).
   HTTP_ACCESS_LOG: featureFlag(),
+  // Alertas de errores (auditoría go/no-go 2026-11-23, B1): URL que recibe un
+  // POST de texto plano por cada error 500 nuevo o fallo de la conciliación de
+  // pagos (ntfy, Slack, Discord…). La misma de deploy/.env para los scripts.
+  // Vacía = solo log. Nunca se le envían datos personales.
+  ALERT_WEBHOOK_URL: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().url().optional(),
+  ),
+  // Conciliación automática con Mercado Pago (B3): cada cuánto se revisan las
+  // organizaciones con donaciones pendientes (por defecto 15 min). La pasada
+  // completa de todas las cuentas conectadas es diaria.
+  PAYMENT_RECONCILE_INTERVAL_MS: z.coerce.number().int().positive().default(900_000),
   // T-110 (auth/RF05): base URL of the web app, used to build the clickable
   // password-reset link emailed to users ({WEB_BASE_URL}/reset-password?token=…).
   // Defaults to the Vite dev server so local dev works without extra config; set
