@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import type {
+  BusinessBenefitPublic,
+  BusinessImpact,
   PublicAnimalSummary,
   ServiceListingPublic,
   ServiceReviewPublic,
@@ -12,6 +14,8 @@ import { accessPathWithReturn, returnPathOf, useSession } from '../../../shell/a
 import { fetchGlobalPublicAnimals } from '../../catalog/api/public-animals';
 import { AnimalSpotlightCard } from '../../catalog/components/animal-spotlight-card';
 import { getPublicService, listPublicServiceReviews } from '../api/public-services';
+import { getListingBenefits, getListingImpact } from '../api/business';
+import { dayLabel, impactSentence } from '../model/business-view';
 import { CATEGORY_TONE, PartnerBadge } from '../components/service-card';
 import {
   SERVICE_CATEGORY_SINGULAR,
@@ -47,6 +51,8 @@ export function ServiceDetailPage() {
   const [service, setService] = useState<ServiceListingPublic | null>(null);
   const [reviews, setReviews] = useState<ServiceReviewPublic[]>([]);
   const [animals, setAnimals] = useState<PublicAnimalSummary[]>([]);
+  const [benefits, setBenefits] = useState<BusinessBenefitPublic[]>([]);
+  const [impact, setImpact] = useState<BusinessImpact | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
@@ -65,14 +71,18 @@ export function ServiceDetailPage() {
         }
         setService(found);
         setState('ready');
-        const [page, nearby] = await Promise.all([
+        const [page, nearby, perks, footprint] = await Promise.all([
           listPublicServiceReviews(id, controller.signal).catch(() => null),
           fetchGlobalPublicAnimals({ city: found.city, limit: 4, signal: controller.signal }).catch(
             () => null,
           ),
+          getListingBenefits(id, controller.signal).catch(() => []),
+          getListingImpact(id, controller.signal).catch(() => null),
         ]);
         if (page) setReviews(page.items);
         if (nearby) setAnimals(nearby.data);
+        setBenefits(perks);
+        setImpact(footprint);
       } catch {
         if (!controller.signal.aborted) setState('error');
       }
@@ -145,6 +155,11 @@ export function ServiceDetailPage() {
                   <p className="text-sm text-foreground/80">
                     {ratingLabel(service.ratingAverage, service.ratingCount)}
                   </p>
+                  {impactSentence(impact) && (
+                    <p className="mt-1 text-sm font-semibold" data-testid="service-impact">
+                      {impactSentence(impact)}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid gap-6 p-6 md:grid-cols-[2fr_1fr]">
@@ -200,6 +215,40 @@ export function ServiceDetailPage() {
                 </div>
               </div>
             </section>
+
+            {benefits.length > 0 && (
+              <section
+                aria-labelledby="service-benefits"
+                className="rounded-2xl bg-brand-gold/20 p-6"
+                data-testid="service-benefits"
+              >
+                <h2 id="service-benefits" className="text-xl font-bold">
+                  Si adoptaste en AdoptaFácil
+                </h2>
+                <ul className="mt-3 space-y-3">
+                  {benefits.map((benefit) => (
+                    <li key={benefit.id}>
+                      <p className="font-bold">{benefit.title}</p>
+                      {benefit.description && <p className="text-sm">{benefit.description}</p>}
+                      <p className="text-xs text-foreground/70">
+                        {[
+                          benefit.terms,
+                          benefit.validUntil && `Hasta el ${dayLabel(benefit.validUntil)}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to="/beneficios"
+                  className="mt-4 inline-block rounded-full bg-brand-navy px-5 py-2 text-sm font-semibold text-white hover:bg-brand-navy/90"
+                >
+                  Obtener mi código
+                </Link>
+              </section>
+            )}
 
             <section aria-labelledby="nearby-animals">
               <div className="mb-3 flex items-end justify-between gap-2">

@@ -77,6 +77,8 @@ export interface ServiceListingPublic extends ServiceListingInput {
   /** Promedio de reseñas aprobadas (1–5), o ausente si no hay ninguna. */
   ratingAverage?: number;
   ratingCount: number;
+  /** Título del beneficio vigente para quien adopta, si el negocio tiene uno. */
+  adopterBenefitTitle?: string;
   createdAt: string;
 }
 
@@ -166,7 +168,9 @@ export interface PetProfile extends PetProfileInput {
   updatedAt: string;
 }
 
-/** Quién se pre-registra para aparecer en la Comunidad (MVP, sin cuenta):
+/** @deprecated El pre-registro sin cuenta se retiró: los negocios entran por
+ *  "Negocios aliados" (cuenta + panel). Tipos conservados por contrato aditivo.
+ *  Quién se pre-registra para aparecer en la Comunidad (MVP, sin cuenta):
  *  un comercio o establecimiento, o un profesional independiente. */
 export const COMMUNITY_PRE_REGISTRATION_KINDS = ['commerce', 'professional'] as const;
 export type CommunityPreRegistrationKind = (typeof COMMUNITY_PRE_REGISTRATION_KINDS)[number];

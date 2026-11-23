@@ -1,265 +1,405 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  SERVICE_CATEGORIES,
-  ServiceCategory,
-  ServiceListingStatus,
+  BUSINESS_COMMERCIAL_CONSENT_TEXT,
+  type BenefitRedemptionRecord,
+  type BusinessAccount,
+  type BusinessOverview,
   type ServiceListing,
-  type ServiceListingInput,
 } from '@adoptafacil/contracts';
-import { Badge, Button, EmptyState, Input, Skeleton, useToast } from '@adoptafacil/ui';
-import { PageContainer, PageHeader } from '../../_layout';
+import { Button, EmptyState, Skeleton, cn, useToast } from '@adoptafacil/ui';
+import { PageContainer } from '../../_layout';
 import { useApiClient } from '../../../shell/api';
-import { SERVICE_CATEGORY_SINGULAR, SERVICE_STATUS_LABELS } from '../model/directory-view';
+import { BUSINESS_ACTIVATED_EVENT } from '../../../shell/navigation';
+import { BenefitsManager } from '../components/benefits-manager';
+import { AllySeal, ImpactStat } from '../components/business-ui';
+import { ListingManager } from '../components/listing-manager';
+import { RedeemCard } from '../components/redeem-card';
+import { PartnerBadge } from '../components/service-card';
+import { ALLY_STEP_COPY } from '../model/business-view';
 
-type FormState = Record<keyof ServiceListingInput, string>;
+const dateFmt = new Intl.DateTimeFormat('es-CO', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'America/Bogota',
+});
 
-const EMPTY: FormState = {
-  category: ServiceCategory.Veterinary,
-  name: '',
-  description: '',
-  department: '',
-  city: '',
-  address: '',
-  phone: '',
-  whatsapp: '',
-  website: '',
-  email: '',
-};
+/** Activar el panel: un paso, con la autorización comercial OPCIONAL aparte. */
+function ActivationCard({ onActivated }: { onActivated: () => void }) {
+  const client = useApiClient();
+  const { toast } = useToast();
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
 
-const STATUS_VARIANT = {
-  [ServiceListingStatus.Pending]: 'warning',
-  [ServiceListingStatus.Approved]: 'success',
-  [ServiceListingStatus.Rejected]: 'destructive',
-  [ServiceListingStatus.Hidden]: 'secondary',
-} as const;
+  const activate = async () => {
+    setBusy(true);
+    try {
+      await client.request<BusinessAccount>('/community/business/activate', {
+        method: 'POST',
+        json: { commercialConsent: consent },
+      });
+      window.dispatchEvent(new Event(BUSINESS_ACTIVATED_EVENT));
+      onActivated();
+    } catch (error) {
+      if ((error as { status?: number }).status === 403) setForbidden(true);
+      else
+        toast({
+          title: 'No pudimos activar tu panel',
+          description: 'Inténtalo de nuevo.',
+          variant: 'destructive',
+        });
+    } finally {
+      setBusy(false);
+    }
+  };
 
-/** Solo envía los campos con texto: el servidor rechaza cadenas vacías. */
-export function toListingPayload(form: FormState): ServiceListingInput {
-  const payload: Record<string, string> = {};
-  for (const [key, value] of Object.entries(form)) {
-    if (value.trim()) payload[key] = value.trim();
+  if (forbidden) {
+    return (
+      <EmptyState
+        title="Sin permiso"
+        description="En una organización, solo el representante o un administrador puede activar el panel de negocio."
+      />
+    );
   }
-  return payload as unknown as ServiceListingInput;
+
+  return (
+    <section
+      className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm"
+      data-testid="business-activation"
+    >
+      <div className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:p-8">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-brand-teal-dark">
+            Negocios aliados
+          </p>
+          <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+            Activa el panel de tu negocio
+          </h1>
+          <p className="mt-2 max-w-xl text-sm text-foreground/80">
+            Desde aquí publicas tu perfil en el directorio, ofreces un beneficio a quienes adoptan,
+            validas sus códigos y ves el impacto de tu negocio en los refugios. Es gratis.
+          </p>
+          <ul className="mt-4 space-y-1 text-sm">
+            <li>✓ Tu perfil en Servicios para mascotas, revisado por nosotros.</li>
+            <li>✓ Clientes nuevos: familias que acaban de adoptar.</li>
+            <li>✓ El camino al sello "Aliado de AdoptaFácil".</li>
+          </ul>
+        </div>
+        <div className="hidden md:block">
+          <AllySeal size="lg" muted />
+        </div>
+      </div>
+      <div className="space-y-4 border-t border-border bg-muted/30 p-6 md:px-8">
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4"
+            checked={consent}
+            onChange={(event) => setConsent(event.target.checked)}
+            data-testid="commercial-consent"
+          />
+          <span>
+            <span className="font-semibold">Opcional.</span> {BUSINESS_COMMERCIAL_CONSENT_TEXT}
+          </span>
+        </label>
+        <Button onClick={() => void activate()} disabled={busy} data-testid="activate-business">
+          {busy ? 'Activando…' : 'Activar mi panel de negocio'}
+        </Button>
+      </div>
+    </section>
+  );
 }
 
-const FIELDS: Array<{ key: keyof FormState; label: string; required?: boolean; type?: string }> = [
-  { key: 'name', label: 'Nombre del negocio', required: true },
-  { key: 'department', label: 'Departamento', required: true },
-  { key: 'city', label: 'Ciudad', required: true },
-  { key: 'address', label: 'Dirección' },
-  { key: 'whatsapp', label: 'WhatsApp', type: 'tel' },
-  { key: 'phone', label: 'Teléfono', type: 'tel' },
-  { key: 'website', label: 'Sitio web (https://…)', type: 'url' },
-  { key: 'email', label: 'Correo de contacto', type: 'email' },
-];
+/** El camino al sello: tres pasos y qué falta. */
+function AllyPath({ overview }: { overview: BusinessOverview }) {
+  const { ally } = overview;
+  if (ally.isAlly) {
+    return (
+      <section className="flex flex-col items-start gap-5 rounded-3xl bg-brand-gold/20 p-6 sm:flex-row sm:items-center">
+        <AllySeal size="md" />
+        <div>
+          <h2 className="text-xl font-extrabold">Eres Aliado de AdoptaFácil</h2>
+          <p className="mt-1 text-sm text-foreground/80">
+            Tu sello aparece en tu perfil y sales primero en el directorio de tu ciudad. Gracias por
+            estar del lado de los animales.
+          </p>
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section
+      aria-labelledby="ally-title"
+      className="rounded-3xl border border-border bg-card p-6"
+      data-testid="ally-path"
+    >
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <AllySeal size="sm" muted={!ally.eligible} />
+        <div>
+          <h2 id="ally-title" className="text-xl font-extrabold">
+            {ally.eligible ? '¡Cumples los requisitos del sello!' : 'Tu camino al sello de aliado'}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {ally.eligible
+              ? 'El equipo de AdoptaFácil revisa tu negocio y te otorga el sello. Te avisaremos.'
+              : 'Necesitas tu perfil publicado y, además, un aporte entregado o un beneficio vigente.'}
+          </p>
+        </div>
+      </div>
+      <ol className="mt-5 grid gap-3 sm:grid-cols-3">
+        {ally.steps.map((step, index) => (
+          <li
+            key={step.key}
+            className={cn(
+              'rounded-2xl border p-4',
+              step.done ? 'border-brand-teal/40 bg-brand-teal/10' : 'border-dashed border-border',
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold',
+                step.done ? 'bg-brand-teal text-white' : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {step.done ? '✓' : index + 1}
+            </span>
+            <p className="mt-2 text-sm font-bold">
+              {ALLY_STEP_COPY[step.key].title}
+              <span className="sr-only">{step.done ? ' (hecho)' : ' (pendiente)'}</span>
+            </p>
+            {!step.done && (
+              <p className="mt-1 text-xs text-muted-foreground">{ALLY_STEP_COPY[step.key].hint}</p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Autorización comercial: se da o se retira cuando quiera (Ley 1581). */
+function ConsentCard({
+  account,
+  onChange,
+}: {
+  account: BusinessAccount;
+  onChange: (account: BusinessAccount) => void;
+}) {
+  const client = useApiClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const flip = async () => {
+    setBusy(true);
+    try {
+      const next = await client.request<BusinessAccount>('/community/business/consent', {
+        method: 'PATCH',
+        json: { commercialConsent: !account.commercialConsent },
+      });
+      onChange(next);
+      toast({
+        title: next.commercialConsent ? 'Autorización guardada' : 'Autorización retirada',
+      });
+    } catch {
+      toast({ title: 'No se pudo guardar', variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section
+      aria-labelledby="consent-title"
+      className="rounded-2xl border border-border bg-card p-5"
+    >
+      <h2 id="consent-title" className="text-lg font-bold">
+        Novedades para tu negocio
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">{BUSINESS_COMMERCIAL_CONSENT_TEXT}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <span className="text-sm font-semibold">
+          {account.commercialConsent ? 'Autorizado' : 'No autorizado'}
+        </span>
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => void flip()}>
+          {account.commercialConsent ? 'Retirar autorización' : 'Autorizar'}
+        </Button>
+        <Link to="/uso-de-mis-datos" className="text-sm font-semibold text-primary hover:underline">
+          Uso de mis datos
+        </Link>
+      </div>
+    </section>
+  );
+}
 
 /**
- * `/mi-negocio` (Comunidad): el negocio publica y edita su perfil en el
- * directorio. Todo perfil nace "En revisión" y vuelve a revisión al editarse.
- * Una Persona gestiona su propio perfil; en una organización, Owner/Administrator
- * (lo aplica el servidor: un 403 se muestra como mensaje).
+ * `/mi-negocio` · Panel del negocio aliado. Sin panel activo, una tarjeta para
+ * activarlo. Activo: el camino al sello, el impacto comprobable, validar
+ * códigos, el beneficio para quien adopta, cómo aportar a los refugios, el
+ * perfil en el directorio y la autorización comercial.
  */
 export function MyServicesPage() {
   const client = useApiClient();
-  const { toast } = useToast();
+  const [overview, setOverview] = useState<BusinessOverview | null>(null);
+  const [failed, setFailed] = useState(false);
   const [listings, setListings] = useState<ServiceListing[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [forbidden, setForbidden] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [redemptions, setRedemptions] = useState<BenefitRedemptionRecord[]>([]);
 
-  const load = async (): Promise<void> => {
+  const refresh = useCallback(async () => {
     try {
-      const rows = await client.request<ServiceListing[]>('/community/services/mine');
-      setListings(Array.isArray(rows) ? rows : []);
-    } catch (error) {
-      if ((error as { status?: number }).status === 403) setForbidden(true);
+      const data = await client.request<BusinessOverview>('/community/business/me');
+      setOverview(data);
+      setFailed(false);
+      if (data.account) {
+        const rows = await client
+          .request<BenefitRedemptionRecord[]>('/community/business/redemptions')
+          .catch(() => []);
+        setRedemptions(Array.isArray(rows) ? rows : []);
+      }
+    } catch {
+      setFailed(true);
     }
-  };
-
-  useEffect(() => {
-    let active = true;
-    void load().finally(() => {
-      if (active) setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
   }, [client]);
 
-  const startEdit = (listing: ServiceListing) => {
-    setEditingId(listing.id);
-    setForm({
-      ...EMPTY,
-      ...Object.fromEntries(
-        Object.keys(EMPTY).map((key) => [key, String(listing[key as keyof ServiceListing] ?? '')]),
-      ),
-    } as FormState);
-    setShowForm(true);
-  };
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      const json = toListingPayload(form);
-      if (editingId) {
-        await client.request(`/community/services/${editingId}`, { method: 'PATCH', json });
-      } else {
-        await client.request('/community/services', { method: 'POST', json });
-      }
-      toast({
-        title: 'Perfil enviado a revisión',
-        description: 'Lo publicaremos en el directorio cuando lo aprobemos.',
-      });
-      setShowForm(false);
-      setEditingId(null);
-      setForm(EMPTY);
-      await load();
-    } catch (error) {
-      toast({
-        title: 'No se pudo guardar',
-        description:
-          error instanceof Error ? error.message : 'Revisa los datos e inténtalo de nuevo.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+  if (failed) {
+    return (
+      <PageContainer>
+        <EmptyState
+          title="No se pudo cargar tu panel"
+          description="Inténtalo de nuevo más tarde."
+        />
+      </PageContainer>
+    );
+  }
+  if (!overview) {
+    return (
+      <PageContainer>
+        <Skeleton className="h-64 w-full rounded-3xl" />
+      </PageContainer>
+    );
+  }
+  if (!overview.account) {
+    return (
+      <PageContainer>
+        <ActivationCard onActivated={() => void refresh()} />
+      </PageContainer>
+    );
+  }
+
+  const { impact, account } = overview;
+  const main = listings[0];
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Mi negocio"
-        description="Publica gratis tu veterinaria, peluquería, servicio de paseo o tienda en el directorio de AdoptaFácil."
-        actions={
-          !forbidden && !showForm ? (
-            <Button
-              onClick={() => {
-                setEditingId(null);
-                setForm(EMPTY);
-                setShowForm(true);
-              }}
-            >
-              Nuevo perfil
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {loading && <Skeleton className="h-40 w-full" />}
-      {!loading && forbidden && (
-        <EmptyState
-          title="Sin permiso"
-          description="En una organización, solo el representante o un administrador puede publicar perfiles."
-        />
-      )}
-
-      {showForm && (
-        <form
-          onSubmit={onSubmit}
-          className="mb-8 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:grid-cols-2"
-        >
-          <label className="space-y-1 text-sm font-semibold sm:col-span-2">
-            Tipo de servicio
-            <select
-              value={form.category}
-              onChange={(event) => setForm({ ...form, category: event.target.value })}
-              className="block w-full rounded-lg border border-input bg-background px-3 py-2 font-normal"
-            >
-              {SERVICE_CATEGORIES.map((value) => (
-                <option key={value} value={value}>
-                  {SERVICE_CATEGORY_SINGULAR[value]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {FIELDS.map((field) => (
-            <label key={field.key} className="space-y-1 text-sm font-semibold">
-              {field.label}
-              <Input
-                type={field.type ?? 'text'}
-                required={field.required}
-                value={form[field.key]}
-                onChange={(event) => setForm({ ...form, [field.key]: event.target.value })}
-              />
-            </label>
-          ))}
-          <label className="space-y-1 text-sm font-semibold sm:col-span-2">
-            Descripción
-            <textarea
-              value={form.description}
-              maxLength={1000}
-              onChange={(event) => setForm({ ...form, description: event.target.value })}
-              className="block min-h-24 w-full rounded-lg border border-input bg-background p-3 font-normal"
-              placeholder="Qué ofreces, horarios, si atiendes urgencias o a domicilio."
-            />
-          </label>
-          <p className="text-xs text-muted-foreground sm:col-span-2">
-            Publica solo datos de contacto del negocio. Al enviar, autorizas a AdoptaFácil a
-            mostrarlos en el directorio público después de revisarlos.
-          </p>
-          <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" disabled={saving}>
-              {editingId ? 'Guardar y enviar a revisión' : 'Enviar a revisión'}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-              Cancelar
-            </Button>
+      <div className="space-y-8" data-testid="business-panel">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-brand-teal-dark">
+              Panel de negocio
+            </p>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+              {main?.name ?? 'Tu negocio'}
+            </h1>
+            {overview.ally.isAlly && <PartnerBadge className="mt-1" />}
           </div>
-        </form>
-      )}
-
-      {!loading && !forbidden && listings.length === 0 && !showForm && (
-        <EmptyState
-          title="Aún no tienes un perfil"
-          description="Crea uno y lo revisaremos antes de mostrarlo en el directorio."
-        />
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        {listings.map((listing) => (
-          <article
-            key={listing.id}
-            className="space-y-2 rounded-2xl border border-border bg-card p-5"
+          <Link
+            to="/negocios-aliados"
+            className="text-sm font-semibold text-primary hover:underline"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold uppercase text-muted-foreground">
-                  {SERVICE_CATEGORY_SINGULAR[listing.category]} · {listing.city}
-                </p>
-                <h3 className="text-lg font-bold">{listing.name}</h3>
-              </div>
-              <Badge variant={STATUS_VARIANT[listing.status]}>
-                {SERVICE_STATUS_LABELS[listing.status]}
-              </Badge>
-            </div>
-            {listing.moderationReason && (
-              <p className="text-sm text-muted-foreground">Motivo: {listing.moderationReason}</p>
-            )}
-            <div className="flex gap-3 text-sm">
-              <button
-                type="button"
-                className="font-semibold text-primary hover:underline"
-                onClick={() => startEdit(listing)}
+            Cómo funciona
+          </Link>
+        </header>
+
+        <AllyPath overview={overview} />
+
+        <section aria-labelledby="impact-title">
+          <h2 id="impact-title" className="text-lg font-bold">
+            Tu impacto
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Solo cuenta lo que confirman otros: los refugios al recibir tus aportes y tu negocio al
+            validar un código.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <ImpactStat value={impact.sheltersSupported} label="Refugios apoyados" tone="teal" />
+            <ImpactStat
+              value={impact.contributionsDelivered}
+              label="Aportes entregados"
+              tone="navy"
+            />
+            <ImpactStat
+              value={impact.adoptersBenefited}
+              label="Familias que usaron tu beneficio"
+              tone="gold"
+              hint={
+                impact.passesIssued ? `${impact.passesIssued} lo guardaron en su cuenta` : undefined
+              }
+            />
+            <ImpactStat value={impact.liveBenefits} label="Beneficios vigentes" tone="coral" />
+          </div>
+        </section>
+
+        <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+          <RedeemCard onRedeemed={() => void refresh()} />
+          <section
+            aria-labelledby="contribute-title"
+            className="rounded-2xl bg-brand-navy p-5 text-white"
+          >
+            <h2 id="contribute-title" className="text-lg font-bold">
+              Aporta a los refugios
+            </h2>
+            <p className="mt-1 text-sm text-white/80">
+              Mira lo que necesitan y ofrece lo que tu negocio tiene: alimento, baños, consultas.
+              Cuando el refugio confirma la entrega, suma a tu impacto.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                to="/recursos"
+                className="rounded-full bg-brand-gold px-4 py-2 text-sm font-bold text-brand-navy hover:bg-brand-gold/90"
               >
-                Editar
-              </button>
-              {listing.status === ServiceListingStatus.Approved && (
-                <Link
-                  to={`/servicios/${listing.id}`}
-                  className="font-semibold text-primary hover:underline"
-                >
-                  Ver en el directorio
-                </Link>
-              )}
+                Ver qué necesitan
+              </Link>
+              <Link
+                to="/mis-ofertas"
+                className="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold hover:bg-white/10"
+              >
+                Mis ofertas
+              </Link>
             </div>
-          </article>
-        ))}
+          </section>
+        </div>
+
+        <BenefitsManager listings={listings} onChange={() => void refresh()} />
+
+        {redemptions.length > 0 && (
+          <section aria-labelledby="redemptions-title">
+            <h2 id="redemptions-title" className="text-lg font-bold">
+              Últimos códigos validados
+            </h2>
+            <ul className="mt-3 divide-y divide-border rounded-2xl border border-border bg-card">
+              {redemptions.map((item) => (
+                <li key={item.id} className="flex items-center justify-between gap-3 p-3 text-sm">
+                  <span>
+                    <strong>{item.animalName}</strong> · {item.benefitTitle}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {dateFmt.format(new Date(item.redeemedAt))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <ListingManager onListingsChange={setListings} />
+
+        <ConsentCard
+          account={account}
+          onChange={(next) => setOverview({ ...overview, account: next })}
+        />
       </div>
     </PageContainer>
   );

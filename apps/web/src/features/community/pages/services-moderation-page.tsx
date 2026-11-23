@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   ServiceListingStatus,
+  type BusinessBenefitQueueItem,
+  type BusinessBenefitsQueuePage,
+  type BusinessImpact,
   type ServiceListing,
   type ServiceListingsPage,
   type ServiceReview,
@@ -13,13 +16,15 @@ import { useApiClient } from '../../../shell/api';
 import { SERVICE_CATEGORY_SINGULAR, SERVICE_STATUS_LABELS } from '../model/directory-view';
 
 type Decision = 'approve' | 'reject' | 'hide';
-type Tab = 'services' | 'reviews';
+type Tab = 'services' | 'benefits' | 'reviews';
 
 /**
  * `/plataforma/servicios` (Comunidad): la plataforma aprueba, rechaza u oculta
  * perfiles del directorio y sus reseñas. Rechazar u ocultar pide motivo; cada
  * decisión queda auditada en el tenant del negocio. Aquí también se marca a
- * un negocio como "Aliado AdoptaFácil" (solo la plataforma puede hacerlo).
+ * un negocio como "Aliado AdoptaFácil" (solo la plataforma puede hacerlo),
+ * viendo su impacto comprobable y si cumple los requisitos del sello. La
+ * pestaña Beneficios modera lo que los negocios ofrecen a quien adopta.
  */
 export function ServicesModerationPage() {
   const client = useApiClient();
@@ -28,6 +33,8 @@ export function ServicesModerationPage() {
   const [status, setStatus] = useState<ServiceListingStatus>(ServiceListingStatus.Pending);
   const [listings, setListings] = useState<ServiceListing[]>([]);
   const [reviews, setReviews] = useState<ServiceReview[]>([]);
+  const [benefits, setBenefits] = useState<BusinessBenefitQueueItem[]>([]);
+  const [impacts, setImpacts] = useState<Record<string, BusinessImpact>>({});
   const [loading, setLoading] = useState(true);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -37,7 +44,25 @@ export function ServicesModerationPage() {
       const page = await client.request<Partial<ServiceListingsPage<ServiceListing>>>(
         `/platform/community/services?status=${status}&limit=50`,
       );
-      setListings(Array.isArray(page?.items) ? page.items : []);
+      const items = Array.isArray(page?.items) ? page.items : [];
+      setListings(items);
+      // Impacto para decidir el sello (solo de perfiles aprobados).
+      const pairs = await Promise.all(
+        items
+          .filter((l) => l.status === ServiceListingStatus.Approved)
+          .map((l) =>
+            client
+              .request<BusinessImpact>(`/platform/community/services/${l.id}/impact`)
+              .then((impact) => [l.id, impact] as const)
+              .catch(() => null),
+          ),
+      );
+      setImpacts(Object.fromEntries(pairs.filter((p) => p !== null)));
+    } else if (tab === 'benefits') {
+      const page = await client.request<Partial<BusinessBenefitsQueuePage>>(
+        `/platform/community/benefits?status=${status}&limit=50`,
+      );
+      setBenefits(Array.isArray(page?.items) ? page.items : []);
     } else {
       const page = await client.request<Partial<ServiceReviewsPage<ServiceReview>>>(
         `/platform/community/service-reviews?status=${status}&limit=50`,
@@ -70,7 +95,9 @@ export function ServicesModerationPage() {
       const path =
         tab === 'services'
           ? `/platform/community/services/${id}/moderate`
-          : `/platform/community/service-reviews/${id}/moderate`;
+          : tab === 'benefits'
+            ? `/platform/community/benefits/${id}/moderate`
+            : `/platform/community/service-reviews/${id}/moderate`;
       await client.request(path, {
         method: 'PATCH',
         json: { decision, ...(reason ? { reason } : {}) },
@@ -153,6 +180,13 @@ export function ServicesModerationPage() {
         </button>
         <button
           type="button"
+          className={tabClass(tab === 'benefits')}
+          onClick={() => setTab('benefits')}
+        >
+          Beneficios
+        </button>
+        <button
+          type="button"
           className={tabClass(tab === 'reviews')}
           onClick={() => setTab('reviews')}
         >
@@ -179,6 +213,9 @@ export function ServicesModerationPage() {
       {!loading && tab === 'reviews' && reviews.length === 0 && (
         <EmptyState title="Nada por revisar" />
       )}
+      {!loading && tab === 'benefits' && benefits.length === 0 && (
+        <EmptyState title="Nada por revisar" />
+      )}
 
       {!loading && tab === 'services' && (
         <div className="space-y-3">
@@ -203,6 +240,23 @@ export function ServicesModerationPage() {
                   .filter(Boolean)
                   .join(' · ')}
               </p>
+              {impacts[listing.id] && (
+                <p className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs">
+                  <strong>Impacto:</strong> {impacts[listing.id].sheltersSupported} refugios ·{' '}
+                  {impacts[listing.id].contributionsDelivered} aportes entregados ·{' '}
+                  {impacts[listing.id].adoptersBenefited} adoptantes beneficiados ·{' '}
+                  {impacts[listing.id].liveBenefits} beneficios vigentes
+                  {!listing.isPartner &&
+                    (impacts[listing.id].contributionsDelivered > 0 ||
+                    impacts[listing.id].liveBenefits > 0 ? (
+                      <span className="ml-2 font-bold text-brand-teal-dark">
+                        · Cumple requisitos del sello
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-muted-foreground">· Aún no cumple el sello</span>
+                    ))}
+                </p>
+              )}
               {actions(listing.id, listing.status)}
               <button
                 type="button"
@@ -212,6 +266,28 @@ export function ServicesModerationPage() {
               >
                 {listing.isPartner ? 'Quitar alianza' : 'Marcar como aliado'}
               </button>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {!loading && tab === 'benefits' && (
+        <div className="space-y-3">
+          {benefits.map((benefit) => (
+            <article key={benefit.id} className="rounded-2xl border border-border bg-card p-5">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                {benefit.listingName} · {benefit.listingCity}
+                {!benefit.active && ' · pausado'}
+              </p>
+              <h3 className="text-lg font-bold">{benefit.title}</h3>
+              {benefit.description && <p className="text-sm">{benefit.description}</p>}
+              {benefit.terms && (
+                <p className="text-sm text-muted-foreground">Condiciones: {benefit.terms}</p>
+              )}
+              {benefit.validUntil && (
+                <p className="text-sm text-muted-foreground">Hasta: {benefit.validUntil}</p>
+              )}
+              {actions(benefit.id, benefit.status)}
             </article>
           ))}
         </div>

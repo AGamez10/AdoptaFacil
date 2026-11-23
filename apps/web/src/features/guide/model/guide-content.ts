@@ -376,9 +376,31 @@ export const PAGE_HELP: readonly PageHelp[] = [
     title: 'Directorio de servicios',
     tips: [
       'Veterinarias, peluquerías, paseadores y tiendas. Filtra por ciudad o tipo de servicio.',
-      'Si tienes un negocio, puedes publicarlo gratis desde "Mi negocio".',
+      'Si adoptaste en AdoptaFácil, mira los beneficios que te dan los negocios aliados.',
+      'Si tienes un negocio, publícalo gratis desde "Negocios aliados".',
     ],
-    related: [{ to: '/mi-negocio', label: 'Publicar mi negocio' }],
+    related: [
+      { to: '/negocios-aliados', label: 'Publicar mi negocio' },
+      { to: '/beneficios', label: 'Beneficios por adoptar' },
+    ],
+  },
+  {
+    match: /^\/negocios-aliados/,
+    title: 'Negocios aliados',
+    tips: [
+      'Un negocio aliado aporta a los refugios y recibe a quienes adoptan con un beneficio.',
+      'Es gratis. El sello de aliado se gana con hechos comprobables y no se compra.',
+    ],
+    related: [{ to: '/mi-negocio', label: 'Ir a mi panel de negocio' }],
+  },
+  {
+    match: /^\/beneficios/,
+    title: 'Beneficios por adoptar',
+    tips: [
+      'Se activan cuando el refugio confirma la entrega de tu animal.',
+      'Cada beneficio te da un código de un solo uso. El negocio no recibe tus datos.',
+    ],
+    related: [{ to: '/servicios', label: 'Ver el directorio' }],
   },
   {
     match: /^\/(donar|donaciones)$/,
@@ -660,12 +682,16 @@ export const PAGE_HELP: readonly PageHelp[] = [
   },
   {
     match: /^\/mi-negocio/,
-    title: 'Mi negocio',
+    title: 'Panel del negocio',
     tips: [
-      'Publica gratis tu veterinaria, peluquería, paseo o tienda en el directorio.',
-      'El equipo revisa el perfil antes de que aparezca en público.',
+      'Publica tu perfil, ofrece un beneficio a quien adopta y valida sus códigos aquí.',
+      'Tu impacto solo cuenta lo que confirman otros: los refugios y tus códigos validados.',
+      'Con el perfil publicado y un aporte o un beneficio vigente, cumples para el sello de aliado.',
     ],
-    related: [{ to: '/servicios', label: 'Ver el directorio' }],
+    related: [
+      { to: '/servicios', label: 'Ver el directorio' },
+      { to: '/negocios-aliados', label: 'Cómo funciona' },
+    ],
   },
   {
     match: /^\/mis-mascotas/,

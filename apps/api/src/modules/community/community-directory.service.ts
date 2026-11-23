@@ -41,6 +41,7 @@ type RawPublicListing = Omit<ServiceListingPublic, 'ratingAverage'> & {
   whatsapp: string | null;
   website: string | null;
   email: string | null;
+  adopterBenefitTitle?: string | null;
 };
 
 type RawQueueListing = RawPublicListing & {
@@ -82,6 +83,7 @@ function toPublicListing(raw: RawPublicListing): ServiceListingPublic {
     isPartner: raw.isPartner === true,
     ratingAverage: raw.ratingAverage === null ? undefined : Number(raw.ratingAverage),
     ratingCount: Number(raw.ratingCount ?? 0),
+    adopterBenefitTitle: opt(raw.adopterBenefitTitle),
     createdAt: raw.createdAt,
   };
 }
@@ -335,7 +337,12 @@ export class CommunityDirectoryService {
   }
 
   private toQueueListing(raw: RawQueueListing): ServiceListing {
-    const { ratingAverage: _avg, ratingCount: _count, ...rest } = toPublicListing(raw);
+    const {
+      ratingAverage: _avg,
+      ratingCount: _count,
+      adopterBenefitTitle: _benefit,
+      ...rest
+    } = toPublicListing(raw);
     return {
       ...rest,
       organizationId: raw.organizationId,

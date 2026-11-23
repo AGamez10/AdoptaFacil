@@ -16,8 +16,13 @@ import { CommunityDirectoryService } from './community-directory.service';
 import { CommunityPetsService } from './community-pets.service';
 import { PublicCommunityController } from './public-community.controller';
 import { PublicCommunityService } from './public-community.service';
-import { CommunityPreRegistrationController } from './community-pre-registration.controller';
-import { CommunityPreRegistrationService } from './community-pre-registration.service';
+import {
+  CommunityAdopterBenefitsController,
+  CommunityBusinessController,
+  CommunityBusinessModerationController,
+  PublicCommunityBusinessController,
+} from './community-business.controller';
+import { CommunityBusinessService } from './community-business.service';
 
 /**
  * M11 · Comunidad (Ola 3, F-8): publicaciones, comentarios, likes y
@@ -38,7 +43,12 @@ import { CommunityPreRegistrationService } from './community-pre-registration.se
     CommunityPetsController,
     CommunityDirectoryModerationController,
     PublicCommunityController,
-    CommunityPreRegistrationController,
+    // Negocios aliados: panel, beneficios para quien adopta, canje e impacto.
+    // (Reemplaza el pre-registro sin cuenta, retirado.)
+    CommunityBusinessController,
+    CommunityAdopterBenefitsController,
+    PublicCommunityBusinessController,
+    CommunityBusinessModerationController,
   ],
   providers: [
     CommunityPostsService,
@@ -48,7 +58,7 @@ import { CommunityPreRegistrationService } from './community-pre-registration.se
     CommunityDirectoryService,
     CommunityPetsService,
     PublicCommunityService,
-    CommunityPreRegistrationService,
+    CommunityBusinessService,
   ],
 })
 export class CommunityModule {}
