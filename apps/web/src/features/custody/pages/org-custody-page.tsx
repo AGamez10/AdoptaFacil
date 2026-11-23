@@ -497,6 +497,9 @@ export function OrgCustodyPage() {
               <p className="text-sm text-muted-foreground">
                 Para registrar un cobro nuevo, abre la ficha del animal y entra a la pestaña
                 Custodia.
+                {onlinePayments?.enabled
+                  ? ' Cada cobro pendiente tiene su botón "Enlace de pago" para compartirlo con el responsable.'
+                  : ''}
               </p>
               <ChargeList
                 api={api}

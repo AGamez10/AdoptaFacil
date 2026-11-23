@@ -55,6 +55,9 @@ describe('Custody online payments (Mercado Pago, cuenta de la organización)', (
   let tokenResponse: Record<string, unknown> = {};
   const orderCalls: { auth: string; body: Record<string, unknown> }[] = [];
   const orders = new Map<string, { token: string; body: Record<string, unknown> }>();
+  /** Lo que responde la búsqueda de pagos de la cuenta (relectura de conciliación). */
+  let searchResults: Record<string, unknown>[] = [];
+  const searchCalls: string[] = [];
 
   const today = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
 
@@ -96,6 +99,12 @@ describe('Custody online payments (Mercado Pago, cuenta de la organización)', (
           id: `ORDCUS${orderCalls.length}`,
           checkout_url: `https://www.mercadopago.com.co/checkout/v1/redirect?order_id=ORDCUS${orderCalls.length}`,
         });
+      }
+      if (u.startsWith('https://api.mp.test/v1/payments/search')) {
+        searchCalls.push(auth);
+        return auth === `Bearer ${orgAccess}`
+          ? json({ results: searchResults, paging: { total: searchResults.length } })
+          : json({}, 401);
       }
       const ord = /^https:\/\/api\.mp\.test\/v1\/orders\/(\w+)$/.exec(u);
       if (ord) {
@@ -515,5 +524,90 @@ describe('Custody online payments (Mercado Pago, cuenta de la organización)', (
         method: 'mercadopago',
       })
       .expect(400);
+  });
+
+  it('the charge shows its active link, and the team is told when money arrives or goes back', async () => {
+    const pending = await newCharge(45000);
+    expect((await chargeOf(pending)).paymentLinkActive).toBe(false);
+    await as(orgA).post(`/custody/charges/${pending}/payment-link`).expect(200);
+    expect(await chargeOf(pending)).toMatchObject({
+      paymentLinkActive: true,
+      onlinePaymentsInReview: 0,
+    });
+    await as(orgA).delete(`/custody/charges/${pending}/payment-link`).expect(204);
+    expect((await chargeOf(pending)).paymentLinkActive).toBe(false);
+
+    // Lo que pasó en las pruebas anteriores dejó avisos en la bandeja del equipo.
+    const notices = await admin.userNotification.findMany({
+      where: { organizationId: orgA.orgId, kind: { startsWith: 'custody.online_payment' } },
+    });
+    const kinds = new Set(notices.map((n) => n.kind));
+    expect(kinds).toEqual(
+      new Set([
+        'custody.online_payment_received',
+        'custody.online_payment_reversed',
+        'custody.online_payment_review',
+      ]),
+    );
+    expect(notices.every((n) => n.userId === orgA.userId)).toBe(true);
+    expect(notices.every((n) => n.href === '/organizacion/custodia')).toBe(true);
+    // El mismo aviso repetido por Mercado Pago no duplica la notificación.
+    const received = notices.filter((n) => n.kind === 'custody.online_payment_received');
+    expect(new Set(received.map((n) => n.dedupeKey)).size).toBe(received.length);
+    // Sin datos del responsable en el aviso.
+    expect(JSON.stringify(notices)).not.toMatch(/Reservada|1000200399|3000000000/);
+    // La otra organización no recibe nada.
+    expect(
+      await admin.userNotification.count({
+        where: { organizationId: orgB.orgId, kind: { startsWith: 'custody.' } },
+      }),
+    ).toBe(0);
+
+    // El cobro con un pago que no admitía queda marcado para revisión.
+    const flagged = (await as(orgA).get('/custody/charges').expect(200)).body.filter(
+      (c: { onlinePaymentsInReview?: number }) => (c.onlinePaymentsInReview ?? 0) > 0,
+    );
+    expect(flagged).toHaveLength(1);
+  });
+
+  it('a lost notification is recovered by the reconciliation re-read, once', async () => {
+    const pending = await newCharge(70000);
+    const url = (await as(orgA).post(`/custody/charges/${pending}/payment-link`).expect(200)).body
+      .url as string;
+    const ref = (await checkout(url.split('/').pop() as string).expect(200)).body
+      .reference as string;
+    // Mercado Pago aprobó, pero su aviso nunca llegó.
+    const approved = {
+      id: 990001,
+      status: 'approved',
+      external_reference: ref,
+      transaction_amount: 70000,
+      currency_id: 'COP',
+      collector_id: Number(mpUserId),
+      live_mode: true,
+      date_created: new Date().toISOString(),
+    };
+    // Un pago de otra cuenta con la misma referencia nunca cuenta.
+    searchResults = [{ ...approved, id: 990002, collector_id: 1234 }, approved];
+    const period = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 7);
+    const reread = await as(orgA).post(`/org/accounting/periods/${period}/reread`).expect(200);
+    expect(reread.body.settled).toBeGreaterThanOrEqual(1);
+    expect(searchCalls.at(-1)).toBe(`Bearer ${orgAccess}`);
+
+    const charge = await chargeOf(pending);
+    expect(charge).toMatchObject({ status: 'paid', paidCop: 70000, balanceCop: 0 });
+    expect(charge.payments).toHaveLength(1);
+    expect(charge.payments[0]).toMatchObject({ method: 'mercadopago', reference: '990001' });
+    // Releer otra vez no paga dos veces; y sigue sin ser una donación.
+    await as(orgA).post(`/org/accounting/periods/${period}/reread`).expect(200);
+    expect((await chargeOf(pending)).payments).toHaveLength(1);
+    expect(await admin.donation.count({ where: { organizationId: orgA.orgId } })).toBe(0);
+    expect(await admin.mercadoPagoPayment.count({ where: { organizationId: orgA.orgId } })).toBe(0);
+
+    // Después Mercado Pago devuelve el dinero: la relectura también lo aplica.
+    searchResults = [{ ...approved, status: 'refunded' }];
+    await as(orgA).post(`/org/accounting/periods/${period}/reread`).expect(200);
+    expect(await chargeOf(pending)).toMatchObject({ status: 'pending', balanceCop: 70000 });
+    searchResults = [];
   });
 });

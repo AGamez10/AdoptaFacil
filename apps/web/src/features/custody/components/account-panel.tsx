@@ -13,7 +13,15 @@ import {
   type CustodyPayment,
   type CustodyPaymentLink,
 } from '@adoptafacil/contracts';
-import { Badge, Button, EmptyState, Input, friendlyErrorMessage, useToast } from '@adoptafacil/ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  buttonVariants,
+  friendlyErrorMessage,
+  useToast,
+} from '@adoptafacil/ui';
 import { openBlob, type CustodyApi } from '../api/custody-api';
 import {
   FILE_ACCEPT,
@@ -21,7 +29,9 @@ import {
   formatCop,
   formatDate,
   parseCopInput,
+  paymentLinkMessage,
   todayInColombia,
+  whatsappShareUrl,
 } from '../model/custody-view';
 import {
   CheckField,
@@ -453,11 +463,15 @@ export function ChargeList({
   const [voiding, setVoiding] = useState<CustodyPayment | null>(null);
   const [link, setLink] = useState<CustodyPaymentLink | null>(null);
   const [linkBusy, setLinkBusy] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  const showLink = async (chargeId: string) => {
-    setLinkBusy(chargeId);
+  const showLink = async (charge: CustodyCharge) => {
+    setLinkBusy(charge.id);
     try {
-      setLink(await api.paymentLink(chargeId));
+      setLink(await api.paymentLink(charge.id));
+      // La primera vez se crea: la lista se refresca para mostrar "Enlace activo".
+      if (!charge.paymentLinkActive) onChanged();
     } catch (error) {
       toast({
         title: 'No pudimos crear el enlace de pago',
@@ -469,28 +483,46 @@ export function ChargeList({
     }
   };
 
-  const copyLink = async () => {
-    if (!link) return;
+  const copyText = async (text: string, done: string) => {
     try {
-      await navigator.clipboard.writeText(link.url);
-      toast({ title: 'Enlace copiado. Compártelo con quien va a pagar.', variant: 'success' });
+      await navigator.clipboard.writeText(text);
+      toast({ title: done, variant: 'success' });
     } catch {
       toast({ title: 'Selecciona el enlace y cópialo a mano.', variant: 'destructive' });
     }
   };
 
+  const nativeShare = async (charge: CustodyCharge, url: string) => {
+    try {
+      await navigator.share({
+        title: `Pago de ${charge.description}`,
+        text: paymentLinkMessage(charge, url),
+      });
+    } catch {
+      // La persona cerró el panel de compartir: no es un error.
+    }
+  };
+
   const revokeLink = async () => {
     if (!link) return;
+    setRevoking(true);
     try {
       await api.revokePaymentLink(link.chargeId);
       setLink(null);
-      toast({ title: 'El enlace quedó sin efecto.', variant: 'success' });
+      toast({
+        title: 'El enlace quedó sin efecto.',
+        description: 'Quien lo tenga ya no puede pagar con él. Puedes crear uno nuevo.',
+        variant: 'success',
+      });
+      onChanged();
     } catch (error) {
       toast({
         title: 'No pudimos dejar sin efecto el enlace',
         description: friendlyErrorMessage(error),
         variant: 'destructive',
       });
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -521,7 +553,11 @@ export function ChargeList({
     return (
       <EmptyState
         title="No hay cobros registrados"
-        description="Aquí aparecerán las mensualidades, la alimentación y los gastos adicionales a cargo del responsable."
+        description={
+          onlinePayments
+            ? 'Aquí aparecerán las mensualidades, la alimentación y los gastos adicionales a cargo del responsable. Cada cobro pendiente trae su botón "Enlace de pago" para compartirlo.'
+            : 'Aquí aparecerán las mensualidades, la alimentación y los gastos adicionales a cargo del responsable.'
+        }
       />
     );
   }
@@ -540,6 +576,12 @@ export function ChargeList({
                     {charge.daysOverdue > 0 ? ` · ${charge.daysOverdue} días` : ''}
                   </Badge>
                   {charge.collectionStartedAt && <Badge variant="outline">Cobro iniciado</Badge>}
+                  {charge.status === 'pending' && onlinePayments && charge.paymentLinkActive && (
+                    <Badge variant="info">Enlace de pago activo</Badge>
+                  )}
+                  {(charge.onlinePaymentsInReview ?? 0) > 0 && (
+                    <Badge variant="warning">Pago en línea por revisar</Badge>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {CUSTODY_CHARGE_CONCEPT_LABELS[charge.concept]}
@@ -637,9 +679,13 @@ export function ChargeList({
                   size="sm"
                   variant="outline"
                   disabled={linkBusy === charge.id}
-                  onClick={() => void showLink(charge.id)}
+                  onClick={() => void showLink(charge)}
                 >
-                  Enlace de pago
+                  {linkBusy === charge.id
+                    ? 'Preparando enlace…'
+                    : charge.paymentLinkActive
+                      ? 'Ver enlace de pago'
+                      : 'Enlace de pago'}
                 </Button>
               )}
               {charge.status === 'pending' && canManage && (
@@ -659,13 +705,26 @@ export function ChargeList({
               )}
             </div>
 
+            {(charge.onlinePaymentsInReview ?? 0) > 0 && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Llegó un pago en línea que este cobro ya no admitía (estaba pagado o anulado). El
+                dinero está en la cuenta de Mercado Pago de la organización: revísalo en el
+                historial del animal y devuelve lo que sobre desde Mercado Pago.
+              </p>
+            )}
+
             {link?.chargeId === charge.id && (
-              <div className="mt-3 space-y-2 rounded-md bg-muted p-3 text-sm">
+              <div
+                className="mt-3 space-y-2 rounded-md bg-muted p-3 text-sm"
+                role="region"
+                aria-label="Enlace de pago por Mercado Pago"
+              >
                 <p className="font-medium">Enlace de pago por Mercado Pago</p>
                 <p className="text-muted-foreground">
-                  Compártelo con quien va a pagar. No necesita cuenta en AdoptaFácil, puede pagar
-                  todo el saldo o una parte y el pago llega a la cuenta de Mercado Pago de la
-                  organización.
+                  Envíaselo a {charge.responsibleName} por WhatsApp, correo o como prefieras. No
+                  necesita cuenta en AdoptaFácil, puede pagar todo el saldo o una parte y el dinero
+                  llega a la cuenta de Mercado Pago de la organización. El pago queda registrado
+                  solo, con su constancia. Es el mismo enlace cada vez que lo abras aquí.
                 </p>
                 <Input
                   readOnly
@@ -674,10 +733,58 @@ export function ChargeList({
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => void copyLink()}>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      void copyText(link.url, 'Enlace copiado. Compártelo con quien va a pagar.')
+                    }
+                  >
                     Copiar enlace
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void revokeLink()}>
+                  <a
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                    href={whatsappShareUrl(paymentLinkMessage(charge, link.url))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Enviar por WhatsApp
+                  </a>
+                  {canNativeShare ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void nativeShare(charge, link.url)}
+                    >
+                      Compartir
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        void copyText(
+                          paymentLinkMessage(charge, link.url),
+                          'Mensaje copiado con el enlace. Pégalo donde quieras enviarlo.',
+                        )
+                      }
+                    >
+                      Copiar mensaje
+                    </Button>
+                  )}
+                  <a
+                    className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Ver como quien paga
+                  </a>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={revoking}
+                    onClick={() => void revokeLink()}
+                  >
                     Dejar sin efecto
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setLink(null)}>
@@ -719,7 +826,11 @@ export function ChargeList({
         open={voiding !== null}
         onClose={() => setVoiding(null)}
         title="Anular el pago"
-        description="La constancia ya emitida se conserva en el historial y el pago queda marcado como anulado."
+        description={
+          voiding?.method === 'mercadopago'
+            ? 'Este pago entró en línea por Mercado Pago. Anularlo aquí NO devuelve el dinero: la devolución se hace desde la cuenta de Mercado Pago de la organización (si la haces allá, AdoptaFácil la registra sola). La constancia se conserva en el historial y el pago queda marcado como anulado.'
+            : 'La constancia ya emitida se conserva en el historial y el pago queda marcado como anulado.'
+        }
         submitLabel="Anular pago"
         onConfirm={async (reason) => {
           if (!voiding) return;

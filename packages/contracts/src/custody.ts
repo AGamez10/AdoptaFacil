@@ -655,6 +655,17 @@ export interface CustodyCharge {
   cancelledAt?: string;
   cancelReason?: string;
   createdAt: string;
+  /**
+   * Pago en línea: el cobro tiene un enlace de pago vigente (ya se compartió o
+   * se puede compartir). Opcional por ser aditivo; ausente equivale a `false`.
+   */
+  paymentLinkActive?: boolean;
+  /**
+   * Pagos en línea que llegaron a Mercado Pago pero el cobro ya no los admitía
+   * (lo pagaron por otro medio o lo anularon): la organización los revisa y
+   * devuelve lo que sobre desde su Mercado Pago. Ausente equivale a 0.
+   */
+  onlinePaymentsInReview?: number;
 }
 
 export interface CreateCustodyChargeInput {

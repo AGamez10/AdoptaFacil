@@ -141,3 +141,23 @@ export function missingDataOf(error: unknown): string[] {
     .map((item) => (item as { message?: unknown }).message)
     .filter((message): message is string => typeof message === 'string' && message.length > 0);
 }
+
+/**
+ * Mensaje listo para mandar con el enlace de pago de un cobro de guardería o
+ * custodia (WhatsApp, correo o lo que use la organización). Sin datos del
+ * responsable: solo lo que la página de pago también muestra.
+ */
+export function paymentLinkMessage(
+  charge: { animalName: string; description: string; balanceCop: number },
+  url: string,
+): string {
+  return (
+    `Hola. Este es el enlace para pagar "${charge.description}" de ${charge.animalName} ` +
+    `(saldo ${formatCop(charge.balanceCop)}). Puedes pagar con Mercado Pago sin crear cuenta: ${url}`
+  );
+}
+
+/** `wa.me` sin número: WhatsApp deja elegir a quién enviarlo. */
+export function whatsappShareUrl(message: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}

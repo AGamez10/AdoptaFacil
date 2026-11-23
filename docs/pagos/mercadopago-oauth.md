@@ -123,6 +123,12 @@ se usa la cuenta de AdoptaFácil (la de planes y café). Sin cuenta conectada no
 - **Apagado por defecto.** `PUT /custody/online-payments/settings` lo enciende (Owner o Administrador) y
   exige aceptar el texto vigente (`CUSTODY_ONLINE_PAYMENT_TERMS`): el refugio factura y responde por IVA y
   retenciones. Queda quién aceptó, cuándo y qué versión (`custody_online_payment_settings`).
+- **Dónde está el enlace (para el refugio).** No hay un enlace general: cada cobro pendiente tiene el
+  suyo. Con el pago en línea encendido, en la ficha del animal (pestaña Custodia, sección Cuenta) o en
+  Organización → Custodia (Vencimientos y pagos), cada cobro pendiente muestra el botón **Enlace de pago**.
+  Al tocarlo aparece el enlace con Copiar, Enviar por WhatsApp, Compartir y Ver como quien paga. El cobro
+  queda marcado "Enlace de pago activo" hasta que se paga, se anula o se deja sin efecto el enlace. Si no
+  hay cobros, primero se registra uno (Registrar cobro, en la ficha del animal).
 - **Enlace por cobro.** `POST /custody/charges/:id/payment-link` devuelve el enlace
   (`/pagar/guarderia/<token>`, 256 bits, uno vigente por cobro, revocable). Quien lo abre no necesita
   cuenta: ve el cobro y su saldo, sin datos del responsable, y paga todo o una parte
@@ -135,7 +141,17 @@ se usa la cuenta de AdoptaFácil (la de planes y café). Sin cuenta conectada no
   vuelve a su saldo. Una devolución PARCIAL no viene en la relectura de la orden: el refugio la registra
   a mano (anula el pago y registra el valor que quedó).
 - **Para revisar.** Si llega un pago que el cobro ya no admite (ya estaba pagado o anulado), no se
-  inventa un pago: queda un aviso en el historial del animal para devolver el excedente desde Mercado Pago.
+  inventa un pago: queda un aviso en el historial del animal y el cobro se marca "Pago en línea por
+  revisar" para devolver el excedente desde Mercado Pago.
+- **Avisos al equipo.** Pago recibido, pago para revisar y devolución o contracargo llegan a la bandeja
+  (y push) de Owner, Administrador y Operador, con enlace a Organización → Custodia.
+- **Aviso perdido.** Si el aviso de Mercado Pago no llega, la relectura de conciliación
+  (Contabilidad → "Releer Mercado Pago", `POST /org/accounting/periods/:period/reread`, con el token del refugio) también aplica los pagos de
+  guardería: registra una sola vez el pago aprobado que faltaba y aplica devoluciones.
+- **Permisos.** Ver: Owner, Administrador, Operador y Auditor. Registrar cobros y pagos y crear o dejar sin
+  efecto enlaces: Owner, Administrador y Operador. Encender o apagar el pago en línea, conceder prórrogas,
+  anular cobros y anular pagos: solo Owner y Administrador. Todo queda en la auditoría. La devolución del
+  dinero se hace en el Mercado Pago del refugio; anular un pago en AdoptaFácil no mueve dinero.
 - **Contabilidad aparte.** No crea donaciones, recibos ni certificados de donación, y sus pagos no
   entran a `mercadopago_payments` ni a la conciliación de donaciones.
 - **Regla.** Pagar o no pagar nunca condiciona la devolución del animal.
