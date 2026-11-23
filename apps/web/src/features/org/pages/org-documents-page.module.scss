@@ -182,6 +182,18 @@
   color: var(--text-muted);
 }
 
+.prefill-details {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-hairline);
+
+  p {
+    margin: 0 0 0.4rem;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+}
+
 .prefill {
   display: grid;
   grid-template-columns: max-content 1fr;

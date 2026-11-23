@@ -65,6 +65,14 @@ export function ServiceCard({ service }: ServiceCardProps) {
         {service.description && (
           <p className="line-clamp-2 text-sm text-foreground/80">{service.description}</p>
         )}
+        {service.adopterBenefitTitle && (
+          <p
+            className="mt-2 rounded-lg bg-brand-gold/20 px-3 py-2 text-xs font-semibold text-brand-navy"
+            data-testid="service-card-benefit"
+          >
+            Si adoptaste: {service.adopterBenefitTitle}
+          </p>
+        )}
         <div className="mt-auto pt-3">
           <Link
             to={`/servicios/${encodeURIComponent(service.id)}`}

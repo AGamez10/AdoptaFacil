@@ -165,6 +165,7 @@ model ServiceListing {
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   reviews      ServiceListingReview[]
+  benefits     BusinessBenefit[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -245,4 +246,84 @@ model CommunityPreRegistration {
 
   @@index([createdAt])
   @@map("community_pre_registrations")
+}
+
+// ---------------------------------------------------------------------------
+// Negocios aliados: panel de negocio, beneficios para quien adopta y pases de
+// canje. Ver la migración `community_business_allies` (RLS, grants y
+// funciones SECURITY DEFINER).
+// ---------------------------------------------------------------------------
+
+/// Marca que un tenant es un NEGOCIO del ecosistema (menú y panel propios) y
+/// guarda su autorización OPCIONAL para recibir ofertas comerciales de
+/// AdoptaFácil (Ley 1581: finalidad aparte del directorio). Una por tenant.
+model BusinessAccount {
+  id                       String    @id @default(uuid()) @db.Uuid
+  organizationId           String    @unique @map("organization_id") @db.Uuid
+  userId                   String    @map("user_id") @db.Uuid
+  commercialConsent        Boolean   @default(false) @map("commercial_consent")
+  commercialConsentAt      DateTime? @map("commercial_consent_at")
+  commercialConsentVersion String?   @map("commercial_consent_version")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("community_business_accounts")
+}
+
+/// Beneficio que un negocio ofrece a quien adoptó en AdoptaFácil. Tenant del
+/// negocio (RLS). Nace `pending`; editar su contenido lo devuelve a revisión;
+/// pausar (`active`) no. Nunca se borra (los canjes son historia del impacto).
+model BusinessBenefit {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  listingId         String    @map("listing_id") @db.Uuid
+  createdByUserId   String    @map("created_by_user_id") @db.Uuid
+  title             String
+  description       String?
+  terms             String?
+  validUntil        DateTime? @map("valid_until") @db.Date
+  active            Boolean   @default(true)
+  status            String    @default("pending")
+  moderationReason  String?   @map("moderation_reason")
+  moderatedByUserId String?   @map("moderated_by_user_id") @db.Uuid
+  moderatedAt       DateTime? @map("moderated_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  listing      ServiceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  passes       BenefitPass[]
+
+  @@index([organizationId])
+  @@index([listingId])
+  @@index([status])
+  @@map("community_business_benefits")
+}
+
+/// Pase de quien adoptó para usar un beneficio (código de 8 caracteres, un
+/// solo canje). Vive en el tenant del negocio, pero la app NO tiene
+/// privilegios sobre la tabla: solo funciones SECURITY DEFINER lo emiten,
+/// listan y canjean, y el negocio nunca ve la identidad de quien adoptó.
+model BenefitPass {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  benefitId          String    @map("benefit_id") @db.Uuid
+  adopterUserId      String    @map("adopter_user_id") @db.Uuid
+  adoptionDeliveryId String    @map("adoption_delivery_id") @db.Uuid
+  code               String    @unique
+  status             String    @default("issued")
+  issuedAt           DateTime  @default(now()) @map("issued_at")
+  redeemedAt         DateTime? @map("redeemed_at")
+  redeemedByUserId   String?   @map("redeemed_by_user_id") @db.Uuid
+
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  benefit          BusinessBenefit  @relation(fields: [benefitId], references: [id], onDelete: Cascade)
+  adoptionDelivery AdoptionDelivery @relation(fields: [adoptionDeliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([benefitId, adopterUserId])
+  @@index([organizationId])
+  @@index([adopterUserId])
+  @@map("community_benefit_passes")
 }

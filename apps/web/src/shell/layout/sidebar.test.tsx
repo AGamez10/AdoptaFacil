@@ -73,13 +73,14 @@ describe('Sidebar — org identity chip (REFACTOR-VISUAL v2, Fase 3)', () => {
       },
     });
 
-    // La compuerta legal consulta `/legal/me` y la campana `/me/notifications`
-    // para toda sesión; lo que no debe pasar para una Persona es pedir el
-    // perfil de la organización.
+    // La compuerta legal consulta `/legal/me`, la campana `/me/notifications`
+    // y el menú pregunta si la persona activó su panel de negocio
+    // (`/community/business/me`); lo que no debe pasar para una Persona es
+    // pedir el perfil de la organización.
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.filter(
-          ([url]) => !/\/(legal\/me|me\/notifications)$/.test(String(url)),
+          ([url]) => !/\/(legal\/me|me\/notifications|community\/business\/me)$/.test(String(url)),
         ),
       ).toHaveLength(0),
     );

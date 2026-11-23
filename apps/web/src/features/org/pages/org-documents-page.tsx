@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   DocumentStatus,
   DocumentType,
   Role,
   type DocumentPrefill,
+  type Organization,
   type OrganizationDocument,
   type UploadOrganizationDocumentFileResult,
   type VerificationLevel,
@@ -260,7 +261,7 @@ export function OrgDocumentsPage() {
       );
       closeUpload();
       await load();
-      if (result.prefill?.nit || result.prefill?.legalName) {
+      if (result.prefill && hasProfileData(result.prefill)) {
         setPrefill(result.prefill);
       }
       toast({
@@ -286,12 +287,12 @@ export function OrgDocumentsPage() {
     setReading(documentId);
     try {
       const result = await client.request<DocumentPrefill>(`/org/documents/${documentId}/prefill`);
-      if (result.nit || result.legalName) {
+      if (hasProfileData(result)) {
         setPrefill(result);
       } else if (!quiet) {
         toast({
           title: result.readable
-            ? 'No encontramos el NIT ni la razón social'
+            ? 'No encontramos datos seguros para tu perfil'
             : 'No pudimos leer el archivo',
           description: result.readable
             ? 'El equipo lo revisa a mano. Puedes escribir los datos en tu perfil.'
@@ -312,11 +313,19 @@ export function OrgDocumentsPage() {
     if (!prefill) return;
     setSaving(true);
     try {
+      // La ubicación se guarda completa: se mezcla con la actual para no borrar
+      // lo que el documento no trae (p. ej. el país).
+      const current = prefill.location
+        ? await client.request<Organization | null>('/org/profile')
+        : null;
       await client.request('/org/profile', {
         method: 'PUT',
         json: {
           ...(prefill.nit ? { nit: prefill.nit } : {}),
           ...(prefill.legalName ? { legalName: prefill.legalName } : {}),
+          ...(prefill.location
+            ? { location: { ...(current?.location ?? {}), ...prefill.location } }
+            : {}),
         },
       });
       setPrefill(null);
@@ -571,7 +580,36 @@ export function OrgDocumentsPage() {
                 <dd>{prefill.legalName}</dd>
               </>
             )}
+            {prefill?.location?.address && (
+              <>
+                <dt>Dirección</dt>
+                <dd>{prefill.location.address}</dd>
+              </>
+            )}
+            {(prefill?.location?.city || prefill?.location?.department) && (
+              <>
+                <dt>Ciudad</dt>
+                <dd>
+                  {[prefill.location.city, prefill.location.department]
+                    .filter((v, i, all) => v && all.indexOf(v) === i)
+                    .join(', ')}
+                </dd>
+              </>
+            )}
           </dl>
+          {prefill?.details && prefill.details.length > 0 && (
+            <div className={styles['prefill-details']}>
+              <p>También leímos (no cambia tu perfil):</p>
+              <dl className={styles['prefill']}>
+                {prefill.details.map((d) => (
+                  <Fragment key={d.key}>
+                    <dt>{d.label}</dt>
+                    <dd>{d.value}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPrefill(null)}>
               Ahora no
@@ -584,4 +622,9 @@ export function OrgDocumentsPage() {
       </Dialog>
     </PageContainer>
   );
+}
+
+/** Solo se ofrece llenar el perfil con datos que la lectura dio por seguros. */
+function hasProfileData(p: DocumentPrefill): boolean {
+  return !!(p.nit || p.legalName || p.location?.address || p.location?.city);
 }

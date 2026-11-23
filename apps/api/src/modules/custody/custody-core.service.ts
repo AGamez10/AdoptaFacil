@@ -74,6 +74,10 @@ export type ChargeWithRelations = ChargeRow & {
   contract: { number: string; graceDays: number } | null;
   extensions: ExtensionRow[];
   payments: PaymentRow[];
+  /** Enlaces de pago vigentes (sin revocar). */
+  paymentLinks?: { id: string }[];
+  /** Pagos en línea que quedaron para revisión. */
+  onlinePayments?: { id: string }[];
 };
 
 export const CHARGE_INCLUDE = {
@@ -82,6 +86,8 @@ export const CHARGE_INCLUDE = {
   contract: { select: { number: true, graceDays: true } },
   extensions: { orderBy: { createdAt: 'asc' } },
   payments: { orderBy: { createdAt: 'asc' } },
+  paymentLinks: { where: { revokedAt: null }, select: { id: true } },
+  onlinePayments: { where: { status: 'mismatch' }, select: { id: true } },
 } as const;
 
 const DOCUMENT_TYPES = [
@@ -628,6 +634,8 @@ export class CustodyCoreService {
       cancelledAt: row.cancelledAt?.toISOString(),
       cancelReason: row.cancelReason ?? undefined,
       createdAt: row.createdAt.toISOString(),
+      paymentLinkActive: (row.paymentLinks?.length ?? 0) > 0,
+      onlinePaymentsInReview: row.onlinePayments?.length ?? 0,
     };
   }
 

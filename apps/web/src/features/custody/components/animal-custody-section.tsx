@@ -526,7 +526,19 @@ export function AnimalCustodySection({
             : undefined
         }
         onClose={() => setOpen(null)}
-        onDone={done}
+        onDone={(message) => {
+          // El cobro nuevo se ve (y se comparte su enlace) en la sección Cuenta.
+          setTab('cuenta');
+          setOpen(null);
+          toast({
+            title: message,
+            description: onlinePayments
+              ? 'Para cobrarlo en línea, toca "Enlace de pago" en el cobro y compártelo.'
+              : undefined,
+            variant: 'success',
+          });
+          void load();
+        }}
       />
 
       <Dialog

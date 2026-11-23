@@ -2,11 +2,11 @@ import { DocumentType, FormalizationState } from '@adoptafacil/contracts';
 import {
   buildVerificationReport,
   checkDocumentKind,
-  extractLegalName,
   extractNit,
   parseSpanishDate,
   type VerificationContext,
 } from './document-checks';
+import { extractChamberData, extractRutData } from './document-fields';
 import { nitCheckDigit } from './nit';
 
 const NOW = new Date('2026-10-08T15:00:00Z');
@@ -161,9 +161,9 @@ describe('verificación automática de documentos', () => {
 
 describe('datos para llenar el perfil', () => {
   it('lee la razón social del RUT y del certificado', () => {
-    expect(extractLegalName(RUT_RTE)).toBe('FUNDACION HUELLITAS DEL VALLE');
-    expect(extractLegalName(CERL)).toBe('FUNDACIÓN HUELLITAS DEL VALLE');
-    expect(extractLegalName('sin datos')).toBeNull();
+    expect(extractRutData(RUT_RTE).legalName).toBe('FUNDACION HUELLITAS DEL VALLE');
+    expect(extractChamberData(CERL).legalName).toBe('FUNDACIÓN HUELLITAS DEL VALLE');
+    expect(extractChamberData('sin datos').legalName).toBeUndefined();
   });
 });
 

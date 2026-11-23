@@ -752,8 +752,8 @@ export function AdoptionStepsSection({ photos = [] }: AdoptionStepsSectionProps)
  * Comunidad: todo el ecosistema que rodea a una mascota (veterinarias,
  * peluquerías, paseadores, tiendas). Con el módulo `community` apagado se
  * anuncia como "muy pronto" y el único llamado es escribirnos por WhatsApp;
- * encendido, lleva al directorio (/servicios) y a publicar un negocio
- * (/mi-negocio).
+ * encendido, lleva al directorio (/servicios) y a Negocios aliados
+ * (/negocios-aliados), la única puerta de entrada para un negocio.
  */
 const ECOSYSTEM = [
   { title: 'Veterinarias', text: 'Consultas, vacunas y urgencias cerca de ti.', tone: 'mint' },
@@ -791,7 +791,7 @@ export function CommunitySection() {
                 Ver servicios cerca de mí
                 <IconArrowRight className={styles.btn__icon} />
               </Link>
-              <Link to="/mi-negocio" className={cn(styles.btn, styles['btn--ghost'])}>
+              <Link to="/negocios-aliados" className={cn(styles.btn, styles['btn--ghost'])}>
                 Tengo un negocio para mascotas
               </Link>
             </div>

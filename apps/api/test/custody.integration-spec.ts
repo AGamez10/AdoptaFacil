@@ -687,6 +687,27 @@ describe('Custody (documentación, guardería, cuenta y reportes; no-leak)', () 
     // Encender o apagar el pago en línea es una decisión de administración.
     await api(orgA).put('/custody/online-payments/settings', { enabled: false }).expect(403);
     await api(orgA).get('/custody/online-payments/settings').expect(200);
+    // El operador crea y comparte el enlace de pago y registra pagos...
+    await api(orgA).post(`/custody/charges/${created.body.id}/payment-link`).expect(200);
+    await request(server)
+      .delete(`/custody/charges/${created.body.id}/payment-link`)
+      .set('Authorization', `Bearer ${orgA.token}`)
+      .expect(204);
+    const payment = await api(orgA)
+      .post(`/custody/charges/${created.body.id}/payments`, {
+        amountCop: 500,
+        paidOn: daysFromToday(0),
+        method: 'cash',
+      })
+      .expect(201);
+    // ...pero anular un pago es solo de administración.
+    const paymentId = (
+      await admin.custodyPayment.findFirstOrThrow({ where: { chargeId: created.body.id } })
+    ).id;
+    expect(payment.body).toBeTruthy();
+    await api(orgA)
+      .post(`/custody/payments/${paymentId}/void`, { reason: 'Un operador no anula pagos' })
+      .expect(403);
 
     await setRole('read_only_auditor');
     await api(orgA).get(`/custody/animals/${animalId}/timeline`).expect(200);

@@ -101,7 +101,13 @@ export function needsOrgSetup(org: Organization, status: OrganizationStatus | nu
 export async function landingAfterSignIn(client: ApiClient): Promise<string> {
   try {
     const roles = await client.request<Role[]>('/rbac/my-roles');
-    if (!roles?.some((role) => role === Role.Owner || role === Role.Administrator)) return '/';
+    if (!roles?.some((role) => role === Role.Owner || role === Role.Administrator)) {
+      // Un negocio aliado entra a su panel; cualquier error deja el inicio de siempre.
+      const business = await client
+        .request<{ account: unknown }>('/community/business/me')
+        .catch(() => null);
+      return business?.account ? '/mi-negocio' : '/';
+    }
     const [org, status] = await Promise.all([
       client.request<Organization>('/org/profile'),
       client

@@ -21,16 +21,12 @@ import { ALLOWED_CONTENT_TYPES } from '../../core/storage/storage-keys';
 import { sniffContentType } from '../../core/storage/file-sniff';
 import { optimizeImage } from '../../core/storage/image-optimizer';
 import { DocumentsService } from './documents.service';
-import {
-  checkDocumentKind,
-  extractLegalName,
-  extractNit,
-} from './document-verification/document-checks';
+import { checkDocumentKind } from './document-verification/document-checks';
+import { hasProfileData, prefillFromText } from './document-verification/document-fields';
 import {
   DOCUMENT_TEXT_PORT,
   type DocumentTextPort,
 } from './document-verification/document-text.port';
-import { isValidNit } from './document-verification/nit';
 
 /** Lo mínimo de un archivo de multer en memoria (no hay @types/multer). */
 export interface UploadedDocumentFile {
@@ -123,7 +119,7 @@ export class DocumentUploadService {
 
     const prefill =
       verdict.result === 'match' && text && PREFILL_TYPES.includes(input.type)
-        ? prefillFrom(document.id, text)
+        ? prefillFrom(document.id, input.type, text)
         : undefined;
     return {
       document,
@@ -133,15 +129,11 @@ export class DocumentUploadService {
   }
 }
 
-function prefillFrom(documentId: string, text: string): DocumentPrefill | undefined {
-  const nit = extractNit(text);
-  const legalName = extractLegalName(text);
-  const validNit = nit && isValidNit(nit.base, nit.dv) ? `${nit.base}-${nit.dv}` : undefined;
-  if (!validNit && !legalName) return undefined;
-  return {
-    documentId,
-    readable: true,
-    ...(validNit ? { nit: validNit } : {}),
-    ...(legalName ? { legalName } : {}),
-  };
+function prefillFrom(
+  documentId: string,
+  type: DocumentType,
+  text: string,
+): DocumentPrefill | undefined {
+  const prefill = prefillFromText(documentId, type, text);
+  return hasProfileData(prefill) ? prefill : undefined;
 }

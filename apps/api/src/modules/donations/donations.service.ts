@@ -589,6 +589,13 @@ export class DonationsService {
     }
     let settled = 0;
     for (const event of events) {
+      // A custody/boarding charge paid online (not a donation): a lost
+      // notification settles here, once, in the custody account.
+      const custody = await this.custodyPayments?.applyReadBack(organizationId, event, collector);
+      if (custody?.matched) {
+        if (custody.applied && event.status === 'approved') settled++;
+        continue;
+      }
       await this.recordMercadoPagoPayment(organizationId, event);
       if (!(await this.matchesExpectedPayment(event, organizationId, collector.userId))) continue;
       if (event.status === 'voided') {

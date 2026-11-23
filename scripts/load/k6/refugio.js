@@ -42,7 +42,13 @@ export default function () {
   if (Math.random() < 0.15) {
     const created = http.post(
       `${API}/animals`,
-      JSON.stringify({ name: `Carga ${Date.now()}`, species: 'dog', sex: 'female', size: 'small' }),
+      JSON.stringify({
+        name: `Carga ${Date.now()}`,
+        species: 'dog',
+        sex: 'female',
+        size: 'small',
+        approximateAgeMonths: 12,
+      }),
       { headers, tags: { name: 'crear-animal' } },
     );
     check(created, { 'crear 201': (r) => r.status === 201 });

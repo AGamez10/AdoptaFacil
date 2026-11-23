@@ -131,6 +131,8 @@ const INTENT_LABELS: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/apadrinar(\/|$)/, 'apadrinar a un animal'],
   [/^\/campanas(\/|$)/, 'aportar a una campaña'],
   [/^\/comunidad(\/|$)/, 'participar en la comunidad'],
+  [/^\/mi-negocio(\/|$)/, 'activar el panel de tu negocio'],
+  [/^\/beneficios(\/|$)/, 'ver tus beneficios por adoptar'],
   [/^\/servicios(\/|$)/, 'contactar un servicio para tu mascota'],
   [/^\/marketplace(\/|$)/, 'comprar en la tienda solidaria'],
   [/^\/o\/[^/]+/, 'apoyar a esta organización'],

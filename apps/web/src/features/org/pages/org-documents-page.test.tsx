@@ -231,4 +231,62 @@ describe('OrgDocumentsPage (M01, S-10: FSD v3.5 Sección A)', () => {
     expect(await screen.findByText(/no parece el RUT/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Subir RUT' })).toBeInTheDocument();
   });
+  it('proposes NIT, razón social and domicilio read from the RUT and keeps the current country', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    stubFetch((url, init) => {
+      calls.push({ url, init });
+      if (url.includes('/org/documents/file')) {
+        return {
+          document: { id: 'doc-1', type: 'rut', version: 1, status: 'pending' },
+          check: { result: 'match', message: 'Leímos tu archivo y sí es el RUT.' },
+          prefill: {
+            documentId: 'doc-1',
+            readable: true,
+            nit: '900123456-8',
+            legalName: 'FUNDACION HUELLITAS DEL VALLE',
+            location: { department: 'Valle del Cauca', city: 'Cali', address: 'CL 5 38 25' },
+            details: [
+              {
+                key: 'legal_representative',
+                label: 'Representante legal',
+                value: 'PEREZ GOMEZ MARIA',
+              },
+            ],
+          },
+        };
+      }
+      if (url.includes('/org/profile') && init?.method !== 'PUT') {
+        return { id: 'org-1', name: 'Huellitas', location: { country: 'Colombia' } };
+      }
+      if (url.includes('/org/documents/verification')) return { level: 0, criteria: [] };
+      if (url.includes('/org/documents')) return [];
+      return null;
+    });
+    renderShell({ route: '/organizacion/documentos?subir=rut', ...sessionWith([Role.Owner]) });
+    await screen.findByRole('heading', { name: 'Subir RUT' });
+
+    const pdf = new File(['%PDF-1.4'], 'rut.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText(/Archivo/), { target: { files: [pdf] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Subir' }));
+
+    expect(await screen.findByText('FUNDACION HUELLITAS DEL VALLE')).toBeInTheDocument();
+    expect(screen.getByText('900123456-8')).toBeInTheDocument();
+    expect(screen.getByText('CL 5 38 25')).toBeInTheDocument();
+    expect(screen.getByText('Cali, Valle del Cauca')).toBeInTheDocument();
+    expect(screen.getByText('PEREZ GOMEZ MARIA')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Usar en mi perfil' }));
+    expect(await screen.findByText('Perfil actualizado')).toBeInTheDocument();
+    const put = calls.find((c) => c.url.includes('/org/profile') && c.init?.method === 'PUT');
+    expect(JSON.parse(String(put?.init?.body))).toEqual({
+      nit: '900123456-8',
+      legalName: 'FUNDACION HUELLITAS DEL VALLE',
+      location: {
+        country: 'Colombia',
+        department: 'Valle del Cauca',
+        city: 'Cali',
+        address: 'CL 5 38 25',
+      },
+    });
+  });
 });

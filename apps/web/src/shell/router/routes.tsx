@@ -153,7 +153,8 @@ const MyPetsPage = lazyPage(loadCommunity, 'MyPetsPage');
 const MyServicesPage = lazyPage(loadCommunity, 'MyServicesPage');
 const ServiceDetailPage = lazyPage(loadCommunity, 'ServiceDetailPage');
 const ServicesDirectoryPage = lazyPage(loadCommunity, 'ServicesDirectoryPage');
-const BusinessPreRegistrationPage = lazyPage(loadCommunity, 'BusinessPreRegistrationPage');
+const BusinessAlliesPage = lazyPage(loadCommunity, 'BusinessAlliesPage');
+const AdopterBenefitsPage = lazyPage(loadCommunity, 'AdopterBenefitsPage');
 const ServicesModerationPage = lazyPage(loadCommunity, 'ServicesModerationPage');
 const loadAnimals = () => import('../../features/animals');
 const AnimalsPage = lazyPage(loadAnimals, 'AnimalsPage');
@@ -425,8 +426,14 @@ export function AppRoutes() {
           (sin sesión): destino de los enlaces compartidos en redes (`/p/:id`). */}
           <Route path="/comunidad/publicacion/:id" element={<PublicPostPage />} />
           <Route path="/servicios" element={<ServicesDirectoryPage />} />
-          {/* Pre-registro público (sin cuenta). Estático: gana a /servicios/:id. */}
-          <Route path="/servicios/prerregistro" element={<BusinessPreRegistrationPage />} />
+          {/* Negocios aliados: la única puerta para un negocio (público). El viejo
+          pre-registro sin cuenta se retiró; su URL lleva aquí. Estático: gana a
+          /servicios/:id. */}
+          <Route path="/negocios-aliados" element={<BusinessAlliesPage />} />
+          <Route
+            path="/servicios/prerregistro"
+            element={<Navigate to="/negocios-aliados" replace />}
+          />
           <Route path="/servicios/:id" element={<ServiceDetailPage />} />
           {/* Voluntariados PÚBLICOS (PR #43, M08 RF18): jornadas activas de todas
           las organizaciones, sin sesión. Inscribirse lleva a /voluntariado. */}
@@ -627,6 +634,8 @@ export function AppRoutes() {
                 Owner/Administrator (403 si no). La ficha de mascota es solo
                 para cuentas de persona (lo aplica el servidor). */}
                 <Route path="mi-negocio" element={<MyServicesPage />} />
+                {/* Beneficios por adoptar (quien adoptó): códigos de un solo uso. */}
+                <Route path="beneficios" element={<AdopterBenefitsPage />} />
                 <Route path="mis-mascotas" element={<MyPetsPage />} />
                 {/* M05/RF14 (F-3) · certificado de donación REAL, leído por donationId
               (nav-state) desde el recibo real de la donación. */}
