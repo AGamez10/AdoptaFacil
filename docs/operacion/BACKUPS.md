@@ -78,24 +78,39 @@ el webhook y sin archivos `.partial` residuales.
 
 ## Restaurar en producción (desastre o rollback con migración)
 
+Un solo comando, probado en cada cambio por la CI (job Docker, "Backup + restore
+drill": respaldo -> prueba aislada -> restauración real -> el sitio responde y lo
+escrito después del respaldo ya no está):
+
 ```bash
 cd /opt/adoptafacil
-C="docker compose -f deploy/compose.yaml --env-file deploy/.env"
-$C stop caddy api                                   # nadie escribe mientras tanto
-$C exec -T postgres dropdb -U "$POSTGRES_USER" --if-exists adoptafacil_prev
-$C exec -T postgres psql -U "$POSTGRES_USER" -d postgres \
-  -c "ALTER DATABASE $POSTGRES_DB RENAME TO adoptafacil_prev"   # se conserva por si acaso
-$C exec -T postgres createdb -U "$POSTGRES_USER" "$POSTGRES_DB"
-age -d -i /ruta/adoptafacil-backup.key backups/db-<UTC>.dump.age |
-  $C exec -T postgres pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --exit-on-error
-# Archivos (si hace falta):
-age -d -i /ruta/adoptafacil-backup.key backups/storage-<UTC>.tar.gz.age |
-  $C run --rm --no-deps -T --entrypoint tar -v api_storage:/restore api xzf - -C /restore
-$C up -d --wait                                      # migrate re-verifica la postura RLS
+AGE_IDENTITY=/ruta/adoptafacil-backup.key \
+  deploy/scripts/restore.sh backups/db-<UTC>.dump.age --files   # sin --files: solo la base
+# Pide escribir RESTAURAR. Luego:
+deploy/scripts/smoke.sh
 ```
 
+Qué hace: verifica SHA-256 y que la clave abra el respaldo; detiene Caddy, API,
+worker y PgBouncer; **renombra** la base actual a `<base>_prev_<UTC>` (nunca la
+borra); restaura; con `--files` restaura los archivos subidos; arranca todo
+(migrate vuelve a verificar la postura RLS); deja una línea en
+`backups/restores.log` y manda una alerta con el resultado. Si algo falla, la
+alerta dice dónde quedó la base anterior.
+
+Volver atrás si la restauración no sirvió: detener `caddy api worker pgbouncer`,
+`ALTER DATABASE adoptafacil RENAME TO adoptafacil_malo`,
+`ALTER DATABASE adoptafacil_prev_<UTC> RENAME TO adoptafacil`, `up -d --wait`.
+
 Anotar fecha, respaldo usado, duración y resultado en el registro de
-incidentes. Borrar `adoptafacil_prev` solo cuando todo esté verificado.
+incidentes. Borrar `adoptafacil_prev_<UTC>` solo cuando todo esté verificado.
+
+### Simulacro en el VPS real (una vez antes de cobrar, luego cada trimestre)
+
+1. `deploy/scripts/backup.sh` y `deploy/scripts/restore-test.sh` (no tocan producción).
+2. Anunciar 15 minutos de mantenimiento y correr `restore.sh` con el respaldo
+   recién hecho (se pierde a lo sumo lo de esos minutos).
+3. `deploy/scripts/smoke.sh`, entrar a la web, revisar una organización.
+4. Anotar la duración: ese es el RTO real.
 
 ## Ley 1581 y supresión
 

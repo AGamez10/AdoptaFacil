@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../core/auth/auth.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
@@ -10,6 +11,10 @@ import { DonationCertificatesService } from './donation-certificates.service';
 import { MercadoPagoAccountsModule } from '../payments/mercadopago-accounts.module';
 import { SponsorshipsModule } from '../sponsorships/sponsorships.module';
 import { CustodyModule } from '../custody/custody.module';
+import { PAYMENT_RECONCILE_QUEUE } from './payment-reconciliation.constants';
+import { PaymentReconciliationProcessor } from './payment-reconciliation.processor';
+import { PaymentReconciliationScheduler } from './payment-reconciliation.scheduler';
+import { PaymentReconciliationService } from './payment-reconciliation.service';
 
 /**
  * M05 · Donations (T-050, P1). A Person donates to an organization, sees the
@@ -60,6 +65,8 @@ import { CustodyModule } from '../custody/custody.module';
     MercadoPagoAccountsModule,
     SponsorshipsModule,
     CustodyModule,
+    // B3: conciliación automática con Mercado Pago (ningún pago se pierde).
+    BullModule.registerQueue({ name: PAYMENT_RECONCILE_QUEUE }),
   ],
   controllers: [
     DonationsController,
@@ -67,7 +74,13 @@ import { CustodyModule } from '../custody/custody.module';
     DonationAccessPublicController,
     DonationStatusPublicController,
   ],
-  providers: [DonationsService, DonationCertificatesService],
+  providers: [
+    DonationsService,
+    DonationCertificatesService,
+    PaymentReconciliationService,
+    PaymentReconciliationScheduler,
+    PaymentReconciliationProcessor,
+  ],
   // Contabilidad: la conciliación mensual relee Mercado Pago con el token del refugio.
   exports: [DonationsService],
 })

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -18,6 +19,7 @@ import {
 import { AuditService } from '../../core/audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
+import { campaignChanges, campaignLockProblem } from './campaign-lock';
 import { computeProgress } from './campaign-progress';
 
 const MAX_PAGE = 50;
@@ -119,43 +121,75 @@ export class CampaignsService {
     return toCampaign(row);
   }
 
-  /** Patch a campaign; audits an update, or a status change specifically. */
+  /**
+   * Patch a campaign. A closed or cancelled campaign is final (never reopened
+   * or rewritten) and, once it received money, its goal cannot go down nor its
+   * category change (409; the DB trigger `campaigns_lock` enforces the same).
+   * The audit records each changed field with its previous and new value.
+   */
   async update(actorUserId: string, id: string, input: UpdateCampaignInput): Promise<Campaign> {
     const organizationId = this.requireOrgId();
-    return this.prisma.withOrgContext(organizationId, async (tx) => {
-      const existing = await tx.campaign.findUnique({ where: { id } });
+    const result = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      // FOR UPDATE: a donation landing at the same time waits for this edit,
+      // so the "already received money" check cannot race the first donation.
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM campaigns WHERE id = ${id}::uuid FOR UPDATE`;
+      const existing = locked.length ? await tx.campaign.findUnique({ where: { id } }) : null;
       if (!existing) {
         throw new NotFoundException('Campaign not found');
       }
+      const changes = campaignChanges(existing, input);
+      const problem = campaignLockProblem(existing, changes);
+      if (problem) {
+        return { rejected: { problem, status: existing.status, fields: Object.keys(changes) } };
+      }
+      if (Object.keys(changes).length === 0) {
+        return { campaign: toCampaign(existing) };
+      }
       // Una fecha límite NUEVA no puede quedar en el pasado; reenviar la que ya
       // estaba guardada (al editar otros campos) sí se permite.
-      if (input.deadline && new Date(input.deadline).getTime() !== existing.deadline.getTime()) {
+      if (changes.deadline && input.deadline) {
         const error = dateRuleError(input.deadline, DATE_RULES.campaignDeadline);
         if (error) throw new BadRequestException(error);
       }
       const updated = await tx.campaign.update({
         where: { id },
         data: {
-          title: input.title,
-          description: input.description,
-          category: input.category,
-          goalAmount: input.goalAmount,
-          status: input.status,
-          deadline: input.deadline ? new Date(input.deadline) : undefined,
+          title: changes.title ? input.title : undefined,
+          description: changes.description ? input.description : undefined,
+          category: changes.category ? input.category : undefined,
+          goalAmount: changes.goalAmount ? input.goalAmount : undefined,
+          status: changes.status ? input.status : undefined,
+          deadline: changes.deadline && input.deadline ? new Date(input.deadline) : undefined,
         },
       });
-      const statusChanged = input.status !== undefined && input.status !== existing.status;
       await this.audit.recordWithTx(tx, {
         organizationId,
         actorUserId,
-        action: statusChanged ? 'campaign.status_changed' : 'campaign.updated',
+        action: changes.status ? 'campaign.status_changed' : 'campaign.updated',
         entityType: 'campaign',
         entityId: id,
-        metadata: statusChanged
-          ? { from: existing.status, to: input.status }
-          : { fields: Object.keys(input) },
+        metadata: {
+          ...(changes.status ? { from: changes.status.from, to: changes.status.to } : {}),
+          fields: Object.keys(changes),
+          changes,
+          raisedAmount: existing.raisedAmount,
+        },
       });
-      return toCampaign(updated);
+      return { campaign: toCampaign(updated) };
     });
+    if ('rejected' in result && result.rejected) {
+      // Outside the (read-only) transaction so the attempt stays on the log.
+      await this.audit.record({
+        organizationId,
+        actorUserId,
+        action: 'campaign.locked_change_rejected',
+        entityType: 'campaign',
+        entityId: id,
+        metadata: { status: result.rejected.status, fields: result.rejected.fields },
+      });
+      throw new ConflictException(result.rejected.problem);
+    }
+    return result.campaign as Campaign;
   }
 }

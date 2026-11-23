@@ -45,6 +45,12 @@
      si faltan menos de 5 minutos.
    - Si Mercado Pago responde `invalid_grant`, la conexión queda `needs_reconnect`, las donaciones se pausan
      (409) y el panel pide reconectar.
+   - **Conciliación automática** (`payment-reconcile`, auditoría go/no-go 2026-11-23): cada
+     `PAYMENT_RECONCILE_INTERVAL_MS` (15 min) relee Mercado Pago, con el token de cada refugio que tenga
+     una donación pendiente de más de 10 minutos, y aplica los pagos cuyo aviso no llegó (lo mismo que el
+     botón "Releer Mercado Pago" de contabilidad). Una pasada diaria relee las últimas 72 h de todas las
+     cuentas conectadas para recoger reembolsos y contracargos. Solo lee: no cobra ni mueve dinero.
+     Avisa por `ALERT_WEBHOOK_URL` si recupera pagos o si una cuenta no se puede leer.
 7. **Desconectar.** `DELETE /org/mercadopago/connect` borra los tokens. Mercado Pago no tiene un endpoint de
    revocación, así que la UI le dice al refugio que también puede quitar la app desde Seguridad →
    Aplicaciones conectadas.

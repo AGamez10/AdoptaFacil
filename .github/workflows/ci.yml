@@ -209,6 +209,37 @@ jobs:
           # Solo Caddy publica puertos: Postgres, Redis y la API quedan en redes internas.
           test -z "$(docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env ps --format '{{.Service}} {{.Publishers}}' | grep -v '^caddy' | grep -E '0\.0\.0\.0|::' || true)"
 
+      # Auditoría go/no-go 2026-11-23 (B1): un respaldo que nunca se restauró no
+      # cuenta. Simulacro completo con los scripts de producción: respaldo
+      # cifrado -> prueba de restauración aislada -> restauración REAL sobre la
+      # pila -> el sitio vuelve a responder y lo escrito después del respaldo
+      # ya no está (la base anterior queda guardada aparte).
+      - name: Backup + restore drill (backup.sh -> restore-test.sh -> restore.sh)
+        env:
+          COMPOSE_PROJECT_NAME: adoptafacil-ci
+        run: |
+          command -v age >/dev/null || (sudo apt-get update && sudo apt-get install -y --no-install-recommends age)
+          key="$RUNNER_TEMP/backup.key"
+          rm -f "$key" && age-keygen -o "$key" 2>/dev/null
+          {
+            echo "BACKUP_AGE_RECIPIENT=$(age-keygen -y "$key")"
+            echo "BACKUP_AGE_IDENTITY_FILE=$key"
+            echo "BACKUP_DIR=$RUNNER_TEMP/backups"
+          } >> deploy/.env
+          C="docker compose -p adoptafacil-ci -f deploy/compose.yaml --env-file deploy/.env"
+          q() { $C exec -T postgres psql -U adoptafacil -d adoptafacil -Atc "$1"; }
+          deploy/scripts/backup.sh
+          deploy/scripts/restore-test.sh
+          # Algo escrito DESPUÉS del respaldo: la restauración debe borrarlo.
+          q "CREATE TABLE drill_after_backup (x int)"
+          migrations_before="$(q 'SELECT count(*) FROM _prisma_migrations')"
+          CONFIRM=RESTAURAR deploy/scripts/restore.sh "$(ls -1t "$RUNNER_TEMP"/backups/db-*.dump.age | head -n1)" --files
+          test "$(q "SELECT to_regclass('public.drill_after_backup') IS NULL")" = "t"
+          test "$(q 'SELECT count(*) FROM _prisma_migrations')" = "$migrations_before"
+          $C exec -T postgres psql -U adoptafacil -d postgres -Atc "SELECT datname FROM pg_database" | grep -q '^adoptafacil_prev_'
+          curl -fsSk https://localhost/api/health | grep -q '"status":"ok"'
+          curl -fsSk -o /dev/null https://localhost/
+
       # Producción usa PORTALS_TLS=cloudflare o namecheap: compila Caddy con cada
       # módulo DNS y valida el Caddyfile con ese bloque (sin emitir certificados).
       - name: Caddy con módulos DNS (build + validate)

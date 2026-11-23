@@ -7,6 +7,7 @@ import { accountingPeriodOf } from '@adoptafacil/contracts';
 import { mercadoPagoSignatureV1 } from '../src/core/payments/mercadopago-payment.adapter';
 import { NOTIFICATION_PORT } from '../src/core/notifications/notification.port';
 import { PlansService } from '../src/core/plans/plans.service';
+import { PaymentReconciliationService } from '../src/modules/donations/payment-reconciliation.service';
 import { purgeOrganizations } from './support/cleanup';
 import { LEGAL_GUEST, LEGAL_ORG } from './support/legal';
 import { CapturingNotificationPort, SIGNATURE_PNG } from './support/signers';
@@ -393,6 +394,39 @@ describe('Accounting: ledger, reconciliation, close and reviewer package', () =>
       differenceCop: 0,
     });
     expect(rec.body.counts.matched).toBe(2);
+  });
+
+  it('B3: the automatic reconciliation recovers a lost notification without anyone pressing a button', async () => {
+    const lost = await donate(25_000);
+    const fresh = await donate(15_000);
+    // Lost: pending for 30 minutes although Mercado Pago already approved it.
+    await admin.$executeRaw`UPDATE donations SET created_at = now() - interval '30 minutes' WHERE id = ${lost.id}::uuid`;
+    mpPayment('70010', lost.collectionId, lost.amountCharged, {
+      date_created: new Date().toISOString(),
+      date_approved: new Date().toISOString(),
+    });
+
+    const candidates = await appDb.$queryRaw<{ organization_id: string }[]>`
+      SELECT organization_id FROM mercadopago_reconciliation_candidates(true, 10, 72)`;
+    const ids = candidates.map((c) => c.organization_id);
+    expect(ids).toContain(owner.orgId);
+    // No Mercado Pago connection ⇒ never a candidate.
+    expect(ids).not.toContain(other.orgId);
+
+    const result = await app.get(PaymentReconciliationService).run('pending');
+    expect(result.failed).toBe(0);
+    expect(result.settled).toBeGreaterThanOrEqual(1);
+    expect((await admin.donation.findUniqueOrThrow({ where: { id: lost.id } })).status).toBe(
+      'approved',
+    );
+    // A donation still in checkout (no payment in Mercado Pago) stays pending.
+    expect((await admin.donation.findUniqueOrThrow({ where: { id: fresh.id } })).status).toBe(
+      'pending',
+    );
+    // Running it again changes nothing (idempotent: one receipt, one approval).
+    const again = await app.get(PaymentReconciliationService).run('daily');
+    expect(again.failed).toBe(0);
+    expect(await admin.donationReceipt.count({ where: { donationId: lost.id } })).toBe(1);
   });
 
   it('an amount that does not match is never approved and shows as a discrepancy', async () => {
