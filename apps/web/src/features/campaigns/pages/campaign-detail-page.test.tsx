@@ -130,6 +130,27 @@ describe('CampaignDetailPage (S2-01)', () => {
     );
   });
 
+  it('a closed campaign shows no edit form: it cannot be reopened (B3)', async () => {
+    stubCampaignApi({ campaign: { ...CAMPAIGN, status: CampaignStatus.Closed } });
+    renderShell({ route: '/organizacion/campanas/c1', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByTestId('campaign-locked-card')).toHaveTextContent(
+      /no se puede reabrir ni modificar/,
+    );
+    expect(screen.queryByRole('heading', { name: 'Editar campaña' })).not.toBeInTheDocument();
+    // Accountability evidence can still be published.
+    expect(screen.getByRole('button', { name: 'Agregar evidencia' })).toBeInTheDocument();
+  });
+
+  it('a funded campaign warns that the goal can only go up', async () => {
+    stubCampaignApi();
+    renderShell({ route: '/organizacion/campanas/c1', ...sessionWith([Role.Owner]) });
+
+    expect(await screen.findByTestId('campaign-funded-note')).toHaveTextContent(
+      /la meta solo puede subir/,
+    );
+  });
+
   it('hides edit and evidence-write controls for a ReadOnlyAuditor (view-only)', async () => {
     stubCampaignApi();
     renderShell({ route: '/organizacion/campanas/c1', ...sessionWith([Role.ReadOnlyAuditor]) });

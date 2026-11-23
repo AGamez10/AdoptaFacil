@@ -363,7 +363,24 @@ export function CampaignDetailPage() {
             </Card>
           )}
 
-          {canManage && (
+          {canManage && campaign.status !== CampaignStatus.Active && (
+            <Card data-testid="campaign-locked-card">
+              <CardHeader>
+                <CardTitle>Campaña cerrada</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Una campaña{' '}
+                  {campaign.status === CampaignStatus.Closed ? 'finalizada' : 'cancelada'} ya no se
+                  puede reabrir ni modificar: su meta y lo recaudado quedan fijos para los donantes.
+                  Sí puedes seguir publicando evidencias de rendición. Si necesitas recaudar más,
+                  crea una campaña nueva.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {canManage && campaign.status === CampaignStatus.Active && (
             <Card>
               <CardHeader>
                 <CardTitle>Editar campaña</CardTitle>
@@ -436,6 +453,12 @@ export function CampaignDetailPage() {
                     options={STATUS_OPTIONS}
                   />
                 </div>
+                {campaign.raisedAmount > 0 && (
+                  <p className="text-sm text-muted-foreground" data-testid="campaign-funded-note">
+                    Ya recibió donaciones: la meta solo puede subir y la categoría queda fija.
+                    Finalizar o cancelar la campaña es definitivo.
+                  </p>
+                )}
                 <Button disabled={saving} onClick={() => void submitCampaign()}>
                   {saving ? 'Guardando…' : 'Guardar cambios'}
                 </Button>

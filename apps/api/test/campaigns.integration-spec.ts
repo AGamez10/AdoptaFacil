@@ -182,6 +182,79 @@ describe('Campaigns (M06, RF15: CRUD + RBAC + public exposure)', () => {
       .expect(404);
   });
 
+  it('B3: once funded, the goal cannot go down nor the category change (API 409 + DB trigger)', async () => {
+    const created = await createCampaign(owner.token, valid).expect(201);
+    const id = created.body.id as string;
+    await admin.campaign.update({ where: { id }, data: { raisedAmount: 120_000 } });
+    const patch = (body: Record<string, unknown>) =>
+      request(server)
+        .patch(`/campaigns/${id}`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send(body);
+
+    await patch({ goalAmount: 100_000 }).expect(409);
+    await patch({ category: 'food' }).expect(409);
+    // Resending the stored values (the edit form does) is not a change.
+    await patch({ ...valid }).expect(200);
+    // Raising the goal is allowed and audited with before/after.
+    await patch({ goalAmount: 900_000 }).expect(200);
+    const updated = await admin.auditLog.findFirst({
+      where: { organizationId: owner.orgId, action: 'campaign.updated', entityId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect((updated?.metadata as { changes: unknown }).changes).toEqual({
+      goalAmount: { from: 500_000, to: 900_000 },
+    });
+    // The database refuses it too, even for the owner role.
+    await expect(admin.campaign.update({ where: { id }, data: { goalAmount: 1 } })).rejects.toThrow(
+      /goal cannot be lowered/,
+    );
+  });
+
+  it('B3: a closed campaign is final: never reopened nor edited (API 409 + DB trigger)', async () => {
+    const created = await createCampaign(owner.token, valid).expect(201);
+    const id = created.body.id as string;
+    await admin.campaign.update({ where: { id }, data: { raisedAmount: 300_000 } });
+    await request(server)
+      .patch(`/campaigns/${id}`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ status: 'closed' })
+      .expect(200);
+
+    for (const body of [
+      { status: 'active' },
+      { goalAmount: 900_000 },
+      { deadline: '2027-06-30T00:00:00.000Z' },
+      { title: 'Otra' },
+    ]) {
+      const res = await request(server)
+        .patch(`/campaigns/${id}`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send(body)
+        .expect(409);
+      expect(res.body.message).toMatch(/no se puede reabrir ni modificar/);
+    }
+    const rejected = await admin.auditLog.count({
+      where: {
+        organizationId: owner.orgId,
+        action: 'campaign.locked_change_rejected',
+        entityId: id,
+      },
+    });
+    expect(rejected).toBe(4);
+
+    await expect(
+      admin.campaign.update({ where: { id }, data: { status: 'active' } }),
+    ).rejects.toThrow(/can no longer be modified/);
+    await expect(
+      admin.campaign.update({ where: { id }, data: { raisedAmount: 400_000 } }),
+    ).rejects.toThrow(/can no longer be modified/);
+    // A later refund may still lower what was raised: that is the truth of the money.
+    await admin.campaign.update({ where: { id }, data: { raisedAmount: 250_000 } });
+    const row = await admin.campaign.findUniqueOrThrow({ where: { id } });
+    expect(row).toMatchObject({ status: 'closed', goalAmount: 500_000, raisedAmount: 250_000 });
+  });
+
   it('changes status (audited) and drops the campaign from the public list', async () => {
     await request(server)
       .patch(`/campaigns/${campaignId}`)
