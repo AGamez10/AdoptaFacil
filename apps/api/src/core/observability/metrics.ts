@@ -19,7 +19,7 @@ export const httpRequestDuration = new Histogram({
 
 export const publicCacheResults = new Counter({
   name: 'public_cache_requests_total',
-  help: 'Public read cache lookups by result (hit, miss)',
+  help: 'Public read cache lookups by result (hit, miss, coalesced)',
   labelNames: ['result'] as const,
   registers: [metricsRegistry],
 });

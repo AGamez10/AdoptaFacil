@@ -6,7 +6,7 @@ import {
   type NestInterceptor,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { from, of, type Observable, switchMap, tap } from 'rxjs';
+import { from, lastValueFrom, of, type Observable, switchMap } from 'rxjs';
 import { publicCacheResults } from '../observability/metrics';
 import { PublicCacheService } from './public-cache.service';
 
@@ -33,6 +33,15 @@ export function publicCacheKey(originalUrl: string): string {
  */
 @Injectable()
 export class PublicCacheInterceptor implements NestInterceptor {
+  /**
+   * Single-flight per key: while one request rebuilds an expired entry, the
+   * others for the same URL wait for that result instead of each running the
+   * same query. Without it, every TTL expiry of a heavy read (the national
+   * catalog) sent dozens of identical queries at once, emptied the Prisma pool
+   * and turned into 10 s timeouts (load test, 2026-11-23).
+   */
+  private readonly inflight = new Map<string, Promise<unknown>>();
+
   constructor(private readonly cache: PublicCacheService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -55,13 +64,22 @@ export class PublicCacheInterceptor implements NestInterceptor {
           publicCacheResults.inc({ result: 'hit' });
           return of(JSON.parse(hit) as unknown);
         }
+        const pending = this.inflight.get(key);
+        if (pending) {
+          res.setHeader('X-Cache', 'COALESCED');
+          publicCacheResults.inc({ result: 'coalesced' });
+          return from(pending);
+        }
         res.setHeader('X-Cache', 'MISS');
         publicCacheResults.inc({ result: 'miss' });
-        return next.handle().pipe(
-          tap((body) => {
+        const run = lastValueFrom(next.handle(), { defaultValue: undefined })
+          .then((body) => {
             if (body !== undefined && body !== null) void this.cache.set(key, JSON.stringify(body));
-          }),
-        );
+            return body;
+          })
+          .finally(() => this.inflight.delete(key));
+        this.inflight.set(key, run);
+        return from(run);
       }),
     );
   }
