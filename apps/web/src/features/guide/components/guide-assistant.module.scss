@@ -7,6 +7,7 @@ $ease: cubic-bezier(0.22, 1, 0.36, 1);
 
 .assistant {
   position: fixed;
+  view-transition-name: af-assistant;
   right: 0.75rem;
   bottom: calc(0.75rem + var(--af-bottom-bar, 0px) + env(safe-area-inset-bottom, 0px));
   z-index: 40;

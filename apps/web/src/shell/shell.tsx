@@ -1,9 +1,10 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter } from 'react-router-dom';
 import { AppProviders } from './app-providers';
 import { RootErrorBoundary, RouteErrorBoundary, SilentErrorBoundary } from './errors';
-import { AppRoutes } from './router/routes';
+import { AppRoutes, ROUTE_PRELOADS } from './router/routes';
+import { IntentPreloader } from './router/intent-preloader';
 import { ScrollToTop } from './router/scroll-to-top';
+import { ViewTransitionRouter } from './router/view-transition-router';
 import { CookieConsentBanner } from './consent';
 import { InstallAppBanner } from './install';
 
@@ -32,15 +33,17 @@ const AUTH_MODE: 'mock' | 'http' =
 /**
  * Application shell entry point: providers + router + routes. Mounted by main.tsx.
  * The provider tree is router-agnostic; tests mount <AppProviders> + <AppRoutes>
- * under a <MemoryRouter> instead of <BrowserRouter>.
+ * under a <MemoryRouter> instead of <ViewTransitionRouter>.
  */
 export function Shell() {
   return (
     // Errores de render: la 500 con marca en vez de una pantalla en blanco.
     <RootErrorBoundary>
       <AppProviders session={{ mode: AUTH_MODE }}>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        {/* <BrowserRouter> con transiciones de vista entre pantallas. */}
+        <ViewTransitionRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ScrollToTop />
+          <IntentPreloader table={ROUTE_PRELOADS} />
           <RouteErrorBoundary>
             <AppRoutes />
           </RouteErrorBoundary>
@@ -56,7 +59,7 @@ export function Shell() {
           <CookieConsentBanner />
           {/* Invitación a instalar la app: sale después del aviso de cookies. */}
           <InstallAppBanner />
-        </BrowserRouter>
+        </ViewTransitionRouter>
       </AppProviders>
     </RootErrorBoundary>
   );

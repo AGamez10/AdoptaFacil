@@ -1,6 +1,5 @@
 import {
   getLegalDocumentBySlug,
-  LEGAL_DOCUMENTS,
   renderLegalTemplate,
   type LegalDocumentDescriptor,
 } from '@adoptafacil/contracts';
@@ -54,9 +53,4 @@ export function listLegalVersions(slug: string): string[] {
     .reverse();
 }
 
-/** Ruta pública de un documento. */
-export function legalPath(slug: string, version?: string): string {
-  return version ? `/legal/${slug}/${version}` : `/legal/${slug}`;
-}
-
-export { LEGAL_DOCUMENTS };
+export { legalPath, LEGAL_DOCUMENTS } from './legal-path';

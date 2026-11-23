@@ -166,6 +166,7 @@ export function AdoptionRequestPage() {
                   Nombre completo
                   <Input
                     id="adoption-full-name"
+                    autoComplete="name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     onBlur={() => setTouched((prev) => ({ ...prev, fullName: true }))}
@@ -188,6 +189,8 @@ export function AdoptionRequestPage() {
                   <Input
                     id="adoption-email"
                     type="email"
+                    autoComplete="email"
+                    spellCheck={false}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onBlur={() => setTouched((prev) => ({ ...prev, email: true }))}
@@ -205,6 +208,8 @@ export function AdoptionRequestPage() {
                   Teléfono (opcional)
                   <Input
                     id="adoption-phone"
+                    type="tel"
+                    autoComplete="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />

@@ -1,5 +1,7 @@
 .topbar {
   position: sticky;
+  /* Queda quieta mientras cambia la pantalla (ViewTransitionRouter). */
+  view-transition-name: af-topbar;
   top: 0;
   z-index: 30;
   display: flex;

@@ -2,6 +2,7 @@
    abajo a la derecha, z-index 40). En móvil ocupa el ancho con 12px de margen. */
 .banner {
   position: fixed;
+  view-transition-name: af-consent;
   left: 1rem;
   bottom: calc(1rem + var(--af-bottom-bar, 0px) + env(safe-area-inset-bottom, 0px));
   z-index: 45;
