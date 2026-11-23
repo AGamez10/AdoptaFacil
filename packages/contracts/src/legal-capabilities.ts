@@ -407,7 +407,14 @@ export interface DocumentPrefill {
   readable: boolean;
   /** "900123456-8", solo si el dígito de verificación es correcto. */
   nit?: string;
+  /** Razón social. Nunca una etiqueta del formulario: si la lectura no es
+   *  segura, se omite. */
   legalName?: string;
+  /** Domicilio principal leído del documento (departamento, ciudad, dirección). */
+  location?: { country?: string; department?: string; city?: string; address?: string };
+  /** Otros datos leídos que NO van al perfil (representante legal, fecha y
+   *  número de inscripción, tipo de contribuyente…): solo informativos. */
+  details?: ExtractedDocumentField[];
 }
 
 /** Qué pudo confirmar la lectura automática de un documento al subirlo.

@@ -165,6 +165,14 @@ describe('Document verification + capabilities (M01)', () => {
       readable: true,
       nit: `${NIT}-${DV}`,
       legalName: 'FUNDACION PATITAS DE PRUEBA',
+      details: [
+        { key: 'taxpayer_type', label: 'Tipo de contribuyente', value: 'Persona jurídica' },
+        {
+          key: 'regime',
+          label: 'Responsabilidad de renta',
+          value: '04 · Régimen Tributario Especial',
+        },
+      ],
     });
 
     await request(server)

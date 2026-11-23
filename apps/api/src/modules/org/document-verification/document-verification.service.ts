@@ -9,8 +9,8 @@ import { TenantContextService } from '../../../core/tenant/tenant-context.servic
 import { STORAGE_PORT, type StoragePort } from '../../../core/storage/storage.port';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PlatformDocumentsService } from '../platform-documents.service';
-import { buildVerificationReport, extractLegalName, extractNit } from './document-checks';
-import { isValidNit } from './nit';
+import { buildVerificationReport } from './document-checks';
+import { prefillFromText } from './document-fields';
 import { DOCUMENT_TEXT_PORT, type DocumentTextPort } from './document-text.port';
 
 /**
@@ -86,13 +86,6 @@ export class DocumentVerificationService {
     const stored = await this.storage.readObject(doc.storageRef);
     const text = stored ? await this.reader.extractText(stored.data, stored.contentType) : null;
     if (text === null) return { documentId: doc.id, readable: false };
-    const nit = extractNit(text);
-    const legalName = extractLegalName(text);
-    return {
-      documentId: doc.id,
-      readable: true,
-      ...(nit && isValidNit(nit.base, nit.dv) ? { nit: `${nit.base}-${nit.dv}` } : {}),
-      ...(legalName ? { legalName } : {}),
-    };
+    return prefillFromText(doc.id, doc.type as DocumentType, text);
   }
 }

@@ -138,20 +138,21 @@ export function extractNit(raw: string): { base: string; dv: string } | null {
   if (!label || label.index === undefined) return null;
   const window = text.slice(label.index, label.index + 240);
   const run = window.match(/(?<![\d.])((?:\d[ \t]?){9,11})(?![\d.])/);
-  if (!run) return null;
-  const digits = onlyDigits(run[1]);
-  return { base: digits.slice(0, -1), dv: digits.slice(-1) };
+  const near = run ? splitRun(run[1]) : null;
+  if (near && isValidNit(near.base, near.dv)) return near;
+  // Hay PDF de la DIAN que dibujan primero todo el formulario (las etiquetas) y
+  // al final los valores: el NIT queda lejos de su casilla. Se toma la primera
+  // tira de casillas cuyo dígito de verificación cuadra.
+  for (const m of text.matchAll(/(?<![\d.]|\d[ \t])((?:\d[ \t]){8,10}\d)(?![\d.]|[ \t]\d)/g)) {
+    const candidate = splitRun(m[1]);
+    if (isValidNit(candidate.base, candidate.dv)) return candidate;
+  }
+  return near;
 }
 
-/** Razón social: lo que sigue a "Razón social" o "Nombre:" en la misma línea. */
-export function extractLegalName(text: string): string | null {
-  const m = text.match(/(?:raz[oó]n\s+social|^\s*nombre)\s*:?[ \t]*([^\n]{3,160})/im);
-  if (!m) return null;
-  const value = m[1]
-    .replace(/^\s*\d+\.\s*/, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return /[A-Za-zÁÉÍÓÚÑáéíóúñ]{3}/.test(value) ? value : null;
+function splitRun(run: string): { base: string; dv: string } {
+  const digits = onlyDigits(run);
+  return { base: digits.slice(0, -1), dv: digits.slice(-1) };
 }
 
 function check(
