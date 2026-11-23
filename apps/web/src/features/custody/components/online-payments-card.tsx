@@ -51,8 +51,11 @@ export function OnlinePaymentsCard({
       setAccepted(false);
       toast({
         title: enabled
-          ? 'Pago en línea encendido. Ya puedes compartir enlaces de pago.'
+          ? 'Pago en línea encendido.'
           : 'Pago en línea apagado. Los enlaces ya compartidos dejan de recibir pagos.',
+        description: enabled
+          ? 'Cada cobro pendiente ahora tiene el botón "Enlace de pago". Ábrelo y compártelo con el responsable.'
+          : undefined,
         variant: 'success',
       });
     } catch (error) {
@@ -90,6 +93,25 @@ export function OnlinePaymentsCard({
             </Link>{' '}
             para poder recibir pagos en línea.
           </Notice>
+        )}
+        {settings.enabled && (
+          <div className="space-y-1">
+            <p className="font-medium">Cómo cobrar con un enlace</p>
+            <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+              <li>
+                Registra el cobro en la ficha del animal, pestaña Custodia, sección Cuenta (o usa
+                uno que ya esté pendiente en esta lista).
+              </li>
+              <li>
+                En el cobro, toca <span className="font-medium">Enlace de pago</span>. El enlace es
+                solo de ese cobro y siempre es el mismo hasta que lo dejes sin efecto.
+              </li>
+              <li>
+                Cópialo o envíalo por WhatsApp. Quien paga no necesita cuenta; cuando Mercado Pago
+                confirma, el pago y su constancia aparecen solos aquí y te llega un aviso.
+              </li>
+            </ol>
+          </div>
         )}
         {settings.enabled && settings.acceptedAt && (
           <p className="text-muted-foreground">
