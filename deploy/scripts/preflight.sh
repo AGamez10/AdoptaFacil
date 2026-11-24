@@ -48,6 +48,7 @@ else
   for k in AUTH_IDENTITY_DRIVER PAYMENT_DRIVER DIAN_DRIVER SIGNATURE_DRIVER NOTIFICATION_DRIVER STORAGE_DRIVER; do
     case "$(aget "$k")" in fake|log|stub) err "api.env: $k=$(aget "$k") es simulado y la API no arranca así en producción" ;; esac
   done
+  [ "$(aget SIGNATURE_DRIVER)" == "internal" ] || warn "SIGNATURE_DRIVER no es internal: nadie podrá firmar contratos de adopción (503)"
   [ "$(aget NOTIFICATION_DRIVER)" == "smtp" ] || err "api.env: NOTIFICATION_DRIVER debe ser smtp en producción"
   for k in SMTP_HOST SMTP_PORT SMTP_FROM; do [ -n "$(aget "$k")" ] || err "api.env: falta $k (correo)"; done
   if [ "$(aget STORAGE_DRIVER)" == "s3" ]; then
@@ -73,6 +74,27 @@ else
   [ "$(aget FEATURE_VOLUNTEERING_MINORS)" != "true" ] || err "api.env: voluntariado con menores no se permite en producción"
   [ "$(aget FEATURE_SPONSORSHIPS)" != "true" ] || err "api.env: los apadrinamientos aún no cobran con la cuenta de cada organización; déjalos apagados"
   [ "$(aget PLAN_ENFORCEMENT)" != "true" ] || warn "PLAN_ENFORCEMENT=true: los planes se cobran/limitan desde PLAN_LAUNCH_DATE"
+
+  # Un valor que quedó como en la plantilla (<algo>) llegaría tal cual a la API.
+  while IFS= read -r line; do err "api.env: $line todavía tiene el texto de la plantilla; pon el valor real"; done \
+    < <(grep -nE '^[A-Z0-9_]+=<' "$API_ENV_FILE" | cut -d= -f1 | sed 's/^\([0-9]*\):\(.*\)/\2 (línea \1)/')
+  # Los interruptores de la API solo entienden true o false: "on" o "1" se
+  # leerían como apagado sin avisar (la API ya no arranca así).
+  while IFS= read -r line; do err "api.env: $line no es válido; los interruptores de la API van con true o false"; done \
+    < <(grep -E '^(FEATURE_[A-Z_]+|PLAN_ENFORCEMENT|REPORTS_SIGNATURES_ENABLED|HTTP_ACCESS_LOG|MERCADOPAGO_TEST|MERCADOPAGO_OAUTH_PKCE|ALLOW_LOOPBACK_PUBLIC_URLS)=' "$API_ENV_FILE" \
+      | grep -vE '=(true|false)\s*$' || true)
+  if [ -n "$(aget MERCADOPAGO_PLATFORM_ACCESS_TOKEN)" ]; then
+    [ -n "$(aget MERCADOPAGO_WEBHOOK_SECRET)" ] || err "api.env: MERCADOPAGO_PLATFORM_ACCESS_TOKEN sin MERCADOPAGO_WEBHOOK_SECRET: Mercado Pago cobraría planes y café pero ninguno se confirmaría"
+  fi
+  if [ "$(aget PLAN_ENFORCEMENT)" == "true" ]; then
+    [ -n "$(aget PLAN_LAUNCH_DATE)" ] || warn "PLAN_ENFORCEMENT=true sin PLAN_LAUNCH_DATE: no hay 3 meses de Pro gratis; quien no pague queda en Gratis al pasar su prueba"
+    [ -n "$(aget MERCADOPAGO_PLATFORM_ACCESS_TOKEN)" ] || warn "PLAN_ENFORCEMENT=true sin MERCADOPAGO_PLATFORM_ACCESS_TOKEN: los planes solo se pueden pagar por transferencia"
+  fi
+  if [ "${CUSTOM_DOMAINS:-off}" == "on" ] && [ -z "$(aget CUSTOM_DOMAIN_CNAME_TARGET)" ]; then
+    err "CUSTOM_DOMAINS=on en deploy/.env exige CUSTOM_DOMAIN_CNAME_TARGET en api.env (si no, el plan Pro ve «aún no disponible»)"
+  fi
+  coffee="$(aget COFFEE_QR_DOMAINS)"; coffee="${coffee:-adoptafacil.org}"
+  [[ ",${coffee// /}," == *",${APP_DOMAIN:-},"* ]] || warn "COFFEE_QR_DOMAINS ($coffee) no incluye APP_DOMAIN (${APP_DOMAIN:-?}): el QR del café apuntaría a otro dominio"
 fi
 
 # --- Permisos de los archivos con secretos -----------------------------------

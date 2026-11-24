@@ -46,12 +46,12 @@ Para que producción pueda arrancar sin credenciales de terceros, cada puerto
 que solo tenía un adaptador simulado ganó uno `disabled` que se niega en vez
 de fingir:
 
-| Variable               | `disabled` hace                                            | Archivo                                                                  |
-| ---------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `AUTH_IDENTITY_DRIVER` | `POST /auth/google` responde 404                           | `apps/api/src/core/identity/disabled-identity.adapter.ts`                |
-| `PAYMENT_DRIVER`       | todo cobro, consulta y webhook responde 503                | `apps/api/src/core/payments/disabled-payment.adapter.ts`                 |
-| `DIAN_DRIVER`          | ningún RTE se verifica automáticamente (`verified: false`) | `apps/api/src/modules/org/disabled-dian.adapter.ts`                      |
-| `SIGNATURE_DRIVER`     | firmar un contrato responde 503                            | `apps/api/src/modules/adoptions/signature/disabled-signature.adapter.ts` |
+| Variable               | `disabled` hace                                                                             | Archivo                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `AUTH_IDENTITY_DRIVER` | `POST /auth/google` responde 404                                                            | `apps/api/src/core/identity/disabled-identity.adapter.ts`                |
+| `PAYMENT_DRIVER`       | todo cobro, consulta y webhook responde 503                                                 | `apps/api/src/core/payments/disabled-payment.adapter.ts`                 |
+| `DIAN_DRIVER`          | ningún RTE se verifica automáticamente (`verified: false`)                                  | `apps/api/src/modules/org/disabled-dian.adapter.ts`                      |
+| `SIGNATURE_DRIVER`     | firmar un contrato responde 503 (en producción se usa `internal`, firma electrónica simple) | `apps/api/src/modules/adoptions/signature/disabled-signature.adapter.ts` |
 
 `render.yaml` declara todos en `disabled` y el correo en `smtp`. La prueba
 `apps/api/src/config/render-blueprint.spec.ts` lee ese archivo, rellena lo que

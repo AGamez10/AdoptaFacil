@@ -398,6 +398,7 @@ export class FollowUpService {
           body: `Tu hito de seguimiento "${row.title}" venció el ${row.due_at.toISOString()}. Por favor complétalo.`,
           template: {
             event: 'adoption.followup_overdue',
+            organizationId: row.organization_id,
             data: { hito: row.title, fecha: row.due_at.toISOString() },
           },
         });

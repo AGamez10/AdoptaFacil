@@ -14,6 +14,7 @@ import {
 import { SIGNATURE_PORT } from './signature/signature.port';
 import { DisabledSignatureAdapter } from './signature/disabled-signature.adapter';
 import { FakeSignatureAdapter } from './signature/fake-signature.adapter';
+import { InternalSignatureAdapter } from './signature/internal-signature.adapter';
 import { FollowUpController } from './followup.controller';
 import { FollowUpService } from './followup.service';
 import { FollowUpScheduler } from './followup.scheduler';
@@ -50,14 +51,21 @@ import { AdoptionDeliveryService } from './adoption-delivery.service';
     AdoptionsService,
     AdoptionContractsService,
     AdoptionContractCopyService,
-    // SIGNATURE_DRIVER (Ola 1, R0-1): 'fake' for dev/test; production must
-    // bind 'disabled' (env validation refuses 'fake' there).
+    // SIGNATURE_DRIVER (Ola 1, R0-1): 'fake' for dev/test; production binds
+    // 'internal' (firma electrónica simple, 2026-11-24) or 'disabled' (503).
+    // Env validation refuses 'fake' there.
     {
       provide: SIGNATURE_PORT,
-      useFactory: () =>
-        process.env.SIGNATURE_DRIVER === 'disabled'
-          ? new DisabledSignatureAdapter()
-          : new FakeSignatureAdapter(),
+      useFactory: () => {
+        switch (process.env.SIGNATURE_DRIVER) {
+          case 'internal':
+            return new InternalSignatureAdapter();
+          case 'disabled':
+            return new DisabledSignatureAdapter();
+          default:
+            return new FakeSignatureAdapter();
+        }
+      },
     },
     // Mismo factory que `OrgModule` ya registra para sí mismo — no está en su
     // lista de `exports` (deliberadamente mínima, ver su propio comentario),

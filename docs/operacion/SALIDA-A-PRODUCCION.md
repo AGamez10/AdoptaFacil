@@ -92,7 +92,7 @@ sudo deploy/scripts/backup.sh && sudo deploy/scripts/restore-test.sh
 AUTH_IDENTITY_DRIVER=disabled
 PAYMENT_DRIVER=disabled
 DIAN_DRIVER=disabled
-SIGNATURE_DRIVER=disabled
+SIGNATURE_DRIVER=internal
 NOTIFICATION_DRIVER=smtp
 SMTP_HOST=smtp-relay.brevo.com
 SMTP_PORT=587

@@ -312,6 +312,8 @@ describe('Adoption delivery (ajuste 6: acta de entrega)', () => {
 
     const email = sentEmails.find((m) => m.template?.event === 'adoption.delivery_code');
     expect(email?.template?.data.codigo).toBe(res.body.code);
+    // Crece/Pro: el código sale con la marca del refugio, como los demás correos al adoptante.
+    expect(email?.template?.organizationId).toBe(refugeOrgId);
 
     const forContract = await request(server)
       .get(`/adoptions/deliveries/by-contract/${contractId}`)

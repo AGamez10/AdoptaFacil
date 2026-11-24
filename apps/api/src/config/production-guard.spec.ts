@@ -1,4 +1,5 @@
 import {
+  FEATURE_FLAG_KEYS,
   PRODUCTION_FORBIDDEN_DRIVERS,
   isLoopbackUrl,
   parseRedisUrl,
@@ -159,6 +160,12 @@ describe('production guard (R0-1)', () => {
         'SIGNATURE_DRIVER',
         'STORAGE_DRIVER',
       ].sort(),
+    );
+  });
+
+  it("accepts the platform's own simple electronic signature in production (2026-11-24)", () => {
+    expect(validateEnv({ ...SAFE_PRODUCTION, SIGNATURE_DRIVER: 'internal' }).SIGNATURE_DRIVER).toBe(
+      'internal',
     );
   });
 
@@ -332,6 +339,57 @@ describe('module feature flags (R1-1)', () => {
     expect(
       validateEnv({ ...BASE, FEATURE_VOLUNTEERING_MINORS: 'true' }).FEATURE_VOLUNTEERING_MINORS,
     ).toBe(true);
+  });
+
+  it('knows every switch of the schema, PLAN_ENFORCEMENT included', () => {
+    expect(FEATURE_FLAG_KEYS).toEqual(
+      expect.arrayContaining(['PLAN_ENFORCEMENT', 'FEATURE_PAYMENTS', 'HTTP_ACCESS_LOG']),
+    );
+    // Not switches: no value means "follow MERCADOPAGO_TEST" / "MFA on".
+    expect(FEATURE_FLAG_KEYS).not.toContain('MERCADOPAGO_OAUTH_TEST_TOKEN');
+    expect(FEATURE_FLAG_KEYS).not.toContain('PLATFORM_MFA_REQUIRED');
+  });
+
+  it('refuses in production a switch written as on/1/yes instead of true (it would be silently off)', () => {
+    for (const value of ['on', '1', 'yes', 'TRUE', 'off']) {
+      expect(() => validateEnv({ ...SAFE_PRODUCTION, PLAN_ENFORCEMENT: value })).toThrow(
+        /PLAN_ENFORCEMENT: "[^"]+" is not valid; use true or false/,
+      );
+    }
+    expect(validateEnv({ ...SAFE_PRODUCTION, PLAN_ENFORCEMENT: 'true' }).PLAN_ENFORCEMENT).toBe(
+      true,
+    );
+    expect(validateEnv({ ...SAFE_PRODUCTION, PLAN_ENFORCEMENT: 'false' }).PLAN_ENFORCEMENT).toBe(
+      false,
+    );
+  });
+});
+
+describe("AdoptaFácil's own Mercado Pago account (plans, coffee) in production", () => {
+  const PLATFORM = {
+    ...SAFE_PRODUCTION,
+    PLAN_ENFORCEMENT: 'true',
+    MERCADOPAGO_PLATFORM_ACCESS_TOKEN: 'APP_USR-123-dummy',
+  };
+
+  it('refuses the platform token without the webhook secret (charges would never confirm)', () => {
+    expect(() => validateEnv(PLATFORM)).toThrow(/MERCADOPAGO_WEBHOOK_SECRET/);
+  });
+
+  it('boots with the token and the secret while donations stay off', () => {
+    const env = validateEnv({ ...PLATFORM, MERCADOPAGO_WEBHOOK_SECRET: 'whsec' });
+    expect(env.PAYMENT_DRIVER).toBe('disabled');
+    expect(env.PLAN_ENFORCEMENT).toBe(true);
+  });
+
+  it('pins the Mercado Pago API host for the platform token too', () => {
+    expect(() =>
+      validateEnv({
+        ...PLATFORM,
+        MERCADOPAGO_WEBHOOK_SECRET: 'whsec',
+        MERCADOPAGO_BASE_URL: 'https://evil.example',
+      }),
+    ).toThrow(/MERCADOPAGO_BASE_URL/);
   });
 });
 

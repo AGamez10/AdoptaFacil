@@ -474,6 +474,7 @@ export class AdoptionDeliveryService {
         template: {
           event: 'adoption.delivery_code',
           organizationName,
+          organizationId: row.organizationId,
           data: {
             nombre: row.adopterName,
             animal: row.animalName,

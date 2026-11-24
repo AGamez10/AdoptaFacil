@@ -274,7 +274,9 @@ export const envSchema = z.object({
   // auto-verified RTE (SEC-003) and the fake signature emitted "fake:" ids on
   // real contracts. 'fake' stays the dev/test default.
   DIAN_DRIVER: z.enum(['fake', 'disabled']).default('fake'),
-  SIGNATURE_DRIVER: z.enum(['fake', 'disabled']).default('fake'),
+  // 'internal' (decisión del dueño, 2026-11-24): firma electrónica simple de
+  // la propia plataforma, el valor de producción para firmar contratos.
+  SIGNATURE_DRIVER: z.enum(['fake', 'internal', 'disabled']).default('fake'),
   // Ola 1 (R1-1): module feature flags. OFF unless the value is exactly
   // "true", in every environment — a missing or misspelled flag fails closed.
   // A module that is off answers 404 in the API (FeatureFlagGuard) and is
@@ -464,12 +466,23 @@ function assertProductionSafety(env: Env, ctx: z.RefinementCtx): void {
   // every payment notification to the API's public origin. Over plain http
   // (or the localhost default) the code could be intercepted and no
   // notification would ever settle a donation.
-  if (env.PAYMENT_DRIVER === 'mercadopago') {
+  // Los planes, el café y la guardería cobran con la cuenta PROPIA de
+  // AdoptaFácil (MERCADOPAGO_PLATFORM_ACCESS_TOKEN) aunque las donaciones sigan
+  // apagadas (PAYMENT_DRIVER=disabled). Sin la clave secreta de webhooks la
+  // API rechaza cada notificación: Mercado Pago cobraría y el plan nunca se
+  // activaría. Por eso el token exige la clave y las mismas URLs https.
+  if (env.MERCADOPAGO_PLATFORM_ACCESS_TOKEN && !env.MERCADOPAGO_WEBHOOK_SECRET) {
+    fail(
+      'MERCADOPAGO_WEBHOOK_SECRET',
+      'MERCADOPAGO_PLATFORM_ACCESS_TOKEN charges plans and the coffee: without the webhook secret no payment would ever be confirmed',
+    );
+  }
+  if (env.PAYMENT_DRIVER === 'mercadopago' || env.MERCADOPAGO_PLATFORM_ACCESS_TOKEN) {
     const apiBase = env.API_PUBLIC_BASE_URL ?? env.STORAGE_PUBLIC_BASE_URL;
     if (!isHttpsUrl(apiBase)) {
       fail(
         'API_PUBLIC_BASE_URL',
-        'PAYMENT_DRIVER=mercadopago needs the public https origin of the API in production',
+        'Mercado Pago needs the public https origin of the API in production',
       );
     }
     if (env.MERCADOPAGO_OAUTH_REDIRECT_URI && !isHttpsUrl(env.MERCADOPAGO_OAUTH_REDIRECT_URI)) {
@@ -646,6 +659,35 @@ export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
 });
 
 /**
+ * Variables que son interruptores (`featureFlag()`): se reconocen porque sin
+ * valor dan `false` y con "true" dan `true`. Se calcula del esquema para que
+ * un interruptor nuevo quede cubierto sin tocar esta lista.
+ */
+export const FEATURE_FLAG_KEYS: readonly string[] = Object.entries(envSchema.shape)
+  .filter(([, schema]) => {
+    const unset = (schema as z.ZodTypeAny).safeParse(undefined);
+    const on = (schema as z.ZodTypeAny).safeParse('true');
+    return unset.success && unset.data === false && on.success && on.data === true;
+  })
+  .map(([key]) => key);
+
+/**
+ * En producción un interruptor solo acepta "true" o "false". Antes,
+ * `PLAN_ENFORCEMENT=on` (o `1`, `yes`, `True`) se leía en silencio como
+ * apagado: se salía a producción creyendo que algo estaba encendido.
+ */
+function strictFlagIssues(config: Record<string, unknown>): string[] {
+  if (config['NODE_ENV'] !== 'production') return [];
+  return FEATURE_FLAG_KEYS.flatMap((key) => {
+    const value = config[key];
+    if (value === undefined || typeof value === 'boolean') return [];
+    return value === 'true' || value === 'false'
+      ? []
+      : [`  - ${key}: "${String(value)}" is not valid; use true or false`];
+  });
+}
+
+/**
  * Empty values count as "not set" (BLD-001): `pnpm setup:env` and PaaS
  * dashboards write `KEY=` for optional credentials, and `z.string().min(1)
  * .optional()` would otherwise reject the generated .env and stop the API.
@@ -663,11 +705,18 @@ function dropEmptyValues(config: Record<string, unknown>): Record<string, unknow
  * offending variable so a misconfigured environment fails fast and loud.
  */
 export function validateEnv(config: Record<string, unknown>): Env {
-  const parsed = validatedEnvSchema.safeParse(dropEmptyValues(config));
-  if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
-      .join('\n');
+  const cleaned = dropEmptyValues(config);
+  const parsed = validatedEnvSchema.safeParse(cleaned);
+  const flagIssues = strictFlagIssues(cleaned);
+  if (!parsed.success || flagIssues.length > 0) {
+    const issues = [
+      ...flagIssues,
+      ...(parsed.success
+        ? []
+        : parsed.error.issues.map(
+            (issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`,
+          )),
+    ].join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   return parsed.data;
