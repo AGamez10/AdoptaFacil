@@ -50,8 +50,8 @@ describe('registro de plantillas', () => {
     }
   });
 
-  it('son 25 diseños del motor (14 gratuitos y 11 Premium) además de la clásica', () => {
-    expect(DESIGN_IDS).toHaveLength(25);
+  it('son 26 diseños del motor (14 gratuitos y 12 Premium) además de la clásica', () => {
+    expect(DESIGN_IDS).toHaveLength(26);
     const premium = PORTAL_TEMPLATES.filter((t) => t.tier === 'paid').map((t) => t.id);
     // Decisión del cliente (2026-11-15): Sistema solar e Hilo pasan a Pro y llega Documental.
     for (const id of [
@@ -66,8 +66,9 @@ describe('registro de plantillas', () => {
       // Serie moderna (2026-11-22): Halo y Prisma son de pago.
       'halo',
       'prisma',
-      // De temporada (2026-11-24): Navidad es de pago.
+      // De temporada (2026-11-24): Navidad y Bola de nieve son de pago.
       'navidad',
+      'nieve',
     ]) {
       expect(DESIGN_IDS).toContain(id);
       expect(premium).toContain(id);

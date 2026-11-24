@@ -177,6 +177,7 @@ export const PORTAL_TEMPLATE_IDS = [
   'prisma',
   // De temporada (2026-11-24): Navidad, de pago y solo dentro de su ventana de fechas.
   'navidad',
+  'nieve',
 ] as const;
 export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
@@ -393,7 +394,14 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
     id: 'navidad',
     name: 'Navidad',
     tagline:
-      'Luces cálidas, nieve suave y una carta de Navidad por cada animal: invita a donar y a regalar un hogar esta temporada. De día y de noche.',
+      'Un cuento de Navidad: Papá Noel cruza el cielo en su trineo sobre un pueblito nevado, cada animal cuelga como una esfera del árbol y el trineo avanza hasta la meta de tu campaña.',
+    tier: 'paid',
+  },
+  {
+    id: 'nieve',
+    name: 'Bola de nieve',
+    tagline:
+      'Una bola de nieve en 3D que se gira y se agita para presentar a un animal al azar, un calendario de adviento con una puerta por animal y una guirnalda que se enciende con cada aporte.',
     tier: 'paid',
   },
 ];
@@ -499,6 +507,7 @@ export const PORTAL_TEMPLATE_OPTIONS: Readonly<
   halo: [],
   prisma: [],
   navidad: [],
+  nieve: [],
 };
 
 /**
@@ -590,6 +599,7 @@ export const PORTAL_TEMPLATE_SEASONS: Readonly<
 > = {
   // Decisión del dueño (2026-11-24): Navidad, desde finales de noviembre hasta Reyes.
   navidad: { from: '11-20', to: '01-07' },
+  nieve: { from: '11-20', to: '01-07' },
 };
 
 /** Colombia no tiene horario de verano: UTC-5 todo el año. */

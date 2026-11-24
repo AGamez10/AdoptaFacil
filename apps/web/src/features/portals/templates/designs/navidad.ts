@@ -2,6 +2,7 @@ import { EMPTY, type TplAnimal, type TplModel } from '../engine/model';
 import { animalArt, leadImage, leadSource, meta, revealFallback } from '../engine/modern';
 import { pic, premiumDesign, scopedTransition, vtName } from '../engine/premium';
 import { availLine, fmt, logoMark, paw } from '../engine/runtime';
+import { miniSleigh, nightScene } from './navidad-art';
 
 /*
  * Navidad (de pago y de temporada; ver `PORTAL_TEMPLATE_SEASONS`).
@@ -32,6 +33,7 @@ const CSS = `
 }
 .tpl-navidad>*:not(.nv-snow){position:relative;z-index:2}
 
+@keyframes nvTw{50%{opacity:.25}}
 /* Guirnalda de luces. */
 .tpl-navidad .nv-lights{display:flex;justify-content:space-between;gap:0;height:26px;padding-inline:8px;overflow:hidden;background:linear-gradient(180deg,var(--pine),transparent)}
 .tpl-navidad[data-mode=dark] .nv-lights{background:linear-gradient(180deg,#07100B,transparent)}
@@ -61,33 +63,65 @@ const CSS = `
 .tpl-navidad .nv-don{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 18px;border-radius:999px;background:var(--k-acc);color:var(--k-acc-ink)!important;text-decoration:none;font-weight:700;font-size:15px;flex:none}
 @media (max-width:860px){.tpl-navidad .nv-nav{display:none}.tpl-navidad .nv-top .k-mode{margin-left:auto;padding:0 11px}.tpl-navidad .nv-top .k-mode span{display:none}}
 
-/* Portada. */
-.tpl-navidad .nv-hero{padding-block:clamp(36px,6vw,88px) clamp(40px,6vw,80px)}
-.tpl-navidad .nv-hero .w{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(28px,5vw,72px);align-items:center}
+/* Portada: escena nocturna ilustrada (cielo, luna, pueblito, árbol y trineo). */
+.tpl-navidad{--sky1:#14275A;--sky2:#3B3F86;--sky3:#F0A988;--hill-far:#C9D8EC;--hill-near:#F4F8FD}
+.tpl-navidad[data-mode=dark]{--sky1:#030817;--sky2:#0B1C44;--sky3:#2A4F88;--hill-far:#9FB4D4;--hill-near:#E3ECF7}
+.tpl-navidad .nv-hero{position:relative;overflow:hidden;color:#FFFFFF;background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 48%,var(--sky3) 78%);padding-block:clamp(40px,6vw,84px) clamp(250px,24vw,330px);isolation:isolate}
+.tpl-navidad .nv-art-scene{position:absolute;left:0;bottom:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+@media (max-width:860px){.tpl-navidad .nv-art-scene{height:min(100%,760px);width:auto;aspect-ratio:1440/800;left:50%;translate:-79% 0}}
+.tpl-navidad .nv-art-scene .tw{animation:nvTw 2.6s ease-in-out infinite;animation-delay:calc(var(--d,0s) * -1)}
+.tpl-navidad .nv-fly{translate:640px 170px}
+.tpl-navidad .nv-art-scene .win{animation:nvWin 4s ease-in-out infinite alternate}
+@keyframes nvWin{50%{fill:#FFC64A}}
+.tpl-navidad .nv-hero .w{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:clamp(28px,5vw,72px);align-items:start}
 @media (max-width:860px){.tpl-navidad .nv-hero .w{grid-template-columns:minmax(0,1fr)}}
-.tpl-navidad .nv-tag{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:var(--k-tint);color:var(--k-ink);font-weight:600;font-size:14px}
-.tpl-navidad .nv-tag svg{width:16px;color:var(--red)}
-.tpl-navidad[data-mode=dark] .nv-tag svg{color:var(--gold)}
-.tpl-navidad .nv-h1{font-family:var(--k-fd);font-weight:800;font-size:clamp(44px,6.2vw,92px);line-height:.95;letter-spacing:-.035em;margin-top:18px;font-variation-settings:'opsz' 144}
-.tpl-navidad .nv-h1 em{font-style:italic;color:var(--red)}
-.tpl-navidad[data-mode=dark] .nv-h1 em{color:var(--gold)}
-.tpl-navidad .nv-lede{font-size:clamp(18px,1.6vw,21px);line-height:1.55;color:var(--k-soft);max-width:30em;margin-top:18px}
+.tpl-navidad .nv-tag{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25);color:#FFFFFF;font-weight:600;font-size:14px}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.tpl-navidad .nv-tag{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}}
+.tpl-navidad .nv-tag svg{width:16px;color:#FFD24D}
+.tpl-navidad .nv-h1{font-family:var(--k-fd);font-weight:800;font-size:clamp(46px,6.4vw,96px);line-height:.95;letter-spacing:-.035em;margin-top:18px;font-variation-settings:'opsz' 144;text-shadow:0 4px 30px rgba(5,10,40,.45)}
+.tpl-navidad .nv-h1 em{font-style:italic;color:#FFD27A}
+.tpl-navidad .nv-lede{font-size:clamp(18px,1.6vw,21px);line-height:1.55;color:#E9EDFA;max-width:30em;margin-top:18px;text-shadow:0 2px 12px rgba(5,10,40,.5)}
 .tpl-navidad .nv-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
-.tpl-navidad .nv-cta .gh{display:inline-flex;align-items:center;gap:8px;min-height:54px;padding:0 22px;border-radius:999px;text-decoration:none;font-weight:700;color:var(--k-ink);box-shadow:inset 0 0 0 2px var(--k-line)}
+.tpl-navidad .nv-cta .k-btn{background:#D62F3A;color:#FFFFFF!important;box-shadow:0 14px 30px -12px rgba(214,47,58,.8)}
+.tpl-navidad .nv-cta .gh{display:inline-flex;align-items:center;gap:8px;min-height:54px;padding:0 22px;border-radius:999px;text-decoration:none;font-weight:700;color:#FFFFFF!important;box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)}
 .tpl-navidad .nv-cta svg{width:18px}
-.tpl-navidad .nv-count{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:28px;color:var(--k-soft);font-size:14px}
-.tpl-navidad .nv-count b{display:block;font-family:var(--k-fd);font-size:clamp(28px,3vw,40px);line-height:1;color:var(--k-ink);font-variant-numeric:tabular-nums}
+.tpl-navidad .nv-count{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:28px;color:#DDE3F5;font-size:14px}
+.tpl-navidad .nv-count b{display:block;font-family:var(--k-fd);font-size:clamp(28px,3vw,40px);line-height:1;color:#FFFFFF;font-variant-numeric:tabular-nums}
 
-.tpl-navidad .nv-win{position:relative;aspect-ratio:4/5;border-radius:999px 999px 28px 28px;overflow:hidden;background:var(--pine);box-shadow:0 0 0 10px var(--k-card),0 0 0 12px var(--gold),0 40px 60px -30px rgba(60,10,10,.5)}
-.tpl-navidad .nv-win>.portrait,.tpl-navidad .nv-win>a,.tpl-navidad .nv-win>a>.portrait{position:absolute;inset:0}
-.tpl-navidad .nv-win::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 55%,rgba(20,8,8,.55))}
-.tpl-navidad .nv-art{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(70% 60% at 50% 110%,#2E7D50,transparent 70%),#1F5C3A;color:#FFF4E6}
-.tpl-navidad .nv-art svg{width:30%;opacity:.35}
-.tpl-navidad .nv-wish{position:absolute;left:16px;right:16px;bottom:16px;z-index:1;display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:16px;background:rgba(255,248,240,.94);color:#2A1215;font-size:15px;line-height:1.35}
-.tpl-navidad .nv-wish svg{width:22px;flex:none;color:#B3202A}
+/* El animal de portada cuelga como una esfera del árbol. */
+.tpl-navidad .nv-orn{position:relative;justify-self:center;width:min(100%,380px);padding-top:70px;transform-origin:50% 0}
+.tpl-navidad .nv-orn::before{content:"";position:absolute;left:50%;top:-200px;height:250px;width:2px;background:linear-gradient(#FFD27A00,#FFD27A);translate:-50% 0}
+.tpl-navidad .nv-cap{position:absolute;left:50%;top:44px;translate:-50% 0;width:56px;height:34px;border-radius:8px 8px 4px 4px;background:linear-gradient(90deg,#B98A2C,#F6D58A 45%,#B98A2C);box-shadow:inset 0 -4px 0 rgba(0,0,0,.15);z-index:2}
+.tpl-navidad .nv-cap::before{content:"";position:absolute;left:50%;top:-18px;translate:-50% 0;width:22px;height:22px;border-radius:50%;border:3px solid #E7B85A}
+.tpl-navidad .nv-ball{position:relative;aspect-ratio:1;border-radius:50%;overflow:hidden;background:radial-gradient(circle at 35% 30%,#3FA36B,#1F5C3A);box-shadow:0 0 0 8px #E7B85A,0 0 0 14px rgba(255,210,122,.25),0 40px 70px -20px rgba(0,0,0,.6),0 0 90px rgba(255,210,122,.35)}
+.tpl-navidad .nv-ball>.portrait,.tpl-navidad .nv-ball>a,.tpl-navidad .nv-ball>a>.portrait{position:absolute;inset:0}
+.tpl-navidad .nv-ball::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;background:radial-gradient(circle at 30% 22%,rgba(255,255,255,.55),rgba(255,255,255,0) 28%),radial-gradient(circle at 50% 120%,rgba(0,0,0,.35),transparent 55%)}
+.tpl-navidad .nv-art{position:absolute;inset:0;display:grid;place-items:center;color:#FFF4E6}
+.tpl-navidad .nv-art svg{width:34%;opacity:.4}
+.tpl-navidad .nv-wish{position:relative;margin:22px auto 0;display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:16px;background:rgba(255,248,240,.95);color:#2A1215;font-size:15px;line-height:1.35;max-width:340px;box-shadow:0 18px 40px -18px rgba(0,0,0,.5)}
+.tpl-navidad .nv-wish svg{width:22px;flex:none;color:#C62828}
 .tpl-navidad .nv-wish b{font-family:var(--k-fd)}
-.tpl-navidad .nv-bow{position:absolute;top:-6px;left:50%;translate:-50% 0;z-index:2;width:74px;color:var(--red);filter:drop-shadow(0 6px 8px rgba(0,0,0,.25))}
-.tpl-navidad .nv-winw{position:relative;max-width:460px;width:100%;justify-self:center;padding-top:18px}
+@media (max-width:860px){.tpl-navidad .nv-orn{width:min(78%,300px);padding-top:56px}.tpl-navidad .nv-cap{top:30px}}
+
+@media (prefers-reduced-motion:no-preference){
+  .tpl-navidad .nv-fly{animation:nvFly 24s linear infinite}
+  @keyframes nvFly{0%{translate:-460px 360px}45%{translate:560px 210px}100%{translate:1620px 70px}}
+  .tpl-navidad .nv-bob{animation:nvBob 1.3s ease-in-out infinite alternate}
+  @keyframes nvBob{to{translate:0 -12px}}
+  .tpl-navidad .nv-art-scene .lg{transform-box:fill-box;transform-origin:50% 0;animation:nvLeg .45s ease-in-out infinite alternate}
+  .tpl-navidad .nv-art-scene .lg-b{animation-delay:-.22s}
+  @keyframes nvLeg{from{rotate:-10deg}to{rotate:12deg}}
+  .tpl-navidad .sl-trail circle{animation:nvTw 1s ease-in-out infinite;animation-delay:calc(var(--d,0s) * -1)}
+  .tpl-navidad .nose-glow{animation:nvTw 1.2s ease-in-out infinite}
+  .tpl-navidad .wave{transform-box:view-box;transform-origin:56px -40px;animation:nvWave 1.1s ease-in-out infinite alternate}
+  @keyframes nvWave{to{rotate:-18deg}}
+  .tpl-navidad .star-glow{transform-box:fill-box;transform-origin:center;animation:nvPulse 2.4s ease-in-out infinite}
+  @keyframes nvPulse{50%{scale:1.5;opacity:.15}}
+  .tpl-navidad .smoke{animation:nvSmoke 5s ease-in-out infinite}
+  @keyframes nvSmoke{to{translate:6px -14px;opacity:0}}
+  .tpl-navidad .nv-orn{animation:nvSwing 5s ease-in-out infinite alternate}
+  @keyframes nvSwing{from{rotate:-2.2deg}to{rotate:2.2deg}}
+}
 
 /* Cómo participar: tres regalos. */
 .tpl-navidad .k-act{border-top:6px solid var(--red)}
@@ -95,22 +129,28 @@ const CSS = `
 .tpl-navidad .k-act:nth-child(3){border-top-color:var(--gold)}
 .tpl-navidad[data-mode=dark] .k-act:nth-child(2){border-top-color:#3FA36B}
 
-/* Catálogo: carta de deseos por animal. */
-.tpl-navidad .nv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:clamp(18px,2vw,28px)}
-.tpl-navidad .nv-card{display:flex;flex-direction:column;gap:12px;padding:12px 12px 18px;border-radius:var(--k-r);background:var(--k-card);box-shadow:var(--k-sh);text-decoration:none;color:inherit;transition:translate .4s cubic-bezier(.2,.8,.2,1)}
-.tpl-navidad .nv-card:hover{translate:0 -6px}
-.tpl-navidad .nv-card:nth-child(odd):hover{rotate:-.6deg}
-.tpl-navidad .nv-card:nth-child(even):hover{rotate:.6deg}
-.tpl-navidad .nv-card .ph{position:relative;aspect-ratio:1;border-radius:calc(var(--k-r) - 8px);overflow:hidden;background:var(--k-tint)}
-.tpl-navidad .nv-card .ph .portrait{position:absolute;inset:0}
+/* Catálogo: cada animal es una etiqueta de regalo colgada de una cinta. */
+.tpl-navidad .nv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:clamp(34px,3vw,44px) clamp(18px,2vw,28px);padding-top:24px}
+.tpl-navidad .nv-card{position:relative;display:flex;flex-direction:column;gap:12px;padding:14px 14px 18px;border-radius:18px 18px 22px 22px;background:var(--k-card);box-shadow:var(--k-sh);text-decoration:none;color:inherit;transform-origin:50% -22px;transition:rotate .6s cubic-bezier(.3,1.6,.5,1),translate .4s}
+.tpl-navidad .nv-card::before{content:"";position:absolute;left:50%;top:-26px;width:2px;height:28px;background:var(--red);translate:-50% 0}
+.tpl-navidad[data-mode=dark] .nv-card::before{background:var(--gold)}
+.tpl-navidad .nv-card::after{content:"";position:absolute;left:50%;top:-6px;width:14px;height:14px;border-radius:50%;translate:-50% 0;background:var(--k-bg);box-shadow:inset 0 0 0 3px var(--gold)}
+.tpl-navidad .nv-card:nth-child(odd):hover{rotate:-2.5deg}
+.tpl-navidad .nv-card:nth-child(even):hover{rotate:2.5deg}
+.tpl-navidad .nv-card .ph{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--k-tint);margin-top:8px}
+.tpl-navidad .nv-card .ph .portrait{position:absolute;inset:0;transition:scale .8s cubic-bezier(.2,.8,.2,1)}
+.tpl-navidad .nv-card:hover .ph .portrait{scale:1.06}
 .tpl-navidad .nv-card .nw{position:absolute;top:10px;left:10px;padding:5px 10px;border-radius:999px;background:#FFF8F0;color:#2A1215;font-size:12px;font-weight:700}
-.tpl-navidad .nv-card b{font-family:var(--k-fd);font-size:24px;line-height:1.05;padding:0 6px;overflow-wrap:anywhere}
-.tpl-navidad .nv-card small{font-size:14px;color:var(--k-soft);padding:0 6px;margin-top:-6px}
-.tpl-navidad .nv-card .ds{display:flex;align-items:center;gap:8px;margin:2px 6px 0;padding:8px 12px;border-radius:12px;background:var(--k-tint);font-size:14px;font-weight:600}
-.tpl-navidad .nv-card .ds svg{width:16px;flex:none;color:var(--red)}
-.tpl-navidad[data-mode=dark] .nv-card .ds svg{color:var(--gold)}
+.tpl-navidad .nv-card .to{display:grid;gap:2px;padding:0 4px;font-size:13px;color:var(--k-soft)}
+.tpl-navidad .nv-card .to span{display:flex;gap:6px;align-items:baseline;border-bottom:1px dashed var(--k-line);padding-bottom:4px}
+.tpl-navidad .nv-card .to em{font-style:normal;font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:11px;color:var(--hl);min-width:3.2em}
+.tpl-navidad .nv-card b{font-family:var(--k-fd);font-size:24px;line-height:1.05;color:var(--k-ink);overflow-wrap:anywhere}
+.tpl-navidad .nv-card small{font-size:14px;color:var(--k-soft);padding:0 4px}
+.tpl-navidad .nv-card .ds{display:flex;align-items:center;justify-content:center;gap:8px;padding:9px 12px;border-radius:999px;background:var(--red);color:#FFFFFF;font-size:14px;font-weight:700}
+.tpl-navidad[data-mode=dark] .nv-card .ds{background:var(--gold);color:#2A1215}
+.tpl-navidad .nv-card .ds svg{width:16px;flex:none}
+@media (max-width:560px){.tpl-navidad .nv-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:34px 12px}.tpl-navidad .nv-card{padding:10px 10px 12px;gap:8px}.tpl-navidad .nv-card b{font-size:19px}.tpl-navidad .nv-card .ds{font-size:12px;padding:7px 8px}.tpl-navidad .nv-card .to{font-size:12px}}
 
-@media (max-width:560px){.tpl-navidad .nv-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tpl-navidad .nv-card{padding:8px 8px 12px;gap:8px}.tpl-navidad .nv-card b{font-size:19px}.tpl-navidad .nv-card .ds{font-size:12px;padding:6px 8px;margin:0}}
 /* Campaña envuelta como regalo. */
 .tpl-navidad .nv-gift{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:center;padding:clamp(28px,5vw,64px);border-radius:clamp(24px,3vw,40px);background:var(--k-card);box-shadow:var(--k-sh);overflow:hidden}
 .tpl-navidad .nv-gift::before,.tpl-navidad .nv-gift::after{content:"";position:absolute;background:var(--ribbon);opacity:.9;pointer-events:none}
@@ -125,6 +165,11 @@ const CSS = `
 .tpl-navidad .nv-bar{height:14px;border-radius:14px;background:var(--k-tint);overflow:hidden;margin-top:18px}
 .tpl-navidad .nv-bar i{display:block;height:100%;width:100%;transform-origin:0 50%;scale:var(--v) 1;border-radius:14px;background:repeating-linear-gradient(-45deg,var(--red) 0 12px,#D9434C 12px 24px)}
 .tpl-navidad[data-mode=dark] .nv-bar i{background:repeating-linear-gradient(-45deg,#E7B85A 0 12px,#F2CD7E 12px 24px)}
+.tpl-navidad .nv-track{position:relative;margin-top:26px;padding-top:58px}
+.tpl-navidad .nv-track .sl svg{display:block;width:100%}.tpl-navidad .nv-track .sl{position:absolute;top:0;left:calc(var(--v) * 100%);width:clamp(150px,18vw,210px);translate:-92% 0;filter:drop-shadow(0 8px 10px rgba(0,0,0,.25))}
+.tpl-navidad .nv-track .goal{position:absolute;right:-4px;top:18px;width:30px;color:var(--red)}.tpl-navidad[data-mode=dark] .nv-track .goal{color:var(--gold)}
+.tpl-navidad .nv-track .nv-bar{margin-top:0}
+.tpl-navidad .nv-push{margin-top:10px;font-weight:600;color:var(--k-ink)}
 .tpl-navidad .nv-figs{display:flex;flex-wrap:wrap;gap:10px 30px;margin-top:18px}
 .tpl-navidad .nv-figs span{display:block;font-size:13px;color:var(--k-soft)}
 .tpl-navidad .nv-figs b{font-size:clamp(18px,1.8vw,24px);font-weight:700;font-variant-numeric:tabular-nums}
@@ -145,6 +190,9 @@ const CSS = `
 }
 
 @media (prefers-reduced-motion:no-preference){
+  .tpl-navidad .nv-track .lg{transform-box:fill-box;transform-origin:50% 0;animation:nvLeg .45s ease-in-out infinite alternate}
+  .tpl-navidad .nv-track .lg-b{animation-delay:-.22s}
+  .tpl-navidad .nv-track .sl svg{animation:nvBob 1.3s ease-in-out infinite alternate}
   @supports ((animation-timeline:view()) and (animation-range:entry)){
     .tpl-navidad .rv,.tpl-navidad .k-act,.tpl-navidad .k-nd,.tpl-navidad .k-pr,.tpl-navidad .k-revs figure{animation:nvIn linear both;animation-timeline:view();animation-range:entry calc(var(--i,0) * 5%) entry calc(65% + var(--i,0) * 5%)}
     @keyframes nvIn{from{opacity:0;translate:0 48px}}
@@ -160,7 +208,6 @@ const CSS = `
 const STAR = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.2l7.1-.6z"/></svg>`;
 const HEART = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.2 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.5.8-1.3 2.3-2.5 4.4-2.5 3.6 0 5.7 3.7 4.2 7.2C19.5 16.4 12 21 12 21z"/></svg>`;
 const GIFT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>`;
-const BOW = `<svg viewBox="0 0 80 40" fill="currentColor" aria-hidden="true"><path d="M40 20C30 4 10 0 8 10s16 14 32 10zM40 20c10-16 30-20 32-10S56 24 40 20z"/><circle cx="40" cy="20" r="7"/><path d="M36 24l-8 16 8-3 4 3 1-16zM44 24l8 16-8-3-4 3-1-16z" opacity=".85"/></svg>`;
 
 /** Días que faltan para Nochebuena en Colombia (UTC-5); 0 el 24 y después. */
 function daysToNochebuena(now = new Date()): number {
@@ -178,13 +225,13 @@ function countdown(): string {
 }
 
 const card = (a: TplAnimal, i: number) =>
-  `<a class="nv-card rv" href="${a.href}" data-id="${a.id}" style="--i:${i % 4};view-transition-name:${vtName('nv', a.id)}"><span class="ph">${animalArt(a, { decor: true })}${a.isNew ? '<span class="nw">Recién llegado</span>' : ''}</span><b>${a.name}</b><small>${meta(a)}</small><span class="ds">${STAR}Mi deseo: un hogar</span></a>`;
+  `<a class="nv-card rv" href="${a.href}" data-id="${a.id}" style="--i:${i % 4};view-transition-name:${vtName('nv', a.id)}"><span class="ph">${animalArt(a, { decor: true })}${a.isNew ? '<span class="nw">Recién llegado</span>' : ''}</span><span class="to"><span><em>De</em><b>${a.name}</b></span><span><em>Para</em>una familia que lo quiera</span></span><small>${meta(a)}</small><span class="ds">${STAR}Quiero conocerl${a.spLabel.endsWith('a') ? 'a' : 'o'}</span></a>`;
 
 function lights(): string {
   return `<div class="nv-lights" aria-hidden="true">${'<i></i>'.repeat(36)}</div>`;
 }
 
-function windowFrame(m: TplModel): string {
+function ornament(m: TplModel): string {
   const lead = leadSource(m);
   const inner =
     lead.kind === 'cover'
@@ -194,9 +241,9 @@ function windowFrame(m: TplModel): string {
         : `<span class="nv-art">${paw()}</span>`;
   const wish =
     lead.kind === 'animal' && lead.animal
-      ? `<p class="nv-wish">${HEART}<span><b>${lead.animal.name}</b> pidió un solo regalo: una familia.</span></p>`
+      ? `<p class="nv-wish">${HEART}<span><b>${lead.animal.name}</b> le escribió a Papá Noel: solo quiere una familia.</span></p>`
       : `<p class="nv-wish">${HEART}<span>Esta Navidad, <b>cada aporte</b> se convierte en comida, abrigo y cuidados.</span></p>`;
-  return `<div class="nv-winw"><span class="nv-bow">${BOW}</span><div class="nv-win">${inner}${wish}</div></div>`;
+  return `<div class="nv-orn"><span class="nv-cap" aria-hidden="true"></span><div class="nv-ball">${inner}</div>${wish}</div>`;
 }
 
 export const navidad = premiumDesign({
@@ -217,7 +264,7 @@ export const navidad = premiumDesign({
 ${lights()}
 <header class="nv-top"><div class="w"><a class="nv-id" href="#nv-top"><i>${logoMark(m)}</i><b>${ORG.name}</b></a><nav class="nv-nav" aria-label="Secciones"><a href="#nv-cat">Adopta</a><a href="#nv-camp">Campaña</a><a href="#nv-ldg">Transparencia</a></nav>${P.modeBtn()}<a class="nv-don" href="${ORG.donateHref}">Donar</a></div></header>
 ${P.tbar()}
-<section class="nv-hero" id="nv-top"><div class="w">
+<section class="nv-hero" id="nv-top">${nightScene()}<div class="w">
   <div>
     <p class="nv-tag">${STAR}Navidad en ${ORG.name}</p>
     <h1 class="nv-h1">Esta Navidad, <em>regala un hogar.</em></h1>
@@ -225,7 +272,7 @@ ${P.tbar()}
     <div class="nv-cta"><a class="k-btn" href="${ORG.donateHref}" data-magnet>${GIFT} Donar esta Navidad</a><a class="gh" href="#nv-cat">${n ? 'Conocerlos' : 'Cómo ayudar'} ${pic.arrow}</a></div>
     <div class="nv-count">${countdown()}<div><b>${n}</b>${n === 1 ? 'espera' : 'esperan'} su regalo</div>${CAMPAIGN.active ? `<div><b>${CAMPAIGN.pct}%</b>de la campaña</div>` : ''}</div>
   </div>
-  ${windowFrame(m)}
+  ${ornament(m)}
 </div></section>
 ${P.acts(P.hd('Cómo participar', 'Tres regalos que cambian una Navidad'), gifts)}
 <section class="k-sec" data-sec="animales" id="nv-cat">
@@ -235,7 +282,7 @@ ${P.acts(P.hd('Cómo participar', 'Tres regalos que cambian una Navidad'), gifts
 ${P.campaign(
   () => `<section class="w k-sec" data-sec="campana" id="nv-camp"><div class="nv-gift">
   <div><p class="k-eb">Campaña de Navidad${CAMPAIGN.category ? ` · ${CAMPAIGN.category}` : ''}</p><h2>${CAMPAIGN.title}</h2>${CAMPAIGN.description ? `<p class="k-sub">${CAMPAIGN.description}</p>` : ''}<a class="k-btn" href="${CAMPAIGN.href}" data-magnet>${GIFT} Aportar a este regalo</a></div>
-  <div><p class="nv-pct" aria-label="${CAMPAIGN.pct}% de la meta">${CAMPAIGN.pct}%</p><div class="nv-bar" aria-hidden="true"><i style="--v:${CAMPAIGN.pct / 100}"></i></div>
+  <div><p class="nv-pct" aria-label="${CAMPAIGN.pct}% de la meta">${CAMPAIGN.pct}%</p><div class="nv-track" style="--v:${Math.min(1, Math.max(0.08, CAMPAIGN.pct / 100))}" aria-hidden="true"><span class="sl">${miniSleigh()}</span><span class="goal">${GIFT}</span><div class="nv-bar"><i style="--v:${CAMPAIGN.pct / 100}"></i></div></div><p class="nv-push">${missing > 0 ? `Ayuda a que el trineo llegue a la meta: faltan ${fmt(missing)}.` : '¡El trineo llegó a la meta! Gracias.'}</p>
   <div class="nv-figs"><div><span>Recaudado</span><b>${fmt(CAMPAIGN.raised)}</b></div><div><span>${missing > 0 ? 'Faltan' : 'Meta'}</span><b>${fmt(missing > 0 ? missing : CAMPAIGN.goal)}</b></div><div><span>Cierra</span><b>${CAMPAIGN.deadline || '—'}</b></div></div>${P.more()}</div>
 </div></section>`,
   P.hd('Campaña activa', 'Sin campaña por ahora'),

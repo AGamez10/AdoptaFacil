@@ -12,6 +12,8 @@ describe('plantillas de temporada (Navidad, 2026-11-24)', () => {
   it('Navidad es de pago y de temporada; las demás no son de temporada', () => {
     expect(isPremiumTemplate('navidad')).toBe(true);
     expect(isSeasonalTemplate('navidad')).toBe(true);
+    expect(isSeasonalTemplate('nieve')).toBe(true);
+    expect(isPremiumTemplate('nieve')).toBe(true);
     expect(isSeasonalTemplate('halo')).toBe(false);
     expect(isTemplateInSeason('halo', new Date('2026-07-01T12:00:00Z'))).toBe(true);
     expect(PORTAL_TEMPLATE_SEASONS.navidad).toEqual({ from: '11-20', to: '01-07' });
