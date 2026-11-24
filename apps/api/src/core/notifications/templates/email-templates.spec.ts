@@ -51,6 +51,8 @@ describe('email catalog', () => {
       // Sin estos el contador o revisor fiscal no recibe su enlace personal.
       'reports.signature_request',
       'accounting.share',
+      // Comprobante de cada cobro del plan (Condiciones para organizaciones §5.3).
+      'plan.charged',
     ]);
   });
 

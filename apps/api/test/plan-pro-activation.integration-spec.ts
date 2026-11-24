@@ -3,7 +3,12 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
-import { PLAN_CATALOG, PLAN_CAPABILITY_INFO, type PlanCapability } from '@adoptafacil/contracts';
+import {
+  LEGAL_CONTROLLER,
+  PLAN_CATALOG,
+  PLAN_CAPABILITY_INFO,
+  type PlanCapability,
+} from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { OrgEmailBrandingService } from '../src/core/notifications/branding/org-email-branding.service';
 import {
@@ -167,6 +172,21 @@ describe('Pagar un plan activa lo que promete (Mercado Pago simulado, de punta a
       amount: pre.amount,
       currency: 'COP',
       chargedAt: new Date(),
+    });
+    await notify('subscription_authorized_payment', chargeId).expect(200);
+  }
+
+  /** Renovación: Mercado Pago cobra el mes siguiente de la suscripción `id`. */
+  async function renew(id: string): Promise<void> {
+    const pre = fake.preapprovals.get(id) as MercadoPagoPreapproval;
+    const chargeId = `chren${randomUUID().slice(0, 8)}`;
+    fake.charges.set(chargeId, {
+      id: chargeId,
+      preapprovalId: id,
+      paymentStatus: 'approved',
+      amount: pre.amount,
+      currency: 'COP',
+      chargedAt: new Date(Date.now() + 31 * 86_400_000),
     });
     await notify('subscription_authorized_payment', chargeId).expect(200);
   }
@@ -362,8 +382,30 @@ describe('Pagar un plan activa lo que promete (Mercado Pago simulado, de punta a
     expect(String(activated[0].template?.data.beneficios)).toContain('Dominio propio');
     expect(String(activated[0].template?.data.beneficios)).not.toContain('Patrocinio');
 
+    // Comprobante del cobro (Condiciones para organizaciones §5.3), con el NIT
+    // de quien cobra y sin IVA mientras el titular no sea responsable de IVA.
+    const receipts = () => sent.filter((m) => m.template?.event === 'plan.charged');
+    expect(receipts()).toHaveLength(1);
+    expect(receipts()[0]).toMatchObject({ to: org.email });
+    expect(receipts()[0].template?.data).toMatchObject({
+      plan: 'Pro',
+      monto: PLAN_CATALOG.pro.monthlyPriceCop,
+      referencia: charge,
+    });
+    expect(String(receipts()[0].template?.data.titular)).toContain(LEGAL_CONTROLLER.nit);
+    expect(String(receipts()[0].template?.data.iva)).toContain('Sin IVA');
+    // El comprobante es de AdoptaFácil: nunca sale con la marca de la organización.
+    expect(receipts()[0].template?.organizationId).toBeUndefined();
+
     // Mercado Pago repite la notificación: nada cambia y no se avisa dos veces.
     await notify('subscription_authorized_payment', charge).expect(200);
+    expect(sent.filter((m) => m.template?.event === 'plan.activated')).toHaveLength(1);
+    expect(receipts()).toHaveLength(1);
+
+    // La renovación del mes siguiente trae su propio comprobante, sin otro aviso de activación.
+    await renew(id);
+    expect(receipts()).toHaveLength(2);
+    expect(receipts()[1].template?.data.referencia).not.toBe(charge);
     expect(sent.filter((m) => m.template?.event === 'plan.activated')).toHaveLength(1);
   });
 

@@ -6,6 +6,8 @@ import {
   PLAN_CAPABILITIES,
   PLAN_CATALOG,
   PLAN_CAPABILITY_INFO,
+  planCapabilityOffered,
+  PLAN_DISPLAYED_LIMITS,
   PLAN_LIMIT_LABELS,
   formatPlanLimit,
   isMercadoPagoCheckoutUrl,
@@ -17,7 +19,6 @@ import {
   type OrganizationPlanView,
   type PlanDefinition,
   type PlanKey,
-  type PlanLimit,
 } from '@adoptafacil/contracts';
 import {
   Badge,
@@ -169,7 +170,10 @@ function PlanCard({
   // AdoptaFácil's Mercado Pago account is not configured yet, so the button
   // is never offered just to fail.
   const onlineBilling = enforced && (onlineAvailable ?? isMercadoPagoProvider());
-  const included = PLAN_CAPABILITIES.filter((capability) => plan.capabilities[capability]);
+  // Solo lo que ya funciona: lo que está en construcción no se anuncia junto a un precio.
+  const included = PLAN_CAPABILITIES.filter(
+    (capability) => plan.capabilities[capability] && planCapabilityOffered(capability),
+  );
   return (
     <Card
       id={`plan-card-${plan.key}`}
@@ -207,7 +211,7 @@ function PlanCard({
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <ul className="space-y-1">
-          {(Object.keys(plan.limits) as PlanLimit[]).map((limit) => (
+          {PLAN_DISPLAYED_LIMITS.map((limit) => (
             <li key={limit} className="flex justify-between gap-2">
               <span className="text-muted-foreground">{LIMIT_LABELS[limit]}</span>
               <span className="font-medium">{formatLimit(limit, plan.limits[limit])}</span>

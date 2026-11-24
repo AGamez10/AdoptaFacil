@@ -164,14 +164,16 @@ export const PLAN_CATALOG: Record<PlanKey, PlanDefinition> = {
 
 /**
  * How each capability is described to organizations, and whether it already
- * works today. `available: false` = sold in the plan but still being built: the
- * landing and the plans screen show it as "próximamente", so no page promises
- * something the product does not do yet (Estatuto del Consumidor, publicidad).
+ * works today. `available: false` = planned but still being built: it is NOT
+ * listed in any offer (landing, plans screen, activation email) until it
+ * works, because what a paid plan advertises binds the seller (Ley 1480 de
+ * 2011, arts. 29-30). A "próximamente" next to a price still reads as part of
+ * what is being bought.
  */
 export const PLAN_CAPABILITY_INFO: Record<PlanCapability, { label: string; available: boolean }> = {
   portalAllDesigns: { label: 'Todos los diseños de portal público', available: true },
   portalPremiumDesigns: {
-    label: 'Plantillas Pro del portal (como Historias, con video)',
+    label: 'Plantillas Pro del portal (como Documental, con video)',
     available: true,
   },
   portalAdvancedCustomization: {
@@ -226,6 +228,16 @@ export const PLAN_ALWAYS_INCLUDED = [
   'Comprobantes de donación y documentos de la organización',
 ] as const;
 
+/** Limits shown to organizations. `portalDesigns` is the same in every plan,
+ *  is not enforced and is lower than the designs actually offered, so showing
+ *  it would advertise a restriction that does not exist. */
+export const PLAN_DISPLAYED_LIMITS: readonly PlanLimit[] = ['members', 'storageMb'];
+
+/** Whether `capability` may be listed in an offer today (it already works). */
+export function planCapabilityOffered(capability: PlanCapability): boolean {
+  return PLAN_CAPABILITY_INFO[capability].available;
+}
+
 export const PLAN_LIMIT_LABELS: Record<PlanLimit, string> = {
   members: 'Miembros del equipo',
   storageMb: 'Almacenamiento',
@@ -270,7 +282,10 @@ export function planHighlights(key: PlanKey): PlanHighlight[] {
     ];
   }
   const added = PLAN_CAPABILITIES.filter(
-    (capability) => plan.capabilities[capability] && !previous.capabilities[capability],
+    (capability) =>
+      plan.capabilities[capability] &&
+      !previous.capabilities[capability] &&
+      planCapabilityOffered(capability),
   ).map((capability) => ({
     text: PLAN_CAPABILITY_INFO[capability].label,
     available: PLAN_CAPABILITY_INFO[capability].available,
