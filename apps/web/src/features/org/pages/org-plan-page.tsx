@@ -10,6 +10,7 @@ import {
   formatPlanLimit,
   isMercadoPagoCheckoutUrl,
   priceWithIva,
+  PLAN_PRICES_ADD_IVA,
   type PlanCheckoutState,
   type PlanCheckoutStatusView,
   type PlanCheckoutView,
@@ -190,12 +191,17 @@ function PlanCard({
         <CardDescription>{plan.tagline}</CardDescription>
         <p className="pt-2 text-2xl font-semibold">
           {paid ? cop.format(plan.monthlyPriceCop) : 'Gratis, siempre'}
-          {paid && <span className="text-sm font-normal text-muted-foreground"> /mes + IVA</span>}
+          {paid && (
+            <span className="text-sm font-normal text-muted-foreground">
+              {PLAN_PRICES_ADD_IVA ? ' /mes + IVA' : ' /mes'}
+            </span>
+          )}
         </p>
         {paid && (
           <p className="text-xs text-muted-foreground">
-            {cop.format(priceWithIva(plan.monthlyPriceCop))} con IVA, o{' '}
-            {cop.format(plan.annualPriceCop)} al año + IVA por transferencia (2 meses gratis)
+            {PLAN_PRICES_ADD_IVA
+              ? `${cop.format(priceWithIva(plan.monthlyPriceCop))} con IVA, o ${cop.format(plan.annualPriceCop)} al año + IVA por transferencia (2 meses gratis)`
+              : `No se cobra IVA (AdoptaFácil no es responsable de IVA). O ${cop.format(plan.annualPriceCop)} al año por transferencia (2 meses gratis)`}
           </p>
         )}
       </CardHeader>

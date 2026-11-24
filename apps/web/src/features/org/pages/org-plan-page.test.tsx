@@ -62,15 +62,16 @@ describe('OrgPlanPage', () => {
     expect(screen.getByTestId('plan-pay-mercadopago-crece')).toBeInTheDocument();
   });
 
-  it('shows the free plan, member usage and the three plans with prices + IVA', async () => {
+  it('shows the free plan, member usage and the three plans with prices (sin IVA: el titular no es responsable de IVA)', async () => {
     stubPlan(viewFor({ effectivePlan: 'free' }));
     renderShell({ route: '/organizacion/plan', ...sessionWith([Role.Owner]) });
 
     expect(await screen.findByText('Estás en el plan Gratis')).toBeInTheDocument();
     expect(screen.getByText(/de 3/)).toBeInTheDocument();
     expect(screen.getByText('Tu plan')).toBeInTheDocument();
-    expect(screen.getByText(/46\.410/)).toBeInTheDocument();
-    expect(screen.getByText(/94\.010/)).toBeInTheDocument();
+    expect(screen.getAllByText(/No se cobra IVA/)).toHaveLength(2);
+    expect(screen.queryByText(/\+ IVA/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/46\.410/)).not.toBeInTheDocument();
     expect(screen.getByText('Dominio propio (www.turefugio.org)')).toBeInTheDocument();
     expect(screen.getAllByText('Opcional')).toHaveLength(2);
     expect(screen.getAllByText('Próximamente').length).toBeGreaterThan(0);

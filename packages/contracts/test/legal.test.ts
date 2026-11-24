@@ -15,6 +15,8 @@ import {
   LEGAL_CONTROLLER,
   PLATFORM_DOCUMENT_NOTICE,
   renderLegalTemplate,
+  nitVerificationDigit,
+  legalControllerFooterLine,
 } from '../src/legal-controller';
 
 const DOCS_DIR = join(__dirname, '..', '..', '..', 'docs', 'legal');
@@ -152,6 +154,40 @@ describe('titular configurable', () => {
     );
     expect(describeLegalController(company)).toContain('NIT 900.000.000-1');
     expect(renderLegalTemplate('{{otro}}')).toBe('{{otro}}');
+  });
+
+  it('el titular es la persona natural del RUT, con NIT y dígito de verificación correctos', () => {
+    expect(LEGAL_CONTROLLER.kind).toBe('natural_person');
+    expect(LEGAL_CONTROLLER.name).toBe('Andres Felipe Gamez Arias');
+    expect(LEGAL_CONTROLLER.nit).toBe('1.004.356.866-5');
+    const [base, dv] = LEGAL_CONTROLLER.nit.split('-');
+    expect(nitVerificationDigit(base!)).toBe(Number(dv));
+    expect(LEGAL_CONTROLLER.economicActivity?.ciiu).toBe('6201');
+    expect(LEGAL_CONTROLLER.taxResponsibilities?.map((r) => r.code)).toEqual(['05']);
+    expect(LEGAL_CONTROLLER.vatResponsible).toBe(false);
+    expect(LEGAL_CONTROLLER.address).toContain('Bogotá D.C.');
+  });
+
+  it('ningún dato del titular queda pendiente ni expone la cédula o el correo personal', () => {
+    const rendered = describeLegalController();
+    expect(rendered).not.toMatch(/⟦/);
+    expect(rendered).not.toMatch(/cédula/i);
+    expect(rendered).toContain('NIT 1.004.356.866-5');
+    expect(rendered).toContain('persona natural');
+    expect(LEGAL_CONTROLLER.email).toBe('adoptafacil.oficial@gmail.com');
+    expect(legalControllerFooterLine()).toContain('NIT 1.004.356.866-5');
+    for (const doc of LEGAL_DOCUMENTS) {
+      const raw = readFileSync(join(DOCS_DIR, doc.slug, `${doc.version}.md`), 'utf8');
+      const text = renderLegalTemplate(raw);
+      expect(text).not.toContain('NOMBRE COMPLETO DE LA PERSONA NATURAL');
+      expect(text).not.toContain('NIT DEL RUT');
+      expect(text).not.toContain('00andresgamez');
+    }
+  });
+
+  it('el dígito de verificación sigue el algoritmo de la DIAN', () => {
+    expect(nitVerificationDigit('1004356866')).toBe(5);
+    expect(nitVerificationDigit('800197268')).toBe(4);
   });
 
   it('el aviso de documentos generados aclara contador, revisor fiscal y certificado tributario', () => {

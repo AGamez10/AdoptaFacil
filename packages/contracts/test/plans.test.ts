@@ -14,9 +14,12 @@ import {
   minimumPlanForLimit,
   planHighlights,
   priceWithIva,
+  PLAN_IVA_RATE,
+  PLAN_PRICES_ADD_IVA,
   resolveEffectivePlan,
   type OrganizationSubscription,
 } from '../src/plans';
+import { LEGAL_CONTROLLER } from '../src/legal-controller';
 
 const NOW = new Date('2026-10-08T12:00:00Z');
 const days = (n: number) => new Date(NOW.getTime() + n * 86_400_000).toISOString();
@@ -85,9 +88,12 @@ describe('plan catalog', () => {
     expect(minimumPlanForLimit('members', 500)).toBe('pro');
   });
 
-  it('adds 19 % IVA', () => {
-    expect(priceWithIva(39_000)).toBe(46_410);
-    expect(priceWithIva(79_000)).toBe(94_010);
+  it('no suma IVA: el titular del RUT no es responsable de IVA (solo responsabilidad 05)', () => {
+    expect(LEGAL_CONTROLLER.vatResponsible).toBe(false);
+    expect(PLAN_IVA_RATE).toBe(0);
+    expect(PLAN_PRICES_ADD_IVA).toBe(false);
+    expect(priceWithIva(39_000)).toBe(39_000);
+    expect(priceWithIva(79_000)).toBe(79_000);
   });
 });
 

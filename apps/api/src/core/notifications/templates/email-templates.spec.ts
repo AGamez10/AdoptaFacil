@@ -153,6 +153,12 @@ describe('composeEmail', () => {
       'href="https://app.adoptafacil.test/donaciones/comprobante?token=abc"',
     );
     expect(email.html).toContain('Ley 1581');
+    // Identidad del operador (RUT): persona natural y NIT, nunca la cédula ni el correo personal.
+    expect(email.html).toContain('NIT 1.004.356.866-5');
+    expect(email.text).toContain(
+      'AdoptaFácil es operada por Andres Felipe Gamez Arias, persona natural',
+    );
+    expect(email.html).not.toContain('00andresgamez');
     expect(email.text).toContain(
       'Ver mi comprobante: https://app.adoptafacil.test/donaciones/comprobante?token=abc',
     );

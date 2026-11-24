@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { legalControllerFooterLine } from '@adoptafacil/contracts';
 import { accessPathWithReturn, returnPathOf } from '../auth/return-to';
 import {
   OFFICIAL_EMAIL,
@@ -142,6 +143,10 @@ export function PublicFooter() {
       <p className={styles.footer__meta}>
         © {new Date().getFullYear()} AdoptaFácil · Hecho en Colombia para los animales que esperan
         hogar
+        {/* Identidad del proveedor (Ley 1480 de 2011, art. 50): una sola fuente, LEGAL_CONTROLLER. */}
+        <span className="mt-1 block" data-testid="footer-operator">
+          {legalControllerFooterLine()}
+        </span>
       </p>
     </footer>
   );

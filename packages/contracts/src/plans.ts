@@ -13,6 +13,8 @@
 // off every organization is treated as `pro`, so nothing is gated until the
 // owner decides to start charging.
 
+import { LEGAL_CONTROLLER } from './legal-controller';
+
 /** Plan keys, cheapest first. The order is the upgrade order. */
 export const PLAN_KEYS = ['free', 'crece', 'pro'] as const;
 export type PlanKey = (typeof PLAN_KEYS)[number];
@@ -335,9 +337,14 @@ export function launchPromoEnd(launchDate: Date): Date {
   return end;
 }
 
-/** IVA rate applied on top of the plan price (the subscription is a taxed
- *  service of AdoptaFácil). TODO(client): confirmar con el contador. */
-export const PLAN_IVA_RATE = 0.19;
+/** IVA rate applied on top of the plan price. It follows the operator's RUT:
+ *  only a VAT-responsible operator (responsabilidad 48) may charge IVA. The
+ *  current RUT (persona natural, responsabilidad 05 only) is NOT, so plans are
+ *  charged without IVA. TODO(client): confirmar con el contador. */
+export const PLAN_IVA_RATE = LEGAL_CONTROLLER.vatResponsible ? 0.19 : 0;
+
+/** Whether plan prices carry IVA on top (drives the "+ IVA" labels). */
+export const PLAN_PRICES_ADD_IVA = PLAN_IVA_RATE > 0;
 
 /** Days a lapsed paid plan keeps working before falling back to `free`. */
 export const PLAN_GRACE_DAYS = 15;
@@ -452,7 +459,7 @@ export function minimumPlanForLimit(limit: PlanLimit, needed: number): PlanKey {
   );
 }
 
-/** Monthly price including IVA, rounded to whole pesos. */
+/** Monthly price including IVA (if the operator charges it), rounded to whole pesos. */
 export function priceWithIva(priceCop: number): number {
   return Math.round(priceCop * (1 + PLAN_IVA_RATE));
 }

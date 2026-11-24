@@ -4,6 +4,7 @@ import type {
   EmailIcon,
   EmailTheme,
 } from '@adoptafacil/contracts';
+import { legalControllerFooterLine } from '@adoptafacil/contracts';
 import type { EmailBrand } from '../branding/org-email-branding';
 import { escapeHtml } from './email-render';
 
@@ -247,6 +248,7 @@ export function renderLayout(input: LayoutInput): string {
                 <td class="af-muted" style="padding-top:18px;font-size:12px;line-height:1.6;color:${MUTED};">
                   <strong class="af-ink" style="color:${INK};">AdoptaFácil</strong> · Transparencia y confianza para el rescate animal en Colombia.<br>
                   ${legal}<br>
+                  ${escapeHtml(legalControllerFooterLine())}<br>
                   <a class="af-link" href="${web}" style="color:${BUTTON};text-decoration:none;">${web.replace(/^https?:\/\//, '')}</a>
                 </td>
               </tr>
@@ -278,5 +280,6 @@ export function renderTextFooter(
   } else {
     lines.push('Correo de servicio sobre tu actividad; no es publicidad. Ley 1581 de 2012.');
   }
+  lines.push(legalControllerFooterLine());
   return lines.join('\n');
 }

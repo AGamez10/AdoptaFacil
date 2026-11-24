@@ -289,7 +289,13 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     );
     const { signature, context } = signedContext('1');
     await expect(
-      adapter.verifyAndNormalizeWebhook({}, signature.replace(/v1=./, 'v1=0'), context),
+      // Cambia SIEMPRE el primer dígito del HMAC: reemplazarlo por un '0' fijo no
+      // alteraba nada cuando el HMAC ya empezaba en '0' (1 de cada 16 corridas).
+      adapter.verifyAndNormalizeWebhook(
+        {},
+        signature.replace(/v1=(.)/, (_m, c: string) => `v1=${c === '0' ? '1' : '0'}`),
+        context,
+      ),
     ).rejects.toThrow(/signature/);
     await expect(
       adapter.verifyAndNormalizeWebhook({}, signature, { ...context, headers: {} }),
