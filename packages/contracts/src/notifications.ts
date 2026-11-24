@@ -56,6 +56,7 @@ export const EMAIL_EVENT_KEYS = [
   'coffee.refund_notice',
   'sponsorship.payment_received',
   'plan.activated',
+  'plan.charged',
 ] as const;
 
 export type EmailEventKey = (typeof EMAIL_EVENT_KEYS)[number];

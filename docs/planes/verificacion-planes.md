@@ -7,6 +7,31 @@ contra PostgreSQL 16 y Redis reales, con los planes **encendidos** y la promoci�
 Cobro con Mercado Pago: `apps/api/test/plan-billing.integration-spec.ts` (11 pruebas, Mercado Pago
 simulado sin red). Resultado: 105/105 en las suites de planes, portal, exportes y correos.
 
+## Verificación 2026-11-24: ¿se cumple todo lo que se ofrece?
+
+Rama base: `claude/project-thread-svlwgg` (tras #159, planes sin IVA). Se revisó cada promesa de la
+landing, de «Plan y facturación», del correo de activación y de las Condiciones para
+organizaciones 2026-11-23.
+
+| Promesa                                                     | Dónde se promete                     | Estado                                                                                     |
+| ----------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Plantillas Pro del portal                                   | landing, Plan y facturación, correo  | ✅ (la etiqueta decía «como Historias», que es gratis desde #130; ahora dice «Documental») |
+| Portal sin sello, correos con tu marca, Excel, reporte PDF  | ídem                                 | ✅                                                                                         |
+| Cierre mensual, exporte contable completo, paquete contador | ídem                                 | ✅                                                                                         |
+| Miembros (10 / sin límite) y almacenamiento (10 / 50 GB)    | ídem                                 | ✅                                                                                         |
+| Dominio propio (Pro)                                        | ídem                                 | ✅ con `CUSTOM_DOMAINS=on` en el servidor                                                  |
+| Soporte prioritario por WhatsApp (Pro)                      | ídem                                 | ✅ canal visible; la prioridad la da el equipo                                             |
+| Patrocinio de empresas (Pro)                                | tarjeta de Pro con «Próximamente»    | ❌ no existe → **se quitó de la oferta** hasta que funcione                                |
+| «Diseños de portal: 5» en cada plan                         | Plan y facturación                   | ❌ hay 30 diseños y el límite no se aplica → **se dejó de mostrar**                        |
+| Comprobante de cada cobro con identificación tributaria     | Condiciones para organizaciones §5.3 | ❌ solo había aviso de activación → **nuevo correo `plan.charged` en cada cobro aprobado** |
+| Conciliación contra Mercado Pago «en Crece y Pro»           | guía de Contabilidad                 | ⚠️ es gratis para todos → texto corregido                                                  |
+| Precio anual                                                | landing, Plan y facturación          | ✅ por transferencia, la plataforma lo activa a mano                                       |
+
+Evidencia: `plan-pro-activation.integration-spec.ts` ahora exige el comprobante (con NIT, sin IVA,
+sin marca de la organización, uno por cobro, sin duplicar si Mercado Pago repite la notificación
+y otro en la renovación); `packages/contracts/test/plans.test.ts` impide anunciar junto a un precio
+algo con `available: false` y exige que la plantilla nombrada en la etiqueta sea de pago.
+
 ## Verificación 2026-11-21: pagar un plan activa lo que promete
 
 Evidencia: `apps/api/test/plan-pro-activation.integration-spec.ts` (Mercado Pago simulado, planes
@@ -65,7 +90,7 @@ no lo controla · 🕒 = marcado «próximamente» en la oferta (no se promete c
 | Personalización avanzada del portal     | sí        | sí        | sí         | incluida en todos los planes desde el 2026-11-06 (no se vende como exclusiva)                                          | ✅                                          |
 | Soporte prioritario por WhatsApp        | —         | —         | sí         | no hay código: es un proceso del equipo                                                                                | ⚠️ marcado disponible, depende de operación |
 | Dominio propio                          | —         | —         | sí         | la org compra el dominio; CNAME + TXT; verificación DNS y HTTPS on-demand (`portal-custom-domain.integration-spec.ts`) | ✅ (encender con `CUSTOM_DOMAINS=on`)       |
-| Patrocinio de empresas                  | —         | —         | sí         | no construido                                                                                                          | 🕒                                          |
+| Patrocinio de empresas                  | —         | —         | sí         | no construido; fuera de la oferta desde 2026-11-24                                                                     | 🕒                                          |
 | Límite "Diseños de portal" (5)          | 5         | 5         | 5          | ninguno; igual en los tres planes                                                                                      | sin efecto                                  |
 
 Lo que nunca se cobra (contrato, seguimientos, auditoría, documentos legales, comprobantes,
@@ -76,17 +101,17 @@ cuota: un límite comercial no detiene un proceso de protección.
 
 ## Ciclo de vida (probado)
 
-| Situación                                  | Qué pasa                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Contratar en línea                         | «Pagar con Mercado Pago» crea una suscripción mensual en la cuenta de AdoptaFácil, con IVA y descuento fundador. El plan rige cuando Mercado Pago confirma el primer cobro aprobado (firma verificada); autorizar sin cobro no lo activa. Con los planes apagados responde 409: nadie paga por algo que ya tiene gratis. |
-| Contratar por transferencia                | La plataforma lo activa en **Plataforma → Planes de organizaciones** (`/plataforma/planes`) con fecha, factura y descuento. Queda auditado.                                                                                                                                                                              |
-| Renovación                                 | Cada cobro mensual aprobado extiende el periodo un mes. Repetir la misma notificación no cambia nada.                                                                                                                                                                                                                    |
-| Cobro rechazado                            | La suscripción pasa a **pago vencido**: sigue funcionando hasta 15 días después del fin de periodo mientras Mercado Pago reintenta. Un cobro aprobado la reactiva. Pasada la gracia, Gratis.                                                                                                                             |
-| Subir o bajar de plan                      | La suscripción nueva rige con su primer cobro aprobado y la anterior **se cancela en Mercado Pago** (sin doble cobro).                                                                                                                                                                                                   |
-| Cancelar                                   | Botón «Cancelar mi plan» (Owner/Administrador). Primero se detiene el cobro en Mercado Pago; si Mercado Pago no responde no se marca nada. El plan sigue hasta el último día pagado, sin gracia, y luego Gratis.                                                                                                         |
-| Cancelación de la plataforma               | Cancelado sin fecha = Gratis de inmediato; con fecha = hasta ese día. Si la organización pagaba por Mercado Pago, ese cobro se cancela antes de guardar.                                                                                                                                                                 |
-| Dejar de pagar / bajar                     | No se borra nada: plantilla Pro y "sin sello" quedan guardados y vuelven al pagar. Los miembros de más se conservan; solo no se agregan nuevos.                                                                                                                                                                          |
-| Una organización intenta asignarse un plan | 403.                                                                                                                                                                                                                                                                                                                     |
+| Situación                                  | Qué pasa                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contratar en línea                         | «Pagar con Mercado Pago» crea una suscripción mensual en la cuenta de AdoptaFácil, sin IVA mientras el titular no sea responsable de IVA (#159), con descuento fundador. El plan rige cuando Mercado Pago confirma el primer cobro aprobado (firma verificada); autorizar sin cobro no lo activa. Con los planes apagados responde 409: nadie paga por algo que ya tiene gratis. |
+| Contratar por transferencia                | La plataforma lo activa en **Plataforma → Planes de organizaciones** (`/plataforma/planes`) con fecha, factura y descuento. Queda auditado.                                                                                                                                                                                                                                      |
+| Renovación                                 | Cada cobro mensual aprobado extiende el periodo un mes. Repetir la misma notificación no cambia nada.                                                                                                                                                                                                                                                                            |
+| Cobro rechazado                            | La suscripción pasa a **pago vencido**: sigue funcionando hasta 15 días después del fin de periodo mientras Mercado Pago reintenta. Un cobro aprobado la reactiva. Pasada la gracia, Gratis.                                                                                                                                                                                     |
+| Subir o bajar de plan                      | La suscripción nueva rige con su primer cobro aprobado y la anterior **se cancela en Mercado Pago** (sin doble cobro).                                                                                                                                                                                                                                                           |
+| Cancelar                                   | Botón «Cancelar mi plan» (Owner/Administrador). Primero se detiene el cobro en Mercado Pago; si Mercado Pago no responde no se marca nada. El plan sigue hasta el último día pagado, sin gracia, y luego Gratis.                                                                                                                                                                 |
+| Cancelación de la plataforma               | Cancelado sin fecha = Gratis de inmediato; con fecha = hasta ese día. Si la organización pagaba por Mercado Pago, ese cobro se cancela antes de guardar.                                                                                                                                                                                                                         |
+| Dejar de pagar / bajar                     | No se borra nada: plantilla Pro y "sin sello" quedan guardados y vuelven al pagar. Los miembros de más se conservan; solo no se agregan nuevos.                                                                                                                                                                                                                                  |
+| Una organización intenta asignarse un plan | 403.                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## Avisos por correo (diarios, solo con planes encendidos)
 
@@ -109,8 +134,8 @@ Quien paga con Mercado Pago y renueva normalmente no recibe nada.
 
 ## Lo que sigue sin estar
 
-1. **Probado solo con Mercado Pago simulado.** Falta una corrida en el sandbox de Mercado Pago
-   con un usuario de prueba antes de cobrar dinero real.
+1. **Probado solo con Mercado Pago simulado.** Falta un cobro real pequeño (que luego se
+   reembolsa) para ver de punta a punta la activación y el comprobante antes de abrir el cobro.
 2. **Factura electrónica** del plan: no se genera; la emite el contador. 🧾
 3. **Soporte prioritario por WhatsApp** (Pro) depende del equipo, no del código.
 4. **Patrocinio de empresas** sigue «próximamente». El **dominio propio** está construido (ver `docs/operacion/DOMINIO-PROPIO.md`).

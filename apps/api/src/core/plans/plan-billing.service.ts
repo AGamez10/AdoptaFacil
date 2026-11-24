@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  LEGAL_CONTROLLER,
   PLAN_CATALOG,
   Role,
   isPlanDowngrade,
@@ -95,6 +96,34 @@ interface AppliedPreapproval extends PlanWebhookOutcome {
   /** Set when this notification turned a paid plan ON (new plan, new
    *  subscription or back from past due): the owners get a confirmation. */
   activated?: { organizationId: string; plan: PaidPlan; paidThrough: Date | null; key: string };
+  /** The organization and plan an approved charge was applied to (for its receipt). */
+  charged?: { organizationId: string; plan: PaidPlan; paidThrough: Date | null };
+}
+
+/** An approved Mercado Pago charge of a plan, as the receipt shows it. */
+export interface PlanChargeReceipt {
+  chargeId: string;
+  amountCop: number;
+  chargedAt: Date;
+}
+
+/** Fecha corta en hora de Colombia ("23 de noviembre de 2026"). Pura. */
+function bogotaDate(date: Date): string {
+  return new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+/** Línea del IVA del comprobante, según el RUT del titular. Pura. */
+export function planReceiptVatLine(
+  vatResponsible = LEGAL_CONTROLLER.vatResponsible === true,
+): string {
+  return vatResponsible
+    ? 'Valor con IVA incluido.'
+    : 'Sin IVA: el titular no es responsable de IVA según su RUT.';
 }
 
 /** Lo que el correo de activación dice que quedó habilitado. Puro. */
@@ -343,11 +372,15 @@ export class PlanBillingService {
     }
     return this.afterApply(
       await this.applyPreapproval(preapproval, addOneMonth(charge.chargedAt), charge.id),
+      { chargeId: charge.id, amountCop: charge.amount, chargedAt: charge.chargedAt },
     );
   }
 
   /** Cancels, after the commit, the subscription a new one replaced. */
-  private async afterApply(outcome: AppliedPreapproval): Promise<PlanWebhookOutcome> {
+  private async afterApply(
+    outcome: AppliedPreapproval,
+    receipt?: PlanChargeReceipt,
+  ): Promise<PlanWebhookOutcome> {
     if (outcome.replacedPreapprovalId) {
       await this.cancelAtGateway(outcome.replacedPreapprovalId, 'replaced');
     }
@@ -357,7 +390,88 @@ export class PlanBillingService {
     if (outcome.activated) {
       await this.notifyActivated(outcome.activated);
     }
+    if (receipt && outcome.charged) {
+      await this.sendReceipt(outcome.charged, receipt);
+    }
     return { applied: outcome.applied };
+  }
+
+  /** Correos de los Propietarios de la organización y su nombre. */
+  private ownersOf(organizationId: string): Promise<{ name: string; emails: string[] }> {
+    return this.prisma.withOrgContext(organizationId, async (tx) => {
+      const [org, owners] = await Promise.all([
+        tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+        tx.userRole.findMany({
+          where: { organizationId, role: Role.Owner },
+          select: { userId: true },
+        }),
+      ]);
+      const users = await tx.user.findMany({
+        where: { id: { in: owners.map((o) => o.userId) } },
+        select: { email: true },
+      });
+      return {
+        name: org?.name ?? 'tu organización',
+        emails: users.map((u) => u.email).filter(Boolean),
+      };
+    });
+  }
+
+  /**
+   * Condiciones para organizaciones §5.3: un comprobante de CADA cobro del plan
+   * (el primero y cada renovación), con la identificación tributaria del
+   * titular. No es factura electrónica: esa la expide el contador cuando la ley
+   * la exija. Best-effort: un fallo se registra y nunca deshace el cobro.
+   */
+  private async sendReceipt(
+    charged: NonNullable<AppliedPreapproval['charged']>,
+    receipt: PlanChargeReceipt,
+  ): Promise<void> {
+    try {
+      const { organizationId, plan, paidThrough } = charged;
+      const found = await this.ownersOf(organizationId);
+      const planName = PLAN_CATALOG[plan].name;
+      const amount = new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+      }).format(receipt.amountCop);
+      const until = paidThrough ? bogotaDate(paidThrough) : 'que la plataforma lo indique';
+      const vat = planReceiptVatLine();
+      const titular = `${LEGAL_CONTROLLER.name} (NIT ${LEGAL_CONTROLLER.nit})`;
+      const link = `${this.webBaseUrl}/organizacion/plan`;
+      for (const to of found.emails) {
+        await this.notifications.send({
+          to,
+          subject: `Comprobante de pago de tu plan ${planName}`,
+          body:
+            `Comprobante de pago del plan ${planName} de AdoptaFácil para ${found.name}.\n\n` +
+            `Valor: ${amount}. ${vat}\nFecha del cobro: ${bogotaDate(receipt.chargedAt)}.\n` +
+            `Periodo pagado hasta: ${until}.\nReferencia de Mercado Pago: ${receipt.chargeId}.\n` +
+            `Cobra: ${titular}, ${LEGAL_CONTROLLER.address}.\n\n` +
+            `Este correo es tu comprobante de pago; no es factura electrónica. Ver tu plan: ${link}`,
+          template: {
+            event: 'plan.charged',
+            data: {
+              organizacion: found.name,
+              plan: planName,
+              monto: receipt.amountCop,
+              iva: vat,
+              fecha: receipt.chargedAt.toISOString(),
+              vence: paidThrough ? paidThrough.toISOString() : null,
+              referencia: receipt.chargeId,
+              titular,
+              direccion_titular: LEGAL_CONTROLLER.address,
+              enlace: link,
+            },
+            organizationName: found.name,
+          },
+          idempotencyKey: `plan.charged:${receipt.chargeId}:${to}`,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`Plan receipt email skipped: ${(error as Error).message}`);
+    }
   }
 
   /**
@@ -367,32 +481,12 @@ export class PlanBillingService {
   private async notifyActivated(input: NonNullable<AppliedPreapproval['activated']>) {
     try {
       const { organizationId, plan, paidThrough, key } = input;
-      const found = await this.prisma.withOrgContext(organizationId, async (tx) => {
-        const [org, owners] = await Promise.all([
-          tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
-          tx.userRole.findMany({
-            where: { organizationId, role: Role.Owner },
-            select: { userId: true },
-          }),
-        ]);
-        const users = await tx.user.findMany({
-          where: { id: { in: owners.map((o) => o.userId) } },
-          select: { email: true },
-        });
-        return { name: org?.name ?? 'tu organización', emails: users.map((u) => u.email) };
-      });
+      const found = await this.ownersOf(organizationId);
       const planName = PLAN_CATALOG[plan].name;
       const benefits = planActivatedBenefits(plan);
       const link = `${this.webBaseUrl}/organizacion/plan`;
-      const until = paidThrough
-        ? new Intl.DateTimeFormat('es-CO', {
-            timeZone: 'America/Bogota',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          }).format(paidThrough)
-        : 'que la plataforma lo indique';
-      for (const to of found.emails.filter(Boolean)) {
+      const until = paidThrough ? bogotaDate(paidThrough) : 'que la plataforma lo indique';
+      for (const to of found.emails) {
         await this.notifications.send({
           to,
           subject: `Tu plan ${planName} ya está activo`,
@@ -862,6 +956,15 @@ export class PlanBillingService {
           previous.providerReference !== preapproval.id);
       return {
         applied: true,
+        ...(paidThrough
+          ? {
+              charged: {
+                organizationId: ref.organizationId,
+                plan: ref.plan,
+                paidThrough: currentPeriodEnd,
+              },
+            }
+          : {}),
         ...(replaced ? { replacedPreapprovalId: replaced } : {}),
         ...(supersededSchedule ? { alsoCancel: [supersededSchedule] } : {}),
         ...(turnedOn

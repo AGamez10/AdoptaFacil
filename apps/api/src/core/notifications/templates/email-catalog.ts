@@ -1266,6 +1266,45 @@ export const EMAIL_CATALOG: readonly EmailEventDefinition[] = [
         'Este cobro es de AdoptaFácil por el software; nunca toca las donaciones de tu organización.',
     },
   },
+  {
+    event: 'plan.charged',
+    label: 'Comprobante de pago del plan',
+    description:
+      'Se envía con cada cobro aprobado de un plan Crece o Pro por Mercado Pago (el primero y cada renovación). Es el comprobante que prometen las Condiciones para organizaciones (§5.3).',
+    audience: 'Dueños de la organización',
+    category: 'transactional',
+    theme: 'plan',
+    required: true,
+    variables: [
+      ORG,
+      v('plan', 'Plan cobrado', 'Pro'),
+      v('monto', 'Valor cobrado', '79000', 'money'),
+      v('iva', 'Línea del IVA', 'Sin IVA: el titular no es responsable de IVA según su RUT.'),
+      v('fecha', 'Fecha del cobro', '2026-11-21T15:00:00.000Z', 'date'),
+      v('vence', 'Periodo pagado hasta', '2026-12-21T15:00:00.000Z', 'date'),
+      v('referencia', 'Referencia del cobro en Mercado Pago', '7290000001'),
+      v('titular', 'Quién cobra (nombre y NIT)', 'Andres Felipe Gamez Arias (NIT 1.004.356.866-5)'),
+      v('direccion_titular', 'Dirección de quien cobra', 'Bogotá D.C., Colombia'),
+      v('enlace', 'Enlace a Plan y facturación', 'https://adoptafacil.co/organizacion/plan', 'url'),
+    ],
+    ctaUrlVariable: 'enlace',
+    defaults: {
+      subject: 'Comprobante de pago de tu plan {{plan}}',
+      preheader: 'Recibimos {{monto}} por el plan {{plan}} de {{organizacion}}.',
+      heading: 'Comprobante de pago',
+      body:
+        'Hola, equipo de **{{organizacion}}**:\n\n' +
+        'Recibimos el pago de tu plan **{{plan}}** de AdoptaFácil.\n\n' +
+        '• Valor: **{{monto}}**. {{iva}}\n' +
+        '• Fecha del cobro: {{fecha}}\n' +
+        '• Periodo pagado hasta: {{vence}}\n' +
+        '• Referencia de Mercado Pago: {{referencia}}\n' +
+        '• Cobra: {{titular}}, {{direccion_titular}}',
+      ctaLabel: 'Ver mi plan',
+      footerNote:
+        'Este correo es tu comprobante de pago; no es factura electrónica. Es un cobro de AdoptaFácil por el software y nunca toca las donaciones de tu organización.',
+    },
+  },
 ];
 
 const BY_EVENT = new Map(EMAIL_CATALOG.map((d) => [d.event, d]));

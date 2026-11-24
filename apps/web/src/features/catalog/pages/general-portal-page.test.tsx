@@ -428,7 +428,9 @@ describe('GeneralPortalPage (landing)', () => {
     const pro = within(screen.getByTestId('plan-pro'));
     expect(pro.getByText('$79.000 al mes')).toBeInTheDocument();
     expect(pro.getByText('Dominio propio (www.turefugio.org)')).toBeInTheDocument();
-    expect(pro.getAllByText('Próximamente').length).toBeGreaterThan(0);
+    // Lo que aún no funciona no se anuncia junto a un precio (Ley 1480).
+    expect(pro.queryByText('Próximamente')).not.toBeInTheDocument();
+    expect(pro.queryByText(/Patrocinio de empresas/)).not.toBeInTheDocument();
     expect(screen.getByTestId('landing-plans').textContent).not.toMatch(/Muy pronto/);
   });
 

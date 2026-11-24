@@ -5,6 +5,7 @@ import {
   PLAN_CAPABILITIES,
   PLAN_CAPABILITY_INFO,
   PLAN_CATALOG,
+  PLAN_DISPLAYED_LIMITS,
   PLAN_KEYS,
   NEW_ORG_TRIAL_DAYS,
   freeProPeriod,
@@ -122,6 +123,28 @@ describe('planHighlights (landing and plans screen share the catalog)', () => {
     expect(BRANDED_EMAIL_MONTHLY_LIMIT.crece).toBeLessThan(BRANDED_EMAIL_MONTHLY_LIMIT.pro);
     // Quitar el sello del portal (PortalThemeConfig.hideSeal).
     expect(PLAN_CAPABILITY_INFO.portalRemoveSeal.available).toBe(true);
+  });
+
+  it('never advertises next to a price what does not work yet (Ley 1480, arts. 29-30)', () => {
+    for (const key of PLAN_KEYS) {
+      for (const item of planHighlights(key)) expect(item.available).toBe(true);
+    }
+    // Patrocinio de empresas sigue en construcción: no aparece en la oferta de Pro.
+    expect(PLAN_CAPABILITY_INFO.corporateSponsorship.available).toBe(false);
+    expect(planHighlights('pro').map((h) => h.text)).not.toContain(
+      PLAN_CAPABILITY_INFO.corporateSponsorship.label,
+    );
+  });
+
+  it('names a premium template that really is premium', () => {
+    const label = PLAN_CAPABILITY_INFO.portalPremiumDesigns.label;
+    const named = PORTAL_TEMPLATES.filter((t) => label.includes(t.name));
+    expect(named.length).toBeGreaterThan(0);
+    for (const t of named) expect(t.tier).toBe('paid');
+  });
+
+  it('shows only the limits that differ between plans and are enforced', () => {
+    expect(PLAN_DISPLAYED_LIMITS).toEqual(['members', 'storageMb']);
   });
 });
 

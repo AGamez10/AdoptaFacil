@@ -74,7 +74,11 @@ describe('OrgPlanPage', () => {
     expect(screen.queryByText(/46\.410/)).not.toBeInTheDocument();
     expect(screen.getByText('Dominio propio (www.turefugio.org)')).toBeInTheDocument();
     expect(screen.getAllByText('Opcional')).toHaveLength(2);
-    expect(screen.getAllByText('Próximamente').length).toBeGreaterThan(0);
+    // Lo que aún no funciona no se anuncia junto a un precio (Ley 1480), ni un
+    // límite de diseños que no existe.
+    expect(screen.queryByText('Próximamente')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Patrocinio de empresas/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Diseños de portal')).not.toBeInTheDocument();
     expect(
       screen.getByText(/Recaudo de donaciones, también si aún no estás formalizado/),
     ).toBeInTheDocument();

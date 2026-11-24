@@ -848,7 +848,8 @@ export const PAGE_HELP: readonly PageHelp[] = [
     tips: [
       'Aquí se ordena mes a mes lo que entró por donaciones: cada pago, reembolso o contracargo confirmado por Mercado Pago.',
       'Plan Gratis: descargas el libro del mes en Excel o CSV con folio, fecha, tipo y valor, más los totales del mes.',
-      'Planes Crece y Pro: además el paquete completo para tu contador, con comisión y neto, forma de pago, destinación, conciliación contra Mercado Pago y los donantes que autorizaron identificarse.',
+      'En todos los planes: la conciliación del mes contra Mercado Pago.',
+      'Planes Crece y Pro: además el paquete completo para tu contador, con comisión y neto, forma de pago, destinación y los donantes que autorizaron identificarse, el cierre del mes y el envío para firma.',
       'Cerrar el mes lo deja sellado: lo que llegue después se registra como ajuste del mes siguiente. AdoptaFácil prepara la información; la contabilidad oficial le corresponde a tu contador.',
     ],
     related: [REPORTS_LINK, SIGNERS_LINK],
