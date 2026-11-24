@@ -186,6 +186,111 @@ describe('Plans enforcement (launch promo, premium templates, member limit)', ()
     }
   });
 
+  /**
+   * Navidad (2026-11-24): de pago y de temporada. Se simula el reloj (solo
+   * `Date`, en fechas pasadas para que el token siga vigente) con la temporada
+   * 2025-2026: prueba de 14 días con Navidad, vence a mitad de diciembre y el
+   * portal vuelve a la Clásica, al pagar regresa y al terminar la temporada
+   * vuelve a la Clásica aunque el plan siga pagado.
+   */
+  it('Navidad: la prueba la incluye, al vencer vuelve a la Clásica, al pagar regresa y fuera de temporada no se usa', async () => {
+    const at = (iso: string) =>
+      jest.useFakeTimers({
+        now: new Date(iso),
+        doNotFake: [
+          'hrtime',
+          'nextTick',
+          'performance',
+          'queueMicrotask',
+          'requestAnimationFrame',
+          'cancelAnimationFrame',
+          'requestIdleCallback',
+          'cancelIdleCallback',
+          'setImmediate',
+          'clearImmediate',
+          'setInterval',
+          'clearInterval',
+          'setTimeout',
+          'clearTimeout',
+        ],
+      });
+    const publicTemplate = async () =>
+      (await request(server).get(`/public/organizations/${slug}/theme`).expect(200)).body.template;
+    const created = (
+      await admin.organization.findUniqueOrThrow({
+        where: { id: owner.orgId },
+        select: { createdAt: true },
+      })
+    ).createdAt;
+    setEnforced(true);
+    setPromoEnd(null);
+    setTrialDays(14);
+    try {
+      // Se registró el 28 de noviembre: prueba hasta el 12 de diciembre.
+      await admin.organization.update({
+        where: { id: owner.orgId },
+        data: { createdAt: new Date('2025-11-28T15:00:00Z') },
+      });
+      at('2025-12-01T15:00:00Z');
+      await request(server)
+        .put('/portals/theme')
+        .set(auth(owner.token))
+        .send({ tokens: {}, template: 'navidad' })
+        .expect(200);
+      expect(await publicTemplate()).toBe('navidad');
+
+      // 15 de diciembre: venció la prueba y no pagó.
+      at('2025-12-15T15:00:00Z');
+      expect(await publicTemplate()).toBe('clasica');
+      const locked = await request(server).get('/portals/theme').set(auth(owner.token)).expect(200);
+      expect(locked.body.template).toBe('clasica');
+      expect(locked.body.lockedTemplate).toBe('navidad');
+      await request(server)
+        .put('/portals/theme')
+        .set(auth(owner.token))
+        .send({ tokens: {}, template: 'navidad' })
+        .expect(403);
+
+      // Paga Crece: vuelve sola, sin volver a elegirla.
+      await subscribe(owner.orgId, 'crece', new Date('2026-01-15T15:00:00Z'));
+      expect(await publicTemplate()).toBe('navidad');
+
+      // 10 de enero: terminó la temporada; el plan sigue pagado.
+      at('2026-01-10T15:00:00Z');
+      expect(await publicTemplate()).toBe('clasica');
+      const ended = await request(server).get('/portals/theme').set(auth(owner.token)).expect(200);
+      expect(ended.body.template).toBe('clasica');
+      expect(ended.body.outOfSeasonTemplate).toBe('navidad');
+      expect(ended.body.lockedTemplate).toBeUndefined();
+      const pub = await request(server).get(`/public/organizations/${slug}/theme`).expect(200);
+      expect(pub.body.outOfSeasonTemplate).toBeUndefined();
+      const refused = await request(server)
+        .put('/portals/theme')
+        .set(auth(owner.token))
+        .send({ tokens: {}, template: 'navidad' })
+        .expect(400);
+      expect(refused.body.message).toMatch(/del 20 de noviembre al 7 de enero/);
+      // Guardar colores no borra la elección: vuelve la próxima temporada.
+      await request(server)
+        .put('/portals/theme')
+        .set(auth(owner.token))
+        .send({ tokens: { primary: '142 72% 29%' } })
+        .expect(200);
+      at('2026-11-25T15:00:00Z');
+      await subscribe(owner.orgId, 'crece', new Date('2026-12-25T15:00:00Z'));
+      expect(await publicTemplate()).toBe('navidad');
+    } finally {
+      jest.useRealTimers();
+      await admin.organization.update({ where: { id: owner.orgId }, data: { createdAt: created } });
+      setEnforced(false);
+      await request(server)
+        .put('/portals/theme')
+        .set(auth(owner.token))
+        .send({ tokens: {}, template: 'documental' })
+        .expect(200);
+    }
+  });
+
   it('la promoción de lanzamiento manda si termina después de la prueba', async () => {
     setEnforced(true);
     setTrialDays(14);

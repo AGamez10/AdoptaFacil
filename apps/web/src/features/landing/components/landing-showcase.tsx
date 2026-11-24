@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import {
   NEW_ORG_TRIAL_DAYS,
   PORTAL_TEMPLATES,
+  isSeasonalTemplate,
+  isTemplateInSeason,
   type PortalTemplateId,
 } from '@adoptafacil/contracts';
 import { cn } from '@adoptafacil/ui';
@@ -20,6 +22,13 @@ const isPro = (id: PortalTemplateId) => PORTAL_TEMPLATES.find((t) => t.id === id
 /** Gratuitas y Pro por separado: cada plantilla aparece una sola vez. */
 const FREE_IDS = DEMO_TEMPLATE_IDS.filter((id) => !isPro(id));
 const PRO_IDS = DEMO_TEMPLATE_IDS.filter(isPro);
+
+/** Pro visibles hoy: las de temporada solo dentro de su ventana, y primero. */
+function proIdsToday(now = new Date()): PortalTemplateId[] {
+  return PRO_IDS.filter((id) => isTemplateInSeason(id, now)).sort(
+    (a, b) => Number(isSeasonalTemplate(b)) - Number(isSeasonalTemplate(a)),
+  );
+}
 
 export const LANDING_TEMPLATES_ID = 'plantillas';
 export const LANDING_COFFEE_ID = 'cafe';
@@ -64,6 +73,7 @@ function TemplateTile({ id, pro }: { id: PortalTemplateId; pro?: boolean }) {
  * registra la fundación con esa plantilla.
  */
 export function TemplateGallerySection() {
+  const proIds = proIdsToday();
   return (
     <section
       id={LANDING_TEMPLATES_ID}
@@ -90,7 +100,7 @@ export function TemplateGallerySection() {
           ))}
         </ul>
 
-        {PRO_IDS.length > 0 && (
+        {proIds.length > 0 && (
           <div className={styles.pro} data-testid="landing-pro-templates">
             <div className={styles.pro__head}>
               <span className={styles.pro__badge}>PRO</span>
@@ -104,7 +114,7 @@ export function TemplateGallerySection() {
               </div>
             </div>
             <ul className={styles.gallery} aria-label="Plantillas Pro">
-              {PRO_IDS.map((id) => (
+              {proIds.map((id) => (
                 <TemplateTile key={id} id={id} pro />
               ))}
             </ul>

@@ -175,6 +175,9 @@ export const PORTAL_TEMPLATE_IDS = [
   // Serie moderna (2026-11-22): dos de pago.
   'halo',
   'prisma',
+  // De temporada (2026-11-24): Navidad, de pago y solo dentro de su ventana de fechas.
+  'navidad',
+  'nieve',
 ] as const;
 export type PortalTemplateId = (typeof PORTAL_TEMPLATE_IDS)[number];
 export const DEFAULT_PORTAL_TEMPLATE: PortalTemplateId = 'clasica';
@@ -385,6 +388,22 @@ export const PORTAL_TEMPLATES: readonly PortalTemplateInfo[] = [
       'Vidrio y luz de colores: fichas que se inclinan al pasar y un catálogo que se reacomoda con suavidad. Cristal y neón.',
     tier: 'paid',
   },
+  // De temporada: solo se puede elegir y solo se muestra dentro de su ventana
+  // (`PORTAL_TEMPLATE_SEASONS`). Fuera de ella el portal pasa solo a la Clásica.
+  {
+    id: 'navidad',
+    name: 'Navidad',
+    tagline:
+      'Un cuento de Navidad: Papá Noel cruza el cielo en su trineo sobre un pueblito nevado, cada animal cuelga como una esfera del árbol y el trineo avanza hasta la meta de tu campaña.',
+    tier: 'paid',
+  },
+  {
+    id: 'nieve',
+    name: 'Bola de nieve',
+    tagline:
+      'Una bola de nieve en 3D que se gira y se agita para presentar a un animal al azar, un calendario de adviento con una puerta por animal y una guirnalda que se enciende con cada aporte.',
+    tier: 'paid',
+  },
 ];
 
 /**
@@ -487,6 +506,8 @@ export const PORTAL_TEMPLATE_OPTIONS: Readonly<
   documental: [],
   halo: [],
   prisma: [],
+  navidad: [],
+  nieve: [],
 };
 
 /**
@@ -557,6 +578,82 @@ export function resolveTemplateOptions(
  *  cada organización; usa `PortalThemeConfig.premiumDesignsAvailable`. */
 export const PORTAL_TEMPLATE_TIERS_ENFORCED = false;
 
+/**
+ * Ventana de una plantilla de temporada, en fechas del calendario de Colombia
+ * (`MM-DD`, ambas incluidas). Si `from` es mayor que `to`, la ventana cruza el
+ * año (p. ej. del 20 de noviembre al 7 de enero). Se repite cada año.
+ */
+export interface PortalTemplateSeason {
+  from: string;
+  to: string;
+}
+
+/**
+ * Plantillas de temporada y su ventana. Para mover las fechas basta cambiar
+ * este valor (la API y la web leen el mismo). Fuera de la ventana la plantilla
+ * no se puede elegir y un portal que la tenga se muestra con la Clásica; la
+ * elección queda guardada.
+ */
+export const PORTAL_TEMPLATE_SEASONS: Readonly<
+  Partial<Record<PortalTemplateId, PortalTemplateSeason>>
+> = {
+  // Decisión del dueño (2026-11-24): Navidad, desde finales de noviembre hasta Reyes.
+  navidad: { from: '11-20', to: '01-07' },
+  nieve: { from: '11-20', to: '01-07' },
+};
+
+/** Colombia no tiene horario de verano: UTC-5 todo el año. */
+const COLOMBIA_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/** `MM-DD` de la fecha en Colombia. */
+export function colombiaMonthDay(now: Date): string {
+  const co = new Date(now.getTime() - COLOMBIA_OFFSET_MS);
+  const mm = String(co.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(co.getUTCDate()).padStart(2, '0');
+  return `${mm}-${dd}`;
+}
+
+/** ¿La plantilla es de temporada? */
+export function isSeasonalTemplate(id: PortalTemplateId): boolean {
+  return PORTAL_TEMPLATE_SEASONS[id] !== undefined;
+}
+
+/** ¿Se puede usar hoy? Las que no son de temporada, siempre. */
+export function isTemplateInSeason(id: PortalTemplateId, now: Date = new Date()): boolean {
+  const season = PORTAL_TEMPLATE_SEASONS[id];
+  if (!season) return true;
+  const md = colombiaMonthDay(now);
+  return season.from <= season.to
+    ? md >= season.from && md <= season.to
+    : md >= season.from || md <= season.to;
+}
+
+const MONTHS_ES = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
+
+/** "del 20 de noviembre al 7 de enero" (vacío si no es de temporada). */
+export function seasonLabel(id: PortalTemplateId): string {
+  const season = PORTAL_TEMPLATE_SEASONS[id];
+  if (!season) return '';
+  const fmt = (md: string) => {
+    const [m, d] = md.split('-').map(Number);
+    return `${d} de ${MONTHS_ES[(m ?? 1) - 1]}`;
+  };
+  return `del ${fmt(season.from)} al ${fmt(season.to)}`;
+}
+
 /** ¿La plantilla es de pago ("super Pro")? */
 export function isPremiumTemplate(id: PortalTemplateId): boolean {
   return PORTAL_TEMPLATES.find((t) => t.id === id)?.tier === 'paid';
@@ -588,6 +685,12 @@ export interface PortalThemeConfig {
    * guardada y vuelve sola al pagar un plan. Solo en la lectura propia.
    */
   lockedTemplate?: PortalTemplateId;
+  /**
+   * Plantilla de temporada elegida cuya ventana de fechas ya pasó (o aún no
+   * empieza). El portal se muestra con `template` (la Clásica); la elección
+   * queda guardada y vuelve en la próxima temporada. Solo en la lectura propia.
+   */
+  outOfSeasonTemplate?: PortalTemplateId;
   /** Si el plan vigente incluye las plantillas de pago. Solo en la lectura propia. */
   premiumDesignsAvailable?: boolean;
   /**

@@ -1,5 +1,6 @@
 import {
   DEFAULT_PORTAL_TEMPLATE,
+  isTemplateInSeason,
   type PortalTemplateId,
   type PortalThemeConfig,
 } from '@adoptafacil/contracts';
@@ -17,7 +18,10 @@ const KEY = 'af.signupTemplate';
 
 export function readSignupTemplate(search: URLSearchParams): PortalTemplateId | null {
   const fromUrl = search.get('plantilla');
-  if (isDemoTemplate(fromUrl)) {
+  // Una plantilla de temporada fuera de su ventana no se puede guardar: se ignora.
+  const usable = (id: string | null): id is PortalTemplateId =>
+    isDemoTemplate(id) && isTemplateInSeason(id);
+  if (usable(fromUrl)) {
     try {
       sessionStorage.setItem(KEY, fromUrl);
     } catch {
@@ -27,7 +31,7 @@ export function readSignupTemplate(search: URLSearchParams): PortalTemplateId | 
   }
   try {
     const stored = sessionStorage.getItem(KEY);
-    return isDemoTemplate(stored) ? stored : null;
+    return usable(stored) ? stored : null;
   } catch {
     return null;
   }

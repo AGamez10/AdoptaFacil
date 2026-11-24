@@ -6,7 +6,9 @@ import {
   PLAN_REQUIRED_CODE,
   PORTAL_TEMPLATE_IDS,
   isPremiumTemplate,
+  isTemplateInSeason,
   minimumPlanFor,
+  seasonLabel,
   type PlanCapability,
   type PlanRequiredError,
   PORTAL_TEMPLATE_OPTIONS,
@@ -124,31 +126,38 @@ function present(
   storage: StoragePort,
   fallback?: PortalTemplateId,
   premiumAllowed = true,
+  now: Date = new Date(),
 ) {
   const chosen = stored.template ?? fallback;
-  const locked = chosen !== undefined && !premiumAllowed && isPremiumTemplate(chosen);
-  const template = locked ? DEFAULT_PORTAL_TEMPLATE : chosen;
+  // Plantilla de temporada fuera de su ventana: se muestra la Clásica (sin
+  // importar el plan) y la elección queda guardada para la próxima temporada.
+  const outOfSeason = chosen !== undefined && !isTemplateInSeason(chosen, now);
+  const locked =
+    !outOfSeason && chosen !== undefined && !premiumAllowed && isPremiumTemplate(chosen);
+  const hidden = locked || outOfSeason;
+  const template = hidden ? DEFAULT_PORTAL_TEMPLATE : chosen;
   return {
     tokens: stored.tokens,
     ...(template
       ? {
           template,
-          templateOptions: resolveTemplateOptions(template, locked ? undefined : stored.options),
+          templateOptions: resolveTemplateOptions(template, hidden ? undefined : stored.options),
         }
       : {}),
-    ...(stored.coverVideoKey && !locked
+    ...(stored.coverVideoKey && !hidden
       ? { coverVideoUrl: storage.resolvePublicUrl(stored.coverVideoKey) }
       : {}),
-    ...(stored.coverVideoPosterKey && !locked
+    ...(stored.coverVideoPosterKey && !hidden
       ? { coverVideoPosterUrl: storage.resolvePublicUrl(stored.coverVideoPosterKey) }
       : {}),
-    ...(stored.coverVideo2Key && !locked
+    ...(stored.coverVideo2Key && !hidden
       ? { coverVideo2Url: storage.resolvePublicUrl(stored.coverVideo2Key) }
       : {}),
-    ...(stored.coverVideo2PosterKey && !locked
+    ...(stored.coverVideo2PosterKey && !hidden
       ? { coverVideo2PosterUrl: storage.resolvePublicUrl(stored.coverVideo2PosterKey) }
       : {}),
     ...(locked ? { lockedTemplate: chosen } : {}),
+    ...(outOfSeason ? { outOfSeasonTemplate: chosen } : {}),
   };
 }
 
@@ -224,6 +233,12 @@ export class PortalThemeService {
     // gratuita hasta que la organización pague, sin perder su elección.
     if (input.template !== undefined && isPremiumTemplate(input.template) && !premiumAllowed) {
       throw planRequired('portalPremiumDesigns', 'Esta plantilla');
+    }
+    // Una plantilla de temporada solo se elige dentro de su ventana.
+    if (input.template !== undefined && !isTemplateInSeason(input.template)) {
+      throw new BadRequestException(
+        `Esta plantilla es de temporada y solo se puede usar ${seasonLabel(input.template)}.`,
+      );
     }
     // Quitar el sello exige el plan; volver a mostrarlo, nunca.
     const removeSealAllowed = await this.plans.hasCapability(organizationId, 'portalRemoveSeal');
@@ -354,12 +369,11 @@ export class PortalThemeService {
     // El sello se oculta solo si la organización lo pidió Y su plan lo incluye.
     const hideSeal =
       data?.hideSeal === true && (await this.capabilityForSlug(slug, 'portalRemoveSeal'));
-    const { lockedTemplate: _hidden, ...shown } = present(
-      stored,
-      this.storage,
-      DEFAULT_PORTAL_TEMPLATE,
-      premiumAllowed,
-    );
+    const {
+      lockedTemplate: _hidden,
+      outOfSeasonTemplate: _ended,
+      ...shown
+    } = present(stored, this.storage, DEFAULT_PORTAL_TEMPLATE, premiumAllowed);
     return {
       ...shown,
       logoPosition: data?.logoPosition ?? 'left',

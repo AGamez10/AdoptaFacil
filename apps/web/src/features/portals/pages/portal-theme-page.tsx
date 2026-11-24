@@ -8,6 +8,7 @@ import {
   type PortalSocialNavPosition,
   PORTAL_TEMPLATES,
   PORTAL_TEMPLATE_OPTIONS,
+  isTemplateInSeason,
   resolveTemplateOptions,
   type PortalTemplateId,
   type PortalTemplateOptions,
@@ -255,6 +256,10 @@ export function PortalThemePage() {
   // Con una bloqueada, guardar sin cambiar de plantilla no la reemplaza.
   const [premiumAvailable, setPremiumAvailable] = useState(true);
   const [lockedTemplate, setLockedTemplate] = useState<PortalTemplateId | undefined>(undefined);
+  // Plantilla de temporada guardada cuya ventana pasó: tampoco se pisa al guardar.
+  const [outOfSeasonTemplate, setOutOfSeasonTemplate] = useState<PortalTemplateId | undefined>(
+    undefined,
+  );
   const [templateTouched, setTemplateTouched] = useState(false);
   const [templateOptions, setTemplateOptions] = useState<PortalTemplateOptions>({});
   // Historias: video de portada. `coverVideoKey` undefined = sin cambios.
@@ -296,7 +301,9 @@ export function PortalThemePage() {
         setSocialNavPosition(config.socialNavPosition ?? 'right');
         const saved = safeTemplate(config.template);
         const tried =
-          tryTemplate && safeTemplate(tryTemplate) === tryTemplate
+          tryTemplate &&
+          safeTemplate(tryTemplate) === tryTemplate &&
+          isTemplateInSeason(safeTemplate(tryTemplate))
             ? safeTemplate(tryTemplate)
             : saved;
         setTemplate(tried);
@@ -316,6 +323,7 @@ export function PortalThemePage() {
         setCoverVideo2PosterUrl(safeMediaUrl(config.coverVideo2PosterUrl));
         setPremiumAvailable(config.premiumDesignsAvailable !== false);
         setLockedTemplate(config.lockedTemplate);
+        setOutOfSeasonTemplate(config.outOfSeasonTemplate);
         setHideSeal(config.hideSeal === true);
         setRemoveSealAvailable(config.removeSealAvailable !== false);
         setSlug(org?.slug ?? undefined);
@@ -390,7 +398,9 @@ export function PortalThemePage() {
           socialNavPosition,
           // Con una plantilla de pago bloqueada, guardar colores no la reemplaza
           // por la gratuita que se está mostrando: se omite la plantilla.
-          ...(lockedTemplate && !templateTouched ? {} : { template, templateOptions }),
+          ...((lockedTemplate || outOfSeasonTemplate) && !templateTouched
+            ? {}
+            : { template, templateOptions }),
           ...(coverVideoKey !== undefined ? { coverVideoKey } : {}),
           ...(coverVideo2Key !== undefined ? { coverVideo2Key } : {}),
           ...(sealTouched ? { hideSeal } : {}),
@@ -405,6 +415,7 @@ export function PortalThemePage() {
       );
       setPremiumAvailable(themeConfig.premiumDesignsAvailable !== false);
       setLockedTemplate(themeConfig.lockedTemplate);
+      setOutOfSeasonTemplate(themeConfig.outOfSeasonTemplate);
       setTemplateTouched(false);
       setHideSeal(themeConfig.hideSeal === true);
       setRemoveSealAvailable(themeConfig.removeSealAvailable !== false);
@@ -515,6 +526,7 @@ export function PortalThemePage() {
                   onChange={chooseTemplate}
                   premiumAvailable={premiumAvailable}
                   lockedTemplate={lockedTemplate}
+                  outOfSeasonTemplate={outOfSeasonTemplate}
                 />
               </CardContent>
             </Card>
