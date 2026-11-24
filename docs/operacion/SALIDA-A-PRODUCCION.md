@@ -25,7 +25,8 @@
 Hazlo en este orden. Guarda cada clave en tu gestor de contraseñas y **no la envíes por el chat**: se pega directo en el servidor en el paso 4.
 
 1. **VPS:** [Hostinger VPS](https://www.hostinger.com/vps-hosting) → **KVM 2** con Ubuntu 24.04 y el centro de datos más cercano (EE. UU. o Brasil). Al comprarlo, agrega tu clave SSH pública. Luego, en hPanel → VPS → Firewall, deja solo 22/tcp, 80/tcp, 443/tcp y 443/udp. Anota la **IP**.
-2. **Dominio en Cloudflare:** [dash.cloudflare.com](https://dash.cloudflare.com) → Add a domain → `adoptafacil.org` y cambia los nameservers donde compraste el dominio. Crea estos registros DNS **sin proxy (nube gris)**:
+2. **Dominio en Cloudflare:** [dash.cloudflare.com](https://dash.cloudflare.com) → Add a domain → `adoptafacil.org` y cambia los nameservers donde compraste el dominio. Crea estos registros DNS **con proxy (nube naranja)** y SSL/TLS en Full (strict); ver [BLINDAJE-VPS.md](./BLINDAJE-VPS.md):
+
    - `A @ → IP`
    - `A www → IP`
    - `A * → IP`

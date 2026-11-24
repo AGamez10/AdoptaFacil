@@ -126,12 +126,17 @@
 	}
 }
 
+# Con PORTALS_TLS=cloudflare|namecheap el certificado sale por DNS-01, que no
+# depende de que Let's Encrypt llegue al VPS: necesario con la nube naranja y
+# el origen cerrado a Cloudflare (docs/operacion/BLINDAJE-VPS.md).
 {$APP_DOMAIN} {
+	import edge-tls-{$PORTALS_TLS:off}.caddy
 	import app
 }
 
 # www siempre redirige al dominio principal (necesita su registro DNS).
 www.{$APP_DOMAIN} {
+	import edge-tls-{$PORTALS_TLS:off}.caddy
 	redir https://{$APP_DOMAIN}{uri} permanent
 }
 

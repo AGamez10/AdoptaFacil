@@ -177,6 +177,15 @@ export function CustomDomainCard({
               https://{view.domain}
             </a>
             {view.verifiedAt && ` desde el ${colombiaDateTime.format(new Date(view.verifiedAt))}`}.
+            {view.certificate === 'pending' && (
+              <span
+                className="block pt-1 text-muted-foreground"
+                data-testid="custom-domain-cert-pending"
+              >
+                Estamos emitiendo el certificado HTTPS de tu dominio. Suele tardar unos minutos; si
+                abres el enlace antes, puede mostrar un aviso de seguridad.
+              </span>
+            )}
           </p>
         )}
 

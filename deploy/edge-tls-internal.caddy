@@ -1,0 +1,3 @@
+# PORTALS_TLS=internal (CI y pruebas): el dominio principal sigue la regla
+# automática de Caddy (localhost recibe la CA interna). Archivo vacío a
+# propósito.

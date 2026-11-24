@@ -22,6 +22,7 @@ import { AuditService } from '../../core/audit/audit.service';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { PlansService } from '../../core/plans/plans.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CloudflareCustomHostnames } from './cloudflare-custom-hostnames';
 
 /** Nombre del registro TXT de verificación, delante del dominio. */
 export const PORTAL_DOMAIN_TXT_LABEL = '_adoptafacil';
@@ -97,6 +98,11 @@ export function evaluatePortalDns(input: {
  * responde en ese dominio y Caddy emite el certificado HTTPS la primera vez
  * que alguien entra (on-demand TLS, autorizado SOLO por {@link isServable}).
  *
+ * Con Cloudflare for SaaS ({@link CloudflareCustomHostnames}), al verificar
+ * se registra además como custom hostname de la zona: el tráfico entra por
+ * Cloudflare, que emite el certificado público, y el VPS sigue cerrado a sus
+ * IPs. En ese modo no se conecta la raíz del dominio.
+ *
  * Si el plan deja de incluirlo, el dominio deja de servirse (sin borrar nada)
  * y vuelve solo al renovar. Todo cambio queda en la auditoría.
  */
@@ -112,10 +118,15 @@ export class PortalDomainService {
     private readonly audit: AuditService,
     private readonly plans: PlansService,
     private readonly dns: PortalDnsLookup,
+    private readonly edge: CloudflareCustomHostnames,
     config: ConfigService<Env, true>,
   ) {
     this.target = config.get('CUSTOM_DOMAIN_CNAME_TARGET', { infer: true }) as string | undefined;
-    this.ipv4 = config.get('CUSTOM_DOMAIN_IPV4', { infer: true }) as string | undefined;
+    // Cloudflare for SaaS (plan Free) solo enruta subdominios por CNAME: la
+    // raíz con un registro A al VPS se saltaría Cloudflare y el origen cerrado.
+    this.ipv4 = edge.enabled
+      ? undefined
+      : (config.get('CUSTOM_DOMAIN_IPV4', { infer: true }) as string | undefined);
     const web = config.get('WEB_BASE_URL', { infer: true }) as string;
     this.platformHost = (/^https?:\/\/([^/:]+)/i.exec(web)?.[1] ?? '').toLowerCase();
   }
@@ -161,12 +172,35 @@ export class PortalDomainService {
     }
     if (!row) return { ...base, state: 'none', domain: null, records: [] };
     const state = row.status === 'active' ? (planIncludes ? 'active' : 'suspended') : 'pending_dns';
+    const certificate = state === 'active' ? await this.edgeStatus(row.domain) : undefined;
     return {
       ...base,
       state,
       domain: row.domain,
       records: this.records(row.domain, row.verificationToken),
+      ...(certificate ? { certificate } : {}),
     };
+  }
+
+  /** Estado del certificado en Cloudflare; `undefined` sin SaaS o si no responde. */
+  private async edgeStatus(domain: string): Promise<'pending' | 'active' | undefined> {
+    if (!this.edge.enabled) return undefined;
+    try {
+      return (await this.edge.status(domain)) ?? 'pending';
+    } catch (error) {
+      this.logger.warn(`Cloudflare status ${domain}: ${(error as Error).message}`);
+      return undefined;
+    }
+  }
+
+  /** Quita el dominio de Cloudflare sin frenar a la organización si falla. */
+  private async edgeRemove(domain: string): Promise<void> {
+    if (!this.edge.enabled) return;
+    try {
+      await this.edge.remove(domain);
+    } catch (error) {
+      this.logger.warn(`Cloudflare remove ${domain}: ${(error as Error).message}`);
+    }
   }
 
   /** `PUT /org/portal/domain`: pide (o cambia) el dominio. Queda pendiente de DNS. */
@@ -193,9 +227,9 @@ export class PortalDomainService {
         `Usa un subdominio como www.${domain}: la raíz del dominio no se puede conectar todavía.`,
       );
     }
-    await this.prisma.withOrgContext(organizationId, async (tx) => {
+    const replaced = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const previous = await tx.portalCustomDomain.findUnique({ where: { organizationId } });
-      if (previous?.domain === domain) return;
+      if (previous?.domain === domain) return null;
       const token = randomBytes(16).toString('hex');
       await tx.portalCustomDomain.upsert({
         where: { organizationId },
@@ -223,7 +257,9 @@ export class PortalDomainService {
         entityId: organizationId,
         metadata: { domain, previousDomain: previous?.domain ?? null },
       });
+      return previous?.status === 'active' ? previous.domain : null;
     });
+    if (replaced) await this.edgeRemove(replaced);
     return this.view(actor);
   }
 
@@ -265,14 +301,24 @@ export class PortalDomainService {
       );
       if (taken[0]?.taken) error = 'taken';
     }
+    if (!error && this.edge.enabled) {
+      try {
+        await this.edge.ensure(row.domain);
+      } catch (edgeError) {
+        this.logger.warn(`Cloudflare ensure ${row.domain}: ${(edgeError as Error).message}`);
+        error = 'edge_error';
+      }
+    }
 
     const now = new Date();
+    let lost = false;
     await this.prisma
       .withOrgContext(organizationId, async (tx) => {
         if (error) {
-          // Un dominio ya activo con un fallo pasajero del DNS sigue activo; si los
-          // registros desaparecieron, vuelve a pendiente.
-          const keepActive = row.status === 'active' && error === 'dns_error';
+          // Un dominio ya activo con un fallo pasajero (DNS o Cloudflare) sigue
+          // activo; si los registros desaparecieron, vuelve a pendiente.
+          const keepActive =
+            row.status === 'active' && (error === 'dns_error' || error === 'edge_error');
           await tx.portalCustomDomain.update({
             where: { organizationId },
             data: {
@@ -282,6 +328,7 @@ export class PortalDomainService {
             },
           });
           if (row.status === 'active' && !keepActive) {
+            lost = true;
             await this.audit.recordWithTx(tx, {
               organizationId,
               actorUserId: actor.id,
@@ -320,15 +367,17 @@ export class PortalDomainService {
         }
         throw dbError;
       });
+    // Los registros desaparecieron: también deja de enrutarse por Cloudflare.
+    if (lost) await this.edgeRemove(row.domain);
     return this.view(actor);
   }
 
   /** `DELETE /org/portal/domain`: desconecta el dominio. El portal sigue en su enlace. */
   async remove(actor: RequestUser): Promise<PortalDomainView> {
     const organizationId = this.tenant(actor);
-    await this.prisma.withOrgContext(organizationId, async (tx) => {
+    const removed = await this.prisma.withOrgContext(organizationId, async (tx) => {
       const row = await tx.portalCustomDomain.findUnique({ where: { organizationId } });
-      if (!row) return;
+      if (!row) return null;
       await tx.portalCustomDomain.delete({ where: { organizationId } });
       await this.audit.recordWithTx(tx, {
         organizationId,
@@ -338,7 +387,9 @@ export class PortalDomainService {
         entityId: row.id,
         metadata: { domain: row.domain, status: row.status },
       });
+      return row.status === 'active' ? row.domain : null;
     });
+    if (removed) await this.edgeRemove(removed);
     return this.view(actor);
   }
 

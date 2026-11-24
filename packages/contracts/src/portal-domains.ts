@@ -14,13 +14,16 @@
 export type PortalDomainState = 'none' | 'pending_dns' | 'active' | 'suspended' | 'unavailable';
 
 /** Por qué no se pudo verificar (el último intento). */
-export type PortalDomainCheckError = 'txt_missing' | 'target_mismatch' | 'taken' | 'dns_error';
+export type PortalDomainCheckError =
+  'txt_missing' | 'target_mismatch' | 'taken' | 'dns_error' | 'edge_error';
 
 export const PORTAL_DOMAIN_CHECK_ERRORS: Record<PortalDomainCheckError, string> = {
   txt_missing: 'Todavía no vemos el registro TXT de verificación.',
   target_mismatch: 'El dominio todavía no apunta a AdoptaFácil (revisa el CNAME o el registro A).',
   taken: 'Ese dominio ya está conectado a otra organización.',
   dns_error: 'No pudimos consultar el DNS en este momento. Intenta de nuevo en unos minutos.',
+  edge_error:
+    'Tus registros están bien, pero no pudimos activar el dominio en nuestra red. Intenta de nuevo en unos minutos.',
 };
 
 export interface PortalDnsRecord {
@@ -41,6 +44,12 @@ export interface PortalDomainView {
   lastCheckedAt: string | null;
   lastError: PortalDomainCheckError | null;
   verifiedAt: string | null;
+  /**
+   * Con `state: 'active'` y la red de Cloudflare: `pending` mientras se emite el
+   * certificado HTTPS del dominio (suele tardar unos minutos). Ausente si no
+   * aplica o no se pudo consultar.
+   */
+  certificate?: 'pending' | 'active';
 }
 
 /** `PUT /org/portal/domain`. */

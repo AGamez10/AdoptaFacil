@@ -12,6 +12,7 @@ import {
   OrgPortalDomainController,
   PublicPortalDomainController,
 } from './portal-domain.controller';
+import { CloudflareCustomHostnames } from './cloudflare-custom-hostnames';
 import { PortalDnsLookup, PortalDomainService } from './portal-domain.service';
 
 /**
@@ -45,6 +46,7 @@ import { PortalDnsLookup, PortalDomainService } from './portal-domain.service';
     // Dominio propio (Pro): verificación por DNS y autorización de HTTPS.
     PortalDomainService,
     PortalDnsLookup,
+    CloudflareCustomHostnames,
   ],
 })
 export class PortalsModule {}

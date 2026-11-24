@@ -1,0 +1,8 @@
+# PORTALS_TLS=cloudflare: el dominio principal y www también sacan su
+# certificado por DNS-01 en Cloudflare. Así funciona con la nube NARANJA
+# (proxy) y con el origen cerrado a solo IPs de Cloudflare: Let's Encrypt no
+# necesita entrar al VPS. Se importa dentro de cada bloque de sitio.
+tls {
+	dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	resolvers 1.1.1.1 1.0.0.1
+}

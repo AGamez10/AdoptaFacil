@@ -147,3 +147,30 @@ describe('validateEnv — no real payment gateway wired', () => {
     );
   });
 });
+
+describe('validateEnv — Cloudflare for SaaS (dominios propios)', () => {
+  const ZONE = '0123456789abcdef0123456789abcdef';
+  const TOKEN = 'token-de-cloudflare-0123456789';
+
+  it('zona y token van juntos', () => {
+    expect(() => validateEnv({ ...BASE, CLOUDFLARE_SAAS_ZONE_ID: ZONE })).toThrow(
+      /CLOUDFLARE_SAAS_API_TOKEN/,
+    );
+    expect(() => validateEnv({ ...BASE, CLOUDFLARE_SAAS_API_TOKEN: TOKEN })).toThrow(
+      /CLOUDFLARE_SAAS_ZONE_ID/,
+    );
+    expect(() =>
+      validateEnv({ ...BASE, CLOUDFLARE_SAAS_ZONE_ID: ZONE, CLOUDFLARE_SAAS_API_TOKEN: TOKEN }),
+    ).not.toThrow();
+  });
+
+  it('el Zone ID es de 32 caracteres hex', () => {
+    expect(() =>
+      validateEnv({
+        ...BASE,
+        CLOUDFLARE_SAAS_ZONE_ID: 'adoptafacil.org',
+        CLOUDFLARE_SAAS_API_TOKEN: TOKEN,
+      }),
+    ).toThrow(/Zone ID/);
+  });
+});

@@ -90,9 +90,20 @@ else
     [ -n "$(aget PLAN_LAUNCH_DATE)" ] || warn "PLAN_ENFORCEMENT=true sin PLAN_LAUNCH_DATE: no hay 3 meses de Pro gratis; quien no pague queda en Gratis al pasar su prueba"
     [ -n "$(aget MERCADOPAGO_PLATFORM_ACCESS_TOKEN)" ] || warn "PLAN_ENFORCEMENT=true sin MERCADOPAGO_PLATFORM_ACCESS_TOKEN: los planes solo se pueden pagar por transferencia"
   fi
-  if [ "${CUSTOM_DOMAINS:-off}" == "on" ] && [ -z "$(aget CUSTOM_DOMAIN_CNAME_TARGET)" ]; then
-    err "CUSTOM_DOMAINS=on en deploy/.env exige CUSTOM_DOMAIN_CNAME_TARGET en api.env (si no, el plan Pro ve «aún no disponible»)"
-  fi
+  case "${CUSTOM_DOMAINS:-off}" in
+    off) ;;
+    on | cloudflare)
+      [ -n "$(aget CUSTOM_DOMAIN_CNAME_TARGET)" ] || err "CUSTOM_DOMAINS=${CUSTOM_DOMAINS} en deploy/.env exige CUSTOM_DOMAIN_CNAME_TARGET en api.env (si no, el plan Pro ve «aún no disponible»)"
+      if [ "${CUSTOM_DOMAINS}" == "cloudflare" ]; then
+        for k in CLOUDFLARE_SAAS_ZONE_ID CLOUDFLARE_SAAS_API_TOKEN; do
+          [ -n "$(aget "$k")" ] || err "CUSTOM_DOMAINS=cloudflare exige $k en api.env (Cloudflare for SaaS)"
+        done
+      else
+        warn "CUSTOM_DOMAINS=on: los dominios propios llegan sin Cloudflare y exigen el origen abierto; usa CUSTOM_DOMAINS=cloudflare (docs/operacion/DOMINIO-PROPIO.md)"
+      fi
+      ;;
+    *) err "deploy/.env: CUSTOM_DOMAINS=${CUSTOM_DOMAINS} no es válido (off, cloudflare u on)" ;;
+  esac
   coffee="$(aget COFFEE_QR_DOMAINS)"; coffee="${coffee:-adoptafacil.org}"
   [[ ",${coffee// /}," == *",${APP_DOMAIN:-},"* ]] || warn "COFFEE_QR_DOMAINS ($coffee) no incluye APP_DOMAIN (${APP_DOMAIN:-?}): el QR del café apuntaría a otro dominio"
 fi

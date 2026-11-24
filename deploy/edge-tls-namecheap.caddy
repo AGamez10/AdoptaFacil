@@ -1,0 +1,12 @@
+# PORTALS_TLS=namecheap: el dominio principal y www también sacan su
+# certificado por DNS-01 en Namecheap (mismas credenciales que el comodín).
+# Se importa dentro de cada bloque de sitio.
+tls {
+	dns namecheap {
+		api_key {env.NAMECHEAP_API_KEY}
+		user {env.NAMECHEAP_API_USER}
+		api_endpoint https://api.namecheap.com/xml.response
+		client_ip {env.NAMECHEAP_CLIENT_IP}
+	}
+	resolvers 1.1.1.1 1.0.0.1
+}

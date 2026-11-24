@@ -42,8 +42,10 @@ else
   [ "$age_h" -lt "$BACKUP_MAX_AGE_H" ] || problems+=("último respaldo hace ${age_h} h")
 fi
 
-# 5. Certificado TLS.
-not_after="$(echo | openssl s_client -connect "$APP_DOMAIN:443" -servername "$APP_DOMAIN" 2>/dev/null |
+# 5. Certificado TLS del origen (Caddy), leído en el propio VPS: con la nube
+#    naranja el público es el de Cloudflare, que se renueva solo; el de Caddy
+#    es el que exige SSL "Full (strict)" y, si vence, el sitio da error 526.
+not_after="$(echo | openssl s_client -connect 127.0.0.1:443 -servername "$APP_DOMAIN" 2>/dev/null |
   openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
 if [ -n "$not_after" ]; then
   days=$((($(date -d "$not_after" +%s) - $(date +%s)) / 86400))

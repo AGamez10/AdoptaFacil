@@ -15,8 +15,8 @@ servidor` si conecta la raíz y la plataforma definió `CUSTOM_DOMAIN_IPV4`);
    - `TXT _adoptafacil.www.turefugio.org → adoptafacil-verify=<código>` (prueba que es suyo).
 4. Pulsa **Ya los creé, verificar**. Si algo falta, la pantalla dice qué (falta el TXT, el
    dominio aún no apunta, ya lo tiene otra organización, el DNS no respondió).
-5. Verificado, el portal responde en `https://www.turefugio.org`; el certificado HTTPS se
-   emite solo la primera vez que alguien entra.
+5. Verificado, el portal responde en `https://www.turefugio.org`; el certificado HTTPS lo emite
+   Cloudflare en unos minutos.
 
 ## Estados
 
@@ -38,19 +38,48 @@ servidor` si conecta la raíz y la plataforma definió `CUSTOM_DOMAIN_IPV4`);
 - Todo cambio queda en la auditoría: `portal.custom_domain_requested`, `_verified`, `_lost`,
   `_removed`.
 
-## Encenderlo en producción (una vez)
+## Encenderlo en producción (una vez): Cloudflare for SaaS
 
-1. En el DNS de `adoptafacil.org`, crear `portales.adoptafacil.org` → IP del servidor, **sin el
-   proxy de Cloudflare (nube gris)**: el certificado del dominio de la fundación lo emite Caddy
-   por HTTP-01 y necesita llegar directo.
-2. `deploy/api.env`:
+Con el VPS cerrado a solo IPs de Cloudflare ([BLINDAJE-VPS.md](./BLINDAJE-VPS.md)), los dominios
+de las fundaciones también tienen que entrar por Cloudflare. Eso es **Cloudflare for SaaS**: gratis
+hasta 100 dominios en el plan Free; después, unos US$0,10 al mes por dominio (confírmalo en
+Cloudflare antes de pasar de 100). Cloudflare emite el certificado público de cada dominio; el WAF
+y el límite de peticiones también los protegen.
+
+1. **Registro destino.** Cloudflare → `adoptafacil.org` → DNS → Add record: `A`, nombre
+   `portales`, valor la IP del VPS, **nube naranja**.
+2. **Activar Custom Hostnames.** SSL/TLS → **Custom Hostnames** → **Enable Cloudflare for SaaS**
+   (pide tarjeta aunque no cobre hasta los 100). En **Fallback Origin** escribe
+   `portales.adoptafacil.org` → Add. Debe quedar **Active**.
+3. **Regla de cifrado hacia el VPS.** Rules → **Configuration Rules** → Create rule
+   `Dominios propios: SSL Full` → _Edit expression_:
+   `not (http.host eq "adoptafacil.org" or ends_with(http.host, ".adoptafacil.org"))` →
+   **SSL: Full** → Deploy. Para esos dominios Caddy cifra con su CA interna (Cloudflare tiene el
+   certificado público); el resto del sitio sigue en Full (strict).
+4. **Token mínimo para la API.** My Profile → API Tokens → Create Token → **Create Custom Token**:
+   nombre `adoptafacil-saas`, permiso **Zone → SSL and Certificates → Edit**, Zone Resources
+   _Include · Specific zone · adoptafacil.org_, Client IP Address Filtering _Is in · IP del VPS_ →
+   Create. Copia el token una sola vez. Anota también el **Zone ID** (Overview de la zona, columna
+   derecha, sección API).
+5. `deploy/api.env`:
    ```
    CUSTOM_DOMAIN_CNAME_TARGET=portales.adoptafacil.org
-   CUSTOM_DOMAIN_IPV4=<IP pública del servidor>   # opcional: permite conectar la raíz
+   CLOUDFLARE_SAAS_ZONE_ID=<Zone ID>
+   CLOUDFLARE_SAAS_API_TOKEN=<token del paso 4>
    ```
-3. `deploy/.env`: `CUSTOM_DOMAINS=on` (Caddy carga `deploy/custom-domains-on.caddy`).
-4. Reconstruir y desplegar (la web recibe `VITE_APP_DOMAIN` = `APP_DOMAIN` para reconocer un
-   host ajeno como dominio de una organización).
+   Sin `CUSTOM_DOMAIN_IPV4`: con Cloudflare for SaaS solo se conectan subdominios
+   (`www.turefugio.org`) por CNAME.
+6. `deploy/.env`: `CUSTOM_DOMAINS=cloudflare`.
+7. `sudo deploy/scripts/preflight.sh` y desplegar.
+
+Al verificar un dominio, la API lo registra en Cloudflare; al quitarlo, cambiarlo o si sus
+registros desaparecen, lo saca. Mientras Cloudflare emite el certificado (minutos), el panel de la
+fundación lo dice. Si Cloudflare no responde al verificar, la fundación ve "no pudimos activar el
+dominio en nuestra red" y puede reintentar.
+
+> `CUSTOM_DOMAINS=on` (modo anterior: directo al VPS con nube gris en `portales` y certificado de
+> Let's Encrypt al primer acceso) sigue disponible, pero exige el origen abierto a todo Internet.
+> `verificar-blindaje.sh` lo marca como falla.
 
 ## Seguridad
 

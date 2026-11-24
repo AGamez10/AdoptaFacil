@@ -1,0 +1,3 @@
+# PORTALS_TLS=off: el dominio principal y www usan el reto ACME por defecto de
+# Caddy (HTTP-01/TLS-ALPN). Solo sirve con la nube GRIS en Cloudflare. Archivo
+# vacío a propósito.

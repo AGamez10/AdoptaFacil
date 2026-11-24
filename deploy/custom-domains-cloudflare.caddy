@@ -1,0 +1,14 @@
+# CUSTOM_DOMAINS=cloudflare: dominios propios de las organizaciones Pro
+# (www.turefugio.org) a través de Cloudflare for SaaS. El certificado público
+# lo emite y presenta Cloudflare en su borde; el VPS sigue cerrado a solo IPs de
+# Cloudflare (deploy/host/cloudflare-origen.sh). Entre Cloudflare y Caddy el
+# tráfico va cifrado con un certificado de la CA interna de Caddy (por eso la
+# regla de configuración "SSL: Full" para estos hosts, docs/operacion/DOMINIO-PROPIO.md).
+# Igual que en "on", Caddy solo atiende un host si la API lo autoriza
+# (on_demand_tls ask: dominio verificado y plan vigente).
+https:// {
+	tls internal {
+		on_demand
+	}
+	import app
+}
