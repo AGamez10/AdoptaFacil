@@ -125,17 +125,17 @@ curl -fsS https://prueba.adoptafacil.org/api/health    # también "ok" (portales
 
 ### ¿Ya lo tengo?
 
-En la consola de SES, en la región **US East (N. Virginia)**: _Identities_ muestra
+En la consola de SES, en la región **US East (Ohio)**: _Identities_ muestra
 `adoptafacil.org` como **Verified**, y _Account dashboard_ **no** dice "Your
 account is in the sandbox". Si además `sudo grep SMTP_HOST deploy/api.env`
-muestra `email-smtp.us-east-1.amazonaws.com`, este punto está hecho.
+muestra `email-smtp.us-east-2.amazonaws.com`, este punto está hecho.
 
 ### A. Cuenta de AWS
 
 1. Crea la cuenta en [aws.amazon.com](https://aws.amazon.com) (pide tarjeta).
 2. Activa la verificación en dos pasos del usuario raíz: arriba a la derecha tu
    nombre → **Security credentials** → **Assign MFA device**.
-3. Arriba a la derecha elige la región **US East (N. Virginia) us-east-1** y
+3. Arriba a la derecha elige la región **US East (Ohio) us-east-2** y
    déjala fija para todo este punto. Busca "SES" en la barra de arriba y entra
    a **Amazon Simple Email Service**.
 
@@ -161,7 +161,7 @@ En Cloudflare → DNS → Records → **Add record**, crea cada uno **tal cual**
 
 - Pega el nombre completo; Cloudflare quita solo el `.adoptafacil.org` del final.
 - En los CNAME, pon **Proxy status en gris (DNS only)**. Si quedan naranjas, la verificación falla.
-- El MX lleva prioridad **10** y el valor `feedback-smtp.us-east-1.amazonses.com`.
+- El MX lleva prioridad **10** y el valor `feedback-smtp.us-east-2.amazonses.com`.
 - El TXT de `bounce` es `v=spf1 include:amazonses.com ~all`.
 
 **No toques el SPF del dominio raíz (`@`)**: con el MAIL FROM `bounce` no hace falta.
@@ -204,7 +204,7 @@ Verifica que la pantalla diga "Suppression reasons: Bounce, Complaint".
 
 ### H. Credenciales SMTP
 
-1. SES → **SMTP settings**. Anota el _SMTP endpoint_: `email-smtp.us-east-1.amazonaws.com`.
+1. SES → **SMTP settings**. Anota el _SMTP endpoint_: `email-smtp.us-east-2.amazonaws.com`.
 2. **Create SMTP credentials** → deja el nombre que propone → **Create user**.
 3. Te muestra **SMTP user name** y **SMTP password** **una sola vez**: descarga
    el .csv o cópialos a tu gestor de contraseñas. No son la clave de tu cuenta
@@ -248,7 +248,7 @@ detalles, contesta en el mismo caso de soporte (_Support → Your support cases_
 
    ```dotenv
    NOTIFICATION_DRIVER=smtp
-   SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+   SMTP_HOST=email-smtp.us-east-2.amazonaws.com
    SMTP_PORT=587
    SMTP_USER=<SMTP user name del paso H>
    SMTP_PASS=<SMTP password del paso H>
