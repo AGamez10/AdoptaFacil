@@ -52,7 +52,7 @@ export function PublicAnimalDetailArticle({
 
   return (
     <article className={styles.detail} data-testid="public-animal-detail">
-      <div className={styles.media}>
+      <div className={styles.media} data-fd-part="media">
         {animal.photoUrl ? (
           <img
             src={animal.photoUrl}
@@ -74,24 +74,28 @@ export function PublicAnimalDetailArticle({
       </div>
 
       <div className={styles.info}>
-        <h1 className={styles.name}>{animal.name}</h1>
+        <h1 className={styles.name} data-fd-part="name">
+          {animal.name}
+        </h1>
         <p className={styles.subtitle}>
           {[animal.breed, city].filter(Boolean).join(' · ') || 'Busca un hogar para toda la vida'}
         </p>
 
-        <dl className={styles.facts}>
+        <dl className={styles.facts} data-fd-part="facts">
           {facts.map((fact) => (
-            <div key={fact.label} className={styles.fact} data-tone={fact.tone}>
+            <div key={fact.label} className={styles.fact} data-tone={fact.tone} data-fd-part="fact">
               <dt>{fact.label}</dt>
               <dd>{fact.value}</dd>
             </div>
           ))}
         </dl>
 
-        <div className={styles.actions}>{actions}</div>
+        <div className={styles.actions} data-fd-part="actions">
+          {actions}
+        </div>
 
         {org && (
-          <section className={styles.org} aria-label="Organización responsable">
+          <section className={styles.org} aria-label="Organización responsable" data-fd-part="org">
             {org.logoUrl ? (
               <img src={org.logoUrl} alt="" className={styles.org__logo} />
             ) : (
@@ -107,7 +111,7 @@ export function PublicAnimalDetailArticle({
           </section>
         )}
 
-        <section className={styles.steps} aria-labelledby="adopt-steps-title">
+        <section className={styles.steps} aria-labelledby="adopt-steps-title" data-fd-part="steps">
           <h2 id="adopt-steps-title" className={styles.steps__title}>
             Así es adoptar a {animal.name}
           </h2>

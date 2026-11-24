@@ -367,3 +367,222 @@
     outline-offset: 2px;
   }
 }
+
+/*
+ * Ficha con la apariencia de la plantilla del portal (`.skin`). Los valores
+ * llegan como variables --fd-* leídas de la plantilla (`readAnimalSkin`):
+ * fondo, tinta, tipografías, acento y forma de sus tarjetas. Solo cambia la
+ * piel; la estructura y el contenido son los mismos de la ficha base.
+ */
+.skin {
+  color: var(--fd-ink);
+  font-family: var(--fd-font);
+
+  &.page {
+    min-height: 100vh;
+    background-color: var(--fd-bg);
+    background-image: var(--fd-bg-image);
+  }
+
+  .media {
+    border: var(--fd-card-bd);
+    border-radius: var(--fd-r);
+    background: color-mix(in srgb, var(--fd-acc) 14%, var(--fd-bg));
+    box-shadow: var(--fd-card-sh);
+  }
+
+  .media__empty {
+    color: var(--fd-soft);
+    font-family: var(--fd-head);
+  }
+
+  .badge {
+    background: var(--fd-acc);
+    color: var(--fd-acc-ink);
+  }
+
+  .badge--glass {
+    background: color-mix(in srgb, var(--fd-bg) 88%, transparent);
+    color: var(--fd-ink);
+  }
+
+  .name {
+    font-family: var(--fd-head);
+    font-weight: var(--fd-head-w);
+    letter-spacing: var(--fd-head-ls);
+    color: inherit;
+  }
+
+  .subtitle {
+    color: var(--fd-soft);
+  }
+
+  .fact {
+    border: var(--fd-card-bd);
+    border-radius: var(--fd-r);
+    background: var(--fd-card);
+    box-shadow: var(--fd-card-sh);
+
+    dt {
+      color: var(--fd-soft);
+    }
+
+    dd {
+      font-family: var(--fd-head);
+      font-weight: var(--fd-head-w);
+      letter-spacing: var(--fd-head-ls);
+      color: inherit;
+    }
+
+    // El primer dato lleva el acento de la plantilla (como su saldo destacado).
+    &:first-child {
+      border-color: transparent;
+      background: var(--fd-hi);
+      color: var(--fd-acc-ink);
+      box-shadow: none;
+
+      dt {
+        color: inherit;
+        opacity: 0.8;
+      }
+    }
+  }
+
+  .actions {
+    border: var(--fd-card-bd);
+    border-radius: var(--fd-r);
+    background: var(--fd-card);
+    box-shadow: var(--fd-card-sh);
+  }
+
+  .org {
+    border: 1.5px solid var(--fd-line);
+    border-radius: var(--fd-r);
+  }
+
+  .org__logo {
+    background: var(--fd-acc);
+    font-family: var(--fd-head);
+    color: var(--fd-acc-ink);
+  }
+
+  .org__eyebrow,
+  .org__meta {
+    color: var(--fd-soft);
+  }
+
+  .org__name {
+    color: inherit;
+  }
+
+  .steps {
+    border-radius: var(--fd-r);
+    background: var(--fd-hi);
+    color: var(--fd-acc-ink);
+
+    li::before {
+      border: 1.5px solid currentColor;
+      background: transparent;
+      color: inherit;
+    }
+  }
+
+  .steps__title,
+  .similar__title {
+    font-family: var(--fd-head);
+    font-weight: var(--fd-head-w);
+    letter-spacing: var(--fd-head-ls);
+    color: inherit;
+  }
+
+  .backMore {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .stickyCta {
+    border-top-color: var(--fd-line);
+    background: color-mix(in srgb, var(--fd-bg) 94%, transparent);
+    color: var(--fd-ink);
+
+    span {
+      color: var(--fd-soft);
+    }
+  }
+
+  .stickyCta__text strong {
+    font-family: var(--fd-head);
+  }
+
+  .stickyCta__button {
+    background: var(--fd-acc);
+    color: var(--fd-acc-ink);
+    box-shadow: none;
+  }
+
+  .note,
+  .actions :global(.text-muted-foreground) {
+    color: var(--fd-soft);
+  }
+
+  /* Detalles propios de algunas plantillas. */
+
+  // Velitas (claro, "Papel"): papel recortado con sombra corrida de color.
+  &[data-animal-skin='velitas'][data-mode='light'] {
+    .media,
+    .actions {
+      box-shadow:
+        8px 9px 0 #d7e8d3,
+        var(--fd-card-sh);
+    }
+
+    .fact:nth-child(2) {
+      box-shadow: 5px 6px 0 #f6d9c4;
+    }
+
+    .fact:nth-child(3) {
+      box-shadow: 5px 6px 0 #d5e2f2;
+    }
+
+    .fact:nth-child(4) {
+      box-shadow: 5px 6px 0 #d7e8d3;
+    }
+
+    .media {
+      rotate: -1deg;
+    }
+  }
+
+  // Velitas (oscuro): noche de velitas, nombre encendido.
+  &[data-animal-skin='velitas'][data-mode='dark'] {
+    .name {
+      text-shadow: 0 0 30px rgb(255 181 71 / 0.45);
+    }
+
+    .steps {
+      background: radial-gradient(120% 100% at 50% 0%, #2a2350, #14121f);
+      color: #fff0d9;
+      box-shadow: 0 0 0 1px rgb(255 214 150 / 0.12);
+
+      li::before {
+        border-color: #ffb547;
+        color: #ffb547;
+      }
+    }
+  }
+
+  // Hilo y Cartel: bordes de tinta y sombras duras también en la foto.
+  &[data-animal-skin='hilo'] .steps,
+  &[data-animal-skin='cartel'] .steps {
+    border: var(--fd-card-bd);
+    box-shadow: var(--fd-card-sh);
+  }
+}
+
+/* Aviso bajo los botones de la vista previa. */
+.note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
