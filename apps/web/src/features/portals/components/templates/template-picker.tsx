@@ -3,7 +3,10 @@ import {
   PLAN_CATALOG,
   PLAN_KEYS,
   PORTAL_TEMPLATES,
+  isSeasonalTemplate,
+  isTemplateInSeason,
   planIncludes,
+  seasonLabel,
   type PortalTemplateId,
   type PortalTemplateInfo,
 } from '@adoptafacil/contracts';
@@ -24,6 +27,10 @@ export interface TemplatePickerProps {
   premiumAvailable?: boolean;
   /** Plantilla Pro guardada que hoy no se muestra (el portal usa una gratuita). */
   lockedTemplate?: PortalTemplateId;
+  /** Plantilla de temporada guardada cuya ventana ya pasó (el portal usa la Clásica). */
+  outOfSeasonTemplate?: PortalTemplateId;
+  /** Fecha de hoy (pruebas); por defecto, ahora. */
+  now?: Date;
 }
 
 export function tierLabel(template: PortalTemplateInfo): string {
@@ -147,6 +154,11 @@ function TemplateOption({ template, selected, locked, onChange }: OptionProps) {
         </span>
       </span>
       <span className={styles.option__tagline}>{template.tagline}</span>
+      {isSeasonalTemplate(template.id) && (
+        <span className={styles.option__season} data-testid={`template-season-${template.id}`}>
+          Solo por temporada, {seasonLabel(template.id)}
+        </span>
+      )}
     </label>
   );
 }
@@ -162,12 +174,29 @@ export function TemplatePicker({
   onChange,
   premiumAvailable = true,
   lockedTemplate,
+  outOfSeasonTemplate,
+  now,
 }: TemplatePickerProps) {
-  const free = PORTAL_TEMPLATES.filter((template) => template.tier === 'free');
-  const paid = PORTAL_TEMPLATES.filter((template) => template.tier === 'paid');
+  // Las de temporada solo aparecen dentro de su ventana (o si ya es la elegida).
+  const visible = PORTAL_TEMPLATES.filter(
+    (template) => template.id === value || isTemplateInSeason(template.id, now ?? new Date()),
+  );
+  const free = visible.filter((template) => template.tier === 'free');
+  const paid = visible
+    .filter((template) => template.tier === 'paid')
+    // La de temporada va primero: es la que vende en estas fechas.
+    .sort((a, b) => Number(isSeasonalTemplate(b.id)) - Number(isSeasonalTemplate(a.id)));
+  const endedName = PORTAL_TEMPLATES.find((t) => t.id === outOfSeasonTemplate)?.name;
   return (
     <fieldset className={styles.picker} data-testid="template-picker">
       <legend className="sr-only">Plantilla del portal</legend>
+      {endedName && (
+        <p className={styles.pro__status} data-testid="template-season-ended">
+          <strong>Terminó la temporada de {endedName}.</strong> Tu portal volvió a la plantilla
+          Clásica. Tu elección quedó guardada y vuelve sola la próxima temporada (
+          {seasonLabel(outOfSeasonTemplate as PortalTemplateId)}) si tu plan la incluye.
+        </p>
+      )}
       <div className={styles.grid} data-testid="template-group-free">
         {free.map((template) => (
           <TemplateOption

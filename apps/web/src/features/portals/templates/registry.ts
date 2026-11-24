@@ -34,6 +34,8 @@ export const ENGINE_TEMPLATE_IDS = [
   'documental',
   'halo',
   'prisma',
+  // De temporada (Crece y Pro, solo dentro de su ventana de fechas).
+  'navidad',
 ] as const satisfies readonly PortalTemplateId[];
 
 export type EngineTemplateId = (typeof ENGINE_TEMPLATE_IDS)[number];
@@ -64,6 +66,7 @@ const LOADERS: Record<EngineTemplateId, () => Promise<TemplateDesign>> = {
   bento: () => import('./designs/bento').then((x) => x.bento),
   halo: () => import('./designs/halo').then((x) => x.halo),
   prisma: () => import('./designs/prisma').then((x) => x.prisma),
+  navidad: () => import('./designs/navidad').then((x) => x.navidad),
 };
 
 export function isEngineTemplate(id: string): id is EngineTemplateId {

@@ -77,6 +77,8 @@ describe('plan catalog', () => {
       // 2026-11-22: serie moderna, Halo y Prisma de pago; Brisa y Bento gratis.
       'halo',
       'prisma',
+      // 2026-11-24: Navidad, de pago y de temporada.
+      'navidad',
     ]);
     expect(isPremiumTemplate('historias')).toBe(false);
     expect(isPremiumTemplate('brisa')).toBe(false);
