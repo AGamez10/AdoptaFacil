@@ -134,8 +134,8 @@ Quien paga con Mercado Pago y renueva normalmente no recibe nada.
 
 ## Lo que sigue sin estar
 
-1. **Probado solo con Mercado Pago simulado.** Falta una corrida en el sandbox de Mercado Pago
-   con un usuario de prueba antes de cobrar dinero real.
+1. **Probado solo con Mercado Pago simulado.** Falta un cobro real pequeño (que luego se
+   reembolsa) para ver de punta a punta la activación y el comprobante antes de abrir el cobro.
 2. **Factura electrónica** del plan: no se genera; la emite el contador. 🧾
 3. **Soporte prioritario por WhatsApp** (Pro) depende del equipo, no del código.
 4. **Patrocinio de empresas** sigue «próximamente». El **dominio propio** está construido (ver `docs/operacion/DOMINIO-PROPIO.md`).
