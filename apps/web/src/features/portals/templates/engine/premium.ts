@@ -535,7 +535,8 @@ export interface PremiumSpec {
 
 const MODE_KEY = 'af-tpl-mode:';
 
-function preferredMode(id: DesignId): Mode {
+/** Modo (claro/oscuro) con el que se abre una plantilla Premium: el que eligió el visitante o el del sistema. */
+export function preferredMode(id: DesignId): Mode {
   try {
     const v = localStorage.getItem(MODE_KEY + id);
     if (v === 'light' || v === 'dark') return v;

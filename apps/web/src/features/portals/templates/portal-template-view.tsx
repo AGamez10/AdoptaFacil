@@ -11,6 +11,7 @@ import {
   publicAnimalDetailHref,
 } from '../model/animals-catalog';
 import { hslStringToHex } from '../model/color-conversion';
+import { readAnimalSkin, type AnimalSkin } from './animal-skin';
 import { PreviewAnimalDialog } from './demo/preview-animal-dialog';
 import { PreviewLedgerDialog } from './demo/preview-ledger-dialog';
 import { createKit, ensureVolunteeringSection } from './engine/kit';
@@ -66,6 +67,8 @@ export function PortalTemplateView({
   // El libro se viste como la plantilla (y su modo claro/oscuro) al abrirse.
   const [ledgerTheme, setLedgerTheme] = useState<LedgerTheme | null>(null);
   const [previewAnimal, setPreviewAnimal] = useState<AnimalSummary | null>(null);
+  // La ficha de la vista previa se viste como la plantilla (y su modo actual).
+  const [previewSkin, setPreviewSkin] = useState<AnimalSkin | null>(null);
   const [three, setThree] = useState<ThreeModule | null | undefined>(
     design.webgl ? undefined : null,
   );
@@ -85,7 +88,17 @@ export function PortalTemplateView({
   const openPreview = useRef<(href: string) => boolean>(() => false);
   openPreview.current = (href) => {
     const animal = animalByHref.get(href);
-    if (animal) setPreviewAnimal(animal);
+    if (animal) {
+      const mode = rootRef.current?.dataset.mode;
+      setPreviewSkin(
+        readAnimalSkin(
+          design,
+          mode === 'light' || mode === 'dark' ? mode : undefined,
+          themeStyle as Record<string, string>,
+        ),
+      );
+      setPreviewAnimal(animal);
+    }
     return Boolean(animal);
   };
   // Con el módulo de reseñas apagado, la API responde 404 a "Registrar reseña":
@@ -270,6 +283,7 @@ export function PortalTemplateView({
             org={source.organization}
             slug={source.slug}
             onOpenAnimal={setPreviewAnimal}
+            skin={previewSkin}
           />
         </>
       ) : (

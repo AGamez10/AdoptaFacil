@@ -15,6 +15,7 @@ import {
   type PublicAnimalOrg,
 } from '../../components/public-animal-detail-article';
 import styles from '../../pages/public-animal-detail-page.module.scss';
+import type { AnimalSkin } from '../animal-skin';
 
 const SIMILAR_MAX = 4;
 
@@ -26,6 +27,8 @@ export interface PreviewAnimalDialogProps {
   org: PublicAnimalOrg;
   slug: string;
   onOpenAnimal: (animal: AnimalSummary | null) => void;
+  /** Apariencia de la plantilla que se está viendo (sin ella, la de la app). */
+  skin?: AnimalSkin | null;
 }
 
 /**
@@ -41,6 +44,7 @@ export function PreviewAnimalDialog({
   org,
   slug,
   onOpenAnimal,
+  skin = null,
 }: PreviewAnimalDialogProps) {
   const payments = useFeature('payments');
   const [notice, setNotice] = useState(false);
@@ -89,14 +93,33 @@ export function PreviewAnimalDialog({
   return (
     <Dialog open={Boolean(animal)} onOpenChange={(open) => !open && onOpenAnimal(null)}>
       <DialogContent
-        className="max-h-[92vh] overflow-y-auto bg-[var(--af-cream)] p-0 text-[var(--af-ink)]"
+        className={cn(
+          'max-h-[92vh] overflow-y-auto p-0',
+          !skin && 'bg-[var(--af-cream)] text-[var(--af-ink)]',
+        )}
         // Ancho de la ficha real (el diálogo base mide 32rem) y por encima de la
-        // barra de la vista de ejemplo.
-        style={{ maxWidth: 'min(64rem, 96vw)', zIndex: 70 }}
+        // barra de la vista de ejemplo. Con plantilla, su fondo y su tinta.
+        style={{
+          maxWidth: 'min(64rem, 96vw)',
+          zIndex: 70,
+          ...(skin && {
+            ...skin.style,
+            backgroundColor: 'var(--fd-bg)',
+            backgroundImage: 'var(--fd-bg-image)',
+            color: 'var(--fd-ink)',
+            borderColor: 'var(--fd-line)',
+          }),
+        }}
         data-testid="preview-animal-dialog"
       >
         {animal && (
-          <div ref={topRef} className={styles.container} style={{ paddingBlock: '1.5rem' }}>
+          <div
+            ref={topRef}
+            className={cn(styles.container, skin && styles.skin)}
+            style={{ paddingBlock: '1.5rem' }}
+            data-animal-skin={skin?.template}
+            data-mode={skin?.mode}
+          >
             <DialogTitle className="sr-only">Ficha de {animal.name}</DialogTitle>
             <DialogDescription className="sr-only">
               Así ve la ficha de {animal.name} quien visita el portal.
@@ -125,7 +148,7 @@ export function PreviewAnimalDialog({
                       </button>
                     )}
                   </div>
-                  <p className="text-left text-xs text-muted-foreground" aria-live="polite">
+                  <p className={cn('text-left', styles.note)} aria-live="polite">
                     {notice
                       ? 'Vista previa: en el portal publicado este botón lleva a la solicitud.'
                       : `Necesitarás iniciar sesión como persona para solicitar adopción de ${animal.name}.`}
