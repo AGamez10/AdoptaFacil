@@ -26,6 +26,7 @@ import { resolveOrgSubdomain } from '../model/subdomain';
 import { isEngineTemplate, loadDesign } from '../templates/registry';
 import type { TemplateDesign } from '../templates/engine/types';
 import { usePublicTheme } from '../templates/use-public-theme';
+import { readAnimalSkin, templateMode, type AnimalSkin } from '../templates/animal-skin';
 import { useTemplateAssets } from '../templates/use-template-assets';
 import { useGuideContext } from '../../guide/model/guide-context';
 import styles from './public-animal-detail-page.module.scss';
@@ -107,6 +108,12 @@ export function PublicAnimalDetailPage() {
     };
   }, [engine]);
   useTemplateAssets(design);
+
+  // Piel de la ficha: se lee de la plantilla ya montada (después de su hoja).
+  const [skin, setSkin] = useState<AnimalSkin | null>(null);
+  useEffect(() => {
+    setSkin(design ? readAnimalSkin(design, templateMode(design), themeStyle) : null);
+  }, [design, themeStyle]);
 
   // Deep-link: una lectura del animal por su código (o id heredado). Antes se
   // buscaba dentro de las primeras 50 filas del catálogo y los animales más
@@ -241,7 +248,14 @@ export function PublicAnimalDetailPage() {
   const similar = others.map(toCard).filter((item): item is PublicAnimalSummary => item !== null);
 
   const page = (
-    <main className={styles.page}>
+    <main
+      className={cn(styles.page, skin && styles.skin)}
+      style={design ? { ...themeStyle, ...skin?.style } : undefined}
+      data-animal-skin={skin?.template}
+      data-mode={skin?.mode}
+      data-testid={skin ? 'animal-detail-template' : undefined}
+      data-template={skin?.template}
+    >
       <div className={styles.container}>
         {/* F1-03+: botones SECUNDARIOS (outline): nunca compiten con "Solicitar adopción". */}
         <div className={styles.back}>
@@ -348,37 +362,11 @@ export function PublicAnimalDetailPage() {
     </main>
   );
 
-  const themed = design ? (
-    <div
-      className={`af-tpl tpl-${design.id}${design.kit ? ' kit' : ''}`}
-      style={themeStyle}
-      data-testid="animal-detail-template"
-      data-template={design.id}
-    >
-      {/* La ficha se lee sobre su hoja clara (textos e iconos de la app). La
-          plantilla pone el fondo, la tipografía y el acento alrededor. */}
-      <div
-        style={{
-          background: 'var(--af-cream)',
-          color: 'var(--af-ink)',
-          borderRadius: 'clamp(16px, 2.4vw, 32px)',
-          margin: 'clamp(8px, 2vw, 24px)',
-          overflow: 'hidden',
-          boxShadow: '0 24px 60px -30px rgb(0 0 0 / 0.5)',
-        }}
-      >
-        {page}
-      </div>
-    </div>
-  ) : (
-    page
-  );
-
-  if (onOrgSubdomain) return themed;
+  if (onOrgSubdomain) return page;
   return (
     <div className="flex min-h-screen flex-col bg-[var(--af-cream)] text-[var(--af-ink)]">
       <PublicNavbar />
-      <div className="flex-1">{themed}</div>
+      <div className="flex-1">{page}</div>
       <PublicFooter />
     </div>
   );
