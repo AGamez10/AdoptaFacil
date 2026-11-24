@@ -163,6 +163,12 @@ describe('production guard (R0-1)', () => {
     );
   });
 
+  it("accepts the platform's own simple electronic signature in production (2026-11-24)", () => {
+    expect(validateEnv({ ...SAFE_PRODUCTION, SIGNATURE_DRIVER: 'internal' }).SIGNATURE_DRIVER).toBe(
+      'internal',
+    );
+  });
+
   it('still lets development and test use the simulated adapters', () => {
     for (const NODE_ENV of ['development', 'test']) {
       const env = validateEnv({ ...BASE, NODE_ENV });

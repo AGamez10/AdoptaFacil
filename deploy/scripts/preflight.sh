@@ -48,6 +48,7 @@ else
   for k in AUTH_IDENTITY_DRIVER PAYMENT_DRIVER DIAN_DRIVER SIGNATURE_DRIVER NOTIFICATION_DRIVER STORAGE_DRIVER; do
     case "$(aget "$k")" in fake|log|stub) err "api.env: $k=$(aget "$k") es simulado y la API no arranca así en producción" ;; esac
   done
+  [ "$(aget SIGNATURE_DRIVER)" == "internal" ] || warn "SIGNATURE_DRIVER no es internal: nadie podrá firmar contratos de adopción (503)"
   [ "$(aget NOTIFICATION_DRIVER)" == "smtp" ] || err "api.env: NOTIFICATION_DRIVER debe ser smtp en producción"
   for k in SMTP_HOST SMTP_PORT SMTP_FROM; do [ -n "$(aget "$k")" ] || err "api.env: falta $k (correo)"; done
   if [ "$(aget STORAGE_DRIVER)" == "s3" ]; then

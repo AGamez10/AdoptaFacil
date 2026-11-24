@@ -274,7 +274,9 @@ export const envSchema = z.object({
   // auto-verified RTE (SEC-003) and the fake signature emitted "fake:" ids on
   // real contracts. 'fake' stays the dev/test default.
   DIAN_DRIVER: z.enum(['fake', 'disabled']).default('fake'),
-  SIGNATURE_DRIVER: z.enum(['fake', 'disabled']).default('fake'),
+  // 'internal' (decisión del dueño, 2026-11-24): firma electrónica simple de
+  // la propia plataforma, el valor de producción para firmar contratos.
+  SIGNATURE_DRIVER: z.enum(['fake', 'internal', 'disabled']).default('fake'),
   // Ola 1 (R1-1): module feature flags. OFF unless the value is exactly
   // "true", in every environment — a missing or misspelled flag fails closed.
   // A module that is off answers 404 in the API (FeatureFlagGuard) and is

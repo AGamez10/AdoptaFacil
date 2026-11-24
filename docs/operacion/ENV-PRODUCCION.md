@@ -67,7 +67,7 @@ Variables con valor por defecto en el compose que no hace falta tocar: `API_REPL
 | `AUTH_IDENTITY_DRIVER`                                                              | Sí                                         | `disabled` (o `google`)                                     | `fake` no arranca.                                                                                                                                                                                                                        |
 | `GOOGLE_OAUTH_CLIENT_ID`                                                            | Con `google`                               | `….apps.googleusercontent.com`                              | Google Cloud → APIs y servicios → Credenciales → ID de cliente OAuth (aplicación web), origen `https://adoptafacil.org`. El mismo valor en `VITE_GOOGLE_CLIENT_ID`.                                                                       |
 | `DIAN_DRIVER`                                                                       | Sí                                         | `disabled`                                                  | No existe API pública de la DIAN; la verificación es humana.                                                                                                                                                                              |
-| `SIGNATURE_DRIVER`                                                                  | Sí                                         | `disabled`                                                  | Ver §6: hoy con este valor **no se pueden firmar contratos de adopción**.                                                                                                                                                                 |
+| `SIGNATURE_DRIVER`                                                                  | Sí                                         | `internal`                                                  | Firma electrónica simple de la plataforma (decisión del 2026-11-24). Con `disabled` firmar un contrato responde 503.                                                                                                                      |
 | `NOTIFICATION_DRIVER`                                                               | Sí                                         | `smtp`                                                      | `log` no arranca.                                                                                                                                                                                                                         |
 | `SMTP_HOST`                                                                         | Sí                                         | `email-smtp.us-east-1.amazonaws.com`                        | SES → SMTP settings → _SMTP endpoint_.                                                                                                                                                                                                    |
 | `SMTP_PORT`                                                                         | Sí                                         | `587`                                                       | Con 587 la API exige cifrado (STARTTLS).                                                                                                                                                                                                  |
@@ -151,11 +151,12 @@ Verificado en el código (`core/notifications/branding/*`, `templated-notificati
   de AdoptaFácil aunque el refugio pagara: el código de entrega del animal, el aviso de seguimiento
   vencido y la aprobación/rechazo de horas de voluntariado. Ahora llevan la marca como los demás.
 
-**Hallazgo bloqueante para contratos (no es de correo):** el único valor de `SIGNATURE_DRIVER`
-permitido en producción es `disabled`, y con él **firmar un contrato de adopción responde 503**
-(`adoptions/signature/disabled-signature.adapter.ts`). La firma dibujada, la huella SHA-256, la
-fecha y la auditoría ya los guarda la plataforma; lo único que falta es un adaptador "firma
-electrónica simple interna" que no se presente como simulado. Ver la decisión pendiente en el hilo.
+**Firma de contratos (decisión del dueño, 2026-11-24):** `SIGNATURE_DRIVER=internal` firma con
+una **firma electrónica simple** de la propia plataforma: persona autenticada, imagen de la firma
+dibujada (cifrada), huella SHA-256 del contrato, fecha UTC, identificador único `afs1:…` y evento de
+auditoría. No es firma digital certificada; que baste para el contrato de adopción (Ley 527 de 1999,
+art. 7, y Decreto 2364 de 2012) queda **por confirmar con abogado**. Antes de este cambio el único
+valor permitido en producción era `disabled` y firmar respondía 503.
 
 Verificar dominio y salir del sandbox de SES: [GUIA-PASO-A-PASO-PRODUCCION.md, punto 2](./GUIA-PASO-A-PASO-PRODUCCION.md)
 (pasos A a L: Easy DKIM 2048, MAIL FROM `bounce`, DMARC `p=none`, lista de supresión, credenciales
@@ -168,7 +169,7 @@ SMTP y texto en inglés para pedir producción). Resumen de DNS en [CORREO.md §
 | Portal público en tu subdominio                                                                              | Todos     | `PORTALS_TLS=cloudflare` + `CLOUDFLARE_API_TOKEN` + `VITE_PORTAL_BASE_DOMAIN` (`deploy/.env`)                  |
 | Correos (recibos, contratos, seguimientos…)                                                                  | Todos     | SES fuera del sandbox + `SMTP_*`                                                                               |
 | Recaudo de donaciones                                                                                        | Todos     | `PAYMENT_DRIVER=mercadopago`, `FEATURE_PAYMENTS=true`, `PAYMENTS_PRODUCTION_APPROVAL_REF`, credenciales Orders |
-| Adopciones con contrato                                                                                      | Todos     | **Código**: adaptador de firma para producción (ver §6)                                                        |
+| Adopciones con contrato                                                                                      | Todos     | `SIGNATURE_DRIVER=internal`                                                                                    |
 | Pagar Crece/Pro en línea y comprobante por cobro                                                             | Crece/Pro | `PLAN_ENFORCEMENT=true`, `PLAN_LAUNCH_DATE`, `MERCADOPAGO_PLATFORM_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET` |
 | Correos con tu marca                                                                                         | Crece/Pro | Lo mismo que "Correos". Nada por refugio.                                                                      |
 | Dominio propio                                                                                               | Pro       | `CUSTOM_DOMAINS=on` + `CUSTOM_DOMAIN_CNAME_TARGET` + registro `portales` en gris                               |
