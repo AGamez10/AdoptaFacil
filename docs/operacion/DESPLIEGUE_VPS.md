@@ -146,9 +146,10 @@ Los dos nameservers los asigna Cloudflare a cada cuenta al agregar la zona; no
 se conocen antes. Se copian una sola vez en Namecheap (paso 2).
 
 1. En Cloudflare: **Add a site** → `adoptafacil.org` → plan Free. Copia los
-   registros existentes y crea los de la tabla, todos en **DNS only** (nube
-   gris): Caddy termina el TLS; con el proxy naranja Cloudflare pondría su
-   propio certificado delante.
+   registros existentes y crea los de la tabla, con **proxy (nube naranja)** y
+   SSL/TLS en **Full (strict)**. Caddy saca sus certificados por DNS-01, que
+   funciona con el proxy, y el origen se cierra a solo Cloudflare
+   ([BLINDAJE-VPS.md](./BLINDAJE-VPS.md)).
 2. En Namecheap: Domain List → `adoptafacil.org` → Manage → Nameservers →
    **Custom DNS** → los dos nameservers que muestra Cloudflare. Propaga en
    minutos u horas; Cloudflare avisa por correo cuando la zona queda activa.

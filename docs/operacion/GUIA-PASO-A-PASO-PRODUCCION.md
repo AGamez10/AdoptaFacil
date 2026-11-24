@@ -71,7 +71,7 @@ muestra las tres con valor, **este punto está hecho**.
    `adoptafacil.org` → plan **Free** → Continue. Cloudflare copia los registros
    que ya existen; revisa que estén todos (sobre todo los de correo: MX y TXT).
 2. **Registros del servidor**, en DNS → Records → **Add record**, con
-   **Proxy status en gris ("DNS only")**:
+   **Proxy status en naranja ("Proxied")**:
 
    | Tipo | Nombre | Valor      |
    | ---- | ------ | ---------- |
@@ -79,8 +79,10 @@ muestra las tres con valor, **este punto está hecho**.
    | A    | `www`  | IP del VPS |
    | A    | `*`    | IP del VPS |
 
-   La nube debe quedar **gris**. Si queda naranja, Cloudflare pone su propio
-   certificado delante y Caddy no puede emitir el suyo.
+   La nube debe quedar **naranja**, con SSL/TLS en **Full (strict)**: así el
+   WAF y el límite de peticiones de Cloudflare protegen el sitio. Caddy saca
+   sus certificados por DNS-01 (`PORTALS_TLS=cloudflare`), que funciona con el
+   proxy. Blindaje completo del borde y del VPS: [BLINDAJE-VPS.md](./BLINDAJE-VPS.md).
 
 3. **Cambiar los nameservers en Namecheap:** Domain List → `adoptafacil.org` →
    **Manage** → Nameservers → **Custom DNS** → pega los dos que te muestra

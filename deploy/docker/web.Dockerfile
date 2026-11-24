@@ -62,5 +62,5 @@ COPY --from=caddy-namecheap-build /usr/bin/caddy /usr/bin/caddy
 RUN caddy list-modules | grep -qx 'dns.providers.namecheap'
 
 FROM caddy-${PORTALS_TLS} AS edge
-COPY deploy/Caddyfile deploy/portals-*.caddy deploy/custom-domains-*.caddy /etc/caddy/
+COPY deploy/Caddyfile deploy/portals-*.caddy deploy/edge-tls-*.caddy deploy/custom-domains-*.caddy /etc/caddy/
 COPY --from=build /repo/apps/web/dist /srv/web

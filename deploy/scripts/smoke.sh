@@ -26,9 +26,14 @@ for h in strict-transport-security x-content-type-options; do
   grep -qi "^$h:" <<<"$hdrs" && ok "cabecera $h" || ko "falta la cabecera $h"
 done
 
-issuer="$(echo | openssl s_client -connect "$APP_DOMAIN:443" -servername "$APP_DOMAIN" 2>/dev/null | openssl x509 -noout -issuer 2>/dev/null || true)"
+# Certificado del ORIGEN (el de Caddy), leído en el propio VPS: con la nube
+# naranja, el dominio público muestra el de Cloudflare y el de Caddy es el que
+# exige SSL "Full (strict)".
+issuer="$(echo | openssl s_client -connect 127.0.0.1:443 -servername "$APP_DOMAIN" 2>/dev/null | openssl x509 -noout -issuer 2>/dev/null || true)"
 [[ "$issuer" == *"Let's Encrypt"* || "$issuer" == *"ZeroSSL"* || "$issuer" == *"Google Trust"* ]] \
   && ok "certificado público ($issuer)" || ko "certificado no público: ${issuer:-ilegible}"
+
+grep -qi '^cf-ray:' <<<"$hdrs" && ok "detrás del proxy de Cloudflare" || echo "  AVISO sin cabecera cf-ray: el sitio no pasa por Cloudflare (nube gris)"
 
 if [ "${PORTALS_TLS:-off}" != "off" ]; then
   check "portal por subdominio responde" "curl -fsS -m 10 'https://prueba.$APP_DOMAIN/api/health' | grep -q '\"status\":\"ok\"'"
