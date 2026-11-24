@@ -344,6 +344,7 @@ export class ServiceHoursService {
           event: emailInput.approved
             ? 'volunteering.hours_approved'
             : 'volunteering.hours_rejected',
+          organizationId,
           data: {
             nombre: emailInput.volunteerName,
             oportunidad: emailInput.opportunityTitle,
