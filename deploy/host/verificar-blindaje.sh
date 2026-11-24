@@ -59,7 +59,7 @@ if [ -f "$REPO/deploy/.env" ]; then
     [[ "$perm" == 600 || "$perm" == 400 ]] && ok "$(basename "$f") con permisos $perm" || ko "$(basename "$f") con permisos $perm (usa chmod 600)"
   done
   check "PORTALS_TLS=cloudflare (certificados por DNS)" "grep -qx 'PORTALS_TLS=cloudflare' '$REPO/deploy/.env'"
-  grep -qx 'CUSTOM_DOMAINS=on' "$REPO/deploy/.env" && ko "CUSTOM_DOMAINS=on con el origen cerrado a Cloudflare: los dominios propios no cargarían" || ok "CUSTOM_DOMAINS apagado"
+  grep -qx 'CUSTOM_DOMAINS=on' "$REPO/deploy/.env" && ko "CUSTOM_DOMAINS=on con el origen cerrado a Cloudflare: los dominios propios no cargarían (usa cloudflare)" || ok "dominios propios compatibles con el origen cerrado"
   check "secretos fuera de git" "! git -C '$REPO' ls-files --error-unmatch deploy/.env deploy/api.env"
   pubs="$(docker compose -f "$REPO/deploy/compose.yaml" --env-file "$REPO/deploy/.env" ps --format '{{.Service}} {{.Publishers}}' 2>/dev/null | grep -E '0\.0\.0\.0|::' | awk '{print $1}' | sort -u | tr '\n' ' ')"
   [[ "$pubs" == "caddy " ]] && ok "solo caddy publica puertos" || ko "servicios con puertos públicos: ${pubs:-ninguno (¿la pila está arriba?)}"

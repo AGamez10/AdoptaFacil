@@ -325,6 +325,17 @@ export const envSchema = z.object({
     .regex(/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/, 'debe ser un nombre de host')
     .optional(),
   CUSTOM_DOMAIN_IPV4: z.ipv4().optional(),
+  // Cloudflare for SaaS (docs/operacion/DOMINIO-PROPIO.md): con los dos, cada
+  // dominio propio verificado se registra como custom hostname de la zona de
+  // AdoptaFácil y entra por Cloudflare, con el origen cerrado a sus IPs. El
+  // token solo necesita Zone → SSL and Certificates → Edit sobre esa zona.
+  // Con SaaS no se conecta la raíz del dominio (CUSTOM_DOMAIN_IPV4 se ignora).
+  CLOUDFLARE_SAAS_ZONE_ID: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-f]{32}$/, 'debe ser el Zone ID de Cloudflare (32 caracteres hex)')
+    .optional(),
+  CLOUDFLARE_SAAS_API_TOKEN: z.string().trim().min(20).optional(),
   // Written approval reference (PSP confirmation + legal review, D1–D7/D17)
   // that production requires before FEATURE_PAYMENTS or FEATURE_SPONSORSHIPS
   // can be turned on. Free text (ticket, email date, document id); it is only
@@ -599,6 +610,16 @@ export function isHttpsUrl(raw: string): boolean {
 
 /** The validated schema + cross-field rules (fail-fast for smtp credentials). */
 export const validatedEnvSchema = envSchema.superRefine((env, ctx) => {
+  if (Boolean(env.CLOUDFLARE_SAAS_ZONE_ID) !== Boolean(env.CLOUDFLARE_SAAS_API_TOKEN)) {
+    const missing = env.CLOUDFLARE_SAAS_ZONE_ID
+      ? 'CLOUDFLARE_SAAS_API_TOKEN'
+      : 'CLOUDFLARE_SAAS_ZONE_ID';
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [missing],
+      message: 'CLOUDFLARE_SAAS_ZONE_ID y CLOUDFLARE_SAAS_API_TOKEN van juntos',
+    });
+  }
   if (env.NOTIFICATION_DRIVER === 'smtp') {
     for (const key of REQUIRED_SMTP_KEYS) {
       if (env[key] === undefined || env[key] === null || env[key] === '') {

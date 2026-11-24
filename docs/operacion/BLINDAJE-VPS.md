@@ -158,10 +158,9 @@ curl -m 8 -k https://IP_DEL_VPS     # "timed out": bien
 Si algún día hace falta abrirlo para un diagnóstico:
 `sudo adoptafacil-cloudflare-origen quitar`, y luego `... aplicar`.
 
-> **Dominios propios del plan Pro (`CUSTOM_DOMAINS`).** Entran directo al VPS,
-> sin Cloudflare, y con el origen cerrado no cargarían. Déjalo en `off` en el
-> lanzamiento. Para encenderlo después, la vía es **Cloudflare for SaaS**
-> (gratis hasta 100 dominios), que se prepara aparte.
+> **Dominios propios del plan Pro.** Entran por **Cloudflare for SaaS**, así que
+> también funcionan con el origen cerrado: `CUSTOM_DOMAINS=cloudflare`. Pasos en
+> [DOMINIO-PROPIO.md](./DOMINIO-PROPIO.md#encenderlo-en-producción-una-vez-cloudflare-for-saas).
 
 ## 7. Cloudflare: seguridad del borde (plan Free)
 
@@ -232,7 +231,8 @@ sudo nano deploy/.env
 
 Pega las cuatro y llena: `APP_DOMAIN=adoptafacil.org`, `ACME_EMAIL`,
 `PORTALS_TLS=cloudflare`, `CLOUDFLARE_API_TOKEN` (paso 6.2),
-`VITE_PORTAL_BASE_DOMAIN=adoptafacil.org`, `CUSTOM_DOMAINS=off`.
+`VITE_PORTAL_BASE_DOMAIN=adoptafacil.org`, `CUSTOM_DOMAINS=cloudflare`
+(paso 8b).
 Guarda: `Ctrl+O`, `Enter`, `Ctrl+X`.
 
 ```bash
@@ -243,6 +243,14 @@ Copia **a mano** desde tu `.env` local los valores de correo (SES Ohio):
 `SMTP_HOST=email-smtp.us-east-2.amazonaws.com`, `SMTP_PORT=587`, `SMTP_USER`,
 `SMTP_PASS`, `SMTP_FROM`. Lo que no uses va comentado con `#`, nunca vacío.
 Mientras SES siga en sandbox, solo llega correo a direcciones verificadas.
+
+## 8b. Dominios propios (plan Pro) con Cloudflare for SaaS
+
+Sigue los pasos 1 a 6 de
+[DOMINIO-PROPIO.md](./DOMINIO-PROPIO.md#encenderlo-en-producción-una-vez-cloudflare-for-saas):
+registro `portales` en naranja, activar Custom Hostnames con ese _fallback origin_, la regla
+"SSL: Full" para dominios ajenos, el token con solo _SSL and Certificates → Edit_ y las tres
+variables en `deploy/api.env`.
 
 ## 9. Preflight y despliegue
 

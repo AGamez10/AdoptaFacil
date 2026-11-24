@@ -14,8 +14,8 @@
 #
 # Requisitos: TODOS los registros del sitio (@, www y *) con la nube NARANJA en
 # Cloudflare y PORTALS_TLS=cloudflare (certificados por DNS-01). Los dominios
-# propios de las organizaciones Pro (CUSTOM_DOMAINS=on) llegan directo, sin
-# Cloudflare, y quedarían bloqueados: no actives las dos cosas a la vez.
+# propios de las organizaciones Pro van con CUSTOM_DOMAINS=cloudflare (Cloudflare
+# for SaaS); con CUSTOM_DOMAINS=on llegarían directo y quedarían bloqueados.
 set -euo pipefail
 
 CHAIN=AF-CLOUDFLARE
