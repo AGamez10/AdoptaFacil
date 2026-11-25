@@ -35,6 +35,8 @@ import {
 const PREVIEW_ROWS = 200;
 /** Lectura de fotos en tandas, para no abrir cientos de archivos a la vez. */
 const PHOTO_BATCH = 12;
+/** Tope de píxeles al decodificar una foto para la miniatura (bomba GIF, AF-N05). */
+const THUMB_INPUT_PIXEL_LIMIT = 80_000_000;
 
 /** Fecha de calendario en Colombia de un instante UTC. */
 function colombiaDate(instant: Date): string {
@@ -205,7 +207,7 @@ export class CustodyReportsService {
           const bytes = await this.core.readFile(ref);
           if (!bytes) return;
           try {
-            const thumb = await sharp(bytes)
+            const thumb = await sharp(bytes, { limitInputPixels: THUMB_INPUT_PIXEL_LIMIT })
               .rotate()
               .resize(96, 96, { fit: 'cover' })
               .jpeg({ quality: 70 })

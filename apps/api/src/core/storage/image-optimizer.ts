@@ -29,13 +29,18 @@ export interface OptimizedImage {
 /**
  * Devuelve la imagen recomprimida, o los bytes originales si el tipo no se
  * optimiza o si WebP no sale más pequeño. Devuelve `null` si los bytes no son
- * una imagen decodificable: quien llama debe rechazar la subida.
+ * una imagen decodificable, o si son un GIF por encima de {@link GIF_MAX_PIXELS}:
+ * quien llama debe rechazar la subida.
  */
 export async function optimizeImage(
   buffer: Buffer,
   contentType: string,
   options: ImageOptimizeOptions = {},
 ): Promise<OptimizedImage | null> {
+  if (contentType === 'image/gif') {
+    // El GIF no se recomprime, pero sí se controla su tamaño en píxeles (AF-N05).
+    return (await gifWithinPixelLimit(buffer)) ? { buffer, contentType } : null;
+  }
   if (!OPTIMIZABLE_IMAGE_TYPES.includes(contentType)) {
     return { buffer, contentType };
   }
@@ -75,6 +80,25 @@ async function encodeWebp(
     if (out.length <= targetMaxBytes) break;
   }
   return out;
+}
+
+/**
+ * Tope de píxeles de un GIF subido. El GIF se guarda tal cual (no se
+ * recomprime), así que sin este control un archivo de pocos KB con dimensiones
+ * enormes queda guardado y cada vista que lo decodifique (tarjeta para
+ * compartir, miniaturas) ocupa cientos de MB (bomba GIF, AF-N05). 40 MP sobra
+ * para cualquier GIF real (un 4K completo son 8,3 MP).
+ */
+export const GIF_MAX_PIXELS = 40_000_000;
+
+/** `true` si el GIF se puede leer y no supera {@link GIF_MAX_PIXELS}. Solo lee la cabecera. */
+export async function gifWithinPixelLimit(buffer: Buffer): Promise<boolean> {
+  try {
+    const { width, height } = await sharp(buffer).metadata();
+    return Boolean(width && height) && width! * height! <= GIF_MAX_PIXELS;
+  } catch {
+    return false;
+  }
 }
 
 /**

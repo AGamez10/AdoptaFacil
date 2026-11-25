@@ -5,6 +5,7 @@ import {
   optimizeImage,
   sniffImageContentType,
 } from './image-optimizer';
+import { gifBomb } from '../../testing/gif-bomb';
 import { isAllowedUpload } from './storage-keys';
 
 /** Foto de celular simulada: mucho píxel y algo de textura para que el JPEG pese. */
@@ -64,12 +65,27 @@ describe('optimizeImage', () => {
     expect(result!.contentType).toBe('image/webp');
   });
 
-  it('no toca GIF, PDF ni video', async () => {
+  it('no toca PDF ni video', async () => {
     const bytes = Buffer.from('no es una imagen real');
-    for (const type of ['image/gif', 'application/pdf', 'video/mp4']) {
+    for (const type of ['application/pdf', 'video/mp4']) {
       const result = await optimizeImage(bytes, type);
       expect(result).toEqual({ buffer: bytes, contentType: type });
     }
+  });
+
+  it('deja el GIF tal cual (puede ser animado)', async () => {
+    const gif = gifBomb(640, 480);
+    expect(await optimizeImage(gif, 'image/gif')).toEqual({
+      buffer: gif,
+      contentType: 'image/gif',
+    });
+  });
+
+  it('AF-N05: rechaza una bomba GIF (pocos KB, 49 MP) y un GIF ilegible', async () => {
+    const bomb = gifBomb(7000, 7000);
+    expect(bomb.length).toBeLessThan(64 * 1024);
+    expect(await optimizeImage(bomb, 'image/gif')).toBeNull();
+    expect(await optimizeImage(Buffer.from('GIF89a basura'), 'image/gif')).toBeNull();
   });
 
   it('rechaza bytes que no son una imagen decodificable', async () => {

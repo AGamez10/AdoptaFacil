@@ -570,6 +570,16 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
         'Mercado Pago webhook rejected: order live_mode does not match MERCADOPAGO_TEST.',
       );
     }
+    // NV-01: the read-back already uses the org's own token, but when the order
+    // reports its owner (`user_id`) it must be that same connected account.
+    // Not documented as required, so an order without it is still accepted.
+    if (
+      order?.user_id !== undefined &&
+      order.user_id !== null &&
+      String(order.user_id) !== collectorId
+    ) {
+      throw new Error('Mercado Pago webhook rejected: order belongs to another account.');
+    }
     const reference = typeof order?.external_reference === 'string' ? order.external_reference : '';
     if (!reference) {
       throw new Error('Mercado Pago webhook rejected: order has no external_reference.');

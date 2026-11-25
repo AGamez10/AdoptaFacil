@@ -353,7 +353,9 @@ export class CustodyController {
 
   @Get('contracts')
   @Roles(...VIEW_ROLES)
-  listContracts(@Query('animalId') animalId?: string): Promise<CustodyContract[]> {
+  listContracts(
+    @Query('animalId', new ParseUUIDPipe({ optional: true })) animalId?: string,
+  ): Promise<CustodyContract[]> {
     return this.contracts.listContracts({ animalId: uuidOrUndefined(animalId, 'animalId') });
   }
 
@@ -436,8 +438,8 @@ export class CustodyController {
   @Get('charges')
   @Roles(...VIEW_ROLES)
   listCharges(
-    @Query('animalId') animalId?: string,
-    @Query('responsibleId') responsibleId?: string,
+    @Query('animalId', new ParseUUIDPipe({ optional: true })) animalId?: string,
+    @Query('responsibleId', new ParseUUIDPipe({ optional: true })) responsibleId?: string,
     @Query('status') status?: string,
   ): Promise<CustodyCharge[]> {
     if (status && !['pending', 'paid', 'cancelled'].includes(status)) {

@@ -46,14 +46,18 @@ function makeService(opts: {
   withOrgContext: jest.Mock;
   identity: { verifyGoogleIdToken: jest.Mock };
   tokens: { issueTokens: jest.Mock };
+  credentialUpdate: jest.Mock;
+  audit: { record: jest.Mock };
 } {
   const tx = makeTx(opts.profile ?? null);
   const withOrgContext = jest
     .fn()
     .mockImplementation((_org: string, cb: (t: TxMock) => Promise<unknown>) => cb(tx));
+  const credentialUpdate = jest.fn().mockResolvedValue({});
   const prisma = {
     authCredential: {
       findUnique: jest.fn().mockResolvedValue(opts.existingCredential ?? null),
+      update: credentialUpdate,
     },
     withOrgContext,
   } as unknown as PrismaService;
@@ -70,7 +74,8 @@ function makeService(opts: {
   };
   const notifications = { send: jest.fn() } as unknown as NotificationPort;
   const identity = { verifyGoogleIdToken: jest.fn().mockResolvedValue(opts.claims) };
-  const audit = { record: jest.fn(), recordWithTx: jest.fn() } as unknown as AuditService;
+  const auditMock = { record: jest.fn(), recordWithTx: jest.fn() };
+  const audit = auditMock as unknown as AuditService;
   const config = {
     get: (key: string) => (key === 'WEB_BASE_URL' ? 'http://localhost:5173' : undefined),
   } as unknown as ConfigService<Env, true>;
@@ -84,7 +89,7 @@ function makeService(opts: {
     config,
     {} as unknown as LegalService,
   );
-  return { service, tx, withOrgContext, identity, tokens };
+  return { service, tx, withOrgContext, identity, tokens, credentialUpdate, audit: auditMock };
 }
 
 describe('AuthService.googleSignIn — new account (no existing AuthCredential)', () => {
@@ -178,6 +183,76 @@ describe('AuthService.googleSignIn — auto-link by email', () => {
         accountType: 'organization',
       }),
     );
+  });
+});
+
+describe('AuthService.googleSignIn — pre-hijacking (AF-N02)', () => {
+  const claims: IdentityClaims = {
+    email: 'victima@example.com',
+    name: 'Víctima',
+    emailVerified: true,
+    sub: 'google-sub-victima',
+  };
+
+  it('el primer enlace invalida la contraseña que puso quien registró el correo antes', async () => {
+    // Un atacante registró victima@example.com con SU contraseña (sin verificar
+    // el buzón). Cuando la dueña real entra con Google, esa contraseña muere.
+    const existingCredential = {
+      id: 'cred-1',
+      userId: 'usr-1',
+      organizationId: 'org-1',
+      accountType: 'person',
+      email: 'victima@example.com',
+      authProvider: 'password',
+      googleSub: null,
+      passwordHash: 'hash-del-atacante',
+    };
+    const { service, credentialUpdate, audit } = makeService({ existingCredential, claims });
+
+    await service.googleSignIn({ idToken: 'x' });
+
+    expect(credentialUpdate).toHaveBeenCalledWith({
+      where: { id: 'cred-1' },
+      data: {
+        googleSub: 'google-sub-victima',
+        authProvider: 'google',
+        passwordHash: 'random-hash',
+      },
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'auth.google_linked', entityId: 'usr-1' }),
+    );
+  });
+
+  it('una cuenta ya enlazada a ESA identidad de Google entra sin tocar nada', async () => {
+    const existingCredential = {
+      id: 'cred-2',
+      userId: 'usr-2',
+      organizationId: 'org-2',
+      accountType: 'person',
+      email: 'victima@example.com',
+      authProvider: 'google',
+      googleSub: 'google-sub-victima',
+    };
+    const { service, credentialUpdate } = makeService({ existingCredential, claims });
+    const session = await service.googleSignIn({ idToken: 'x' });
+    expect(session.user.id).toBe('usr-2');
+    expect(credentialUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rechaza otra identidad de Google con el mismo correo (401)', async () => {
+    const existingCredential = {
+      id: 'cred-3',
+      userId: 'usr-3',
+      organizationId: 'org-3',
+      accountType: 'person',
+      email: 'victima@example.com',
+      authProvider: 'google',
+      googleSub: 'otra-identidad',
+    };
+    const { service, tokens } = makeService({ existingCredential, claims });
+    await expect(service.googleSignIn({ idToken: 'x' })).rejects.toThrow('Invalid Google sign-in');
+    expect(tokens.issueTokens).not.toHaveBeenCalled();
   });
 });
 

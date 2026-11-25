@@ -516,4 +516,12 @@ describe('Marketplace (M10, F-7: products, RBAC, business rules, public catalog)
       expect(res.body.images).toHaveLength(2);
     });
   });
+
+  it('organizationId que no es UUID: 400, nunca 500 (auditoría 2026-11-24)', async () => {
+    for (const bad of ['no-es-uuid', "1' OR '1'='1", '00000000-0000-0000-0000']) {
+      await request(server)
+        .get(`/public/marketplace/products?organizationId=${encodeURIComponent(bad)}`)
+        .expect(400);
+    }
+  });
 });

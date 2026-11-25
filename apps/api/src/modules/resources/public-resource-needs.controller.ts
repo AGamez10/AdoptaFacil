@@ -23,7 +23,7 @@ export class PublicResourceNeedsController {
   list(
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-    @Query('organizationId') organizationId?: string,
+    @Query('organizationId', new ParseUUIDPipe({ optional: true })) organizationId?: string,
   ): Promise<ResourceNeedsPage> {
     return this.service.list(Number(limit), Number(offset), organizationId);
   }

@@ -426,4 +426,12 @@ describe('Resources (M09, F-6: needs → offers → deliveries → evidence, RBA
       .expect(200);
     await offer(donor.token, need4.body.id, 1).expect(400);
   });
+
+  it('organizationId que no es UUID: 400, nunca 500 (auditoría 2026-11-24)', async () => {
+    for (const bad of ['no-es-uuid', "1' OR '1'='1", '00000000-0000-0000-0000']) {
+      await request(server)
+        .get(`/public/resources/needs?organizationId=${encodeURIComponent(bad)}`)
+        .expect(400);
+    }
+  });
 });

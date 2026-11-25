@@ -7,7 +7,7 @@ import { computeBreakdown } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
 import { purgeOrganizations } from './support/cleanup';
 import { completeTestProfile } from './support/profile';
-import { LEGAL_PERSON, LEGAL_ORG } from './support/legal';
+import { LEGAL_GUEST, LEGAL_ORG, LEGAL_PERSON } from './support/legal';
 import { approveTestOrganization, formalizeTestOrganization } from './support/organization-status';
 
 /**
@@ -163,6 +163,45 @@ describe('Donations (M05: donate + breakdown + receipt)', () => {
       })
       .expect(201);
     expect(res.body.id).toBe(orgDonationId);
+  });
+
+  it('PAY-4: la clave de otro donante no devuelve su donación (409 sin datos)', async () => {
+    // Otra persona autenticada reusa la clave de la donación anterior.
+    const res = await request(server)
+      .post('/donations')
+      .set('Authorization', `Bearer ${person2Token}`)
+      .send({ organizationId: orgId, intendedAmount: 50000, idempotencyKey: orgKey })
+      .expect(409);
+    expect(JSON.stringify(res.body)).not.toContain(orgDonationId);
+
+    // Un invitado tampoco (ni con otro correo).
+    const guestKey = `pay4-guest-${randomUUID()}`;
+    const guestBody = {
+      ...LEGAL_GUEST,
+      organizationId: orgId,
+      intendedAmount: 20000,
+      idempotencyKey: guestKey,
+      payer: { email: 'pedro@example.test', fullName: 'Pedro Pagador', documentId: 'CC-1111' },
+    };
+    const first = await request(server).post('/donations').send(guestBody).expect(201);
+    const replay = await request(server)
+      .post('/donations')
+      .send({ ...guestBody, payer: { email: 'otro@example.test' } })
+      .expect(409);
+    expect(JSON.stringify(replay.body)).not.toContain('CC-1111');
+    // El mismo invitado sí recupera su donación.
+    const same = await request(server).post('/donations').send(guestBody).expect(201);
+    expect(same.body.id).toBe(first.body.id);
+  });
+
+  it('PAY-3: un monto enorme da 400, nunca 500', async () => {
+    for (const intendedAmount of [100_000_001, 3_000_000_000, 1e15]) {
+      await request(server)
+        .post('/donations')
+        .set('Authorization', `Bearer ${personToken}`)
+        .send({ organizationId: orgId, intendedAmount, idempotencyKey: `pay3-${randomUUID()}` })
+        .expect(400);
+    }
   });
 
   it('0 %: the donor pays exactly the chosen amount and the org receives all of it', async () => {

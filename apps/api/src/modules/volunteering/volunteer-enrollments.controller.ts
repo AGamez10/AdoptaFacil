@@ -66,7 +66,7 @@ export class VolunteerEnrollmentsController {
   list(
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-    @Query('opportunityId') opportunityId?: string,
+    @Query('opportunityId', new ParseUUIDPipe({ optional: true })) opportunityId?: string,
     @Query('status') status?: VolunteerEnrollmentStatus,
   ): Promise<Paginated<VolunteerEnrollment>> {
     return this.service.list(Number(limit), Number(offset), { opportunityId, status });

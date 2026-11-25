@@ -51,7 +51,7 @@ export class PlatformDocumentsController {
   @Post(':id/decision')
   decide(
     @CurrentUser() actor: RequestUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(reviewDocumentSchema)) dto: ReviewOrganizationDocumentInput,
   ): Promise<OrganizationDocument> {
     return this.service.decide(actor.id, id, dto);

@@ -236,6 +236,14 @@ export class DonationsService {
     // with ON CONFLICT DO NOTHING, so concurrency never duplicates the row.
     const existing = await this.findByIdempotencyKey(input.organizationId, input.idempotencyKey);
     if (existing) {
+      // PAY-4: the key alone never hands back a donation (and its payer's
+      // name/document). Only the SAME donor replaying it gets the row; anyone
+      // else gets a bare 409.
+      if (!this.isSameDonor(existing, actor, input)) {
+        throw new ConflictException(
+          'Esta solicitud de donación ya se usó. Recarga e inténtalo de nuevo.',
+        );
+      }
       // No `paymentLinkUrl` here on purpose: a retry never calls the gateway
       // again, so there is no fresh link to attach — the caller's FIRST
       // response already carried the one (still-live) checkout link.
@@ -1348,6 +1356,20 @@ export class DonationsService {
   }
 
   /** Cross-tenant idempotency read: a donation by (org, key), or null. */
+  /** ¿Quien reintenta es el mismo donante de la donación ya creada con esa clave? */
+  private isSameDonor(
+    row: DonationRow,
+    actor: RequestUser | undefined,
+    input: CreateDonationInput,
+  ): boolean {
+    if (actor) return row.donor_user_id === actor.id;
+    if (row.donor_user_id !== null) return false;
+    // Un invitado se reconoce por su correo; sin correo no hay cómo y se responde 409.
+    const norm = (email?: string | null) => (email ?? '').trim().toLowerCase();
+    const email = norm(input.payer?.email);
+    return email !== '' && norm(row.payer?.email) === email;
+  }
+
   private async findByIdempotencyKey(
     organizationId: string,
     idempotencyKey: string,

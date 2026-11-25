@@ -65,7 +65,7 @@ export class SponsorshipPlansController {
   list(
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-    @Query('animalId') animalId?: string,
+    @Query('animalId', new ParseUUIDPipe({ optional: true })) animalId?: string,
   ): Promise<Paginated<SponsorshipPlan>> {
     return this.service.list(Number(limit), Number(offset), animalId);
   }

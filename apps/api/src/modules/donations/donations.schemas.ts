@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MIN_DONATION_AMOUNT } from '@adoptafacil/contracts';
+import { MAX_DONATION_AMOUNT, MIN_DONATION_AMOUNT } from '@adoptafacil/contracts';
 import { legalAcceptancesSchema } from '../../core/legal/legal.schemas';
 
 /** Runtime validation for M05 donations (T-050). `.strict()` rejects unknown keys
@@ -8,11 +8,12 @@ import { legalAcceptancesSchema } from '../../core/legal/legal.schemas';
 
 const uuid = z.string().guid();
 
-/** Pesos enteros COP, positivos, por encima del mínimo (P1). */
+/** Pesos enteros COP, positivos, entre el mínimo (P1) y el máximo (PAY-3). */
 const pesos = z
   .number()
   .int('El monto debe ser un número entero de pesos.')
-  .min(MIN_DONATION_AMOUNT, `El monto mínimo es ${MIN_DONATION_AMOUNT} COP.`);
+  .min(MIN_DONATION_AMOUNT, `El monto mínimo es ${MIN_DONATION_AMOUNT} COP.`)
+  .max(MAX_DONATION_AMOUNT, 'El monto es demasiado alto. Revisa los ceros.');
 
 const donorSchema = z
   .object({

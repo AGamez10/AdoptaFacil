@@ -49,6 +49,17 @@ function toOrganization(org: OrgRow, profile: ProfileRow | null): Organization {
   };
 }
 
+/**
+ * Estados en los que la identidad legal (NIT, razón social, nombre) ya fue
+ * revisada contra documentos aprobados por la plataforma (RUT y Cámara para
+ * Formalizada; además la ESAL y el RTE los otorga solo la plataforma). AF-N01.
+ */
+const LEGAL_IDENTITY_LOCKED_STATES: readonly FormalizationState[] = [
+  FormalizationState.Formalizada,
+  FormalizationState.ESAL,
+  FormalizationState.ESAL_RTE,
+];
+
 @Injectable()
 export class OrgProfileService {
   constructor(
@@ -87,6 +98,8 @@ export class OrgProfileService {
     input: UpdateOrganizationProfileInput,
   ): Promise<Organization> {
     const organizationId = this.requireOrgId();
+
+    await this.assertLegalIdentityUnlocked(organizationId, actorUserId, input);
 
     // S-3: NIT is a unique legal identifier (art. 125-3 ET) — a HARD block,
     // checked and (if blocked) audited BEFORE the write transaction below, so
@@ -219,6 +232,64 @@ export class OrgProfileService {
       ]);
       return { ...toOrganization(org, profile), ...(duplicateWarning ? { duplicateWarning } : {}) };
     });
+  }
+
+  /**
+   * AF-N01: la plataforma aprobó la ESAL (y el RTE) mirando un NIT, una razón
+   * social y un nombre concretos, y los certificados tributarios salen con esos
+   * datos. Desde Formalizada (documentos aprobados) y en ESAL / ESAL con RTE
+   * (que solo otorga la plataforma), esos tres campos no se cambian desde el perfil:
+   * para corregirlos, el Owner baja el estado de formalización (lo que suspende
+   * los certificados) y la plataforma vuelve a verificar con el dato nuevo.
+   * Reenviar el mismo valor sí se permite (el formulario manda todo el perfil).
+   */
+  private async assertLegalIdentityUnlocked(
+    organizationId: string,
+    actorUserId: string,
+    input: UpdateOrganizationProfileInput,
+  ): Promise<void> {
+    if (input.nit === undefined && input.legalName === undefined && input.name === undefined) {
+      return;
+    }
+    const current = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const [org, profile] = await Promise.all([
+        tx.organization.findUniqueOrThrow({ where: { id: organizationId } }),
+        tx.organizationProfile.findUnique({ where: { organizationId } }),
+      ]);
+      return { org, profile };
+    });
+    const state = (current.profile?.formalizationState ??
+      FormalizationState.Informal) as FormalizationState;
+    if (!LEGAL_IDENTITY_LOCKED_STATES.includes(state)) return;
+
+    // En Formalizada (estado al que la organización llega sola) se puede
+    // completar un dato que aún estaba vacío; en ESAL y ESAL con RTE (que
+    // otorga la plataforma) nada cambia.
+    const fillAllowed = state === FormalizationState.Formalizada;
+    const same = (next: string | null | undefined, prev: string | null | undefined): boolean =>
+      next === undefined ||
+      (next ?? '').trim() === (prev ?? '').trim() ||
+      (fillAllowed && (prev ?? '').trim() === '');
+    const changed = [
+      ...(same(input.nit, current.profile?.nit) ? [] : ['nit']),
+      ...(same(input.legalName, current.profile?.legalName) ? [] : ['legalName']),
+      ...(same(input.name, current.org.name) ? [] : ['name']),
+    ];
+    if (changed.length === 0) return;
+
+    await this.audit.record({
+      organizationId,
+      actorUserId,
+      action: 'organization.legal_identity_change_blocked',
+      entityType: 'organization',
+      entityId: organizationId,
+      // Solo qué campos se intentaron cambiar, nunca los valores.
+      metadata: { fields: changed, formalizationState: state },
+    });
+    throw new ConflictException(
+      'La plataforma ya verificó el NIT, la razón social y el nombre de tu organización. ' +
+        'Para cambiarlos, baja el estado de formalización y pide una nueva verificación.',
+    );
   }
 
   /**
