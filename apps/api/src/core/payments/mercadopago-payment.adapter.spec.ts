@@ -449,6 +449,24 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
       expect(init?.signal).toBeInstanceOf(AbortSignal);
     });
 
+    it('NV-01: rechaza una orden cuyo dueño (user_id) es otra cuenta; acepta la propia', async () => {
+      const { signature, context } = signedOrder(paid.id);
+      const foreign = new MercadoPagoPaymentAdapter(
+        orderConfig(),
+        makeFetch({}, ORDER, { live_mode: true, ...paid, user_id: '987654321' }),
+      );
+      await expect(foreign.verifyAndNormalizeWebhook({}, signature, context)).rejects.toThrow(
+        /another account/,
+      );
+      const own = new MercadoPagoPaymentAdapter(
+        orderConfig(),
+        makeFetch({}, ORDER, { live_mode: true, ...paid, user_id: 123456789 }),
+      );
+      await expect(own.verifyAndNormalizeWebhook({}, signature, context)).resolves.toMatchObject({
+        status: 'approved',
+      });
+    });
+
     it('is signed with the Orders application secret (the shared one is not enough)', async () => {
       const readOrder = { live_mode: true, ...paid };
       const adapter = new MercadoPagoPaymentAdapter(orderConfig(), makeFetch({}, ORDER, readOrder));
