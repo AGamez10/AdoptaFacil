@@ -129,6 +129,39 @@ describe('Privacy: data-subject access and suppression (Ley 1581)', () => {
     expect(JSON.stringify(audit?.metadata)).not.toContain(ana.email);
   });
 
+  it('AF-N02: registrarse con el correo de un donante invitado no entrega sus datos', async () => {
+    // Un donante invitado (sin cuenta) dejó su nombre y cédula en una donación.
+    const guestEmail = `privacy-invitado-${randomUUID()}@test.local`;
+    const guestDonation = await admin.donation.create({
+      data: {
+        organizationId: shelter.orgId,
+        conceptKind: 'organization',
+        conceptId: shelter.orgId,
+        intendedAmount: 15000,
+        amountCharged: 15000,
+        breakdown: {},
+        collectionId: `col-${randomUUID()}`,
+        idempotencyKey: randomUUID(),
+        status: 'approved',
+        payer: { email: guestEmail, fullName: 'Donante Invitado', documentNumber: '79111222' },
+      },
+    });
+    // Otra persona registra ese correo (sin probar que el buzón es suyo).
+    const res = await request(server)
+      .post('/auth/register/person')
+      .send({ ...LEGAL_PERSON, displayName: 'Impostor', email: guestEmail, password })
+      .expect(201);
+    orgIds.push(res.body.user.organizationId);
+
+    const data = await request(server)
+      .get('/me/privacy/data')
+      .set({ Authorization: `Bearer ${res.body.tokens.accessToken}` })
+      .expect(200);
+    expect(data.body.data.donations).toEqual([]);
+    expect(JSON.stringify(data.body.data)).not.toContain('79111222');
+    expect(JSON.stringify(data.body.data)).not.toContain(guestDonation.id);
+  });
+
   it('supresión needs the exact confirmation phrase and is only for person accounts', async () => {
     await request(server)
       .post('/me/privacy/suppression')

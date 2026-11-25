@@ -285,7 +285,8 @@ export class AuthService {
    * Google Sign-In (T-Google-SignIn, `POST /auth/google`): verifies the ID
    * token via IdentityPort, then AUTO-LINKS by email to an existing
    * AuthCredential (regardless of whether it was originally created with a
-   * password or with Google) — or, the first time, creates a lightweight
+   * password or with Google; the first link invalidates the old password,
+   * AF-N02) — or, the first time, creates a lightweight
    * Person account (NEVER an Organization; registering one stays the long
    * NIT/legal-representative form). Ends the SAME way as password login/
    * register: a fresh AuthSession (access + refresh JWT pair) — Google
@@ -321,8 +322,37 @@ export class AuthService {
     });
 
     if (existing) {
-      // Auto-link: enter the existing account as-is, whatever its accountType
-      // or original authProvider — Google Sign-In never mutates the account.
+      // Auto-link: enter the existing account, whatever its accountType or
+      // original authProvider — Google never changes who the account is.
+      if (existing.googleSub && existing.googleSub !== claims.sub) {
+        // Another Google identity already owns this account (e.g. a recycled
+        // address): never let a second one in by email alone.
+        throw new UnauthorizedException('Invalid Google sign-in token.');
+      }
+      if (!existing.googleSub) {
+        // AF-N02 (pre-hijacking): password registration never proves the
+        // mailbox, so whoever registered this email first may not be its
+        // owner. Google just proved the caller owns it: on this FIRST link the
+        // old password stops working (the owner can set a new one with
+        // "Olvidé mi contraseña", which also proves the mailbox) and
+        // `issueTokens` below closes every other session.
+        await this.prisma.authCredential.update({
+          where: { id: existing.id },
+          data: {
+            googleSub: claims.sub,
+            authProvider: 'google',
+            passwordHash: await this.passwords.hash(randomBytes(32).toString('hex')),
+          },
+        });
+        await this.audit.record({
+          organizationId: existing.organizationId,
+          actorUserId: existing.userId,
+          action: 'auth.google_linked',
+          entityType: 'user',
+          entityId: existing.userId,
+          metadata: { previousProvider: existing.authProvider, passwordInvalidated: true },
+        });
+      }
       const accountType = existing.accountType as AccountType;
       const profile = await this.prisma.withOrgContext(existing.organizationId, (tx) =>
         tx.user.findUnique({ where: { id: existing.userId } }),
