@@ -335,14 +335,16 @@ export class AuthService {
         // owner. Google just proved the caller owns it: on this FIRST link the
         // old password stops working (the owner can set a new one with
         // "Olvidé mi contraseña", which also proves the mailbox) and
-        // `issueTokens` below closes every other session.
-        await this.prisma.authCredential.update({
-          where: { id: existing.id },
-          data: {
-            googleSub: claims.sub,
-            authProvider: 'google',
-            passwordHash: await this.passwords.hash(randomBytes(32).toString('hex')),
-          },
+        // `issueTokens` below closes every other session. The devices that
+        // were subscribed to push notices are dropped too: they may be the
+        // previous holder's, and would keep receiving this person's notices.
+        const passwordHash = await this.passwords.hash(randomBytes(32).toString('hex'));
+        await this.prisma.withOrgContext(existing.organizationId, async (tx) => {
+          await tx.authCredential.update({
+            where: { id: existing.id },
+            data: { googleSub: claims.sub, authProvider: 'google', passwordHash },
+          });
+          await tx.pushSubscription.deleteMany({ where: { userId: existing.userId } });
         });
         await this.audit.record({
           organizationId: existing.organizationId,
@@ -572,6 +574,9 @@ export class AuthService {
         where: { userId: credential.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
+      // Same for push: a device subscribed by whoever held the account keeps
+      // no access to this person's notices after the recovery.
+      await tx.pushSubscription.deleteMany({ where: { userId: credential.userId } });
       await this.audit.recordWithTx(tx, {
         organizationId: credential.organizationId,
         actorUserId: credential.userId,

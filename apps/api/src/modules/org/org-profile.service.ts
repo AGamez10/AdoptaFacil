@@ -60,6 +60,12 @@ const LEGAL_IDENTITY_LOCKED_STATES: readonly FormalizationState[] = [
   FormalizationState.ESAL_RTE,
 ];
 
+type LegalIdentityField = 'nit' | 'legalName' | 'name';
+const LEGAL_IDENTITY_FIELDS: readonly LegalIdentityField[] = ['nit', 'legalName', 'name'];
+const LEGAL_IDENTITY_LOCKED_MESSAGE =
+  'La plataforma ya verificó el NIT, la razón social y el nombre de tu organización. ' +
+  'Para cambiarlos, baja el estado de formalización y pide una nueva verificación.';
+
 @Injectable()
 export class OrgProfileService {
   constructor(
@@ -99,7 +105,11 @@ export class OrgProfileService {
   ): Promise<Organization> {
     const organizationId = this.requireOrgId();
 
-    await this.assertLegalIdentityUnlocked(organizationId, actorUserId, input);
+    // Aviso temprano (antes de revisar duplicados); la comprobación que manda
+    // se repite dentro de la escritura, con las filas bloqueadas.
+    await this.prisma.withOrgContext(organizationId, (tx) =>
+      this.assertLegalIdentityUnlocked(tx, organizationId, actorUserId, input, false),
+    );
 
     // S-3: NIT is a unique legal identifier (art. 125-3 ET) — a HARD block,
     // checked and (if blocked) audited BEFORE the write transaction below, so
@@ -154,14 +164,26 @@ export class OrgProfileService {
     };
 
     return this.prisma.withOrgContext(organizationId, async (tx) => {
-      if (input.name !== undefined) {
+      const unchanged = await this.assertLegalIdentityUnlocked(
+        tx,
+        organizationId,
+        actorUserId,
+        input,
+        true,
+      );
+      const write = {
+        ...profileWrite,
+        ...(unchanged.has('nit') ? { nit: undefined } : {}),
+        ...(unchanged.has('legalName') ? { legalName: undefined } : {}),
+      };
+      if (input.name !== undefined && !unchanged.has('name')) {
         await tx.organization.update({ where: { id: organizationId }, data: { name: input.name } });
       }
       try {
         await tx.organizationProfile.upsert({
           where: { organizationId },
-          create: { organizationId, ...profileWrite },
-          update: profileWrite,
+          create: { organizationId, ...write },
+          update: write,
         });
       } catch (error) {
         // slug/subdomain are the only user-supplied unique columns on this
@@ -244,39 +266,57 @@ export class OrgProfileService {
    * Reenviar el mismo valor sí se permite (el formulario manda todo el perfil).
    */
   private async assertLegalIdentityUnlocked(
+    tx: Prisma.TransactionClient,
     organizationId: string,
     actorUserId: string,
     input: UpdateOrganizationProfileInput,
-  ): Promise<void> {
+    lock: boolean,
+  ): Promise<Set<LegalIdentityField>> {
+    const unchanged = new Set<LegalIdentityField>();
     if (input.nit === undefined && input.legalName === undefined && input.name === undefined) {
-      return;
+      return unchanged;
     }
-    const current = await this.prisma.withOrgContext(organizationId, async (tx) => {
-      const [org, profile] = await Promise.all([
-        tx.organization.findUniqueOrThrow({ where: { id: organizationId } }),
-        tx.organizationProfile.findUnique({ where: { organizationId } }),
-      ]);
-      return { org, profile };
-    });
-    const state = (current.profile?.formalizationState ??
+    // Dentro de la escritura se bloquean las filas: un cambio de estado de
+    // formalización en paralelo espera a que esta transacción termine.
+    const forUpdate = lock ? Prisma.sql`FOR UPDATE` : Prisma.empty;
+    const [profile] = await tx.$queryRaw<
+      Array<{ formalization_state: string; nit: string | null; legal_name: string | null }>
+    >(Prisma.sql`
+      SELECT formalization_state, nit, legal_name FROM organization_profiles
+      WHERE organization_id = ${organizationId}::uuid ${forUpdate}
+    `);
+    const [org] = await tx.$queryRaw<Array<{ name: string }>>(Prisma.sql`
+      SELECT name FROM organizations WHERE id = ${organizationId}::uuid ${forUpdate}
+    `);
+    const state = (profile?.formalization_state ??
       FormalizationState.Informal) as FormalizationState;
-    if (!LEGAL_IDENTITY_LOCKED_STATES.includes(state)) return;
+    if (!LEGAL_IDENTITY_LOCKED_STATES.includes(state)) return unchanged;
 
     // En Formalizada (estado al que la organización llega sola) se puede
     // completar un dato que aún estaba vacío; en ESAL y ESAL con RTE (que
     // otorga la plataforma) nada cambia.
     const fillAllowed = state === FormalizationState.Formalizada;
-    const same = (next: string | null | undefined, prev: string | null | undefined): boolean =>
-      next === undefined ||
-      (next ?? '').trim() === (prev ?? '').trim() ||
-      (fillAllowed && (prev ?? '').trim() === '');
-    const changed = [
-      ...(same(input.nit, current.profile?.nit) ? [] : ['nit']),
-      ...(same(input.legalName, current.profile?.legalName) ? [] : ['legalName']),
-      ...(same(input.name, current.org.name) ? [] : ['name']),
-    ];
-    if (changed.length === 0) return;
+    const current: Record<LegalIdentityField, string | null | undefined> = {
+      nit: profile?.nit,
+      legalName: profile?.legal_name,
+      name: org?.name,
+    };
+    const changed: LegalIdentityField[] = [];
+    for (const field of LEGAL_IDENTITY_FIELDS) {
+      const next = input[field];
+      if (next === undefined) continue;
+      const prev = (current[field] ?? '').trim();
+      if ((next ?? '').trim() === prev) {
+        // Mismo valor reenviado por el formulario: no se escribe (ni con
+        // espacios distintos), así el candado de la base nunca salta por esto.
+        unchanged.add(field);
+      } else if (!(fillAllowed && prev === '')) {
+        changed.push(field);
+      }
+    }
+    if (changed.length === 0) return unchanged;
 
+    // Fuera de la transacción: el registro del intento bloqueado sobrevive al rollback.
     await this.audit.record({
       organizationId,
       actorUserId,
@@ -286,10 +326,7 @@ export class OrgProfileService {
       // Solo qué campos se intentaron cambiar, nunca los valores.
       metadata: { fields: changed, formalizationState: state },
     });
-    throw new ConflictException(
-      'La plataforma ya verificó el NIT, la razón social y el nombre de tu organización. ' +
-        'Para cambiarlos, baja el estado de formalización y pide una nueva verificación.',
-    );
+    throw new ConflictException(LEGAL_IDENTITY_LOCKED_MESSAGE);
   }
 
   /**

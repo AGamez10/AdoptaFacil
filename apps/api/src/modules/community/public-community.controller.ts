@@ -21,6 +21,7 @@ import { STORAGE_PORT, type StoragePort } from '../../core/storage/storage.port'
 import { PublicCache } from '../../core/cache/public-cache.decorator';
 import { PublicCommunityService } from './public-community.service';
 import { buildShareHtml, renderShareCard, shareSource } from './share/share-card';
+import { ShareCardCache } from './share/share-card-cache';
 
 /** Ruta de la publicación en la web (canónica, la que se indexa). */
 export function publicPostPath(id: string): string {
@@ -45,6 +46,8 @@ export function publicPostPath(id: string): string {
 export class PublicCommunityController {
   private readonly webBaseUrl: string;
   private readonly apiPublicBaseUrl: string;
+
+  private readonly cards = new ShareCardCache();
 
   constructor(
     private readonly service: PublicCommunityService,
@@ -97,12 +100,15 @@ export class PublicCommunityController {
         ? posterKeyFor(first.storageRef)
         : first.storageRef
       : null;
-    const stored = photoKey ? await this.storage.readObject(photoKey).catch(() => null) : null;
-    const png = await renderShareCard(
-      post,
-      new URL(this.webBaseUrl).host.replace(/^www\./, ''),
-      stored?.data ?? null,
-    );
+    // Misma publicación y misma foto: la tarjeta se genera una vez y se reusa.
+    const png = await this.cards.get(`${post.id}:${photoKey ?? ''}`, async () => {
+      const stored = photoKey ? await this.storage.readObject(photoKey).catch(() => null) : null;
+      return renderShareCard(
+        post,
+        new URL(this.webBaseUrl).host.replace(/^www\./, ''),
+        stored?.data ?? null,
+      );
+    });
     return new StreamableFile(png, { type: 'image/png', length: png.length });
   }
 
