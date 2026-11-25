@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { PostType, type PublicCommunityPost } from '@adoptafacil/contracts';
-import { buildShareCardSvg, renderShareCard } from './share-card';
+import { gifBomb } from '../../../testing/gif-bomb';
+import { buildShareCardSvg, renderShareCard, sharePhotoBase64 } from './share-card';
 
 const post: PublicCommunityPost = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -39,5 +40,13 @@ describe('share card photo', () => {
     expect([meta.width, meta.height, meta.format]).toEqual([1200, 630, 'png']);
     const broken = await renderShareCard(post, 'adoptafacil.co', Buffer.from('no soy una imagen'));
     expect((await sharp(broken).metadata()).width).toBe(1200);
+  });
+
+  it('AF-N05: no decodifica una bomba GIF (pocos KB, 49 MP) y cae a la ilustración', async () => {
+    const bomb = gifBomb(7000, 7000);
+    expect(bomb.length).toBeLessThan(64 * 1024);
+    expect(await sharePhotoBase64(bomb)).toBeUndefined();
+    // Un GIF normal sí se usa.
+    expect(await sharePhotoBase64(gifBomb(640, 480))).toEqual(expect.any(String));
   });
 });

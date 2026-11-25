@@ -158,26 +158,38 @@ export function buildShareCardSvg(
 </svg>`;
 }
 
+/**
+ * Tope de píxeles al decodificar la foto de la publicación. Las fotos JPEG/PNG/WebP
+ * ya llegan reducidas a 1600 px al subirlas, pero el GIF se guarda tal cual: sin
+ * este tope, un GIF de pocos KB con dimensiones enormes ocupa cientos de MB en una
+ * ruta pública (bomba GIF, hallazgo AF-N05). 40 MP sobra para cualquier foto real.
+ */
+export const SHARE_PHOTO_PIXEL_LIMIT = 40_000_000;
+
+/**
+ * Foto reducida al tamaño del panel (×1), en base64, para que la tarjeta pese
+ * poco. `undefined` si el archivo es ilegible o supera el tope de píxeles.
+ */
+export async function sharePhotoBase64(photo: Buffer): Promise<string | undefined> {
+  try {
+    const resized = await sharp(photo, { limitInputPixels: SHARE_PHOTO_PIXEL_LIMIT })
+      .rotate()
+      .resize(390, 570, { fit: 'cover', position: 'attention' })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    return resized.toString('base64');
+  } catch {
+    return undefined; // archivo ilegible o demasiado grande: cae a la ilustración
+  }
+}
+
 /** PNG 1200×630 listo para `og:image`. */
 export async function renderShareCard(
   post: PublicCommunityPost,
   siteHost: string,
   photo?: Buffer | null,
 ): Promise<Buffer> {
-  let photoBase64: string | undefined;
-  if (photo) {
-    try {
-      // Se reduce al tamaño del panel (×1) para que la tarjeta pese poco.
-      const resized = await sharp(photo)
-        .rotate()
-        .resize(390, 570, { fit: 'cover', position: 'attention' })
-        .jpeg({ quality: 82 })
-        .toBuffer();
-      photoBase64 = resized.toString('base64');
-    } catch {
-      photoBase64 = undefined; // archivo ilegible: cae a la ilustración
-    }
-  }
+  const photoBase64 = photo ? await sharePhotoBase64(photo) : undefined;
   return sharp(Buffer.from(buildShareCardSvg(post, siteHost, photoBase64)))
     .png({ compressionLevel: 9, palette: false })
     .toBuffer();
