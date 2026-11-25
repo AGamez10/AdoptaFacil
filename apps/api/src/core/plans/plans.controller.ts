@@ -6,6 +6,7 @@ import {
   Headers,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -126,14 +127,14 @@ export class PlatformPlansController {
   ) {}
 
   @Get(':id/plan')
-  get(@Param('id') id: string): Promise<OrganizationPlanView> {
+  get(@Param('id', ParseUUIDPipe) id: string): Promise<OrganizationPlanView> {
     return this.plans.platformGet(id);
   }
 
   @Put(':id/plan')
   assign(
     @CurrentUser() actor: RequestUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(assignPlanSchema)) dto: AssignOrganizationPlanInput,
   ): Promise<OrganizationSubscription> {
     return this.billing.platformAssign(actor.id, id, dto);

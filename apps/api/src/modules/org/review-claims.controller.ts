@@ -1,4 +1,13 @@
-import { Controller, Delete, Get, HttpCode, Param, Put, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { Role, type DocumentReviewClaim } from '@adoptafacil/contracts';
 import type { RequestUser } from '../../core/auth/auth.types';
 import { CurrentUser } from '../../core/auth/current-user.decorator';
@@ -33,7 +42,7 @@ export class ReviewClaimsController {
   @Put(':organizationId')
   async claim(
     @CurrentUser() user: RequestUser,
-    @Param('organizationId') organizationId: string,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
   ): Promise<DocumentReviewClaim> {
     return this.claims.claim(await this.actor(user), organizationId);
   }
@@ -42,7 +51,7 @@ export class ReviewClaimsController {
   @HttpCode(204)
   async release(
     @CurrentUser() user: RequestUser,
-    @Param('organizationId') organizationId: string,
+    @Param('organizationId', ParseUUIDPipe) organizationId: string,
   ): Promise<void> {
     await this.claims.release(await this.actor(user), organizationId);
   }

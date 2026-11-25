@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import {
   Role,
   type OrganizationDuplicateFlag,
@@ -36,7 +36,7 @@ export class PlatformDuplicatesController {
   @Post(':id/decision')
   decide(
     @CurrentUser() actor: RequestUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(reviewDuplicateFlagSchema)) dto: ReviewOrganizationDuplicateInput,
   ): Promise<OrganizationDuplicateFlag> {
     return this.service.decide(actor.id, id, dto);

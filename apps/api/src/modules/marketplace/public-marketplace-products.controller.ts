@@ -29,7 +29,7 @@ export class PublicMarketplaceProductsController {
   @PublicCache()
   list(
     @Query('category') category?: string,
-    @Query('organizationId') organizationId?: string,
+    @Query('organizationId', new ParseUUIDPipe({ optional: true })) organizationId?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ): Promise<ProductsPublicPage> {
