@@ -46,6 +46,13 @@ export function canTransitionDonation(from: DonationStatus, to: DonationStatus):
 export const MIN_DONATION_AMOUNT = 1000;
 
 /**
+ * Monto máximo de una donación en línea (COP, pesos enteros): 100 millones.
+ * Evita un 500 con montos fuera del entero de Postgres (auditoría 2026-11-24,
+ * PAY-3) y frena errores de digitación. Parametrizable: TODO(client).
+ */
+export const MAX_DONATION_AMOUNT = 100_000_000;
+
+/**
  * Contacto del donante que se persiste con la donación y se sella en el recibo
  * (dato personal Ley 1581 — nunca en claro en auditoría). Espeja `PaymentPayer` de
  * M15 más el nombre visible del recibo.
