@@ -215,6 +215,24 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
       });
       expect(blocked).toBe(3); // los tres intentos en ESAL con RTE
 
+      // Candado en la base: ni una escritura directa (fuera de la API) lo cambia.
+      await expect(
+        admin.organizationProfile.update({
+          where: { organizationId: org.orgId },
+          data: { nit: '900999999-1' },
+        }),
+      ).rejects.toThrow(/nit is locked/);
+      await expect(
+        admin.organization.update({ where: { id: org.orgId }, data: { name: 'Otra' } }),
+      ).rejects.toThrow(/name is locked/);
+
+      // El mismo valor con espacios de más no es un cambio (ni da 500 por el candado).
+      await request(server)
+        .put('/org/profile')
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({ nit: ` ${before.nit} `, name: ' Fundación Verificada ' })
+        .expect(200);
+
       // Reenviar los mismos datos (el formulario manda todo) y editar lo demás sí funciona.
       await request(server)
         .put('/org/profile')
