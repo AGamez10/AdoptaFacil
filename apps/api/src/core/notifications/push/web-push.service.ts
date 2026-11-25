@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import webpush from 'web-push';
 import type { Env } from '../../../config/env.validation';
 import type { RequestUser } from '../../auth/auth.types';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { isAllowedPushEndpoint } from './push-endpoint';
 
 /** Lo que muestra el aviso en el dispositivo. `href` es una ruta interna. */
 export interface WebPushPayload {
@@ -67,6 +68,9 @@ export class WebPushService {
 
   /** Guarda (o actualiza) la suscripción de un dispositivo de la persona. */
   async subscribe(actor: RequestUser, input: WebPushSubscriptionInput): Promise<void> {
+    if (!isAllowedPushEndpoint(input.endpoint)) {
+      throw new BadRequestException('El servicio de avisos de este navegador no es compatible.');
+    }
     await this.prisma.withOrgContext(actor.organizationId, async (tx) => {
       // Un mismo navegador puede haber estado con otra persona: se reemplaza.
       await tx.pushSubscription.deleteMany({ where: { endpoint: input.endpoint } });
@@ -125,7 +129,9 @@ export class WebPushService {
   }
 
   private async deliver(rows: EndpointRow[], payload: WebPushPayload): Promise<void> {
-    if (rows.length === 0) return;
+    // Una fila guardada antes de la lista de servicios permitidos nunca se usa.
+    const allowed = rows.filter((row) => isAllowedPushEndpoint(row.endpoint));
+    if (allowed.length === 0) return;
     const message = JSON.stringify({
       title: payload.title.slice(0, 200),
       body: payload.body?.slice(0, 300),
@@ -133,7 +139,7 @@ export class WebPushService {
       tag: payload.tag?.slice(0, 80),
     });
     await Promise.allSettled(
-      rows.map(async (row) => {
+      allowed.map(async (row) => {
         try {
           await webpush.sendNotification(
             { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
