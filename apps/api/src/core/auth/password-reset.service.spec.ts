@@ -16,6 +16,7 @@ interface TxMock {
   passwordResetToken: { create: jest.Mock; updateMany: jest.Mock };
   authCredential: { update: jest.Mock };
   refreshToken: { updateMany: jest.Mock };
+  pushSubscription: { deleteMany: jest.Mock };
 }
 
 function makeTx(claimCount = 1): TxMock {
@@ -26,6 +27,7 @@ function makeTx(claimCount = 1): TxMock {
     },
     authCredential: { update: jest.fn().mockResolvedValue({}) },
     refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    pushSubscription: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
 }
 
@@ -175,6 +177,8 @@ describe('AuthService.confirmPasswordReset (T-110)', () => {
       where: { userId: 'user-1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
+    // Los dispositivos suscritos a avisos push por quien tenía la cuenta salen.
+    expect(h.tx.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
     expect(h.audit.recordWithTx).toHaveBeenCalledWith(
       h.tx,
       expect.objectContaining({ action: 'password_reset.completed', actorUserId: 'user-1' }),

@@ -22,7 +22,8 @@ import type { TokenService } from './token.service';
 interface TxMock {
   organization: { create: jest.Mock };
   user: { create: jest.Mock; findUnique: jest.Mock };
-  authCredential: { create: jest.Mock };
+  authCredential: { create: jest.Mock; update: jest.Mock };
+  pushSubscription: { deleteMany: jest.Mock };
 }
 
 function makeTx(profile: unknown = null): TxMock {
@@ -32,7 +33,11 @@ function makeTx(profile: unknown = null): TxMock {
       create: jest.fn().mockResolvedValue({}),
       findUnique: jest.fn().mockResolvedValue(profile),
     },
-    authCredential: { create: jest.fn().mockResolvedValue({}) },
+    authCredential: {
+      create: jest.fn().mockResolvedValue({}),
+      update: jest.fn().mockResolvedValue({}),
+    },
+    pushSubscription: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
 }
 
@@ -53,11 +58,9 @@ function makeService(opts: {
   const withOrgContext = jest
     .fn()
     .mockImplementation((_org: string, cb: (t: TxMock) => Promise<unknown>) => cb(tx));
-  const credentialUpdate = jest.fn().mockResolvedValue({});
   const prisma = {
     authCredential: {
       findUnique: jest.fn().mockResolvedValue(opts.existingCredential ?? null),
-      update: credentialUpdate,
     },
     withOrgContext,
   } as unknown as PrismaService;
@@ -89,7 +92,15 @@ function makeService(opts: {
     config,
     {} as unknown as LegalService,
   );
-  return { service, tx, withOrgContext, identity, tokens, credentialUpdate, audit: auditMock };
+  return {
+    service,
+    tx,
+    withOrgContext,
+    identity,
+    tokens,
+    credentialUpdate: tx.authCredential.update,
+    audit: auditMock,
+  };
 }
 
 describe('AuthService.googleSignIn — new account (no existing AuthCredential)', () => {
@@ -207,10 +218,12 @@ describe('AuthService.googleSignIn — pre-hijacking (AF-N02)', () => {
       googleSub: null,
       passwordHash: 'hash-del-atacante',
     };
-    const { service, credentialUpdate, audit } = makeService({ existingCredential, claims });
+    const { service, credentialUpdate, audit, tx } = makeService({ existingCredential, claims });
 
     await service.googleSignIn({ idToken: 'x' });
 
+    // Los dispositivos suscritos a avisos push por quien tenía la cuenta salen.
+    expect(tx.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'usr-1' } });
     expect(credentialUpdate).toHaveBeenCalledWith({
       where: { id: 'cred-1' },
       data: {
@@ -234,10 +247,11 @@ describe('AuthService.googleSignIn — pre-hijacking (AF-N02)', () => {
       authProvider: 'google',
       googleSub: 'google-sub-victima',
     };
-    const { service, credentialUpdate } = makeService({ existingCredential, claims });
+    const { service, credentialUpdate, tx } = makeService({ existingCredential, claims });
     const session = await service.googleSignIn({ idToken: 'x' });
     expect(session.user.id).toBe('usr-2');
     expect(credentialUpdate).not.toHaveBeenCalled();
+    expect(tx.pushSubscription.deleteMany).not.toHaveBeenCalled();
   });
 
   it('rechaza otra identidad de Google con el mismo correo (401)', async () => {
