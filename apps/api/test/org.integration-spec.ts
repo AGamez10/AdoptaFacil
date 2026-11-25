@@ -170,6 +170,76 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
     expect(JSON.stringify(events[0].metadata)).not.toContain('900123456-7');
   });
 
+  describe('AF-N01: identidad legal bloqueada tras la verificación de la plataforma', () => {
+    it('no deja cambiar NIT, razón social ni nombre en ESAL con RTE; sí el resto del perfil', async () => {
+      const org = await registerOrg('Fundación Verificada');
+      await request(server)
+        .put('/org/profile')
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({
+          nit: `9009${randomUUID().replace(/\D/g, '').slice(0, 5)}-1`,
+          legalName: 'Fundación Verificada',
+        })
+        .expect(200);
+      // La plataforma (PlatformAdmin con MFA) aprueba la ESAL con RTE.
+      await admin.organizationProfile.update({
+        where: { organizationId: org.orgId },
+        data: { formalizationState: 'esal_rte', rteVigente: true },
+      });
+      const before = await admin.organizationProfile.findUniqueOrThrow({
+        where: { organizationId: org.orgId },
+      });
+
+      for (const change of [
+        { nit: '900999999-1' },
+        { legalName: 'Otra Fundación S.A.S.' },
+        { name: 'Otra Fundación' },
+      ]) {
+        const res = await request(server)
+          .put('/org/profile')
+          .set('Authorization', `Bearer ${org.token}`)
+          .send(change)
+          .expect(409);
+        expect(res.body.message).toContain('nueva verificación');
+      }
+
+      const after = await admin.organizationProfile.findUniqueOrThrow({
+        where: { organizationId: org.orgId },
+        include: { organization: true },
+      });
+      expect(after.nit).toBe(before.nit);
+      expect(after.legalName).toBe('Fundación Verificada');
+      expect(after.organization.name).toBe('Fundación Verificada');
+      const blocked = await admin.auditLog.count({
+        where: { organizationId: org.orgId, action: 'organization.legal_identity_change_blocked' },
+      });
+      expect(blocked).toBe(3);
+
+      // Reenviar los mismos datos (el formulario manda todo) y editar lo demás sí funciona.
+      await request(server)
+        .put('/org/profile')
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({
+          nit: before.nit,
+          legalName: before.legalName,
+          name: 'Fundación Verificada',
+          description: 'Nueva',
+        })
+        .expect(200);
+
+      // Bajando el estado (suspende certificados) se puede corregir y pedir verificación otra vez.
+      await admin.organizationProfile.update({
+        where: { organizationId: org.orgId },
+        data: { formalizationState: 'formalizada', rteVigente: false },
+      });
+      await request(server)
+        .put('/org/profile')
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({ legalName: 'Fundación Verificada Corregida' })
+        .expect(200);
+    });
+  });
+
   describe('public endpoint GET /public/organizations/:slug', () => {
     it('returns only public fields; hides NIT while informal; never phone/legalName', async () => {
       const res = await request(server).get(`/public/organizations/${slugA}`).expect(200);

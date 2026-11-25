@@ -18,6 +18,7 @@ import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.u
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { DuplicateDetectionService } from './duplicate-detection.service';
+import { PLATFORM_ONLY_STATES } from './formalization.machine';
 
 /** Merge the registry row (organizations) with its profile into the full
  *  `Organization` contract shape. */
@@ -87,6 +88,8 @@ export class OrgProfileService {
     input: UpdateOrganizationProfileInput,
   ): Promise<Organization> {
     const organizationId = this.requireOrgId();
+
+    await this.assertLegalIdentityUnlocked(organizationId, actorUserId, input);
 
     // S-3: NIT is a unique legal identifier (art. 125-3 ET) — a HARD block,
     // checked and (if blocked) audited BEFORE the write transaction below, so
@@ -219,6 +222,58 @@ export class OrgProfileService {
       ]);
       return { ...toOrganization(org, profile), ...(duplicateWarning ? { duplicateWarning } : {}) };
     });
+  }
+
+  /**
+   * AF-N01: la plataforma aprobó la ESAL (y el RTE) mirando un NIT, una razón
+   * social y un nombre concretos, y los certificados tributarios salen con esos
+   * datos. Mientras la organización esté en un estado que solo la plataforma
+   * otorga (ESAL, ESAL con RTE), esos tres campos no se cambian desde el perfil:
+   * para corregirlos, el Owner baja el estado de formalización (lo que suspende
+   * los certificados) y la plataforma vuelve a verificar con el dato nuevo.
+   * Reenviar el mismo valor sí se permite (el formulario manda todo el perfil).
+   */
+  private async assertLegalIdentityUnlocked(
+    organizationId: string,
+    actorUserId: string,
+    input: UpdateOrganizationProfileInput,
+  ): Promise<void> {
+    if (input.nit === undefined && input.legalName === undefined && input.name === undefined) {
+      return;
+    }
+    const current = await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const [org, profile] = await Promise.all([
+        tx.organization.findUniqueOrThrow({ where: { id: organizationId } }),
+        tx.organizationProfile.findUnique({ where: { organizationId } }),
+      ]);
+      return { org, profile };
+    });
+    const state = (current.profile?.formalizationState ??
+      FormalizationState.Informal) as FormalizationState;
+    if (!PLATFORM_ONLY_STATES.includes(state)) return;
+
+    const same = (next: string | null | undefined, prev: string | null | undefined): boolean =>
+      next === undefined || (next ?? '').trim() === (prev ?? '').trim();
+    const changed = [
+      ...(same(input.nit, current.profile?.nit) ? [] : ['nit']),
+      ...(same(input.legalName, current.profile?.legalName) ? [] : ['legalName']),
+      ...(same(input.name, current.org.name) ? [] : ['name']),
+    ];
+    if (changed.length === 0) return;
+
+    await this.audit.record({
+      organizationId,
+      actorUserId,
+      action: 'organization.legal_identity_change_blocked',
+      entityType: 'organization',
+      entityId: organizationId,
+      // Solo qué campos se intentaron cambiar, nunca los valores.
+      metadata: { fields: changed, formalizationState: state },
+    });
+    throw new ConflictException(
+      'La plataforma ya verificó el NIT, la razón social y el nombre de tu organización. ' +
+        'Para cambiarlos, baja el estado de formalización y pide una nueva verificación.',
+    );
   }
 
   /**
