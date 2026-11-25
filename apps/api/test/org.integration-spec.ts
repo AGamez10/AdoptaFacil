@@ -213,7 +213,7 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
       const blocked = await admin.auditLog.count({
         where: { organizationId: org.orgId, action: 'organization.legal_identity_change_blocked' },
       });
-      expect(blocked).toBe(3);
+      expect(blocked).toBe(3); // los tres intentos en ESAL con RTE
 
       // Reenviar los mismos datos (el formulario manda todo) y editar lo demás sí funciona.
       await request(server)
@@ -227,10 +227,21 @@ describe('Organization profile (M01: CRUD + RBAC + public endpoint)', () => {
         })
         .expect(200);
 
-      // Bajando el estado (suspende certificados) se puede corregir y pedir verificación otra vez.
+      // En Formalizada (documentos ya aprobados) sigue bloqueado.
       await admin.organizationProfile.update({
         where: { organizationId: org.orgId },
         data: { formalizationState: 'formalizada', rteVigente: false },
+      });
+      await request(server)
+        .put('/org/profile')
+        .set('Authorization', `Bearer ${org.token}`)
+        .send({ nit: '900999999-1' })
+        .expect(409);
+
+      // Bajando el estado (suspende certificados) se puede corregir y pedir verificación otra vez.
+      await admin.organizationProfile.update({
+        where: { organizationId: org.orgId },
+        data: { formalizationState: 'en_proceso' },
       });
       await request(server)
         .put('/org/profile')

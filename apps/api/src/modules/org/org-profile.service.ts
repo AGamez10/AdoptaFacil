@@ -18,7 +18,6 @@ import { isUniqueConstraintViolation } from '../../core/errors/prisma-conflict.u
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { DuplicateDetectionService } from './duplicate-detection.service';
-import { PLATFORM_ONLY_STATES } from './formalization.machine';
 
 /** Merge the registry row (organizations) with its profile into the full
  *  `Organization` contract shape. */
@@ -49,6 +48,17 @@ function toOrganization(org: OrgRow, profile: ProfileRow | null): Organization {
     organizationType: (profile?.organizationType as OrganizationType | null) ?? undefined,
   };
 }
+
+/**
+ * Estados en los que la identidad legal (NIT, razón social, nombre) ya fue
+ * revisada contra documentos aprobados por la plataforma (RUT y Cámara para
+ * Formalizada; además la ESAL y el RTE los otorga solo la plataforma). AF-N01.
+ */
+const LEGAL_IDENTITY_LOCKED_STATES: readonly FormalizationState[] = [
+  FormalizationState.Formalizada,
+  FormalizationState.ESAL,
+  FormalizationState.ESAL_RTE,
+];
 
 @Injectable()
 export class OrgProfileService {
@@ -227,8 +237,8 @@ export class OrgProfileService {
   /**
    * AF-N01: la plataforma aprobó la ESAL (y el RTE) mirando un NIT, una razón
    * social y un nombre concretos, y los certificados tributarios salen con esos
-   * datos. Mientras la organización esté en un estado que solo la plataforma
-   * otorga (ESAL, ESAL con RTE), esos tres campos no se cambian desde el perfil:
+   * datos. Desde Formalizada (documentos aprobados) y en ESAL / ESAL con RTE
+   * (que solo otorga la plataforma), esos tres campos no se cambian desde el perfil:
    * para corregirlos, el Owner baja el estado de formalización (lo que suspende
    * los certificados) y la plataforma vuelve a verificar con el dato nuevo.
    * Reenviar el mismo valor sí se permite (el formulario manda todo el perfil).
@@ -250,7 +260,7 @@ export class OrgProfileService {
     });
     const state = (current.profile?.formalizationState ??
       FormalizationState.Informal) as FormalizationState;
-    if (!PLATFORM_ONLY_STATES.includes(state)) return;
+    if (!LEGAL_IDENTITY_LOCKED_STATES.includes(state)) return;
 
     const same = (next: string | null | undefined, prev: string | null | undefined): boolean =>
       next === undefined || (next ?? '').trim() === (prev ?? '').trim();
