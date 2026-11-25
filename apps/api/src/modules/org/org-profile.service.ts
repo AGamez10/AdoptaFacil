@@ -262,8 +262,14 @@ export class OrgProfileService {
       FormalizationState.Informal) as FormalizationState;
     if (!LEGAL_IDENTITY_LOCKED_STATES.includes(state)) return;
 
+    // En Formalizada (estado al que la organización llega sola) se puede
+    // completar un dato que aún estaba vacío; en ESAL y ESAL con RTE (que
+    // otorga la plataforma) nada cambia.
+    const fillAllowed = state === FormalizationState.Formalizada;
     const same = (next: string | null | undefined, prev: string | null | undefined): boolean =>
-      next === undefined || (next ?? '').trim() === (prev ?? '').trim();
+      next === undefined ||
+      (next ?? '').trim() === (prev ?? '').trim() ||
+      (fillAllowed && (prev ?? '').trim() === '');
     const changed = [
       ...(same(input.nit, current.profile?.nit) ? [] : ['nit']),
       ...(same(input.legalName, current.profile?.legalName) ? [] : ['legalName']),
