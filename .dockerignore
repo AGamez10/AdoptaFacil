@@ -15,5 +15,15 @@
 .storage
 **/.storage
 docs
+# Secretos reales del VPS (AF-N07): la etapa `migrate` copia /repo entero, así que
+# lo que no se excluya aquí queda dentro de la imagen.
+deploy/api.env
 deploy/backups
+deploy/.last-release
+**/*.env
+**/*.age
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
 *.log
