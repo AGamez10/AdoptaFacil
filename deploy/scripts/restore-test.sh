@@ -28,8 +28,14 @@ echo "==> PostgreSQL efímero sin red"
 docker run -d --name "$name" --network none \
   -e POSTGRES_PASSWORD="$(head -c 18 /dev/urandom | od -An -tx1 | tr -d ' \n')" \
   -e POSTGRES_USER=restore -e POSTGRES_DB=restore postgres:16 >/dev/null
+# Por TCP y no por el socket: al iniciar, la imagen oficial levanta un servidor
+# TEMPORAL solo en el socket para crear la base, lo apaga y arranca el real. Por
+# el socket, pg_isready contesta "listo" ante el temporal y el psql siguiente
+# puede caer en su apagado ("the database system is shutting down"). El
+# temporal no escucha en TCP, así que 127.0.0.1 solo responde con el definitivo
+# (con --network none el contenedor conserva su propio loopback).
 for _ in $(seq 1 60); do
-  docker exec "$name" pg_isready -U restore -d restore >/dev/null 2>&1 && break
+  docker exec "$name" pg_isready -h 127.0.0.1 -U restore -d restore >/dev/null 2>&1 && break
   sleep 1
 done
 # Rol que referencian GRANTs y policies del dump.
