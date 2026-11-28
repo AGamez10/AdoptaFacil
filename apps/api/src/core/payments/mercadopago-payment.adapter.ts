@@ -51,8 +51,20 @@ export function orderTtlDays(expiresAt?: Date, now: Date = new Date()): number {
  * key: the key is only unique per organization while `donations.collection_id`
  * is globally unique. Deterministic, so a retry maps to the same reference.
  */
-export function mercadoPagoReferenceFor(organizationId: string, idempotencyKey: string): string {
-  const digest = createHash('sha256').update(`${organizationId}:${idempotencyKey}`).digest('hex');
+export function mercadoPagoReferenceFor(
+  organizationId: string,
+  idempotencyKey: string,
+  namespace?: string,
+): string {
+  // Auditoría run-4 F5: la llave de una donación la escribe el cliente; sin un
+  // espacio de nombres podía coincidir con la de un apadrinamiento
+  // (`sponsorship:<id>:<mes>:attempt:<n>`) y quedarse con su pago. Las
+  // donaciones llevan `donation:`; apadrinamiento y guardería conservan su
+  // derivación (sus llaves las genera el servidor).
+  const material = namespace
+    ? `${organizationId}:${namespace}:${idempotencyKey}`
+    : `${organizationId}:${idempotencyKey}`;
+  const digest = createHash('sha256').update(material).digest('hex');
   return `${MERCADOPAGO_REFERENCE_PREFIX}${digest}`.slice(0, MERCADOPAGO_REFERENCE_MAX_LENGTH);
 }
 
@@ -417,7 +429,12 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     this.assertDirectCollection(collector);
 
     const breakdown = computeBreakdown(input.intendedAmount);
-    const reference = mercadoPagoReferenceFor(collector.organizationId, input.idempotencyKey);
+    const kind = input.concept.kind;
+    const reference = mercadoPagoReferenceFor(
+      collector.organizationId,
+      input.idempotencyKey,
+      kind === 'sponsorship' || kind === 'custody' ? undefined : 'donation',
+    );
     const { title, backPath } = checkoutCopyFor(input.concept.kind);
     const back = new URL(`${this.webBase}${backPath}`);
     back.searchParams.set('reference', reference);

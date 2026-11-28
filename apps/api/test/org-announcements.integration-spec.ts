@@ -59,14 +59,23 @@ describe('Org urgent announcements', () => {
 
   const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+  const typedThirdParty = `third-party-${tag}@victim.test`;
+
+  /** A real person account with `email`, whose request carries a DIFFERENT
+   *  typed address (audit run-4 F2: only the account address may be used). */
   async function seedRequest(org: Actor, email: string, fullName: string) {
+    const person = await request(server)
+      .post('/auth/register/person')
+      .send({ ...LEGAL_PERSON, displayName: fullName, email, password: 'password-1234' })
+      .expect(201);
+    createdOrgIds.push(person.body.user.organizationId);
     await admin.adoptionRequest.create({
       data: {
         organizationId: org.orgId,
         animalId: randomUUID(),
         animalSnapshot: { animalId: randomUUID(), name: 'Michi', species: 'cat' },
-        applicantUserId: org.userId,
-        applicant: { fullName, email },
+        applicantUserId: person.body.user.id,
+        applicant: { fullName, email: typedThirdParty },
         message: 'Quiero adoptar con mucho cariño y responsabilidad.',
       },
     });
@@ -180,6 +189,7 @@ describe('Org urgent announcements', () => {
     const to = sent.map((m) => m.to.toLowerCase()).sort();
     expect(to).toEqual([adopterOnly, shared].sort());
     expect(to).not.toContain(otherOrgContact);
+    expect(to).not.toContain(typedThirdParty);
     const html = sent[0].html ?? '';
     expect(html).toContain('Hogar temporal hoy');
     expect(html).toContain(`&amp;o=${orgA.orgId}`);
@@ -268,5 +278,28 @@ describe('Org urgent announcements', () => {
       .set(auth(orgB.token))
       .send({ audiences: ['everyone'], title: 'Hola', message: 'Mensaje de prueba suficiente.' })
       .expect(400);
+  });
+
+  it('audit run-4 F9: concurrent sends cannot exceed the daily limit', async () => {
+    const results = await Promise.all(
+      Array.from({ length: ORG_ANNOUNCEMENT_DAILY_LIMIT * 2 }, (_, i) =>
+        request(server)
+          .post('/org/announcements')
+          .set(auth(orgB.token))
+          .send({
+            audiences: ['volunteers'],
+            title: `Paralelo ${i}`,
+            message: 'Mensaje de prueba suficiente.',
+          }),
+      ),
+    );
+    const statuses = results.map((r) => r.status);
+    expect(statuses.filter((st) => st === 201)).toHaveLength(ORG_ANNOUNCEMENT_DAILY_LIMIT);
+    expect(statuses.filter((st) => st === 429)).toHaveLength(ORG_ANNOUNCEMENT_DAILY_LIMIT);
+    expect(
+      await admin.auditLog.count({
+        where: { organizationId: orgB.orgId, action: 'org.announcement_sent' },
+      }),
+    ).toBe(ORG_ANNOUNCEMENT_DAILY_LIMIT);
   });
 });

@@ -15,7 +15,9 @@ describe('Mercado Pago contract (ADR-PAG-003)', () => {
   it('only approved settles; refunds and chargebacks are voided; unknown stays pending', () => {
     expect(mercadoPagoPaymentStatus('approved')).toBe('approved');
     expect(mercadoPagoPaymentStatus('rejected')).toBe('declined');
-    for (const s of ['refunded', 'charged_back', 'cancelled']) {
+    // Audit run-4 N1/N2: a cancelled attempt never collected money.
+    expect(mercadoPagoPaymentStatus('cancelled')).toBe('declined');
+    for (const s of ['refunded', 'charged_back']) {
       expect(mercadoPagoPaymentStatus(s)).toBe('voided');
     }
     for (const s of ['pending', 'in_process', 'in_mediation', 'whatever', undefined]) {

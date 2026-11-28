@@ -103,6 +103,13 @@ export class AdoptionsService {
     // especie, foto) se construye AQUÍ, nunca con lo que mande el cliente. La
     // función SQL vuelve a verificarlo todo de forma atómica.
     const animalSnapshot = await this.serverAnimalSnapshot(input.organizationId, input.animalId);
+    // Auditoría run-4 F2: el correo del solicitante es SIEMPRE el de su cuenta,
+    // nunca el que venga en el cuerpo (si no, cualquiera podía inscribir
+    // correos de terceros como "adoptantes" y recibir anuncios de la org).
+    const applicant = {
+      ...input.applicant,
+      email: (await this.accountEmail(actor)).toLowerCase(),
+    };
 
     let row: AdoptionRow;
     try {
@@ -112,7 +119,7 @@ export class AdoptionsService {
           ${input.animalId}::uuid,
           ${JSON.stringify(animalSnapshot)}::jsonb,
           ${actor.id}::uuid,
-          ${JSON.stringify(input.applicant)}::jsonb,
+          ${JSON.stringify(applicant)}::jsonb,
           ${input.message}
         )
       `);
@@ -335,6 +342,9 @@ export class AdoptionsService {
   /** Best-effort applicant notification behind the simulable NotificationPort. */
   private async notifyApplicant(row: AdoptionModel, organizationName?: string): Promise<void> {
     const applicant = row.applicant as unknown as AdoptionApplicant;
+    // F2: el destino es el correo de la CUENTA del solicitante, no el JSON.
+    const to = await this.applicantAccountEmail(row.organizationId, row.applicantUserId);
+    if (!to) return;
     const snapshot = row.animalSnapshot as unknown as AdoptionAnimalSnapshot;
     const emailInput = {
       applicantName: applicant.fullName,
@@ -345,7 +355,7 @@ export class AdoptionsService {
     };
     try {
       await this.notifications.send({
-        to: applicant.email,
+        to,
         subject: buildAdoptionStatusEmailSubject(emailInput),
         body: buildAdoptionStatusEmailBody(emailInput),
         template: {
@@ -364,6 +374,28 @@ export class AdoptionsService {
     } catch (error) {
       this.logger.warn(`No se pudo notificar al solicitante: ${(error as Error).message}`);
     }
+  }
+
+  /** Correo de la cuenta del actor (su propio tenant); el JWT como respaldo. */
+  private async accountEmail(actor: RequestUser): Promise<string> {
+    const user = await this.prisma.withOrgContext(actor.organizationId, (tx) =>
+      tx.user.findUnique({ where: { id: actor.id }, select: { email: true } }),
+    );
+    return user?.email ?? actor.email;
+  }
+
+  /** Correo de la cuenta de un solicitante, leído bajo el contexto de la org. */
+  private async applicantAccountEmail(
+    organizationId: string,
+    applicantUserId: string,
+  ): Promise<string | null> {
+    const rows = await this.prisma.withOrgContext(organizationId, (tx) =>
+      tx.$queryRaw<Array<{ user_id: string; email: string }>>(
+        Prisma.sql`SELECT user_id, email FROM adoption_applicant_account_emails(${organizationId}::uuid)
+                   WHERE user_id = ${applicantUserId}::uuid`,
+      ),
+    );
+    return rows[0]?.email ?? null;
   }
 
   /** A raw-query error caused by the active-request partial unique index. */

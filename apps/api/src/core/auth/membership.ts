@@ -33,3 +33,35 @@ export async function assertActiveMembership(
     });
   }
 }
+
+/** Error code of the 401 for an access token issued before a credential change. */
+export const SESSION_REVOKED = 'SESSION_REVOKED';
+
+/**
+ * Audit run-4 RA-01: an access token issued BEFORE the account's sessions were
+ * revoked (password reset completed, first Google link) stops working at once
+ * instead of living out its 15 minutes. `auth_credentials` is the global
+ * identity index (no RLS): a single keyed read by the unique `user_id`.
+ * Tokens minted in the same second as the revocation are accepted (`iat` has
+ * one-second resolution and the new session is issued right after it).
+ */
+export async function assertSessionNotRevoked(
+  prisma: PrismaService,
+  userId: string,
+  issuedAtSeconds: number | undefined,
+): Promise<void> {
+  const credential = await prisma.authCredential.findUnique({
+    where: { userId },
+    select: { sessionsRevokedAt: true },
+  });
+  const revokedAt = credential?.sessionsRevokedAt;
+  if (!revokedAt) return;
+  const revokedAtSeconds = Math.floor(revokedAt.getTime() / 1000);
+  if (typeof issuedAtSeconds !== 'number' || issuedAtSeconds < revokedAtSeconds) {
+    throw new UnauthorizedException({
+      statusCode: 401,
+      code: SESSION_REVOKED,
+      message: 'Tu sesión se cerró porque cambiaron las credenciales de la cuenta.',
+    });
+  }
+}

@@ -15,6 +15,7 @@ import {
   COFFEE_CODE_PATTERN,
   COFFEE_ORDER_REFERENCE_PATTERN,
   COFFEE_RESERVATION_MINUTES,
+  COFFEE_MAX_UNITS_PER_ORDER,
   type CoffeeCampaignOption,
   type CoffeeCheckoutInput,
   type CoffeeCheckoutResult,
@@ -67,6 +68,15 @@ async function unitsHeldByOthers(tx: Tx, lotId: string, exceptOrderId?: string):
       ), 0)
       + COALESCE((SELECT sum(quantity) FROM coffee_physical_sales WHERE lot_id = ${lotId}::uuid), 0)
     )::int AS held`);
+  return rows[0]?.held ?? 0;
+}
+
+/** Bolsas que un comprador tiene apartadas y sin pagar (reservas vivas). */
+async function unitsHeldUnpaidByBuyer(tx: Tx, email: string, phone: string): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ held: number | null }>>(Prisma.sql`
+    SELECT COALESCE(sum(quantity), 0)::int AS held FROM coffee_orders
+    WHERE status = 'pending' AND reserved_until > now()
+      AND (buyer_email = ${email} OR buyer_phone = ${phone})`);
   return rows[0]?.held ?? 0;
 }
 
@@ -188,6 +198,21 @@ export class CoffeePublicService {
         where: { id: input.lotId },
         include: { product: { select: { name: true } } },
       });
+      // Auditoría run-4 F11: un mismo comprador (por correo o teléfono) no puede
+      // tener apartadas sin pagar más bolsas que el máximo de un pedido; antes,
+      // checkouts repetidos sin pagar agotaban un lote durante 15 minutos.
+      const buyerHeld = await unitsHeldUnpaidByBuyer(
+        tx,
+        input.buyer.email.trim().toLowerCase(),
+        input.buyer.phone.trim(),
+      );
+      if (buyerHeld + input.quantity > COFFEE_MAX_UNITS_PER_ORDER) {
+        throw new ConflictException({
+          code: 'HOLD_LIMIT',
+          message:
+            'Ya tienes bolsas apartadas sin pagar. Termina ese pago o espera unos minutos para hacer otro pedido.',
+        });
+      }
       const available = lot.stockUnits - (await unitsHeldByOthers(tx, lot.id));
       if (input.quantity > available) {
         throw new ConflictException({

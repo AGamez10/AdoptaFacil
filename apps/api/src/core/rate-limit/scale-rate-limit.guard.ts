@@ -15,6 +15,7 @@ import type { Redis } from 'ioredis';
 import type { Env } from '../../config/env.validation';
 import { REDIS_CLIENT } from '../../redis/redis.service';
 import { RedisThrottlerStorage } from '../auth/redis-throttler.storage';
+import { normalizeRoutePath } from '../bots/public-api-throttler.guard';
 import { rateLimitRejections } from '../observability/metrics';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
@@ -23,7 +24,9 @@ const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /** Public, anonymous read routes (behind Caddy's `/api` prefix strip). */
 export function isPublicReadPath(path: string): boolean {
-  return path.startsWith('/public/') || path === '/storage/public';
+  // Auditoría run-4 F3: misma normalización que Express (mayúsculas, barra final).
+  const p = normalizeRoutePath(path);
+  return p.startsWith('/public/') || p === '/storage/public';
 }
 
 /**

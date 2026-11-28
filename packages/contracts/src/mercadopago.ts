@@ -56,9 +56,12 @@ export function mercadoPagoPaymentStatus(raw: string | null | undefined): Paymen
   switch (raw) {
     case 'approved':
       return 'approved';
+    // Auditoría run-4 N1/N2: un pago `cancelled` nunca cobró (ticket vencido,
+    // intento abandonado). Es un intento fallido, no un reverso: tratarlo como
+    // `voided` revertía donaciones y cobros que OTRO intento ya había pagado.
     case 'rejected':
-      return 'declined';
     case 'cancelled':
+      return 'declined';
     case 'refunded':
     case 'charged_back':
       return 'voided';

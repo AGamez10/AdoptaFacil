@@ -133,3 +133,79 @@ describe('Password recovery (request → link → confirm)', () => {
       .expect(400);
   });
 });
+
+/**
+ * Audit run-4 F6 + RA-01: completing one reset consumes EVERY other pending link
+ * of the account, and access tokens issued before the reset stop working at
+ * once (not 15 minutes later). Own app instance: own throttler budget.
+ */
+describe('Password recovery: sibling links and live access tokens (audit run-4 F6, RA-01)', () => {
+  let app: INestApplication;
+  let server: ReturnType<INestApplication['getHttpServer']>;
+  const admin = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+  const notifications = new CapturingNotificationPort();
+  const email = `t110-f6-${randomUUID()}@test.local`;
+  let orgId: string;
+  let accessToken: string;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(NOTIFICATION_PORT)
+      .useValue(notifications)
+      .compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+    server = app.getHttpServer();
+    const reg = await request(server)
+      .post('/auth/register/person')
+      .send({ ...LEGAL_PERSON, displayName: 'F6 User', email, password: 'oldpassword123' })
+      .expect(201);
+    orgId = reg.body.user.organizationId;
+    accessToken = reg.body.tokens.accessToken;
+  });
+
+  afterAll(async () => {
+    await purgeOrganizations(admin, [orgId]);
+    await admin.$disconnect();
+    await app?.close();
+  });
+
+  it('kills sibling reset links and pre-reset access tokens', async () => {
+    await request(server).get('/auth/me').set('Authorization', `Bearer ${accessToken}`).expect(200);
+
+    notifications.sent.length = 0;
+    await request(server).post('/auth/password-reset').send({ email }).expect(202);
+    await request(server).post('/auth/password-reset').send({ email }).expect(202);
+    const [first, second] = notifications.sent.map((m) => tokenFromLink(m.body));
+    expect(first).not.toBe(second);
+
+    // `iat` has one-second resolution: make the old token clearly older.
+    await new Promise((r) => setTimeout(r, 1100));
+    await request(server)
+      .post('/auth/password-reset/confirm')
+      .send({ token: second, password: 'ownerpassword123' })
+      .expect(204);
+
+    // RA-01: the access token minted before the reset is dead right away.
+    const dead = await request(server)
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(401);
+    expect(dead.body.code).toBe('SESSION_REVOKED');
+
+    // F6: the older sibling link can no longer overwrite the owner's password.
+    await request(server)
+      .post('/auth/password-reset/confirm')
+      .send({ token: first, password: 'attackerpassword123' })
+      .expect(400);
+
+    const login = await request(server)
+      .post('/auth/login')
+      .send({ email, password: 'ownerpassword123' })
+      .expect(200);
+    await request(server)
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${login.body.tokens.accessToken}`)
+      .expect(200);
+  });
+});

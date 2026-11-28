@@ -281,6 +281,16 @@ describe('Org team members (Miembros)', () => {
     expect(carla).toMatchObject({ signerRole: 'accountant' });
     await changeRole(owner, signer.userId, Role.Operator).expect(409);
     await remove(owner, signer.userId).expect(409);
+    // Audit run-4 F7: /rbac/roles enforces the same rule (no side door).
+    await request(server)
+      .post('/rbac/roles')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ userId: signer.userId, role: Role.Administrator })
+      .expect(409);
+    await request(server)
+      .delete(`/rbac/roles/${signer.userId}/${Role.ReadOnlyAuditor}`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .expect(409);
   });
 
   it('restoring access respects the members limit of the plan', async () => {

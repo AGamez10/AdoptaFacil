@@ -360,6 +360,16 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
     expect([a.status, b.status].sort()).toEqual([201, 409]);
     const offer = await request(server).get(`/public/coffee/${productCode}`).expect(200);
     expect(offer.body.lot.availableUnits).toBe(0);
+
+    // Audit run-4 F11: the same buyer (email OR phone) cannot keep piling up
+    // unpaid holds past one order's maximum (3 already held + 8 > 10).
+    const capped = await checkout({ quantity: 8 }).expect(409);
+    expect(capped.body.code).toBe('HOLD_LIMIT');
+    const samePhone = await checkout({
+      quantity: 8,
+      buyer: { ...buyer, email: `otro-${randomUUID()}@test.local` },
+    }).expect(409);
+    expect(samePhone.body.code).toBe('HOLD_LIMIT');
   });
 
   it('si la campaña elegida se cerró, se pide elegir otra', async () => {
