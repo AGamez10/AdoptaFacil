@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
+import { getStorageToken } from '@nestjs/throttler';
 import request from 'supertest';
 import { mercadoPagoSignatureV1 } from '../src/core/payments/mercadopago-payment.adapter';
 import { purgeOrganizations } from './support/cleanup';
@@ -72,6 +73,16 @@ describe('Custody online payments (Mercado Pago, cuenta de la organización)', (
       request(server).put(path).set('Authorization', `Bearer ${actor.token}`).send(body),
     delete: (path: string) =>
       request(server).delete(path).set('Authorization', `Bearer ${actor.token}`),
+  });
+
+  // The public checkout now keeps its own 10 per 10 minutes per client (audit
+  // run-4 F4). Each test starts with a fresh budget; the limit itself is
+  // covered in public-rate-limit.integration-spec.ts.
+  beforeEach(() => {
+    const storage = app?.get<{ storage?: Map<string, unknown> }>(getStorageToken(), {
+      strict: false,
+    });
+    storage?.storage?.clear();
   });
 
   beforeAll(async () => {
@@ -608,6 +619,39 @@ describe('Custody online payments (Mercado Pago, cuenta de la organización)', (
     searchResults = [{ ...approved, status: 'refunded' }];
     await as(orgA).post(`/org/accounting/periods/${period}/reread`).expect(200);
     expect(await chargeOf(pending)).toMatchObject({ status: 'pending', balanceCop: 70000 });
+    searchResults = [];
+  });
+
+  it('audit run-4 N1: a cancelled or refunded SIBLING attempt never reverts the paid charge', async () => {
+    const pending = await newCharge(50000);
+    const url = (await as(orgA).post(`/custody/charges/${pending}/payment-link`).expect(200)).body
+      .url as string;
+    const ref = (await checkout(url.split('/').pop() as string).expect(200)).body
+      .reference as string;
+    const base = {
+      external_reference: ref,
+      transaction_amount: 50000,
+      currency_id: 'COP',
+      collector_id: Number(mpUserId),
+      live_mode: true,
+      date_created: new Date().toISOString(),
+    };
+    // An expired cash ticket (cancelled) and then a card payment of the same order.
+    const ticket = { ...base, id: 991001, status: 'cancelled' };
+    const card = { ...base, id: 991002, status: 'approved' };
+    searchResults = [ticket, card];
+    const period = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 7);
+    await as(orgA).post(`/org/accounting/periods/${period}/reread`).expect(200);
+    expect(await chargeOf(pending)).toMatchObject({ status: 'paid', balanceCop: 0 });
+
+    // Re-reading again (the cancelled ticket listed first) keeps it paid.
+    await as(orgA).post(`/org/accounting/periods/${period}/reread`).expect(200);
+    // A refund of a payment that did NOT settle the charge changes nothing either.
+    searchResults = [{ ...ticket, status: 'refunded' }, card];
+    await as(orgA).post(`/org/accounting/periods/${period}/reread`).expect(200);
+    const charge = await chargeOf(pending);
+    expect(charge).toMatchObject({ status: 'paid', paidCop: 50000, balanceCop: 0 });
+    expect(charge.payments[0]).toMatchObject({ reference: '991002' });
     searchResults = [];
   });
 });

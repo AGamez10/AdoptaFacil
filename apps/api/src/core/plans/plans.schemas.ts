@@ -26,6 +26,9 @@ export const assignPlanSchema = z
 export const startPlanCheckoutSchema = z
   .object({
     plan: z.enum(['crece', 'pro']),
+    /** Correo de la cuenta de Mercado Pago que va a pagar, si no es el de la
+     *  cuenta de AdoptaFácil (Mercado Pago pide entrar con ese mismo correo). */
+    payerEmail: z.string().trim().toLowerCase().email().max(320).optional(),
   })
   .strict();
 

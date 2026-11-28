@@ -171,7 +171,12 @@ describe('AuthService.confirmPasswordReset (T-110)', () => {
     });
     expect(h.tx.authCredential.update).toHaveBeenCalledWith({
       where: { userId: 'user-1' },
-      data: { passwordHash: 'new-hash' },
+      data: { passwordHash: 'new-hash', sessionsRevokedAt: expect.any(Date) },
+    });
+    // Audit run-4 F6: every other pending link of the user is consumed too.
+    expect(h.tx.passwordResetToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', usedAt: null },
+      data: { usedAt: expect.any(Date) },
     });
     expect(h.tx.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', revokedAt: null },

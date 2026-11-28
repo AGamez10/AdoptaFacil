@@ -469,4 +469,27 @@ describe('Community business allies (panel, benefits, passes, impact)', () => {
       .expect(200);
     expect(page.body.items).toHaveLength(0);
   });
+
+  it('audit run-4 F10: concurrent creations cannot exceed the open-benefits cap', async () => {
+    const own = await request(server)
+      .post('/community/services')
+      .set(auth(otherBusiness.token))
+      .send({
+        category: 'grooming',
+        name: `Peluquería F10 ${randomUUID().slice(0, 6)}`,
+        department: 'Antioquia',
+        city,
+      })
+      .expect(201);
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        request(server)
+          .post('/community/business/benefits')
+          .set(auth(otherBusiness.token))
+          .send({ listingId: own.body.id, title: `Beneficio paralelo ${i}` }),
+      ),
+    );
+    expect(results.filter((r) => r.status === 201)).toHaveLength(3);
+    expect(results.filter((r) => r.status === 409)).toHaveLength(3);
+  });
 });

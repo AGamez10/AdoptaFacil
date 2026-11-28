@@ -509,9 +509,18 @@ export class CustodyOnlinePaymentsService {
 
     if (event.status === 'voided') {
       const kind = event.mercadopagoPayment?.status === 'charged_back' ? 'chargeback' : 'refund';
+      // Auditoría run-4 N1: un aviso de ORDEN (eventId = id de la orden) habla
+      // de toda la orden; un pago suelto (relectura) solo revierte si es EL
+      // pago que saldó el cobro, nunca un intento hermano de la misma orden.
+      const orderLevel = event.eventId !== event.mercadopagoPayment?.paymentId;
       return {
         matched: true,
-        applied: await this.reverse(organizationId, reference, kind),
+        applied: await this.reverse(
+          organizationId,
+          reference,
+          kind,
+          orderLevel ? undefined : gatewayPaymentId,
+        ),
       };
     }
     if (event.status !== 'approved') return { matched: true, applied: false };
@@ -663,6 +672,7 @@ export class CustodyOnlinePaymentsService {
     organizationId: string,
     reference: string,
     kind: 'refund' | 'chargeback',
+    reversedPaymentId?: string,
   ): Promise<boolean> {
     const result = await this.inOrganization(organizationId, async (tx): Promise<Settled> => {
       await tx.$queryRaw`SELECT 1 FROM custody_online_payments WHERE collection_id = ${reference} FOR UPDATE`;
@@ -674,6 +684,13 @@ export class CustodyOnlinePaymentsService {
         },
       });
       if (!attempt || attempt.status !== 'approved' || !attempt.payment) return { applied: false };
+      if (
+        reversedPaymentId &&
+        attempt.gatewayPaymentId &&
+        attempt.gatewayPaymentId !== reversedPaymentId
+      ) {
+        return { applied: false };
+      }
       if (!attempt.payment.voidedAt) {
         await this.billing.voidPaymentInTx(tx, {
           paymentId: attempt.payment.id,

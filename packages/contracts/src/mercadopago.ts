@@ -56,9 +56,12 @@ export function mercadoPagoPaymentStatus(raw: string | null | undefined): Paymen
   switch (raw) {
     case 'approved':
       return 'approved';
+    // Auditoría run-4 N1/N2: un pago `cancelled` nunca cobró (ticket vencido,
+    // intento abandonado). Es un intento fallido, no un reverso: tratarlo como
+    // `voided` revertía donaciones y cobros que OTRO intento ya había pagado.
     case 'rejected':
-      return 'declined';
     case 'cancelled':
+      return 'declined';
     case 'refunded':
     case 'charged_back':
       return 'voided';
@@ -106,6 +109,10 @@ export function isMercadoPagoCheckoutUrl(url: string | null | undefined): boolea
 /** `POST /org/plan/checkout` body (Owner/Administrator). Monthly only. */
 export interface StartPlanCheckoutInput {
   plan: Exclude<PlanKey, 'free'>;
+  /** Email of the Mercado Pago account that pays, when it is not the user's
+   *  AdoptaFácil email (Mercado Pago asks the payer to log in with it).
+   *  Optional: defaults to the user's email. */
+  payerEmail?: string;
 }
 
 /** `POST /org/plan/checkout` — where to send the browser to authorize the

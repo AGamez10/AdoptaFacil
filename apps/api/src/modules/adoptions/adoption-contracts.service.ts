@@ -169,14 +169,20 @@ export class AdoptionContractsService {
       // `healthStatusAtDelivery` quedan sin llenar: no existen en ningún
       // otro lugar del sistema, la organización los diligencia después
       // (`updateData`, mientras el contrato siga en `draft`).
-      const [organization, profile, animalRow, adopterProfileRows] = await Promise.all([
-        tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
-        tx.organizationProfile.findUnique({ where: { organizationId } }),
-        tx.animal.findUnique({ where: { id: req.animalId }, include: { breed: true } }),
-        this.prisma.$queryRaw<AdopterProfileRow[]>(
-          Prisma.sql`SELECT * FROM adopter_profile_for_contract(${req.applicantUserId}::uuid)`,
-        ),
-      ]);
+      const [organization, profile, animalRow, adopterProfileRows, adopterAccount] =
+        await Promise.all([
+          tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+          tx.organizationProfile.findUnique({ where: { organizationId } }),
+          tx.animal.findUnique({ where: { id: req.animalId }, include: { breed: true } }),
+          this.prisma.$queryRaw<AdopterProfileRow[]>(
+            Prisma.sql`SELECT * FROM adopter_profile_for_contract(${req.applicantUserId}::uuid)`,
+          ),
+          // Auditoría run-4 F2: el correo del firmante adoptante es el de su cuenta.
+          tx.$queryRaw<Array<{ user_id: string; email: string }>>(
+            Prisma.sql`SELECT user_id, email FROM adoption_applicant_account_emails(${organizationId}::uuid)
+                     WHERE user_id = ${req.applicantUserId}::uuid`,
+          ),
+        ]);
       // P0-3: el contrato identifica al animal REAL de la organización, nunca
       // un snapshot que haya mandado el cliente.
       if (!animalRow || animalRow.organizationId !== organizationId || !animalRow.isActive) {
@@ -230,7 +236,7 @@ export class AdoptionContractsService {
           id: randomUUID(),
           role: 'adopter',
           fullName: applicant.fullName,
-          email: applicant.email,
+          email: adopterAccount[0]?.email ?? applicant.email,
           userId: req.applicantUserId,
         },
         ...(input.additionalSigners ?? []).map((s) => ({

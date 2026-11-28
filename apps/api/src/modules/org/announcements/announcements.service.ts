@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HttpException, HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   ORG_ANNOUNCEMENT_DAILY_LIMIT,
   type AnnouncementAudience,
@@ -81,13 +82,7 @@ export class AnnouncementsService {
     now = new Date(),
   ): Promise<SendOrgAnnouncementResult> {
     if ((await this.sentInLastDay(organizationId, now)) >= ORG_ANNOUNCEMENT_DAILY_LIMIT) {
-      throw new HttpException(
-        {
-          code: 'ANNOUNCEMENT_LIMIT',
-          message: `Puedes enviar hasta ${ORG_ANNOUNCEMENT_DAILY_LIMIT} anuncios en 24 horas.`,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      throw this.limitError();
     }
     const byAudience = await this.contacts(organizationId);
     const recipients = new Map<string, Contact>();
@@ -105,13 +100,28 @@ export class AnnouncementsService {
     const orgName = org?.name ?? 'Una organización de AdoptaFácil';
 
     // Audit first (counts only): the daily limit holds even if enqueuing fails midway.
-    await this.audit.record({
-      organizationId,
-      actorUserId,
-      action: ANNOUNCEMENT_AUDIT_ACTION,
-      entityType: 'announcement',
-      entityId: announcementId,
-      metadata: { audiences: input.audiences, recipients: list.length },
+    // Auditoría run-4 F9: contar y registrar van en UNA transacción con un lock
+    // por organización; antes, N envíos en paralelo veían todos el mismo conteo
+    // y pasaban el tope diario.
+    await this.prisma.withOrgContext(organizationId, async (tx) => {
+      const lockKey = `org.announcement:${organizationId}`;
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+      const sentToday = await tx.auditLog.count({
+        where: {
+          organizationId,
+          action: ANNOUNCEMENT_AUDIT_ACTION,
+          createdAt: { gt: new Date(now.getTime() - DAY_MS) },
+        },
+      });
+      if (sentToday >= ORG_ANNOUNCEMENT_DAILY_LIMIT) throw this.limitError();
+      await this.audit.recordWithTx(tx, {
+        organizationId,
+        actorUserId,
+        action: ANNOUNCEMENT_AUDIT_ACTION,
+        entityType: 'announcement',
+        entityId: announcementId,
+        metadata: { audiences: input.audiences, recipients: list.length },
+      });
     });
 
     for (let i = 0; i < list.length; i += ENQUEUE_BATCH) {
@@ -160,9 +170,19 @@ export class AnnouncementsService {
     return { recipients: list.length };
   }
 
+  private limitError(): HttpException {
+    return new HttpException(
+      {
+        code: 'ANNOUNCEMENT_LIMIT',
+        message: `Puedes enviar hasta ${ORG_ANNOUNCEMENT_DAILY_LIMIT} anuncios en 24 horas.`,
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
   /** Distinct contacts per audience, read under the org's RLS context. */
   private async contacts(organizationId: string): Promise<Record<AnnouncementAudience, Contact[]>> {
-    const [donations, requests, enrollments] = await this.prisma.withOrgContext(
+    const [donations, requests, enrollments, applicantAccounts] = await this.prisma.withOrgContext(
       organizationId,
       (tx) =>
         Promise.all([
@@ -181,8 +201,14 @@ export class AnnouncementsService {
             select: { volunteerEmail: true, volunteerName: true, volunteerUserId: true },
             take: MAX_RECIPIENTS * 2,
           }),
+          // Auditoría run-4 F2: el correo de quien pidió adoptar sale de SU
+          // CUENTA, nunca del texto `applicant.email` que escribió el cliente.
+          tx.$queryRaw<Array<{ user_id: string; email: string }>>(
+            Prisma.sql`SELECT user_id, email FROM adoption_applicant_account_emails(${organizationId}::uuid)`,
+          ),
         ]),
     );
+    const accountEmailByUser = new Map(applicantAccounts.map((a) => [a.user_id, a.email]));
     const fromJson = (value: unknown, nameKey: string, userId?: string | null): Contact | null => {
       const obj = value as Record<string, unknown> | null;
       const email = typeof obj?.email === 'string' ? obj.email.trim() : '';
@@ -191,7 +217,14 @@ export class AnnouncementsService {
     };
     return {
       donors: unique(donations.map((d) => fromJson(d.payer, 'fullName', d.donorUserId))),
-      adopters: unique(requests.map((r) => fromJson(r.applicant, 'fullName', r.applicantUserId))),
+      adopters: unique(
+        requests.map((r) => {
+          const email = accountEmailByUser.get(r.applicantUserId);
+          if (!email) return null;
+          const obj = { ...(r.applicant as Record<string, unknown> | null), email };
+          return fromJson(obj, 'fullName', r.applicantUserId);
+        }),
+      ),
       volunteers: unique(
         enrollments.map((e) =>
           isEmail(e.volunteerEmail.trim())

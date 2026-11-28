@@ -108,9 +108,9 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
     reference: string,
     status: string,
     amount: number,
-    opts: { badSignature?: boolean } = {},
+    opts: { badSignature?: boolean; paymentId?: string } = {},
   ) {
-    const id = String(paymentSeq++);
+    const id = opts.paymentId ?? String(paymentSeq++);
     mp.payments.set(id, {
       id,
       status,
@@ -360,6 +360,16 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
     expect([a.status, b.status].sort()).toEqual([201, 409]);
     const offer = await request(server).get(`/public/coffee/${productCode}`).expect(200);
     expect(offer.body.lot.availableUnits).toBe(0);
+
+    // Audit run-4 F11: the same buyer (email OR phone) cannot keep piling up
+    // unpaid holds past one order's maximum (3 already held + 8 > 10).
+    const capped = await checkout({ quantity: 8 }).expect(409);
+    expect(capped.body.code).toBe('HOLD_LIMIT');
+    const samePhone = await checkout({
+      quantity: 8,
+      buyer: { ...buyer, email: `otro-${randomUUID()}@test.local` },
+    }).expect(409);
+    expect(samePhone.body.code).toBe('HOLD_LIMIT');
   });
 
   it('si la campaña elegida se cerró, se pide elegir otra', async () => {
@@ -392,6 +402,31 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
       contributionTotalCop: 4_400,
     });
     expect(JSON.stringify(status.body)).not.toContain(buyer.email);
+  });
+
+  it('un pago duplicado queda en la bitácora y solo el reverso del pago que confirmó anula la compra', async () => {
+    const paidId = (
+      await admin.coffeeOrder.findUniqueOrThrow({ where: { reference: firstReference } })
+    ).mpPaymentId as string;
+    const dup = String(paymentSeq);
+    await notifyPayment(firstReference, 'approved', 55_998).expect(200);
+    const order = await admin.coffeeOrder.findUniqueOrThrow({
+      where: { reference: firstReference },
+    });
+    expect(order).toMatchObject({ status: 'paid', mpPaymentId: paidId });
+    const dupAudit = await admin.auditLog.findMany({
+      where: { action: 'coffee.order_duplicate_payment', entityId: order.id },
+    });
+    expect(
+      dupAudit.filter((a) => (a.metadata as { paymentId?: string }).paymentId === dup),
+    ).toHaveLength(1);
+
+    // Devolver el duplicado no anula la compra.
+    const r1 = await notifyPayment(firstReference, 'refunded', 55_998, { paymentId: dup });
+    expect(r1.body).toEqual({ applied: false });
+    expect(
+      (await admin.coffeeOrder.findUniqueOrThrow({ where: { reference: firstReference } })).status,
+    ).toBe('paid');
   });
 
   it('un pago que llega tarde, cuando ya no hay bolsas, queda para devolución', async () => {

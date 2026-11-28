@@ -718,6 +718,33 @@ export class DonationsService {
     `);
     const donation = rows[0];
     if (!donation) return;
+    // Auditoría run-4 N2: solo se revierte lo que se pagó. Una donación que no
+    // está aprobada no tiene dinero que devolver, y si OTRO pago aprobado de la
+    // misma referencia sigue vigente, el reverso de un intento hermano no toca
+    // la donación que ese otro pago liquidó.
+    if (donation.status !== 'approved') return;
+    const reversedPaymentId = event.mercadopagoPayment?.paymentId;
+    if (reversedPaymentId) {
+      const stillPaid = await this.prisma.withOrgContext(donation.organization_id, (tx) =>
+        tx.mercadoPagoPayment.count({
+          where: {
+            organizationId: donation.organization_id,
+            externalReference: event.collectionId,
+            status: 'approved',
+            mpPaymentId: { not: reversedPaymentId },
+            // Only a FULL payment of this donation keeps it paid (a stray
+            // payment for another amount never settled it).
+            transactionAmount: new Prisma.Decimal(donation.amount_charged),
+          },
+        }),
+      );
+      if (stillPaid > 0) {
+        this.logger.warn(
+          `Reverso de un intento hermano ignorado: ${event.collectionId} sigue pagada por otro pago.`,
+        );
+        return;
+      }
+    }
     const gatewayStatus = event.mercadopagoPayment?.status;
     const reason =
       gatewayStatus === 'refunded' ||

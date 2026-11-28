@@ -57,6 +57,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
 
   let refugeToken = '';
   let refugeOrgId = '';
+  const personEmail = `t028b-p-${randomUUID()}@test.local`;
   let personToken = '';
   let personUserId = '';
   let otherToken = '';
@@ -135,7 +136,7 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
       .send({
         ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
-        email: `t028b-p-${randomUUID()}@test.local`,
+        email: personEmail,
         password,
       })
       .expect(201);
@@ -481,7 +482,8 @@ describe('Adoption contracts (M04: contract + signature, nuevo requerimiento)', 
   it('al sellarse, cada parte recibe UNA copia del contrato en PDF por correo', async () => {
     const copies = contractCopies();
     expect(copies.map((m) => m.to).sort()).toEqual(
-      ['adoptante@test.local', refugeEmail.toLowerCase()].sort(),
+      // Audit run-4 F2: the adopter's copy goes to the ACCOUNT address, not the typed one.
+      [personEmail, refugeEmail.toLowerCase()].sort(),
     );
     for (const message of copies) {
       expect(message.attachments).toHaveLength(1);

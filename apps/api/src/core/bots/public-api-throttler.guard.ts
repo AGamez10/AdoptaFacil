@@ -8,6 +8,7 @@ import {
   type ThrottlerRequest,
   type ThrottlerStorage,
 } from '@nestjs/throttler';
+import { THROTTLER_LIMIT } from '@nestjs/throttler/dist/throttler.constants';
 import type { Request } from 'express';
 import { BotVerifier, type VerifiedBot } from './verified-bots';
 
@@ -63,13 +64,29 @@ export class PublicApiThrottlerGuard extends ThrottlerGuard {
   }
 
   protected override async handleRequest(requestProps: ThrottlerRequest): Promise<boolean> {
-    const req = requestProps.context.switchToHttp().getRequest<PublicRequest>();
+    const { context, throttler } = requestProps;
+    const req = context.switchToHttp().getRequest<PublicRequest>();
     req.verifiedBot = await this.botVerifier.verify(req.ip, req.get('user-agent'));
-    return super.handleRequest({
+    await super.handleRequest({
       ...requestProps,
       limit: req.verifiedBot ? this.limits.bot : this.limits.ip,
       ttl: WINDOW_MS,
       blockDuration: WINDOW_MS,
+    });
+    // Auditoría run-4 F4: una ruta pública con su propio `@Throttle` (p. ej.
+    // el checkout de guardería, 10 cada 10 min) quedaba con el presupuesto
+    // compartido de 300/min. Ahora su límite propio se cobra ADEMÁS, con una
+    // llave por ruta y por cliente (los valores ya vienen resueltos en
+    // `requestProps` desde la metadata de la ruta).
+    const routeLimit = this.reflector.getAllAndOverride<unknown>(THROTTLER_LIMIT + throttler.name, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (routeLimit === undefined) return true;
+    return super.handleRequest({
+      ...requestProps,
+      generateKey: (ctx, tracker, name) =>
+        `public-route:${ctx.getClass().name}.${ctx.getHandler().name}:${name}:${tracker}`,
     });
   }
 
@@ -88,6 +105,17 @@ export class PublicApiThrottlerGuard extends ThrottlerGuard {
   }
 }
 
+/**
+ * Auditoría run-4 F3: Express enruta sin distinguir mayúsculas y acepta una
+ * barra final, así que `/PUBLIC/animals` o `/public/animals/` llegan al mismo
+ * handler. Los limitadores comparan contra la ruta NORMALIZADA igual que Express.
+ */
+export function normalizeRoutePath(path: string): string {
+  const bare = (path.split('?')[0] ?? '').toLowerCase().replace(/\/{2,}/g, '/');
+  return bare.length > 1 ? bare.replace(/\/+$/, '') || '/' : bare;
+}
+
 export function isPublicPath(path: string): boolean {
-  return path === '/public' || path.startsWith('/public/');
+  const p = normalizeRoutePath(path);
+  return p === '/public' || p.startsWith('/public/');
 }
