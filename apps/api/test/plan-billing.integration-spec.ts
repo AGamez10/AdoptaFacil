@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
+import { getStorageToken } from '@nestjs/throttler';
 import request from 'supertest';
 import { priceWithIva, PLAN_CATALOG } from '@adoptafacil/contracts';
 import { AppModule } from '../src/app.module';
@@ -31,6 +32,7 @@ class FakeBillingClient {
   cancelled: string[] = [];
   failCancel = false;
   failCreate = false;
+  payerEmails: string[] = [];
   private seq = 0;
 
   isConfigured(): boolean {
@@ -40,7 +42,9 @@ class FakeBillingClient {
   async createMonthlySubscription(input: {
     externalReference: string;
     amountCop: number;
+    payerEmail: string;
   }): Promise<{ id: string; checkoutUrl: string }> {
+    this.payerEmails.push(input.payerEmail);
     if (this.failCreate) throw new Error('Mercado Pago preapproval create failed (400: back_url)');
     const id = `pre${++this.seq}${randomUUID().slice(0, 6)}`;
     this.preapprovals.set(id, {
@@ -199,6 +203,15 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
     jest.restoreAllMocks();
   });
 
+  // Cada prueba registra su propia organización: el límite de registro
+  // (10 por minuto) no es lo que se prueba aquí.
+  beforeEach(() => {
+    const storage = app?.get<{ storage?: Map<string, unknown> }>(getStorageToken(), {
+      strict: false,
+    });
+    storage?.storage?.clear();
+  });
+
   afterAll(async () => {
     await purgeOrganizations(admin, createdOrgIds);
     await admin.$disconnect();
@@ -245,6 +258,27 @@ describe('Plan billing with Mercado Pago (checkout, renewal, failed charge, upgr
       providerReference: id,
       status: 'active',
     });
+  });
+
+  it('el cobro se abre al correo de la cuenta o al de Mercado Pago que indique quien paga', async () => {
+    const org = await registerOrg('Refugio Otro Correo');
+    await request(server)
+      .post('/org/plan/checkout')
+      .set(auth(org.token))
+      .send({ plan: 'crece' })
+      .expect(200);
+    expect(fake.payerEmails.at(-1)).toBe(org.email);
+    await request(server)
+      .post('/org/plan/checkout')
+      .set(auth(org.token))
+      .send({ plan: 'crece', payerEmail: '  Tesoreria@Refugio.CO ' })
+      .expect(200);
+    expect(fake.payerEmails.at(-1)).toBe('tesoreria@refugio.co');
+    await request(server)
+      .post('/org/plan/checkout')
+      .set(auth(org.token))
+      .send({ plan: 'crece', payerEmail: 'no-es-correo' })
+      .expect(400);
   });
 
   it('una firma inválida se rechaza; autorizar sin cobro aprobado no activa el plan', async () => {

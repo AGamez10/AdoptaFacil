@@ -345,6 +345,7 @@ export class CommunityBusinessService {
       // Bajo RLS, un perfil de otro tenant simplemente no existe → 404.
       const listing = await tx.serviceListing.findUnique({ where: { id: input.listingId } });
       if (!listing) throw new NotFoundException('Listing not found');
+      await lockBenefitCap(tx, organizationId);
       const open = await tx.businessBenefit.count({
         where: { status: { in: ['pending', 'approved'] }, active: true },
       });
@@ -387,6 +388,7 @@ export class CommunityBusinessService {
       const existing = await tx.businessBenefit.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException('Benefit not found');
       if (input.active === true && !existing.active) {
+        await lockBenefitCap(tx, organizationId);
         const open = await tx.businessBenefit.count({
           where: { status: { in: ['pending', 'approved'] }, active: true, id: { not: id } },
         });
@@ -583,4 +585,14 @@ export class CommunityBusinessService {
       throw error;
     }
   }
+}
+
+/**
+ * Auditoría run-4 F10: el tope de beneficios abiertos se contaba y luego se
+ * escribía sin lock, así que varias creaciones o reactivaciones en paralelo lo
+ * rompían. Un lock por organización (dura lo que la transacción) las serializa.
+ */
+async function lockBenefitCap(tx: Prisma.TransactionClient, organizationId: string): Promise<void> {
+  const lockKey = `community.business_benefits:${organizationId}`;
+  await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
 }

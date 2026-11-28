@@ -59,6 +59,48 @@ describe('Public API rate limiting', () => {
   });
 });
 
+describe('Public rate limits: case/trailing-slash bypass and per-route limits (audit run-4 F3, F4)', () => {
+  let app: INestApplication;
+  let server: ReturnType<INestApplication['getHttpServer']>;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PUBLIC_RATE_LIMITS)
+      .useValue({ ip: 1000, bot: 1200 })
+      .compile();
+    app = moduleRef.createNestApplication();
+    await app.init();
+    server = app.getHttpServer();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('F3: /PUBLIC/... and a trailing slash still count against the public budget', async () => {
+    for (const path of ['/PUBLIC/campaigns', '/Public/animals', '/public/campaigns/']) {
+      const res = await request(server).get(path);
+      expect(res.status).not.toBe(429);
+      expect(res.headers['x-ratelimit-limit']).toBeDefined();
+    }
+  });
+
+  it('F4: the custody checkout keeps its own 10 per 10 minutes under the global guard', async () => {
+    const path = '/public/custody/pay/no-such-token-f4/checkout';
+    for (let i = 0; i < 10; i += 1) {
+      const res = await request(server).post(path).send({});
+      expect(res.status).not.toBe(429);
+    }
+    const blocked = await request(server).post(path).send({});
+    expect(blocked.status).toBe(429);
+    // Upper-case variant hits the same handler and the same per-route budget.
+    await request(server)
+      .post('/PUBLIC/custody/pay/no-such-token-f4/checkout')
+      .send({})
+      .expect(429);
+  });
+});
+
 describe('CSP violation reports (POST /public/security/csp-report)', () => {
   let app: INestApplication;
   let server: ReturnType<INestApplication['getHttpServer']>;

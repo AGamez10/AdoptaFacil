@@ -98,12 +98,33 @@ describe('MercadoPagoPaymentAdapter (ADR-PAG-003, OAuth del refugio)', () => {
     ).rejects.toThrow(/custody/);
   });
 
+  it('audit run-4 F5: a donation key that copies a sponsorship key gets a different reference', async () => {
+    const key = 'sponsorship:00000000-0000-4000-8000-000000000001:2026-11:attempt:1';
+    const donation = await new MercadoPagoPaymentAdapter(
+      makeConfig(),
+      makeFetch(),
+    ).createCollection({
+      ...INPUT,
+      idempotencyKey: key,
+    });
+    const sponsorship = await new MercadoPagoPaymentAdapter(
+      makeConfig(),
+      makeFetch(),
+    ).createCollection({
+      ...INPUT,
+      idempotencyKey: key,
+      concept: { kind: 'sponsorship', id: INPUT.concept.id },
+    });
+    expect(donation.collectionId).not.toBe(sponsorship.collectionId);
+    expect(sponsorship.collectionId).toBe(mercadoPagoReferenceFor(ORG_ID, key));
+  });
+
   it("creates the Checkout Pro ORDER WITH THE ORG's token, no platform fee", async () => {
     const fetchFn = makeFetch();
     const adapter = new MercadoPagoPaymentAdapter(makeConfig(), fetchFn);
     const result = await adapter.createCollection(INPUT);
 
-    const reference = mercadoPagoReferenceFor(ORG_ID, 'idem-1');
+    const reference = mercadoPagoReferenceFor(ORG_ID, 'idem-1', 'donation');
     expect(reference.length).toBeLessThanOrEqual(MERCADOPAGO_REFERENCE_MAX_LENGTH);
     const breakdown = computeBreakdown(50_000);
     expect(breakdown.platformFee).toBe(0);

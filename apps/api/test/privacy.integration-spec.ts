@@ -60,6 +60,7 @@ describe('Privacy: data-subject access and suppression (Ley 1581)', () => {
   let beto: Actor;
   let shelter: Actor;
   let donationId: string;
+  let listingId: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -89,6 +90,34 @@ describe('Privacy: data-subject access and suppression (Ley 1581)', () => {
       },
     });
     donationId = donation.id;
+    // Audit run-4 F8: a public directory listing and a push device of hers.
+    const listing = await admin.serviceListing.create({
+      data: {
+        organizationId: ana.orgId,
+        createdByUserId: ana.userId,
+        category: 'grooming',
+        name: 'Peluquería de Ana',
+        department: 'Antioquia',
+        city: 'Medellín',
+        address: 'Calle 1 # 2-3',
+        phone: '3001234567',
+        whatsapp: '3001234567',
+        email: ana.email,
+        status: 'approved',
+      },
+    });
+    listingId = listing.id;
+    // Born pending (trigger): approve it like the platform would (status only).
+    await admin.serviceListing.update({ where: { id: listingId }, data: { status: 'approved' } });
+    await admin.pushSubscription.create({
+      data: {
+        organizationId: ana.orgId,
+        userId: ana.userId,
+        endpoint: `https://fcm.googleapis.com/fcm/send/${randomUUID()}`,
+        p256dh: 'k',
+        auth: 'a',
+      },
+    });
     await post(ana, 'Hoy adopté a Luna y está feliz en casa.');
     await post(beto, 'Beto también comparte su historia de adopción.');
   });
@@ -179,6 +208,7 @@ describe('Privacy: data-subject access and suppression (Ley 1581)', () => {
   });
 
   it('supresión: identity erased, own content deleted, legally retained records kept, sign-in impossible', async () => {
+    await request(server).get(`/public/community/services/${listingId}`).expect(200);
     const res = await request(server)
       .post('/me/privacy/suppression')
       .set(auth(ana))
@@ -212,6 +242,19 @@ describe('Privacy: data-subject access and suppression (Ley 1581)', () => {
       where: { actorUserId: ana.userId, action: 'privacy.suppression_completed' },
     });
     expect(audit).not.toBeNull();
+
+    // F8: her directory listing is no longer public nor holds her contact data,
+    // and her push devices are gone.
+    await request(server).get(`/public/community/services/${listingId}`).expect(404);
+    const listing = await admin.serviceListing.findUniqueOrThrow({ where: { id: listingId } });
+    expect(listing).toMatchObject({
+      status: 'hidden',
+      phone: null,
+      whatsapp: null,
+      email: null,
+      address: null,
+    });
+    expect(await admin.pushSubscription.count({ where: { userId: ana.userId } })).toBe(0);
 
     // The old e-mail and password no longer sign in.
     await request(server).post('/auth/login').send({ email: ana.email, password }).expect(401);

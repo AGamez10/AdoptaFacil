@@ -70,7 +70,7 @@ export class OrgPlanController {
     @CurrentUser() user: RequestUser,
     @Body(new ZodValidationPipe(startPlanCheckoutSchema)) dto: StartPlanCheckoutInput,
   ): Promise<PlanCheckoutView> {
-    return this.billing.startCheckout(user, dto.plan);
+    return this.billing.startCheckout(user, dto.plan, dto.payerEmail);
   }
 
   /** Stop paying: Mercado Pago stops the monthly charge and the plan keeps

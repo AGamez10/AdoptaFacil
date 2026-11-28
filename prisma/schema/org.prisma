@@ -333,24 +333,27 @@ model UserRole {
 /// never the plaintext. Carries organization_id + account_type so tokens can be
 /// issued without reading the RLS-protected `users` table.
 model AuthCredential {
-  id             String   @id @default(uuid()) @db.Uuid
-  userId         String   @unique @map("user_id") @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  accountType    String   @map("account_type")
-  email          String   @unique
-  passwordHash   String   @map("password_hash")
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @unique @map("user_id") @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  accountType       String    @map("account_type")
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
   /// 'password' | 'google' (T-Google-SignIn). A 'google' credential still has a
   /// `passwordHash` — a random, unusable-to-guess value hashed the same way as
   /// a real password (no separate "no password" state; simplest safe default,
   /// mirrors how the rest of auth already treats passwordHash as required).
-  authProvider   String   @default("password") @map("auth_provider")
+  authProvider      String    @default("password") @map("auth_provider")
   /// Google's stable `sub` claim (T-Google-SignIn). NULL for a password-only
   /// credential; unique when present so two Google accounts never collide.
   /// Auto-link on Google Sign-In is by EMAIL (see AuthService.googleSignIn),
   /// not by this column — this is bookkeeping/anti-spoofing, not the lookup key.
-  googleSub      String?  @unique @map("google_sub")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  googleSub         String?   @unique @map("google_sub")
+  /// Audit run-4 RA-01: every access token issued before this instant is
+  /// rejected (password reset, first Google link). NULL = never revoked.
+  sessionsRevokedAt DateTime? @map("sessions_revoked_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

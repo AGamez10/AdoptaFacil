@@ -9,7 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { type AccessTokenClaims, OrganizationStatus } from '@adoptafacil/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedRequest } from './auth.types';
-import { assertActiveMembership } from './membership';
+import { assertActiveMembership, assertSessionNotRevoked } from './membership';
 
 /** Error code of the 403 a suspended organization's members get (R2-1). */
 export const ORGANIZATION_SUSPENDED = 'ORGANIZATION_SUSPENDED';
@@ -60,6 +60,9 @@ export class JwtAuthGuard implements CanActivate {
       email: claims.email,
       mfaAt: typeof claims.mfa_at === 'number' ? claims.mfa_at : undefined,
     };
+
+    // RA-01: a token issued before a password reset / first Google link is dead.
+    await assertSessionNotRevoked(this.prisma, claims.sub, (claims as { iat?: number }).iat);
 
     const path = (request.originalUrl ?? request.url ?? '').split('?')[0];
     // Run-2 R-04: a removed member's still-valid access token stops working at

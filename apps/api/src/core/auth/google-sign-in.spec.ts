@@ -24,6 +24,7 @@ interface TxMock {
   user: { create: jest.Mock; findUnique: jest.Mock };
   authCredential: { create: jest.Mock; update: jest.Mock };
   pushSubscription: { deleteMany: jest.Mock };
+  passwordResetToken: { updateMany: jest.Mock };
 }
 
 function makeTx(profile: unknown = null): TxMock {
@@ -38,6 +39,7 @@ function makeTx(profile: unknown = null): TxMock {
       update: jest.fn().mockResolvedValue({}),
     },
     pushSubscription: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    passwordResetToken: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
 }
 
@@ -230,7 +232,14 @@ describe('AuthService.googleSignIn — pre-hijacking (AF-N02)', () => {
         googleSub: 'google-sub-victima',
         authProvider: 'google',
         passwordHash: 'random-hash',
+        // RA-01: the previous holder's access tokens die at once.
+        sessionsRevokedAt: expect.any(Date),
       },
+    });
+    // Audit run-4 F6: the previous holder's pending reset links die too.
+    expect(tx.passwordResetToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'usr-1', usedAt: null },
+      data: { usedAt: expect.any(Date) },
     });
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'auth.google_linked', entityId: 'usr-1' }),

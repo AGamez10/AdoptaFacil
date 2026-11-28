@@ -191,7 +191,11 @@ export class PlanBillingService {
   }
 
   /** `POST /org/plan/checkout` (Owner/Administrator of the caller's org). */
-  async startCheckout(actor: RequestUser, plan: PaidPlan): Promise<PlanCheckoutView> {
+  async startCheckout(
+    actor: RequestUser,
+    plan: PaidPlan,
+    payerEmailOverride?: string,
+  ): Promise<PlanCheckoutView> {
     // While PLAN_ENFORCEMENT is off every organization already has Pro for
     // free: charging for it would bill for something it already has.
     if (!this.plans.enforced) {
@@ -206,7 +210,8 @@ export class PlanBillingService {
     }
     const organizationId = actor.organizationId;
     if (!organizationId) throw new ForbiddenException('Missing tenant context');
-    if (!actor.email) {
+    const payerEmail = payerEmailOverride ?? actor.email;
+    if (!payerEmail) {
       throw new BadRequestException('Tu cuenta necesita un correo para pagar el plan.');
     }
     const current = await this.prisma.withOrgContext(organizationId, (tx) =>
@@ -254,7 +259,7 @@ export class PlanBillingService {
       created = await this.billing.createMonthlySubscription({
         reason: `AdoptaFácil · Plan ${PLAN_CATALOG[plan].name} (mensual)`,
         externalReference: reference,
-        payerEmail: actor.email,
+        payerEmail,
         amountCop: monthlyAmountCop,
         backUrl: `${this.webBaseUrl}/organizacion/plan?pago=mercadopago`,
         // A new checkout per click; Mercado Pago dedups only true retries.

@@ -77,4 +77,82 @@ describe('assertXlsxExpandsWithin (audit run-2 S-05)', () => {
       XlsxMalformedError,
     );
   });
+
+  describe('audit run-4 F1: EOCD entry count that hides entries', () => {
+    /** Rebuilds `zip` adding one extra deflated entry; `declaredCount` lets the EOCD lie. */
+    function withHiddenEntry(zip: Buffer, payload: Buffer, honestCount: boolean): Buffer {
+      const eocdAt = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+      const count = zip.readUInt16LE(eocdAt + 10);
+      const cdSize = zip.readUInt32LE(eocdAt + 12);
+      const cdOffset = zip.readUInt32LE(eocdAt + 16);
+      const body = zip.subarray(0, cdOffset);
+      const cd = zip.subarray(cdOffset, cdOffset + cdSize);
+      const name = Buffer.from('docProps/pad.xml');
+      const data = deflateRawSync(payload);
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x04034b50, 0);
+      local.writeUInt16LE(8, 8);
+      local.writeUInt32LE(data.length, 18);
+      local.writeUInt32LE(payload.length, 22);
+      local.writeUInt16LE(name.length, 26);
+      const extraCd = Buffer.alloc(46);
+      extraCd.writeUInt32LE(0x02014b50, 0);
+      extraCd.writeUInt16LE(8, 10);
+      extraCd.writeUInt32LE(data.length, 20);
+      extraCd.writeUInt32LE(payload.length, 24);
+      extraCd.writeUInt16LE(name.length, 28);
+      extraCd.writeUInt32LE(body.length, 42);
+      const newBody = Buffer.concat([body, local, name, data]);
+      const newCd = Buffer.concat([cd, extraCd, name]);
+      const eocd = Buffer.alloc(22);
+      eocd.writeUInt32LE(0x06054b50, 0);
+      const declared = honestCount ? count + 1 : count;
+      eocd.writeUInt16LE(declared, 8);
+      eocd.writeUInt16LE(declared, 10);
+      eocd.writeUInt32LE(newCd.length, 12);
+      eocd.writeUInt32LE(newBody.length, 16);
+      return Buffer.concat([newBody, newCd, eocd]);
+    }
+
+    async function realWorkbook(): Promise<Buffer> {
+      const wb = new ExcelJS.Workbook();
+      wb.addWorksheet('Animales').addRow(['Nombre', 'Especie']);
+      return Buffer.from(await wb.xlsx.writeBuffer());
+    }
+
+    it('rejects a 30 MiB entry hidden by an under-declared EOCD count (reproduction)', async () => {
+      const attack = withHiddenEntry(
+        await realWorkbook(),
+        Buffer.alloc(30 * 1024 * 1024, 0x61),
+        false,
+      );
+      expect(attack.length).toBeLessThan(100 * 1024);
+      expect(() => assertXlsxExpandsWithin(attack)).toThrow(XlsxTooLargeError);
+    });
+
+    it('control: the same entry with an honest count is rejected for size', async () => {
+      const honest = withHiddenEntry(
+        await realWorkbook(),
+        Buffer.alloc(30 * 1024 * 1024, 0x61),
+        true,
+      );
+      expect(() => assertXlsxExpandsWithin(honest)).toThrow(XlsxTooLargeError);
+    });
+
+    it('rejects even a tiny hidden entry (count mismatch), but accepts it when declared', async () => {
+      const base = await realWorkbook();
+      expect(() =>
+        assertXlsxExpandsWithin(withHiddenEntry(base, Buffer.from('<x/>'), false)),
+      ).toThrow(XlsxMalformedError);
+      expect(
+        assertXlsxExpandsWithin(withHiddenEntry(base, Buffer.from('<x/>'), true)),
+      ).toBeGreaterThan(0);
+    });
+
+    it('rejects a central directory that does not end at the EOCD (shifted offsets)', async () => {
+      const base = await realWorkbook();
+      const shifted = Buffer.concat([Buffer.alloc(64), base]);
+      expect(() => assertXlsxExpandsWithin(shifted)).toThrow(XlsxMalformedError);
+    });
+  });
 });

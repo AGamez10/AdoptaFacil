@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { UserRole as UserRoleRow } from '@prisma/client';
+import type { Prisma, UserRole as UserRoleRow } from '@prisma/client';
 import { Role, type RoleAssignment } from '@adoptafacil/contracts';
 import { AuditService } from '../audit/audit.service';
 import { PlansService } from '../plans/plans.service';
@@ -72,6 +72,7 @@ export class RbacService {
       if (!target) {
         throw new NotFoundException('User not found in this organization');
       }
+      await assertNotActiveSigner(tx, organizationId, userId);
       // Límite de miembros del plan (solo con PLAN_ENFORCEMENT): dar el PRIMER
       // rol a alguien de la organización que hoy no tiene ninguno lo suma al
       // equipo, igual que aceptar una invitación. Sin esto, revocar los roles
@@ -118,6 +119,7 @@ export class RbacService {
       throw new ForbiddenException('Missing tenant context');
     }
     await this.prisma.withTenant(async (tx) => {
+      await assertNotActiveSigner(tx, organizationId, userId);
       if (role === Role.Owner) {
         // RLS scopes this to the caller's organization.
         const owners = await tx.$queryRaw<{ user_id: string }[]>`
@@ -139,5 +141,25 @@ export class RbacService {
         });
       }
     });
+  }
+}
+
+/**
+ * Auditoría run-4 F7: un firmante designado (revisor fiscal, contador…) no
+ * ocupa puesto y solo el Owner lo gestiona, en Firmantes. `/rbac/roles` no
+ * replicaba la guarda de `MembersService.loadTarget` y dejaba a un
+ * Administrator darle (o quitarle) roles saltándose esa regla y el cupo.
+ */
+async function assertNotActiveSigner(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  userId: string,
+): Promise<void> {
+  const signer = await tx.orgSignerDesignation.findFirst({
+    where: { organizationId, userId, revokedAt: null },
+    select: { id: true },
+  });
+  if (signer) {
+    throw new ConflictException('Los firmantes se gestionan en la sección Firmantes.');
   }
 }

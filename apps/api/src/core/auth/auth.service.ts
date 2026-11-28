@@ -342,9 +342,20 @@ export class AuthService {
         await this.prisma.withOrgContext(existing.organizationId, async (tx) => {
           await tx.authCredential.update({
             where: { id: existing.id },
-            data: { googleSub: claims.sub, authProvider: 'google', passwordHash },
+            // RA-01: the previous holder's still-valid access tokens die now.
+            data: {
+              googleSub: claims.sub,
+              authProvider: 'google',
+              passwordHash,
+              sessionsRevokedAt: new Date(),
+            },
           });
           await tx.pushSubscription.deleteMany({ where: { userId: existing.userId } });
+          // Auditoría run-4 F6: pending reset links of the previous holder stop working.
+          await tx.passwordResetToken.updateMany({
+            where: { userId: existing.userId, usedAt: null },
+            data: { usedAt: new Date() },
+          });
         });
         await this.audit.record({
           organizationId: existing.organizationId,
@@ -566,7 +577,14 @@ export class AuthService {
       }
       await tx.authCredential.update({
         where: { userId: credential.userId },
-        data: { passwordHash },
+        // RA-01: access tokens issued before the reset stop working at once.
+        data: { passwordHash, sessionsRevokedAt: new Date() },
+      });
+      // Auditoría run-4 F6: every OTHER pending reset link dies with this one
+      // (an older link must not be able to undo the owner's new password).
+      await tx.passwordResetToken.updateMany({
+        where: { userId: credential.userId, usedAt: null },
+        data: { usedAt: new Date() },
       });
       // Revoke every active session: recovering the account invalidates any
       // refresh token that might be in someone else's hands.

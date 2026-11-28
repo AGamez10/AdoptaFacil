@@ -36,17 +36,28 @@ export function assertXlsxExpandsWithin(
   if (buf.length < 22) throw new XlsxMalformedError('too short');
   const eocd = findEndOfCentralDirectory(buf);
   const entries = buf.readUInt16LE(eocd + 10);
+  const cdSize = buf.readUInt32LE(eocd + 12);
   const cdOffset = buf.readUInt32LE(eocd + 16);
   // ZIP64 (sentinels) is never produced for a sheet of this size.
-  if (entries === 0xffff || cdOffset === 0xffffffff) throw new XlsxMalformedError('zip64');
+  if (entries === 0xffff || cdOffset === 0xffffffff || cdSize === 0xffffffff) {
+    throw new XlsxMalformedError('zip64');
+  }
   if (entries > MAX_ENTRIES) throw new XlsxTooLargeError('too many entries');
+  // Auditoría run-4 F1: el conteo del EOCD lo controla quien sube el archivo.
+  // JSZip (lo que usa ExcelJS) NO lo usa: recorre el directorio central por
+  // firma y, si `cdOffset + cdSize` no coincide con el EOCD, desplaza todos los
+  // offsets ("datos antepuestos"). Por eso aquí se exige un ZIP sin ambigüedad:
+  // directorio central pegado al EOCD, y se miden TODOS los registros que haya
+  // físicamente (por firma), no los que declara el conteo.
+  if (cdOffset + cdSize !== eocd) throw new XlsxMalformedError('central directory mismatch');
 
   let total = 0;
+  let seen = 0;
   let p = cdOffset;
-  for (let n = 0; n < entries; n += 1) {
-    if (p + 46 > buf.length || buf.readUInt32LE(p) !== CD_SIG) {
-      throw new XlsxMalformedError('bad central directory');
-    }
+  while (p + 4 <= buf.length && buf.readUInt32LE(p) === CD_SIG) {
+    seen += 1;
+    if (seen > MAX_ENTRIES) throw new XlsxTooLargeError('too many entries');
+    if (p + 46 > eocd) throw new XlsxMalformedError('bad central directory');
     const method = buf.readUInt16LE(p + 10);
     const compressedSize = buf.readUInt32LE(p + 20);
     const nameLen = buf.readUInt16LE(p + 28);
@@ -82,6 +93,9 @@ export function assertXlsxExpandsWithin(
       throw new XlsxMalformedError(`unsupported compression ${method}`);
     }
     if (total > maxBytes) throw new XlsxTooLargeError('expands over the limit');
+  }
+  if (p !== eocd || seen !== entries) {
+    throw new XlsxMalformedError('central directory entry count mismatch');
   }
   return total;
 }

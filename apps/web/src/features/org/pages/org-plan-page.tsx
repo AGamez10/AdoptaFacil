@@ -32,6 +32,7 @@ import {
   CardTitle,
   Button,
   ErrorState,
+  Input,
   Skeleton,
   useToast,
 } from '@adoptafacil/ui';
@@ -120,12 +121,19 @@ function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
   const client = useApiClient();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [otherEmail, setOtherEmail] = useState(false);
+  const [payerEmail, setPayerEmail] = useState('');
   const pay = async () => {
+    const email = payerEmail.trim();
+    if (otherEmail && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast({ title: 'Revisa el correo de Mercado Pago', variant: 'destructive' });
+      return;
+    }
     setBusy(true);
     try {
       const view = await client.request<PlanCheckoutView>('/org/plan/checkout', {
         method: 'POST',
-        json: { plan: plan.key },
+        json: otherEmail && email ? { plan: plan.key, payerEmail: email } : { plan: plan.key },
       });
       if (!isMercadoPagoCheckoutUrl(view.checkoutUrl)) throw new Error('bad checkout url');
       window.location.assign(view.checkoutUrl);
@@ -135,14 +143,39 @@ function PayWithMercadoPagoButton({ plan }: { plan: PlanDefinition }) {
     }
   };
   return (
-    <Button
-      className="w-full"
-      onClick={pay}
-      disabled={busy}
-      data-testid={`plan-pay-mercadopago-${plan.key}`}
-    >
-      {busy ? 'Abriendo Mercado Pago…' : `Pagar ${plan.name} con Mercado Pago`}
-    </Button>
+    <div className="w-full space-y-2">
+      <Button
+        className="w-full"
+        onClick={pay}
+        disabled={busy}
+        data-testid={`plan-pay-mercadopago-${plan.key}`}
+      >
+        {busy ? 'Abriendo Mercado Pago…' : `Pagar ${plan.name} con Mercado Pago`}
+      </Button>
+      {/* Mercado Pago pide entrar con el mismo correo al que se abre el cobro
+          mensual: si la cuenta que paga es otra, se puede indicar aquí. */}
+      {otherEmail ? (
+        <Input
+          type="email"
+          autoComplete="email"
+          placeholder="Correo de tu cuenta de Mercado Pago"
+          aria-label="Correo de tu cuenta de Mercado Pago"
+          value={payerEmail}
+          maxLength={320}
+          onChange={(event) => setPayerEmail(event.target.value)}
+          data-testid={`plan-payer-email-${plan.key}`}
+        />
+      ) : (
+        <button
+          type="button"
+          className="w-full text-center text-xs text-muted-foreground underline"
+          onClick={() => setOtherEmail(true)}
+          data-testid={`plan-payer-email-toggle-${plan.key}`}
+        >
+          ¿Tu Mercado Pago usa otro correo?
+        </button>
+      )}
+    </div>
   );
 }
 

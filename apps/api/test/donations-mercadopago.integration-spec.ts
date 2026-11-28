@@ -649,6 +649,47 @@ describe('Donations with Mercado Pago (OAuth of the organization, no split)', ()
     });
   });
 
+  it('audit run-4 N2: a failed sibling attempt never declines nor reverses a paid donation', async () => {
+    const res = await donate(`mp-n2-${randomUUID()}`).expect(201);
+    const ref = res.body.collectionId as string;
+    const id = res.body.id as string;
+    const attempt = (paymentId: number, status: string) =>
+      payments.set(String(paymentId), {
+        token: orgAccess,
+        body: {
+          id: paymentId,
+          status,
+          collector_id: Number(mpUserId),
+          external_reference: ref,
+          transaction_amount: res.body.amountCharged,
+          currency_id: 'COP',
+        },
+      });
+
+    // 1) Card rejected first, then paid with another card in the same checkout.
+    attempt(910001, 'rejected');
+    await notify('910001').expect(200);
+    expect((await admin.donation.findUnique({ where: { id } }))?.status).toBe('declined');
+    attempt(910002, 'approved');
+    const paid = await notify('910002').expect(200);
+    expect(paid.body).toMatchObject({ applied: true, status: 'approved', donationId: id });
+    expect(await admin.donationReceipt.count({ where: { donationId: id } })).toBe(1);
+
+    // 2) An expired cash ticket of the same checkout (cancelled) is not a reversal.
+    attempt(910003, 'cancelled');
+    await notify('910003').expect(200);
+    // 3) Neither is a refund of a sibling while the full payment still stands.
+    attempt(910001, 'refunded');
+    await notify('910001').expect(200);
+    expect(await admin.donationReversal.count({ where: { donationId: id } })).toBe(0);
+    expect((await admin.donation.findUnique({ where: { id } }))?.status).toBe('approved');
+
+    // The refund of THE payment that settled it does reverse it.
+    attempt(910002, 'refunded');
+    await notify('910002').expect(200);
+    expect(await admin.donationReversal.count({ where: { donationId: id } })).toBe(1);
+  });
+
   it('a grant Mercado Pago no longer honors blocks donations until the org reconnects', async () => {
     await admin.organizationMercadoPagoConnection.update({
       where: { organizationId: orgId },

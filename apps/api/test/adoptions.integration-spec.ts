@@ -34,6 +34,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
   let requestId = '';
 
   const snapshot = () => ({ animalId, name: 'Firulais', species: animalSpecies });
+  const personEmail = `t028-p-${randomUUID()}@test.local`;
   const applicant = () => ({ fullName: 'Adoptante Demo', email: 'adoptante@test.local' });
 
   beforeAll(async () => {
@@ -62,7 +63,7 @@ describe('Adoptions (M04: request + evaluation)', () => {
       .send({
         ...LEGAL_PERSON,
         displayName: 'Persona Adoptante',
-        email: `t028-p-${randomUUID()}@test.local`,
+        email: personEmail,
         password,
       })
       .expect(201);
@@ -119,6 +120,9 @@ describe('Adoptions (M04: request + evaluation)', () => {
       .expect(201);
     expect(res.body.status).toBe('new');
     expect(res.body.organizationId).toBe(refugeOrgId);
+    // Audit run-4 F2: the typed address is replaced by the account address.
+    expect(res.body.applicant.email).toBe(personEmail);
+    expect(res.body.applicant.email).not.toBe(applicant().email);
     requestId = res.body.id;
   });
 

@@ -36,7 +36,16 @@ export const createDonationSchema = z
     intendedAmount: pesos,
     concept: conceptSchema.optional(),
     payer: donorSchema.optional(),
-    idempotencyKey: z.string().trim().min(8).max(200),
+    // Auditoría run-4 F5: los prefijos de las llaves que genera el servidor
+    // (apadrinamiento, guardería) no se aceptan en una donación.
+    idempotencyKey: z
+      .string()
+      .trim()
+      .min(8)
+      .max(200)
+      .refine((key) => !/^(sponsorship|custody)[:-]/i.test(key), {
+        message: 'idempotencyKey uses a reserved prefix',
+      }),
     anonymous: z.boolean().optional().default(false),
     // Términos + autorización de datos de un donante invitado; el servicio los
     // exige cuando no hay sesión (ver DonationsService.create).
