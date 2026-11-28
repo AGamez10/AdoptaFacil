@@ -109,6 +109,10 @@ export function isMercadoPagoCheckoutUrl(url: string | null | undefined): boolea
 /** `POST /org/plan/checkout` body (Owner/Administrator). Monthly only. */
 export interface StartPlanCheckoutInput {
   plan: Exclude<PlanKey, 'free'>;
+  /** Email of the Mercado Pago account that pays, when it is not the user's
+   *  AdoptaFácil email (Mercado Pago asks the payer to log in with it).
+   *  Optional: defaults to the user's email. */
+  payerEmail?: string;
 }
 
 /** `POST /org/plan/checkout` — where to send the browser to authorize the

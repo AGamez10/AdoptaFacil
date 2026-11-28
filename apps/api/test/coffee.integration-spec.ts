@@ -108,9 +108,9 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
     reference: string,
     status: string,
     amount: number,
-    opts: { badSignature?: boolean } = {},
+    opts: { badSignature?: boolean; paymentId?: string } = {},
   ) {
-    const id = String(paymentSeq++);
+    const id = opts.paymentId ?? String(paymentSeq++);
     mp.payments.set(id, {
       id,
       status,
@@ -402,6 +402,31 @@ describe('Café: lotes con QR, checkout con stock y aporte a la campaña elegida
       contributionTotalCop: 4_400,
     });
     expect(JSON.stringify(status.body)).not.toContain(buyer.email);
+  });
+
+  it('un pago duplicado queda en la bitácora y solo el reverso del pago que confirmó anula la compra', async () => {
+    const paidId = (
+      await admin.coffeeOrder.findUniqueOrThrow({ where: { reference: firstReference } })
+    ).mpPaymentId as string;
+    const dup = String(paymentSeq);
+    await notifyPayment(firstReference, 'approved', 55_998).expect(200);
+    const order = await admin.coffeeOrder.findUniqueOrThrow({
+      where: { reference: firstReference },
+    });
+    expect(order).toMatchObject({ status: 'paid', mpPaymentId: paidId });
+    const dupAudit = await admin.auditLog.findMany({
+      where: { action: 'coffee.order_duplicate_payment', entityId: order.id },
+    });
+    expect(
+      dupAudit.filter((a) => (a.metadata as { paymentId?: string }).paymentId === dup),
+    ).toHaveLength(1);
+
+    // Devolver el duplicado no anula la compra.
+    const r1 = await notifyPayment(firstReference, 'refunded', 55_998, { paymentId: dup });
+    expect(r1.body).toEqual({ applied: false });
+    expect(
+      (await admin.coffeeOrder.findUniqueOrThrow({ where: { reference: firstReference } })).status,
+    ).toBe('paid');
   });
 
   it('un pago que llega tarde, cuando ya no hay bolsas, queda para devolución', async () => {

@@ -368,6 +368,12 @@ export class CoffeePublicService {
           order.status === 'needs_refund' ||
           order.status === 'refunded'
         ) {
+          // Un segundo pago aprobado del mismo pedido (pagó dos veces): no
+          // cambia el pedido, pero queda en la bitácora para devolverlo.
+          if (order.mpPaymentId && order.mpPaymentId !== payment.id) {
+            this.logger.warn(`coffee order ${reference} got a second approved payment`);
+            await audit('coffee.order_duplicate_payment', { amount: payment.amount });
+          }
           return { applied: false as const };
         }
         if (payment.amount !== order.totalCop || payment.currency !== 'COP') {
@@ -404,6 +410,11 @@ export class CoffeePublicService {
       }
       if (payment.status === 'refunded' || payment.status === 'charged_back') {
         if (order.status !== 'paid' && order.status !== 'needs_refund') {
+          return { applied: false as const };
+        }
+        // Solo el reverso del pago que confirmó el pedido lo revierte: devolver
+        // un pago duplicado o un intento suelto no anula la compra.
+        if (order.mpPaymentId && order.mpPaymentId !== payment.id) {
           return { applied: false as const };
         }
         await tx.coffeeOrder.update({ where: { id: order.id }, data: { status: 'refunded' } });
