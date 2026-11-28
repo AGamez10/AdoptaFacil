@@ -300,7 +300,7 @@ export const envSchema = z.object({
   // the owner's call once the subscription can actually be invoiced.
   PLAN_ENFORCEMENT: featureFlag(),
   // Fecha del lanzamiento comercial (ISO-8601, p. ej. 2026-11-01). Desde ahí y
-  // durante LAUNCH_PRO_PROMO_MONTHS (3 meses) toda organización SIN suscripción
+  // durante LAUNCH_PRO_PROMO_MONTHS (1 mes, el "Black Friday" de lanzamiento) toda organización SIN suscripción
   // pagada tiene Pro gratis, plantillas de pago incluidas. Sin la fecha no hay
   // promoción: con PLAN_ENFORCEMENT encendido, quien no paga queda en Gratis.
   PLAN_LAUNCH_DATE: z

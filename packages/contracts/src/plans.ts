@@ -299,13 +299,14 @@ export function planHighlights(key: PlanKey): PlanHighlight[] {
 }
 
 /**
- * Promoción de lanzamiento (decisión del cliente, 2026-10-16): toda organización
- * tiene Pro gratis durante estos meses desde el lanzamiento. Mientras
+ * Promoción de lanzamiento (decisión del cliente, 2026-10-16; acortada a UN mes
+ * el 2026-11-28, "nuestro Black Friday": Pro 100 % gratis para todas las
+ * organizaciones durante el mes de lanzamiento). Mientras
  * `PLAN_ENFORCEMENT` esté apagado todas tienen Pro sin vencimiento; al
  * encenderlo, cada organización arranca en `trialing` con
  * `currentPeriodEnd` = fecha de lanzamiento + estos meses.
  */
-export const LAUNCH_PRO_PROMO_MONTHS = 3;
+export const LAUNCH_PRO_PROMO_MONTHS = 1;
 
 /**
  * Prueba gratis de cada organización nueva (decisión del dueño, 2026-11-14):

@@ -2,7 +2,7 @@ import { EMPTY, type TplAnimal, type TplModel } from '../engine/model';
 import { animalArt, leadImage, leadSource, meta, revealFallback } from '../engine/modern';
 import { pic, premiumDesign, scopedTransition, vtName } from '../engine/premium';
 import { availLine, fmt, logoMark, paw } from '../engine/runtime';
-import { miniSleigh, nightScene } from './navidad-art';
+import { flyingSleigh, miniSleigh, nightScene } from './navidad-art';
 
 /*
  * Navidad (de pago y de temporada; ver `PORTAL_TEMPLATE_SEASONS`).
@@ -66,11 +66,16 @@ const CSS = `
 /* Portada: escena nocturna ilustrada (cielo, luna, pueblito, árbol y trineo). */
 .tpl-navidad{--sky1:#14275A;--sky2:#3B3F86;--sky3:#F0A988;--hill-far:#C9D8EC;--hill-near:#F4F8FD}
 .tpl-navidad[data-mode=dark]{--sky1:#030817;--sky2:#0B1C44;--sky3:#2A4F88;--hill-far:#9FB4D4;--hill-near:#E3ECF7}
-.tpl-navidad .nv-hero{position:relative;overflow:hidden;color:#FFFFFF;background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 48%,var(--sky3) 78%);padding-block:clamp(40px,6vw,84px) clamp(250px,24vw,330px);isolation:isolate}
+.tpl-navidad .nv-hero{--slw:clamp(200px,26vw,400px);--lane:calc(var(--slw) * .235 + 28px);position:relative;overflow:hidden;color:#FFFFFF;background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 48%,var(--sky3) 78%);padding-block:calc(var(--lane) + clamp(16px,3vw,44px)) clamp(250px,24vw,330px);isolation:isolate}
 .tpl-navidad .nv-art-scene{position:absolute;left:0;bottom:0;width:100%;height:100%;z-index:-1;pointer-events:none}
-@media (max-width:860px){.tpl-navidad .nv-art-scene{height:min(100%,760px);width:auto;aspect-ratio:1440/800;left:50%;translate:-79% 0}}
+@media (max-width:860px){.tpl-navidad .nv-art-scene{height:min(100%,760px);width:auto;max-width:none;aspect-ratio:1440/800;left:50%;translate:-79% 0}}
 .tpl-navidad .nv-art-scene .tw{animation:nvTw 2.6s ease-in-out infinite;animation-delay:calc(var(--d,0s) * -1)}
-.tpl-navidad .nv-fly{translate:640px 170px}
+/* Trineo: vuela en su propio carril arriba de la portada y por ENCIMA del
+   contenido, de borde a borde (sale por la derecha en cualquier ancho). Con
+   movimiento reducido queda quieto en el cielo. */
+.tpl-navidad .nv-sky{position:absolute;left:0;right:0;top:clamp(6px,1vw,14px);height:var(--lane);z-index:3;pointer-events:none;overflow:hidden}
+.tpl-navidad .nv-flyer{position:absolute;top:12px;left:58%;width:var(--slw);translate:-50% 0}
+.tpl-navidad .nv-flyer svg{display:block;width:100%;height:auto;overflow:visible}
 .tpl-navidad .nv-art-scene .win{animation:nvWin 4s ease-in-out infinite alternate}
 @keyframes nvWin{50%{fill:#FFC64A}}
 .tpl-navidad .nv-hero .w{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:clamp(28px,5vw,72px);align-items:start}
@@ -104,16 +109,16 @@ const CSS = `
 @media (max-width:860px){.tpl-navidad .nv-orn{width:min(78%,300px);padding-top:56px}.tpl-navidad .nv-cap{top:30px}}
 
 @media (prefers-reduced-motion:no-preference){
-  .tpl-navidad .nv-fly{animation:nvFly 24s linear infinite}
-  @keyframes nvFly{0%{translate:-460px 360px}45%{translate:560px 210px}100%{translate:1620px 70px}}
-  .tpl-navidad .nv-bob{animation:nvBob 1.3s ease-in-out infinite alternate}
-  @keyframes nvBob{to{translate:0 -12px}}
-  .tpl-navidad .nv-art-scene .lg{transform-box:fill-box;transform-origin:50% 0;animation:nvLeg .45s ease-in-out infinite alternate}
-  .tpl-navidad .nv-art-scene .lg-b{animation-delay:-.22s}
+  .tpl-navidad .nv-flyer{animation:nvFly 22s linear infinite}
+  @keyframes nvFly{0%{left:0;translate:-100% 0}82%,100%{left:100%;translate:0 0}}
+  .tpl-navidad .nv-flyer svg{animation:nvBob 1.3s ease-in-out infinite alternate}
+  @keyframes nvBob{to{translate:0 -8px}}
+  .tpl-navidad .nv-flyer .lg,.tpl-navidad .nv-art-scene .lg{transform-box:fill-box;transform-origin:50% 0;animation:nvLeg .45s ease-in-out infinite alternate}
+  .tpl-navidad .nv-flyer .lg-b,.tpl-navidad .nv-art-scene .lg-b{animation-delay:-.22s}
   @keyframes nvLeg{from{rotate:-10deg}to{rotate:12deg}}
   .tpl-navidad .sl-trail circle{animation:nvTw 1s ease-in-out infinite;animation-delay:calc(var(--d,0s) * -1)}
   .tpl-navidad .nose-glow{animation:nvTw 1.2s ease-in-out infinite}
-  .tpl-navidad .wave{transform-box:view-box;transform-origin:56px -40px;animation:nvWave 1.1s ease-in-out infinite alternate}
+  .tpl-navidad .wave{transform-box:fill-box;transform-origin:0 100%;animation:nvWave 1.1s ease-in-out infinite alternate}
   @keyframes nvWave{to{rotate:-18deg}}
   .tpl-navidad .star-glow{transform-box:fill-box;transform-origin:center;animation:nvPulse 2.4s ease-in-out infinite}
   @keyframes nvPulse{50%{scale:1.5;opacity:.15}}
@@ -186,6 +191,8 @@ const CSS = `
 @media (max-width:700px){
   .tpl-navidad .nv-float{position:fixed;left:16px;right:16px;bottom:max(14px,env(safe-area-inset-bottom));z-index:45;display:flex;justify-content:center;align-items:center;gap:8px;min-height:52px;border-radius:999px;background:var(--k-acc);color:var(--k-acc-ink)!important;font-weight:700;text-decoration:none;box-shadow:0 14px 30px -10px rgba(0,0,0,.45)}
   .tpl-navidad .nv-float svg{width:18px}
+  /* El botón "Ayuda" y el aviso de cookies suben por encima del botón de donar. */
+  html:has(.nv-float){--af-bottom-bar:66px}
   .tpl-navidad .k-foot{padding-bottom:84px}
 }
 
@@ -203,6 +210,8 @@ const CSS = `
 
 /* Libro público: el saldo se destaca en rojo de Navidad. */
 .tpl-navidad{--lg-hi:linear-gradient(135deg,#8E1520,#B3202A)}
+/* Sobre el rojo, el saldo siempre en crema (en modo oscuro el acento es oro con tinta oscura). */
+.tpl-navidad .af-led{--lg-acc-ink:#FFF8F0}
 `;
 
 const STAR = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.2l7.1-.6z"/></svg>`;
@@ -264,7 +273,7 @@ export const navidad = premiumDesign({
 ${lights()}
 <header class="nv-top"><div class="w"><a class="nv-id" href="#nv-top"><i>${logoMark(m)}</i><b>${ORG.name}</b></a><nav class="nv-nav" aria-label="Secciones"><a href="#nv-cat">Adopta</a><a href="#nv-camp">Campaña</a><a href="#nv-ldg">Transparencia</a></nav>${P.modeBtn()}<a class="nv-don" href="${ORG.donateHref}">Donar</a></div></header>
 ${P.tbar()}
-<section class="nv-hero" id="nv-top">${nightScene()}<div class="w">
+<section class="nv-hero" id="nv-top">${nightScene()}<div class="nv-sky" aria-hidden="true"><span class="nv-flyer">${flyingSleigh()}</span></div><div class="w">
   <div>
     <p class="nv-tag">${STAR}Navidad en ${ORG.name}</p>
     <h1 class="nv-h1">Esta Navidad, <em>regala un hogar.</em></h1>

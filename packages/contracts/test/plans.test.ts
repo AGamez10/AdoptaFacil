@@ -9,6 +9,7 @@ import {
   PLAN_KEYS,
   NEW_ORG_TRIAL_DAYS,
   freeProPeriod,
+  LAUNCH_PRO_PROMO_MONTHS,
   launchPromoEnd,
   newOrgTrialEnd,
   minimumPlanFor,
@@ -191,17 +192,18 @@ describe('launch promotion', () => {
   const launch = new Date('2026-11-01T00:00:00Z');
   const end = launchPromoEnd(launch);
 
-  it('lasts three calendar months from the launch date', () => {
-    expect(end.toISOString()).toBe('2027-02-01T00:00:00.000Z');
+  it('lasts one calendar month from the launch date', () => {
+    expect(LAUNCH_PRO_PROMO_MONTHS).toBe(1);
+    expect(end.toISOString()).toBe('2026-12-01T00:00:00.000Z');
   });
 
   it('gives pro to an org without subscription until it ends, then free', () => {
-    expect(resolveEffectivePlan(null, new Date('2027-01-31T23:00:00Z'), true, end)).toBe('pro');
-    expect(resolveEffectivePlan(null, new Date('2027-02-02T00:00:00Z'), true, end)).toBe('free');
+    expect(resolveEffectivePlan(null, new Date('2026-11-30T23:00:00Z'), true, end)).toBe('pro');
+    expect(resolveEffectivePlan(null, new Date('2026-12-02T00:00:00Z'), true, end)).toBe('free');
   });
 
   it('does not override a stored subscription, even a canceled one', () => {
-    const during = new Date('2026-12-01T00:00:00Z');
+    const during = new Date('2026-11-15T00:00:00Z');
     expect(
       resolveEffectivePlan(sub({ currentPeriodEnd: '2027-06-01T00:00:00Z' }), during, true, end),
     ).toBe('crece');
