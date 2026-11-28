@@ -39,12 +39,12 @@ const CSS = `
 @media (max-width:860px){.tpl-nieve .nb-nav{display:none}.tpl-nieve .nb-top .k-mode{margin-left:auto;padding:0 11px}.tpl-nieve .nb-top .k-mode span{display:none}}
 
 /* Portada. */
-.tpl-nieve .nb-hero{position:relative;overflow:hidden;isolation:isolate;background:radial-gradient(120% 80% at 70% 0%,var(--sky2),var(--sky1) 70%);padding-block:clamp(36px,5vw,72px) clamp(56px,7vw,96px)}
+.tpl-nieve .nb-hero{position:relative;overflow:hidden;isolation:isolate;--slw:clamp(200px,26vw,400px);--lane:calc(var(--slw) * .225 + 28px);background:radial-gradient(120% 80% at 70% 0%,var(--sky2),var(--sky1) 70%);padding-block:calc(var(--lane) + clamp(12px,2.4vw,36px)) clamp(56px,7vw,96px)}
 .tpl-nieve[data-mode=light] .nb-hero{background:radial-gradient(120% 90% at 70% 10%,#FFFFFF,#D7E4F7 55%,#B4CBEE)}
 .tpl-nieve .nb-stars{position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(1.5px 1.5px at 20px 30px,#fff 50%,transparent 51%),radial-gradient(1px 1px at 120px 80px,#fff 50%,transparent 51%),radial-gradient(2px 2px at 200px 150px,#fff 50%,transparent 51%),radial-gradient(1px 1px at 300px 40px,#fff 50%,transparent 51%);background-size:340px 220px;opacity:.7}
 .tpl-nieve[data-mode=light] .nb-stars{opacity:0}
-.tpl-nieve .nb-sky{position:absolute;left:0;right:0;top:8px;height:170px;z-index:0;pointer-events:none;overflow:hidden}
-.tpl-nieve .nb-sky svg{position:absolute;top:10px;left:0;width:clamp(240px,26vw,380px);height:auto;overflow:visible;translate:-320px 40px}
+.tpl-nieve .nb-sky{position:absolute;left:0;right:0;top:clamp(6px,1vw,14px);height:var(--lane);z-index:2;pointer-events:none;overflow:hidden}
+.tpl-nieve .nb-sky svg{position:absolute;top:12px;left:58%;width:var(--slw);height:auto;overflow:visible;translate:-50% 0}
 .tpl-nieve .nb-hero .w{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,4vw,64px);align-items:center}
 @media (max-width:860px){.tpl-nieve .nb-hero .w{grid-template-columns:minmax(0,1fr)}}
 .tpl-nieve .nb-eb{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:var(--k-card);box-shadow:var(--k-sh);font-weight:700;font-size:14px}
@@ -133,12 +133,14 @@ const CSS = `
 @media (max-width:700px){
   .tpl-nieve .nb-float{position:fixed;left:16px;right:16px;bottom:max(14px,env(safe-area-inset-bottom));z-index:45;display:flex;justify-content:center;align-items:center;gap:8px;min-height:52px;border-radius:999px;background:var(--k-acc);color:var(--k-acc-ink)!important;font-weight:800;text-decoration:none;box-shadow:0 14px 30px -10px rgba(0,0,0,.45)}
   .tpl-nieve .nb-float svg{width:18px}
+  /* El botón "Ayuda" y el aviso de cookies suben por encima del botón de donar. */
+  html:has(.nb-float){--af-bottom-bar:66px}
   .tpl-nieve .k-foot{padding-bottom:84px}
 }
 
 @media (prefers-reduced-motion:no-preference){
   .tpl-nieve .nb-sky svg{animation:nbFly 20s linear infinite}
-  @keyframes nbFly{0%{translate:-320px 70px}100%{translate:calc(100vw + 60px) -10px}}
+  @keyframes nbFly{0%{left:0;translate:-100% 6px}82%,100%{left:100%;translate:0 -2px}}
   .tpl-nieve .nb-sky .lg{transform-box:fill-box;transform-origin:50% 0;animation:nbLeg .45s ease-in-out infinite alternate}
   .tpl-nieve .nb-sky .lg-b{animation-delay:-.22s}
   @keyframes nbLeg{from{rotate:-10deg}to{rotate:12deg}}
@@ -152,6 +154,8 @@ const CSS = `
   }
 }
 .tpl-nieve{--lg-hi:linear-gradient(135deg,#8E0D22,#C8102E)}
+/* Sobre el rojo, el saldo siempre en crema (en modo oscuro el acento es oro con tinta oscura). */
+.tpl-nieve .af-led{--lg-acc-ink:#FFF8F0}
 `;
 
 const STAR = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.2l7.1-.6z"/></svg>`;
@@ -549,7 +553,7 @@ export const nieve = {
       return `
 <header class="nb-top"><div class="w"><a class="nb-id" href="#nb-top"><i>${logoMark(m)}</i><b>${ORG.name}</b></a><nav class="nb-nav" aria-label="Secciones"><a href="#nb-cat">Adopta</a><a href="#nb-camp">Campaña</a><a href="#nb-ldg">Transparencia</a></nav>${P.modeBtn()}<a class="nb-don" href="${ORG.donateHref}">Donar</a></div></header>
 ${P.tbar()}
-<section class="nb-hero" id="nb-top"><div class="nb-stars" aria-hidden="true"></div><div class="nb-sky" aria-hidden="true"><svg viewBox="-160 -82 520 112">${sleighTeam()}</svg></div><div class="w">
+<section class="nb-hero" id="nb-top"><div class="nb-stars" aria-hidden="true"></div><div class="nb-sky" aria-hidden="true"><svg viewBox="-160 -84 520 116" focusable="false">${sleighTeam()}</svg></div><div class="w">
   <div>
     <p class="nb-eb">${STAR}La Navidad de ${ORG.name}</p>
     <h1 class="nb-h1">Agita la magia. <em>Cambia una vida.</em></h1>

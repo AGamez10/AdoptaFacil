@@ -70,7 +70,7 @@ Gratis. «Cancelar mi plan» también detiene el plan programado. Probado en
 `PLAN_ENFORCEMENT` viene apagado por defecto (`env.validation.ts`, `deploy/api.env.example`
 lo tiene comentado). Mientras esté apagado **toda organización es Pro y nada se bloquea**
 (probado: «con los planes apagados toda organización es Pro»). Al encenderlo, quien no tenga
-suscripción tiene Pro gratis 3 meses desde `PLAN_LAUNCH_DATE` y después queda en Gratis.
+suscripción tiene Pro gratis 1 mes desde `PLAN_LAUNCH_DATE` y después queda en Gratis.
 
 ## Tabla plan → derechos
 
@@ -127,7 +127,7 @@ Quien paga con Mercado Pago y renueva normalmente no recibe nada.
 
 - **Planes apagados** (`PLAN_ENFORCEMENT` sin poner): todas las organizaciones tienen todo gratis
   y el botón de pagar responde «no hay nada que pagar todavía».
-- Para empezar a cobrar: `PLAN_ENFORCEMENT=true`, `PLAN_LAUNCH_DATE=<fecha>` (3 meses de Pro
+- Para empezar a cobrar: `PLAN_ENFORCEMENT=true`, `PLAN_LAUNCH_DATE=<fecha>` (1 mes de Pro
   gratis desde esa fecha) y `MERCADOPAGO_PLATFORM_ACCESS_TOKEN` de la cuenta de AdoptaFácil, más
   el webhook de **Planes y suscripciones** en la app de Mercado Pago apuntando a
   `https://<api>/billing/webhooks/mercadopago` (ver `docs/pagos/mercadopago-oauth.md` §7).

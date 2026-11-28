@@ -14,7 +14,7 @@ import { approveTestOrganization } from './support/organization-status';
 /**
  * Planes encendidos (`PLAN_ENFORCEMENT`) sobre lo que hoy funciona:
  * - promoción de lanzamiento: sin suscripción, Pro gratis hasta
- *   `PLAN_LAUNCH_DATE` + 3 meses;
+ *   `PLAN_LAUNCH_DATE` + 1 mes;
  * - plantillas de pago: al terminar el plan el portal vuelve solo a una
  *   gratuita, la elección se conserva y regresa al pagar;
  * - límite de miembros en las invitaciones;

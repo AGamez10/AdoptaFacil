@@ -897,8 +897,9 @@ export function PlansSection() {
           id="landing-plans-title"
         >
           Lo que protege al animal, al adoptante y la transparencia es gratis para siempre. Los
-          planes de pago son opcionales: suman marca, alcance y comodidad. Al lanzar, cada
-          organización tiene Pro gratis por {LAUNCH_PRO_PROMO_MONTHS} meses.
+          planes de pago son opcionales: suman marca, alcance y comodidad. Nuestro mes de
+          lanzamiento es un Black Friday al 100 %: cada organización tiene Pro gratis durante{' '}
+          {LAUNCH_PRO_PROMO_MONTHS === 1 ? 'un mes' : `${LAUNCH_PRO_PROMO_MONTHS} meses`}.
         </SectionHeading>
         <ul className={styles.plans__grid}>
           {PLAN_KEYS.map((key) => {

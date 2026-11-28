@@ -47,7 +47,7 @@ function sleigh(x: number, y: number): string {
 <path d="M46 -49 q7 14 15 0 q-2 8 -7.5 9 q-6 -1 -7.5 -9z" fill="#FFFFFF"/>
 <circle cx="55" cy="-53" r="1.2" fill="#1B0F08"/><circle cx="58" cy="-49" r="1.6" fill="#F08A7A"/>
 <path d="M45 -55 Q48 -72 36 -72 Q40 -64 44 -57z" fill="#D32F2F"/><rect x="44" y="-58" width="16" height="4.5" rx="2.2" fill="#FFFFFF"/><circle cx="35" cy="-71" r="3.4" fill="#FFFFFF"/>
-<path class="wave" d="M56 -40 L70 -56" stroke="#D32F2F" stroke-width="5.5" stroke-linecap="round"/><circle class="wave" cx="71" cy="-58" r="4" fill="#FFFFFF"/>
+<g class="wave"><path d="M56 -40 L70 -56" stroke="#D32F2F" stroke-width="5.5" stroke-linecap="round"/><circle cx="71" cy="-58" r="4" fill="#FFFFFF"/></g>
 <path d="M2 -30 H66 Q80 -30 82 -14 L84 2 Q62 10 12 6 Q0 4 2 -12z" fill="#C62828"/>
 <path d="M2 -30 H66 Q80 -30 82 -14" stroke="#E7B85A" stroke-width="3" fill="none"/>
 <path d="M14 -18 q8 -6 16 0 q8 6 16 0 q8 -6 16 0" stroke="#E7B85A" stroke-width="2" fill="none" opacity=".8"/>
@@ -127,7 +127,9 @@ function gift(x: number, y: number, w: number, h: number, box: string, rib: stri
 /**
  * Escena de portada: cielo con estrellas y luna, colinas nevadas, pueblito,
  * muñeco de nieve, el gran árbol con regalos y el trineo cruzando el cielo.
- * El cielo es transparente: el color lo pone la sección (sin costuras).
+ * El cielo es transparente: el color lo pone la sección (sin costuras). El
+ * trineo NO va aquí: vuela aparte (`flyingSleigh`) para cruzar todo el ancho
+ * visible, que el recorte `slice` del SVG cambia con cada pantalla.
  */
 export function nightScene(): string {
   const r = seeded(42);
@@ -141,7 +143,6 @@ export function nightScene(): string {
 <defs><radialGradient id="nvMoon"><stop offset="0" stop-color="#FFF6D8" stop-opacity=".55"/><stop offset="1" stop-color="#FFF6D8" stop-opacity="0"/></radialGradient></defs>
 ${stars}
 <circle cx="1180" cy="150" r="150" fill="url(#nvMoon)"/><circle cx="1180" cy="150" r="58" fill="#FFF6D8"/><circle cx="1162" cy="140" r="10" fill="#F1E5BE"/><circle cx="1196" cy="170" r="7" fill="#F1E5BE"/>
-<g class="nv-fly"><g class="nv-bob">${sleighTeam()}</g></g>
 <path d="M0 560 C200 500 380 520 560 548 C760 585 900 500 1100 520 C1260 535 1360 560 1440 550 L1440 800 L0 800z" fill="var(--hill-far)"/>
 ${pine(120, 545, 0.9)}${pine(170, 540, 0.7)}${pine(1010, 520, 0.8)}${pine(1080, 528, 1)}${pine(1130, 532, 0.7)}
 ${house(600, 562, 0.9, 'a')}${house(690, 568, 0.75, 'b')}${house(470, 555, 0.7, 'b')}
@@ -157,4 +158,9 @@ ${gift(1314, 690, 46, 34, '#D32F2F', '#FFD25A')}${gift(1190, 694, 40, 30, '#2E7D
 /** Trineo pequeño para la barra de avance de la campaña. */
 export function miniSleigh(): string {
   return `<svg viewBox="-120 -82 480 112" aria-hidden="true" focusable="false">${sleighTeam()}</svg>`;
+}
+
+/** Trineo de la portada: vuela por su carril de borde a borde. */
+export function flyingSleigh(): string {
+  return `<svg viewBox="-160 -84 520 116" aria-hidden="true" focusable="false">${sleighTeam()}</svg>`;
 }
